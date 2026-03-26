@@ -476,7 +476,26 @@ Expected: FAIL with `ImportError` or `ModuleNotFoundError`
         self.assertTrue(serializer.is_valid(), serializer.errors)
 ```
 
-- [ ] **Step 28: Write test — business hours enabled with default term durations (cross-field rule)**
+- [ ] **Step 28: Write test — reject start_time == end_time (zero-hour window)**
+
+```python
+    def test_reject_zero_hour_window(self):
+        """start_time == end_time creates a 0-hour window, which is invalid."""
+        data = {
+            "terms": [{"name": "term1", "duration_days": 7}],
+            "business_hours": {
+                "enabled": True,
+                "start_time": "09:00",
+                "end_time": "09:00",
+                "weekdays": [1, 2, 3, 4, 5],
+                "timezone": "UTC",
+            },
+        }
+        serializer = ROSCustomTimeframesSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+```
+
+- [ ] **Step 29: Write test — business hours enabled with default term durations (cross-field rule)**
 
 ```python
     def test_business_hours_with_default_terms(self):
@@ -519,11 +538,11 @@ Expected: FAIL with `ImportError` or `ModuleNotFoundError`
         self.assertTrue(serializer.is_valid(), serializer.errors)
 ```
 
-- [ ] **Step 29: Implement the serializer to make all tests pass**
+- [ ] **Step 31: Implement the serializer to make all tests pass**
 
-- [ ] **Step 29: Run full serializer test suite — verify all GREEN**
+- [ ] **Step 32: Run full serializer test suite — verify all GREEN**
 
-- [ ] **Step 30: Commit**
+- [ ] **Step 33: Commit**
 
 ---
 
@@ -742,9 +761,9 @@ class TestROSCustomTimeframesView(IamTestCase):
 
 - [ ] **Step 11: Implement view, URL registration, and storage to pass all tests**
 
-- [ ] **Step 10: Run test suite — verify all GREEN**
+- [ ] **Step 12: Run test suite — verify all GREEN**
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 13: Commit**
 
 ---
 
@@ -1600,9 +1619,9 @@ func TestForceRepoll_FirstOfMonthStillTriggers(t *testing.T) {
 
 - [ ] **Step 6: Extract ShouldPollForRecommendations and implement**
 
-- [ ] **Step 5: Run tests — verify GREEN**
+- [ ] **Step 7: Run tests — verify GREEN**
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ---
 
@@ -2034,9 +2053,9 @@ class BusinessHoursFilterTest {
 
 - [ ] **Step 5: Implement BusinessHoursFilter**
 
-- [ ] **Step 5: Run tests — verify GREEN**
+- [ ] **Step 6: Run tests — verify GREEN**
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ---
 
