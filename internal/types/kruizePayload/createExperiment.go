@@ -14,6 +14,30 @@ type createExperiment struct {
 	Kubernetes_objects      []kubernetesObject     `json:"kubernetes_objects"`
 	Trial_settings          TrialSettings          `json:"trial_settings"`
 	Recommendation_settings RecommendationSettings `json:"recommendation_settings"`
+	Term_settings           *TermSettings          `json:"term_settings,omitempty"`
+	Business_hours          *BusinessHoursSettings `json:"business_hours,omitempty"`
+}
+
+// TermSettings maps to Kruize experiment term_settings (short/medium/long).
+type TermSettings struct {
+	ShortTerm  *TermDuration `json:"short_term,omitempty"`
+	MediumTerm *TermDuration `json:"medium_term,omitempty"`
+	LongTerm   *TermDuration `json:"long_term,omitempty"`
+}
+
+// TermDuration is duration and threshold for one Kruize term.
+type TermDuration struct {
+	DurationInDays     int     `json:"duration_in_days"`
+	ThresholdInPercent float64 `json:"threshold_in_percent"`
+}
+
+// BusinessHoursSettings maps to Kruize business_hours block.
+type BusinessHoursSettings struct {
+	Enabled   bool   `json:"enabled"`
+	StartTime string `json:"start_time,omitempty"`
+	EndTime   string `json:"end_time,omitempty"`
+	Weekdays  []int  `json:"weekdays,omitempty"`
+	Timezone  string `json:"timezone,omitempty"`
 }
 
 type TrialSettings struct {
@@ -42,6 +66,53 @@ func GetCreateExperimentPayload(experiment_name string, cluster_identifier strin
 			Target_cluster:          "remote",
 			Trial_settings:          TrialSettings{Measurement_duration: "15min"},
 			Recommendation_settings: RecommendationSettings{Threshold: "0.1"},
+			Kubernetes_objects: []kubernetesObject{
+				{
+					K8stype:    data["k8s_object_type"],
+					Name:       data["k8s_object_name"],
+					Namespace:  data["namespace"],
+					Containers: container_array,
+				},
+			},
+		},
+	}
+
+	postBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return postBody, nil
+}
+
+// GetCreateExperimentPayloadWithSettings is like GetCreateExperimentPayload but optionally adds
+// term_settings and business_hours for Kruize custom timeframes. Omitted JSON keys when args are nil.
+func GetCreateExperimentPayloadWithSettings(
+	experiment_name string,
+	cluster_identifier string,
+	containers []map[string]string,
+	data map[string]string,
+	termSettings *TermSettings,
+	businessHours *BusinessHoursSettings,
+) ([]byte, error) {
+	container_array := []container{}
+	for _, c := range containers {
+		container_array = append(container_array, container{
+			Container_image_name: c["container_image_name"],
+			Container_name:       c["container_name"],
+		})
+	}
+	payload := []createExperiment{
+		{
+			Version:                 "1.0", // TODO To be set to cfg.KruizePerformanceProfileVersion
+			Experiment_name:         experiment_name,
+			Cluster_name:            cluster_identifier,
+			Performance_profile:     "resource-optimization-openshift",
+			Mode:                    "monitor",
+			Target_cluster:          "remote",
+			Trial_settings:          TrialSettings{Measurement_duration: "15min"},
+			Recommendation_settings: RecommendationSettings{Threshold: "0.1"},
+			Term_settings:           termSettings,
+			Business_hours:          businessHours,
 			Kubernetes_objects: []kubernetesObject{
 				{
 					K8stype:    data["k8s_object_type"],
