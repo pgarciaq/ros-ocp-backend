@@ -2430,10 +2430,13 @@ package model
 import "testing"
 
 func TestGetWorkloadsByOrgID_ReturnsCorrectType(t *testing.T) {
-    // Verify the function signature exists and returns []Workload.
+    // Verify the function signature exists and returns (WorkloadQuery, error).
     // Full DB test is integration-scope, but verify the query builds correctly.
     orgID := "1234567"
-    query := BuildGetWorkloadsByOrgIDQuery(orgID)
+    query, err := BuildGetWorkloadsByOrgIDQuery(orgID)
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
     if query.OrgID != "1234567" {
         t.Errorf("expected org_id 1234567, got %s", query.OrgID)
     }
@@ -2471,6 +2474,7 @@ func TestGetWorkloadsByOrgID_EmptyOrgID(t *testing.T) {
 ```typescript
 // apps/koku-ui-hccm/src/routes/settings/rosCustomTimeframes/RosCustomTimeframes.test.tsx
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import RosCustomTimeframes from './RosCustomTimeframes';
 
 describe('RosCustomTimeframes Settings', () => {
