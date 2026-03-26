@@ -538,11 +538,11 @@ Expected: FAIL with `ImportError` or `ModuleNotFoundError`
         self.assertTrue(serializer.is_valid(), serializer.errors)
 ```
 
-- [ ] **Step 31: Implement the serializer to make all tests pass**
+- [ ] **Step 30: Implement the serializer to make all tests pass**
 
-- [ ] **Step 32: Run full serializer test suite — verify all GREEN**
+- [ ] **Step 31: Run full serializer test suite — verify all GREEN**
 
-- [ ] **Step 33: Commit**
+- [ ] **Step 32: Commit**
 
 ---
 
@@ -749,12 +749,16 @@ class TestROSCustomTimeframesView(IamTestCase):
         self.assertIn("no-cache", cache_control.lower().replace(" ", ""))
 ```
 
-- [ ] **Step 10: Write test — non-admin can still GET (read-only access)**
+- [ ] **Step 10: Write test — authenticated user can GET without admin role**
 
 ```python
-    def test_non_admin_can_get(self):
-        """Non-admin users can read settings (GET) even if PUT is restricted."""
-        # GET should be available to all authenticated users
+    def test_authenticated_user_can_get(self):
+        """Any authenticated user (not just admins) can GET settings.
+
+        IamTestCase's default user is an admin, so this confirms GET works for
+        the base authenticated case. A full non-admin test requires creating a
+        user with restricted RBAC permissions — left to integration tests.
+        """
         response = self.client.get(self.url, **self.headers)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 ```
@@ -866,10 +870,9 @@ class TestROSReportShipperCustomTimeframes(TestCase):
 
 ```python
     def test_get_ros_custom_timeframes_db_error_returns_none(self):
-        """If the DB query fails, return None instead of crashing the pipeline."""
+        """If the DB query fails, build_ros_msg catches it and omits custom_timeframes."""
         with patch.object(self.shipper, "_get_ros_custom_timeframes", side_effect=Exception("DB error")):
-            with patch.object(self.shipper, "_get_ros_custom_timeframes", return_value=None):
-                msg = self.shipper.build_ros_msg(["https://url1"], ["key1"])
+            msg = self.shipper.build_ros_msg(["https://url1"], ["key1"])
         parsed = json.loads(msg)
         self.assertIsNone(parsed["metadata"].get("custom_timeframes"))
 ```
@@ -2562,12 +2565,12 @@ describe('RosCustomTimeframes Settings', () => {
 
 | Part | Repository | Tasks | Test Count | Focus |
 |---|---|---|---|---|
-| 1 | koku | 3 tasks (serializer, views, Kafka) | ~39 tests | Settings API validation, multi-tenancy, caching, Kafka changes |
-| 2 | ros-ocp-backend | 7 tasks (client, detection, payload, parsing, updateExperiment, re-poll, cleanup) | ~27 tests | Settings propagation, experiment updates, force re-poll |
-| 3 | Kruize | 5 tasks (terms fix, retention, updateExperiment API, business hours filter, custom terms) | ~28 tests | Core algorithm, new API, business hours, threshold scaling |
-| 4 | koku-ui | 1 task (duration display) | ~7 tests | Display logic |
-| 5 | Cross-cutting | 4 tasks (term mapping, API response, workload query, settings page) | ~19 tests | Glue logic, UI components |
-| **Total** | **4 repos** | **20 tasks** | **~120 tests** | |
+| 1 | koku | 3 tasks (serializer, views, Kafka) | 46 tests | Settings API validation, multi-tenancy, caching, Kafka changes |
+| 2 | ros-ocp-backend | 7 tasks (client, detection, payload, parsing, updateExperiment, re-poll, cleanup) | 29 tests | Settings propagation, experiment updates, force re-poll |
+| 3 | Kruize | 5 tasks (terms fix, retention, updateExperiment API, business hours filter, custom terms) | 27 tests | Core algorithm, new API, business hours, threshold scaling |
+| 4 | koku-ui | 1 task (duration display) | 7 tests | Display logic |
+| 5 | Cross-cutting | 4 tasks (term mapping, API response, workload query, settings page) | 21 tests | Glue logic, UI components |
+| **Total** | **4 repos** | **20 tasks** | **130 tests** | |
 
 ### TDD Cycle Per Task
 
