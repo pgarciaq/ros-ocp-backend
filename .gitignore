@@ -5,6 +5,8 @@ bin
 tmp
 coverage.txt
 output.csv
+comparison.csv
+/compare
 .idea/
 .DS_Store
 .go/
