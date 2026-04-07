@@ -167,6 +167,112 @@ Each milestone follows RED-GREEN-REFACTOR. Within each milestone, implement one 
 
 The implementation order within each milestone follows the test plan section numbering (T-2.3a before T-2.3b, T-1.1 before T-1.2, etc.).
 
+## Appendix: Native Engine vs Kruize — Memory Recommendation Differences
+
+Empirical comparison (see `docs/kruize-vs-native-comparison.md` and `cmd/compare/`)
+shows that Kruize consistently recommends **10-16% more memory** than the native
+engine for the same input data. CPU recommendations are within 0-7%. The gap is
+systematic, not a bug — it stems from three compounding algorithmic differences.
+
+### Difference 1: Base Statistic (biggest factor, ~10-14% of the gap)
+
+| | Native Engine | Kruize |
+|---|---|---|
+| **What it computes** | Decay-weighted mean of **daily P95** memory usage values | **Absolute maximum** of per-interval memory usage across the entire window |
+| **Code** | `SelectMemUsagePercentile(row, 0.95)` → `MemUsageP95KiB` per day, then `WeightedPercentile()` across days | `CommonUtils.percentile(100, memUsageList)` where each entry is the per-interval `max` from `calculateMemoryUsage()` |
+| **Effect** | Smooths out spikes: 1-2 anomalous intervals barely move the weighted average | A single high-usage interval in 21 days of data becomes the base for the recommendation |
+
+For a stable workload, the all-time max can be 10-14% higher than the weighted
+average of daily P95 values. This is the dominant factor.
+
+### Difference 2: Buffer / Headroom (~4-5% additional gap)
+
+| | Native Engine | Kruize |
+|---|---|---|
+| **Buffer** | **Adaptive**: `1 + (P95 − P50) / mean`, clamped to **[1.15, 1.50]** | **Fixed 20%** on usage path, or `usage + spike × 1.05` on spike path; final = `min(usage_path, spike_path)` |
+| **Stable workloads** | Margin ≈ **1.15** (15%) because P95 ≈ P50 | Always **1.20** (20%) regardless of variability |
+| **Variable workloads** | Margin rises toward 1.50 as `(P95 − P50) / mean` grows | Still 1.20 on usage path; spike path may be lower if spikes are small relative to base |
+
+The native engine's adaptive margin rewards stable workloads with a tighter buffer
+(15%), while Kruize always adds 20%. For stable workloads this creates a ~4-5%
+relative gap. For highly variable workloads, the native engine's margin increases
+toward 50%, potentially exceeding Kruize's 20%.
+
+### Difference 3: Limit ≠ Request (native) vs Limit == Request (Kruize)
+
+| | Native Engine | Kruize |
+|---|---|---|
+| **Memory limit** | `request × 1.05` | Same as request |
+| **Code** | `LimitMultiplier: 1.05` in `DefaultMemoryConfig` | `getMemoryLimitRecommendation()` returns `getMemoryRequestRecommendation()` |
+
+This doesn't affect the request comparison but means Kruize's recommended limits
+are ~15-20% higher than the native engine's limits (since Kruize's request is
+already higher and equals its limit).
+
+### Worked Example: postgres-ghi56 (cost profile, short term)
+
+```
+Native:
+  base = weighted_avg(daily_P95_values) ≈ 10,186,124 KiB
+  margin = adaptive(P95, P50, mean) ≈ 1.15  (stable workload)
+  request = 10,186,124 × 1.15 = 11,714,043 KiB
+  limit   = 11,714,043 × 1.05 = 12,299,745 KiB
+
+Kruize:
+  base = max(all_interval_maxes) ≈ 11,631,467 KiB  (+14.2% vs native base)
+  buffer = 1.20  (fixed)
+  request = 11,631,467 × 1.20 = 13,957,761 KiB
+  limit   = 13,957,761  (same as request)
+
+Result: Kruize request is 19.1% higher than native request.
+```
+
+### Why the Gap Scales with Workload Memory Size
+
+For memory-heavy workloads (postgres: ~12 GiB, prometheus: ~8 GiB), the gap is
+10-16%. For lighter workloads (frontend: ~1.5 GiB, backend: ~3.3 GiB), the gap
+is 0-4%.
+
+This is because memory-heavy workloads have higher **absolute** variance even at
+the same relative variance. A postgres process fluctuating between 10-12 GiB has
+a much larger absolute gap between its daily P95 and its all-time max than a
+frontend container fluctuating between 1.4-1.6 GiB. Since the base statistic
+difference (P95-avg vs absolute-max) is the dominant factor, and it operates on
+absolute values, the gap grows with memory footprint.
+
+### Design Rationale
+
+The native engine's approach is a deliberate choice:
+
+- **Averaged P95 instead of absolute max**: Prevents a single anomalous interval
+  from permanently inflating recommendations. The decay weighting further reduces
+  the influence of old spikes.
+- **Adaptive margin**: Rewards stable workloads with tighter recommendations (15%)
+  while still protecting variable workloads (up to 50%). Kruize's flat 20% is
+  either too tight for variable workloads or too loose for stable ones.
+- **Separate limit > request**: Provides a small (5%) OOM buffer above the request,
+  matching Kubernetes best practice where `limit > request` allows bursting.
+
+The tradeoff is that the native engine is slightly more aggressive — it may
+under-provision in rare worst-case scenarios that Kruize would catch. This is
+mitigated by the adaptive margin and by the Phase 4 (OOM feedback) mechanism
+that will adjust recommendations upward when actual OOM events are detected.
+
+### Observed Comparison Results (21 days, 5 containers)
+
+| Container | CPU Req Diff | Mem Req Diff | Pattern |
+|---|---|---|---|
+| frontend-abc12 | +5.9% to +7.5% | -1.3% to +0.3% | Very close; native slightly higher CPU |
+| backend-def34 | +5.1% to +5.4% | -4.3% to -3.0% | Native higher CPU, Kruize higher memory |
+| postgres-ghi56 | -0.7% to -0.9% | -16.1% to -15.3% | CPU identical; Kruize ~16% more memory |
+| prometheus-jkl78 | +1.9% to +2.2% | -15.8% to -16.8% | CPU close; Kruize ~16% more memory |
+| grafana-mno90 | -2.4% to +4.8% | -10.8% to -11.7% | Mixed CPU; Kruize ~11% more memory |
+
+Positive diff = native recommends more; negative = Kruize recommends more.
+Reproducible via `go run ./cmd/compare/` (see `docs/kruize-vs-native-comparison.md`).
+
+---
+
 ## What This Does NOT Include
 
 - Phase 4 (OOM feedback) -- deferred
