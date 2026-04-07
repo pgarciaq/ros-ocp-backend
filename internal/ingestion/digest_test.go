@@ -43,10 +43,10 @@ func TestComputeDigest(t *testing.T) {
 			values[i] = int64(i + 1) // 1..96
 		}
 		d := ComputeDigest(values)
-		assert.Equal(t, int64(48), d.P50)  // rank 48
-		assert.Equal(t, int64(91), d.P95)  // rank 91.2 → 91
-		assert.Equal(t, int64(94), d.P98)  // rank 94.08 → 94
-		assert.Equal(t, int64(95), d.P99)  // rank 95.04 → 95
+		assert.Equal(t, int64(48), d.P50) // rank 48
+		assert.Equal(t, int64(91), d.P95) // rank 91.2 → 91
+		assert.Equal(t, int64(94), d.P98) // rank 94.08 → 94
+		assert.Equal(t, int64(95), d.P99) // rank 95.04 → 95
 		assert.Equal(t, int64(96), d.Max)
 		assert.Equal(t, int64(96), d.Count)
 	})

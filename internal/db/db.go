@@ -1,9 +1,11 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 
@@ -13,6 +15,7 @@ import (
 )
 
 var DB *gorm.DB = nil
+var Pool *pgxpool.Pool = nil
 
 func initDB() {
 	cfg := config.GetConfig()
@@ -52,6 +55,41 @@ func GetDB() *gorm.DB {
 		initDB()
 	}
 	return DB
+}
+
+func initPool() {
+	cfg := config.GetConfig()
+	log := logging.GetLogger()
+
+	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
+		cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBHost, cfg.DBPort, cfg.DBssl)
+
+	if cfg.DBssl != "disable" {
+		rdsCA := CreateCACertFile(cfg.DBCACert)
+		dsn = fmt.Sprintf("%s sslrootcert=%s", dsn, rdsCA)
+	}
+
+	poolCfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		log.Fatalf("failed to parse pgxpool config: %v", err)
+	}
+	poolCfg.MaxConns = 10
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	if err != nil {
+		log.Fatalf("failed to create pgxpool: %v", err)
+	}
+
+	Pool = pool
+	log.Info("pgxpool initialization complete")
+}
+
+// GetPool returns the pgxpool.Pool singleton, initializing it if needed.
+func GetPool() *pgxpool.Pool {
+	if Pool == nil {
+		initPool()
+	}
+	return Pool
 }
 
 func CreateCACertFile(certString string) string {
