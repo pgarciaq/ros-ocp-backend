@@ -187,6 +187,21 @@ func SetupKruizePerformanceProfile() {
 
 }
 
+// ReadCSVBodyFromUrl fetches a CSV URL and returns the response body as an io.ReadCloser.
+// The caller is responsible for closing the body.
+func ReadCSVBodyFromUrl(csvURL string) (io.ReadCloser, error) {
+	parsedURL, _ := url.Parse(csvURL)
+	resp, err := HTTPClient.Get(parsedURL.String())
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		resp.Body.Close()
+		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, csvURL)
+	}
+	return resp.Body, nil
+}
+
 func ReadCSVFromUrl(csvURL string) ([][]string, error) {
 	parsedCSVURL, _ := url.Parse(csvURL)
 	resp, err := http.Get(parsedCSVURL.String()) //nolint:gosec // URL from trusted config; unbounded timeout intentional for large CSVs

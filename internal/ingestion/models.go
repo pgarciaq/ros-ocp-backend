@@ -12,15 +12,15 @@ type MetricRow struct {
 	WorkloadType  string
 	ContainerName string
 
-	CPURequestMC   int64
-	CPULimitMC     int64
-	CPUUsageMC     int64
-	CPUThrottleMC  int64
-	MemRequestKiB  int64
-	MemLimitKiB    int64
-	MemUsageKiB    int64
-	MemRSSKiB      int64
-	OOMCount       int64
+	CPURequestMC  int64
+	CPULimitMC    int64
+	CPUUsageMC    int64
+	CPUThrottleMC int64
+	MemRequestKiB int64
+	MemLimitKiB   int64
+	MemUsageKiB   int64
+	MemRSSKiB     int64
+	OOMCount      int64
 }
 
 // DigestKey uniquely identifies a container-day combination for aggregation.
@@ -36,13 +36,13 @@ type DigestKey struct {
 
 // Digest holds pre-computed percentile values for a single container-day.
 type Digest struct {
-	P50  int64
-	P60  int64
-	P95  int64
-	P98  int64
-	P99  int64
-	Max  int64
-	Mean int64
-	Sum  int64
+	P50   int64
+	P60   int64
+	P95   int64
+	P98   int64
+	P99   int64
+	Max   int64
+	Mean  int64
+	Sum   int64
 	Count int64
 }

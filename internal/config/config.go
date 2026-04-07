@@ -80,6 +80,9 @@ type Config struct {
 	// Namespace recommendation config
 	DisableNamespaceRecommendation bool `mapstructure:"DISABLE_NAMESPACE_RECOMMENDATION"`
 
+	// Native recommendation engine (replaces Kruize pipeline)
+	UseNativeEngine bool `mapstructure:"ROS_USE_NATIVE_ENGINE"`
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -243,6 +246,8 @@ func initConfig() {
 	viper.SetDefault("RECORD_LIMIT_CSV", 1000)
 	viper.SetDefault("CSV_STREAM_INTERVAL", 100)
 	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", false)
+	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", true)
+	viper.SetDefault("ROS_USE_NATIVE_ENGINE", true)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)

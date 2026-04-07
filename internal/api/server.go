@@ -66,6 +66,17 @@ func StartAPIServer() {
 	}
 
 	registerRecommendationRoutes(v1)
+	// Container
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift", GetNativeRecommendationSetList)
+	} else {
+		v1.GET("/recommendations/openshift", GetRecommendationSetList)
+	}
+	v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
+
+	// Project/Namespace
+	v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetList)
+	v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
 
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server

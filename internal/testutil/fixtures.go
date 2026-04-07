@@ -8,48 +8,54 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func firstOfCurrentMonth() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
 // Deterministic test constants used across all test suites.
 const (
-	TestOrgID       = "org7654321"
-	TestClusterUUID = "11111111-1111-1111-1111-111111111111"
-	TestNamespace   = "test-ns"
-	TestWorkload    = "test-deploy"
+	TestOrgID        = "org7654321"
+	TestClusterUUID  = "11111111-1111-1111-1111-111111111111"
+	TestNamespace    = "test-ns"
+	TestWorkload     = "test-deploy"
 	TestWorkloadType = "deployment"
-	TestContainer   = "main"
+	TestContainer    = "main"
 )
 
 // BaseDate is a fixed reference point for reproducible test data.
-var BaseDate = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+// Uses first of current month so partition auto-creation in migrations covers it.
+var BaseDate = firstOfCurrentMonth()
 
 // ContainerDigestRow holds the fields for a single daily_container_digests row.
 type ContainerDigestRow struct {
-	BucketDate        time.Time
-	OrgID             string
-	ClusterUUID       string
-	Namespace         string
-	Workload          string
-	WorkloadType      string
-	ContainerName     string
-	CPURequestP50MC   int64
-	CPURequestP95MC   int64
-	CPUUsageP50MC     int64
-	CPUUsageP95MC     int64
-	CPUUsageP98MC     int64
-	CPUUsageP99MC     int64
-	CPUUsageMaxMC     int64
-	CPUThrottleP95MC  int64
-	CPUThrottleMaxMC  int64
-	MemRequestP50KiB  int64
-	MemRequestP95KiB  int64
-	MemUsageP50KiB    int64
-	MemUsageP95KiB    int64
-	MemUsageMaxKiB    int64
-	MemRSSP95KiB      int64
-	MemRSSMaxKiB      int64
-	OOMCountSum       int64
-	CPUUsageMeanMC    int64
-	MemUsageMeanKiB   int64
-	SampleCount       int64
+	BucketDate       time.Time
+	OrgID            string
+	ClusterUUID      string
+	Namespace        string
+	Workload         string
+	WorkloadType     string
+	ContainerName    string
+	CPURequestP50MC  int64
+	CPURequestP95MC  int64
+	CPUUsageP50MC    int64
+	CPUUsageP95MC    int64
+	CPUUsageP98MC    int64
+	CPUUsageP99MC    int64
+	CPUUsageMaxMC    int64
+	CPUThrottleP95MC int64
+	CPUThrottleMaxMC int64
+	MemRequestP50KiB int64
+	MemRequestP95KiB int64
+	MemUsageP50KiB   int64
+	MemUsageP95KiB   int64
+	MemUsageMaxKiB   int64
+	MemRSSP95KiB     int64
+	MemRSSMaxKiB     int64
+	OOMCountSum      int64
+	CPUUsageMeanMC   int64
+	MemUsageMeanKiB  int64
+	SampleCount      int64
 }
 
 // SeedContainerDigest inserts a single row into daily_container_digests.

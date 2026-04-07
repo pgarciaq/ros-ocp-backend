@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -10,7 +11,10 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -72,6 +76,12 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 				continue
 			}
 		}
+
+		if cfg.UseNativeEngine && csvType == types.PayloadTypeContainer {
+			processContainerCSVNative(file, kafkaMsg)
+			continue
+		}
+
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
 			csvFetchError.Inc()
@@ -380,4 +390,49 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	}
 
+}
+
+// processContainerCSVNative handles container CSV files through the native Go
+// recommendation engine instead of the Kruize pipeline. It downloads the CSV,
+// computes daily digests, upserts them, and runs the recommendation engine.
+func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
+	log := logging.GetLogger()
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native engine: unable to fetch CSV from URL: %v", err)
+		return
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	if err := ingestion.ProcessCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+		log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	now := time.Now().UTC()
+	start := now.AddDate(0, 0, -15)
+	results, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, now)
+	if err != nil {
+		log.Errorf("native engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	if len(results) == 0 {
+		log.Infof("native engine: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
+
+	if err := engine.WriteRecommendations(ctx, pool, results); err != nil {
+		log.Errorf("native engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
 }
