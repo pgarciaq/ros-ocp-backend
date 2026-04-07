@@ -86,6 +86,18 @@ func RecommendAllWorkloads(
 	var results []ContainerRec
 
 	for key, digestRows := range grouped {
+		// Current values: use the most recent digest's P50 as the "current" resource config.
+		// In a stable deployment, request/limit values are constant across all samples in a day,
+		// so P50 == actual current value.
+		latest := latestDigest(digestRows)
+		currentCPUReqMC := latest.CPURequestP50MC
+		currentCPULimMC := latest.CPURequestP95MC // P95 as proxy for limit (which is typically constant or absent)
+		currentMemReqKiB := latest.MemRequestP50KiB
+		currentMemLimKiB := latest.MemRequestP95KiB
+
+		// Stale detection: if the most recent digest is older than 3 days, mark as stale.
+		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > stalenessThreshold
+
 		for _, tc := range terms {
 			windowRows := filterByWindow(digestRows, end, tc.WindowDays)
 			if len(windowRows) < tc.MinDataDays {
@@ -102,25 +114,34 @@ func RecommendAllWorkloads(
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
 
-				results = append(results, ContainerRec{
-					OrgID:            orgID,
-					ClusterUUID:      clusterUUID,
-					Namespace:        key.Namespace,
-					Workload:         key.Workload,
-					WorkloadType:     key.WorkloadType,
-					ContainerName:    key.ContainerName,
-					Term:             tc.Name,
-					Engine:           profile,
-					RecCPURequestMC:  cpuRec.CostRequestMC,
-					RecCPULimitMC:    cpuRec.CostLimitMC,
-					RecMemRequestKiB: memRec.CostRequestKiB,
-					RecMemLimitKiB:   memRec.CostLimitKiB,
-					ConfidenceLevel:  confidence,
-					TrendSlope:       cpuRec.TrendSlope,
-					IsIdle:           cpuRec.IsIdle,
-					OOMCountSum:      sumOOMCounts(windowRows),
-					DataDays:         dataDays,
-				})
+				rec := ContainerRec{
+					OrgID:                orgID,
+					ClusterUUID:          clusterUUID,
+					Namespace:            key.Namespace,
+					Workload:             key.Workload,
+					WorkloadType:         key.WorkloadType,
+					ContainerName:        key.ContainerName,
+					Term:                 tc.Name,
+					Engine:               profile,
+					RecCPURequestMC:      cpuRec.CostRequestMC,
+					RecCPULimitMC:        cpuRec.CostLimitMC,
+					RecMemRequestKiB:     memRec.CostRequestKiB,
+					RecMemLimitKiB:       memRec.CostLimitKiB,
+					CurrentCPURequestMC:  currentCPUReqMC,
+					CurrentCPULimitMC:    currentCPULimMC,
+					CurrentMemRequestKiB: currentMemReqKiB,
+					CurrentMemLimitKiB:   currentMemLimKiB,
+					ConfidenceLevel:      confidence,
+					TrendSlope:           cpuRec.TrendSlope,
+					IsIdle:               cpuRec.IsIdle,
+					OOMCountSum:          sumOOMCounts(windowRows),
+					DataDays:             dataDays,
+					Stale:                stale,
+				}
+				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+
+				results = append(results, rec)
 			}
 		}
 	}
@@ -142,22 +163,34 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				term, engine,
 				rec_cpu_request_millicores, rec_cpu_limit_millicores,
 				rec_memory_request_kib, rec_memory_limit_kib,
+				current_cpu_request_millicores, current_cpu_limit_millicores,
+				current_memory_request_kib, current_memory_limit_kib,
+				variation_cpu_request_pct, variation_memory_request_pct,
 				confidence_level, stale, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
 				rec_cpu_limit_millicores = EXCLUDED.rec_cpu_limit_millicores,
 				rec_memory_request_kib = EXCLUDED.rec_memory_request_kib,
 				rec_memory_limit_kib = EXCLUDED.rec_memory_limit_kib,
+				current_cpu_request_millicores = EXCLUDED.current_cpu_request_millicores,
+				current_cpu_limit_millicores = EXCLUDED.current_cpu_limit_millicores,
+				current_memory_request_kib = EXCLUDED.current_memory_request_kib,
+				current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
+				variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
+				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
 				confidence_level = EXCLUDED.confidence_level,
-				stale = false,
+				stale = EXCLUDED.stale,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
 			r.Term, r.Engine,
 			r.RecCPURequestMC, r.RecCPULimitMC,
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
-			r.ConfidenceLevel,
+			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+			r.VariationCPURequestPct, r.VariationMemRequestPct,
+			r.ConfidenceLevel, r.Stale,
 		)
 	}
 
@@ -231,4 +264,20 @@ func sumOOMCounts(rows []DigestRow) int64 {
 		total += r.OOMCountSum
 	}
 	return total
+}
+
+const stalenessThreshold = 3 * 24 * time.Hour // 3 days
+
+// latestDigest returns the DigestRow with the most recent BucketDate.
+func latestDigest(rows []DigestRow) DigestRow {
+	if len(rows) == 0 {
+		return DigestRow{}
+	}
+	best := rows[0]
+	for _, r := range rows[1:] {
+		if r.BucketDate.After(best.BucketDate) {
+			best = r
+		}
+	}
+	return best
 }

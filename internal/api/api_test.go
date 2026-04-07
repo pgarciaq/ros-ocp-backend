@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/csv"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMapQueryParameters(t *testing.T) {
@@ -666,4 +669,72 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 		assert.Equal(t, []string{"1b36b20f-7fa0-4454-a6d2-008294e06378"}, queryParams["clusters.cluster_uuid = ?"])
 		assert.Equal(t, []string{"baz"}, queryParams[projectCol+" != ?"])
 	})
+}
+
+func ptr64(v int64) *int64      { return &v }
+func ptrF32(v float32) *float32 { return &v }
+
+func TestGenerateNativeCSV(t *testing.T) {
+	results := []model.NativeContainerResult{
+		{
+			ClusterUUID:  "c1",
+			ClusterAlias: "cluster-1",
+			Container:    "app",
+			Project:      "ns1",
+			Workload:     "deploy-a",
+			WorkloadType: "deployment",
+			SourceID:     "s1",
+			LastReported: "2026-04-07T00:00:00Z",
+			Recommendations: map[string]model.TermRecommendation{
+				"short_term": {
+					Cost: &model.EngineRecommendation{
+						CPURequestMillicores: ptr64(100),
+						CPULimitMillicores:   ptr64(200),
+						MemRequestKiB:        ptr64(2048),
+						MemLimitKiB:          ptr64(4096),
+						ConfidenceLevel:      ptrF32(0.85),
+					},
+					Performance: &model.EngineRecommendation{
+						CPURequestMillicores: ptr64(300),
+						ConfidenceLevel:      ptrF32(0.90),
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := GenerateNativeCSV(&buf, results)
+	require.NoError(t, err)
+
+	reader := csv.NewReader(&buf)
+	records, err := reader.ReadAll()
+	require.NoError(t, err)
+
+	assert.Equal(t, NativeCSVHeader, records[0])
+	assert.Len(t, records, 3) // header + 2 engine rows
+
+	costRow := records[1]
+	assert.Equal(t, "c1", costRow[0])
+	assert.Equal(t, "short_term", costRow[8])
+	assert.Equal(t, "cost", costRow[9])
+	assert.Equal(t, "100", costRow[10])
+	assert.Equal(t, "200", costRow[11])
+	assert.Equal(t, "2048", costRow[12])
+	assert.Equal(t, "4096", costRow[13])
+
+	perfRow := records[2]
+	assert.Equal(t, "performance", perfRow[9])
+	assert.Equal(t, "300", perfRow[10])
+}
+
+func TestGenerateNativeCSV_Empty(t *testing.T) {
+	var buf bytes.Buffer
+	err := GenerateNativeCSV(&buf, nil)
+	require.NoError(t, err)
+
+	reader := csv.NewReader(&buf)
+	records, err := reader.ReadAll()
+	require.NoError(t, err)
+	assert.Len(t, records, 1) // header only
 }

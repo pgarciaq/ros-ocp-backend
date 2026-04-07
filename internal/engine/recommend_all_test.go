@@ -268,7 +268,82 @@ func TestComputeVariation(t *testing.T) {
 	}
 }
 
-// Helpers to set timestamps for testing
-func init() {
-	_ = time.UTC
+func TestRecommendAllWorkloads_PopulatesCurrentValues(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	cpuReqMC := int64(200)
+	memReqKiB := int64(524288)
+	testutil.SeedDigestSeries(t, pool, 7, cpuReqMC, 10, memReqKiB, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	for _, r := range results {
+		assert.True(t, r.CurrentCPURequestMC > 0, "current CPU request should be populated")
+		assert.True(t, r.CurrentMemRequestKiB > 0, "current mem request should be populated")
+	}
+}
+
+func TestRecommendAllWorkloads_VariationIsComputed(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	for _, r := range results {
+		if r.CurrentCPURequestMC > 0 {
+			assert.NotEqual(t, float32(0), r.VariationCPURequestPct,
+				"variation should be non-zero when current != recommended")
+		}
+	}
+}
+
+func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Seed data from 10 days ago -- well within staleness threshold when
+	// end is also old, but the check is now() vs latest digest, not end.
+	testutil.SeedDigestSeries(t, pool, 3, 200, 10, 524288, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, 2)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	// BaseDate is first-of-current-month. If it's >3 days ago, results should be stale.
+	// If today is day 1-3 of the month, they won't be stale. Either way, verify consistency.
+	if len(results) > 0 {
+		daysSinceLatest := time.Since(end.Truncate(24 * time.Hour))
+		if daysSinceLatest > stalenessThreshold {
+			for _, r := range results {
+				assert.True(t, r.Stale, "recommendations from old data should be stale")
+			}
+		} else {
+			for _, r := range results {
+				assert.False(t, r.Stale, "recent data should not be stale")
+			}
+		}
+	}
+}
+
+func TestLatestDigest(t *testing.T) {
+	d1 := DigestRow{BucketDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 100}
+	d2 := DigestRow{BucketDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 200}
+	d3 := DigestRow{BucketDate: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 150}
+
+	got := latestDigest([]DigestRow{d1, d2, d3})
+	assert.Equal(t, d2.CPURequestP50MC, got.CPURequestP50MC)
+	assert.Equal(t, d2.BucketDate, got.BucketDate)
+}
+
+func TestLatestDigest_Empty(t *testing.T) {
+	got := latestDigest(nil)
+	assert.True(t, got.BucketDate.IsZero())
 }

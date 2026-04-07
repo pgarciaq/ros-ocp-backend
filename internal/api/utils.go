@@ -1041,6 +1041,71 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 	return rows, nil
 }
 
+// GenerateNativeCSV writes native recommendation results as CSV.
+func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error {
+	writer := csv.NewWriter(w)
+	if err := writer.Write(NativeCSVHeader); err != nil {
+		return fmt.Errorf("unable to write header: %w", err)
+	}
+
+	for _, r := range results {
+		for _, termName := range []string{"short_term", "medium_term", "long_term"} {
+			term, ok := r.Recommendations[termName]
+			if !ok {
+				continue
+			}
+			for _, eng := range []struct {
+				name string
+				rec  *model.EngineRecommendation
+			}{
+				{"cost", term.Cost},
+				{"performance", term.Performance},
+			} {
+				if eng.rec == nil {
+					continue
+				}
+				row := []string{
+					r.ClusterUUID,
+					r.ClusterAlias,
+					r.Container,
+					r.Project,
+					r.Workload,
+					r.WorkloadType,
+					r.LastReported,
+					r.SourceID,
+					termName,
+					eng.name,
+					optionalInt64Str(eng.rec.CPURequestMillicores),
+					optionalInt64Str(eng.rec.CPULimitMillicores),
+					optionalInt64Str(eng.rec.MemRequestKiB),
+					optionalInt64Str(eng.rec.MemLimitKiB),
+					optionalFloat32Str(eng.rec.ConfidenceLevel),
+				}
+				if err := writer.Write(row); err != nil {
+					return fmt.Errorf("unable to write row: %w", err)
+				}
+			}
+		}
+	}
+
+	writer.Flush()
+	return writer.Error()
+}
+
+func optionalInt64Str(v *int64) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatInt(*v, 10)
+}
+
+func optionalFloat32Str(v *float32) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatFloat(float64(*v), 'f', 3, 32)
+}
+
 func GenerateAndStreamCSV(w io.Writer, recommendationSets []model.RecommendationSetResult) error {
 	writer := csv.NewWriter(w)
 	header := FlattenedCSVHeader
