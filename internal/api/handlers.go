@@ -252,7 +252,7 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
 	var startTimestamp, endTimestamp time.Time
 
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().UTC()
 	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	startDateStr := c.QueryParam("start_date")
@@ -269,7 +269,7 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 
 	endDateStr := c.QueryParam("end_date")
 	if endDateStr == "" {
-		endTimestamp = now
+		endTimestamp = now.Add(time.Second)
 	} else {
 		var err error
 		endTimestamp, err = time.Parse(timeLayout, endDateStr)
@@ -325,12 +325,35 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
-	interfaceSlice := make([]any, len(results))
-	for i, v := range results {
-		interfaceSlice[i] = v
+	switch apiListOptions.Format {
+	case listoptions.ResponseFormatCSV:
+		filename := "recommendations-" + time.Now().Format("20060102")
+		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
+		pipeReader, pipeWriter := io.Pipe()
+		go func() {
+			var genErr error
+			defer func() {
+				if r := recover(); r != nil {
+					genErr = fmt.Errorf("panic in native CSV generation: %v", r)
+				}
+				if genErr != nil {
+					_ = pipeWriter.CloseWithError(genErr)
+				} else {
+					_ = pipeWriter.Close()
+				}
+			}()
+			genErr = GenerateNativeCSV(pipeWriter, results)
+		}()
+		return c.Stream(http.StatusOK, "text/csv", pipeReader)
+	default:
+		interfaceSlice := make([]any, len(results))
+		for i, v := range results {
+			interfaceSlice[i] = v
+		}
+		response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		return c.JSON(http.StatusOK, response)
 	}
-	response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
-	return c.JSON(http.StatusOK, response)
 }
 
 func GetAppStatus(c echo.Context) error {

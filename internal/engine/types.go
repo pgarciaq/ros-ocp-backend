@@ -83,6 +83,7 @@ type ContainerRec struct {
 	IsIdle                 bool
 	OOMCountSum            int64
 	DataDays               int
+	Stale                  bool
 }
 
 // TermConfig defines a recommendation term's parameters.

@@ -132,3 +132,21 @@ var FlattenedCSVHeader = []string{
 	"variation_memory_request_amount",
 	"variation_memory_request_format",
 }
+
+var NativeCSVHeader = []string{
+	"cluster_uuid",
+	"cluster_alias",
+	"container",
+	"project",
+	"workload",
+	"workload_type",
+	"last_reported",
+	"source_id",
+	"recommendation_term",
+	"recommendation_engine",
+	"rec_cpu_request_millicores",
+	"rec_cpu_limit_millicores",
+	"rec_memory_request_kib",
+	"rec_memory_limit_kib",
+	"confidence_level",
+}
