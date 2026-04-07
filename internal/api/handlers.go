@@ -247,6 +247,92 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 	}
 }
 
+// MapNativeQueryParameters parses query params using the native schema's column names.
+func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
+	queryParams := make(map[string]interface{})
+	var startTimestamp, endTimestamp time.Time
+
+	now := time.Now().UTC().Truncate(time.Second)
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	startDateStr := c.QueryParam("start_date")
+	if startDateStr == "" {
+		startTimestamp = firstOfMonth
+	} else {
+		var err error
+		startTimestamp, err = time.Parse(timeLayout, startDateStr)
+		if err != nil {
+			return queryParams, err
+		}
+	}
+	queryParams["rs.updated_at >= ?"] = startTimestamp
+
+	endDateStr := c.QueryParam("end_date")
+	if endDateStr == "" {
+		endTimestamp = now
+	} else {
+		var err error
+		endTimestamp, err = time.Parse(timeLayout, endDateStr)
+		if err != nil {
+			return queryParams, err
+		}
+		endTimestamp = endTimestamp.Add(24 * time.Hour)
+	}
+	queryParams["rs.updated_at < ?"] = endTimestamp
+
+	if clusters := c.QueryParams()["cluster"]; len(clusters) > 0 {
+		queryParams["c.cluster_alias IN ?"] = clusters
+	}
+	if projects := c.QueryParams()["project"]; len(projects) > 0 {
+		queryParams["rs.namespace IN ?"] = projects
+	}
+	if workloads := c.QueryParams()["workload"]; len(workloads) > 0 {
+		queryParams["rs.workload IN ?"] = workloads
+	}
+	if workloadTypes := c.QueryParams()["workload_type"]; len(workloadTypes) > 0 {
+		queryParams["rs.workload_type IN ?"] = workloadTypes
+	}
+	if containers := c.QueryParams()["container"]; len(containers) > 0 {
+		queryParams["rs.container_name IN ?"] = containers
+	}
+
+	return queryParams, nil
+}
+
+// GetNativeRecommendationSetList serves recommendations from the native Go engine
+// using relational columns instead of JSONB.
+func GetNativeRecommendationSetList(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	queryParams, err := MapNativeQueryParameters(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	results, count, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	if queryErr != nil {
+		log.Errorf("unable to fetch native recommendations; %v", queryErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch records from database",
+		})
+	}
+
+	interfaceSlice := make([]any, len(results))
+	for i, v := range results {
+		interfaceSlice[i] = v
+	}
+	response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+	return c.JSON(http.StatusOK, response)
+}
+
 func GetAppStatus(c echo.Context) error {
 	status := map[string]string{
 		"api-server": "working",

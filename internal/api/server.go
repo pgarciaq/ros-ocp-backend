@@ -52,7 +52,11 @@ func StartAPIServer() {
 	}
 
 	// Container
-	v1.GET("/recommendations/openshift", GetRecommendationSetList)
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift", GetNativeRecommendationSetList)
+	} else {
+		v1.GET("/recommendations/openshift", GetRecommendationSetList)
+	}
 	v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 
 	// Project/Namespace

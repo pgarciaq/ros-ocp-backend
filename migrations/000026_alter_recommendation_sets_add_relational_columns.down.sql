@@ -3,6 +3,11 @@
 
 ALTER TABLE recommendation_sets DROP CONSTRAINT IF EXISTS recommendation_sets_pkey;
 
+-- Restore legacy NOT NULL constraints.
+ALTER TABLE recommendation_sets ALTER COLUMN monitoring_start_time SET NOT NULL;
+ALTER TABLE recommendation_sets ALTER COLUMN monitoring_end_time SET NOT NULL;
+ALTER TABLE recommendation_sets ALTER COLUMN recommendations SET NOT NULL;
+
 ALTER TABLE recommendation_sets
     DROP COLUMN IF EXISTS term,
     DROP COLUMN IF EXISTS engine,

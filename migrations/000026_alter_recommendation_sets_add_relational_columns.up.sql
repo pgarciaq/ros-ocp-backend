@@ -61,6 +61,11 @@ ALTER TABLE recommendation_sets ALTER COLUMN cluster_uuid SET NOT NULL;
 ALTER TABLE recommendation_sets ALTER COLUMN namespace SET NOT NULL;
 ALTER TABLE recommendation_sets ALTER COLUMN workload SET NOT NULL;
 
--- Step 7: Add new composite PK (6 rows per container: 3 terms x 2 engines).
+-- Step 7: Relax legacy NOT NULL constraints (new Go engine doesn't use these columns).
+ALTER TABLE recommendation_sets ALTER COLUMN monitoring_start_time DROP NOT NULL;
+ALTER TABLE recommendation_sets ALTER COLUMN monitoring_end_time DROP NOT NULL;
+ALTER TABLE recommendation_sets ALTER COLUMN recommendations DROP NOT NULL;
+
+-- Step 8: Add new composite PK (6 rows per container: 3 terms x 2 engines).
 ALTER TABLE recommendation_sets ADD PRIMARY KEY
     (org_id, cluster_uuid, namespace, workload, container_name, term, engine);
