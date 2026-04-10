@@ -104,3 +104,25 @@ and accept the loss until a future phase addresses it.
 
 Option C (accept degradation) — per user decision. Notifications are not a
 priority for the current phase. This document serves as the tracking artifact.
+
+## Phase 3 Tasks
+
+The following items must be addressed in Phase 3 to close this gap:
+
+1. **Persist notification_codes in WriteRecommendations** — `EvaluateNotifications()`
+   is already implemented and tested. `WriteRecommendations` must be updated to
+   include `notification_codes` in the INSERT statement so the column is populated
+   for every recommendation row.
+
+2. **Map native notification codes to Kruize-compatible format** — Add a mapping
+   layer (code table or function) that converts native integer codes (1–24) to
+   Kruize-style notification objects with `code`, `message`, and `type` fields.
+
+3. **Include mapped notifications in NativeContainerResult** — The API response
+   assembly must embed the mapped notifications so koku-ui can render optimized
+   badges, warning alerts, and notification filtering without changes.
+
+4. **Re-enable skipped IQE tests** — Once notifications are functional, un-skip
+   the tests in `iqe-ros-ocp-plugin`:
+   - `tests/rest/test_notifications.py` (2 tests)
+   - `tests/rest/test_boxplots.py` (1 test, if boxplot data is also added)
