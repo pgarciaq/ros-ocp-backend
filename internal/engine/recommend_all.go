@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 type containerKey struct {
@@ -157,17 +159,18 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 
 	batch := &pgx.Batch{}
 	for _, r := range recs {
+		containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName)
 		batch.Queue(`
 			INSERT INTO recommendation_sets (
 				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
-				term, engine,
+				term, engine, container_id,
 				rec_cpu_request_millicores, rec_cpu_limit_millicores,
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_memory_request_pct,
 				confidence_level, stale, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -182,9 +185,10 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
+				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-			r.Term, r.Engine,
+			r.Term, r.Engine, containerID,
 			r.RecCPURequestMC, r.RecCPULimitMC,
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
 			r.CurrentCPURequestMC, r.CurrentCPULimitMC,

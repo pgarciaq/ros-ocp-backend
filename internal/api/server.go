@@ -67,12 +67,14 @@ func StartAPIServer() {
 
 	registerRecommendationRoutes(v1)
 	// Container
+	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if cfg.UseNativeEngine {
-		v1.GET("/recommendations/openshift", GetNativeRecommendationSetList)
+		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
 		v1.GET("/recommendations/openshift", GetRecommendationSetList)
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 	}
-	v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 
 	// Project/Namespace
 	v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetList)

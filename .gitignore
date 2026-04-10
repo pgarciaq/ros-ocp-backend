@@ -7,6 +7,7 @@ coverage.txt
 output.csv
 comparison.csv
 /compare
+/bench
 .idea/
 .DS_Store
 .go/
