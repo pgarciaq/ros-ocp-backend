@@ -333,6 +333,119 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 	}
 }
 
+func TestRecommendAllWorkloads_TermWindowScoping(t *testing.T) {
+	// T-1.8: Verify that short (1 day), medium (7 days), and long (15 days)
+	// actually use only their respective data windows.
+	// Strategy: seed 15 days with strongly increasing CPU usage.
+	// Short-term (window=1) sees only the last day (high CPU), producing
+	// a larger recommendation than long-term (window=15) which averages
+	// over the full range including the low early-day values.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Seed 15 days: CPU starts at 100mc, increases by 100mc/day → day 15 = 1500mc.
+	for i := 0; i < 15; i++ {
+		cpuVal := int64(100) + int64(i)*100
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       testutil.TestNamespace,
+			Workload:        testutil.TestWorkload,
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   testutil.TestContainer,
+			CPURequestP50MC: cpuVal, CPURequestP95MC: cpuVal + 50,
+			CPUUsageP50MC: cpuVal - 20, CPUUsageP95MC: cpuVal,
+			CPUUsageP98MC: cpuVal + 10, CPUUsageP99MC: cpuVal + 15,
+			CPUUsageMaxMC:    cpuVal + 30,
+			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+			MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+			MemUsageMaxKiB: 525312,
+			MemRSSP95KiB:   524000, MemRSSMaxKiB: 525000,
+			OOMCountSum: 0, CPUUsageMeanMC: cpuVal - 10,
+			MemUsageMeanKiB: 523000, SampleCount: 96,
+		})
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 14) // day index 14 = 15th day
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	// Use performance engine (P98) since the test fixtures populate P98
+	// but not P60 (which the cost engine uses).
+	termCPU := map[string]int64{}
+	for _, r := range results {
+		if r.Engine == "performance" {
+			termCPU[r.Term] = r.RecCPURequestMC
+		}
+	}
+
+	shortCPU, hasShort := termCPU["short"]
+	longCPU, hasLong := termCPU["long"]
+	require.True(t, hasShort, "should have short-term performance results")
+	require.True(t, hasLong, "should have long-term performance results")
+
+	assert.Greater(t, shortCPU, longCPU,
+		"short-term (1 day window, sees only latest high CPU=%d) should recommend more than "+
+			"long-term (15 day window, averages in low early days CPU=%d)", shortCPU, longCPU)
+}
+
+func TestWriteRecommendations_PKAllowsTermEngineCoexistence(t *testing.T) {
+	// T-2.5: The composite PK (org_id, cluster_uuid, namespace, workload,
+	// container_name, term, engine) must allow the same container to have
+	// rows for different term/engine combinations simultaneously.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	base := ContainerRec{
+		OrgID:            testutil.TestOrgID,
+		ClusterUUID:      testutil.TestClusterUUID,
+		Namespace:        testutil.TestNamespace,
+		Workload:         testutil.TestWorkload,
+		WorkloadType:     testutil.TestWorkloadType,
+		ContainerName:    testutil.TestContainer,
+		RecCPURequestMC:  100,
+		RecCPULimitMC:    105,
+		RecMemRequestKiB: 51200,
+		RecMemLimitKiB:   53760,
+	}
+
+	var recs []ContainerRec
+	for _, term := range []string{"short", "medium", "long"} {
+		for _, eng := range []string{"cost", "performance"} {
+			r := base
+			r.Term = term
+			r.Engine = eng
+			recs = append(recs, r)
+		}
+	}
+
+	err := WriteRecommendations(ctx, pool, recs)
+	require.NoError(t, err)
+
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM recommendation_sets WHERE org_id = $1 AND container_name = $2`,
+		testutil.TestOrgID, testutil.TestContainer).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 6, count, "6 rows (3 terms × 2 engines) must coexist for the same container")
+
+	// Verify specific combinations exist
+	for _, term := range []string{"short", "medium", "long"} {
+		for _, eng := range []string{"cost", "performance"} {
+			var exists bool
+			err = pool.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM recommendation_sets
+				 WHERE org_id=$1 AND container_name=$2 AND term=$3 AND engine=$4)`,
+				testutil.TestOrgID, testutil.TestContainer, term, eng).Scan(&exists)
+			require.NoError(t, err)
+			assert.True(t, exists, "row for %s/%s should exist", term, eng)
+		}
+	}
+}
+
 func TestLatestDigest(t *testing.T) {
 	d1 := DigestRow{BucketDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 100}
 	d2 := DigestRow{BucketDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 200}

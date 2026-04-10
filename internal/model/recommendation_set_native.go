@@ -1,14 +1,24 @@
 package model
 
 import (
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
 )
+
+var log *logrus.Entry = logging.GetLogger()
+
+// Fixed namespace UUID for deterministic ID generation (UUID v5).
+var nativeIDNamespace = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 
 // NativeRecommendationRow represents a single row from recommendation_sets
 // using the new relational columns (one row per container+term+engine).
@@ -35,8 +45,11 @@ type NativeRecommendationRow struct {
 	VariationCPURequestPct *float32 `gorm:"column:variation_cpu_request_pct"`
 	VariationMemRequestPct *float32 `gorm:"column:variation_memory_request_pct"`
 	ConfidenceLevel        *float32 `gorm:"column:confidence_level"`
-	NotificationCodes      []int16  `gorm:"column:notification_codes;type:smallint[]"`
-	Stale                  bool     `gorm:"column:stale"`
+	// SMALLINT[] caps values at 32767. Current notification codes (1-24) are
+	// well within range. If legacy 6-digit codes are ever needed, this column
+	// type must be migrated to INTEGER[].
+	NotificationCodes []int16 `gorm:"column:notification_codes;type:smallint[]"`
+	Stale             bool    `gorm:"column:stale"`
 
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
@@ -51,6 +64,7 @@ func (NativeRecommendationRow) TableName() string {
 // NativeContainerResult is the API-ready format for a single container,
 // with all 6 recommendation variants nested.
 type NativeContainerResult struct {
+	ID              string                        `json:"id"`
 	ClusterAlias    string                        `json:"cluster_alias"`
 	ClusterUUID     string                        `json:"cluster_uuid"`
 	Container       string                        `json:"container"`
@@ -62,6 +76,12 @@ type NativeContainerResult struct {
 	Recommendations map[string]TermRecommendation `json:"recommendations"`
 }
 
+// NativeContainerID generates a deterministic UUID v5 from the composite key.
+func NativeContainerID(clusterUUID, namespace, workload, container string) string {
+	name := fmt.Sprintf("%s/%s/%s/%s", clusterUUID, namespace, workload, container)
+	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
+}
+
 // TermRecommendation holds cost and performance recommendations for a term.
 type TermRecommendation struct {
 	Cost        *EngineRecommendation `json:"cost,omitempty"`
@@ -70,11 +90,18 @@ type TermRecommendation struct {
 
 // EngineRecommendation holds the actual CPU/memory recommendation values.
 type EngineRecommendation struct {
-	CPURequestMillicores *int64   `json:"cpu_request_millicores,omitempty"`
-	CPULimitMillicores   *int64   `json:"cpu_limit_millicores,omitempty"`
-	MemRequestKiB        *int64   `json:"memory_request_kib,omitempty"`
-	MemLimitKiB          *int64   `json:"memory_limit_kib,omitempty"`
-	ConfidenceLevel      *float32 `json:"confidence_level,omitempty"`
+	CPURequestMillicores   *int64   `json:"cpu_request_millicores,omitempty"`
+	CPULimitMillicores     *int64   `json:"cpu_limit_millicores,omitempty"`
+	MemRequestKiB          *int64   `json:"memory_request_kib,omitempty"`
+	MemLimitKiB            *int64   `json:"memory_limit_kib,omitempty"`
+	CurrentCPURequestMC    *int64   `json:"current_cpu_request_millicores,omitempty"`
+	CurrentCPULimitMC      *int64   `json:"current_cpu_limit_millicores,omitempty"`
+	CurrentMemRequestKiB   *int64   `json:"current_memory_request_kib,omitempty"`
+	CurrentMemLimitKiB     *int64   `json:"current_memory_limit_kib,omitempty"`
+	VariationCPURequestPct *float32 `json:"variation_cpu_request_pct,omitempty"`
+	VariationMemRequestPct *float32 `json:"variation_memory_request_pct,omitempty"`
+	ConfidenceLevel        *float32 `json:"confidence_level,omitempty"`
+	NotificationCodes      []int16  `json:"notification_codes,omitempty"`
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
@@ -86,26 +113,31 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.container_name, rs.term, rs.engine,
 			rs.rec_cpu_request_millicores, rs.rec_cpu_limit_millicores,
 			rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
-			rs.confidence_level, rs.stale, rs.updated_at,
+			rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
+			rs.current_memory_request_kib, rs.current_memory_limit_kib,
+			rs.variation_cpu_request_pct, rs.variation_memory_request_pct,
+			rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
 		Where("ra.org_id = ?", orgID).
 		Where("rs.stale = false")
 
-	applyNativeRBAC(query, userPerms)
+	query = applyNativeRBAC(query, userPerms)
+	query = applyQueryParams(query, queryParams)
 
-	for key, values := range queryParams {
-		switch v := values.(type) {
-		case []string:
-			args := make([]interface{}, len(v))
-			for i, s := range v {
-				args[i] = s
-			}
-			query = query.Where(key, args...)
-		default:
-			query = query.Where(key, v)
-		}
+	// Total count of distinct containers (for pagination metadata).
+	var totalContainers int64
+	countQuery := db.Table("recommendation_sets rs").
+		Select("COUNT(DISTINCT (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name))").
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("rs.stale = false")
+	countQuery = applyNativeRBAC(countQuery, userPerms)
+	countQuery = applyQueryParams(countQuery, queryParams)
+	if err := countQuery.Scan(&totalContainers).Error; err != nil {
+		return nil, 0, err
 	}
 
 	var rows []NativeRecommendationRow
@@ -118,17 +150,17 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	}
 
 	results := assembleNativeResults(rows)
-	return results, len(results), nil
+	return results, int(totalContainers), nil
 }
 
 // applyNativeRBAC adds RBAC-based WHERE clauses using the native schema's column names.
-func applyNativeRBAC(query *gorm.DB, userPerms map[string][]string) {
+func applyNativeRBAC(query *gorm.DB, userPerms map[string][]string) *gorm.DB {
 	cfg := config.GetConfig()
 	if !cfg.RBACEnabled {
-		return
+		return query
 	}
 	if _, ok := userPerms["*"]; ok {
-		return
+		return query
 	}
 
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]
@@ -137,11 +169,132 @@ func applyNativeRBAC(query *gorm.DB, userPerms map[string][]string) {
 	projectAll := hasProject && utils.StringInSlice("*", projectPerms)
 
 	if hasCluster && !clusterAll {
-		query.Where("c.cluster_uuid IN (?)", clusterPerms)
+		query = query.Where("c.cluster_uuid IN (?)", clusterPerms)
 	}
 	if hasProject && !projectAll {
-		query.Where("rs.namespace IN (?)", projectPerms)
+		query = query.Where("rs.namespace IN (?)", projectPerms)
 	}
+	return query
+}
+
+// applyQueryParams adds dynamic WHERE clauses from the parsed query parameters.
+// For []string values (IN clauses), the slice is passed directly to GORM
+// so it expands into IN ($1, $2, ...) rather than a single scalar.
+func applyQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
+	for key, values := range queryParams {
+		query = query.Where(key, values)
+	}
+	return query
+}
+
+// nativeDetailSelect is the shared SELECT clause for detail queries.
+const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
+	rs.container_name, rs.term, rs.engine,
+	rs.rec_cpu_request_millicores, rs.rec_cpu_limit_millicores,
+	rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
+	rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
+	rs.current_memory_request_kib, rs.current_memory_limit_kib,
+	rs.variation_cpu_request_pct, rs.variation_memory_request_pct,
+	rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
+	c.source_id, c.cluster_alias, c.last_reported_at`
+
+// GetNativeRecommendationByID fetches a single container's recommendations
+// by its deterministic UUID. Primary path uses the indexed container_id column
+// (O(1)). If that yields no rows — e.g. pre-migration data where container_id
+// is NULL — falls back to a bounded composite-key scan.
+func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
+	db := database.GetDB()
+
+	// Primary path: indexed lookup on container_id.
+	query := db.Table("recommendation_sets rs").
+		Select(nativeDetailSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("rs.container_id = ?", id).
+		Where("rs.stale = false")
+	query = applyNativeRBAC(query, userPerms)
+
+	var rows []NativeRecommendationRow
+	if err := query.Order("rs.term, rs.engine").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	if len(rows) > 0 {
+		results := assembleNativeResults(rows)
+		if len(results) > 0 {
+			return &results[0], nil
+		}
+	}
+
+	// Fallback for pre-migration rows where container_id is NULL.
+	// Scan a bounded window of distinct container keys and match by UUID v5.
+	return getNativeRecommendationByIDFallback(db, orgID, id, userPerms)
+}
+
+// getNativeRecommendationByIDFallback scans up to 500 distinct container keys
+// for the org, computes the UUID v5 for each, and fetches the matching container.
+// This path is only hit for rows written before migration 028 populated
+// container_id. Once all data is reprocessed, this code path becomes dead.
+func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
+	log.Warnf("container_id miss for %s in org %s — using fallback scan (pre-migration data)", id, orgID)
+
+	type containerKey struct {
+		ClusterUUID   string `gorm:"column:cluster_uuid"`
+		Namespace     string `gorm:"column:namespace"`
+		Workload      string `gorm:"column:workload"`
+		ContainerName string `gorm:"column:container_name"`
+	}
+
+	keysQuery := db.Table("recommendation_sets rs").
+		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("rs.stale = false").
+		Limit(500)
+	keysQuery = applyNativeRBAC(keysQuery, userPerms)
+
+	var keys []containerKey
+	if err := keysQuery.Find(&keys).Error; err != nil {
+		return nil, err
+	}
+
+	var matched *containerKey
+	for i := range keys {
+		if NativeContainerID(keys[i].ClusterUUID, keys[i].Namespace, keys[i].Workload, keys[i].ContainerName) == id {
+			matched = &keys[i]
+			break
+		}
+	}
+	if matched == nil {
+		return nil, nil
+	}
+
+	var rows []NativeRecommendationRow
+	err := db.Table("recommendation_sets rs").
+		Select(nativeDetailSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Where("rs.org_id = ?", orgID).
+		Where("rs.cluster_uuid = ?", matched.ClusterUUID).
+		Where("rs.namespace = ?", matched.Namespace).
+		Where("rs.workload = ?", matched.Workload).
+		Where("rs.container_name = ?", matched.ContainerName).
+		Where("rs.stale = false").
+		Order("rs.term, rs.engine").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) == 0 {
+		return nil, nil
+	}
+	return &results[0], nil
 }
 
 // assembleNativeResults groups flat rows into nested NativeContainerResult structs.
@@ -170,6 +323,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		first := rowGroup[0]
 
 		result := NativeContainerResult{
+			ID:              NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
 			ClusterAlias:    first.ClusterAlias,
 			ClusterUUID:     first.ClusterUUID,
 			Container:       first.ContainerName,
@@ -189,11 +343,18 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			}
 
 			eng := &EngineRecommendation{
-				CPURequestMillicores: r.RecCPURequestMC,
-				CPULimitMillicores:   r.RecCPULimitMC,
-				MemRequestKiB:        r.RecMemRequestKiB,
-				MemLimitKiB:          r.RecMemLimitKiB,
-				ConfidenceLevel:      r.ConfidenceLevel,
+				CPURequestMillicores:   r.RecCPURequestMC,
+				CPULimitMillicores:     r.RecCPULimitMC,
+				MemRequestKiB:          r.RecMemRequestKiB,
+				MemLimitKiB:            r.RecMemLimitKiB,
+				CurrentCPURequestMC:    r.CurrentCPURequestMC,
+				CurrentCPULimitMC:      r.CurrentCPULimitMC,
+				CurrentMemRequestKiB:   r.CurrentMemRequestKiB,
+				CurrentMemLimitKiB:     r.CurrentMemLimitKiB,
+				VariationCPURequestPct: r.VariationCPURequestPct,
+				VariationMemRequestPct: r.VariationMemRequestPct,
+				ConfidenceLevel:        r.ConfidenceLevel,
+				NotificationCodes:      r.NotificationCodes,
 			}
 
 			switch r.Engine {
