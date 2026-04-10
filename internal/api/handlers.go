@@ -356,6 +356,227 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 	}
 }
 
+// GetNativeRecommendationSet returns a single container's native recommendations by deterministic UUID.
+func GetNativeRecommendationSet(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	idStr := c.Param("recommendation-id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation_id"})
+	}
+
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
+	if err != nil {
+		log.Errorf("unable to fetch native recommendation %s; %v", idStr, err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch recommendation",
+		})
+	}
+	if result == nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+// GetRecommendationSetListWithFallback tries the native engine first. If it
+// returns zero results, falls back to the legacy Kruize JSONB path. This
+// enables zero-downtime migration: containers not yet reprocessed by the
+// native engine are still served from the old data.
+//
+// NOTE: Native responses do NOT include Kruize-style notification objects.
+// The koku-ui notification/warning/optimized indicators will be absent for
+// containers served from the native path. This is a known limitation until
+// a notification mapping layer is implemented.
+func GetRecommendationSetListWithFallback(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	queryParams, err := MapNativeQueryParameters(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	results, count, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	if queryErr != nil {
+		log.Errorf("unable to fetch native recommendations; %v", queryErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch records from database",
+		})
+	}
+
+	if count > 0 {
+		return serveNativeList(c, results, int(count), apiListOptions)
+	}
+
+	log.Info("native engine returned 0 results, falling back to Kruize path")
+	return serveLegacyList(c, OrgID, apiListOptions, userPerms)
+}
+
+// GetRecommendationSetWithFallback tries the native detail lookup first.
+// If not found, falls back to the legacy Kruize JSONB lookup. Native uses a
+// deterministic UUID v5 (from composite key), while legacy uses the DB row's
+// random UUID — both are valid UUIDs from different namespaces so there is no
+// collision risk.
+func GetRecommendationSetWithFallback(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	idStr := c.Param("recommendation-id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation_id"})
+	}
+
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
+	if err != nil {
+		log.Errorf("unable to fetch native recommendation %s; %v", idStr, err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch recommendation",
+		})
+	}
+	if result != nil {
+		return c.JSON(http.StatusOK, result)
+	}
+
+	log.Infof("native detail miss for %s, falling back to Kruize path", idStr)
+	return serveLegacyDetail(c, OrgID, idStr, userPerms)
+}
+
+func serveNativeList(c echo.Context, results []model.NativeContainerResult, count int, opts listoptions.ListOptions) error {
+	switch opts.Format {
+	case listoptions.ResponseFormatCSV:
+		filename := "recommendations-" + time.Now().Format("20060102")
+		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
+		pipeReader, pipeWriter := io.Pipe()
+		go func() {
+			var genErr error
+			defer func() {
+				if r := recover(); r != nil {
+					genErr = fmt.Errorf("panic in native CSV generation: %v", r)
+				}
+				if genErr != nil {
+					_ = pipeWriter.CloseWithError(genErr)
+				} else {
+					_ = pipeWriter.Close()
+				}
+			}()
+			genErr = GenerateNativeCSV(pipeWriter, results)
+		}()
+		return c.Stream(http.StatusOK, "text/csv", pipeReader)
+	default:
+		interfaceSlice := make([]any, len(results))
+		for i, v := range results {
+			interfaceSlice[i] = v
+		}
+		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		return c.JSON(http.StatusOK, response)
+	}
+}
+
+func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions, userPerms map[string][]string) error {
+	queryParams, err := MapQueryParameters(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "bytes")
+	if unitParseErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
+	}
+
+	recSet := model.RecommendationSet{}
+	recSets, count, queryErr := recSet.GetRecommendationSets(orgID, opts, queryParams, userPerms)
+	if queryErr != nil {
+		log.Errorf("unable to fetch legacy records from database; %v", queryErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch records from database",
+		})
+	}
+
+	for i := range recSets {
+		recSets[i].RecommendationsJSON = UpdateRecommendationJSON(
+			"recommendationset-list",
+			recSets[i].ID,
+			recSets[i].ClusterUUID,
+			unitChoices,
+			setk8sUnits,
+			recSets[i].Recommendations,
+		)
+	}
+
+	switch opts.Format {
+	case listoptions.ResponseFormatCSV:
+		filename := "recommendations-" + time.Now().Format("20060102")
+		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
+		pipeReader, pipeWriter := io.Pipe()
+		go func() {
+			var genErr error
+			defer func() {
+				if r := recover(); r != nil {
+					genErr = fmt.Errorf("panic in legacy CSV generation: %v", r)
+				}
+				if genErr != nil {
+					_ = pipeWriter.CloseWithError(genErr)
+				} else {
+					_ = pipeWriter.Close()
+				}
+			}()
+			genErr = GenerateAndStreamCSV(pipeWriter, recSets)
+		}()
+		return c.Stream(http.StatusOK, "text/csv", pipeReader)
+	default:
+		interfaceSlice := make([]any, len(recSets))
+		for i, v := range recSets {
+			interfaceSlice[i] = v
+		}
+		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		return c.JSON(http.StatusOK, response)
+	}
+}
+
+func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string][]string) error {
+	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
+	if unitParseErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
+	}
+
+	recSetVar := model.RecommendationSet{}
+	recSet, err := recSetVar.GetRecommendationSetByID(orgID, idStr, userPerms)
+	if err != nil {
+		log.Errorf("legacy fallback: unable to fetch recommendation %s; %v", idStr, err)
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+	}
+
+	if len(recSet.Recommendations) == 0 {
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
+	}
+
+	recSet.RecommendationsJSON = UpdateRecommendationJSON(
+		"recommendationset",
+		recSet.ID,
+		recSet.ClusterUUID,
+		unitChoices,
+		setk8sUnits,
+		recSet.Recommendations,
+	)
+	return c.JSON(http.StatusOK, recSet)
+}
+
 func GetAppStatus(c echo.Context) error {
 	status := map[string]string{
 		"api-server": "working",

@@ -48,6 +48,21 @@ func TestEvaluateNotifications_HealthyWorkload_NoCodes(t *testing.T) {
 	assert.Empty(t, codes)
 }
 
+func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
+	// T-1.9: When CurrentCPULimitMC is zero (limit not set on the pod),
+	// EvaluateNotifications should not panic or produce spurious codes.
+	// A healthy workload with missing limits should still have no codes.
+	rec := ContainerRec{
+		DataDays:        7,
+		OOMCountSum:     0,
+		IsIdle:          false,
+		TrendSlope:      0,
+		ConfidenceLevel: 0.9,
+	}
+	codes := EvaluateNotifications(rec, 3)
+	assert.Empty(t, codes, "healthy workload with zero CPU limit should produce no notification codes")
+}
+
 func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 	rec := ContainerRec{
 		DataDays:        1,

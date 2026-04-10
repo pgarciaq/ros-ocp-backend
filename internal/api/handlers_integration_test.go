@@ -17,6 +17,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -128,6 +129,534 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 
 	// Reset global
 	database.DB = nil
+}
+
+func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	err = engine.WriteRecommendations(ctx, pool, recs)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response struct {
+		Data []model.NativeContainerResult `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Count should equal number of distinct containers, not number of rows
+	assert.Equal(t, len(response.Data), response.Meta.Count,
+		"meta.count should equal the number of distinct containers")
+	assert.Greater(t, response.Meta.Count, 0)
+}
+
+func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	err = engine.WriteRecommendations(ctx, pool, recs)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	// First get the list to extract the ID
+	t.Run("fetch detail by ID from list", func(t *testing.T) {
+		listReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+		listReq.Header.Set("X-Rh-Identity", identityHeader)
+		listRec := httptest.NewRecorder()
+		app.ServeHTTP(listRec, listReq)
+		require.Equal(t, http.StatusOK, listRec.Code)
+
+		var listResp struct {
+			Data []model.NativeContainerResult `json:"data"`
+		}
+		err := json.Unmarshal(listRec.Body.Bytes(), &listResp)
+		require.NoError(t, err)
+		require.NotEmpty(t, listResp.Data)
+
+		containerID := listResp.Data[0].ID
+		assert.NotEmpty(t, containerID)
+
+		// Fetch detail
+		detailReq := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+		detailReq.Header.Set("X-Rh-Identity", identityHeader)
+		detailRec := httptest.NewRecorder()
+		app.ServeHTTP(detailRec, detailReq)
+		require.Equal(t, http.StatusOK, detailRec.Code)
+
+		var detail model.NativeContainerResult
+		err = json.Unmarshal(detailRec.Body.Bytes(), &detail)
+		require.NoError(t, err)
+
+		assert.Equal(t, containerID, detail.ID)
+		assert.Equal(t, testutil.TestClusterUUID, detail.ClusterUUID)
+		assert.Equal(t, testutil.TestNamespace, detail.Project)
+		assert.Equal(t, testutil.TestWorkload, detail.Workload)
+		assert.Equal(t, testutil.TestContainer, detail.Container)
+		assert.NotEmpty(t, detail.Recommendations)
+	})
+
+	t.Run("bad UUID returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/not-a-uuid", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("nonexistent UUID returns 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/00000000-0000-0000-0000-000000000000", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("missing identity returns 401", func(t *testing.T) {
+		containerID := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestContainer)
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+}
+
+func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
+	// T-2.2: Org A must not see org B's recommendations.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	orgA := "orgAAAAAAAA"
+	orgB := "orgBBBBBBBB"
+	clusterA := "aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	clusterB := "bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+	// Seed rh_accounts and clusters for both orgs
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (100, $1), (200, $2) ON CONFLICT DO NOTHING`, orgA, orgB)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (100, $1, 'cluster-a', 'src-a', now()), (200, $2, 'cluster-b', 'src-b', now()) ON CONFLICT DO NOTHING`, clusterA, clusterB)
+	require.NoError(t, err)
+
+	// Seed digests and compute recommendations for both orgs
+	for i := 0; i < 7; i++ {
+		for _, org := range []struct{ orgID, cluster, ns string }{
+			{orgA, clusterA, "ns-a"},
+			{orgB, clusterB, "ns-b"},
+		} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate: testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:      org.orgID, ClusterUUID: org.cluster,
+				Namespace: org.ns, Workload: "deploy", WorkloadType: "deployment",
+				ContainerName:   "app",
+				CPURequestP50MC: 100, CPURequestP95MC: 120,
+				CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+				MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+				MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+				MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+				SampleCount: 96,
+			})
+		}
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recsA, err := engine.RecommendAllWorkloads(ctx, pool, orgA, clusterA, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, recsA)
+	recsB, err := engine.RecommendAllWorkloads(ctx, pool, orgB, clusterB, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, recsB)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recsA))
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recsB))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	// Request as org A: should see only org A's data
+	t.Run("org A sees only its own data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgA))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.NativeContainerResult `json:"data"`
+			Meta struct {
+				Count int `json:"count"`
+			} `json:"meta"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Greater(t, response.Meta.Count, 0)
+
+		for _, d := range response.Data {
+			assert.Equal(t, clusterA, d.ClusterUUID, "org A should only see cluster A")
+			assert.Equal(t, "ns-a", d.Project, "org A should only see namespace ns-a")
+		}
+	})
+
+	// Request as org B: should see only org B's data
+	t.Run("org B sees only its own data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgB))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.NativeContainerResult `json:"data"`
+			Meta struct {
+				Count int `json:"count"`
+			} `json:"meta"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Greater(t, response.Meta.Count, 0)
+
+		for _, d := range response.Data {
+			assert.Equal(t, clusterB, d.ClusterUUID, "org B should only see cluster B")
+			assert.Equal(t, "ns-b", d.Project, "org B should only see namespace ns-b")
+		}
+	})
+
+	// Request as unknown org: should see nothing
+	t.Run("unknown org sees nothing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader("orgNONEXISTENT"))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []interface{} `json:"data"`
+			Meta struct {
+				Count int `json:"count"`
+			} `json:"meta"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, 0, response.Meta.Count)
+	})
+}
+
+func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
+	// §17: API filter by cluster alias.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	cluster1 := "c1111111-1111-1111-1111-111111111111"
+	cluster2 := "c2222222-2222-2222-2222-222222222222"
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'alpha-cluster', 'src-1', now()), (1, $2, 'beta-cluster', 'src-2', now()) ON CONFLICT DO NOTHING`, cluster1, cluster2)
+	require.NoError(t, err)
+
+	for i := 0; i < 7; i++ {
+		for _, cl := range []struct{ uuid, ns string }{{cluster1, "ns-alpha"}, {cluster2, "ns-beta"}} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate: testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:      testutil.TestOrgID, ClusterUUID: cl.uuid,
+				Namespace: cl.ns, Workload: "deploy", WorkloadType: "deployment",
+				ContainerName:   "app",
+				CPURequestP50MC: 100, CPURequestP95MC: 120,
+				CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+				MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+				MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+				MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+				SampleCount: 96,
+			})
+		}
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, testutil.BaseDate, end)
+	require.NoError(t, err)
+	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift?cluster=alpha-cluster", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response struct {
+		Data []model.NativeContainerResult `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Greater(t, response.Meta.Count, 0)
+
+	for _, d := range response.Data {
+		assert.Equal(t, "alpha-cluster", d.ClusterAlias,
+			"filter by cluster should return only matching cluster")
+	}
+}
+
+func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
+	// §17: API filter by project (namespace).
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	for i := 0; i < 7; i++ {
+		for _, ns := range []string{"production", "staging"} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate: testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:      testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+				Namespace: ns, Workload: "deploy-" + ns, WorkloadType: "deployment",
+				ContainerName:   "app",
+				CPURequestP50MC: 100, CPURequestP95MC: 120,
+				CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+				MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+				MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+				MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+				SampleCount: 96,
+			})
+		}
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift?project=production", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response struct {
+		Data []model.NativeContainerResult `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Greater(t, response.Meta.Count, 0)
+
+	for _, d := range response.Data {
+		assert.Equal(t, "production", d.Project,
+			"filter by project should return only matching namespace")
+	}
+}
+
+func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
+	// RBAC test: When RBAC is enabled and user has permissions for only
+	// one cluster, only that cluster's data should be returned.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	cluster1 := "a1111111-1111-1111-1111-111111111111"
+	cluster2 := "a2222222-2222-2222-2222-222222222222"
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'rbac-cluster-1', 'src-1', now()), (1, $2, 'rbac-cluster-2', 'src-2', now()) ON CONFLICT DO NOTHING`, cluster1, cluster2)
+	require.NoError(t, err)
+
+	for i := 0; i < 7; i++ {
+		for _, cl := range []struct{ uuid, ns string }{{cluster1, "ns-rbac-1"}, {cluster2, "ns-rbac-2"}} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate: testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:      testutil.TestOrgID, ClusterUUID: cl.uuid,
+				Namespace: cl.ns, Workload: "deploy", WorkloadType: "deployment",
+				ContainerName:   "app",
+				CPURequestP50MC: 100, CPURequestP95MC: 120,
+				CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+				MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+				MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+				MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+				SampleCount: 96,
+			})
+		}
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, testutil.BaseDate, end)
+	require.NoError(t, err)
+	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
+
+	// Enable RBAC temporarily
+	cfg := config.GetConfig()
+	origRBAC := cfg.RBACEnabled
+	cfg.RBACEnabled = true
+	defer func() { cfg.RBACEnabled = origRBAC }()
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	// Inject RBAC permissions: only allow cluster1
+	v1.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("user.permissions", map[string][]string{
+				"openshift.cluster": {cluster1},
+				"openshift.project": {"*"},
+			})
+			return next(c)
+		}
+	})
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response struct {
+		Data []model.NativeContainerResult `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Greater(t, response.Meta.Count, 0, "RBAC-filtered results should not be empty")
+
+	for _, d := range response.Data {
+		assert.Equal(t, cluster1, d.ClusterUUID,
+			"RBAC should restrict results to the permitted cluster only")
+	}
 }
 
 func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {

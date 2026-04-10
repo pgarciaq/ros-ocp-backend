@@ -115,6 +115,31 @@ func TestRecommendCPU_WithDecay_RecentWeightedMore(t *testing.T) {
 	assert.Greater(t, rec.CostRequestMC, int64(300))
 }
 
+func TestRecommendCPU_TreatsEachRowAsContainer(t *testing.T) {
+	// T-1.2: Each DigestRow is a daily digest for the SAME container.
+	// Duplicating a row should NOT divide the recommendation by N
+	// (no per-pod averaging); the percentile algorithm picks the same
+	// ranked value regardless of how many identical rows exist.
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	single := DigestRow{
+		BucketDate: now, CPUUsageP50MC: 300, CPUUsageP60MC: 400,
+		CPUUsageP95MC: 500, CPUUsageP98MC: 550, CPUUsageMaxMC: 600,
+		CPUUsageMeanMC: 350, SampleCount: 96,
+	}
+	cfg := DefaultCPUConfig(now, 0)
+
+	recSingle := RecommendCPU([]DigestRow{single}, cfg)
+
+	// Five identical rows (same container, same day repeated)
+	fiveRows := []DigestRow{single, single, single, single, single}
+	recFive := RecommendCPU(fiveRows, cfg)
+
+	assert.Equal(t, recSingle.CostRequestMC, recFive.CostRequestMC,
+		"identical rows must produce identical cost recommendations")
+	assert.Equal(t, recSingle.PerfRequestMC, recFive.PerfRequestMC,
+		"identical rows must produce identical perf recommendations")
+}
+
 func TestRecommendCPU_IdleDetection(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	rows := []DigestRow{
