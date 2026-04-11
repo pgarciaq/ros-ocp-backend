@@ -155,9 +155,12 @@ memory. Pod resource limits should be set accordingly:
 
 ## Summary of Action Items
 
-| Item | Phase | Priority | Effort |
+| Item | Phase | Priority | Status |
 |------|-------|----------|--------|
-| Populate `container_id` in `WriteRecommendations` | 3 | High | One-line fix |
-| Add count query timing instrumentation | 2/3 | Medium | One log line |
-| Redis count cache (if metrics warrant) | 3 | Medium | Low (~15 LOC) |
-| Set pod resource limits for batch worker | 3 | Low | Deployment config |
+| Populate `container_id` in `WriteRecommendations` | 3 | High | **COMPLETED** (Phase 3) |
+| Add count query timing instrumentation | 2/3 | Medium | **COMPLETED** (Phase 3) |
+| Redis count cache (if metrics warrant) | 4+ | Medium | Deferred -- monitor production metrics first |
+| Set pod resource limits for batch worker | 4+ | Low | Deferred -- deployment config |
+| `WriteRecommendationQuality` batch writes | 4 | Medium | Planned -- same `pgx.Batch` pattern, ~600K rows/cycle at 100K containers |
+| `WriteRecommendationHistory` batch writes | 4 | Medium | Planned -- always-on snapshots, ~600K rows/cycle at 100K containers |
+| OOM bump computation overhead | 4 | Low | Negligible -- single `math.Log2` per container with OOM events |

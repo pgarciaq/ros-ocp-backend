@@ -255,8 +255,11 @@ The native engine's approach is a deliberate choice:
 
 The tradeoff is that the native engine is slightly more aggressive — it may
 under-provision in rare worst-case scenarios that Kruize would catch. This is
-mitigated by the adaptive margin and by the Phase 4 (OOM feedback) mechanism
-that will adjust recommendations upward when actual OOM events are detected.
+mitigated by the adaptive margin and by the
+[Phase 4 OOM feedback mechanism](phase-4-oom-feedback.md) that adjusts
+recommendations upward when actual OOM events are detected, using a
+post-margin logarithmic bump (`1.0 + 0.15 * log2(1 + oom_count)`, capped
+at 1.60x).
 
 ### Observed Comparison Results (21 days, 5 containers)
 
@@ -275,9 +278,9 @@ Reproducible via `go run ./cmd/compare/` (see `docs/kruize-vs-native-comparison.
 
 ## What This Does NOT Include
 
-- Phase 4 (OOM feedback) -- deferred
+- Phase 4 (OOM feedback) -- see [phase-4-oom-feedback.md](phase-4-oom-feedback.md)
 - Phase 5 (GPU) -- deferred
 - Kruize removal (Phase 10) -- the Kruize path stays, gated by config
 - API contract tests (section 17 of test plan) -- deferred to after core engine works
-- Performance benchmarks (section 19) -- deferred
+- Performance benchmarks (section 19) -- completed in Phase 2 (see `cmd/bench/` and `docs/native-engine-performance.md`)
 - Shadow mode implementation (section 16) -- schema created but reconciliation logic deferred
