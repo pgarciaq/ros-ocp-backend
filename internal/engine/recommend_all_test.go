@@ -17,7 +17,7 @@ func TestRecommendAllWorkloads_SingleContainer(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	// 3 terms x 2 engines = 6 results for one container
@@ -54,7 +54,7 @@ func TestRecommendAllWorkloads_WritesToDB(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
 	end := testutil.BaseDate.AddDate(0, 0, 6)
 
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
@@ -74,7 +74,7 @@ func TestRecommendAllWorkloads_Empty_WhenNoDigests(t *testing.T) {
 	ctx := context.Background()
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, "org-empty", testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, "org-empty", testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
@@ -88,7 +88,7 @@ func TestRecommendAllWorkloads_InsufficientData_SkipsTerm(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 1, 200, 0, 524288, 0)
 	end := testutil.BaseDate
 
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	// Should only have short/cost + short/performance = 2
@@ -138,7 +138,7 @@ func TestRecommendAllWorkloads_TwoContainers(t *testing.T) {
 	}
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	// 2 containers x 3 terms x 2 engines = 12
@@ -202,7 +202,7 @@ func TestRecommendAllWorkloads_ConfidenceLevel(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
 	end := testutil.BaseDate.AddDate(0, 0, 6)
 
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	for _, r := range results {
@@ -277,7 +277,7 @@ func TestRecommendAllWorkloads_PopulatesCurrentValues(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 7, cpuReqMC, 10, memReqKiB, 1024)
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
@@ -294,7 +294,7 @@ func TestRecommendAllWorkloads_VariationIsComputed(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	for _, r := range results {
@@ -314,7 +314,7 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 	testutil.SeedDigestSeries(t, pool, 3, 200, 10, 524288, 1024)
 
 	end := testutil.BaseDate.AddDate(0, 0, 2)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 
 	// BaseDate is 7 days ago. With only 3 days seeded (offset 0-2), the latest
@@ -369,7 +369,7 @@ func TestRecommendAllWorkloads_TermWindowScoping(t *testing.T) {
 	}
 
 	end := testutil.BaseDate.AddDate(0, 0, 14) // day index 14 = 15th day
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
@@ -484,7 +484,7 @@ func TestRecommendAllWorkloads_PopulatesNotificationCodes(t *testing.T) {
 	}
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 

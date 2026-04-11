@@ -115,6 +115,9 @@ type MemoryConfig struct {
 	LimitMultiplier    float64
 	DecayHalfLifeHours float64
 	Now                time.Time
+	OOMCountSum        int64
+	OOMBaseBump        float64
+	OOMMaxBump         float64
 }
 
 // DefaultCPUConfig returns the default CPU recommendation parameters.
@@ -141,5 +144,7 @@ func DefaultMemoryConfig(now time.Time, decayHalfLifeHours float64) MemoryConfig
 		LimitMultiplier:    1.05,
 		DecayHalfLifeHours: decayHalfLifeHours,
 		Now:                now,
+		OOMBaseBump:        0.15,
+		OOMMaxBump:         1.60,
 	}
 }
