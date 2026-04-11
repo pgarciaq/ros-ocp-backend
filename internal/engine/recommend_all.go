@@ -142,6 +142,7 @@ func RecommendAllWorkloads(
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+				rec.NotificationCodes = EvaluateNotifications(rec, tc.MinDataDays)
 
 				results = append(results, rec)
 			}
@@ -169,8 +170,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				current_cpu_request_millicores, current_cpu_limit_millicores,
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_memory_request_pct,
-				confidence_level, stale, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
+				notification_codes, confidence_level, stale, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -183,6 +184,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
 				variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
 				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
+				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
 				container_id = EXCLUDED.container_id,
@@ -194,7 +196,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
 			r.VariationCPURequestPct, r.VariationMemRequestPct,
-			r.ConfidenceLevel, r.Stale,
+			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 		)
 	}
 

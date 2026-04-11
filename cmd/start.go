@@ -23,6 +23,9 @@ var processorCmd = &cobra.Command{
 		cfg := config.GetConfig()
 		go utils.Start_prometheus_server()
 		utils.SetupKruizePerformanceProfile()
+		if !cfg.UseNativeEngine {
+			utils.Setup_kruize_performance_profile()
+		}
 		kafka.StartConsumer(cfg.UploadTopic, services.ProcessReport)
 	},
 }
