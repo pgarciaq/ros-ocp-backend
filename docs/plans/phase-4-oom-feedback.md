@@ -379,8 +379,8 @@ are functional.
 | Track A M2: Nise oom_count | **Done** | `oom_count` in `OCP_ROS_USAGE_COLUMN`, 90/10 weighted random generation |
 | Track B M1: OOM bump in RecommendMemory | **Done** | Post-margin log-scale bump, configurable via `ROS_OOM_BASE_BUMP`/`ROS_OOM_MAX_BUMP`, 6 unit tests |
 | Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, unit + integration tests |
-| E2E pipeline test | Pending | `TestProcessContainerCSVNative_WithOOMData` |
-| IQE tests | Pending | `test_oom_bumped_recommendation`, `test_oom_notification_present` |
+| E2E pipeline test | **Done** | `TestProcessContainerCSVNative_WithOOMData` -- validates digest OOM accumulation, memory bump, and quality metrics |
+| IQE tests | Pending | `test_oom_bumped_recommendation`, `test_oom_notification_present` -- requires cluster deployment |
 
 ## Branching
 
