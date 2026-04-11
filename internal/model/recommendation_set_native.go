@@ -1,7 +1,10 @@
 package model
 
 import (
+	"database/sql/driver"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
 )
@@ -19,6 +23,52 @@ var log *logrus.Entry = logging.GetLogger()
 
 // Fixed namespace UUID for deterministic ID generation (UUID v5).
 var nativeIDNamespace = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+// SmallintArray implements sql.Scanner and driver.Valuer for PostgreSQL
+// SMALLINT[] columns so GORM can read/write []int16 via database/sql.
+type SmallintArray []int16
+
+func (a *SmallintArray) Scan(src interface{}) error {
+	if src == nil {
+		*a = nil
+		return nil
+	}
+	s, ok := src.(string)
+	if !ok {
+		if b, ok := src.([]byte); ok {
+			s = string(b)
+		} else {
+			return fmt.Errorf("SmallintArray.Scan: unsupported type %T", src)
+		}
+	}
+	s = strings.Trim(s, "{}")
+	if s == "" {
+		*a = nil
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make(SmallintArray, 0, len(parts))
+	for _, p := range parts {
+		v, err := strconv.ParseInt(strings.TrimSpace(p), 10, 16)
+		if err != nil {
+			return fmt.Errorf("SmallintArray.Scan: parsing %q: %w", p, err)
+		}
+		result = append(result, int16(v))
+	}
+	*a = result
+	return nil
+}
+
+func (a SmallintArray) Value() (driver.Value, error) {
+	if a == nil {
+		return nil, nil
+	}
+	parts := make([]string, len(a))
+	for i, v := range a {
+		parts[i] = strconv.FormatInt(int64(v), 10)
+	}
+	return "{" + strings.Join(parts, ",") + "}", nil
+}
 
 // NativeRecommendationRow represents a single row from recommendation_sets
 // using the new relational columns (one row per container+term+engine).
@@ -48,8 +98,8 @@ type NativeRecommendationRow struct {
 	// SMALLINT[] caps values at 32767. Current notification codes (1-24) are
 	// well within range. If legacy 6-digit codes are ever needed, this column
 	// type must be migrated to INTEGER[].
-	NotificationCodes []int16 `gorm:"column:notification_codes;type:smallint[]"`
-	Stale             bool    `gorm:"column:stale"`
+	NotificationCodes SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
+	Stale             bool          `gorm:"column:stale"`
 
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
@@ -90,18 +140,19 @@ type TermRecommendation struct {
 
 // EngineRecommendation holds the actual CPU/memory recommendation values.
 type EngineRecommendation struct {
-	CPURequestMillicores   *int64   `json:"cpu_request_millicores,omitempty"`
-	CPULimitMillicores     *int64   `json:"cpu_limit_millicores,omitempty"`
-	MemRequestKiB          *int64   `json:"memory_request_kib,omitempty"`
-	MemLimitKiB            *int64   `json:"memory_limit_kib,omitempty"`
-	CurrentCPURequestMC    *int64   `json:"current_cpu_request_millicores,omitempty"`
-	CurrentCPULimitMC      *int64   `json:"current_cpu_limit_millicores,omitempty"`
-	CurrentMemRequestKiB   *int64   `json:"current_memory_request_kib,omitempty"`
-	CurrentMemLimitKiB     *int64   `json:"current_memory_limit_kib,omitempty"`
-	VariationCPURequestPct *float32 `json:"variation_cpu_request_pct,omitempty"`
-	VariationMemRequestPct *float32 `json:"variation_memory_request_pct,omitempty"`
-	ConfidenceLevel        *float32 `json:"confidence_level,omitempty"`
-	NotificationCodes      []int16  `json:"notification_codes,omitempty"`
+	CPURequestMillicores   *int64                                     `json:"cpu_request_millicores,omitempty"`
+	CPULimitMillicores     *int64                                     `json:"cpu_limit_millicores,omitempty"`
+	MemRequestKiB          *int64                                     `json:"memory_request_kib,omitempty"`
+	MemLimitKiB            *int64                                     `json:"memory_limit_kib,omitempty"`
+	CurrentCPURequestMC    *int64                                     `json:"current_cpu_request_millicores,omitempty"`
+	CurrentCPULimitMC      *int64                                     `json:"current_cpu_limit_millicores,omitempty"`
+	CurrentMemRequestKiB   *int64                                     `json:"current_memory_request_kib,omitempty"`
+	CurrentMemLimitKiB     *int64                                     `json:"current_memory_limit_kib,omitempty"`
+	VariationCPURequestPct *float32                                   `json:"variation_cpu_request_pct,omitempty"`
+	VariationMemRequestPct *float32                                   `json:"variation_memory_request_pct,omitempty"`
+	ConfidenceLevel        *float32                                   `json:"confidence_level,omitempty"`
+	NotificationCodes      SmallintArray                              `json:"notification_codes,omitempty"`
+	Notifications          map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
@@ -136,9 +187,11 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		Where("rs.stale = false")
 	countQuery = applyNativeRBAC(countQuery, userPerms)
 	countQuery = applyQueryParams(countQuery, queryParams)
+	t0 := time.Now()
 	if err := countQuery.Scan(&totalContainers).Error; err != nil {
 		return nil, 0, err
 	}
+	log.Infof("native list count query: %dms (%d containers)", time.Since(t0).Milliseconds(), totalContainers)
 
 	var rows []NativeRecommendationRow
 	err := query.
@@ -355,6 +408,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				VariationMemRequestPct: r.VariationMemRequestPct,
 				ConfidenceLevel:        r.ConfidenceLevel,
 				NotificationCodes:      r.NotificationCodes,
+				Notifications:          notifications.MapToKruizeFormat(r.NotificationCodes),
 			}
 
 			switch r.Engine {
