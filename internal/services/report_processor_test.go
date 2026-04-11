@@ -157,6 +157,82 @@ func TestProcessContainerCSVNative_EmptyCSV(t *testing.T) {
 	assert.Equal(t, 0, count, "no digests should be written for empty CSV")
 }
 
+func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	origPool := db.Pool
+	db.Pool = pool
+	t.Cleanup(func() { db.Pool = origPool })
+
+	orgID := "org-oom-test"
+	clusterUUID := "11111111-2222-3333-4444-555555555555"
+
+	csvData := buildTestCSVWithOOM(7)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		fmt.Fprint(w, csvData)
+	}))
+	defer ts.Close()
+
+	kafkaMsg := types.KafkaMsg{
+		Request_id:   "test-req-oom",
+		B64_identity: "dGVzdA==",
+		Files:        []string{ts.URL},
+	}
+	kafkaMsg.Metadata.Org_id = orgID
+	kafkaMsg.Metadata.Source_id = "src-oom"
+	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
+	kafkaMsg.Metadata.Cluster_alias = "oom-cluster"
+
+	processContainerCSVNative(ts.URL, kafkaMsg)
+
+	var oomDigestSum int64
+	err := pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(oom_count_sum), 0) FROM daily_container_digests
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'oom-container'`,
+		orgID, clusterUUID).Scan(&oomDigestSum)
+	require.NoError(t, err)
+	assert.Greater(t, oomDigestSum, int64(0), "oom-container digests should have OOM events")
+
+	var noOomDigestSum int64
+	err = pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(oom_count_sum), 0) FROM daily_container_digests
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'stable-container'`,
+		orgID, clusterUUID).Scan(&noOomDigestSum)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), noOomDigestSum, "stable-container should have zero OOM events")
+
+	var oomMemReq, stableMemReq int64
+	err = pool.QueryRow(ctx,
+		`SELECT COALESCE(rec_memory_request_kib, 0)
+		 FROM recommendation_sets
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'oom-container'
+		   AND term = 'medium' AND engine = 'cost'
+		 LIMIT 1`,
+		orgID, clusterUUID).Scan(&oomMemReq)
+	require.NoError(t, err)
+
+	err = pool.QueryRow(ctx,
+		`SELECT COALESCE(rec_memory_request_kib, 0)
+		 FROM recommendation_sets
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'stable-container'
+		   AND term = 'medium' AND engine = 'cost'
+		 LIMIT 1`,
+		orgID, clusterUUID).Scan(&stableMemReq)
+	require.NoError(t, err)
+
+	assert.Greater(t, oomMemReq, stableMemReq,
+		"OOM container memory recommendation should be higher than stable container")
+
+	var qualityCount int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM recommendation_quality WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, clusterUUID).Scan(&qualityCount)
+	require.NoError(t, err)
+	assert.Greater(t, qualityCount, 0, "quality metrics should be written")
+}
+
 const testCSVHeader = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
 func buildTestCSV(days int) string {
@@ -175,6 +251,36 @@ func buildTestCSV(days int) string {
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
 				))
+			}
+		}
+	}
+	return sb.String()
+}
+
+// buildTestCSVWithOOM generates CSV data with two containers: one with OOM events,
+// one without. Both have identical resource usage so the only difference in memory
+// recommendations comes from the OOM bump.
+func buildTestCSVWithOOM(days int) string {
+	var sb strings.Builder
+	sb.WriteString(testCSVHeader)
+	sb.WriteByte('\n')
+
+	now := time.Now().UTC()
+	for d := 0; d < days; d++ {
+		day := now.AddDate(0, 0, -(days - d))
+		for h := 0; h < 24; h++ {
+			for q := 0; q < 4; q++ {
+				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
+				end := start.Add(15 * time.Minute)
+				ts := start.Format("2006-01-02 15:04:05 +0000 UTC")
+				te := end.Format("2006-01-02 15:04:05 +0000 UTC")
+
+				oomVal := 0
+				if h%6 == 0 && q == 0 {
+					oomVal = 1
+				}
+				sb.WriteString(fmt.Sprintf("%s,%s,oom-ns,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
+				sb.WriteString(fmt.Sprintf("%s,%s,stable-ns,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
 			}
 		}
 	}

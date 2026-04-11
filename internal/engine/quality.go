@@ -94,7 +94,7 @@ func ComputeRecommendationAgeHours(updatedAt time.Time, now time.Time) int64 {
 }
 
 // WriteRecommendationQuality batch-inserts quality metrics into recommendation_quality.
-// It deduplicates recs by container (uses the first short_term/cost entry as representative).
+// It deduplicates recs by container (uses the first cost-engine entry as representative).
 func WriteRecommendationQuality(
 	ctx context.Context, pool *pgxpool.Pool,
 	newRecs []ContainerRec,
@@ -118,7 +118,7 @@ func WriteRecommendationQuality(
 		if seen[key] {
 			continue
 		}
-		if r.Term != "short" || r.Engine != "cost" {
+		if r.Engine != "cost" {
 			continue
 		}
 		seen[key] = true

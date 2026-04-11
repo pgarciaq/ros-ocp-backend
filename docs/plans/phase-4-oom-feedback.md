@@ -370,6 +370,18 @@ are functional.
 | Nise + operator changes lag behind backend | Track B fully testable with synthetic CSV fixtures; no blocking dependency |
 | Partition DDL race between concurrent workers | `CREATE TABLE IF NOT EXISTS` makes partition creation idempotent; DDL failures are non-fatal (warning only). Missing partitions at write time use fatal-with-metrics pattern for visibility. |
 
+## Implementation Status
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| Prerequisite: CSV column rename | **Done** | `csvparser.go` + all test fixtures updated |
+| Track A M1: Operator OOM PromQL + CSV | **Done** | `ros:oom_count_container_sum` query, `OOMCount` field in `rosContainerRow`, golden CSV updated |
+| Track A M2: Nise oom_count | **Done** | `oom_count` in `OCP_ROS_USAGE_COLUMN`, 90/10 weighted random generation |
+| Track B M1: OOM bump in RecommendMemory | **Done** | Post-margin log-scale bump, configurable via `ROS_OOM_BASE_BUMP`/`ROS_OOM_MAX_BUMP`, 6 unit tests |
+| Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, unit + integration tests |
+| E2E pipeline test | Pending | `TestProcessContainerCSVNative_WithOOMData` |
+| IQE tests | Pending | `test_oom_bumped_recommendation`, `test_oom_notification_present` |
+
 ## Branching
 
 - **koku-metrics-operator:** `pgarciaq-rosocp-superpowers-phase4` off `main`
