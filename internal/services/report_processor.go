@@ -408,7 +408,12 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -15)
-	results, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, now)
+	appCfg := config.GetConfig()
+	oomCfg := engine.OOMConfig{
+		BaseBump: appCfg.OOMBaseBump,
+		MaxBump:  appCfg.OOMMaxBump,
+	}
+	results, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, now, oomCfg)
 	if err != nil {
 		log.Errorf("native engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return

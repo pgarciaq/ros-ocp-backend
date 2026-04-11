@@ -310,7 +310,7 @@ func runNativeEngine(ctx context.Context, pool *pgxpool.Pool, csvData []byte, or
 		return nil, fmt.Errorf("query date range: %w", err)
 	}
 
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterID, minDate, maxDate)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterID, minDate, maxDate, engine.OOMConfig{})
 	if err != nil {
 		return nil, fmt.Errorf("recommend: %w", err)
 	}

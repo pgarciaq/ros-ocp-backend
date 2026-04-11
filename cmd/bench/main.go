@@ -245,7 +245,7 @@ func runTier(ctx context.Context, pool *pgxpool.Pool, nContainers int) tierResul
 	runtime.ReadMemStats(&m1)
 
 	t0 = time.Now()
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, benchOrgID, clusterUUID, baseDate, endDate)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, benchOrgID, clusterUUID, baseDate, endDate, engine.OOMConfig{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ERROR recommend: %v\n", err)
 		return tierResult{Containers: nContainers, SeedMS: seedMS}

@@ -64,7 +64,7 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
 	end := start.AddDate(0, 0, 6)
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 
@@ -154,7 +154,7 @@ func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
 	end := start.AddDate(0, 0, 6)
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 	err = engine.WriteRecommendations(ctx, pool, recs)
@@ -207,7 +207,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
 	end := start.AddDate(0, 0, 6)
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 	err = engine.WriteRecommendations(ctx, pool, recs)
@@ -337,10 +337,10 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	}
 
 	end := start.AddDate(0, 0, 6)
-	recsA, err := engine.RecommendAllWorkloads(ctx, pool, orgA, clusterA, start, end)
+	recsA, err := engine.RecommendAllWorkloads(ctx, pool, orgA, clusterA, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recsA)
-	recsB, err := engine.RecommendAllWorkloads(ctx, pool, orgB, clusterB, start, end)
+	recsB, err := engine.RecommendAllWorkloads(ctx, pool, orgB, clusterB, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recsB)
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recsA))
@@ -460,9 +460,9 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	}
 
 	end := start.AddDate(0, 0, 6)
-	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, start, end)
+	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end)
+	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
@@ -537,7 +537,7 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	}
 
 	end := start.AddDate(0, 0, 6)
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
 
@@ -615,9 +615,9 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	}
 
 	end := start.AddDate(0, 0, 6)
-	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, start, end)
+	recs1, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster1, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end)
+	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
@@ -721,7 +721,7 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	}
 
 	end := now.AddDate(0, 0, -1)
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, recentStart, end)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, recentStart, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 	err = engine.WriteRecommendations(ctx, pool, recs)
