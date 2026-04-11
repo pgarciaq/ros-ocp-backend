@@ -15,6 +15,38 @@ The `recommendation_quality` and `recommendation_history` tables (migration 027)
 - **nise** (`~/dev/koku/nise/`) -- `oom_count` in generated ROS CSV for testing
 - **iqe-ros-ocp-plugin** (`~/dev/koku/iqe-ros-ocp-plugin/`) -- IQE tests for OOM notification and quality API
 
+## Prerequisites
+
+### Align Native CSV Parser with Operator Column Names
+
+The native CSV parser (`internal/ingestion/csvparser.go`) uses abbreviated column
+names (`workload_name`, `cpu_request`, `mem_usage`, ...) that do **not** match the
+operator/nise output (`workload`, `cpu_request_container_avg`,
+`memory_usage_container_avg`, ...). The Kruize path uses the operator names via
+`csvColumnMapping.go` and sends structured JSON to Kruize -- it never hits the
+native parser.
+
+Since the native engine has not shipped to production, there is no backward
+compatibility to maintain. **Rename the native parser columns to match the
+operator/nise output:**
+
+| Native parser (current) | Operator/Nise (correct) |
+|-------------------------|------------------------|
+| `workload_name` | `workload` |
+| `cpu_request` | `cpu_request_container_avg` |
+| `cpu_limit` | `cpu_limit_container_avg` |
+| `cpu_usage` | `cpu_usage_container_avg` |
+| `cpu_throttle` | `cpu_throttle_container_avg` |
+| `mem_request` | `memory_request_container_avg` |
+| `mem_limit` | `memory_limit_container_avg` |
+| `mem_usage` | `memory_usage_container_avg` |
+| `mem_rss` | `memory_rss_usage_container_avg` |
+
+Files to update:
+- `internal/ingestion/csvparser.go` -- switch cases and required columns list
+- `internal/ingestion/csvparser_test.go` -- test CSV headers
+- Any other test fixtures using the abbreviated headers
+
 ## Execution Strategy: Two Parallel Tracks
 
 Work proceeds in two independent tracks that can execute concurrently:
@@ -47,6 +79,10 @@ ros-ocp-backend
 
 ### 1a. Add OOM Prometheus Query
 
+**Target: OpenShift 4.19+ only.** KSM v2.x is guaranteed, so
+`kube_pod_container_status_last_terminated_reason` and
+`kube_pod_container_status_restarts_total` are stable metrics.
+
 Add a new entry to `QueryMap` in `internal/collector/queries.go`:
 
 ```promql
@@ -59,16 +95,17 @@ ros:oom_kill_container_sum:
   )
 ```
 
-`kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}` is a gauge (0 or 1) available on every Kubernetes cluster via kube-state-metrics. Joining with `increase(kube_pod_container_status_restarts_total[15m])` gives an OOM count per interval rather than just a binary flag. The exact PromQL needs validation against a real cluster -- the simpler fallback is:
+Joining `increase(restarts_total[15m])` with the OOMKilled reason gauge gives an
+OOM count per interval rather than just a binary flag. No fallback query needed --
+both metrics are stable on 4.19+.
 
-```promql
-sum by(container, pod, namespace, node) (
-  kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container!='', pod!=''}
-  * on(namespace) group_left kube_namespace_labels{...}
-)
-```
-
-This gives a binary 0/1 per container per interval.
+**OpenShift 4.19+ simplification opportunity:** All existing ROS queries duplicate
+a namespace filter with an `OR` for two label names
+(`label_insights_cost_management_optimizations` and
+`label_cost_management_optimizations`). If 4.19+ standardizes on a single label,
+the OOM query (and all existing ROS queries) could collapse the `OR` halves into a
+single `kube_namespace_labels` matcher. This is a product decision to evaluate
+during implementation.
 
 ### 1b. Add CSV Column
 
@@ -202,17 +239,21 @@ For each unique container in `recs` (deduplicate across terms/engines, use the s
 - **`oom_events_after_rec`**: OOM events in `daily_container_digests` with `bucket_date` after the recommendation's `updated_at`.
 - **`stability_pct`**: `max(0, 1.0 - (|variation_cpu_request_pct|/100)*0.5 - (|variation_memory_request_pct|/100)*0.5)`.
 - **`adoption_detected`**: `true` if current resource config matches the recommendation within 5% tolerance.
-- **`recommendation_age_hours`**: hours since the most recent `updated_at` on `recommendation_sets`.
+- **`recommendation_age_hours`**: hours since the most recent `updated_at` on `recommendation_sets`. Stored as `BIGINT` (truncated integer hours). At one recommendation per hour max, sub-hour precision adds no value.
 
 Batch-insert into `recommendation_quality` using `pgx.Batch`.
 
 ### Partition Management
 
-`EnsureQualityPartitions(ctx, pool)`: create monthly partitions (current + next 2 months), called once during ingestion startup. Same pattern as migration 027.
+`EnsureQualityPartitions(ctx, pool)`: create monthly partitions (current + next 2 months), called once during ingestion startup. Same `CREATE TABLE IF NOT EXISTS ... PARTITION OF ...` pattern as migration 027. Partition DDL failures are **non-fatal** (log warning, continue) since concurrent workers may race.
 
 ### Pipeline Integration
 
 Call `WriteRecommendationQuality` after `WriteRecommendations` in `processContainerCSVNative` (`internal/services/report_processor.go`).
+
+### Error Handling
+
+Use the **fatal-with-metrics** pattern matching `workload_metrics` and `historical_recommendation_set`: check for `"no partition"` in errors, increment a `partitionMissing` Prometheus counter, and return a hard error. This runs after `WriteRecommendations` succeeds, so quality write failures do not block the primary recommendation pipeline, but they are visible in monitoring.
 
 ### Tests
 
@@ -247,7 +288,7 @@ Call `WriteRecommendationHistory` after `WriteRecommendations` in `processContai
 
 ### Partition Management
 
-`EnsureHistoryPartitions(ctx, pool)` -- same pattern as quality partitions. Called once during ingestion startup.
+`EnsureHistoryPartitions(ctx, pool)` -- same pattern as quality partitions. Called once during ingestion startup. Same fatal-with-metrics error handling for missing partitions at write time.
 
 ### Tests
 
@@ -255,15 +296,20 @@ Call `WriteRecommendationHistory` after `WriteRecommendations` in `processContai
 
 ---
 
+## Known Gaps (Out of Scope)
+
+- **Boxplots in native engine:** The native engine does not produce boxplot data. Boxplots are a Kruize-only feature -- Kruize computes `plots` (min/q1/median/q3/max) and they are stored in the `recommendation_sets.recommendations` JSONB column. The native `EngineRecommendation` struct has no `plots` field. Computing boxplots from `daily_container_digests` percentiles is feasible but deferred to a future phase.
+- **Retention policy for `recommendation_history`:** Deferred. Monthly partitions enable `DROP TABLE` for old months. A 6-month sweep is the expected approach.
+
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
-| Operator PromQL may differ across kube-state-metrics versions | Test on QE cluster before merging; binary detection fallback query documented |
 | OOM bump parameters (15% base / 1.60x cap) may need tuning | Configurable via env vars from the start; structured logging of applied bump |
 | Quality/history write overhead at 100K containers | `pgx.Batch` (same as `WriteRecommendations`); tables partitioned monthly |
 | History storage growth (1.8 GB/month at 100K) | Monthly partitions enable `DROP TABLE`; retention policy deferred to future phase |
 | Nise + operator changes lag behind backend | Track B fully testable with synthetic CSV fixtures; no blocking dependency |
+| Partition DDL race between concurrent workers | `CREATE TABLE IF NOT EXISTS` makes partition creation idempotent; DDL failures are non-fatal (warning only). Missing partitions at write time use fatal-with-metrics pattern for visibility. |
 
 ## Branching
 
