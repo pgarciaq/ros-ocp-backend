@@ -29,6 +29,12 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 	costRequest := int64(math.Round(float64(costPctVal) * margin))
 	perfRequest := int64(math.Round(float64(perfPctVal) * margin))
 
+	if cfg.OOMCountSum > 0 {
+		bump := math.Min(cfg.OOMMaxBump, 1.0+cfg.OOMBaseBump*math.Log2(1+float64(cfg.OOMCountSum)))
+		costRequest = int64(math.Round(float64(costRequest) * bump))
+		perfRequest = int64(math.Round(float64(perfRequest) * bump))
+	}
+
 	costLimit := int64(math.Round(float64(costRequest) * cfg.LimitMultiplier))
 	perfLimit := int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
 

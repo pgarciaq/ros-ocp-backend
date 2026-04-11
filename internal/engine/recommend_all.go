@@ -18,6 +18,14 @@ type containerKey struct {
 	ContainerName string
 }
 
+// OOMConfig holds configurable OOM bump parameters, typically read from
+// environment variables (ROS_OOM_BASE_BUMP, ROS_OOM_MAX_BUMP).
+// Zero values cause DefaultMemoryConfig defaults to be used.
+type OOMConfig struct {
+	BaseBump float64
+	MaxBump  float64
+}
+
 // RecommendAllWorkloads reads all digests for an org+cluster within [start, end],
 // groups them by container, computes recommendations for all terms x 2 engines,
 // and returns the results. It does NOT write to the DB.
@@ -26,6 +34,7 @@ func RecommendAllWorkloads(
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	start, end time.Time,
+	oomCfg OOMConfig,
 ) ([]ContainerRec, error) {
 	terms, err := LoadTermConfig(ctx, pool, orgID)
 	if err != nil {
@@ -108,10 +117,18 @@ func RecommendAllWorkloads(
 
 			dataDays := len(windowRows)
 			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
+			oomTotal := sumOOMCounts(windowRows)
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
 				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
+				memCfg.OOMCountSum = oomTotal
+				if oomCfg.BaseBump > 0 {
+					memCfg.OOMBaseBump = oomCfg.BaseBump
+				}
+				if oomCfg.MaxBump > 0 {
+					memCfg.OOMMaxBump = oomCfg.MaxBump
+				}
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)

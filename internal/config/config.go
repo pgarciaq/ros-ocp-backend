@@ -81,7 +81,9 @@ type Config struct {
 	DisableNamespaceRecommendation bool `mapstructure:"DISABLE_NAMESPACE_RECOMMENDATION"`
 
 	// Native recommendation engine (replaces Kruize pipeline)
-	UseNativeEngine bool `mapstructure:"ROS_USE_NATIVE_ENGINE"`
+	UseNativeEngine bool    `mapstructure:"ROS_USE_NATIVE_ENGINE"`
+	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
+	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`
 
 	//Unleash config
 	UnleashClientAccessToken string
@@ -248,6 +250,8 @@ func initConfig() {
 	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", false)
 	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", true)
 	viper.SetDefault("ROS_USE_NATIVE_ENGINE", true)
+	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
+	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
