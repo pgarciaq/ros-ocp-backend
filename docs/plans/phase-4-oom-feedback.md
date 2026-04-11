@@ -1,0 +1,273 @@
+# Phase 4: OOM Feedback and Recommendation Quality
+
+## Problem Statement
+
+The native engine currently **observes** OOM events but does **not act on them**. When `OOMCountSum > 0`, `EvaluateNotifications` emits `NotifOOMDetected` (code 3) as an informational alert, but `RecommendMemory` ignores OOM data entirely. The engine recommends 10-16% less memory than Kruize for large workloads (documented in [phase-1-2-3-go-engine.md](phase-1-2-3-go-engine.md) appendix), and the explicit design assumption is that Phase 4's OOM feedback closes this safety gap.
+
+Additionally, the **koku-metrics-operator does not collect OOM data at all** -- there are no Prometheus queries for `kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}` and no `oom_count` column in the ROS container CSV. This means `oom_count_sum` in `daily_container_digests` is always 0 in production, and `NotifOOMDetected` never fires for real workloads.
+
+The `recommendation_quality` and `recommendation_history` tables (migration 027) exist as schema-only -- no Go code reads from or writes to them.
+
+## Repositories Touched
+
+- **koku-metrics-operator** (`~/dev/koku/koku-metrics-operator/`) -- OOM Prometheus query, CSV column, tests
+- **ros-ocp-backend** (`~/dev/koku/ros-ocp-backend/`) -- Engine OOM feedback, quality tracking, history, tests
+- **nise** (`~/dev/koku/nise/`) -- `oom_count` in generated ROS CSV for testing
+- **iqe-ros-ocp-plugin** (`~/dev/koku/iqe-ros-ocp-plugin/`) -- IQE tests for OOM notification and quality API
+
+## Execution Strategy: Two Parallel Tracks
+
+Work proceeds in two independent tracks that can execute concurrently:
+
+- **Track A** (operator + nise): Data collection -- add OOM Prometheus queries and CSV columns
+- **Track B** (backend engine + quality + history): Backend engine OOM feedback, quality and history table wiring
+
+Track A and Track B have no code dependencies between them. The backend already parses `oom_count` as optional -- Track B can be tested with synthetic CSV fixtures before Track A delivers real OOM data.
+
+## Architecture
+
+```
+Operator (koku-metrics-operator)
+  Prometheus Query: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}
+    -> ROS CSV: + oom_count column
+
+ros-ocp-backend
+  CSV Parser (reads oom_count)
+    -> Daily Digest (oom_count_sum)
+      -> RecommendMemory (OOM bump: log-scale, post-margin)
+        -> recommendation_quality (all 4 metrics)
+        -> recommendation_history (always-on snapshots)
+```
+
+---
+
+## Track A, Milestone 1: Operator -- OOM Collection (koku-metrics-operator)
+
+**Goal:** Add a Prometheus query that detects OOM kills per container per interval, and include the count in the ROS container CSV.
+
+### 1a. Add OOM Prometheus Query
+
+Add a new entry to `QueryMap` in `internal/collector/queries.go`:
+
+```promql
+ros:oom_kill_container_sum:
+  sum by(container, pod, namespace, node) (
+    increase(kube_pod_container_status_restarts_total{container!='', container!='POD', pod!=''}[15m])
+    * on(pod, namespace, container) group_left
+      (kube_pod_container_status_last_terminated_reason{reason='OOMKilled'} > 0)
+    * on(namespace) group_left kube_namespace_labels{...}
+  )
+```
+
+`kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}` is a gauge (0 or 1) available on every Kubernetes cluster via kube-state-metrics. Joining with `increase(kube_pod_container_status_restarts_total[15m])` gives an OOM count per interval rather than just a binary flag. The exact PromQL needs validation against a real cluster -- the simpler fallback is:
+
+```promql
+sum by(container, pod, namespace, node) (
+  kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container!='', pod!=''}
+  * on(namespace) group_left kube_namespace_labels{...}
+)
+```
+
+This gives a binary 0/1 per container per interval.
+
+### 1b. Add CSV Column
+
+- `internal/collector/types.go`: Add `OOMCount` field to `rosContainerRow`. Add `"oom_count"` to `csvHeader()`. Format in `csvRow()`.
+- Wire the query result into `rosContainerRow` during collection in `internal/collector/collector.go`.
+
+### 1c. Tests
+
+- Unit test: Verify `csvHeader()` includes `"oom_count"` at the expected position.
+- Unit test: Verify `csvRow()` formats the OOM count value correctly (0, positive integer).
+- Integration test (Ginkgo/envtest): Mock Prometheus response with OOM data, verify CSV output contains the column.
+
+**Compatibility:** The new column is additive. Old backends that don't recognize `oom_count` will ignore it (the `ros-ocp-backend` CSV parser already handles `oom_count` as optional via `if idx.oomCount >= 0`). No breaking change.
+
+---
+
+## Track A, Milestone 2: Nise -- OOM Test Data (nise)
+
+**Goal:** Allow `nise report ocp --ros-ocp-info` to emit `oom_count` in the ROS container CSV so end-to-end dev environment tests can exercise the full OOM pipeline.
+
+- Add an `oom_count` column to the ROS container CSV generator.
+- Default to 0 for most rows; inject OOM events probabilistically (e.g., 1-3 events per day for a configurable percentage of containers).
+- Add a static data YAML field `oom_rate` (float, 0.0-1.0) to control frequency.
+
+---
+
+## Track B, Milestone 1: Engine -- OOM Feedback in RecommendMemory (ros-ocp-backend)
+
+**Goal:** When OOM events are detected in the analysis window, adjust memory recommendations upward using a post-margin, logarithmic-scale bump.
+
+### Design Decision: Post-Margin OOM Bump
+
+The OOM bump is applied **after** the adaptive margin, as a separate multiplicative step:
+
+```
+recommendation = weighted_usage_percentile * adaptive_margin * oom_bump
+```
+
+**Why post-margin (not raising the margin floor or shifting percentiles):**
+
+- **Kubernetes VPA** uses the same approach: compute base recommendation from usage percentiles with a safety margin, then apply an additional OOM bump that raises the recommendation above the container's last memory limit. VPA's OOM logic is a separate, clearly identifiable adjustment.
+- **Separation of concerns:** The adaptive margin handles workload variability (P95-P50 spread). The OOM bump handles observed kill events. Mixing the two signals into a single margin parameter makes tuning and debugging harder.
+- **Kruize** has no explicit OOM feedback -- it implicitly avoids OOM by using absolute-max as its base statistic. Our approach is more targeted: we use P95-average as the base (more cost-efficient) and add explicit OOM correction only when kills are observed.
+
+### Design Decision: Logarithmic Scaling
+
+The bump follows a logarithmic curve with diminishing returns:
+
+```
+bump = min(OOMMaxBump, 1.0 + OOMBaseBump * log2(1 + oom_count))
+```
+
+**Why logarithmic (not linear or binary):**
+
+- **Diminishing returns:** The first OOM is the most informative signal ("you're under-provisioned"). Additional OOMs in the same window add less new information -- the workload is probably still running the same under-provisioned configuration.
+- **Prevents over-reaction:** With linear scaling, a workload that OOMs 10 times (e.g., a CrashLoopBackOff) would get a 100% bump. Logarithmic scaling gives: 1 OOM = +15%, 3 OOMs = +30%, 7 OOMs = +45%, 15 OOMs = +60% (at cap).
+- **VPA comparison:** VPA uses an exponential backoff in the opposite direction -- each successive OOM doubles the headroom, which can lead to massive over-provisioning. Our logarithmic approach is more conservative.
+
+### Implementation
+
+Modify `MemoryConfig` in `internal/engine/types.go`:
+
+```go
+type MemoryConfig struct {
+    // ... existing fields ...
+    OOMCountSum int64   // Total OOM events in the analysis window
+    OOMBaseBump float64 // Base bump per log2(1+oom_count) (default 0.15)
+    OOMMaxBump  float64 // Maximum OOM bump multiplier (default 1.60)
+}
+```
+
+In `internal/engine/recommend_all.go`, pass `sumOOMCounts(windowRows)` into `memCfg.OOMCountSum` before calling `RecommendMemory`.
+
+In `internal/engine/recommend_memory.go`, after computing `costRequest` / `perfRequest` (post-margin):
+
+```go
+if cfg.OOMCountSum > 0 {
+    bump := math.Min(cfg.OOMMaxBump, 1.0 + cfg.OOMBaseBump*math.Log2(1+float64(cfg.OOMCountSum)))
+    costRequest = int64(math.Round(float64(costRequest) * bump))
+    perfRequest = int64(math.Round(float64(perfRequest) * bump))
+    costLimit = int64(math.Round(float64(costRequest) * cfg.LimitMultiplier))
+    perfLimit = int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
+}
+```
+
+### Default OOM Parameters
+
+```go
+OOMBaseBump: 0.15  // 15% at 1 OOM, ~30% at 3 OOMs, ~45% at 7 OOMs
+OOMMaxBump:  1.60  // cap at 60% above baseline
+```
+
+**Bump curve at default parameters:**
+
+| OOM count | Bump multiplier | Increase |
+|-----------|----------------|----------|
+| 1         | 1.15           | +15%     |
+| 3         | 1.30           | +30%     |
+| 7         | 1.45           | +45%     |
+| 15        | 1.60           | capped   |
+
+Configurable via env vars `ROS_OOM_BASE_BUMP` and `ROS_OOM_MAX_BUMP`.
+
+### Tests
+
+- Unit: `TestRecommendMemory_OOMBump` -- seed with `OOMCountSum = 1`, verify ~15% higher.
+- Unit: `TestRecommendMemory_OOMLogScale` -- verify logarithmic curve at 1, 3, 7, 15 OOMs.
+- Unit: `TestRecommendMemory_OOMMaxBumpCap` -- seed with 100 OOMs, verify capped at 1.60.
+- Unit: `TestRecommendMemory_ZeroOOM` -- verify no change at 0.
+- Integration: Seed digests with OOM counts, call `RecommendAllWorkloads`, verify bumped `RecMemRequestKiB` and `NotifOOMDetected`.
+
+---
+
+## Track B, Milestone 2: Recommendation Quality Tracking (ros-ocp-backend)
+
+**Goal:** Wire the `recommendation_quality` table with all four quality metrics.
+
+### Quality Writer
+
+New file: `internal/engine/quality.go`
+
+```go
+func WriteRecommendationQuality(
+    ctx context.Context, pool *pgxpool.Pool,
+    recs []ContainerRec, oomCountsByContainer map[containerKey]int64,
+) error
+```
+
+For each unique container in `recs` (deduplicate across terms/engines, use the short_term/cost entry as representative), compute:
+
+- **`oom_events_after_rec`**: OOM events in `daily_container_digests` with `bucket_date` after the recommendation's `updated_at`.
+- **`stability_pct`**: `max(0, 1.0 - (|variation_cpu_request_pct|/100)*0.5 - (|variation_memory_request_pct|/100)*0.5)`.
+- **`adoption_detected`**: `true` if current resource config matches the recommendation within 5% tolerance.
+- **`recommendation_age_hours`**: hours since the most recent `updated_at` on `recommendation_sets`.
+
+Batch-insert into `recommendation_quality` using `pgx.Batch`.
+
+### Partition Management
+
+`EnsureQualityPartitions(ctx, pool)`: create monthly partitions (current + next 2 months), called once during ingestion startup. Same pattern as migration 027.
+
+### Pipeline Integration
+
+Call `WriteRecommendationQuality` after `WriteRecommendations` in `processContainerCSVNative` (`internal/services/report_processor.go`).
+
+### Tests
+
+- Integration: Full pipeline seed, verify all four fields populated.
+- Unit: `TestStabilityPct` -- table-driven with known variations.
+- Unit: `TestAdoptionDetection` -- within/beyond 5% tolerance, edge case at 0.
+
+---
+
+## Track B, Milestone 3: Recommendation History Snapshots (ros-ocp-backend)
+
+**Goal:** Wire the `recommendation_history` table for trend analysis. Always-on (no config gate).
+
+### History Writer
+
+New file: `internal/engine/history.go`
+
+```go
+func WriteRecommendationHistory(
+    ctx context.Context, pool *pgxpool.Pool,
+    recs []ContainerRec, sourceBinary string,
+) error
+```
+
+Inserts a snapshot of each recommendation into `recommendation_history` with `recorded_at = now()`, `engine` from `ContainerRec.Engine`, and `source_binary` identifying the binary version.
+
+### Pipeline Integration
+
+Call `WriteRecommendationHistory` after `WriteRecommendations` in `processContainerCSVNative`, always.
+
+**Write volume:** At 10K containers, 60K rows/day (~6 MB/day, 180 MB/month). At 100K containers, 600K rows/day (60 MB/day, 1.8 GB/month). The table is partitioned, so dropping old months is a single `DROP TABLE` statement.
+
+### Partition Management
+
+`EnsureHistoryPartitions(ctx, pool)` -- same pattern as quality partitions. Called once during ingestion startup.
+
+### Tests
+
+- Integration: Write recommendations, call history writer, query back, verify all fields match.
+
+---
+
+## Risks and Mitigations
+
+| Risk | Mitigation |
+|------|-----------|
+| Operator PromQL may differ across kube-state-metrics versions | Test on QE cluster before merging; binary detection fallback query documented |
+| OOM bump parameters (15% base / 1.60x cap) may need tuning | Configurable via env vars from the start; structured logging of applied bump |
+| Quality/history write overhead at 100K containers | `pgx.Batch` (same as `WriteRecommendations`); tables partitioned monthly |
+| History storage growth (1.8 GB/month at 100K) | Monthly partitions enable `DROP TABLE`; retention policy deferred to future phase |
+| Nise + operator changes lag behind backend | Track B fully testable with synthetic CSV fixtures; no blocking dependency |
+
+## Branching
+
+- **koku-metrics-operator:** `pgarciaq-rosocp-superpowers-phase4` off `main`
+- **ros-ocp-backend:** `pgarciaq-rosocp-superpowers-phase4` off `pgarciaq-rosocp-superpowers-phase3`
+- **nise:** `pgarciaq-rosocp-superpowers-phase4` off `main`
+- **iqe-ros-ocp-plugin:** `pgarciaq-rosocp-superpowers-phase4` off `pgarciaq-rosocp-superpowers-phase3`
