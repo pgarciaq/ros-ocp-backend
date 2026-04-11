@@ -446,6 +446,94 @@ func TestWriteRecommendations_PKAllowsTermEngineCoexistence(t *testing.T) {
 	}
 }
 
+func TestRecommendAllWorkloads_PopulatesNotificationCodes(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Seed data with OOM events so EvaluateNotifications produces codes.
+	for i := 0; i < 7; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:            testutil.TestOrgID,
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        testutil.TestNamespace,
+			Workload:         testutil.TestWorkload,
+			WorkloadType:     testutil.TestWorkloadType,
+			ContainerName:    testutil.TestContainer,
+			CPURequestP50MC:  200,
+			CPURequestP95MC:  210,
+			CPUUsageP50MC:    190,
+			CPUUsageP95MC:    200,
+			CPUUsageP98MC:    205,
+			CPUUsageP99MC:    208,
+			CPUUsageMaxMC:    215,
+			CPUThrottleP95MC: 5,
+			CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288,
+			MemRequestP95KiB: 524800,
+			MemUsageP50KiB:   524000,
+			MemUsageP95KiB:   524288,
+			MemUsageMaxKiB:   525312,
+			MemRSSP95KiB:     524000,
+			MemRSSMaxKiB:     525000,
+			OOMCountSum:      3,
+			CPUUsageMeanMC:   195,
+			MemUsageMeanKiB:  523000,
+			SampleCount:      96,
+		})
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	oomFound := false
+	for _, r := range results {
+		for _, code := range r.NotificationCodes {
+			if code == NotifOOMDetected {
+				oomFound = true
+			}
+		}
+	}
+	assert.True(t, oomFound, "at least one recommendation should have OOM notification code")
+}
+
+func TestWriteRecommendations_PersistsNotificationCodes(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	rec := ContainerRec{
+		OrgID:             testutil.TestOrgID,
+		ClusterUUID:       testutil.TestClusterUUID,
+		Namespace:         testutil.TestNamespace,
+		Workload:          testutil.TestWorkload,
+		WorkloadType:      testutil.TestWorkloadType,
+		ContainerName:     testutil.TestContainer,
+		Term:              "short",
+		Engine:            "cost",
+		RecCPURequestMC:   100,
+		RecCPULimitMC:     110,
+		RecMemRequestKiB:  51200,
+		RecMemLimitKiB:    53760,
+		ConfidenceLevel:   0.3,
+		DataDays:          2,
+		NotificationCodes: []int16{NotifLowConfidence, NotifOOMDetected},
+	}
+
+	err := WriteRecommendations(ctx, pool, []ContainerRec{rec})
+	require.NoError(t, err)
+
+	var codes []int16
+	err = pool.QueryRow(ctx,
+		`SELECT notification_codes FROM recommendation_sets
+		 WHERE org_id=$1 AND term=$2 AND engine=$3`,
+		rec.OrgID, rec.Term, rec.Engine).Scan(&codes)
+	require.NoError(t, err)
+	assert.Contains(t, codes, NotifLowConfidence)
+	assert.Contains(t, codes, NotifOOMDetected)
+}
+
 func TestLatestDigest(t *testing.T) {
 	d1 := DigestRow{BucketDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 100}
 	d2 := DigestRow{BucketDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), CPURequestP50MC: 200}
