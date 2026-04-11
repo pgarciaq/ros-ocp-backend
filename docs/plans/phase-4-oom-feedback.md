@@ -264,9 +264,9 @@ Use the **fatal-with-metrics** pattern matching `workload_metrics` and `historic
 
 ## Known Gaps (Out of Scope -- Future Phases)
 
-- **Boxplots in native engine:** The native engine does not produce boxplot data. Boxplots are a Kruize-only feature -- Kruize computes `plots` (min/q1/median/q3/max) and they are stored in the `recommendation_sets.recommendations` JSONB column. The native `EngineRecommendation` struct has no `plots` field. Computing boxplots from `daily_container_digests` percentiles is feasible but deferred.
-- **`recommendation_history` table wiring:** The table exists (migration 027) but will not be wired in Phase 4. Use cases include recommendation trend analysis (debugging instability, adoption detection over time, confidence trend dashboards). The `stability_pct` quality metric does NOT depend on history -- it is computed by reading the current values from `recommendation_sets` before `WriteRecommendations` overwrites them.
-- **`recommendation_history` retention policy:** Deferred alongside the table wiring. Monthly partitions enable `DROP TABLE` for old months when implemented.
+- **Boxplots in native engine:** Deferred to [Phase 5](phase-5-history-and-boxplots.md). The native engine does not produce boxplot data. Boxplots are Kruize-only today (stored in `recommendation_sets.recommendations` JSONB). Computing them from `daily_container_digests` percentiles is feasible.
+- **`recommendation_history` table wiring:** Deferred to [Phase 5](phase-5-history-and-boxplots.md). The `stability_pct` quality metric does NOT depend on history -- it is computed by reading the current values from `recommendation_sets` before `WriteRecommendations` overwrites them.
+- **`recommendation_history` retention policy:** Deferred to [Phase 5](phase-5-history-and-boxplots.md).
 
 ## Risks and Mitigations
 
