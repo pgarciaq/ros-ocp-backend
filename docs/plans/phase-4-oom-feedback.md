@@ -262,7 +262,33 @@ Batch-insert into `recommendation_quality` using `pgx.Batch`.
 
 ### Pipeline Integration
 
-Call `WriteRecommendationQuality` after `WriteRecommendations` in `processContainerCSVNative` (`internal/services/report_processor.go`).
+In `processContainerCSVNative` (`internal/services/report_processor.go`), the
+pipeline ordering must be:
+
+```
+1. ReadOldRecommendations(ctx, pool, containerKeys) → oldRecs map
+2. WriteRecommendations(ctx, pool, recs)             // overwrites old values
+3. WriteRecommendationQuality(ctx, pool, recs, oldRecs, oomCounts)
+```
+
+`ReadOldRecommendations` is a new helper that queries `recommendation_sets` for
+the current CPU/memory request values before `WriteRecommendations` overwrites
+them. These old values are needed by `stability_pct` (delta between old and new)
+and `adoption_detected` (compare current resource config to old recommendation).
+
+Updated function signature:
+
+```go
+func WriteRecommendationQuality(
+    ctx context.Context, pool *pgxpool.Pool,
+    newRecs []ContainerRec,
+    oldRecs map[containerKey]OldRecommendation,
+    oomCountsByContainer map[containerKey]int64,
+) error
+```
+
+Where `OldRecommendation` holds the previous `rec_cpu_request_millicores`,
+`rec_memory_request_kib`, and `updated_at` from `recommendation_sets`.
 
 ### Error Handling
 
@@ -318,10 +344,10 @@ Add or update IQE tests to validate OOM and quality behavior through the API:
 - `test_oom_notification_present` -- ingest data with OOM events, verify the
   `NotifOOMDetected` notification appears in the API response's `notifications`
   map with correct `type`, `message`, and `code` fields.
-- `test_recommendation_quality_populated` -- after ingestion, verify the API
-  response (or database, depending on whether quality is API-exposed) contains
-  populated quality metrics. If quality data is not yet exposed via API, this
-  test can be a direct database assertion (skip if no DB access in IQE).
+- `test_recommendation_quality_populated` -- **skipped in Phase 4**. Quality
+  data is internal-only (written to `recommendation_quality` table but not
+  exposed via API). Validated by Go integration tests. API exposure deferred
+  to a future phase.
 
 **Note:** IQE tests depend on both Track A (nise generating OOM data) and Track B
 (engine processing it). They should be the last tests written, after both tracks
