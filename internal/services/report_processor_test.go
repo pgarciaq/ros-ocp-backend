@@ -157,7 +157,7 @@ func TestProcessContainerCSVNative_EmptyCSV(t *testing.T) {
 	assert.Equal(t, 0, count, "no digests should be written for empty CSV")
 }
 
-const testCSVHeader = "interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count"
+const testCSVHeader = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
 func buildTestCSV(days int) string {
 	var sb strings.Builder

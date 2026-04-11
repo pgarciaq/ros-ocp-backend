@@ -106,27 +106,27 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.intervalEnd = i
 		case "namespace":
 			idx.namespace = i
-		case "workload_name":
+		case "workload":
 			idx.workloadName = i
 		case "workload_type":
 			idx.workloadType = i
 		case "container_name":
 			idx.containerName = i
-		case "cpu_request":
+		case "cpu_request_container_avg":
 			idx.cpuRequest = i
-		case "cpu_limit":
+		case "cpu_limit_container_avg":
 			idx.cpuLimit = i
-		case "cpu_usage":
+		case "cpu_usage_container_avg":
 			idx.cpuUsage = i
-		case "cpu_throttle":
+		case "cpu_throttle_container_avg":
 			idx.cpuThrottle = i
-		case "mem_request":
+		case "memory_request_container_avg":
 			idx.memRequest = i
-		case "mem_limit":
+		case "memory_limit_container_avg":
 			idx.memLimit = i
-		case "mem_usage":
+		case "memory_usage_container_avg":
 			idx.memUsage = i
-		case "mem_rss":
+		case "memory_rss_usage_container_avg":
 			idx.memRSS = i
 		case "oom_count":
 			idx.oomCount = i
@@ -139,13 +139,13 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		{"interval_start", idx.intervalStart},
 		{"interval_end", idx.intervalEnd},
 		{"namespace", idx.namespace},
-		{"workload_name", idx.workloadName},
+		{"workload", idx.workloadName},
 		{"workload_type", idx.workloadType},
 		{"container_name", idx.containerName},
-		{"cpu_request", idx.cpuRequest},
-		{"cpu_usage", idx.cpuUsage},
-		{"mem_request", idx.memRequest},
-		{"mem_usage", idx.memUsage},
+		{"cpu_request_container_avg", idx.cpuRequest},
+		{"cpu_usage_container_avg", idx.cpuUsage},
+		{"memory_request_container_avg", idx.memRequest},
+		{"memory_usage_container_avg", idx.memUsage},
 	}
 	for _, r := range required {
 		if r.val < 0 {
