@@ -29,6 +29,14 @@ const (
 // query filters out.
 var BaseDate = sevenDaysAgo()
 
+// RecentStart returns a start date 7 days ago (UTC, day-truncated). Use this
+// instead of BaseDate when seeding data for API integration tests that filter
+// on stale=false (staleness threshold is 3 days from the latest digest).
+func RecentStart() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -7)
+}
+
 // ContainerDigestRow holds the fields for a single daily_container_digests row.
 type ContainerDigestRow struct {
 	BucketDate       time.Time
@@ -103,10 +111,9 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 	}
 }
 
-// SeedDigestSeries inserts N daily digest rows with linearly increasing values,
-// starting from BaseDate, using the test constants for identity columns.
-// The CPU usage P95 starts at baseCPU and increments by cpuStep per day.
-// The memory usage P95 starts at baseMem and increments by memStep per day.
+// SeedDigestSeries inserts N daily digest rows starting from BaseDate.
+// For API integration tests that filter on stale=false, use SeedDigestSeriesFrom
+// with RecentStart() instead.
 func SeedDigestSeries(t *testing.T, pool *pgxpool.Pool, days int, baseCPU, cpuStep, baseMem, memStep int64) {
 	t.Helper()
 	for i := 0; i < days; i++ {
@@ -114,6 +121,45 @@ func SeedDigestSeries(t *testing.T, pool *pgxpool.Pool, days int, baseCPU, cpuSt
 		memVal := baseMem + int64(i)*memStep
 		SeedContainerDigest(t, pool, ContainerDigestRow{
 			BucketDate:       BaseDate.AddDate(0, 0, i),
+			OrgID:            TestOrgID,
+			ClusterUUID:      TestClusterUUID,
+			Namespace:        TestNamespace,
+			Workload:         TestWorkload,
+			WorkloadType:     TestWorkloadType,
+			ContainerName:    TestContainer,
+			CPURequestP50MC:  cpuVal - 20,
+			CPURequestP95MC:  cpuVal + 10,
+			CPUUsageP50MC:    cpuVal - 10,
+			CPUUsageP95MC:    cpuVal,
+			CPUUsageP98MC:    cpuVal + 5,
+			CPUUsageP99MC:    cpuVal + 8,
+			CPUUsageMaxMC:    cpuVal + 15,
+			CPUThrottleP95MC: 5,
+			CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: memVal - 1024,
+			MemRequestP95KiB: memVal + 512,
+			MemUsageP50KiB:   memVal - 512,
+			MemUsageP95KiB:   memVal,
+			MemUsageMaxKiB:   memVal + 1024,
+			MemRSSP95KiB:     memVal - 256,
+			MemRSSMaxKiB:     memVal + 512,
+			OOMCountSum:      0,
+			CPUUsageMeanMC:   cpuVal - 5,
+			MemUsageMeanKiB:  memVal - 256,
+			SampleCount:      96,
+		})
+	}
+}
+
+// SeedDigestSeriesFrom is like SeedDigestSeries but starts from the given date
+// instead of BaseDate. Use with RecentStart() for API integration tests.
+func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, baseCPU, cpuStep, baseMem, memStep int64) {
+	t.Helper()
+	for i := 0; i < days; i++ {
+		cpuVal := baseCPU + int64(i)*cpuStep
+		memVal := baseMem + int64(i)*memStep
+		SeedContainerDigest(t, pool, ContainerDigestRow{
+			BucketDate:       start.AddDate(0, 0, i),
 			OrgID:            TestOrgID,
 			ClusterUUID:      TestClusterUUID,
 			Namespace:        TestNamespace,
