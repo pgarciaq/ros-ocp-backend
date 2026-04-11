@@ -124,7 +124,7 @@ func TestValidateMetricRow(t *testing.T) {
 func TestParseCSVRows(t *testing.T) {
 	t.Run("valid CSV with header", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count",
+			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
 			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
 			"2026-03-01 00:15:00 +0000 UTC,2026-03-01 00:30:00 +0000 UTC,test-ns,test-deploy,deployment,main,0.5,1.0,0.30,0.02,1048576.0,2097152.0,600000.0,300000.0,0",
 		}, "\n")
@@ -139,7 +139,7 @@ func TestParseCSVRows(t *testing.T) {
 	})
 
 	t.Run("empty CSV returns empty slice", func(t *testing.T) {
-		csv := "interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count\n"
+		csv := "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n"
 		rows, err := ParseCSVRows(strings.NewReader(csv))
 		require.NoError(t, err)
 		assert.Empty(t, rows)
@@ -147,7 +147,7 @@ func TestParseCSVRows(t *testing.T) {
 
 	t.Run("NaN values cause row skip", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count",
+			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
 			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,NaN,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
 		}, "\n")
 
@@ -158,7 +158,7 @@ func TestParseCSVRows(t *testing.T) {
 
 	t.Run("large values preserved as int64", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count",
+			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
 			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,128.0,256.0,64.0,0.0,137438953472.0,274877906944.0,68719476736.0,34359738368.0,0",
 		}, "\n")
 
