@@ -424,10 +424,24 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 		return
 	}
 
+	// Step 1: Read old recommendations before overwrite (for stability_pct, adoption_detected)
+	containerKeys := engine.ContainerKeys(results)
+	oldRecs, err := engine.ReadOldRecommendations(ctx, pool, orgID, clusterUUID, containerKeys)
+	if err != nil {
+		log.Errorf("native engine: reading old recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	}
+
+	// Step 2: Write new recommendations (overwrites old values)
 	if err := engine.WriteRecommendations(ctx, pool, results); err != nil {
 		log.Errorf("native engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return
 	}
-
 	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
+
+	// Step 3: Write recommendation quality metrics (non-blocking for primary pipeline)
+	engine.EnsureQualityPartitions(ctx, pool)
+	oomCounts := engine.OOMCountsByContainer(results)
+	if err := engine.WriteRecommendationQuality(ctx, pool, results, oldRecs, oomCounts); err != nil {
+		log.Errorf("native engine: writing quality metrics failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	}
 }
