@@ -66,7 +66,7 @@ func TestProcessCSVToDigests_MultipleContainers(t *testing.T) {
 	assert.Equal(t, 2, count)
 }
 
-const csvHeader = "interval_start,interval_end,namespace,workload_name,workload_type,container_name,cpu_request,cpu_limit,cpu_usage,cpu_throttle,mem_request,mem_limit,mem_usage,mem_rss,oom_count"
+const csvHeader = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
 func csvRow(start, end, ns, wl, wlType, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
 	return start + "," + end + "," + ns + "," + wl + "," + wlType + "," + cn + "," +
