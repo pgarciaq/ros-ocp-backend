@@ -45,7 +45,14 @@ operator/nise output:**
 Files to update:
 - `internal/ingestion/csvparser.go` -- switch cases and required columns list
 - `internal/ingestion/csvparser_test.go` -- test CSV headers
+- `internal/services/report_processor_test.go` -- CSV fixtures in integration tests
 - Any other test fixtures using the abbreviated headers
+
+**Tests:** Update all existing `csvparser_test.go` tests to use operator-style
+headers. Verify that `buildColumnIndex` maps operator column names correctly.
+Verify that `ParseCSVRows` still produces the same `MetricRow` output with the
+renamed columns. Verify that a CSV missing optional columns (e.g., `oom_count`)
+still parses successfully.
 
 ## Execution Strategy: Two Parallel Tracks
 
@@ -129,6 +136,12 @@ during implementation.
 - Default to 0 for most rows; inject OOM events probabilistically (e.g., 1-3 events per day for a configurable percentage of containers).
 - Add a static data YAML field `oom_rate` (float, 0.0-1.0) to control frequency.
 
+### Tests
+
+- Unit (`test_ocp_generator.py`): Verify `OCP_ROS_USAGE_COLUMN` includes `"oom_count"`.
+- Unit: Verify generated rows include `oom_count` column with value 0 when `oom_rate` is 0.
+- Unit: Verify generated rows include nonzero `oom_count` values when `oom_rate` > 0 (seed random for determinism).
+
 ---
 
 ## Track B, Milestone 1: Engine -- OOM Feedback in RecommendMemory (ros-ocp-backend)
@@ -210,11 +223,12 @@ Configurable via env vars `ROS_OOM_BASE_BUMP` and `ROS_OOM_MAX_BUMP`.
 
 ### Tests
 
-- Unit: `TestRecommendMemory_OOMBump` -- seed with `OOMCountSum = 1`, verify ~15% higher.
-- Unit: `TestRecommendMemory_OOMLogScale` -- verify logarithmic curve at 1, 3, 7, 15 OOMs.
-- Unit: `TestRecommendMemory_OOMMaxBumpCap` -- seed with 100 OOMs, verify capped at 1.60.
-- Unit: `TestRecommendMemory_ZeroOOM` -- verify no change at 0.
-- Integration: Seed digests with OOM counts, call `RecommendAllWorkloads`, verify bumped `RecMemRequestKiB` and `NotifOOMDetected`.
+- Unit: `TestRecommendMemory_OOMBump` -- seed with `OOMCountSum = 1`, verify ~15% higher than identical data with `OOMCountSum = 0`.
+- Unit: `TestRecommendMemory_OOMLogScale` -- table-driven with `OOMCountSum` of 1, 3, 7, 15; verify the bump follows the logarithmic curve (not linear).
+- Unit: `TestRecommendMemory_OOMMaxBumpCap` -- seed with `OOMCountSum = 100`, verify capped at `OOMMaxBump` (1.60).
+- Unit: `TestRecommendMemory_ZeroOOM` -- verify no change when `OOMCountSum = 0`.
+- Unit: `TestRecommendMemory_OOMCustomParams` -- verify custom `OOMBaseBump`/`OOMMaxBump` env var values override defaults.
+- Integration (`recommend_all_test.go`): Seed digests with OOM counts, call `RecommendAllWorkloads`, verify bumped `RecMemRequestKiB` and `NotifOOMDetected` notification present.
 
 ---
 
@@ -256,9 +270,62 @@ Use the **fatal-with-metrics** pattern matching `workload_metrics` and `historic
 
 ### Tests
 
-- Integration: Full pipeline seed, verify all four fields populated.
-- Unit: `TestStabilityPct` -- table-driven with known variations.
-- Unit: `TestAdoptionDetection` -- within/beyond 5% tolerance, edge case at 0.
+**Unit tests (`quality_test.go`):**
+
+- `TestStabilityPct` -- table-driven with known CPU/memory variation percentages, verify formula output. Cases: no change (1.0), 50% CPU change (0.75), 50% both (0.5), 100% both (0.0), negative clamping to 0.
+- `TestAdoptionDetection` -- table-driven: current matches recommended within 5% (true), current differs beyond 5% (false), edge case at 0 recommended value.
+- `TestOOMEventsAfterRec` -- verify count of OOM events from digests after recommendation timestamp.
+- `TestRecommendationAgeHours` -- verify truncated integer hours since `updated_at`.
+
+**Integration tests (`quality_test.go`):**
+
+- `TestWriteRecommendationQuality_FullPipeline` -- seed digests, run `RecommendAllWorkloads` + `WriteRecommendations` + `WriteRecommendationQuality`, query `recommendation_quality` table, verify all four fields populated with expected values.
+- `TestWriteRecommendationQuality_StabilityAcrossCycles` -- seed a first recommendation, run the pipeline again with changed data, verify `stability_pct` reflects the delta between old and new recommendations (read-before-overwrite pattern).
+- `TestWriteRecommendationQuality_MissingPartition` -- attempt to write a quality row for a date with no partition, verify the `partitionMissing` Prometheus counter increments and a hard error is returned.
+
+**Partition tests (`quality_test.go`):**
+
+- `TestEnsureQualityPartitions` -- verify partitions are created for current + next 2 months. Call twice, verify idempotent (no error on second call).
+- `TestEnsureQualityPartitions_ConcurrentSafe` -- call from two goroutines simultaneously, verify no errors (exercises `IF NOT EXISTS` idempotency).
+
+---
+
+## End-to-End Pipeline Test (ros-ocp-backend)
+
+Extend or add to the existing `TestProcessContainerCSVNative_EndToEnd` integration
+test (`internal/services/report_processor_test.go`):
+
+- `TestProcessContainerCSVNative_WithOOMData` -- feed a CSV containing rows with
+  `oom_count > 0` through the full `processContainerCSVNative` pipeline. Verify:
+  1. `daily_container_digests` has `oom_count_sum > 0` for affected containers.
+  2. `recommendation_sets` has bumped `rec_memory_request_kib` (higher than the
+     same workload without OOM data).
+  3. `notification_codes` includes `NotifOOMDetected` (code 3).
+  4. `recommendation_quality` row is written with `oom_events_after_rec >= 0`.
+
+This test exercises the complete data flow: CSV parsing -> digest upsert ->
+recommendation engine (with OOM bump) -> quality writer.
+
+---
+
+## IQE Tests (iqe-ros-ocp-plugin)
+
+Add or update IQE tests to validate OOM and quality behavior through the API:
+
+- `test_oom_bumped_recommendation` -- ingest data with OOM events, verify the
+  recommendation's memory request is higher than a baseline without OOM data.
+  Compare two containers: one with `oom_count > 0`, one without.
+- `test_oom_notification_present` -- ingest data with OOM events, verify the
+  `NotifOOMDetected` notification appears in the API response's `notifications`
+  map with correct `type`, `message`, and `code` fields.
+- `test_recommendation_quality_populated` -- after ingestion, verify the API
+  response (or database, depending on whether quality is API-exposed) contains
+  populated quality metrics. If quality data is not yet exposed via API, this
+  test can be a direct database assertion (skip if no DB access in IQE).
+
+**Note:** IQE tests depend on both Track A (nise generating OOM data) and Track B
+(engine processing it). They should be the last tests written, after both tracks
+are functional.
 
 ---
 
