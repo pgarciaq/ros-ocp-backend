@@ -61,13 +61,30 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	log = logging.Set_request_details(kafkaMsg)
 
+	// Create RHAccount and Cluster once before the file loop so both native
+	// and legacy paths have valid rows for JOINs in the API read path.
+	rhAccount := model.RHAccount{
+		Account: kafkaMsg.Metadata.Account,
+		OrgId:   kafkaMsg.Metadata.Org_id,
+	}
+	if err := rhAccount.CreateRHAccount(); err != nil {
+		log.Errorf("unable to get or add record to rh_accounts table: %v. Error: %v", rhAccount, err)
+		return
+	}
+
+	cluster := model.Cluster{
+		TenantID:       rhAccount.ID,
+		SourceId:       kafkaMsg.Metadata.Source_id,
+		ClusterUUID:    kafkaMsg.Metadata.Cluster_uuid,
+		ClusterAlias:   kafkaMsg.Metadata.Cluster_alias,
+		LastReportedAt: time.Now(),
+	}
+	if err := cluster.CreateCluster(); err != nil {
+		log.Errorf("unable to get or add record to clusters table: %v. Error: %v", cluster, err)
+		return
+	}
+
 	var csvType types.PayloadType
-
-	var rhAccount model.RHAccount
-	var rhAccountCreated bool
-
-	var cluster model.Cluster
-	var clusterCreated bool
 
 	for _, file := range kafkaMsg.Files {
 		csvType = utils.DetermineCSVType(file)
@@ -103,33 +120,6 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 				invalidCSV.Inc()
 			}
 			continue
-		}
-
-		if !rhAccountCreated {
-			rhAccount = model.RHAccount{
-				Account: kafkaMsg.Metadata.Account,
-				OrgId:   kafkaMsg.Metadata.Org_id,
-			}
-			if err := rhAccount.CreateRHAccount(); err != nil {
-				log.Errorf("unable to get or add record to rh_accounts table: %v. Error: %v", rhAccount, err)
-				continue
-			}
-			rhAccountCreated = true
-		}
-
-		if !clusterCreated {
-			cluster = model.Cluster{
-				TenantID:       rhAccount.ID,
-				SourceId:       kafkaMsg.Metadata.Source_id,
-				ClusterUUID:    kafkaMsg.Metadata.Cluster_uuid,
-				ClusterAlias:   kafkaMsg.Metadata.Cluster_alias,
-				LastReportedAt: time.Now(),
-			}
-			if err := cluster.CreateCluster(); err != nil {
-				log.Errorf("unable to get or add record to clusters table: %v. Error: %v", cluster, err)
-				continue
-			}
-			clusterCreated = true
 		}
 
 		switch csvType {
