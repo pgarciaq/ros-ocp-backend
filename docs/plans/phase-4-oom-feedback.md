@@ -52,7 +52,7 @@ Files to update:
 Work proceeds in two independent tracks that can execute concurrently:
 
 - **Track A** (operator + nise): Data collection -- add OOM Prometheus queries and CSV columns
-- **Track B** (backend engine + quality + history): Backend engine OOM feedback, quality and history table wiring
+- **Track B** (backend engine + quality): Backend engine OOM feedback and quality tracking
 
 Track A and Track B have no code dependencies between them. The backend already parses `oom_count` as optional -- Track B can be tested with synthetic CSV fixtures before Track A delivers real OOM data.
 
@@ -68,7 +68,6 @@ ros-ocp-backend
     -> Daily Digest (oom_count_sum)
       -> RecommendMemory (OOM bump: log-scale, post-margin)
         -> recommendation_quality (all 4 metrics)
-        -> recommendation_history (always-on snapshots)
 ```
 
 ---
@@ -237,7 +236,7 @@ func WriteRecommendationQuality(
 For each unique container in `recs` (deduplicate across terms/engines, use the short_term/cost entry as representative), compute:
 
 - **`oom_events_after_rec`**: OOM events in `daily_container_digests` with `bucket_date` after the recommendation's `updated_at`.
-- **`stability_pct`**: `max(0, 1.0 - (|variation_cpu_request_pct|/100)*0.5 - (|variation_memory_request_pct|/100)*0.5)`.
+- **`stability_pct`**: `max(0, 1.0 - (|variation_cpu_request_pct|/100)*0.5 - (|variation_memory_request_pct|/100)*0.5)`. Computed by reading the previous recommendation from `recommendation_sets` before `WriteRecommendations` overwrites it. Does not depend on `recommendation_history`.
 - **`adoption_detected`**: `true` if current resource config matches the recommendation within 5% tolerance.
 - **`recommendation_age_hours`**: hours since the most recent `updated_at` on `recommendation_sets`. Stored as `BIGINT` (truncated integer hours). At one recommendation per hour max, sub-hour precision adds no value.
 
@@ -263,51 +262,18 @@ Use the **fatal-with-metrics** pattern matching `workload_metrics` and `historic
 
 ---
 
-## Track B, Milestone 3: Recommendation History Snapshots (ros-ocp-backend)
+## Known Gaps (Out of Scope -- Future Phases)
 
-**Goal:** Wire the `recommendation_history` table for trend analysis. Always-on (no config gate).
-
-### History Writer
-
-New file: `internal/engine/history.go`
-
-```go
-func WriteRecommendationHistory(
-    ctx context.Context, pool *pgxpool.Pool,
-    recs []ContainerRec, sourceBinary string,
-) error
-```
-
-Inserts a snapshot of each recommendation into `recommendation_history` with `recorded_at = now()`, `engine` from `ContainerRec.Engine`, and `source_binary` identifying the binary version.
-
-### Pipeline Integration
-
-Call `WriteRecommendationHistory` after `WriteRecommendations` in `processContainerCSVNative`, always.
-
-**Write volume:** At 10K containers, 60K rows/day (~6 MB/day, 180 MB/month). At 100K containers, 600K rows/day (60 MB/day, 1.8 GB/month). The table is partitioned, so dropping old months is a single `DROP TABLE` statement.
-
-### Partition Management
-
-`EnsureHistoryPartitions(ctx, pool)` -- same pattern as quality partitions. Called once during ingestion startup. Same fatal-with-metrics error handling for missing partitions at write time.
-
-### Tests
-
-- Integration: Write recommendations, call history writer, query back, verify all fields match.
-
----
-
-## Known Gaps (Out of Scope)
-
-- **Boxplots in native engine:** The native engine does not produce boxplot data. Boxplots are a Kruize-only feature -- Kruize computes `plots` (min/q1/median/q3/max) and they are stored in the `recommendation_sets.recommendations` JSONB column. The native `EngineRecommendation` struct has no `plots` field. Computing boxplots from `daily_container_digests` percentiles is feasible but deferred to a future phase.
-- **Retention policy for `recommendation_history`:** Deferred. Monthly partitions enable `DROP TABLE` for old months. A 6-month sweep is the expected approach.
+- **Boxplots in native engine:** The native engine does not produce boxplot data. Boxplots are a Kruize-only feature -- Kruize computes `plots` (min/q1/median/q3/max) and they are stored in the `recommendation_sets.recommendations` JSONB column. The native `EngineRecommendation` struct has no `plots` field. Computing boxplots from `daily_container_digests` percentiles is feasible but deferred.
+- **`recommendation_history` table wiring:** The table exists (migration 027) but will not be wired in Phase 4. Use cases include recommendation trend analysis (debugging instability, adoption detection over time, confidence trend dashboards). The `stability_pct` quality metric does NOT depend on history -- it is computed by reading the current values from `recommendation_sets` before `WriteRecommendations` overwrites them.
+- **`recommendation_history` retention policy:** Deferred alongside the table wiring. Monthly partitions enable `DROP TABLE` for old months when implemented.
 
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
 | OOM bump parameters (15% base / 1.60x cap) may need tuning | Configurable via env vars from the start; structured logging of applied bump |
-| Quality/history write overhead at 100K containers | `pgx.Batch` (same as `WriteRecommendations`); tables partitioned monthly |
-| History storage growth (1.8 GB/month at 100K) | Monthly partitions enable `DROP TABLE`; retention policy deferred to future phase |
+| Quality write overhead at 100K containers | `pgx.Batch` (same as `WriteRecommendations`); table partitioned monthly |
 | Nise + operator changes lag behind backend | Track B fully testable with synthetic CSV fixtures; no blocking dependency |
 | Partition DDL race between concurrent workers | `CREATE TABLE IF NOT EXISTS` makes partition creation idempotent; DDL failures are non-fatal (warning only). Missing partitions at write time use fatal-with-metrics pattern for visibility. |
 
