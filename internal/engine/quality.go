@@ -28,9 +28,9 @@ type OldRecommendation struct {
 }
 
 // ReadOldRecommendations fetches the current recommendation_sets rows for the
-// given containers (short_term/cost only), returning a map keyed by container.
-// This must be called BEFORE WriteRecommendations to capture values for
-// stability_pct and adoption_detected.
+// given containers (term='short', engine='cost' only), returning a map keyed
+// by container. This must be called BEFORE WriteRecommendations to capture
+// values for stability_pct and adoption_detected.
 func ReadOldRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
@@ -47,7 +47,7 @@ func ReadOldRecommendations(
 	var sb strings.Builder
 	args := []any{orgID, clusterUUID}
 	sb.WriteString(`
-		SELECT namespace, workload, container_name,
+		SELECT namespace, workload, COALESCE(workload_type, ''), container_name,
 			rec_cpu_request_millicores, rec_memory_request_kib, updated_at
 		FROM recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'
@@ -69,12 +69,12 @@ func ReadOldRecommendations(
 	defer rows.Close()
 
 	for rows.Next() {
-		var ns, wl, cn string
+		var ns, wl, wlType, cn string
 		var old OldRecommendation
-		if err := rows.Scan(&ns, &wl, &cn, &old.RecCPURequestMC, &old.RecMemRequestKiB, &old.UpdatedAt); err != nil {
+		if err := rows.Scan(&ns, &wl, &wlType, &cn, &old.RecCPURequestMC, &old.RecMemRequestKiB, &old.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("ReadOldRecommendations scan: %w", err)
 		}
-		result[containerKey{Namespace: ns, Workload: wl, ContainerName: cn}] = old
+		result[containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}] = old
 	}
 	return result, rows.Err()
 }
@@ -140,6 +140,7 @@ func WriteRecommendationQuality(
 		key := containerKey{
 			Namespace:     r.Namespace,
 			Workload:      r.Workload,
+			WorkloadType:  r.WorkloadType,
 			ContainerName: r.ContainerName,
 		}
 		if seen[key] {
@@ -236,6 +237,7 @@ func ContainerKeys(recs []ContainerRec) []containerKey {
 		key := containerKey{
 			Namespace:     r.Namespace,
 			Workload:      r.Workload,
+			WorkloadType:  r.WorkloadType,
 			ContainerName: r.ContainerName,
 		}
 		if !seen[key] {
@@ -253,6 +255,7 @@ func OOMCountsByContainer(recs []ContainerRec) map[containerKey]int64 {
 		key := containerKey{
 			Namespace:     r.Namespace,
 			Workload:      r.Workload,
+			WorkloadType:  r.WorkloadType,
 			ContainerName: r.ContainerName,
 		}
 		if _, ok := result[key]; !ok {
