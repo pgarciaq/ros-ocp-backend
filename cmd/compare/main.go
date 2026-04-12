@@ -130,10 +130,10 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-// transformNiseCSV reads a nise-generated ROS CSV (operator format) and renames
-// columns to match the native engine's expected format. For example,
-// "cpu_request_container_avg" becomes "cpu_request" and "workload" becomes
-// "workload_name". Units are preserved (CPU in cores, memory in bytes).
+// transformNiseCSV reads a nise-generated ROS CSV (operator format) and selects
+// the columns required by the native engine's CSV parser. Since the native parser
+// was updated to accept operator column names directly (Phase 4 prerequisite),
+// no renaming is needed -- columns are passed through as-is.
 func transformNiseCSV(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -147,56 +147,48 @@ func transformNiseCSV(path string) ([]byte, error) {
 		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
-	colMap := map[string]string{
-		"interval_start":                 "interval_start",
-		"interval_end":                   "interval_end",
-		"namespace":                      "namespace",
-		"workload":                       "workload_name",
-		"workload_type":                  "workload_type",
-		"container_name":                 "container_name",
-		"cpu_request_container_avg":      "cpu_request",
-		"cpu_limit_container_avg":        "cpu_limit",
-		"cpu_usage_container_avg":        "cpu_usage",
-		"cpu_throttle_container_avg":     "cpu_throttle",
-		"memory_request_container_avg":   "mem_request",
-		"memory_limit_container_avg":     "mem_limit",
-		"memory_usage_container_avg":     "mem_usage",
-		"memory_rss_usage_container_avg": "mem_rss",
+	// Columns the native parser requires or accepts (in output order).
+	// oom_count is optional -- included when present in source CSV.
+	wantedCols := []string{
+		"interval_start", "interval_end", "namespace", "workload",
+		"workload_type", "container_name",
+		"cpu_request_container_avg", "cpu_limit_container_avg",
+		"cpu_usage_container_avg", "cpu_throttle_container_avg",
+		"memory_request_container_avg", "memory_limit_container_avg",
+		"memory_usage_container_avg", "memory_rss_usage_container_avg",
+		"oom_count",
 	}
 
-	// Build index: find which source columns we need
+	// Build index: find which source columns exist
 	srcIndices := map[string]int{}
 	for i, h := range header {
-		if _, ok := colMap[h]; ok {
-			srcIndices[h] = i
-		}
+		srcIndices[h] = i
 	}
 
-	// Verify required columns exist
+	// Verify required columns
 	required := []string{"interval_start", "interval_end", "namespace", "workload", "container_name",
-		"cpu_request_container_avg", "cpu_usage_container_avg", "memory_request_container_avg", "memory_usage_container_avg"}
+		"cpu_request_container_avg", "cpu_usage_container_avg",
+		"memory_request_container_avg", "memory_usage_container_avg"}
 	for _, r := range required {
 		if _, ok := srcIndices[r]; !ok {
 			return nil, fmt.Errorf("missing required column %q in nise CSV", r)
 		}
 	}
 
-	// Build output header in a deterministic order
-	nativeHeader := []string{"interval_start", "interval_end", "namespace", "workload_name",
-		"workload_type", "container_name", "cpu_request", "cpu_limit", "cpu_usage",
-		"cpu_throttle", "mem_request", "mem_limit", "mem_usage", "mem_rss"}
-
-	// Reverse-map: native column name -> nise column name
-	nativeToNise := map[string]string{}
-	for nise, native := range colMap {
-		nativeToNise[native] = nise
+	// Filter wantedCols to only those present in the source CSV
+	var outputCols []string
+	var outputIndices []int
+	for _, col := range wantedCols {
+		if idx, ok := srcIndices[col]; ok {
+			outputCols = append(outputCols, col)
+			outputIndices = append(outputIndices, idx)
+		}
 	}
 
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
-	writer.Write(nativeHeader)
+	writer.Write(outputCols)
 
-	rowCount := 0
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -206,15 +198,13 @@ func transformNiseCSV(path string) ([]byte, error) {
 			return nil, fmt.Errorf("reading row: %w", err)
 		}
 
-		row := make([]string, len(nativeHeader))
-		for i, nativeCol := range nativeHeader {
-			niseCol := nativeToNise[nativeCol]
-			if idx, ok := srcIndices[niseCol]; ok && idx < len(record) {
+		row := make([]string, len(outputCols))
+		for i, idx := range outputIndices {
+			if idx < len(record) {
 				row[i] = record[idx]
 			}
 		}
 		writer.Write(row)
-		rowCount++
 	}
 	writer.Flush()
 
