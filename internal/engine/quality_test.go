@@ -184,6 +184,55 @@ func TestWriteRecommendationQuality_StabilityAcrossCycles(t *testing.T) {
 	assert.Less(t, stabilityPct, float32(1.0))
 }
 
+func TestOOMCountsByContainer(t *testing.T) {
+	recs := []ContainerRec{
+		{Namespace: "ns1", Workload: "deploy1", ContainerName: "c1", OOMCountSum: 5},
+		{Namespace: "ns1", Workload: "deploy1", ContainerName: "c1", OOMCountSum: 99}, // duplicate, should keep first
+		{Namespace: "ns2", Workload: "deploy2", ContainerName: "c2", OOMCountSum: 0},
+		{Namespace: "ns3", Workload: "deploy3", ContainerName: "c3", OOMCountSum: 12},
+	}
+
+	counts := OOMCountsByContainer(recs)
+
+	assert.Equal(t, int64(5), counts[containerKey{Namespace: "ns1", Workload: "deploy1", ContainerName: "c1"}])
+	assert.Equal(t, int64(0), counts[containerKey{Namespace: "ns2", Workload: "deploy2", ContainerName: "c2"}])
+	assert.Equal(t, int64(12), counts[containerKey{Namespace: "ns3", Workload: "deploy3", ContainerName: "c3"}])
+	assert.Len(t, counts, 3)
+}
+
+func TestWriteRecommendationQuality_MissingPartition(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// The migration creates partitions for current + 2 months.
+	// Use a measured_at far in the future (2 years from now) where no partition exists.
+	// We need to override the time used in WriteRecommendationQuality -- but since it
+	// uses time.Now() internally, we instead create a minimal table scenario:
+	// drop the existing partitions and verify the write fails.
+	now := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
+		partName := "recommendation_quality_" + monthStart.Format("200601")
+		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+partName)
+	}
+
+	recs := []ContainerRec{
+		{
+			OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+			Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload,
+			ContainerName: testutil.TestContainer,
+			Term: "medium", Engine: "cost",
+			RecCPURequestMC: 100, RecMemRequestKiB: 1024,
+		},
+	}
+	oldRecs := map[containerKey]OldRecommendation{}
+	oomCounts := map[containerKey]int64{}
+
+	err := WriteRecommendationQuality(ctx, pool, recs, oldRecs, oomCounts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "partition missing")
+}
+
 func TestEnsureQualityPartitions(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

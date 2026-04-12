@@ -92,8 +92,8 @@ ros-ocp-backend
 Add a new entry to `QueryMap` in `internal/collector/queries.go`:
 
 ```promql
-ros:oom_kill_container_sum:
-  sum by(container, pod, namespace, node) (
+ros:oom_count_container_sum:
+  sum by(container, pod, namespace) (
     increase(kube_pod_container_status_restarts_total{container!='', container!='POD', pod!=''}[15m])
     * on(pod, namespace, container) group_left
       (kube_pod_container_status_last_terminated_reason{reason='OOMKilled'} > 0)
@@ -133,8 +133,8 @@ during implementation.
 **Goal:** Allow `nise report ocp --ros-ocp-info` to emit `oom_count` in the ROS container CSV so end-to-end dev environment tests can exercise the full OOM pipeline.
 
 - Add an `oom_count` column to the ROS container CSV generator.
-- Default to 0 for most rows; inject OOM events probabilistically (e.g., 1-3 events per day for a configurable percentage of containers).
-- Add a static data YAML field `oom_rate` (float, 0.0-1.0) to control frequency.
+- Default to 0 for 90% of rows; inject 1-3 OOM events for the remaining 10% using weighted random selection.
+- **Deferred:** A static data YAML field `oom_rate` (float, 0.0-1.0) to control OOM frequency per-pod was not implemented. The hardcoded 90/10 ratio is sufficient for Phase 4 testing. If configurable OOM rates are needed, this can be added as an enhancement.
 
 ### Tests
 
@@ -247,9 +247,9 @@ func WriteRecommendationQuality(
 ) error
 ```
 
-For each unique container in `recs` (deduplicate across terms/engines, use the short_term/cost entry as representative), compute:
+For each unique container in `recs` (deduplicate across terms/engines, use the first cost-engine entry as representative), compute:
 
-- **`oom_events_after_rec`**: OOM events in `daily_container_digests` with `bucket_date` after the recommendation's `updated_at`.
+- **`oom_events_after_rec`**: Total OOM events from the current processing batch (sum of `oom_count_sum` from digests in the analysis window). **Design note:** The original spec called for querying OOM events "after the recommendation's `updated_at`", but this is impractical because (a) the operator sends data hourly so there's no historical OOM accumulation across batches, and (b) for first-time containers there's no `updated_at` boundary. The current-batch semantics accurately reflect the OOM signal available to the engine.
 - **`stability_pct`**: `max(0, 1.0 - (|variation_cpu_request_pct|/100)*0.5 - (|variation_memory_request_pct|/100)*0.5)`. Computed by reading the previous recommendation from `recommendation_sets` before `WriteRecommendations` overwrites it. Does not depend on `recommendation_history`.
 - **`adoption_detected`**: `true` if current resource config matches the recommendation within 5% tolerance.
 - **`recommendation_age_hours`**: hours since the most recent `updated_at` on `recommendation_sets`. Stored as `BIGINT` (truncated integer hours). At one recommendation per hour max, sub-hour precision adds no value.
@@ -258,7 +258,7 @@ Batch-insert into `recommendation_quality` using `pgx.Batch`.
 
 ### Partition Management
 
-`EnsureQualityPartitions(ctx, pool)`: create monthly partitions (current + next 2 months), called once during ingestion startup. Same `CREATE TABLE IF NOT EXISTS ... PARTITION OF ...` pattern as migration 027. Partition DDL failures are **non-fatal** (log warning, continue) since concurrent workers may race.
+`EnsureQualityPartitions(ctx, pool)`: create monthly partitions (current + next 2 months), called before each quality write batch. Same `CREATE TABLE IF NOT EXISTS ... PARTITION OF ...` pattern as migration 027. Partition DDL failures are **non-fatal** (log warning, continue) since concurrent workers may race. Per-batch invocation is safe due to `IF NOT EXISTS` idempotency and provides self-healing if a partition is dropped or missed.
 
 ### Pipeline Integration
 
@@ -292,7 +292,7 @@ Where `OldRecommendation` holds the previous `rec_cpu_request_millicores`,
 
 ### Error Handling
 
-Use the **fatal-with-metrics** pattern matching `workload_metrics` and `historical_recommendation_set`: check for `"no partition"` in errors, increment a `partitionMissing` Prometheus counter, and return a hard error. This runs after `WriteRecommendations` succeeds, so quality write failures do not block the primary recommendation pipeline, but they are visible in monitoring.
+Use the **fatal-with-metrics** pattern: check for `"no partition"` in errors, increment the `rosocp_quality_partition_missing_total` Prometheus counter, and return a hard error. This runs after `WriteRecommendations` succeeds, so quality write failures do not block the primary recommendation pipeline, but they are visible in monitoring.
 
 ### Tests
 
@@ -378,8 +378,9 @@ are functional.
 | Track A M1: Operator OOM PromQL + CSV | **Done** | `ros:oom_count_container_sum` query, `OOMCount` field in `rosContainerRow`, golden CSV updated |
 | Track A M2: Nise oom_count | **Done** | `oom_count` in `OCP_ROS_USAGE_COLUMN`, 90/10 weighted random generation |
 | Track B M1: OOM bump in RecommendMemory | **Done** | Post-margin log-scale bump, configurable via `ROS_OOM_BASE_BUMP`/`ROS_OOM_MAX_BUMP`, 6 unit tests |
-| Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, unit + integration tests |
+| Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, Prometheus counter, unit + integration tests |
 | E2E pipeline test | **Done** | `TestProcessContainerCSVNative_WithOOMData` -- validates digest OOM accumulation, memory bump, and quality metrics |
+| Audit fixes | **Done** | `ReadOldRecommendations` now filters by container keys; `qualityPartitionMissing` Prometheus counter added; `TestOOMCountsByContainer` + `TestWriteRecommendationQuality_MissingPartition` + operator `types_test.go` + nise OOM unit tests added |
 | IQE tests | Pending | `test_oom_bumped_recommendation`, `test_oom_notification_present` -- requires cluster deployment |
 
 ## Branching
