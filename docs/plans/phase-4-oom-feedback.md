@@ -339,14 +339,35 @@ recommendation engine (with OOM bump) -> quality writer.
 
 ## IQE Tests (iqe-ros-ocp-plugin)
 
-Add or update IQE tests to validate OOM and quality behavior through the API:
+### Phase 3: Native Engine Contract (test_native_engine.py)
 
-- `test_oom_bumped_recommendation` -- ingest data with OOM events, verify the
-  recommendation's memory request is higher than a baseline without OOM data.
-  Compare two containers: one with `oom_count > 0`, one without.
-- `test_oom_notification_present` -- ingest data with OOM events, verify the
-  `NotifOOMDetected` notification appears in the API response's `notifications`
-  map with correct `type`, `message`, and `code` fields.
+Phase 3 introduced the native Go engine with a new response format. These tests
+validate the API contract that koku-ui depends on:
+
+- `TestNativeResponseStructure.test_top_level_fields_present` -- every item has
+  cluster_alias, cluster_uuid, container, id, recommendations, etc.
+- `TestNativeResponseStructure.test_deterministic_id_format` -- id is a valid UUID.
+- `TestMultiTermRecommendations.test_all_terms_present` -- short_term, medium_term,
+  long_term keys exist in recommendations.
+- `TestMultiTermRecommendations.test_each_term_has_cost_and_performance` -- both
+  engines populated for each term.
+- `TestEngineFields.test_engine_has_millicore_and_kib_fields` -- cpu_request_millicores
+  and memory_request_kib present.
+- `TestConfidenceLevel.test_confidence_level_present_and_valid` -- confidence_level is
+  a float in [0.0, 1.0].
+- `TestNotificationCodes.test_notification_codes_are_int_array` -- notification_codes
+  is a list of integers.
+- `TestNotificationCodes.test_notifications_map_matches_codes` -- notifications map
+  keys match notification_codes entries, each with type/message/code.
+
+### Phase 4: OOM Feedback (test_oom.py)
+
+- `TestOOMNotificationPresent.test_oom_notification_present` -- ingest OOM-prone
+  nise data, verify at least one container has NotifOOMDetected (code 3).
+- `TestOOMNotificationPresent.test_oom_notification_has_correct_kruize_entry` --
+  code 3 maps to type=CRITICAL with an OOM-related message.
+- `TestOOMBumpedRecommendation.test_oom_bumped_memory_recommendation` -- container
+  with OOM notification has memory_request_kib > current_memory_request_kib.
 - `test_recommendation_quality_populated` -- **skipped in Phase 4**. Quality
   data is internal-only (written to `recommendation_quality` table but not
   exposed via API). Validated by Go integration tests. API exposure deferred
@@ -384,7 +405,7 @@ are functional.
 | Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, Prometheus counter, unit + integration tests |
 | E2E pipeline test | **Done** | `TestProcessContainerCSVNative_WithOOMData` -- validates digest OOM accumulation, memory bump, and quality metrics |
 | Audit fixes | **Done** | `ReadOldRecommendations` now filters by container keys; `qualityPartitionMissing` Prometheus counter added; `TestOOMCountsByContainer` + `TestWriteRecommendationQuality_MissingPartition` + operator `types_test.go` + nise OOM unit tests added |
-| IQE tests | Pending | `test_oom_bumped_recommendation`, `test_oom_notification_present` -- requires cluster deployment |
+| IQE tests | **Done** | `test_native_engine.py` (8 Phase 3 tests) + `test_oom.py` (3 Phase 4 tests) + nise YAML + fixture -- awaiting cluster deployment to execute |
 
 ## Branching
 
