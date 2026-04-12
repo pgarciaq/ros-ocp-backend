@@ -122,13 +122,16 @@ func RecommendAllWorkloads(
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
 				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-				memCfg.OOMCountSum = oomTotal
-				if oomCfg.BaseBump > 0 {
-					memCfg.OOMBaseBump = oomCfg.BaseBump
-				}
-				if oomCfg.MaxBump > 0 {
-					memCfg.OOMMaxBump = oomCfg.MaxBump
-				}
+			memCfg.OOMCountSum = oomTotal
+			if oomCfg.BaseBump > 0 {
+				memCfg.OOMBaseBump = oomCfg.BaseBump
+			}
+			if oomCfg.MaxBump > 0 {
+				memCfg.OOMMaxBump = oomCfg.MaxBump
+			}
+			if memCfg.OOMMaxBump < 1.0 {
+				memCfg.OOMMaxBump = 1.0
+			}
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)

@@ -41,24 +41,28 @@ func ReadOldRecommendations(
 		return result, nil
 	}
 
-	// Build a (namespace, workload, container_name) filter to avoid fetching
-	// all containers in the cluster when only a subset is needed.
-	namespaces := make([]string, len(keys))
-	workloads := make([]string, len(keys))
-	containers := make([]string, len(keys))
-	for i, k := range keys {
-		namespaces[i] = k.Namespace
-		workloads[i] = k.Workload
-		containers[i] = k.ContainerName
-	}
-
-	rows, err := pool.Query(ctx, `
+	// Build a tuple-wise VALUES list for exact (namespace, workload, container_name) matching.
+	// Using separate ANY() arrays would match the cross-product of all values,
+	// potentially returning phantom rows when values overlap across keys.
+	var sb strings.Builder
+	args := []any{orgID, clusterUUID}
+	sb.WriteString(`
 		SELECT namespace, workload, container_name,
 			rec_cpu_request_millicores, rec_memory_request_kib, updated_at
 		FROM recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'
-			AND namespace = ANY($3) AND workload = ANY($4) AND container_name = ANY($5)`,
-		orgID, clusterUUID, namespaces, workloads, containers)
+			AND (namespace, workload, container_name) IN (`)
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		base := 3 + i*3
+		fmt.Fprintf(&sb, "($%d,$%d,$%d)", base, base+1, base+2)
+		args = append(args, k.Namespace, k.Workload, k.ContainerName)
+	}
+	sb.WriteString(")")
+
+	rows, err := pool.Query(ctx, sb.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("ReadOldRecommendations: %w", err)
 	}
@@ -104,11 +108,16 @@ func withinTolerance(actual, expected int64, pct float64) bool {
 }
 
 // ComputeRecommendationAgeHours returns truncated integer hours since updatedAt.
+// Returns 0 if updatedAt is zero or in the future (clock skew).
 func ComputeRecommendationAgeHours(updatedAt time.Time, now time.Time) int64 {
 	if updatedAt.IsZero() {
 		return 0
 	}
-	return int64(now.Sub(updatedAt).Hours())
+	hours := int64(now.Sub(updatedAt).Hours())
+	if hours < 0 {
+		return 0
+	}
+	return hours
 }
 
 // WriteRecommendationQuality batch-inserts quality metrics into recommendation_quality.

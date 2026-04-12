@@ -231,9 +231,82 @@ func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
 		orgID, clusterUUID).Scan(&qualityCount)
 	require.NoError(t, err)
 	assert.Greater(t, qualityCount, 0, "quality metrics should be written")
+
+	// Verify oom_events_after_rec is populated correctly per container
+	var oomEvents int64
+	err = pool.QueryRow(ctx,
+		`SELECT oom_events_after_rec FROM recommendation_quality
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'oom-container'
+		 ORDER BY measured_at DESC LIMIT 1`,
+		orgID, clusterUUID).Scan(&oomEvents)
+	require.NoError(t, err)
+	assert.Greater(t, oomEvents, int64(0), "oom-container quality should have positive OOM events")
+
+	var stableOomEvents int64
+	err = pool.QueryRow(ctx,
+		`SELECT oom_events_after_rec FROM recommendation_quality
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'stable-container'
+		 ORDER BY measured_at DESC LIMIT 1`,
+		orgID, clusterUUID).Scan(&stableOomEvents)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), stableOomEvents, "stable-container quality should have zero OOM events")
+}
+
+func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	origPool := db.Pool
+	db.Pool = pool
+	t.Cleanup(func() { db.Pool = origPool })
+
+	orgID := "org-no-oom-col"
+	clusterUUID := "22222222-3333-4444-5555-666666666666"
+
+	csvData := buildTestCSVWithoutOOMColumn(7)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		fmt.Fprint(w, csvData)
+	}))
+	defer ts.Close()
+
+	kafkaMsg := types.KafkaMsg{
+		Request_id:   "test-req-no-oom",
+		B64_identity: "dGVzdA==",
+		Files:        []string{ts.URL},
+	}
+	kafkaMsg.Metadata.Org_id = orgID
+	kafkaMsg.Metadata.Source_id = "src-no-oom"
+	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
+	kafkaMsg.Metadata.Cluster_alias = "no-oom-cluster"
+
+	processContainerCSVNative(ts.URL, kafkaMsg)
+
+	var digestCount int
+	err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, clusterUUID).Scan(&digestCount)
+	require.NoError(t, err)
+	assert.Greater(t, digestCount, 0, "digests should be written even without oom_count column")
+
+	var oomSum int64
+	err = pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(oom_count_sum), 0) FROM daily_container_digests WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, clusterUUID).Scan(&oomSum)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), oomSum, "oom_count_sum should default to 0 when column is absent")
+
+	var recCount int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, clusterUUID).Scan(&recCount)
+	require.NoError(t, err)
+	assert.Greater(t, recCount, 0, "recommendations should still be generated without oom_count")
 }
 
 const testCSVHeader = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
+
+const testCSVHeaderNoOOM = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg"
 
 func buildTestCSV(days int) string {
 	var sb strings.Builder
@@ -281,6 +354,30 @@ func buildTestCSVWithOOM(days int) string {
 				}
 				sb.WriteString(fmt.Sprintf("%s,%s,oom-ns,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
 				sb.WriteString(fmt.Sprintf("%s,%s,stable-ns,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
+			}
+		}
+	}
+	return sb.String()
+}
+
+// buildTestCSVWithoutOOMColumn generates CSV with the same data as buildTestCSV
+// but omits the oom_count column entirely, simulating data from an older operator.
+func buildTestCSVWithoutOOMColumn(days int) string {
+	var sb strings.Builder
+	sb.WriteString(testCSVHeaderNoOOM)
+	sb.WriteByte('\n')
+
+	now := time.Now().UTC()
+	for d := 0; d < days; d++ {
+		day := now.AddDate(0, 0, -(days - d))
+		for h := 0; h < 24; h++ {
+			for q := 0; q < 4; q++ {
+				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
+				end := start.Add(15 * time.Minute)
+				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
+					start.Format("2006-01-02 15:04:05 +0000 UTC"),
+					end.Format("2006-01-02 15:04:05 +0000 UTC"),
+				))
 			}
 		}
 	}
