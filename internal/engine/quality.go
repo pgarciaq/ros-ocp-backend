@@ -9,9 +9,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
 )
+
+var qualityPartitionMissing = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "rosocp_quality_partition_missing_total",
+	Help: "Number of recommendation_quality writes that failed due to missing partition",
+})
 
 // OldRecommendation holds previous recommendation values read from
 // recommendation_sets before WriteRecommendations overwrites them.
@@ -35,12 +41,24 @@ func ReadOldRecommendations(
 		return result, nil
 	}
 
+	// Build a (namespace, workload, container_name) filter to avoid fetching
+	// all containers in the cluster when only a subset is needed.
+	namespaces := make([]string, len(keys))
+	workloads := make([]string, len(keys))
+	containers := make([]string, len(keys))
+	for i, k := range keys {
+		namespaces[i] = k.Namespace
+		workloads[i] = k.Workload
+		containers[i] = k.ContainerName
+	}
+
 	rows, err := pool.Query(ctx, `
 		SELECT namespace, workload, container_name,
 			rec_cpu_request_millicores, rec_memory_request_kib, updated_at
 		FROM recommendation_sets
-		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'`,
-		orgID, clusterUUID)
+		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'
+			AND namespace = ANY($3) AND workload = ANY($4) AND container_name = ANY($5)`,
+		orgID, clusterUUID, namespaces, workloads, containers)
 	if err != nil {
 		return nil, fmt.Errorf("ReadOldRecommendations: %w", err)
 	}
@@ -165,6 +183,7 @@ func WriteRecommendationQuality(
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
 			if isPartitionMissing(err) {
+				qualityPartitionMissing.Inc()
 				log.Errorf("WriteRecommendationQuality: missing partition for recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for recommendation_quality: %w", err)
 			}
