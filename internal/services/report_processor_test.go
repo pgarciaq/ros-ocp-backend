@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
@@ -250,6 +251,24 @@ func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
 		orgID, clusterUUID).Scan(&stableOomEvents)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), stableOomEvents, "stable-container quality should have zero OOM events")
+
+	// Verify OOM notification code is present for the OOM container
+	var notifCodes []int16
+	rows, err := pool.Query(ctx,
+		`SELECT DISTINCT unnest(notification_codes)
+		 FROM recommendation_sets
+		 WHERE org_id = $1 AND cluster_uuid = $2 AND container_name = 'oom-container'`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var code int16
+		require.NoError(t, rows.Scan(&code))
+		notifCodes = append(notifCodes, code)
+	}
+	require.NoError(t, rows.Err())
+	assert.Contains(t, notifCodes, engine.NotifOOMDetected,
+		"oom-container should have NotifOOMDetected (code 3) in notification_codes")
 }
 
 func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {

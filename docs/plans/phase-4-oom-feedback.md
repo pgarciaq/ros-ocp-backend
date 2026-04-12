@@ -268,8 +268,11 @@ pipeline ordering must be:
 ```
 1. ReadOldRecommendations(ctx, pool, containerKeys) → oldRecs map
 2. WriteRecommendations(ctx, pool, recs)             // overwrites old values
-3. WriteRecommendationQuality(ctx, pool, recs, oldRecs, oomCounts)
+3. if oldRecs != nil → WriteRecommendationQuality(ctx, pool, recs, oldRecs, oomCounts)
 ```
+
+If `ReadOldRecommendations` fails (returns nil), quality writes are skipped to
+avoid writing misleading stability/adoption metrics with "no prior rec" defaults.
 
 `ReadOldRecommendations` is a new helper that queries `recommendation_sets` for
 the current CPU/memory request values before `WriteRecommendations` overwrites
@@ -300,7 +303,7 @@ Use the **fatal-with-metrics** pattern: check for `"no partition"` in errors, in
 
 - `TestStabilityPct` -- table-driven with known CPU/memory variation percentages, verify formula output. Cases: no change (1.0), 50% CPU change (0.75), 50% both (0.5), 100% both (0.0), negative clamping to 0.
 - `TestAdoptionDetection` -- table-driven: current matches recommended within 5% (true), current differs beyond 5% (false), edge case at 0 recommended value.
-- `TestOOMEventsAfterRec` -- verify count of OOM events from digests after recommendation timestamp.
+- `TestOOMEventsAfterRec` -- verified via current-batch OOM totals (see design note above); tested through `TestWriteRecommendationQuality_FullPipeline` and the E2E `TestProcessContainerCSVNative_WithOOMData`.
 - `TestRecommendationAgeHours` -- verify truncated integer hours since `updated_at`.
 
 **Integration tests (`quality_test.go`):**
