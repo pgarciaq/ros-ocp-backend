@@ -77,6 +77,11 @@ func TestRecommendationAgeHours(t *testing.T) {
 	t.Run("zero time returns 0", func(t *testing.T) {
 		assert.Equal(t, int64(0), ComputeRecommendationAgeHours(time.Time{}, now))
 	})
+
+	t.Run("future updatedAt clamps to 0", func(t *testing.T) {
+		future := now.Add(2 * time.Hour)
+		assert.Equal(t, int64(0), ComputeRecommendationAgeHours(future, now))
+	})
 }
 
 func TestWriteRecommendationQuality_FullPipeline(t *testing.T) {

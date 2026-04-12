@@ -548,3 +548,65 @@ func TestLatestDigest_Empty(t *testing.T) {
 	got := latestDigest(nil)
 	assert.True(t, got.BucketDate.IsZero())
 }
+
+func TestOOMMaxBumpClamp(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Seed identical data under two org_ids: one with OOMs, one without.
+	orgOOM := "org-oom-clamp"
+	orgNoOOM := "org-no-oom-clamp"
+	for i := 0; i < 7; i++ {
+		base := testutil.ContainerDigestRow{
+			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        testutil.TestNamespace,
+			Workload:         testutil.TestWorkload,
+			WorkloadType:     testutil.TestWorkloadType,
+			ContainerName:    testutil.TestContainer,
+			CPURequestP50MC:  200, CPURequestP95MC: 210,
+			CPUUsageP50MC: 180, CPUUsageP95MC: 200, CPUUsageP98MC: 205,
+			CPUUsageP99MC: 208, CPUUsageMaxMC: 210,
+			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+			MemUsageP50KiB: 524000, MemUsageP95KiB: 524288, MemUsageMaxKiB: 525312,
+			MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+			CPUUsageMeanMC: 195, MemUsageMeanKiB: 523000,
+			SampleCount: 96,
+		}
+		withOOM := base
+		withOOM.OrgID = orgOOM
+		withOOM.OOMCountSum = 10
+		testutil.SeedContainerDigest(t, pool, withOOM)
+
+		noOOM := base
+		noOOM.OrgID = orgNoOOM
+		noOOM.OOMCountSum = 0
+		testutil.SeedContainerDigest(t, pool, noOOM)
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	// MaxBump=0.5 should be clamped to 1.0, so OOM data produces no bump at all
+	clampedCfg := OOMConfig{BaseBump: 0.15, MaxBump: 0.5}
+	resultsClamped, err := RecommendAllWorkloads(ctx, pool, orgOOM, testutil.TestClusterUUID, testutil.BaseDate, end, clampedCfg)
+	require.NoError(t, err)
+
+	// No-OOM baseline: same data without OOM events, default config
+	resultsBaseline, err := RecommendAllWorkloads(ctx, pool, orgNoOOM, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
+	require.NoError(t, err)
+
+	// With MaxBump clamped to 1.0, memory recommendations should equal the no-OOM baseline
+	// (the clamp ensures OOMs never shrink memory, and bump=min(1.0, ...)=1.0 means no increase)
+	for _, rc := range resultsClamped {
+		if rc.Term != "short" || rc.Engine != "cost" {
+			continue
+		}
+		for _, rb := range resultsBaseline {
+			if rb.Term == rc.Term && rb.Engine == rc.Engine && rb.ContainerName == rc.ContainerName {
+				assert.Equal(t, rb.RecMemRequestKiB, rc.RecMemRequestKiB,
+					"MaxBump clamped to 1.0 should produce same memory rec as no-OOM baseline")
+			}
+		}
+	}
+}
