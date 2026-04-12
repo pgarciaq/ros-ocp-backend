@@ -438,7 +438,13 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	}
 	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
 
-	// Step 3: Write recommendation quality metrics (non-blocking for primary pipeline)
+	// Step 3: Write recommendation quality metrics (non-blocking for primary pipeline).
+	// Skip quality writes if old recommendations could not be read -- writing with
+	// "no prior rec" defaults would produce misleading stability/adoption metrics.
+	if oldRecs == nil {
+		log.Warnf("native engine: skipping quality metrics (old recs unavailable) for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
 	engine.EnsureQualityPartitions(ctx, pool)
 	oomCounts := engine.OOMCountsByContainer(results)
 	if err := engine.WriteRecommendationQuality(ctx, pool, results, oldRecs, oomCounts); err != nil {
