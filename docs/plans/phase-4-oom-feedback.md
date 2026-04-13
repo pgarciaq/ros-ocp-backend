@@ -407,6 +407,42 @@ are functional.
 | Audit fixes | **Done** | `ReadOldRecommendations` now filters by container keys; `qualityPartitionMissing` Prometheus counter added; `TestOOMCountsByContainer` + `TestWriteRecommendationQuality_MissingPartition` + operator `types_test.go` + nise OOM unit tests added |
 | IQE tests | **Done** | `test_native_engine.py` (8 Phase 3 tests) + `test_oom.py` (3 Phase 4 tests) + nise YAML + fixture -- awaiting cluster deployment to execute |
 
+## Cross-Repo Merge Order
+
+The IQE OOM tests (`test_oom.py`) depend on nise generating an `oom_count`
+column in the ROS container CSV. This column was added in commit `c92f444`
+("Add oom_count column to ROS container CSV generation") on the nise branch.
+The IQE CI installs `koku-nise` from PyPI, which does not have this change.
+
+**Required merge and release order:**
+
+1. **nise** → merge to `main`, release to PyPI (adds `oom_count` CSV column +
+   deterministic YAML support)
+2. **ros-ocp-backend** → merge to target branch (OOM bump, quality writer,
+   partition auto-creation)
+3. **iqe-ros-ocp-plugin** → merge to target branch (OOM tests, notification_codes
+   fixture switch, n_days=16 for long_term recs)
+4. **koku-metrics-operator** → merge to `main` (OOM PromQL query + CSV column;
+   can merge independently since the CSV column is additive)
+
+**Why this order matters:**
+
+- If iqe-ros-ocp-plugin merges before nise, the OOM tests
+  (`test_oom_notification_present`, `test_oom_notification_has_correct_kruize_entry`,
+  `test_oom_bumped_memory_recommendation`) will fail in CI because `oom_count` will
+  be missing from the generated CSV, resulting in `oom_count_sum = 0` for all
+  containers and no `NotifOOMDetected` (code 3).
+
+- The `TestNotificationCodes` tests (`test_notification_codes_are_int_array`,
+  `test_notifications_map_matches_codes`) are safe regardless of nise version
+  because they use the OOM fixture with only 2 days of data, which always
+  triggers `NotifLowConfidence` (code 1).
+
+- The deterministic `oom_count` from YAML (commit `e1c40d9`) is a reliability
+  improvement but not strictly required — the random 90/10 generation over
+  ~192 intervals gives p(at least one OOM) ≈ 1 - 0.9^192 ≈ 1.0. However,
+  the CSV column itself (`c92f444`) IS required.
+
 ## Branching
 
 - **koku-metrics-operator:** `pgarciaq-rosocp-superpowers-phase4` off `main`
