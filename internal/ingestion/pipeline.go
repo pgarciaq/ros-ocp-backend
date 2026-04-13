@@ -4,11 +4,38 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 )
+
+// EnsureDigestPartitions creates monthly partitions of daily_container_digests
+// for every month that appears in the grouped data. The migration only creates
+// partitions for the current + next 2 months, so historical data (e.g. from
+// the prior month) will fail with "no partition" unless we create it first.
+// This is idempotent — IF NOT EXISTS prevents errors on re-runs.
+func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []DigestKey) {
+	months := map[time.Time]struct{}{}
+	for _, k := range keys {
+		monthStart := time.Date(k.BucketDate.Year(), k.BucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[monthStart] = struct{}{}
+	}
+	for monthStart := range months {
+		monthEnd := monthStart.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
+		sql := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_container_digests FOR VALUES FROM ('%s') TO ('%s')`,
+			partName,
+			monthStart.Format("2006-01-02"),
+			monthEnd.Format("2006-01-02"),
+		)
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			log.Warnf("EnsureDigestPartitions: %s: %v (non-fatal)", partName, err)
+		}
+	}
+}
 
 // ProcessCSVToDigests is the full native engine ingestion pipeline:
 // parse CSV -> validate -> group by container+day -> compute digests -> upsert to DB.
@@ -25,6 +52,12 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	grouped := GroupCSVRows(rows, orgID, clusterUUID)
 	log.Infof("ProcessCSVToDigests: %d rows -> %d groups for org=%s cluster=%s",
 		len(rows), len(grouped), orgID, clusterUUID)
+
+	digestKeys := make([]DigestKey, 0, len(grouped))
+	for k := range grouped {
+		digestKeys = append(digestKeys, k)
+	}
+	EnsureDigestPartitions(ctx, pool, digestKeys)
 
 	batch := &pgx.Batch{}
 	for key, group := range grouped {
