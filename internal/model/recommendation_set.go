@@ -130,7 +130,7 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 	var recommendationSet RecommendationSetResult
 
 	query := getRecommendationQuery(orgID)
-	query.Where("recommendation_sets.id = ?", recommendationID)
+	query.Where("recommendation_sets.container_id = ?", recommendationID)
 
 	if err := rbac.AddRBACFilter(
 		query,
