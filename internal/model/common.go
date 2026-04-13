@@ -75,22 +75,23 @@ func extractTermVariations(recommVals *RecommendationColumnValues, terms kruizeP
 func getRecommendationQuery(orgID string) *gorm.DB {
 	db := database.GetDB()
 	query := db.Table("recommendation_sets").
-		Select("recommendation_sets.id, "+
-			"recommendation_sets.container_name AS container, "+
-			"workloads.namespace AS project, "+
-			"workloads.workload_name as workload, "+
-			"workloads.workload_type, "+
-			"clusters.source_id, "+
-			"clusters.cluster_uuid, "+
-			"clusters.cluster_alias, "+
-			"clusters.last_reported_at AS last_reported, "+
-			"recommendation_sets.recommendations").
+		Select(
+			"recommendation_sets.container_id AS id, "+
+				"recommendation_sets.container_name AS container, "+
+				"COALESCE(workloads.namespace, recommendation_sets.namespace) AS project, "+
+				"COALESCE(workloads.workload_name, recommendation_sets.workload) AS workload, "+
+				"COALESCE(workloads.workload_type::text, recommendation_sets.workload_type) AS workload_type, "+
+				"COALESCE(clusters.source_id, '') AS source_id, "+
+				"COALESCE(clusters.cluster_uuid, recommendation_sets.cluster_uuid) AS cluster_uuid, "+
+				"COALESCE(clusters.cluster_alias, recommendation_sets.cluster_uuid) AS cluster_alias, "+
+				"COALESCE(clusters.last_reported_at, recommendation_sets.updated_at) AS last_reported, "+
+				"recommendation_sets.recommendations").
 		Joins(`
-			JOIN workloads ON recommendation_sets.workload_id = workloads.id
-			JOIN clusters ON workloads.cluster_id = clusters.id
-			JOIN rh_accounts ON clusters.tenant_id = rh_accounts.id
+			LEFT JOIN workloads ON recommendation_sets.workload_id = workloads.id
+			LEFT JOIN clusters ON workloads.cluster_id = clusters.id
+			LEFT JOIN rh_accounts ON clusters.tenant_id = rh_accounts.id
 		`).Model(&RecommendationSetResult{}).
-		Where("rh_accounts.org_id = ?", orgID)
+		Where("COALESCE(rh_accounts.org_id, recommendation_sets.org_id) = ?", orgID)
 	return query
 }
 
