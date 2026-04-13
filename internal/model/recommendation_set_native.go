@@ -151,8 +151,8 @@ type EngineRecommendation struct {
 	VariationCPURequestPct *float32                                   `json:"variation_cpu_request_pct,omitempty"`
 	VariationMemRequestPct *float32                                   `json:"variation_memory_request_pct,omitempty"`
 	ConfidenceLevel        *float32                                   `json:"confidence_level,omitempty"`
-	NotificationCodes      SmallintArray                              `json:"notification_codes,omitempty"`
-	Notifications          map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	NotificationCodes      SmallintArray                              `json:"notification_codes"`
+	Notifications          map[string]notifications.NotificationEntry `json:"notifications"`
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
@@ -395,6 +395,15 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				term = TermRecommendation{}
 			}
 
+			codes := r.NotificationCodes
+			if codes == nil {
+				codes = SmallintArray{}
+			}
+			notifMap := notifications.MapToKruizeFormat(r.NotificationCodes)
+			if notifMap == nil {
+				notifMap = map[string]notifications.NotificationEntry{}
+			}
+
 			eng := &EngineRecommendation{
 				CPURequestMillicores:   r.RecCPURequestMC,
 				CPULimitMillicores:     r.RecCPULimitMC,
@@ -407,8 +416,8 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				VariationCPURequestPct: r.VariationCPURequestPct,
 				VariationMemRequestPct: r.VariationMemRequestPct,
 				ConfidenceLevel:        r.ConfidenceLevel,
-				NotificationCodes:      r.NotificationCodes,
-				Notifications:          notifications.MapToKruizeFormat(r.NotificationCodes),
+				NotificationCodes:      codes,
+				Notifications:          notifMap,
 			}
 
 			switch r.Engine {

@@ -104,24 +104,22 @@ and accept the loss until a future phase addresses it.
 have been delivered. The native engine now produces Kruize-compatible notification
 objects in API responses.
 
-## API Contract: `omitempty` Behavior
+## API Contract: `notification_codes` and `notifications`
 
-The `EngineRecommendation` struct serializes `notification_codes` and
-`notifications` with Go's `omitempty` JSON tag. This means:
+The `EngineRecommendation` struct **always** includes `notification_codes` and
+`notifications` in the JSON response. When no notifications apply, the fields
+are present as empty values:
 
 | Condition | `notification_codes` in JSON | `notifications` in JSON |
 |-----------|------------------------------|------------------------|
 | Notifications present (e.g. OOM, low confidence) | `[1, 3]` | `{"1": {...}, "3": {...}}` |
-| No notifications (healthy workload, high confidence) | **Field absent** | **Field absent** |
+| No notifications (healthy workload, high confidence) | `[]` | `{}` |
 
-**Frontend must treat `undefined` / missing field the same as `[]` / `{}`.**
-An empty array `[]` is never returned — when `EvaluateNotifications()` produces
-no codes, the Go slice is `nil`, and `omitempty` omits the field entirely.
+The `omitempty` tag was removed from these fields to provide a consistent API
+contract. The frontend can always access `notification_codes` without checking
+for `undefined`.
 
-This is intentional: healthy workloads with no issues should not carry empty
-notification arrays, reducing response payload size for the common case.
-
-### Example: healthy workload response (no notification fields)
+### Example: healthy workload response (empty notifications)
 
 ```json
 {
@@ -129,7 +127,9 @@ notification arrays, reducing response payload size for the common case.
     "cost": {
       "cpu_request_millicores": 150,
       "memory_request_kib": 524288,
-      "confidence_level": 0.86
+      "confidence_level": 0.86,
+      "notification_codes": [],
+      "notifications": {}
     }
   }
 }
