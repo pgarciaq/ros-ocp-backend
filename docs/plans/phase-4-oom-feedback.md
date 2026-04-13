@@ -356,9 +356,10 @@ validate the API contract that koku-ui depends on:
 - `TestConfidenceLevel.test_confidence_level_present_and_valid` -- confidence_level is
   a float in [0.0, 1.0].
 - `TestNotificationCodes.test_notification_codes_are_int_array` -- notification_codes
-  is a list of integers.
-- `TestNotificationCodes.test_notifications_map_matches_codes` -- notifications map
-  keys match notification_codes entries, each with type/message/code.
+  is always present as a list of integers (empty `[]` when no notifications apply).
+- `TestNotificationCodes.test_notifications_map_always_present` -- notifications is
+  always present as a dict; when codes are non-empty, keys match notification_codes
+  entries, each with type/message/code.
 
 ### Phase 4: OOM Feedback (test_oom.py)
 
@@ -434,9 +435,10 @@ The IQE CI installs `koku-nise` from PyPI, which does not have this change.
   containers and no `NotifOOMDetected` (code 3).
 
 - The `TestNotificationCodes` tests (`test_notification_codes_are_int_array`,
-  `test_notifications_map_matches_codes`) are safe regardless of nise version
-  because they use the OOM fixture with only 2 days of data, which always
-  triggers `NotifLowConfidence` (code 1).
+  `test_notifications_map_always_present`) are safe regardless of nise version
+  because the API always returns `notification_codes` and `notifications`
+  fields (omitempty was removed). These tests use the default fixture and
+  assert the fields are always present (as `[]` / `{}` when empty).
 
 - The deterministic `oom_count` from YAML (commit `e1c40d9`) is a reliability
   improvement but not strictly required — the random 90/10 generation over
