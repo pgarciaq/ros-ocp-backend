@@ -247,7 +247,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 		app.ServeHTTP(detailRec, detailReq)
 		require.Equal(t, http.StatusOK, detailRec.Code)
 
-		var detail model.NativeContainerResult
+		var detail model.DetailResponse
 		err = json.Unmarshal(detailRec.Body.Bytes(), &detail)
 		require.NoError(t, err)
 
@@ -256,7 +256,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 		assert.Equal(t, testutil.TestNamespace, detail.Project)
 		assert.Equal(t, testutil.TestWorkload, detail.Workload)
 		assert.Equal(t, testutil.TestContainer, detail.Container)
-		assert.NotEmpty(t, detail.Recommendations)
+		assert.NotEmpty(t, detail.Recommendations.RecommendationTerms)
 	})
 
 	t.Run("bad UUID returns 400", func(t *testing.T) {
@@ -746,14 +746,21 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	recommendations, ok := raw["recommendations"].(map[string]interface{})
 	require.True(t, ok, "response should have recommendations map")
 
+	recTerms, ok := recommendations["recommendation_terms"].(map[string]interface{})
+	require.True(t, ok, "recommendations should have recommendation_terms")
+
 	notifFound := false
-	for _, termData := range recommendations {
+	for _, termData := range recTerms {
 		termMap, ok := termData.(map[string]interface{})
 		if !ok {
 			continue
 		}
+		engines, ok := termMap["recommendation_engines"].(map[string]interface{})
+		if !ok {
+			continue
+		}
 		for _, engineKey := range []string{"cost", "performance"} {
-			engData, ok := termMap[engineKey].(map[string]interface{})
+			engData, ok := engines[engineKey].(map[string]interface{})
 			if !ok {
 				continue
 			}
