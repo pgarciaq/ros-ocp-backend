@@ -11,6 +11,63 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// EnsureSamplePartitions creates monthly partitions of container_usage_samples
+// for every month that appears in the ingested data. Idempotent via IF NOT EXISTS.
+func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow) {
+	months := map[time.Time]struct{}{}
+	for _, r := range rows {
+		monthStart := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[monthStart] = struct{}{}
+	}
+	for monthStart := range months {
+		monthEnd := monthStart.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("container_usage_samples_%s", monthStart.Format("200601"))
+		sql := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF container_usage_samples FOR VALUES FROM ('%s') TO ('%s')`,
+			partName,
+			monthStart.Format("2006-01-02"),
+			monthEnd.Format("2006-01-02"),
+		)
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			log.Warnf("EnsureSamplePartitions: %s: %v (non-fatal)", partName, err)
+		}
+	}
+}
+
+// upsertUsageSamples batch-upserts raw CSV rows into container_usage_samples.
+func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, r := range rows {
+		batch.Queue(`
+			INSERT INTO container_usage_samples (
+				sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+				cpu_usage_mc, mem_usage_kib
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, sample_time)
+			DO UPDATE SET
+				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
+				mem_usage_kib = EXCLUDED.mem_usage_kib`,
+			r.IntervalStart, orgID, clusterUUID,
+			r.Namespace, r.WorkloadName, r.WorkloadType, r.ContainerName,
+			r.CPUUsageMC, r.MemUsageKiB,
+		)
+	}
+
+	br := pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for range rows {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("upsert usage sample: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnsureDigestPartitions creates monthly partitions of daily_container_digests
 // for every month that appears in the grouped data. The migration only creates
 // partitions for the current + next 2 months, so historical data (e.g. from
@@ -47,6 +104,12 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	if len(rows) == 0 {
 		log.Infof("ProcessCSVToDigests: no rows parsed for org=%s cluster=%s", orgID, clusterUUID)
 		return nil
+	}
+
+	// Persist raw samples for boxplot computation at query time.
+	EnsureSamplePartitions(ctx, pool, rows)
+	if err := upsertUsageSamples(ctx, pool, rows, orgID, clusterUUID); err != nil {
+		return fmt.Errorf("upsert usage samples: %w", err)
 	}
 
 	grouped := GroupCSVRows(rows, orgID, clusterUUID)

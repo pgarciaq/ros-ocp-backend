@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services/housekeeper"
@@ -24,6 +27,12 @@ var processorCmd = &cobra.Command{
 		go utils.Start_prometheus_server()
 		utils.SetupKruizePerformanceProfile()
 		if !cfg.UseNativeEngine {
+		if cfg.UseNativeEngine {
+			pool := db.GetPool()
+			if pool != nil {
+				go engine.StartRetentionTicker(context.Background(), pool, cfg.RetentionMonths)
+			}
+		} else {
 			utils.Setup_kruize_performance_profile()
 		}
 		kafka.StartConsumer(cfg.UploadTopic, services.ProcessReport)
