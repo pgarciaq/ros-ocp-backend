@@ -438,6 +438,12 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	}
 	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
 
+	// Step 2b: Snapshot recommendations into history (non-fatal on failure).
+	engine.EnsureHistoryPartitions(ctx, pool)
+	if err := engine.WriteRecommendationHistory(ctx, pool, results, ""); err != nil {
+		log.Errorf("native engine: writing recommendation history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	}
+
 	// Step 3: Write recommendation quality metrics (non-blocking for primary pipeline).
 	// Skip quality writes if old recommendations could not be read -- writing with
 	// "no prior rec" defaults would produce misleading stability/adoption metrics.
