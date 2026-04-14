@@ -406,7 +406,9 @@ are functional.
 | Track B M2: Quality writer | **Done** | `quality.go` with all 4 metrics, 3-step pipeline, partition management, Prometheus counter, unit + integration tests |
 | E2E pipeline test | **Done** | `TestProcessContainerCSVNative_WithOOMData` -- validates digest OOM accumulation, memory bump, and quality metrics |
 | Audit fixes | **Done** | `ReadOldRecommendations` now filters by container keys; `qualityPartitionMissing` Prometheus counter added; `TestOOMCountsByContainer` + `TestWriteRecommendationQuality_MissingPartition` + operator `types_test.go` + nise OOM unit tests added |
-| IQE tests | **Done** | `test_native_engine.py` (8 Phase 3 tests) + `test_oom.py` (3 Phase 4 tests) + nise YAML + fixture -- awaiting cluster deployment to execute |
+| IQE tests | **Done** | `test_native_engine.py` (8 Phase 3 tests) + `test_oom.py` (3 Phase 4 tests) + nise YAML + fixture -- verified on SNO 4.21 aarch64 cluster |
+| IQE cluster verification | **Done** | 11 passed, 1 skipped (quality placeholder) on SNO 4.21.8 aarch64 |
+| Nise OAuth scope fix | **Done** | `report.py`: omit `scope` param when `HCC_TOKEN_SCOPE` is empty -- independent bug fix, on-prem Keycloak rejects `scope=api.console` |
 
 ## Cross-Repo Merge Order
 
@@ -418,7 +420,7 @@ The IQE CI installs `koku-nise` from PyPI, which does not have this change.
 **Required merge and release order:**
 
 1. **nise** → merge to `main`, release to PyPI (adds `oom_count` CSV column +
-   deterministic YAML support)
+   deterministic YAML support + OAuth scope fix for on-prem Keycloak)
 2. **ros-ocp-backend** → merge to target branch (OOM bump, quality writer,
    partition auto-creation)
 3. **iqe-ros-ocp-plugin** → merge to target branch (OOM tests, notification_codes
@@ -444,6 +446,12 @@ The IQE CI installs `koku-nise` from PyPI, which does not have this change.
   improvement but not strictly required — the random 90/10 generation over
   ~192 intervals gives p(at least one OOM) ≈ 1 - 0.9^192 ≈ 1.0. However,
   the CSV column itself (`c92f444`) IS required.
+
+- The OAuth scope fix (commit `7ccfe9a`) is an **independent bug fix** not
+  specific to Phase 4. Nise unconditionally sent `scope=api.console` in OAuth
+  token requests, which on-prem Keycloak rejects with `400 Bad Request`. The
+  fix omits the `scope` parameter when `HCC_TOKEN_SCOPE` is empty. This
+  could be split into a separate nise PR if preferred.
 
 ## Branching
 
