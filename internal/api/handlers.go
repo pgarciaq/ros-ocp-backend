@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -357,6 +359,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 }
 
 // GetNativeRecommendationSet returns a single container's native recommendations by deterministic UUID.
+// The response is wrapped in the Kruize-compatible shape including boxplots and monitoring_end_time.
 func GetNativeRecommendationSet(c echo.Context) error {
 	XRHID := c.Get("Identity").(identity.XRHID)
 	OrgID := XRHID.Identity.OrgID
@@ -379,7 +382,8 @@ func GetNativeRecommendationSet(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
 
-	return c.JSON(http.StatusOK, result)
+	detail := enrichNativeDetail(OrgID, result)
+	return c.JSON(http.StatusOK, detail)
 }
 
 // GetRecommendationSetListWithFallback tries the native engine first. If it
@@ -447,7 +451,8 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		return c.JSON(http.StatusOK, result)
+		detail := enrichNativeDetail(OrgID, result)
+		return c.JSON(http.StatusOK, detail)
 	}
 
 	log.Infof("native detail miss for %s, falling back to Kruize path", idStr)
@@ -575,6 +580,35 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 		recSet.Recommendations,
 	)
 	return c.JSON(http.StatusOK, recSet)
+}
+
+// enrichNativeDetail fetches boxplots and monitoring_end_time for a native
+// recommendation and wraps it in the Kruize-compatible DetailResponse shape.
+func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *model.DetailResponse {
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	key := model.ContainerKey{
+		OrgID:         orgID,
+		ClusterUUID:   result.ClusterUUID,
+		Namespace:     result.Project,
+		Workload:      result.Workload,
+		ContainerName: result.Container,
+	}
+
+	plots := map[string]*model.NativePlot{}
+	var met time.Time
+
+	if pool != nil {
+		for termKey := range result.Recommendations {
+			if p, err := model.AssembleBoxplots(ctx, pool, key, termKey); err == nil && p != nil {
+				plots[termKey] = p
+			}
+		}
+		met, _ = model.MonitoringEndTime(ctx, pool, key)
+	}
+
+	return model.BuildDetailResponse(result, plots, met)
 }
 
 func GetAppStatus(c echo.Context) error {
