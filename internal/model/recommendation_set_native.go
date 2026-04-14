@@ -400,9 +400,6 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				codes = SmallintArray{}
 			}
 			notifMap := notifications.MapToKruizeFormat(r.NotificationCodes)
-			if notifMap == nil {
-				notifMap = map[string]notifications.NotificationEntry{}
-			}
 
 			eng := &EngineRecommendation{
 				CPURequestMillicores:   r.RecCPURequestMC,
