@@ -55,3 +55,30 @@ know about.
 **Long-term fix:** When the native engine becomes the default, update the OpenAPI spec
 to describe the native response shape and regenerate the SDK client types. At that point,
 the tests can switch back to typed deserialization.
+
+## IQE / Nise Authentication on On-Prem Clusters
+
+**Problem:** Nise defaults `HCC_TOKEN_SCOPE` to `api.console` (for console.redhat.com SSO).
+The on-prem Keycloak realm (`cost-management`) does not define this scope, causing a
+`400 invalid_scope` error when nise tries to obtain an OAuth token for the upload.
+
+**Root cause chain:**
+1. `iqe_cost_management/fixtures/helpers.py` builds the nise CLI command with inline
+   env vars for the `cost_onprem` case: `HCC_TOKEN_URL`, `HCC_SERVICE_ACCOUNT_ID`,
+   `HCC_SERVICE_ACCOUNT_SECRET`.
+2. It did NOT set `HCC_TOKEN_SCOPE`, so nise fell through to its default:
+   `os.environ.get("HCC_TOKEN_SCOPE", "api.console")`.
+3. Nise appended `&scope=api.console` to the token request body.
+4. Local Keycloak returned `{"error": "invalid_scope"}` → HTTP 400.
+
+**Fix:** Add `HCC_TOKEN_SCOPE=""` to the `cred` string in the `cost_onprem` branch of
+`iqe_cost_management/fixtures/helpers.py`. An empty string causes nise to skip the
+`scope` parameter entirely, which Keycloak accepts.
+
+**Verification:**
+```bash
+# Fails (400):
+curl -sk -X POST "$TOKEN_URL" -d "client_id=...&client_secret=...&grant_type=client_credentials&scope=api.console"
+# Succeeds:
+curl -sk -X POST "$TOKEN_URL" -d "client_id=...&client_secret=...&grant_type=client_credentials"
+```
