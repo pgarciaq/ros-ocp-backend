@@ -109,7 +109,7 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSetByID(orgID str
 	var nsRecommendationSet NamespaceRecommendationSetResult
 
 	query := getNamespaceRecommendationQuery(orgID)
-	query.Where("namespace_recommendation_sets.id = ?", recommendationID)
+	query = query.Where("namespace_recommendation_sets.id = ?", recommendationID)
 
 	if err := rbac.AddRBACFilter(
 		query,

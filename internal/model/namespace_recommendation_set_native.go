@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
@@ -10,6 +11,15 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
 )
+
+// remapNativeNSOrderBy translates legacy full-table-name column references
+// (from NsAllowedOrderBy) to the alias-based column references used in the
+// native namespace query (ns. / c. prefixes).
+func remapNativeNSOrderBy(col string) string {
+	col = strings.Replace(col, "namespace_recommendation_sets.", "ns.", 1)
+	col = strings.Replace(col, "clusters.", "c.", 1)
+	return col
+}
 
 // NativeNamespaceRow represents a single row from namespace_recommendation_sets
 // using the native relational columns (one row per namespace+term+engine).
@@ -110,9 +120,16 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	if opts.Format == "csv" {
 		limit = config.GetConfig().RecordLimitCSV
 	}
-	// Each namespace has up to 6 rows (3 terms x 2 engines).
+	// Remap legacy full-table-name columns to native query aliases.
+	primaryOrder := remapNativeNSOrderBy(opts.OrderBy) + " " + opts.OrderHow
+	// Each namespace has up to 6 rows (3 terms x 2 engines); secondary sort
+	// ensures correct grouping in assembleNativeNamespaceResults.
+	orderClause := primaryOrder + ", ns.term, ns.engine"
+	// Pagination factor: 3 terms (short/medium/long) x 2 engines (cost/performance) = 6.
+	// This is correct as long as the system caps at 3 terms, which is enforced by
+	// termNames in term_config.go. If custom terms ever exceed 3, revisit this.
 	err := query.
-		Order("ns.namespace_name, ns.term, ns.engine").
+		Order(orderClause).
 		Offset(opts.Offset * 6).Limit(limit * 6).
 		Find(&rows).Error
 	if err != nil {

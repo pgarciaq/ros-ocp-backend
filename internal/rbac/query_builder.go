@@ -42,16 +42,16 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 
 	applyClusterFilter := func() {
 		if resourceType == ResourceContainer || resourceType == ResourceProject {
-			query.Where("clusters.cluster_uuid IN (?)", clusterPerms)
+			query = query.Where("clusters.cluster_uuid IN (?)", clusterPerms)
 		}
 	}
 
 	applyProjectFilter := func() {
 		switch resourceType {
 		case ResourceContainer:
-			query.Where("workloads.namespace IN (?)", projectPerms)
+			query = query.Where("workloads.namespace IN (?)", projectPerms)
 		case ResourceProject:
-			query.Where("namespace_recommendation_sets.namespace_name IN (?)", projectPerms)
+			query = query.Where("namespace_recommendation_sets.namespace_name IN (?)", projectPerms)
 		}
 	}
 

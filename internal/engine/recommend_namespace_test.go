@@ -1,7 +1,12 @@
 package engine
 
 import (
+	"context"
 	"testing"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEvaluateNamespaceNotifications_NewWorkload(t *testing.T) {
@@ -94,6 +99,169 @@ func TestEvaluateNamespaceNotifications_BothNewAndLowConfidence(t *testing.T) {
 	}
 	if hasLow {
 		t.Error("LowConfidence should not fire when DataDays=0")
+	}
+}
+
+// --- Integration tests (testcontainers-go) ---
+
+func TestRecommendAllNamespaces_SingleNamespace(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, testutil.TestNamespace, 7, 200, 10, 524288, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	// 3 terms x 2 engines = 6
+	require.Len(t, results, 6)
+
+	for _, r := range results {
+		assert.Equal(t, testutil.TestOrgID, r.OrgID)
+		assert.Equal(t, testutil.TestClusterUUID, r.ClusterUUID)
+		assert.Equal(t, testutil.TestNamespace, r.Namespace)
+		assert.True(t, r.RecCPURequestMC > 0, "CPU request should be positive")
+		assert.True(t, r.RecMemRequestKiB > 0, "memory request should be positive")
+		assert.True(t, r.RecCPULimitMC >= r.RecCPURequestMC, "CPU limit >= request")
+		assert.True(t, r.RecMemLimitKiB >= r.RecMemRequestKiB, "memory limit >= request")
+		assert.False(t, r.MonitoringStartTime.IsZero(), "MonitoringStartTime should be set")
+		assert.False(t, r.MonitoringEndTime.IsZero(), "MonitoringEndTime should be set")
+	}
+
+	termsSeen := map[string]int{}
+	for _, r := range results {
+		termsSeen[r.Term+"/"+r.Engine]++
+	}
+	assert.Equal(t, 1, termsSeen["short/cost"])
+	assert.Equal(t, 1, termsSeen["short/performance"])
+	assert.Equal(t, 1, termsSeen["medium/cost"])
+	assert.Equal(t, 1, termsSeen["medium/performance"])
+	assert.Equal(t, 1, termsSeen["long/cost"])
+	assert.Equal(t, 1, termsSeen["long/performance"])
+}
+
+func TestRecommendAllNamespaces_InsufficientData(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// 1 day of data: short (minData=1) should produce results,
+	// medium (minData=3) and long (minData=7) should be skipped.
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-insufficient", 1, 200, 0, 524288, 0)
+	end := testutil.BaseDate
+
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	// Only short/cost + short/performance = 2
+	require.Len(t, results, 2)
+	for _, r := range results {
+		assert.Equal(t, "short", r.Term)
+	}
+}
+
+func TestRecommendAllNamespaces_TermSkipping(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// No digests at all for this org
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllNamespaces(ctx, pool, "org-ns-empty", testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestWriteNamespaceRecommendations_Roundtrip(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-write-rt", 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	err = WriteNamespaceRecommendations(ctx, pool, results)
+	require.NoError(t, err)
+
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM namespace_recommendation_sets
+		 WHERE org_id = $1 AND namespace_name = $2 AND term IS NOT NULL`,
+		testutil.TestOrgID, "ns-write-rt").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 6, count, "should have 6 native rows (3 terms x 2 engines)")
+
+	// Read back a specific row and verify columns
+	var cpuReq int64
+	var monEnd interface{}
+	err = pool.QueryRow(ctx,
+		`SELECT rec_cpu_request_millicores, monitoring_end_time
+		 FROM namespace_recommendation_sets
+		 WHERE org_id=$1 AND namespace_name=$2 AND term='short' AND engine='cost'`,
+		testutil.TestOrgID, "ns-write-rt").Scan(&cpuReq, &monEnd)
+	require.NoError(t, err)
+	assert.True(t, cpuReq > 0, "CPU request should be positive")
+	assert.NotNil(t, monEnd, "monitoring_end_time should be set")
+}
+
+func TestWriteNamespaceRecommendationHistory_Roundtrip(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-hist-rt", 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	err = WriteNamespaceRecommendationHistory(ctx, pool, results)
+	require.NoError(t, err)
+
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM historical_namespace_recommendation_sets
+		 WHERE org_id = $1 AND namespace_name = $2 AND term IS NOT NULL`,
+		testutil.TestOrgID, "ns-hist-rt").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 6, count, "should have 6 history rows (3 terms x 2 engines)")
+
+	// Verify monitoring_start_time is populated
+	var monStart interface{}
+	err = pool.QueryRow(ctx,
+		`SELECT monitoring_start_time FROM historical_namespace_recommendation_sets
+		 WHERE org_id=$1 AND namespace_name=$2 AND term='short' AND engine='cost'`,
+		testutil.TestOrgID, "ns-hist-rt").Scan(&monStart)
+	require.NoError(t, err)
+	assert.NotNil(t, monStart, "monitoring_start_time should be set")
+}
+
+func TestRecommendAllNamespaces_Confidence(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-conf", 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	for _, r := range results {
+		assert.True(t, r.ConfidenceLevel >= 0 && r.ConfidenceLevel <= 1.0,
+			"confidence should be 0-1, got %f for %s/%s", r.ConfidenceLevel, r.Term, r.Engine)
+
+		// confidence = dataDays / windowDays
+		// short: 7/1 capped at 1.0, medium: 7/7 = 1.0, long: 7/15 ≈ 0.47
+		if r.Term == "short" {
+			assert.InDelta(t, 1.0, r.ConfidenceLevel, 0.01, "short with 7 days should have max confidence")
+		}
+		if r.Term == "long" {
+			assert.InDelta(t, float64(r.DataDays)/15.0, float64(r.ConfidenceLevel), 0.15,
+				"long-term confidence should approximate dataDays/windowDays")
+		}
 	}
 }
 

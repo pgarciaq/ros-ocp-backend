@@ -17,9 +17,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestMigration026_Roundtrip(t *testing.T) {
-	// T-3.5: Migration 000026 (relational columns) must survive a
-	// full up → down → up cycle without errors.
+func TestMigrationRoundtrip(t *testing.T) {
+	// All migrations must survive a full up → down → up cycle without errors.
 	ctx := context.Background()
 
 	pgContainer, err := postgres.Run(ctx,
@@ -43,7 +42,7 @@ func TestMigration026_Roundtrip(t *testing.T) {
 	require.True(t, ok)
 	migrationsDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
 
-	// Step 1: Run all migrations up (through 027).
+	// Step 1: Run all migrations up (through 033).
 	m, err := migrate.New("file://"+migrationsDir, connStr)
 	require.NoError(t, err)
 	require.NoError(t, m.Up())
@@ -51,7 +50,7 @@ func TestMigration026_Roundtrip(t *testing.T) {
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
 
-	// Step 2: Migrate down to version 25 (reverses 027 and 026).
+	// Step 2: Migrate down to version 25 (reverses 033 through 026).
 	m, err = migrate.New("file://"+migrationsDir, connStr)
 	require.NoError(t, err)
 	require.NoError(t, m.Migrate(25))

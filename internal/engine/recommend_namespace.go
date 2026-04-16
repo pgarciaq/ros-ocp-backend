@@ -40,6 +40,9 @@ type NamespaceRec struct {
 	NotificationCodes      []int16
 	DataDays               int
 	Stale                  bool
+
+	MonitoringStartTime time.Time
+	MonitoringEndTime   time.Time
 }
 
 // RecommendAllNamespaces reads namespace digests for an org+cluster, groups by
@@ -133,11 +136,11 @@ func RecommendAllNamespaces(
 
 			dataDays := len(windowRows)
 			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
+			monStart := end.AddDate(0, 0, -tc.WindowDays)
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
 				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-				// No OOM at namespace level; memCfg.OOMCountSum stays 0.
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
@@ -159,6 +162,8 @@ func RecommendAllNamespaces(
 					ConfidenceLevel:      confidence,
 					DataDays:             dataDays,
 					Stale:                stale,
+					MonitoringStartTime:  monStart,
+					MonitoringEndTime:    end,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
@@ -192,8 +197,8 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_memory_request_pct,
 				notification_codes, confidence_level, stale,
-				monitoring_end_time, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now(),now())
+				monitoring_start_time, monitoring_end_time, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -211,6 +216,7 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
 				namespace_id = EXCLUDED.namespace_id,
+				monitoring_start_time = EXCLUDED.monitoring_start_time,
 				monitoring_end_time = EXCLUDED.monitoring_end_time,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.Namespace,
@@ -221,6 +227,7 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
 			r.VariationCPURequestPct, r.VariationMemRequestPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+			r.MonitoringStartTime, r.MonitoringEndTime,
 		)
 	}
 
@@ -258,8 +265,9 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_memory_request_pct,
 				notification_codes, confidence_level,
-				monitoring_end_time, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)
+				monitoring_start_time, monitoring_end_time,
+				created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21)
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, created_at)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -278,7 +286,8 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
 			r.VariationCPURequestPct, r.VariationMemRequestPct,
 			r.NotificationCodes, r.ConfidenceLevel,
-			now, now,
+			r.MonitoringStartTime, r.MonitoringEndTime,
+			now,
 		)
 	}
 

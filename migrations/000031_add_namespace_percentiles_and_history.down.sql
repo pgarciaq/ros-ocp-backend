@@ -11,11 +11,17 @@ ALTER TABLE daily_namespace_digests
 -- Drop native history index.
 DROP INDEX IF EXISTS idx_hist_ns_recs_native_key;
 
--- Re-apply NOT NULL constraints.
+-- Delete native rows (term IS NOT NULL) before re-applying NOT NULL
+-- constraints, because native rows may have NULL workload_id/recommendations.
+DELETE FROM historical_namespace_recommendation_sets WHERE term IS NOT NULL;
+
+-- Re-apply NOT NULL constraints (safe now that native rows are gone).
 ALTER TABLE historical_namespace_recommendation_sets
   ALTER COLUMN recommendations SET NOT NULL;
 ALTER TABLE historical_namespace_recommendation_sets
   ALTER COLUMN workload_id SET NOT NULL;
+ALTER TABLE historical_namespace_recommendation_sets
+  ALTER COLUMN monitoring_start_time SET NOT NULL;
 
 -- Drop native history columns.
 ALTER TABLE historical_namespace_recommendation_sets
