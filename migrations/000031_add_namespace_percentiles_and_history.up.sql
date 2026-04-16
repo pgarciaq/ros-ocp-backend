@@ -38,6 +38,10 @@ ALTER TABLE historical_namespace_recommendation_sets
 ALTER TABLE historical_namespace_recommendation_sets
   ALTER COLUMN workload_id DROP NOT NULL;
 
+-- Allow native rows without the legacy monitoring_start_time constraint.
+ALTER TABLE historical_namespace_recommendation_sets
+  ALTER COLUMN monitoring_start_time DROP NOT NULL;
+
 -- Unique index for native history rows (prevents duplicates per snapshot).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_hist_ns_recs_native_key
   ON historical_namespace_recommendation_sets (org_id, cluster_uuid, namespace_name, term, engine, created_at)

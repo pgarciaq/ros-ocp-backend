@@ -448,6 +448,17 @@
         "operationId": "getNamespaceRecommendationList",
         "parameters": [
           {
+            "name": "format",
+            "in": "query",
+            "description": "Response format. CSV export is supported for namespace recommendations. Maximum number of records is 1000 for CSV downloads. The 'offset' parameter can be used for pagination with both formats.",
+            "required": false,
+            "schema": {
+                "type": "string",
+                "enum": ["json", "csv"],
+                "default": "json"
+            }
+          },
+          {
             "name": "start_date",
             "in": "query",
             "description": "Start date",
@@ -636,7 +647,7 @@
             }
           },
           "406": {
-            "description": "Requested response format is not supported",
+            "description": "Requested response format is not supported. Note: CSV is supported via the 'format' query parameter or 'Accept: text/csv' header.",
             "content": {
               "application/json": {
                 "schema": {
@@ -644,7 +655,7 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "CSV format is not supported. Please use application/json."
+                      "example": "Unsupported response format."
                     }
                   },
                   "required": ["message"]
@@ -653,13 +664,17 @@
             }
           },
           "503": {
-            "description": "Service unavailable due to a database error",
+            "description": "Service temporarily unavailable — database unreachable",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
                       "type": "string",
                       "example": "unable to fetch records from database"
                     }
@@ -785,6 +800,26 @@
                     "message": {
                       "type": "string",
                       "example": "project recommendation not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable — database unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch records from database"
                     }
                   }
                 }

@@ -692,7 +692,11 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 
 	if pool != nil {
 		for termKey := range result.Recommendations {
-			if p, err := model.AssembleBoxplots(ctx, pool, key, termKey); err == nil && p != nil {
+			p, err := model.AssembleBoxplots(ctx, pool, key, termKey, orgID)
+			if err != nil {
+				log.Warnf("boxplot assembly failed for container %s/%s term %s: %v", key.Namespace, key.ContainerName, termKey, err)
+			}
+			if p != nil {
 				plots[termKey] = p
 			}
 		}
@@ -722,7 +726,11 @@ func enrichNativeNamespaceDetail(orgID string, result *model.NativeNamespaceResu
 		if termKey == "monitoring_end_time" {
 			continue
 		}
-		if p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey); err == nil && p != nil {
+		p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey, orgID)
+		if err != nil {
+			log.Warnf("namespace boxplot assembly failed for %s/%s term %s: %v", key.ClusterUUID, key.Namespace, termKey, err)
+		}
+		if p != nil {
 			termPlots[termKey] = p
 		}
 	}

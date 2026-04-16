@@ -197,6 +197,10 @@ func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
 			log.Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, parseErr)
 			continue
 		}
+		if valErr := ValidateNamespaceMetricRow(row); valErr != nil {
+			log.Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, valErr)
+			continue
+		}
 		rows = append(rows, row)
 	}
 	return rows, nil
@@ -296,6 +300,29 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 	}
 
 	return row, nil
+}
+
+// ValidateNamespaceMetricRow checks that core numeric fields in a
+// NamespaceMetricRow are non-negative. Returns an error describing the first
+// invalid field found.
+func ValidateNamespaceMetricRow(row NamespaceMetricRow) error {
+	checks := []struct {
+		name string
+		val  int64
+	}{
+		{"CPURequestSumMC", row.CPURequestSumMC},
+		{"CPULimitSumMC", row.CPULimitSumMC},
+		{"CPUUsageAvgMC", row.CPUUsageAvgMC},
+		{"MemRequestSumKiB", row.MemRequestSumKiB},
+		{"MemLimitSumKiB", row.MemLimitSumKiB},
+		{"MemUsageAvgKiB", row.MemUsageAvgKiB},
+	}
+	for _, c := range checks {
+		if c.val < 0 {
+			return fmt.Errorf("ValidateNamespaceMetricRow: %s is negative (%d)", c.name, c.val)
+		}
+	}
+	return nil
 }
 
 // GroupNamespaceCSVRows groups namespace metric rows by (namespace, day).

@@ -47,32 +47,98 @@ type TermWindow struct {
 	BucketKey   string // Go time format for the bucket key in plots_data
 }
 
-var termWindows = map[string]TermWindow{
+// defaultTermWindows are the hardcoded defaults when no org overrides exist.
+var defaultTermWindows = map[string]TermWindow{
 	"short_term": {
 		Name:        "short_term",
 		WindowHours: 24,
-		// 6-hour windows: floor(epoch / 21600) * 21600
-		BucketSQL: "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'",
-		BucketKey: "2006-01-02T15:04:05.000Z",
+		BucketSQL:   "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'",
+		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"medium_term": {
 		Name:        "medium_term",
 		WindowHours: 7 * 24,
-		BucketSQL:   "date_trunc('day', sample_time)",
+		BucketSQL:   "date_trunc('day', sample_time AT TIME ZONE 'UTC')",
 		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"long_term": {
 		Name:        "long_term",
 		WindowHours: 15 * 24,
-		BucketSQL:   "date_trunc('day', sample_time)",
+		BucketSQL:   "date_trunc('day', sample_time AT TIME ZONE 'UTC')",
 		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 }
 
+// termKeyNames maps term ordinals to API term key suffixes.
+var termKeyNames = [3]string{"short", "medium", "long"}
+
+// loadTermWindows loads org-specific term configs from the database and builds
+// TermWindow entries. Falls back to defaultTermWindows when no overrides exist.
+func loadTermWindows(ctx context.Context, pool *pgxpool.Pool, orgID string) (map[string]TermWindow, error) {
+	if pool == nil {
+		return defaultTermWindows, nil
+	}
+
+	rows, err := pool.Query(ctx,
+		`SELECT term_ord, window_days
+		 FROM org_recommendation_terms
+		 WHERE org_id = $1
+		 ORDER BY term_ord`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var customs []struct {
+		Ord        int
+		WindowDays int
+	}
+	for rows.Next() {
+		var c struct {
+			Ord        int
+			WindowDays int
+		}
+		if err := rows.Scan(&c.Ord, &c.WindowDays); err != nil {
+			return nil, err
+		}
+		customs = append(customs, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(customs) == 0 {
+		return defaultTermWindows, nil
+	}
+
+	result := make(map[string]TermWindow, len(customs))
+	for _, c := range customs {
+		name := termKeyNames[c.Ord-1] + "_term"
+		windowHours := c.WindowDays * 24
+		tw := TermWindow{
+			Name:        name,
+			WindowHours: windowHours,
+			BucketKey:   "2006-01-02T15:04:05.000Z",
+		}
+		if c.WindowDays <= 1 {
+			tw.BucketSQL = "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'"
+		} else {
+			tw.BucketSQL = "date_trunc('day', sample_time AT TIME ZONE 'UTC')"
+		}
+		result[name] = tw
+	}
+	return result, nil
+}
+
 // AssembleBoxplots queries container_usage_samples and computes exact
 // five-number summaries per time bucket using percentile_cont().
-func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termName string) (*NativePlot, error) {
-	tw, ok := termWindows[termName]
+// orgID is used to load per-org term window overrides from the database.
+func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termName string, orgID string) (*NativePlot, error) {
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+	tw, ok := windows[termName]
 	if !ok {
 		return nil, fmt.Errorf("unknown term: %s", termName)
 	}
@@ -157,8 +223,13 @@ type NamespaceKey struct {
 // AssembleNamespaceBoxplots queries namespace_usage_samples and computes exact
 // five-number summaries per time bucket using percentile_cont().
 // Mirrors AssembleBoxplots but with namespace-level granularity (no workload/container).
-func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string) (*NativePlot, error) {
-	tw, ok := termWindows[termName]
+// orgID is used to load per-org term window overrides from the database.
+func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string, orgID string) (*NativePlot, error) {
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+	tw, ok := windows[termName]
 	if !ok {
 		return nil, fmt.Errorf("unknown term: %s", termName)
 	}

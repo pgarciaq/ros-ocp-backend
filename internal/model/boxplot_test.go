@@ -58,7 +58,7 @@ func TestAssembleBoxplots_ShortTerm_6HourWindows(t *testing.T) {
 	// 96 samples across 24 hours (4 per hour)
 	seedSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, testutil.TestWorkloadType, key.ContainerName, start, 96, 100, 10000)
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -94,7 +94,7 @@ func TestAssembleBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 		seedSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, testutil.TestWorkloadType, key.ContainerName, dayStart, 4, 200+int64(d)*10, 50000+int64(d)*1000)
 	}
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "medium_term")
+	plot, err := AssembleBoxplots(ctx, pool, key, "medium_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -110,7 +110,7 @@ func TestAssembleBoxplots_NoData_ReturnsNil(t *testing.T) {
 		Namespace: "none", Workload: "none", ContainerName: "none",
 	}
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	assert.Nil(t, plot, "no data should return nil plot")
 }
@@ -137,7 +137,7 @@ func TestAssembleBoxplots_UnitConversion(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -225,7 +225,7 @@ func TestAssembleNamespaceBoxplots_ShortTerm_6HourWindows(t *testing.T) {
 
 	seedNamespaceSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, start, 96, 100, 10000)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -260,7 +260,7 @@ func TestAssembleNamespaceBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 		seedNamespaceSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, dayStart, 4, 200+int64(d)*10, 50000+int64(d)*1000)
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "medium_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "medium_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -283,7 +283,7 @@ func TestAssembleNamespaceBoxplots_LongTerm_15Days(t *testing.T) {
 		seedNamespaceSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, dayStart, 4, 300+int64(d)*5, 80000+int64(d)*500)
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "long_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "long_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -299,7 +299,7 @@ func TestAssembleNamespaceBoxplots_NoData_ReturnsNil(t *testing.T) {
 		Namespace: "none",
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	assert.Nil(t, plot, "no data should return nil plot")
 }
@@ -313,7 +313,7 @@ func TestAssembleNamespaceBoxplots_UnknownTerm_ReturnsError(t *testing.T) {
 		Namespace: testutil.TestNamespace,
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "extra_long_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "extra_long_term", key.OrgID)
 	assert.Error(t, err, "unknown term should error")
 	assert.Nil(t, plot)
 	assert.Contains(t, err.Error(), "unknown term")
@@ -341,7 +341,7 @@ func TestAssembleNamespaceBoxplots_UnitConversion(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -368,7 +368,7 @@ func TestAssembleNamespaceBoxplots_FiveNumberSummary_Ordering(t *testing.T) {
 	// 20 distinct samples to get meaningful quartile spread
 	seedNamespaceSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, start, 20, 50, 5000)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -418,7 +418,7 @@ func TestAssembleNamespaceBoxplots_ExactPercentiles(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term")
+	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -474,7 +474,7 @@ func TestAssembleNamespaceBoxplots_LongTerm_Under5ms(t *testing.T) {
 	durations := make([]time.Duration, 20)
 	for i := 0; i < 20; i++ {
 		start := time.Now()
-		plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "long_term")
+		plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "long_term", key.OrgID)
 		durations[i] = time.Since(start)
 		require.NoError(t, err)
 		require.NotNil(t, plot)
