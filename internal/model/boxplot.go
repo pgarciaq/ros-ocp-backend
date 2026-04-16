@@ -147,6 +147,107 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	}, nil
 }
 
+// NamespaceKey identifies a unique namespace for boxplot queries.
+type NamespaceKey struct {
+	OrgID       string
+	ClusterUUID string
+	Namespace   string
+}
+
+// AssembleNamespaceBoxplots queries namespace_usage_samples and computes exact
+// five-number summaries per time bucket using percentile_cont().
+// Mirrors AssembleBoxplots but with namespace-level granularity (no workload/container).
+func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string) (*NativePlot, error) {
+	tw, ok := termWindows[termName]
+	if !ok {
+		return nil, fmt.Errorf("unknown term: %s", termName)
+	}
+
+	end := time.Now().UTC()
+	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s AS bucket,
+			MIN(cpu_usage_mc)::float8,
+			percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+			percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+			percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+			MAX(cpu_usage_mc)::float8,
+			MIN(mem_usage_kib)::float8,
+			percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+			percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+			percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+			MAX(mem_usage_kib)::float8
+		FROM namespace_usage_samples
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
+		  AND sample_time >= $4 AND sample_time < $5
+		GROUP BY bucket
+		ORDER BY bucket`,
+		tw.BucketSQL)
+
+	rows, err := pool.Query(ctx, query,
+		key.OrgID, key.ClusterUUID, key.Namespace,
+		start, end)
+	if err != nil {
+		return nil, fmt.Errorf("AssembleNamespaceBoxplots query: %w", err)
+	}
+	defer rows.Close()
+
+	plotsData := map[string]NativePlotsData{}
+	for rows.Next() {
+		var bucket time.Time
+		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
+		var memMin, memQ1, memMed, memQ3, memMax float64
+
+		if err := rows.Scan(&bucket,
+			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
+			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			return nil, fmt.Errorf("AssembleNamespaceBoxplots scan: %w", err)
+		}
+
+		bucketKey := bucket.UTC().Format(tw.BucketKey)
+		plotsData[bucketKey] = NativePlotsData{
+			CPUUsage: &BoxPlotDetails{
+				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
+				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
+			},
+			MemoryUsage: &BoxPlotDetails{
+				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
+				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
+			},
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("AssembleNamespaceBoxplots rows: %w", err)
+	}
+
+	if len(plotsData) == 0 {
+		return nil, nil
+	}
+
+	return &NativePlot{
+		DataPoints: len(plotsData),
+		PlotsData:  plotsData,
+	}, nil
+}
+
+// NamespaceMonitoringEndTime returns the most recent bucket_date from
+// daily_namespace_digests for the given namespace. Returns zero time if no data.
+func NamespaceMonitoringEndTime(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey) (time.Time, error) {
+	var maxDate time.Time
+	err := pool.QueryRow(ctx, `
+		SELECT COALESCE(MAX(bucket_date), '0001-01-01')
+		FROM daily_namespace_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
+		key.OrgID, key.ClusterUUID, key.Namespace,
+	).Scan(&maxDate)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("NamespaceMonitoringEndTime: %w", err)
+	}
+	return maxDate, nil
+}
+
 // MonitoringEndTime returns the most recent bucket_date from daily_container_digests
 // for the given container. Returns zero time if no data exists.
 func MonitoringEndTime(ctx context.Context, pool *pgxpool.Pool, key ContainerKey) (time.Time, error) {

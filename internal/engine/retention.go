@@ -21,11 +21,22 @@ var retainedTables = []string{
 	"recommendation_history",
 	"recommendation_quality",
 	"container_usage_samples",
+	"daily_namespace_digests",
+	"namespace_usage_samples",
+}
+
+// Non-partitioned tables that need date-based DELETE retention.
+var dateRetainedTables = []struct {
+	Table      string
+	DateColumn string
+}{
+	{"historical_namespace_recommendation_sets", "created_at"},
 }
 
 // RunRetentionSweep drops monthly partitions older than retentionMonths for
 // each retained table. Partitions are identified by naming convention
-// (<table>_YYYYMM) and compared against the retention cutoff.
+// (<table>_YYYYMM) and compared against the retention cutoff. Also purges
+// old rows from non-partitioned tables that use date-based retention.
 func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths int) {
 	if retentionMonths <= 0 {
 		retentionMonths = 6
@@ -52,6 +63,17 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 				retentionDropped.Inc()
 				log.Infof("retention: dropped partition %s (older than %s)", part, cutoffYM)
 			}
+		}
+	}
+
+	for _, dt := range dateRetainedTables {
+		sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
+		tag, err := pool.Exec(ctx, sql, cutoff)
+		if err != nil {
+			log.Warnf("retention: purging %s: %v", dt.Table, err)
+		} else if tag.RowsAffected() > 0 {
+			retentionDropped.Add(float64(tag.RowsAffected()))
+			log.Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
 		}
 	}
 }

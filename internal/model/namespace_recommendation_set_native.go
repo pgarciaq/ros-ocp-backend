@@ -1,0 +1,330 @@
+package model
+
+import (
+	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
+	"gorm.io/gorm"
+)
+
+// NativeNamespaceRow represents a single row from namespace_recommendation_sets
+// using the native relational columns (one row per namespace+term+engine).
+type NativeNamespaceRow struct {
+	OrgID         string `gorm:"column:org_id"`
+	ClusterUUID   string `gorm:"column:cluster_uuid"`
+	NamespaceName string `gorm:"column:namespace_name"`
+	Term          string `gorm:"column:term"`
+	Engine        string `gorm:"column:engine"`
+
+	RecCPURequestMC  *int64 `gorm:"column:rec_cpu_request_millicores"`
+	RecCPULimitMC    *int64 `gorm:"column:rec_cpu_limit_millicores"`
+	RecMemRequestKiB *int64 `gorm:"column:rec_memory_request_kib"`
+	RecMemLimitKiB   *int64 `gorm:"column:rec_memory_limit_kib"`
+
+	CurrentCPURequestMC  *int64 `gorm:"column:current_cpu_request_millicores"`
+	CurrentCPULimitMC    *int64 `gorm:"column:current_cpu_limit_millicores"`
+	CurrentMemRequestKiB *int64 `gorm:"column:current_memory_request_kib"`
+	CurrentMemLimitKiB   *int64 `gorm:"column:current_memory_limit_kib"`
+
+	VariationCPURequestPct *float32      `gorm:"column:variation_cpu_request_pct"`
+	VariationMemRequestPct *float32      `gorm:"column:variation_memory_request_pct"`
+	ConfidenceLevel        *float32      `gorm:"column:confidence_level"`
+	NotificationCodes      SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
+	Stale                  bool          `gorm:"column:stale"`
+
+	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
+	UpdatedAt         time.Time  `gorm:"column:updated_at"`
+	SourceID          string     `gorm:"column:source_id"`
+	ClusterAlias      string     `gorm:"column:cluster_alias"`
+	LastReported      time.Time  `gorm:"column:last_reported_at"`
+}
+
+func (NativeNamespaceRow) TableName() string {
+	return "namespace_recommendation_sets"
+}
+
+// NativeNamespaceResult is the API-ready format for a single namespace,
+// with all recommendation variants nested by term. The Recommendations map
+// uses `any` values because it contains both TermRecommendation objects
+// (keyed by "short_term", "medium_term", "long_term") and string metadata
+// ("monitoring_end_time") to match the legacy response format.
+type NativeNamespaceResult struct {
+	ID              string         `json:"id"`
+	ClusterAlias    string         `json:"cluster_alias"`
+	ClusterUUID     string         `json:"cluster_uuid"`
+	Project         string         `json:"project"`
+	SourceID        string         `json:"source_id"`
+	LastReported    string         `json:"last_reported"`
+	Recommendations map[string]any `json:"recommendations"`
+}
+
+const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, ns.engine,
+	ns.rec_cpu_request_millicores, ns.rec_cpu_limit_millicores,
+	ns.rec_memory_request_kib, ns.rec_memory_limit_kib,
+	ns.current_cpu_request_millicores, ns.current_cpu_limit_millicores,
+	ns.current_memory_request_kib, ns.current_memory_limit_kib,
+	ns.variation_cpu_request_pct, ns.variation_memory_request_pct,
+	ns.notification_codes, ns.confidence_level, ns.stale,
+	ns.monitoring_end_time, ns.updated_at,
+	c.source_id, c.cluster_alias, c.last_reported_at`
+
+// GetNativeNamespaceRecommendations queries the native relational columns from
+// namespace_recommendation_sets.
+func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]NativeNamespaceResult, int, error) {
+	db := database.GetDB()
+
+	query := db.Table("namespace_recommendation_sets ns").
+		Select(nativeNSSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false")
+
+	query = applyNativeNamespaceRBAC(query, userPerms)
+	query = applyNSQueryParams(query, queryParams)
+
+	var totalNamespaces int64
+	countQuery := db.Table("namespace_recommendation_sets ns").
+		Select("COUNT(DISTINCT (ns.cluster_uuid, ns.namespace_name))").
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false")
+	countQuery = applyNativeNamespaceRBAC(countQuery, userPerms)
+	countQuery = applyNSQueryParams(countQuery, queryParams)
+
+	t0 := time.Now()
+	if err := countQuery.Scan(&totalNamespaces).Error; err != nil {
+		return nil, 0, err
+	}
+	log.Infof("native namespace list count query: %dms (%d namespaces)", time.Since(t0).Milliseconds(), totalNamespaces)
+
+	var rows []NativeNamespaceRow
+	limit := opts.Limit
+	if opts.Format == "csv" {
+		limit = config.GetConfig().RecordLimitCSV
+	}
+	// Each namespace has up to 6 rows (3 terms x 2 engines).
+	err := query.
+		Order("ns.namespace_name, ns.term, ns.engine").
+		Offset(opts.Offset * 6).Limit(limit * 6).
+		Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := assembleNativeNamespaceResults(rows)
+	return results, int(totalNamespaces), nil
+}
+
+// GetNativeNamespaceRecommendationByID fetches a single namespace's
+// recommendations by its deterministic UUID.
+func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
+	db := database.GetDB()
+
+	query := db.Table("namespace_recommendation_sets ns").
+		Select(nativeNSSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.namespace_id = ?", id).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false")
+	query = applyNativeNamespaceRBAC(query, userPerms)
+
+	var rows []NativeNamespaceRow
+	if err := query.Order("ns.term, ns.engine").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	if len(rows) > 0 {
+		results := assembleNativeNamespaceResults(rows)
+		if len(results) > 0 {
+			return &results[0], nil
+		}
+	}
+
+	// Fallback: scan namespace keys and match by UUID v5.
+	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms)
+}
+
+func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
+	log.Warnf("namespace_id miss for %s in org %s — using fallback scan", id, orgID)
+
+	type nsKey struct {
+		ClusterUUID   string `gorm:"column:cluster_uuid"`
+		NamespaceName string `gorm:"column:namespace_name"`
+	}
+
+	keysQuery := db.Table("namespace_recommendation_sets ns").
+		Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false").
+		Limit(500)
+	keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
+
+	var keys []nsKey
+	if err := keysQuery.Find(&keys).Error; err != nil {
+		return nil, err
+	}
+
+	var matched *nsKey
+	for i := range keys {
+		if NativeNamespaceID(keys[i].ClusterUUID, keys[i].NamespaceName) == id {
+			matched = &keys[i]
+			break
+		}
+	}
+	if matched == nil {
+		return nil, nil
+	}
+
+	var rows []NativeNamespaceRow
+	err := db.Table("namespace_recommendation_sets ns").
+		Select(nativeNSSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Where("ns.org_id = ?", orgID).
+		Where("ns.cluster_uuid = ?", matched.ClusterUUID).
+		Where("ns.namespace_name = ?", matched.NamespaceName).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false").
+		Order("ns.term, ns.engine").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	results := assembleNativeNamespaceResults(rows)
+	if len(results) == 0 {
+		return nil, nil
+	}
+	return &results[0], nil
+}
+
+// assembleNativeNamespaceResults groups flat rows into nested NativeNamespaceResult structs.
+func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespaceResult {
+	type nsKey struct {
+		ClusterUUID   string
+		NamespaceName string
+	}
+
+	orderKeys := []nsKey{}
+	grouped := map[nsKey][]NativeNamespaceRow{}
+
+	for _, r := range rows {
+		key := nsKey{r.ClusterUUID, r.NamespaceName}
+		if _, exists := grouped[key]; !exists {
+			orderKeys = append(orderKeys, key)
+		}
+		grouped[key] = append(grouped[key], r)
+	}
+
+	var results []NativeNamespaceResult
+	for _, key := range orderKeys {
+		rowGroup := grouped[key]
+		first := rowGroup[0]
+
+		result := NativeNamespaceResult{
+			ID:              NativeNamespaceID(first.ClusterUUID, first.NamespaceName),
+			ClusterAlias:    first.ClusterAlias,
+			ClusterUUID:     first.ClusterUUID,
+			Project:         first.NamespaceName,
+			SourceID:        first.SourceID,
+			LastReported:    first.LastReported.Format(time.RFC3339),
+			Recommendations: make(map[string]any),
+		}
+
+		if first.MonitoringEndTime != nil {
+			result.Recommendations["monitoring_end_time"] = first.MonitoringEndTime.Format(time.RFC3339)
+		}
+
+		terms := map[string]TermRecommendation{}
+		for _, r := range rowGroup {
+			termKey := r.Term + "_term"
+			term := terms[termKey]
+
+			codes := r.NotificationCodes
+			if codes == nil {
+				codes = SmallintArray{}
+			}
+			notifMap := notifications.MapToKruizeFormat(r.NotificationCodes)
+
+			eng := &EngineRecommendation{
+				CPURequestMillicores:   r.RecCPURequestMC,
+				CPULimitMillicores:     r.RecCPULimitMC,
+				MemRequestKiB:          r.RecMemRequestKiB,
+				MemLimitKiB:            r.RecMemLimitKiB,
+				CurrentCPURequestMC:    r.CurrentCPURequestMC,
+				CurrentCPULimitMC:      r.CurrentCPULimitMC,
+				CurrentMemRequestKiB:   r.CurrentMemRequestKiB,
+				CurrentMemLimitKiB:     r.CurrentMemLimitKiB,
+				VariationCPURequestPct: r.VariationCPURequestPct,
+				VariationMemRequestPct: r.VariationMemRequestPct,
+				ConfidenceLevel:        r.ConfidenceLevel,
+				NotificationCodes:      codes,
+				Notifications:          notifMap,
+			}
+
+			switch r.Engine {
+			case "cost":
+				term.Cost = eng
+			case "performance":
+				term.Performance = eng
+			}
+
+			terms[termKey] = term
+		}
+
+		for k, v := range terms {
+			result.Recommendations[k] = v
+		}
+
+		results = append(results, result)
+	}
+
+	return results
+}
+
+// applyNativeNamespaceRBAC adds RBAC-based WHERE clauses for namespace queries.
+func applyNativeNamespaceRBAC(query *gorm.DB, userPerms map[string][]string) *gorm.DB {
+	cfg := config.GetConfig()
+	if !cfg.RBACEnabled {
+		return query
+	}
+	if _, ok := userPerms["*"]; ok {
+		return query
+	}
+
+	clusterPerms, hasCluster := userPerms["openshift.cluster"]
+	projectPerms, hasProject := userPerms["openshift.project"]
+	clusterAll := hasCluster && utils.StringInSlice("*", clusterPerms)
+	projectAll := hasProject && utils.StringInSlice("*", projectPerms)
+
+	if hasCluster && !clusterAll {
+		query = query.Where("c.cluster_uuid IN (?)", clusterPerms)
+	}
+	if hasProject && !projectAll {
+		query = query.Where("ns.namespace_name IN (?)", projectPerms)
+	}
+	return query
+}
+
+// applyNSQueryParams adds dynamic WHERE clauses from parsed namespace query parameters.
+func applyNSQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
+	for key, values := range queryParams {
+		query = query.Where(key, values)
+	}
+	return query
+}

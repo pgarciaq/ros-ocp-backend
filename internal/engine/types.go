@@ -21,9 +21,15 @@ type DigestRow struct {
 	CPUThrottleP95MC int64
 	CPUThrottleMaxMC int64
 	MemRequestP50KiB int64
+	MemRequestP60KiB int64
 	MemRequestP95KiB int64
+	MemRequestP98KiB int64
+	MemRequestP99KiB int64
 	MemUsageP50KiB   int64
+	MemUsageP60KiB   int64
 	MemUsageP95KiB   int64
+	MemUsageP98KiB   int64
+	MemUsageP99KiB   int64
 	MemUsageMaxKiB   int64
 	MemRSSP95KiB     int64
 	MemRSSMaxKiB     int64

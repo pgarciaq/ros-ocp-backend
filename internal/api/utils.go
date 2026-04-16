@@ -478,6 +478,235 @@ func MapNamespaceQueryParameters(c echo.Context) (map[string]any, error) {
 	return queryParams, nil
 }
 
+// parseNativeClusterParams handles cluster filter with mode support for native
+// queries that use the "c." table alias instead of "clusters.".
+func parseNativeClusterParams(value string, mode string) ([]string, []string, error) {
+	if value == "" {
+		return nil, nil, nil
+	}
+	modeClause := FilterModeClause[mode]
+	if modeClause.Suffix == "" {
+		return nil, nil, namespaceAPIErrf(false, "unknown cluster filter mode: %s", mode)
+	}
+	if _, err := uuid.Parse(value); err == nil {
+		suffix := modeClause.Suffix
+		if mode == FilterModeInclude {
+			suffix = FilterModeClause[FilterModeExact].Suffix
+		}
+		return []string{"c.cluster_uuid" + suffix}, []string{value}, nil
+	}
+	s, err := sanitizeParamValue("cluster", value, model.ClusterMaxLen, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	if modeClause.Wrap {
+		s = "%" + s + "%"
+	}
+	return []string{"c.cluster_alias" + modeClause.Suffix}, []string{s}, nil
+}
+
+// buildNativeModeClause builds SQL clause with mode support for native queries.
+// Uses parseNativeClusterParams for cluster params, standard logic for others.
+func buildNativeModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool) (map[string]any, error) {
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	modeClause := FilterModeClause[mode]
+	if modeClause.Suffix == "" {
+		return nil, namespaceAPIErrf(false, "unknown filter mode: %s", mode)
+	}
+
+	allSQLClauses := make([]string, 0, len(vals))
+	allParamVals := make([]string, 0, len(vals))
+	for _, val := range vals {
+		if val == "" {
+			continue
+		}
+		switch param {
+		case "cluster":
+			sqlClauses, paramVals, err := parseNativeClusterParams(val, mode)
+			if err != nil {
+				return nil, err
+			}
+			allSQLClauses = append(allSQLClauses, sqlClauses...)
+			allParamVals = append(allParamVals, paramVals...)
+		default:
+			s, err := sanitizeParamValue(param, val, maxLen, allowDot)
+			if err != nil {
+				return nil, err
+			}
+			if modeClause.Wrap {
+				s = "%" + s + "%"
+			}
+			allParamVals = append(allParamVals, s)
+			allSQLClauses = append(allSQLClauses, column+modeClause.Suffix)
+		}
+	}
+	if len(allSQLClauses) == 0 {
+		return nil, nil
+	}
+	joinedSQLClause := strings.Join(allSQLClauses, modeClause.Join)
+	return map[string]any{joinedSQLClause: allParamVals}, nil
+}
+
+// buildNativeSQLClauseWithFilterType handles include/exclude/exact for native queries.
+func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, excludeVals []string, column string, maxLen int, allowDot bool) (map[string]any, error) {
+	hasExclude, hasExact, hasInclude := len(excludeVals) > 0, len(exactVals) > 0, len(includeVals) > 0
+
+	if !hasExclude && !hasExact {
+		if !hasInclude {
+			return nil, nil
+		}
+		return buildNativeModeClause(param, column, FilterModeInclude, includeVals, maxLen, allowDot)
+	}
+
+	if hasExclude {
+		for _, ev := range excludeVals {
+			if slices.Contains(exactVals, ev) {
+				return nil, namespaceAPIErrf(true, "exclude and exact cannot share values for %s", param)
+			}
+			if slices.Contains(includeVals, ev) {
+				return nil, namespaceAPIErrf(true, "exclude and include cannot share values for %s", param)
+			}
+		}
+	}
+
+	clauseMap := make(map[string]any)
+	if len(excludeVals) > 0 {
+		clause, err := buildNativeModeClause(param, column, FilterModeExclude, excludeVals, maxLen, allowDot)
+		if err != nil {
+			return nil, err
+		}
+		if clause != nil {
+			maps.Copy(clauseMap, clause)
+		}
+	}
+	if len(exactVals) > 0 {
+		clause, err := buildNativeModeClause(param, column, FilterModeExact, exactVals, maxLen, allowDot)
+		if err != nil {
+			return nil, err
+		}
+		if clause != nil {
+			maps.Copy(clauseMap, clause)
+		}
+	}
+	var includeValsFiltered []string
+	if hasExact && hasInclude {
+		exactSet := make(map[string]bool)
+		for _, v := range exactVals {
+			exactSet[v] = true
+		}
+		for _, v := range includeVals {
+			if !exactSet[v] {
+				includeValsFiltered = append(includeValsFiltered, v)
+			}
+		}
+	} else {
+		includeValsFiltered = includeVals
+	}
+	if len(includeValsFiltered) > 0 {
+		clause, err := buildNativeModeClause(param, column, FilterModeInclude, includeValsFiltered, maxLen, allowDot)
+		if err != nil {
+			return nil, err
+		}
+		if clause != nil {
+			maps.Copy(clauseMap, clause)
+		}
+	}
+	return clauseMap, nil
+}
+
+func applyNativeParamFilter(c echo.Context, queryParams map[string]any, param, column string, maxLen int, allowDot bool) error {
+	cfg := config.GetConfig()
+	excludeKey := "exclude[" + param + "]"
+	exactKey := "filter[exact:" + param + "]"
+	var includeVals, excludeVals, exactVals []string
+	for _, v := range c.QueryParams()[param] {
+		if v != "" {
+			includeVals = append(includeVals, v)
+		}
+	}
+	if len(includeVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
+	}
+	for _, v := range c.QueryParams()[excludeKey] {
+		if v != "" {
+			excludeVals = append(excludeVals, v)
+		}
+	}
+	if len(excludeVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
+	}
+	for _, v := range c.QueryParams()[exactKey] {
+		if v != "" {
+			exactVals = append(exactVals, v)
+		}
+	}
+	if len(exactVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
+	}
+	if len(includeVals) == 0 && len(excludeVals) == 0 && len(exactVals) == 0 {
+		return nil
+	}
+	clauseMap, err := buildNativeSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot)
+	if err != nil {
+		return err
+	}
+	if clauseMap != nil {
+		maps.Copy(queryParams, clauseMap)
+	}
+	return nil
+}
+
+// MapNativeNamespaceQueryParameters parses namespace query params using the
+// native schema's column names (ns.* aliases from namespace_recommendation_sets).
+// Supports include, exclude, and exact filter modes for cluster and project params.
+func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, error) {
+	queryParams := make(map[string]interface{})
+	var startTimestamp, endTimestamp time.Time
+
+	now := time.Now().UTC()
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	startDateStr := c.QueryParam("start_date")
+	if startDateStr == "" {
+		startTimestamp = firstOfMonth
+	} else {
+		var err error
+		startTimestamp, err = time.Parse(timeLayout, startDateStr)
+		if err != nil {
+			return queryParams, namespaceAPIErrf(true, "invalid start_date format, use YYYY-MM-DD")
+		}
+	}
+	queryParams["ns.monitoring_end_time >= ?"] = startTimestamp
+
+	endDateStr := c.QueryParam("end_date")
+	if endDateStr == "" {
+		endTimestamp = now.Add(time.Second)
+	} else {
+		var err error
+		endTimestamp, err = time.Parse(timeLayout, endDateStr)
+		if err != nil {
+			return queryParams, namespaceAPIErrf(true, "invalid end_date format, use YYYY-MM-DD")
+		}
+		endTimestamp = endTimestamp.Add(24 * time.Hour)
+	}
+	queryParams["ns.monitoring_end_time < ?"] = endTimestamp
+
+	var errs []error
+	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true); err != nil {
+		errs = append(errs, err)
+	}
+	if err := applyNativeParamFilter(c, queryParams, "project", "ns.namespace_name", model.NamespaceMaxLen, false); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return queryParams, errors.Join(errs...)
+	}
+
+	return queryParams, nil
+}
+
 func get_user_permissions(c echo.Context) map[string][]string {
 	var user_permissions map[string][]string
 	switch t := c.Get("user.permissions").(type) {
@@ -1101,6 +1330,64 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 					optionalInt64Str(eng.rec.CPULimitMillicores),
 					optionalInt64Str(eng.rec.MemRequestKiB),
 					optionalInt64Str(eng.rec.MemLimitKiB),
+					optionalFloat32Str(eng.rec.ConfidenceLevel),
+				}
+				if err := writer.Write(row); err != nil {
+					return fmt.Errorf("unable to write row: %w", err)
+				}
+			}
+		}
+	}
+
+	writer.Flush()
+	return writer.Error()
+}
+
+// GenerateNativeNamespaceCSV writes native namespace recommendation results as CSV.
+func GenerateNativeNamespaceCSV(w io.Writer, results []model.NativeNamespaceResult) error {
+	writer := csv.NewWriter(w)
+	if err := writer.Write(NativeNSCSVHeader); err != nil {
+		return fmt.Errorf("unable to write header: %w", err)
+	}
+
+	for _, r := range results {
+		for _, termName := range []string{"short_term", "medium_term", "long_term"} {
+			termAny, ok := r.Recommendations[termName]
+			if !ok {
+				continue
+			}
+			term, ok := termAny.(model.TermRecommendation)
+			if !ok {
+				continue
+			}
+			for _, eng := range []struct {
+				name string
+				rec  *model.EngineRecommendation
+			}{
+				{"cost", term.Cost},
+				{"performance", term.Performance},
+			} {
+				if eng.rec == nil {
+					continue
+				}
+				row := []string{
+					r.ClusterUUID,
+					r.ClusterAlias,
+					r.Project,
+					r.LastReported,
+					r.SourceID,
+					termName,
+					eng.name,
+					optionalInt64Str(eng.rec.CPURequestMillicores),
+					optionalInt64Str(eng.rec.CPULimitMillicores),
+					optionalInt64Str(eng.rec.MemRequestKiB),
+					optionalInt64Str(eng.rec.MemLimitKiB),
+					optionalInt64Str(eng.rec.CurrentCPURequestMC),
+					optionalInt64Str(eng.rec.CurrentCPULimitMC),
+					optionalInt64Str(eng.rec.CurrentMemRequestKiB),
+					optionalInt64Str(eng.rec.CurrentMemLimitKiB),
+					optionalFloat32Str(eng.rec.VariationCPURequestPct),
+					optionalFloat32Str(eng.rec.VariationMemRequestPct),
 					optionalFloat32Str(eng.rec.ConfidenceLevel),
 				}
 				if err := writer.Write(row); err != nil {

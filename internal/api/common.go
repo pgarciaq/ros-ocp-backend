@@ -157,3 +157,24 @@ var NativeCSVHeader = []string{
 	"rec_memory_limit_kib",
 	"confidence_level",
 }
+
+var NativeNSCSVHeader = []string{
+	"cluster_uuid",
+	"cluster_alias",
+	"project",
+	"last_reported",
+	"source_id",
+	"recommendation_term",
+	"recommendation_engine",
+	"rec_cpu_request_millicores",
+	"rec_cpu_limit_millicores",
+	"rec_memory_request_kib",
+	"rec_memory_limit_kib",
+	"current_cpu_request_millicores",
+	"current_cpu_limit_millicores",
+	"current_memory_request_kib",
+	"current_memory_limit_kib",
+	"variation_cpu_request_pct",
+	"variation_memory_request_pct",
+	"confidence_level",
+}
