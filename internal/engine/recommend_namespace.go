@@ -38,6 +38,7 @@ type NamespaceRec struct {
 	VariationMemRequestPct float32
 	ConfidenceLevel        float32
 	NotificationCodes      []int16
+	MemTrendSlope          float64
 	DataDays               int
 	Stale                  bool
 
@@ -145,26 +146,27 @@ func RecommendAllNamespaces(
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
 
-				rec := NamespaceRec{
-					OrgID:                orgID,
-					ClusterUUID:          clusterUUID,
-					Namespace:            key.Namespace,
-					Term:                 tc.Name,
-					Engine:               profile,
-					RecCPURequestMC:      cpuRec.CostRequestMC,
-					RecCPULimitMC:        cpuRec.CostLimitMC,
-					RecMemRequestKiB:     memRec.CostRequestKiB,
-					RecMemLimitKiB:       memRec.CostLimitKiB,
-					CurrentCPURequestMC:  currentCPUReqMC,
-					CurrentCPULimitMC:    currentCPULimMC,
-					CurrentMemRequestKiB: currentMemReqKiB,
-					CurrentMemLimitKiB:   currentMemLimKiB,
-					ConfidenceLevel:      confidence,
-					DataDays:             dataDays,
-					Stale:                stale,
-					MonitoringStartTime:  monStart,
-					MonitoringEndTime:    end,
-				}
+			rec := NamespaceRec{
+				OrgID:                orgID,
+				ClusterUUID:          clusterUUID,
+				Namespace:            key.Namespace,
+				Term:                 tc.Name,
+				Engine:               profile,
+				RecCPURequestMC:      cpuRec.CostRequestMC,
+				RecCPULimitMC:        cpuRec.CostLimitMC,
+				RecMemRequestKiB:     memRec.CostRequestKiB,
+				RecMemLimitKiB:       memRec.CostLimitKiB,
+				CurrentCPURequestMC:  currentCPUReqMC,
+				CurrentCPULimitMC:    currentCPULimMC,
+				CurrentMemRequestKiB: currentMemReqKiB,
+				CurrentMemLimitKiB:   currentMemLimKiB,
+				ConfidenceLevel:      confidence,
+				MemTrendSlope:        memRec.TrendSlope,
+				DataDays:             dataDays,
+				Stale:                stale,
+				MonitoringStartTime:  monStart,
+				MonitoringEndTime:    end,
+			}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
 				rec.NotificationCodes = EvaluateNamespaceNotifications(rec)
@@ -302,9 +304,14 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 	return nil
 }
 
+// namespacMemTrendSlopeThreshold is higher than the container threshold
+// (100 KiB/day) because namespace-level memory aggregates multiple pods
+// and naturally exhibits larger absolute swings.
+const namespaceMemTrendSlopeThreshold = 500.0
+
 // EvaluateNamespaceNotifications produces notification codes for a namespace
-// recommendation. Same as container notifications minus OOM and idle detection
-// (not applicable at namespace level).
+// recommendation. Checks confidence, newness, and memory trend. OOM and idle
+// detection are not applicable at namespace granularity.
 func EvaluateNamespaceNotifications(rec NamespaceRec) []int16 {
 	var codes []int16
 
@@ -313,6 +320,9 @@ func EvaluateNamespaceNotifications(rec NamespaceRec) []int16 {
 	}
 	if rec.ConfidenceLevel < 0.5 && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
+	}
+	if rec.MemTrendSlope > namespaceMemTrendSlopeThreshold {
+		codes = append(codes, NotifMemoryTrendingUp)
 	}
 
 	return codes
