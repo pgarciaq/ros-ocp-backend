@@ -113,9 +113,15 @@ func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResu
 		CPUThrottleP95MC: cpuThrD.P95,
 		CPUThrottleMaxMC: cpuThrD.Max,
 		MemRequestP50KiB: memReqD.P50,
+		MemRequestP60KiB: memReqD.P60,
 		MemRequestP95KiB: memReqD.P95,
+		MemRequestP98KiB: memReqD.P98,
+		MemRequestP99KiB: memReqD.P99,
 		MemUsageP50KiB:   memUseD.P50,
+		MemUsageP60KiB:   memUseD.P60,
 		MemUsageP95KiB:   memUseD.P95,
+		MemUsageP98KiB:   memUseD.P98,
+		MemUsageP99KiB:   memUseD.P99,
 		MemUsageMaxKiB:   memUseD.Max,
 		MemRSSP95KiB:     memRssD.P95,
 		MemRSSMaxKiB:     memRssD.Max,
@@ -144,9 +150,15 @@ type ContainerDigestResult struct {
 	CPUThrottleP95MC int64
 	CPUThrottleMaxMC int64
 	MemRequestP50KiB int64
+	MemRequestP60KiB int64
 	MemRequestP95KiB int64
+	MemRequestP98KiB int64
+	MemRequestP99KiB int64
 	MemUsageP50KiB   int64
+	MemUsageP60KiB   int64
 	MemUsageP95KiB   int64
+	MemUsageP98KiB   int64
+	MemUsageP99KiB   int64
 	MemUsageMaxKiB   int64
 	MemRSSP95KiB     int64
 	MemRSSMaxKiB     int64
