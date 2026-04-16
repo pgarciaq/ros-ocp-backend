@@ -56,9 +56,15 @@ type ContainerDigestRow struct {
 	CPUThrottleP95MC int64
 	CPUThrottleMaxMC int64
 	MemRequestP50KiB int64
+	MemRequestP60KiB int64
 	MemRequestP95KiB int64
+	MemRequestP98KiB int64
+	MemRequestP99KiB int64
 	MemUsageP50KiB   int64
+	MemUsageP60KiB   int64
 	MemUsageP95KiB   int64
+	MemUsageP98KiB   int64
+	MemUsageP99KiB   int64
 	MemUsageMaxKiB   int64
 	MemRSSP95KiB     int64
 	MemRSSMaxKiB     int64
@@ -78,15 +84,18 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			cpu_request_p50_mc, cpu_request_p95_mc,
 			cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
 			cpu_throttle_p95_mc, cpu_throttle_max_mc,
-			memory_request_p50_kib, memory_request_p95_kib,
-			memory_usage_p50_kib, memory_usage_p95_kib, memory_usage_max_kib,
+			memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
+			memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
 			memory_rss_p95_kib, memory_rss_max_kib,
 			oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12, $13, $14,
-			$15, $16, $17, $18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27
+			$15, $16,
+			$17, $18, $19, $20, $21,
+			$22, $23, $24, $25, $26, $27,
+			$28, $29,
+			$30, $31, $32, $33
 		)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
 		DO UPDATE SET
@@ -94,6 +103,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
 			cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
 			memory_usage_p50_kib = EXCLUDED.memory_usage_p50_kib,
+			memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
 			memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
 			memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
 			sample_count = EXCLUDED.sample_count`,
@@ -101,8 +111,8 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 		row.CPURequestP50MC, row.CPURequestP95MC,
 		row.CPUUsageP50MC, row.CPUUsageP95MC, row.CPUUsageP98MC, row.CPUUsageP99MC, row.CPUUsageMaxMC,
 		row.CPUThrottleP95MC, row.CPUThrottleMaxMC,
-		row.MemRequestP50KiB, row.MemRequestP95KiB,
-		row.MemUsageP50KiB, row.MemUsageP95KiB, row.MemUsageMaxKiB,
+		row.MemRequestP50KiB, row.MemRequestP60KiB, row.MemRequestP95KiB, row.MemRequestP98KiB, row.MemRequestP99KiB,
+		row.MemUsageP50KiB, row.MemUsageP60KiB, row.MemUsageP95KiB, row.MemUsageP98KiB, row.MemUsageP99KiB, row.MemUsageMaxKiB,
 		row.MemRSSP95KiB, row.MemRSSMaxKiB,
 		row.OOMCountSum, row.CPUUsageMeanMC, row.MemUsageMeanKiB, row.SampleCount,
 	)
@@ -137,9 +147,15 @@ func SeedDigestSeries(t *testing.T, pool *pgxpool.Pool, days int, baseCPU, cpuSt
 			CPUThrottleP95MC: 5,
 			CPUThrottleMaxMC: 10,
 			MemRequestP50KiB: memVal - 1024,
+			MemRequestP60KiB: memVal - 512,
 			MemRequestP95KiB: memVal + 512,
+			MemRequestP98KiB: memVal + 768,
+			MemRequestP99KiB: memVal + 900,
 			MemUsageP50KiB:   memVal - 512,
-			MemUsageP95KiB:   memVal,
+			MemUsageP60KiB:   memVal,
+			MemUsageP95KiB:   memVal + 512,
+			MemUsageP98KiB:   memVal + 768,
+			MemUsageP99KiB:   memVal + 900,
 			MemUsageMaxKiB:   memVal + 1024,
 			MemRSSP95KiB:     memVal - 256,
 			MemRSSMaxKiB:     memVal + 512,
@@ -253,9 +269,15 @@ func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, day
 			CPUThrottleP95MC: 5,
 			CPUThrottleMaxMC: 10,
 			MemRequestP50KiB: memVal - 1024,
+			MemRequestP60KiB: memVal - 512,
 			MemRequestP95KiB: memVal + 512,
+			MemRequestP98KiB: memVal + 768,
+			MemRequestP99KiB: memVal + 900,
 			MemUsageP50KiB:   memVal - 512,
-			MemUsageP95KiB:   memVal,
+			MemUsageP60KiB:   memVal,
+			MemUsageP95KiB:   memVal + 512,
+			MemUsageP98KiB:   memVal + 768,
+			MemUsageP99KiB:   memVal + 900,
 			MemUsageMaxKiB:   memVal + 1024,
 			MemRSSP95KiB:     memVal - 256,
 			MemRSSMaxKiB:     memVal + 512,
