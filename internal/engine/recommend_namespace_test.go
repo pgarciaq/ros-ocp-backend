@@ -102,6 +102,58 @@ func TestEvaluateNamespaceNotifications_BothNewAndLowConfidence(t *testing.T) {
 	}
 }
 
+func TestEvaluateNamespaceNotifications_MemoryTrendingUp(t *testing.T) {
+	rec := NamespaceRec{
+		DataDays:        10,
+		ConfidenceLevel: 0.8,
+		MemTrendSlope:   600.0, // above namespace threshold (500 KiB/day)
+	}
+	codes := EvaluateNamespaceNotifications(rec)
+
+	found := false
+	for _, c := range codes {
+		if c == NotifMemoryTrendingUp {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected NotifMemoryTrendingUp (%d) in codes %v", NotifMemoryTrendingUp, codes)
+	}
+}
+
+func TestEvaluateNamespaceNotifications_MemoryTrendBelowThreshold(t *testing.T) {
+	rec := NamespaceRec{
+		DataDays:        10,
+		ConfidenceLevel: 0.8,
+		MemTrendSlope:   200.0, // below namespace threshold (500 KiB/day)
+	}
+	codes := EvaluateNamespaceNotifications(rec)
+
+	for _, c := range codes {
+		if c == NotifMemoryTrendingUp {
+			t.Error("MemoryTrendingUp should not fire when slope is below namespace threshold")
+		}
+	}
+}
+
+func TestEvaluateNamespaceNotifications_StillNoOOMOrIdle(t *testing.T) {
+	rec := NamespaceRec{
+		DataDays:        10,
+		ConfidenceLevel: 0.8,
+		MemTrendSlope:   1000.0,
+	}
+	codes := EvaluateNamespaceNotifications(rec)
+
+	for _, c := range codes {
+		if c == NotifOOMDetected {
+			t.Error("namespace notifications should never include OOM")
+		}
+		if c == NotifIdleWorkload {
+			t.Error("namespace notifications should never include idle workload")
+		}
+	}
+}
+
 // --- Integration tests (testcontainers-go) ---
 
 func TestRecommendAllNamespaces_SingleNamespace(t *testing.T) {
