@@ -265,6 +265,136 @@ func TestRecommendAllNamespaces_Confidence(t *testing.T) {
 	}
 }
 
+func TestRecommendAllNamespaces_MultipleNamespaces(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-alpha", 7, 200, 10, 524288, 1024)
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-beta", 7, 300, 5, 262144, 512)
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-gamma", 7, 100, 20, 1048576, 2048)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	// 3 namespaces x 3 terms x 2 engines = 18
+	require.Len(t, results, 18)
+
+	nsCount := map[string]int{}
+	for _, r := range results {
+		nsCount[r.Namespace]++
+	}
+	assert.Equal(t, 6, nsCount["ns-alpha"])
+	assert.Equal(t, 6, nsCount["ns-beta"])
+	assert.Equal(t, 6, nsCount["ns-gamma"])
+
+	// Verify different namespaces produce different memory recommendations.
+	// Memory is unaffected by the CPU floor, so different base values
+	// should always produce different results.
+	nsMem := map[string]int64{}
+	for _, r := range results {
+		if r.Term == "short" && r.Engine == "cost" {
+			nsMem[r.Namespace] = r.RecMemRequestKiB
+		}
+	}
+	assert.NotEqual(t, nsMem["ns-alpha"], nsMem["ns-gamma"],
+		"different input data should produce different memory recommendations")
+}
+
+func TestWriteNamespaceRecommendations_Upsert(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-upsert", 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	// First write
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	err = WriteNamespaceRecommendations(ctx, pool, results)
+	require.NoError(t, err)
+
+	var firstCPU int64
+	err = pool.QueryRow(ctx,
+		`SELECT rec_cpu_request_millicores FROM namespace_recommendation_sets
+		 WHERE org_id=$1 AND namespace_name=$2 AND term='short' AND engine='cost'`,
+		testutil.TestOrgID, "ns-upsert").Scan(&firstCPU)
+	require.NoError(t, err)
+
+	// Mutate one result and write again
+	for i := range results {
+		results[i].RecCPURequestMC += 999
+	}
+	err = WriteNamespaceRecommendations(ctx, pool, results)
+	require.NoError(t, err)
+
+	// Verify updated, not duplicated
+	var secondCPU int64
+	err = pool.QueryRow(ctx,
+		`SELECT rec_cpu_request_millicores FROM namespace_recommendation_sets
+		 WHERE org_id=$1 AND namespace_name=$2 AND term='short' AND engine='cost'`,
+		testutil.TestOrgID, "ns-upsert").Scan(&secondCPU)
+	require.NoError(t, err)
+	assert.Equal(t, firstCPU+999, secondCPU, "upsert should update, not duplicate")
+
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM namespace_recommendation_sets
+		 WHERE org_id=$1 AND namespace_name=$2 AND term IS NOT NULL`,
+		testutil.TestOrgID, "ns-upsert").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 6, count, "should still have 6 rows after upsert")
+}
+
+func TestRecommendAllNamespaces_P60P98P99Percentiles(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// SeedFull populates P60/P98/P99 columns that SeedNamespaceDigestSeries leaves NULL.
+	// CPU cost engine uses P60 (CostPercentile=0.60).
+	// CPU perf engine uses P98 (PerfPercentile=0.98).
+	// Memory cost uses P95, memory perf uses max — but SelectMemUsagePercentile
+	// should return correct values for any percentile.
+	testutil.SeedNamespaceDigestSeriesFull(t, pool, "ns-pct-full", 7, 300, 10, 524288, 1024)
+
+	// Also seed without P60/P98/P99 (NULL → COALESCE to 0) for comparison.
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-pct-sparse", 7, 300, 10, 524288, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	resultsFull, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+
+	fullRecs := map[string]NamespaceRec{}
+	sparseRecs := map[string]NamespaceRec{}
+	for _, r := range resultsFull {
+		key := r.Namespace + "/" + r.Term + "/" + r.Engine
+		if r.Namespace == "ns-pct-full" {
+			fullRecs[key] = r
+		} else if r.Namespace == "ns-pct-sparse" {
+			sparseRecs[key] = r
+		}
+	}
+
+	// CPU cost uses P60 → "full" seeds distinct P60 values, "sparse" has 0 (NULL→COALESCE).
+	// This means full-seeded namespace should produce a higher CPU cost recommendation
+	// than the sparse one (where P60 falls back to 0).
+	fullCostCPU := fullRecs["ns-pct-full/short/cost"].RecCPURequestMC
+	sparseCostCPU := sparseRecs["ns-pct-sparse/short/cost"].RecCPURequestMC
+	assert.Greater(t, fullCostCPU, sparseCostCPU,
+		"full P60 data (%d) should produce higher CPU cost rec than sparse/zero P60 (%d)",
+		fullCostCPU, sparseCostCPU)
+
+	// CPU perf uses P98 → same pattern: full has distinct P98, sparse has 0.
+	fullPerfCPU := fullRecs["ns-pct-full/short/performance"].RecCPURequestMC
+	sparsePerfCPU := sparseRecs["ns-pct-sparse/short/performance"].RecCPURequestMC
+	assert.Greater(t, fullPerfCPU, sparsePerfCPU,
+		"full P98 data (%d) should produce higher CPU perf rec than sparse/zero P98 (%d)",
+		fullPerfCPU, sparsePerfCPU)
+}
+
 func TestNamespaceRec_VariationFields(t *testing.T) {
 	rec := NamespaceRec{
 		OrgID:                  "org1",

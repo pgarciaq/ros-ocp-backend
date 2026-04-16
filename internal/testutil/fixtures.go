@@ -188,6 +188,46 @@ func SeedNamespaceDigestSeries(t *testing.T, pool *pgxpool.Pool, namespace strin
 	}
 }
 
+// SeedNamespaceDigestSeriesFull inserts N daily namespace digest rows including
+// all P60/P98/P99 percentile columns. Use for tests that exercise exact
+// percentile selection (SelectMemUsagePercentile, SelectCPUUsagePercentile).
+func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace string, days int, baseCPU, cpuStep, baseMem, memStep int64) {
+	t.Helper()
+	ctx := context.Background()
+	for i := 0; i < days; i++ {
+		cpuVal := baseCPU + int64(i)*cpuStep
+		memVal := baseMem + int64(i)*memStep
+		_, err := pool.Exec(ctx, `
+			INSERT INTO daily_namespace_digests (
+				bucket_date, org_id, cluster_uuid, namespace,
+				cpu_request_p50_mc, cpu_request_p60_mc, cpu_request_p95_mc, cpu_request_p99_mc,
+				cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
+				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib,
+				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
+				cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+			) VALUES (
+				$1, $2, $3, $4,
+				$5, $6, $7, $8,
+				$9, $10, $11, $12, $13, $14,
+				$15, $16, $17,
+				$18, $19, $20, $21, $22, $23,
+				$24, $25, $26
+			)
+			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date)
+			DO UPDATE SET cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
+			BaseDate.AddDate(0, 0, i), TestOrgID, TestClusterUUID, namespace,
+			cpuVal-20, cpuVal-10, cpuVal+10, cpuVal+20,
+			cpuVal-10, cpuVal, cpuVal+10, cpuVal+15, cpuVal+18, cpuVal+25,
+			memVal-1024, memVal-512, memVal+512,
+			memVal-512, memVal, memVal+512, memVal+768, memVal+900, memVal+1024,
+			cpuVal-5, memVal-256, int64(96),
+		)
+		if err != nil {
+			t.Fatalf("SeedNamespaceDigestSeriesFull: %v", err)
+		}
+	}
+}
+
 // SeedDigestSeriesFrom is like SeedDigestSeries but starts from the given date
 // instead of BaseDate. Use with RecentStart() for API integration tests.
 func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, baseCPU, cpuStep, baseMem, memStep int64) {
