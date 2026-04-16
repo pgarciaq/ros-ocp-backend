@@ -85,6 +85,7 @@ type Config struct {
 	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
 	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`
 	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
+	MaxLookbackDays int     `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
 	//Unleash config
 	UnleashClientAccessToken string
@@ -254,6 +255,7 @@ func initConfig() {
 	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("ROS_RETENTION_MONTHS", 6)
+	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)

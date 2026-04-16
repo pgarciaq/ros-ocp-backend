@@ -76,9 +76,14 @@ func StartAPIServer() {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 	}
 
-	// Project/Namespace
-	v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetList)
-	v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
+	// Project/Namespace — native engine with Kruize fallback, or legacy-only.
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetListWithFallback)
+		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
+	} else {
+		v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetList)
+		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
+	}
 
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server

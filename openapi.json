@@ -2611,6 +2611,9 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
+          },
+          "plots": {
+            "$ref": "#/components/schemas/PlotsData"
           }
         }
       },
@@ -2640,6 +2643,9 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
+          },
+          "plots": {
+            "$ref": "#/components/schemas/PlotsData"
           }
         }
       },
@@ -2669,6 +2675,9 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
+          },
+          "plots": {
+            "$ref": "#/components/schemas/PlotsData"
           }
         }
       },

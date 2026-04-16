@@ -572,6 +572,107 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 	return c.JSON(http.StatusOK, recSet)
 }
 
+// GetNamespaceRecommendationSetListWithFallback tries the native namespace
+// engine first. If it returns zero results, falls back to the legacy Kruize
+// JSONB path.
+func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultNsRecsDBColumn, listoptions.NsAllowedOrderBy)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	queryParams, err := MapNativeNamespaceQueryParameters(c)
+	if err != nil {
+		log.Error(err.Error())
+		var pe *ParamError
+		if errors.As(err, &pe) && pe.UserErr {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+		}
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "unable to parse query parameters"})
+	}
+
+	results, count, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	if queryErr != nil {
+		log.Errorf("unable to fetch native namespace recommendations; %v", queryErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch records from database",
+		})
+	}
+
+	if count > 0 {
+		return serveNativeNamespaceList(c, results, int(count), apiListOptions)
+	}
+
+	log.Info("native namespace engine returned 0 results, falling back to Kruize path")
+	return GetNamespaceRecommendationSetList(c)
+}
+
+func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceResult, count int, opts listoptions.ListOptions) error {
+	switch opts.Format {
+	case listoptions.ResponseFormatCSV:
+		filename := "namespace-recommendations-" + time.Now().Format("20060102")
+		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
+		pipeReader, pipeWriter := io.Pipe()
+		go func() {
+			var genErr error
+			defer func() {
+				if r := recover(); r != nil {
+					genErr = fmt.Errorf("panic in native namespace CSV generation: %v", r)
+				}
+				if genErr != nil {
+					_ = pipeWriter.CloseWithError(genErr)
+				} else {
+					_ = pipeWriter.Close()
+				}
+			}()
+			genErr = GenerateNativeNamespaceCSV(pipeWriter, results)
+		}()
+		return c.Stream(http.StatusOK, "text/csv", pipeReader)
+	default:
+		interfaceSlice := make([]any, len(results))
+		for i, v := range results {
+			interfaceSlice[i] = v
+		}
+		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		return c.JSON(http.StatusOK, response)
+	}
+}
+
+// GetNamespaceRecommendationSetWithFallback tries the native namespace detail
+// lookup first. If not found, falls back to the legacy Kruize JSONB lookup.
+func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	OrgID := XRHID.Identity.OrgID
+	userPerms := get_user_permissions(c)
+
+	idStr := c.Param("recommendation-id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation-id"})
+	}
+
+	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms)
+	if err != nil {
+		log.Errorf("unable to fetch native namespace recommendation %s; %v", idStr, err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch recommendation",
+		})
+	}
+	if result != nil {
+		enriched := enrichNativeNamespaceDetail(OrgID, result)
+		return c.JSON(http.StatusOK, enriched)
+	}
+
+	log.Infof("native namespace detail miss for %s, falling back to Kruize path", idStr)
+	return GetNamespaceRecommendationSet(c)
+}
+
 // enrichNativeDetail fetches boxplots and monitoring_end_time for a native
 // recommendation and wraps it in the Kruize-compatible DetailResponse shape.
 func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *model.DetailResponse {
@@ -599,6 +700,50 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 	}
 
 	return model.BuildDetailResponse(result, plots, met)
+}
+
+// enrichNativeNamespaceDetail fetches boxplots for a native namespace
+// recommendation and embeds them into the response alongside monitoring_end_time.
+func enrichNativeNamespaceDetail(orgID string, result *model.NativeNamespaceResult) *model.NativeNamespaceResult {
+	ctx := context.Background()
+	pool := db.GetPool()
+	if pool == nil {
+		return result
+	}
+
+	key := model.NamespaceKey{
+		OrgID:       orgID,
+		ClusterUUID: result.ClusterUUID,
+		Namespace:   result.Project,
+	}
+
+	termPlots := map[string]*model.NativePlot{}
+	for termKey := range result.Recommendations {
+		if termKey == "monitoring_end_time" {
+			continue
+		}
+		if p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey); err == nil && p != nil {
+			termPlots[termKey] = p
+		}
+	}
+
+	met, _ := model.NamespaceMonitoringEndTime(ctx, pool, key)
+	if !met.IsZero() && met.Year() > 1 {
+		result.Recommendations["monitoring_end_time"] = met.UTC().Format(time.RFC3339)
+	}
+
+	for termKey, plot := range termPlots {
+		termVal, ok := result.Recommendations[termKey]
+		if !ok {
+			continue
+		}
+		if termRec, ok := termVal.(model.TermRecommendation); ok {
+			termRec.Plots = plot
+			result.Recommendations[termKey] = termRec
+		}
+	}
+
+	return result
 }
 
 func GetAppStatus(c echo.Context) error {

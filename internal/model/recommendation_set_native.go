@@ -132,10 +132,18 @@ func NativeContainerID(clusterUUID, namespace, workload, container string) strin
 	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
 }
 
+// NativeNamespaceID generates a deterministic UUID v5 for a namespace
+// recommendation, keyed by cluster UUID and namespace name.
+func NativeNamespaceID(clusterUUID, namespace string) string {
+	name := fmt.Sprintf("%s/%s", clusterUUID, namespace)
+	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
+}
+
 // TermRecommendation holds cost and performance recommendations for a term.
 type TermRecommendation struct {
 	Cost        *EngineRecommendation `json:"cost,omitempty"`
 	Performance *EngineRecommendation `json:"performance,omitempty"`
+	Plots       *NativePlot           `json:"plots,omitempty"`
 }
 
 // EngineRecommendation holds the actual CPU/memory recommendation values.

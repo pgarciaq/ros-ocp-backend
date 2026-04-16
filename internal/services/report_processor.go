@@ -98,6 +98,10 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			processContainerCSVNative(file, kafkaMsg)
 			continue
 		}
+		if cfg.UseNativeEngine && csvType == types.PayloadTypeNamespace {
+			processNamespaceCSVNative(file, kafkaMsg)
+			continue
+		}
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
@@ -407,8 +411,8 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	}
 
 	now := time.Now().UTC()
-	start := now.AddDate(0, 0, -15)
 	appCfg := config.GetConfig()
+	start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
 	oomCfg := engine.OOMConfig{
 		BaseBump: appCfg.OOMBaseBump,
 		MaxBump:  appCfg.OOMMaxBump,
@@ -455,5 +459,53 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	oomCounts := engine.OOMCountsByContainer(results)
 	if err := engine.WriteRecommendationQuality(ctx, pool, results, oldRecs, oomCounts); err != nil {
 		log.Errorf("native engine: writing quality metrics failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	}
+}
+
+// processNamespaceCSVNative handles namespace CSV files through the native Go
+// recommendation engine instead of the Kruize pipeline.
+func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
+	log := logging.GetLogger()
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native namespace engine: unable to fetch CSV from URL: %v", err)
+		return
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	if err := ingestion.ProcessNamespaceCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+		log.Errorf("native namespace engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	now := time.Now().UTC()
+	nsCfg := config.GetConfig()
+	start := now.AddDate(0, 0, -nsCfg.MaxLookbackDays)
+	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, clusterUUID, start, now)
+	if err != nil {
+		log.Errorf("native namespace engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	if len(results) == 0 {
+		log.Infof("native namespace engine: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
+
+	if err := engine.WriteNamespaceRecommendations(ctx, pool, results); err != nil {
+		log.Errorf("native namespace engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+	log.Infof("native namespace engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
+
+	if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
+		log.Errorf("native namespace engine: writing history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 	}
 }
