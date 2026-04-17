@@ -73,7 +73,7 @@ func TestMigration026_Roundtrip(t *testing.T) {
 	ver, dirty, err := m.Version()
 	require.NoError(t, err)
 	assert.False(t, dirty, "migration state should not be dirty after roundtrip")
-	assert.Equal(t, uint(29), ver, "should be at latest migration version")
+	assert.Equal(t, uint(30), ver, "should be at latest migration version")
 	srcErr, dbErr = m.Close()
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
