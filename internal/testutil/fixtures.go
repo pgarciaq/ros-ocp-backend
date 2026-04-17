@@ -8,9 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func firstOfCurrentMonth() time.Time {
-	now := time.Now().UTC()
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+func sevenDaysAgo() time.Time {
+	return time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -7)
 }
 
 // Deterministic test constants used across all test suites.
@@ -24,8 +23,11 @@ const (
 )
 
 // BaseDate is a fixed reference point for reproducible test data.
-// Uses first of current month so partition auto-creation in migrations covers it.
-var BaseDate = firstOfCurrentMonth()
+// Set to 7 days ago so that a 7-day digest series ending at BaseDate+6
+// (i.e. yesterday) is always within the 3-day staleness window, preventing
+// integration tests from producing stale recommendations that the GORM
+// query filters out.
+var BaseDate = sevenDaysAgo()
 
 // ContainerDigestRow holds the fields for a single daily_container_digests row.
 type ContainerDigestRow struct {

@@ -317,8 +317,8 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
 
-	// BaseDate is first-of-current-month. If it's >3 days ago, results should be stale.
-	// If today is day 1-3 of the month, they won't be stale. Either way, verify consistency.
+	// BaseDate is 7 days ago. With only 3 days seeded (offset 0-2), the latest
+	// digest is 5 days old, which exceeds the 3-day staleness threshold.
 	if len(results) > 0 {
 		daysSinceLatest := time.Since(end.Truncate(24 * time.Hour))
 		if daysSinceLatest > stalenessThreshold {
