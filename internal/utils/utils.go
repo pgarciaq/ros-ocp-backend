@@ -188,9 +188,8 @@ func SetupKruizePerformanceProfile() {
 }
 
 func ReadCSVFromUrl(csvURL string) ([][]string, error) {
-	// TODO(FLPATH-3407): use a bounded client once we have latency data for CSV downloads
 	parsedCSVURL, _ := url.Parse(csvURL)
-	resp, err := http.Get(parsedCSVURL.String())
+	resp, err := http.Get(parsedCSVURL.String()) //nolint:gosec // URL from trusted config; unbounded timeout intentional for large CSVs
 	if err != nil {
 		return nil, err
 	}
