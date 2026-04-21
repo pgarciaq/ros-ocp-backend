@@ -100,7 +100,8 @@ func Setup_kruize_performance_profile() {
 // ReadCSVBodyFromUrl fetches a CSV URL and returns the response body as an io.ReadCloser.
 // The caller is responsible for closing the body.
 func ReadCSVBodyFromUrl(url string) (io.ReadCloser, error) {
-	resp, err := HTTPClient.Get(url)
+	// CSV downloads are heavy; use bare http per PR #603 convention
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}

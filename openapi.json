@@ -424,6 +424,26 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request, e.g. invalid UUID or query parameter value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "invalid recommendation ID"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "User is not authorized",
             "content": {
@@ -431,6 +451,46 @@
                 "schema": {
                   "type": "string",
                   "example": "User is not authorized to access the resource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recommendation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "recommendation not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable due to a database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch recommendation"
+                    }
+                  }
                 }
               }
             }
@@ -642,6 +702,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NamespaceRecommendationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, e.g. invalid query parameter value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "invalid order_by field \"not-a-column\""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is not authorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "User is not authorized to access the resource"
                 }
               }
             }

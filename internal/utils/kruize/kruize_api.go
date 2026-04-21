@@ -353,9 +353,7 @@ func DeleteExperimentFromKruize(experiment_name string) {
 		deletion_err_log(err)
 		return
 	}
-	// TODO(FLPATH-3407): use a bounded client once we have Prometheus latency data for /deleteExperiment
-	client := &http.Client{}
-	res, err := client.Do(req)
+	res, err := utils.HTTPClient.Do(req)
 	if err != nil {
 		deletion_err_log(err)
 		return
