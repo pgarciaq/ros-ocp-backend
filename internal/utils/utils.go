@@ -191,7 +191,7 @@ func SetupKruizePerformanceProfile() {
 // The caller is responsible for closing the body.
 func ReadCSVBodyFromUrl(csvURL string) (io.ReadCloser, error) {
 	parsedURL, _ := url.Parse(csvURL)
-	resp, err := HTTPClient.Get(parsedURL.String())
+	resp, err := http.Get(parsedURL.String()) //nolint:gosec // URL from trusted config; unbounded timeout intentional for large CSVs
 	if err != nil {
 		return nil, err
 	}
