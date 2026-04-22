@@ -409,12 +409,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
-	if count > 0 {
-		return serveNativeList(c, results, int(count), apiListOptions)
-	}
-
-	log.Info("native engine returned 0 results, falling back to Kruize path")
-	return serveLegacyList(c, OrgID, apiListOptions, userPerms)
+	return serveNativeList(c, results, int(count), apiListOptions)
 }
 
 // GetRecommendationSetWithFallback tries the native detail lookup first.
@@ -445,8 +440,10 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusOK, detail)
 	}
 
-	log.Infof("native detail miss for %s, falling back to Kruize path", idStr)
-	return serveLegacyDetail(c, OrgID, idStr, userPerms)
+	return c.JSON(http.StatusNotFound, echo.Map{
+		"status":  "error",
+		"message": fmt.Sprintf("recommendation %s not found", idStr),
+	})
 }
 
 func serveNativeList(c echo.Context, results []model.NativeContainerResult, count int, opts listoptions.ListOptions) error {
