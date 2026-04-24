@@ -340,8 +340,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		interfaceSlice := make([]any, len(results))
-		for i, v := range results {
-			interfaceSlice[i] = v
+		for i := range results {
+			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
 		return c.JSON(http.StatusOK, response)
@@ -380,11 +380,6 @@ func GetNativeRecommendationSet(c echo.Context) error {
 // returns zero results, falls back to the legacy Kruize JSONB path. This
 // enables zero-downtime migration: containers not yet reprocessed by the
 // native engine are still served from the old data.
-//
-// NOTE: Native responses do NOT include Kruize-style notification objects.
-// The koku-ui notification/warning/optimized indicators will be absent for
-// containers served from the native path. This is a known limitation until
-// a notification mapping layer is implemented.
 func GetRecommendationSetListWithFallback(c echo.Context) error {
 	XRHID := c.Get("Identity").(identity.XRHID)
 	OrgID := XRHID.Identity.OrgID
@@ -470,8 +465,8 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		interfaceSlice := make([]any, len(results))
-		for i, v := range results {
-			interfaceSlice[i] = v
+		for i := range results {
+			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
 		return c.JSON(http.StatusOK, response)
