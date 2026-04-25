@@ -245,25 +245,23 @@ func TestComputeConfidence(t *testing.T) {
 
 func TestComputeVariation(t *testing.T) {
 	tests := []struct {
-		name     string
-		current  int64
-		rec      int64
-		wantSign float32
+		name    string
+		current int64
+		rec     int64
+		want    int32
 	}{
 		{"no change", 100, 100, 0},
 		{"increase 50%", 100, 150, 50},
 		{"decrease 50%", 200, 100, -50},
 		{"current zero", 0, 100, 0},
+		{"rounds up", 3, 4, 33},
+		{"rounds down", 3, 5, 67},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := computeVariation(tt.current, tt.rec)
-			if tt.current == 0 {
-				assert.Equal(t, float32(0), got)
-			} else {
-				assert.InDelta(t, float64(tt.wantSign), float64(got), 0.1)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -299,8 +297,10 @@ func TestRecommendAllWorkloads_VariationIsComputed(t *testing.T) {
 
 	for _, r := range results {
 		if r.CurrentCPURequestMC > 0 {
-			assert.NotEqual(t, float32(0), r.VariationCPURequestPct,
-				"variation should be non-zero when current != recommended")
+			assert.NotEqual(t, int32(0), r.VariationCPURequestPct,
+				"CPU request variation should be non-zero when current != recommended")
+			assert.NotEqual(t, int32(0), r.VariationCPULimitPct,
+				"CPU limit variation should be non-zero when current != recommended")
 		}
 	}
 }

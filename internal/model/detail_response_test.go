@@ -19,8 +19,10 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 	curCPULim := int64(500)
 	curMemReq := int64(1024)
 	curMemLim := int64(2048)
-	varCPU := float32(-15.2)
-	varMem := float32(10.5)
+	varCPUReq := int32(-15)
+	varCPULim := int32(100)
+	varMemReq := int32(11)
+	varMemLim := int32(100)
 
 	native := &NativeContainerResult{
 		ID:           "test-uuid",
@@ -43,8 +45,10 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 					CurrentCPULimitMC:      &curCPULim,
 					CurrentMemRequestKiB:   &curMemReq,
 					CurrentMemLimitKiB:     &curMemLim,
-					VariationCPURequestPct: &varCPU,
-					VariationMemRequestPct: &varMem,
+					VariationCPURequestPct: &varCPUReq,
+					VariationCPULimitPct:   &varCPULim,
+					VariationMemRequestPct: &varMemReq,
+					VariationMemLimitPct:   &varMemLim,
 					Notifications: map[string]notifications.NotificationEntry{
 						"1": {Type: "info", Message: "Short Term Available", Code: 1},
 					},
@@ -102,14 +106,22 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 	require.NotNil(t, cost.Config.Limits.Memory)
 	assert.InDelta(t, 4.0, cost.Config.Limits.Memory.Amount, 0.001) // 4096 KiB = 4 MiB
 
-	// Verify variation
+	// Verify variation (limits)
 	require.NotNil(t, cost.Variation)
+	require.NotNil(t, cost.Variation.Limits)
+	require.NotNil(t, cost.Variation.Limits.CPU)
+	assert.Equal(t, float64(100), cost.Variation.Limits.CPU.Amount)
+	assert.Equal(t, "percentage", cost.Variation.Limits.CPU.Format)
+	require.NotNil(t, cost.Variation.Limits.Memory)
+	assert.Equal(t, float64(100), cost.Variation.Limits.Memory.Amount)
+
+	// Verify variation (requests)
 	require.NotNil(t, cost.Variation.Requests)
 	require.NotNil(t, cost.Variation.Requests.CPU)
-	assert.InDelta(t, -15.2, cost.Variation.Requests.CPU.Amount, 0.01)
+	assert.Equal(t, float64(-15), cost.Variation.Requests.CPU.Amount)
 	assert.Equal(t, "percentage", cost.Variation.Requests.CPU.Format)
 	require.NotNil(t, cost.Variation.Requests.Memory)
-	assert.InDelta(t, 10.5, cost.Variation.Requests.Memory.Amount, 0.01)
+	assert.Equal(t, float64(11), cost.Variation.Requests.Memory.Amount)
 
 	// Verify engine-level notifications
 	require.NotNil(t, cost.Notifications)

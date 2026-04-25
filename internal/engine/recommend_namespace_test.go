@@ -473,7 +473,7 @@ func TestNamespaceRec_VariationFields(t *testing.T) {
 	if rec.Namespace != "default" {
 		t.Errorf("expected namespace default, got %s", rec.Namespace)
 	}
-	if rec.VariationCPURequestPct != 100.0 {
-		t.Errorf("expected variation 100.0, got %f", rec.VariationCPURequestPct)
+	if rec.VariationCPURequestPct != 100 {
+		t.Errorf("expected variation 100, got %d", rec.VariationCPURequestPct)
 	}
 }

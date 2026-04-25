@@ -80,8 +80,10 @@ type ContainerRec struct {
 	CurrentMemRequestKiB int64
 	CurrentMemLimitKiB   int64
 
-	VariationCPURequestPct float32
-	VariationMemRequestPct float32
+	VariationCPURequestPct int32
+	VariationCPULimitPct   int32
+	VariationMemRequestPct int32
+	VariationMemLimitPct   int32
 	ConfidenceLevel        float32
 	EstimatedSavingsUSD    float32
 	NotificationCodes      []int16

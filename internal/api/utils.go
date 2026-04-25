@@ -1386,8 +1386,10 @@ func GenerateNativeNamespaceCSV(w io.Writer, results []model.NativeNamespaceResu
 					optionalInt64Str(eng.rec.CurrentCPULimitMC),
 					optionalInt64Str(eng.rec.CurrentMemRequestKiB),
 					optionalInt64Str(eng.rec.CurrentMemLimitKiB),
-					optionalFloat32Str(eng.rec.VariationCPURequestPct),
-					optionalFloat32Str(eng.rec.VariationMemRequestPct),
+					optionalInt32Str(eng.rec.VariationCPURequestPct),
+					optionalInt32Str(eng.rec.VariationCPULimitPct),
+					optionalInt32Str(eng.rec.VariationMemRequestPct),
+					optionalInt32Str(eng.rec.VariationMemLimitPct),
 					optionalFloat32Str(eng.rec.ConfidenceLevel),
 				}
 				if err := writer.Write(row); err != nil {
@@ -1413,6 +1415,13 @@ func optionalFloat32Str(v *float32) string {
 		return ""
 	}
 	return strconv.FormatFloat(float64(*v), 'f', 3, 32)
+}
+
+func optionalInt32Str(v *int32) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatInt(int64(*v), 10)
 }
 
 func GenerateAndStreamCSV(w io.Writer, recommendationSets []model.RecommendationSetResult) error {

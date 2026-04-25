@@ -84,7 +84,7 @@ func ReadOldRecommendations(
 //	max(0, 1.0 - |cpuVariation|/100*0.5 - |memVariation|/100*0.5)
 //
 // A score of 1.0 means no change; 0.0 means one or both resources changed 100%+.
-func ComputeStabilityPct(cpuVariationPct, memVariationPct float32) float32 {
+func ComputeStabilityPct(cpuVariationPct, memVariationPct int32) float32 {
 	v := 1.0 - math.Abs(float64(cpuVariationPct))/100*0.5 - math.Abs(float64(memVariationPct))/100*0.5
 	if v < 0 {
 		return 0

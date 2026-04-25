@@ -40,8 +40,10 @@ type NativeNamespaceRow struct {
 	CurrentMemRequestKiB *int64 `gorm:"column:current_memory_request_kib"`
 	CurrentMemLimitKiB   *int64 `gorm:"column:current_memory_limit_kib"`
 
-	VariationCPURequestPct *float32      `gorm:"column:variation_cpu_request_pct"`
-	VariationMemRequestPct *float32      `gorm:"column:variation_memory_request_pct"`
+	VariationCPURequestPct *int32        `gorm:"column:variation_cpu_request_pct"`
+	VariationCPULimitPct   *int32        `gorm:"column:variation_cpu_limit_pct"`
+	VariationMemRequestPct *int32        `gorm:"column:variation_memory_request_pct"`
+	VariationMemLimitPct   *int32        `gorm:"column:variation_memory_limit_pct"`
 	ConfidenceLevel        *float32      `gorm:"column:confidence_level"`
 	NotificationCodes      SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
 	Stale                  bool          `gorm:"column:stale"`
@@ -77,7 +79,8 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.rec_memory_request_kib, ns.rec_memory_limit_kib,
 	ns.current_cpu_request_millicores, ns.current_cpu_limit_millicores,
 	ns.current_memory_request_kib, ns.current_memory_limit_kib,
-	ns.variation_cpu_request_pct, ns.variation_memory_request_pct,
+	ns.variation_cpu_request_pct, ns.variation_cpu_limit_pct,
+	ns.variation_memory_request_pct, ns.variation_memory_limit_pct,
 	ns.notification_codes, ns.confidence_level, ns.stale,
 	ns.monitoring_end_time, ns.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
@@ -288,7 +291,9 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespace
 				CurrentMemRequestKiB:   r.CurrentMemRequestKiB,
 				CurrentMemLimitKiB:     r.CurrentMemLimitKiB,
 				VariationCPURequestPct: r.VariationCPURequestPct,
+				VariationCPULimitPct:   r.VariationCPULimitPct,
 				VariationMemRequestPct: r.VariationMemRequestPct,
+				VariationMemLimitPct:   r.VariationMemLimitPct,
 				ConfidenceLevel:        r.ConfidenceLevel,
 				NotificationCodes:      codes,
 				Notifications:          notifMap,
