@@ -180,12 +180,21 @@ func toDetailEngine(eng *EngineRecommendation) *DetailEngine {
 	}
 
 	var variation *DetailResourceConfig
-	if eng.VariationCPURequestPct != nil || eng.VariationMemRequestPct != nil {
-		variation = &DetailResourceConfig{
-			Requests: &DetailResourcePair{
+	hasRequestVar := eng.VariationCPURequestPct != nil || eng.VariationMemRequestPct != nil
+	hasLimitVar := eng.VariationCPULimitPct != nil || eng.VariationMemLimitPct != nil
+	if hasRequestVar || hasLimitVar {
+		variation = &DetailResourceConfig{}
+		if hasLimitVar {
+			variation.Limits = &DetailResourcePair{
+				CPU:    pctToValue(eng.VariationCPULimitPct),
+				Memory: pctToValue(eng.VariationMemLimitPct),
+			}
+		}
+		if hasRequestVar {
+			variation.Requests = &DetailResourcePair{
 				CPU:    pctToValue(eng.VariationCPURequestPct),
 				Memory: pctToValue(eng.VariationMemRequestPct),
-			},
+			}
 		}
 	}
 
@@ -228,10 +237,10 @@ func kibToMiB(kib *int64) *DetailResourceValue {
 	if kib == nil {
 		return nil
 	}
-	return &DetailResourceValue{Amount: float64(*kib) / 1024.0, Format: "MiB"}
+	return &DetailResourceValue{Amount: float64(*kib / 1024), Format: "MiB"}
 }
 
-func pctToValue(pct *float32) *DetailResourceValue {
+func pctToValue(pct *int32) *DetailResourceValue {
 	if pct == nil {
 		return nil
 	}

@@ -92,8 +92,10 @@ type NativeRecommendationRow struct {
 	CurrentMemRequestKiB *int64 `gorm:"column:current_memory_request_kib"`
 	CurrentMemLimitKiB   *int64 `gorm:"column:current_memory_limit_kib"`
 
-	VariationCPURequestPct *float32 `gorm:"column:variation_cpu_request_pct"`
-	VariationMemRequestPct *float32 `gorm:"column:variation_memory_request_pct"`
+	VariationCPURequestPct *int32 `gorm:"column:variation_cpu_request_pct"`
+	VariationCPULimitPct   *int32 `gorm:"column:variation_cpu_limit_pct"`
+	VariationMemRequestPct *int32 `gorm:"column:variation_memory_request_pct"`
+	VariationMemLimitPct   *int32 `gorm:"column:variation_memory_limit_pct"`
 	ConfidenceLevel        *float32 `gorm:"column:confidence_level"`
 	// SMALLINT[] caps values at 32767. Current notification codes (1-24) are
 	// well within range. If legacy 6-digit codes are ever needed, this column
@@ -156,8 +158,10 @@ type EngineRecommendation struct {
 	CurrentCPULimitMC      *int64                                     `json:"current_cpu_limit_millicores,omitempty"`
 	CurrentMemRequestKiB   *int64                                     `json:"current_memory_request_kib,omitempty"`
 	CurrentMemLimitKiB     *int64                                     `json:"current_memory_limit_kib,omitempty"`
-	VariationCPURequestPct *float32                                   `json:"variation_cpu_request_pct,omitempty"`
-	VariationMemRequestPct *float32                                   `json:"variation_memory_request_pct,omitempty"`
+	VariationCPURequestPct *int32                                      `json:"variation_cpu_request_pct,omitempty"`
+	VariationCPULimitPct   *int32                                      `json:"variation_cpu_limit_pct,omitempty"`
+	VariationMemRequestPct *int32                                      `json:"variation_memory_request_pct,omitempty"`
+	VariationMemLimitPct   *int32                                      `json:"variation_memory_limit_pct,omitempty"`
 	ConfidenceLevel        *float32                                   `json:"confidence_level,omitempty"`
 	NotificationCodes      SmallintArray                              `json:"notification_codes"`
 	Notifications          map[string]notifications.NotificationEntry `json:"notifications"`
@@ -174,7 +178,8 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
 			rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
 			rs.current_memory_request_kib, rs.current_memory_limit_kib,
-			rs.variation_cpu_request_pct, rs.variation_memory_request_pct,
+			rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
+			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 			rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
@@ -255,7 +260,8 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
 	rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
 	rs.current_memory_request_kib, rs.current_memory_limit_kib,
-	rs.variation_cpu_request_pct, rs.variation_memory_request_pct,
+	rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
+	rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 	rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
@@ -419,7 +425,9 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				CurrentMemRequestKiB:   r.CurrentMemRequestKiB,
 				CurrentMemLimitKiB:     r.CurrentMemLimitKiB,
 				VariationCPURequestPct: r.VariationCPURequestPct,
+				VariationCPULimitPct:   r.VariationCPULimitPct,
 				VariationMemRequestPct: r.VariationMemRequestPct,
+				VariationMemLimitPct:   r.VariationMemLimitPct,
 				ConfidenceLevel:        r.ConfidenceLevel,
 				NotificationCodes:      codes,
 				Notifications:          notifMap,

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -167,7 +168,9 @@ func RecommendAllWorkloads(
 					Stale:                stale,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
 				rec.NotificationCodes = EvaluateNotifications(rec, tc.MinDataDays)
 
 				results = append(results, rec)
@@ -195,9 +198,10 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
 				current_memory_request_kib, current_memory_limit_kib,
-				variation_cpu_request_pct, variation_memory_request_pct,
+				variation_cpu_request_pct, variation_cpu_limit_pct,
+				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -209,7 +213,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				current_memory_request_kib = EXCLUDED.current_memory_request_kib,
 				current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
 				variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
+				variation_cpu_limit_pct = EXCLUDED.variation_cpu_limit_pct,
 				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
+				variation_memory_limit_pct = EXCLUDED.variation_memory_limit_pct,
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
@@ -221,7 +227,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
 			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationMemRequestPct,
+			r.VariationCPURequestPct, r.VariationCPULimitPct,
+			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 		)
 	}
@@ -262,12 +269,13 @@ func computeConfidence(dataDays, minDataDays, windowDays int) float32 {
 	return ratio
 }
 
-// computeVariation returns the percentage change from current to recommended.
-func computeVariation(current, rec int64) float32 {
+// computeVariation returns the percentage change from current to recommended,
+// rounded to the nearest integer.
+func computeVariation(current, rec int64) int32 {
 	if current == 0 {
 		return 0
 	}
-	return float32((float64(rec) - float64(current)) / float64(current) * 100)
+	return int32(math.Round(float64(rec-current) / float64(current) * 100))
 }
 
 func cpuConfigForProfile(profile string, now time.Time, decayHL float64) CPUConfig {

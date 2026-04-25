@@ -15,8 +15,8 @@ import (
 func TestStabilityPct(t *testing.T) {
 	tests := []struct {
 		name   string
-		cpuVar float32
-		memVar float32
+		cpuVar int32
+		memVar int32
 		want   float32
 	}{
 		{"no change", 0, 0, 1.0},

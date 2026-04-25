@@ -34,8 +34,10 @@ type NamespaceRec struct {
 	CurrentMemRequestKiB int64
 	CurrentMemLimitKiB   int64
 
-	VariationCPURequestPct float32
-	VariationMemRequestPct float32
+	VariationCPURequestPct int32
+	VariationCPULimitPct   int32
+	VariationMemRequestPct int32
+	VariationMemLimitPct   int32
 	ConfidenceLevel        float32
 	NotificationCodes      []int16
 	MemTrendSlope          float64
@@ -168,7 +170,9 @@ func RecommendAllNamespaces(
 				MonitoringEndTime:    end,
 			}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
 				rec.NotificationCodes = EvaluateNamespaceNotifications(rec)
 
 				results = append(results, rec)
@@ -197,10 +201,11 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
 				current_memory_request_kib, current_memory_limit_kib,
-				variation_cpu_request_pct, variation_memory_request_pct,
+				variation_cpu_request_pct, variation_cpu_limit_pct,
+				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
 				monitoring_start_time, monitoring_end_time, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -213,7 +218,9 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				current_memory_request_kib = EXCLUDED.current_memory_request_kib,
 				current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
 				variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
+				variation_cpu_limit_pct = EXCLUDED.variation_cpu_limit_pct,
 				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
+				variation_memory_limit_pct = EXCLUDED.variation_memory_limit_pct,
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
@@ -227,7 +234,8 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
 			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationMemRequestPct,
+			r.VariationCPURequestPct, r.VariationCPULimitPct,
+			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 			r.MonitoringStartTime, r.MonitoringEndTime,
 		)
@@ -265,11 +273,12 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
 				current_memory_request_kib, current_memory_limit_kib,
-				variation_cpu_request_pct, variation_memory_request_pct,
+				variation_cpu_request_pct, variation_cpu_limit_pct,
+				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level,
 				monitoring_start_time, monitoring_end_time,
 				created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23)
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, created_at)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -286,7 +295,8 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
 			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
 			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationMemRequestPct,
+			r.VariationCPURequestPct, r.VariationCPULimitPct,
+			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel,
 			r.MonitoringStartTime, r.MonitoringEndTime,
 			now,

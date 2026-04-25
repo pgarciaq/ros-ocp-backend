@@ -175,6 +175,8 @@ var NativeNSCSVHeader = []string{
 	"current_memory_request_kib",
 	"current_memory_limit_kib",
 	"variation_cpu_request_pct",
+	"variation_cpu_limit_pct",
 	"variation_memory_request_pct",
+	"variation_memory_limit_pct",
 	"confidence_level",
 }
