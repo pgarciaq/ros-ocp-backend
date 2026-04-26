@@ -134,7 +134,8 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
 				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
 				memory_rss_p95_kib, memory_rss_max_kib,
-				oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+				oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
+				pod_count_min, pod_count_max, pod_count_avg
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10, $11, $12,
@@ -143,7 +144,8 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 				$21, $22, $23, $24, $25,
 				$26, $27, $28, $29, $30, $31,
 				$32, $33,
-				$34, $35, $36, $37
+				$34, $35, $36, $37,
+				$38, $39, $40
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
 			DO UPDATE SET
@@ -163,7 +165,10 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 				oom_count_sum = EXCLUDED.oom_count_sum,
 				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
 				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
-				sample_count = EXCLUDED.sample_count`,
+				sample_count = EXCLUDED.sample_count,
+				pod_count_min = EXCLUDED.pod_count_min,
+				pod_count_max = EXCLUDED.pod_count_max,
+				pod_count_avg = EXCLUDED.pod_count_avg`,
 			key.BucketDate.Format("2006-01-02"),
 			orgID, clusterUUID,
 			key.Namespace, key.Workload, key.WorkloadType, key.ContainerName,
@@ -174,6 +179,7 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 			d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
 			d.MemRSSP95KiB, d.MemRSSMaxKiB,
 			d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
+			d.PodCountMin, d.PodCountMax, d.PodCountAvg,
 		)
 	}
 

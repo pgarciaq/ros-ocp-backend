@@ -121,3 +121,127 @@ func TestGroupCSVRows(t *testing.T) {
 		assert.Len(t, group, 1)
 	})
 }
+
+func TestComputePodCounts_WithWorkloadPodCount(t *testing.T) {
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	t.Run("single hour single row", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, WorkloadPodCount: 3},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(3), pcMin)
+		assert.Equal(t, int64(3), pcMax)
+		assert.Equal(t, int64(3), pcAvg)
+	})
+
+	t.Run("multiple rows same hour takes max", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, WorkloadPodCount: 2},
+			{IntervalStart: base.Add(5 * time.Minute), WorkloadPodCount: 5},
+			{IntervalStart: base.Add(10 * time.Minute), WorkloadPodCount: 3},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(5), pcMin)
+		assert.Equal(t, int64(5), pcMax)
+		assert.Equal(t, int64(5), pcAvg)
+	})
+
+	t.Run("two hours with different counts", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, WorkloadPodCount: 2},
+			{IntervalStart: base.Add(time.Hour), WorkloadPodCount: 6},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(2), pcMin)
+		assert.Equal(t, int64(6), pcMax)
+		assert.Equal(t, int64(4), pcAvg)
+	})
+
+	t.Run("three hours", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, WorkloadPodCount: 1},
+			{IntervalStart: base.Add(time.Hour), WorkloadPodCount: 2},
+			{IntervalStart: base.Add(2 * time.Hour), WorkloadPodCount: 3},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(1), pcMin)
+		assert.Equal(t, int64(3), pcMax)
+		assert.Equal(t, int64(2), pcAvg)
+	})
+
+	t.Run("empty rows returns zeros", func(t *testing.T) {
+		pcMin, pcMax, pcAvg := computePodCounts(nil)
+		assert.Equal(t, int64(0), pcMin)
+		assert.Equal(t, int64(0), pcMax)
+		assert.Equal(t, int64(0), pcAvg)
+	})
+}
+
+func TestComputePodCounts_FallbackDistinctPods(t *testing.T) {
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	t.Run("distinct pods in same hour", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, Pod: "pod-a"},
+			{IntervalStart: base.Add(5 * time.Minute), Pod: "pod-b"},
+			{IntervalStart: base.Add(10 * time.Minute), Pod: "pod-a"},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(2), pcMin)
+		assert.Equal(t, int64(2), pcMax)
+		assert.Equal(t, int64(2), pcAvg)
+	})
+
+	t.Run("distinct pods across two hours", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, Pod: "pod-a"},
+			{IntervalStart: base, Pod: "pod-b"},
+			{IntervalStart: base, Pod: "pod-c"},
+			{IntervalStart: base.Add(time.Hour), Pod: "pod-a"},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(1), pcMin)
+		assert.Equal(t, int64(3), pcMax)
+		assert.Equal(t, int64(2), pcAvg)
+	})
+
+	t.Run("no pods and no workload_pod_count returns zeros", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base},
+		}
+		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		assert.Equal(t, int64(0), pcMin)
+		assert.Equal(t, int64(0), pcMax)
+		assert.Equal(t, int64(0), pcAvg)
+	})
+}
+
+func TestMinMaxAvgOfMap(t *testing.T) {
+	t.Run("single entry", func(t *testing.T) {
+		m := map[hourKey]int64{{2026, 3, 1, 10}: 5}
+		mn, mx, avg := minMaxAvgOfMap(m)
+		assert.Equal(t, int64(5), mn)
+		assert.Equal(t, int64(5), mx)
+		assert.Equal(t, int64(5), avg)
+	})
+
+	t.Run("multiple entries", func(t *testing.T) {
+		m := map[hourKey]int64{
+			{2026, 3, 1, 10}: 2,
+			{2026, 3, 1, 11}: 4,
+			{2026, 3, 1, 12}: 6,
+		}
+		mn, mx, avg := minMaxAvgOfMap(m)
+		assert.Equal(t, int64(2), mn)
+		assert.Equal(t, int64(6), mx)
+		assert.Equal(t, int64(4), avg)
+	})
+
+	t.Run("empty map", func(t *testing.T) {
+		mn, mx, avg := minMaxAvgOfMap(nil)
+		assert.Equal(t, int64(0), mn)
+		assert.Equal(t, int64(0), mx)
+		assert.Equal(t, int64(0), avg)
+	})
+}

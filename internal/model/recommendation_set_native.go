@@ -103,6 +103,10 @@ type NativeRecommendationRow struct {
 	NotificationCodes SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
 	Stale             bool          `gorm:"column:stale"`
 
+	PodCountMin *int `gorm:"column:pod_count_min"`
+	PodCountMax *int `gorm:"column:pod_count_max"`
+	PodCountAvg *int `gorm:"column:pod_count_avg"`
+
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
@@ -125,6 +129,7 @@ type NativeContainerResult struct {
 	WorkloadType    string                        `json:"workload_type"`
 	SourceID        string                        `json:"source_id"`
 	LastReported    string                        `json:"last_reported"`
+	Replicas        *ReplicaInfo                  `json:"replicas,omitempty"`
 	Recommendations map[string]TermRecommendation `json:"recommendations"`
 }
 
@@ -180,7 +185,9 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.current_memory_request_kib, rs.current_memory_limit_kib,
 			rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
 			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
-			rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
+			rs.notification_codes, rs.confidence_level, rs.stale,
+			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+			rs.updated_at,
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
@@ -262,7 +269,9 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.current_memory_request_kib, rs.current_memory_limit_kib,
 	rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
 	rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
-	rs.notification_codes, rs.confidence_level, rs.stale, rs.updated_at,
+	rs.notification_codes, rs.confidence_level, rs.stale,
+	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
 // GetNativeRecommendationByID fetches a single container's recommendations
@@ -389,6 +398,15 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		rowGroup := grouped[key]
 		first := rowGroup[0]
 
+		var replicas *ReplicaInfo
+		if first.PodCountMax != nil && *first.PodCountMax > 0 {
+			replicas = &ReplicaInfo{
+				Min: derefInt(first.PodCountMin),
+				Max: derefInt(first.PodCountMax),
+				Avg: derefInt(first.PodCountAvg),
+			}
+		}
+
 		result := NativeContainerResult{
 			ID:              NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
 			ClusterAlias:    first.ClusterAlias,
@@ -399,6 +417,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			WorkloadType:    first.WorkloadType,
 			SourceID:        first.SourceID,
 			LastReported:    first.LastReported.Format(time.RFC3339),
+			Replicas:        replicas,
 			Recommendations: make(map[string]TermRecommendation),
 		}
 
@@ -447,4 +466,11 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 	}
 
 	return results
+}
+
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }

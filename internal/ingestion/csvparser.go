@@ -74,29 +74,31 @@ func ValidateMetricRow(row MetricRow) error {
 
 // csvColumnIndex maps expected CSV header names to their column indices.
 type csvColumnIndex struct {
-	intervalStart int
-	intervalEnd   int
-	namespace     int
-	workloadName  int
-	workloadType  int
-	containerName int
-	cpuRequest    int
-	cpuLimit      int
-	cpuUsage      int
-	cpuThrottle   int
-	memRequest    int
-	memLimit      int
-	memUsage      int
-	memRSS        int
-	oomCount      int
+	intervalStart    int
+	intervalEnd      int
+	namespace        int
+	workloadName     int
+	workloadType     int
+	containerName    int
+	pod              int
+	cpuRequest       int
+	cpuLimit         int
+	cpuUsage         int
+	cpuThrottle      int
+	memRequest       int
+	memLimit         int
+	memUsage         int
+	memRSS           int
+	oomCount         int
+	workloadPodCount int
 }
 
 func buildColumnIndex(header []string) (csvColumnIndex, error) {
 	idx := csvColumnIndex{
 		intervalStart: -1, intervalEnd: -1, namespace: -1, workloadName: -1,
-		workloadType: -1, containerName: -1, cpuRequest: -1, cpuLimit: -1,
+		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1,
-		memUsage: -1, memRSS: -1, oomCount: -1,
+		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -112,6 +114,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.workloadType = i
 		case "container_name":
 			idx.containerName = i
+		case "pod":
+			idx.pod = i
 		case "cpu_request_container_avg":
 			idx.cpuRequest = i
 		case "cpu_limit_container_avg":
@@ -130,6 +134,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.memRSS = i
 		case "oom_count":
 			idx.oomCount = i
+		case "workload_pod_count":
+			idx.workloadPodCount = i
 		}
 	}
 	required := []struct {
@@ -142,6 +148,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		{"workload", idx.workloadName},
 		{"workload_type", idx.workloadType},
 		{"container_name", idx.containerName},
+		{"pod", idx.pod},
 		{"cpu_request_container_avg", idx.cpuRequest},
 		{"cpu_usage_container_avg", idx.cpuUsage},
 		{"memory_request_container_avg", idx.memRequest},
@@ -220,6 +227,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	row.WorkloadName = record[idx.workloadName]
 	row.WorkloadType = record[idx.workloadType]
 	row.ContainerName = record[idx.containerName]
+	row.Pod = record[idx.pod]
 
 	row.CPURequestMC, err = CoreToMillicores(record[idx.cpuRequest])
 	if err != nil {
@@ -271,6 +279,14 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			return row, fmt.Errorf("oom_count: %w", err)
 		}
 		row.OOMCount = int64(math.Round(v))
+	}
+
+	if idx.workloadPodCount >= 0 && idx.workloadPodCount < len(record) && record[idx.workloadPodCount] != "" {
+		v, err := strconv.ParseFloat(record[idx.workloadPodCount], 64)
+		if err != nil {
+			return row, fmt.Errorf("workload_pod_count: %w", err)
+		}
+		row.WorkloadPodCount = int64(math.Round(v))
 	}
 
 	return row, nil

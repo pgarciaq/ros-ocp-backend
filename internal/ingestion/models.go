@@ -11,16 +11,18 @@ type MetricRow struct {
 	WorkloadName  string
 	WorkloadType  string
 	ContainerName string
+	Pod           string
 
-	CPURequestMC  int64
-	CPULimitMC    int64
-	CPUUsageMC    int64
-	CPUThrottleMC int64
-	MemRequestKiB int64
-	MemLimitKiB   int64
-	MemUsageKiB   int64
-	MemRSSKiB     int64
-	OOMCount      int64
+	CPURequestMC     int64
+	CPULimitMC       int64
+	CPUUsageMC       int64
+	CPUThrottleMC    int64
+	MemRequestKiB    int64
+	MemLimitKiB      int64
+	MemUsageKiB      int64
+	MemRSSKiB        int64
+	OOMCount         int64
+	WorkloadPodCount int64
 }
 
 // DigestKey uniquely identifies a container-day combination for aggregation.

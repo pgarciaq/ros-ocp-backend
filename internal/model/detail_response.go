@@ -26,10 +26,18 @@ type DetailResponse struct {
 	Recommendations DetailRecommendations `json:"recommendations"`
 }
 
+// ReplicaInfo conveys how many pod replicas back a workload's container.
+type ReplicaInfo struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
+	Avg int `json:"avg"`
+}
+
 // DetailRecommendations wraps the term-level data with monitoring_end_time,
 // current resource config, and top-level notifications.
 type DetailRecommendations struct {
 	Current             *DetailResourceConfig                      `json:"current,omitempty"`
+	Replicas            *ReplicaInfo                               `json:"replicas,omitempty"`
 	MonitoringEndTime   string                                     `json:"monitoring_end_time"`
 	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	RecommendationTerms map[string]DetailTerm                      `json:"recommendation_terms"`
@@ -91,6 +99,10 @@ func BuildDetailResponse(
 	plots map[string]*NativePlot,
 	monitoringEndTime time.Time,
 ) *DetailResponse {
+	var replicas *ReplicaInfo
+	if native.Replicas != nil {
+		replicas = native.Replicas
+	}
 	terms := make(map[string]DetailTerm)
 	allNotifications := map[string]notifications.NotificationEntry{}
 	var current *DetailResourceConfig
@@ -140,6 +152,7 @@ func BuildDetailResponse(
 
 	recs := DetailRecommendations{
 		Current:             current,
+		Replicas:            replicas,
 		MonitoringEndTime:   metStr,
 		RecommendationTerms: terms,
 	}
