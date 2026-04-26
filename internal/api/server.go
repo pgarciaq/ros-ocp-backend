@@ -53,7 +53,7 @@ func StartAPIServer() {
 	}()
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowMethods: []string{http.MethodGet},
+		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},
 	}))
 
 	app.GET("/status", GetAppStatus)
@@ -83,6 +83,13 @@ func StartAPIServer() {
 	} else {
 		v1.GET("/recommendations/openshift/namespace", GetNamespaceRecommendationSetList)
 		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
+	}
+
+	// Custom recommendation term settings (native engine only).
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/settings/terms", GetTermSettings)
+		v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
+		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
 	}
 
 	s := http.Server{
