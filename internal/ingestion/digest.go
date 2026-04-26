@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"math"
 	"slices"
 	"time"
 )
@@ -97,6 +98,8 @@ func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResu
 		oomTotal += r.OOMCount
 	}
 
+	podCountMin, podCountMax, podCountAvg := computePodCounts(rows)
+
 	return ContainerDigestResult{
 		Key:              key,
 		CPURequestP50MC:  cpuReqD.P50,
@@ -129,6 +132,9 @@ func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResu
 		CPUUsageMeanMC:   cpuUseD.Mean,
 		MemUsageMeanKiB:  memUseD.Mean,
 		SampleCount:      cpuUseD.Count,
+		PodCountMin:      podCountMin,
+		PodCountMax:      podCountMax,
+		PodCountAvg:      podCountAvg,
 	}
 }
 
@@ -166,6 +172,93 @@ type ContainerDigestResult struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
+	PodCountMin      int64
+	PodCountMax      int64
+	PodCountAvg      int64
+}
+
+// computePodCounts derives per-day pod count min/max/avg from hourly buckets.
+//
+// Primary strategy: if any row has WorkloadPodCount > 0 (new operator), group
+// rows by IntervalStart hour and take the max WorkloadPodCount per bucket
+// (all pods in a workload report the same count; max is defensive).
+//
+// Fallback strategy: if all WorkloadPodCount values are 0 (old operator),
+// count distinct Pod names per hourly bucket.
+//
+// Then compute min/max/avg of the hourly counts across the day.
+type hourKey struct {
+	year  int
+	month time.Month
+	day   int
+	hour  int
+}
+
+func truncateToHour(t time.Time) hourKey {
+	return hourKey{t.Year(), t.Month(), t.Day(), t.Hour()}
+}
+
+func computePodCounts(rows []MetricRow) (pcMin, pcMax, pcAvg int64) {
+	if len(rows) == 0 {
+		return 0, 0, 0
+	}
+
+	hasWPC := false
+	for _, r := range rows {
+		if r.WorkloadPodCount > 0 {
+			hasWPC = true
+			break
+		}
+	}
+
+	if hasWPC {
+		maxPerHour := make(map[hourKey]int64)
+		for _, r := range rows {
+			h := truncateToHour(r.IntervalStart)
+			if r.WorkloadPodCount > maxPerHour[h] {
+				maxPerHour[h] = r.WorkloadPodCount
+			}
+		}
+		return minMaxAvgOfMap(maxPerHour)
+	}
+
+	podsPerHour := make(map[hourKey]map[string]struct{})
+	for _, r := range rows {
+		if r.Pod == "" {
+			continue
+		}
+		h := truncateToHour(r.IntervalStart)
+		if podsPerHour[h] == nil {
+			podsPerHour[h] = make(map[string]struct{})
+		}
+		podsPerHour[h][r.Pod] = struct{}{}
+	}
+	countPerHour := make(map[hourKey]int64, len(podsPerHour))
+	for h, pods := range podsPerHour {
+		countPerHour[h] = int64(len(pods))
+	}
+	return minMaxAvgOfMap(countPerHour)
+}
+
+func minMaxAvgOfMap(m map[hourKey]int64) (int64, int64, int64) {
+	if len(m) == 0 {
+		return 0, 0, 0
+	}
+	var minV, maxV int64
+	var sum float64
+	first := true
+	for _, v := range m {
+		if first || v < minV {
+			minV = v
+		}
+		if first || v > maxV {
+			maxV = v
+		}
+		sum += float64(v)
+		first = false
+	}
+	avg := int64(math.Round(sum / float64(len(m))))
+	return minV, maxV, avg
 }
 
 func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {

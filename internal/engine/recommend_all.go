@@ -58,6 +58,7 @@ func RecommendAllWorkloads(
 			COALESCE(memory_rss_p95_kib, 0), COALESCE(memory_rss_max_kib, 0),
 			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
 			COALESCE(sample_count, 0),
+			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
 			namespace, workload, workload_type, container_name
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
@@ -87,6 +88,7 @@ func RecommendAllWorkloads(
 			&d.MemUsageMaxKiB,
 			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
 			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
+			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
 			&ns, &wl, &wlType, &cn,
 		)
 		if err != nil {
@@ -125,6 +127,7 @@ func RecommendAllWorkloads(
 			dataDays := len(windowRows)
 			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
 			oomTotal := sumOOMCounts(windowRows)
+			pcMin, pcMax, pcAvg := aggregatePodCounts(windowRows)
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
@@ -166,6 +169,9 @@ func RecommendAllWorkloads(
 					OOMCountSum:          oomTotal,
 					DataDays:             dataDays,
 					Stale:                stale,
+					PodCountMin:          pcMin,
+					PodCountMax:          pcMax,
+					PodCountAvg:          pcAvg,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
@@ -200,8 +206,10 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_cpu_limit_pct,
 				variation_memory_request_pct, variation_memory_limit_pct,
-				notification_codes, confidence_level, stale, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,now())
+				notification_codes, confidence_level, stale,
+				pod_count_min, pod_count_max, pod_count_avg,
+				updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -219,6 +227,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
+				pod_count_min = EXCLUDED.pod_count_min,
+				pod_count_max = EXCLUDED.pod_count_max,
+				pod_count_avg = EXCLUDED.pod_count_avg,
 				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
@@ -230,6 +241,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			r.VariationCPURequestPct, r.VariationCPULimitPct,
 			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+			r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 		)
 	}
 
@@ -296,6 +308,45 @@ func memConfigForProfile(profile string, now time.Time, decayHL float64) MemoryC
 		return cfg
 	}
 	return DefaultMemoryConfig(now, decayHL)
+}
+
+// aggregatePodCounts computes min-of-mins, max-of-maxes, and weighted average
+// of per-day pod count values across the term window's digest rows.
+func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {
+	if len(rows) == 0 {
+		return 0, 0, 0
+	}
+	hasAny := false
+	for _, r := range rows {
+		if r.PodCountMin > 0 || r.PodCountMax > 0 || r.PodCountAvg > 0 {
+			hasAny = true
+			break
+		}
+	}
+	if !hasAny {
+		return 0, 0, 0
+	}
+	first := true
+	var sumAvg float64
+	var count int
+	for _, r := range rows {
+		if r.PodCountMax == 0 && r.PodCountMin == 0 && r.PodCountAvg == 0 {
+			continue
+		}
+		if first || r.PodCountMin < pcMin {
+			pcMin = r.PodCountMin
+		}
+		if first || r.PodCountMax > pcMax {
+			pcMax = r.PodCountMax
+		}
+		sumAvg += float64(r.PodCountAvg)
+		count++
+		first = false
+	}
+	if count > 0 {
+		pcAvg = int64(math.Round(sumAvg / float64(count)))
+	}
+	return
 }
 
 func sumOOMCounts(rows []DigestRow) int64 {

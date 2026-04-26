@@ -37,6 +37,9 @@ type DigestRow struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
+	PodCountMin      int64
+	PodCountMax      int64
+	PodCountAvg      int64
 }
 
 // CPURec holds both cost and performance CPU recommendations for a container.
@@ -92,6 +95,9 @@ type ContainerRec struct {
 	OOMCountSum            int64
 	DataDays               int
 	Stale                  bool
+	PodCountMin            int64
+	PodCountMax            int64
+	PodCountAvg            int64
 }
 
 // TermConfig defines a recommendation term's parameters.

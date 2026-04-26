@@ -158,6 +158,119 @@ func TestSmallintArray_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestAssembleNativeResults_WithPodCounts(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	pcMin := 2
+	pcMax := 5
+	pcAvg := 3
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:     "cluster-1",
+			Namespace:       "ns",
+			Workload:        "deploy",
+			WorkloadType:    "deployment",
+			ContainerName:   "main",
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: &cpuReq,
+			PodCountMin:     &pcMin,
+			PodCountMax:     &pcMax,
+			PodCountAvg:     &pcAvg,
+			UpdatedAt:       now,
+			LastReported:    now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas == nil {
+		t.Fatal("expected replicas to be populated")
+	}
+	if results[0].Replicas.Min != 2 {
+		t.Errorf("expected min=2, got %d", results[0].Replicas.Min)
+	}
+	if results[0].Replicas.Max != 5 {
+		t.Errorf("expected max=5, got %d", results[0].Replicas.Max)
+	}
+	if results[0].Replicas.Avg != 3 {
+		t.Errorf("expected avg=3, got %d", results[0].Replicas.Avg)
+	}
+}
+
+func TestAssembleNativeResults_NilPodCounts(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:     "cluster-1",
+			Namespace:       "ns",
+			Workload:        "deploy",
+			WorkloadType:    "deployment",
+			ContainerName:   "main",
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: &cpuReq,
+			UpdatedAt:       now,
+			LastReported:    now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas != nil {
+		t.Error("expected nil replicas when pod count columns are nil")
+	}
+}
+
+func TestAssembleNativeResults_ZeroPodCountMax(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	zero := 0
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:     "cluster-1",
+			Namespace:       "ns",
+			Workload:        "deploy",
+			WorkloadType:    "deployment",
+			ContainerName:   "main",
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: &cpuReq,
+			PodCountMin:     &zero,
+			PodCountMax:     &zero,
+			PodCountAvg:     &zero,
+			UpdatedAt:       now,
+			LastReported:    now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas != nil {
+		t.Error("expected nil replicas when pod_count_max is 0")
+	}
+}
+
+func TestDerefInt(t *testing.T) {
+	v := 42
+	if derefInt(&v) != 42 {
+		t.Error("derefInt(&42) should return 42")
+	}
+	if derefInt(nil) != 0 {
+		t.Error("derefInt(nil) should return 0")
+	}
+}
+
 func TestAssembleNativeNamespaceResults_Empty(t *testing.T) {
 	results := assembleNativeNamespaceResults(nil)
 	if len(results) != 0 {

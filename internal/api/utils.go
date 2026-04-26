@@ -1312,8 +1312,14 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 				{"cost", term.Cost},
 				{"performance", term.Performance},
 			} {
-				if eng.rec == nil {
-					continue
+			if eng.rec == nil {
+				continue
+			}
+				pcMin, pcMax, pcAvg := "", "", ""
+				if r.Replicas != nil {
+					pcMin = strconv.Itoa(r.Replicas.Min)
+					pcMax = strconv.Itoa(r.Replicas.Max)
+					pcAvg = strconv.Itoa(r.Replicas.Avg)
 				}
 				row := []string{
 					r.ClusterUUID,
@@ -1324,6 +1330,9 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 					r.WorkloadType,
 					r.LastReported,
 					r.SourceID,
+					pcMin,
+					pcMax,
+					pcAvg,
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),

@@ -260,6 +260,80 @@ func TestBuildDetailResponse_NoCurrent(t *testing.T) {
 	assert.Nil(t, detail.Recommendations.Current, "current should be nil when no current_* fields")
 }
 
+func TestBuildDetailResponse_WithReplicas(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Replicas:    &ReplicaInfo{Min: 2, Max: 5, Avg: 3},
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{CPURequestMillicores: &cpuReq},
+			},
+		},
+	}
+
+	detail := BuildDetailResponse(native, nil, time.Time{})
+
+	require.NotNil(t, detail.Recommendations.Replicas)
+	assert.Equal(t, 2, detail.Recommendations.Replicas.Min)
+	assert.Equal(t, 5, detail.Recommendations.Replicas.Max)
+	assert.Equal(t, 3, detail.Recommendations.Replicas.Avg)
+}
+
+func TestBuildDetailResponse_NilReplicas(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{CPURequestMillicores: &cpuReq},
+			},
+		},
+	}
+
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	assert.Nil(t, detail.Recommendations.Replicas)
+}
+
+func TestBuildDetailResponse_ReplicasInJSON(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Replicas:    &ReplicaInfo{Min: 1, Max: 4, Avg: 2},
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{CPURequestMillicores: &cpuReq},
+			},
+		},
+	}
+
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+
+	recs := raw["recommendations"].(map[string]interface{})
+	replicas, ok := recs["replicas"].(map[string]interface{})
+	require.True(t, ok, "should have 'replicas' in recommendations")
+	assert.Equal(t, float64(1), replicas["min"])
+	assert.Equal(t, float64(4), replicas["max"])
+	assert.Equal(t, float64(2), replicas["avg"])
+}
+
 func TestBuildDetailResponse_NoNotifications(t *testing.T) {
 	cpuReq := int64(100)
 	native := &NativeContainerResult{
