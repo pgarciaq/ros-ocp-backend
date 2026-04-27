@@ -81,6 +81,32 @@ func TestRunRetentionSweep_KeepsRecentNamespaceSamplePartitions(t *testing.T) {
 	assert.True(t, found, "current month partition should be kept")
 }
 
+func TestRunRetentionSweep_DropsOldHistoryPartitions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Create a partition 4 months in the past (within 6-month general retention
+	// but outside 90-day history retention)
+	old := time.Now().UTC().AddDate(0, -4, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("recommendation_history_%s", monthStart.Format("200601"))
+	sql := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF recommendation_history FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, sql)
+	require.NoError(t, err)
+
+	RunRetentionSweep(ctx, pool, 6)
+
+	partitions, err := listPartitions(ctx, pool, "recommendation_history")
+	require.NoError(t, err)
+	for _, p := range partitions {
+		assert.NotEqual(t, partName, p, "4-month-old history partition should have been dropped (90-day retention)")
+	}
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string

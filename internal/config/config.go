@@ -86,6 +86,11 @@ type Config struct {
 	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
 	MaxLookbackDays int     `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
+	// History/quality data retention (days). Defaults to 90.
+	// Separate from RetentionMonths because history tables grow faster
+	// (one row per container per term per engine per run).
+	HistoryRetentionDays int `mapstructure:"ROS_HISTORY_RETENTION_DAYS"`
+
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
@@ -235,6 +240,7 @@ func initConfig() {
 	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("ROS_RETENTION_MONTHS", 6)
+	viper.SetDefault("ROS_HISTORY_RETENTION_DAYS", 90)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
