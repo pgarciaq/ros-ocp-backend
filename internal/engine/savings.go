@@ -52,13 +52,14 @@ func computeSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType str
 
 	modelSavings := (cpuDeltaCores*modelCPURate + memDeltaGiB*modelMemRate) * hoursPerMonth * podCountAvg
 
-	// Infrastructure savings: apportion by distribution type
+	// Infrastructure + distributed overhead savings: apportion by distribution type
+	totalInfra := ns.InfraCost + ns.DistributedCost
 	var infraSavings float64
 	if distType == "memory" {
-		infraRate := safeDiv(ns.InfraCost, ns.MemRequestHours)
+		infraRate := safeDiv(totalInfra, ns.MemRequestHours)
 		infraSavings = memDeltaGiB * infraRate * hoursPerMonth * podCountAvg
 	} else {
-		infraRate := safeDiv(ns.InfraCost, ns.CPURequestHours)
+		infraRate := safeDiv(totalInfra, ns.CPURequestHours)
 		infraSavings = cpuDeltaCores * infraRate * hoursPerMonth * podCountAvg
 	}
 

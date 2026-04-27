@@ -195,6 +195,103 @@ func TestApplySavingsEstimates_NegativeSavings_Underprovisioned(t *testing.T) {
 	assert.True(t, recs[0].EstimatedSavingsUSD < 0)
 }
 
+func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "cpu",
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: 730.0,  // $1/core-hour cost model
+				CostModelMemCost: 365.0,  // $0.5/GiB-hour cost model
+				InfraCost:        365.0,  // $0.5/core-hour infra (cpu distribution)
+				DistributedCost:  365.0,  // $0.5/core-hour distributed platform overhead
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:            "ns1",
+			CurrentCPURequestMC:  1000, // 1 core
+			RecCPURequestMC:      500,  // 0.5 cores
+			CurrentMemRequestKiB: 2 * 1024 * 1024, // 2 GiB
+			RecMemRequestKiB:     1 * 1024 * 1024,  // 1 GiB
+			PodCountAvg:          2,
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	// Cost model savings:
+	//   CPU: 0.5 cores * $1/core-hr * 730 hrs * 2 pods = $730
+	//   MEM: 1 GiB * $0.5/GiB-hr * 730 hrs * 2 pods = $730
+	// Infra+distributed savings (cpu distribution):
+	//   (365+365)/730 = $1/core-hr
+	//   0.5 cores * $1/core-hr * 730 hrs * 2 pods = $730
+	// Total = 730 + 730 + 730 = $2190
+	assert.InDelta(t, 2190.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+}
+
+func TestApplySavingsEstimates_DistributedCostOnly(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "cpu",
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: 0,
+				CostModelMemCost: 0,
+				InfraCost:        0,
+				DistributedCost:  730.0, // $1/core-hour from node/cluster monthly costs
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:           "ns1",
+			CurrentCPURequestMC: 500,
+			RecCPURequestMC:     200,
+			PodCountAvg:         1,
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	// 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
+	assert.InDelta(t, 219.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+}
+
+func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "memory",
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: 0,
+				CostModelMemCost: 0,
+				InfraCost:        0,
+				DistributedCost:  730.0,
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:            "ns1",
+			CurrentCPURequestMC:  500,
+			RecCPURequestMC:      500,
+			CurrentMemRequestKiB: 2 * 1024 * 1024, // 2 GiB
+			RecMemRequestKiB:     1 * 1024 * 1024,  // 1 GiB
+			PodCountAvg:          1,
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	// memory distribution: 1 GiB * $1/GiB-hr * 730 hrs * 1 pod = $730
+	assert.InDelta(t, 730.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+}
+
 func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		DistributionType: "cpu",
