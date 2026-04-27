@@ -198,8 +198,8 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		Where("ra.org_id = ?", orgID).
 		Where("rs.stale = false")
 
-	query = applyNativeRBAC(query, userPerms)
-	query = applyQueryParams(query, queryParams)
+	query = ApplyNativeRBAC(query, userPerms)
+	query = ApplyQueryParams(query, queryParams)
 
 	// Total count of distinct containers (for pagination metadata).
 	var totalContainers int64
@@ -209,8 +209,8 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
 		Where("ra.org_id = ?", orgID).
 		Where("rs.stale = false")
-	countQuery = applyNativeRBAC(countQuery, userPerms)
-	countQuery = applyQueryParams(countQuery, queryParams)
+	countQuery = ApplyNativeRBAC(countQuery, userPerms)
+	countQuery = ApplyQueryParams(countQuery, queryParams)
 	t0 := time.Now()
 	if err := countQuery.Scan(&totalContainers).Error; err != nil {
 		return nil, 0, err
@@ -230,14 +230,21 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	return results, int(totalContainers), nil
 }
 
-// applyNativeRBAC adds RBAC-based WHERE clauses using the native schema's column names.
-func applyNativeRBAC(query *gorm.DB, userPerms map[string][]string) *gorm.DB {
+// ApplyNativeRBAC adds RBAC-based WHERE clauses using the native schema's column names.
+// nsColumn is the fully-qualified namespace column (e.g. "rs.namespace", "h.namespace").
+// Exported for reuse in history/quality query functions.
+func ApplyNativeRBAC(query *gorm.DB, userPerms map[string][]string, nsColumn ...string) *gorm.DB {
 	cfg := config.GetConfig()
 	if !cfg.RBACEnabled {
 		return query
 	}
 	if _, ok := userPerms["*"]; ok {
 		return query
+	}
+
+	col := "rs.namespace"
+	if len(nsColumn) > 0 && nsColumn[0] != "" {
+		col = nsColumn[0]
 	}
 
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]
@@ -249,15 +256,15 @@ func applyNativeRBAC(query *gorm.DB, userPerms map[string][]string) *gorm.DB {
 		query = query.Where("c.cluster_uuid IN (?)", clusterPerms)
 	}
 	if hasProject && !projectAll {
-		query = query.Where("rs.namespace IN (?)", projectPerms)
+		query = query.Where(col+" IN (?)", projectPerms)
 	}
 	return query
 }
 
-// applyQueryParams adds dynamic WHERE clauses from the parsed query parameters.
+// ApplyQueryParams adds dynamic WHERE clauses from the parsed query parameters.
 // For []string values (IN clauses), the slice is passed directly to GORM
 // so it expands into IN ($1, $2, ...) rather than a single scalar.
-func applyQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
+func ApplyQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
 	for key, values := range queryParams {
 		query = query.Where(key, values)
 	}
@@ -294,7 +301,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 		Where("ra.org_id = ?", orgID).
 		Where("rs.container_id = ?", id).
 		Where("rs.stale = false")
-	query = applyNativeRBAC(query, userPerms)
+	query = ApplyNativeRBAC(query, userPerms)
 
 	var rows []NativeRecommendationRow
 	if err := query.Order("rs.term, rs.engine").Find(&rows).Error; err != nil {
@@ -334,7 +341,7 @@ func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerm
 		Where("ra.org_id = ?", orgID).
 		Where("rs.stale = false").
 		Limit(500)
-	keysQuery = applyNativeRBAC(keysQuery, userPerms)
+	keysQuery = ApplyNativeRBAC(keysQuery, userPerms)
 
 	var keys []containerKey
 	if err := keysQuery.Find(&keys).Error; err != nil {
