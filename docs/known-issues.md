@@ -4,7 +4,7 @@ This document tracks features that are implemented in the ros-ocp-backend
 native engine but lack corresponding UI support in koku-ui, as well as
 features that are not yet implemented in the engine.
 
-Last updated: 2026-04-27
+Last updated: 2026-04-28
 
 ---
 
@@ -57,8 +57,11 @@ users to understand how recent vs older data is weighted.
 (partitioned tables). Quality metrics (`recommendation_quality`) track
 stability, adoption, and OOM events post-recommendation.
 
-**API status:** Not exposed. There is no API endpoint to query historical
-recommendations or quality trends over time.
+**API status:** Fully implemented.
+`GET /api/cost-management/v1/recommendations/openshift/history` returns
+paginated recommendation snapshots with filtering by date range, cluster,
+project, workload, container, term, and engine. Supports JSON and CSV
+export.
 
 **UI status:** Not implemented. No timeline or trend visualization of how
 recommendations have changed.
@@ -69,8 +72,10 @@ recommendations have changed.
 `stability_pct`, `adoption_detected`, `oom_events_after_rec`, and
 `recommendation_age_hours`.
 
-**API status:** Not exposed as a dedicated endpoint. Quality data is
-computed and stored but not served to clients.
+**API status:** Fully implemented.
+`GET /api/cost-management/v1/recommendations/openshift/quality` returns
+paginated quality metrics with filtering by date range, cluster, project,
+workload, and container. Supports JSON and CSV export.
 
 **UI status:** Not implemented.
 
@@ -197,5 +202,5 @@ into a storage-specific digest table.
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |
-| `/recommendations/openshift/history` | — | Not implemented |
-| `/recommendations/openshift/quality` | — | Not implemented |
+| `/recommendations/openshift/history` | GET | Implemented |
+| `/recommendations/openshift/quality` | GET | Implemented |
