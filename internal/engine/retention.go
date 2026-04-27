@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,12 +18,18 @@ var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 	Help: "Number of partitions dropped by retention sweep",
 })
 
+// Tables retained by the general ROS_RETENTION_MONTHS setting.
 var retainedTables = []string{
-	"recommendation_history",
-	"recommendation_quality",
 	"container_usage_samples",
 	"daily_namespace_digests",
 	"namespace_usage_samples",
+}
+
+// Tables retained by the separate ROS_HISTORY_RETENTION_DAYS setting
+// (history/quality grow faster: one row per container×term×engine per run).
+var historyRetainedTables = []string{
+	"recommendation_history",
+	"recommendation_quality",
 }
 
 // Non-partitioned tables that need date-based DELETE retention.
@@ -34,7 +41,8 @@ var dateRetainedTables = []struct {
 }
 
 // RunRetentionSweep drops monthly partitions older than retentionMonths for
-// each retained table. Partitions are identified by naming convention
+// each retained table. History/quality tables use historyRetentionDays instead
+// (default 90 days). Partitions are identified by naming convention
 // (<table>_YYYYMM) and compared against the retention cutoff. Also purges
 // old rows from non-partitioned tables that use date-based retention.
 func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths int) {
@@ -45,7 +53,31 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	cutoff := time.Now().UTC().AddDate(0, -retentionMonths, 0)
 	cutoffYM := cutoff.Format("200601")
 
-	for _, table := range retainedTables {
+	sweepPartitionedTables(ctx, pool, retainedTables, cutoffYM)
+
+	cfg := config.GetConfig()
+	historyDays := cfg.HistoryRetentionDays
+	if historyDays <= 0 {
+		historyDays = 90
+	}
+	historyCutoff := time.Now().UTC().AddDate(0, 0, -historyDays)
+	historyCutoffYM := historyCutoff.Format("200601")
+	sweepPartitionedTables(ctx, pool, historyRetainedTables, historyCutoffYM)
+
+	for _, dt := range dateRetainedTables {
+		sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
+		tag, err := pool.Exec(ctx, sql, cutoff)
+		if err != nil {
+			log.Warnf("retention: purging %s: %v", dt.Table, err)
+		} else if tag.RowsAffected() > 0 {
+			retentionDropped.Add(float64(tag.RowsAffected()))
+			log.Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
+		}
+	}
+}
+
+func sweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []string, cutoffYM string) {
+	for _, table := range tables {
 		partitions, err := listPartitions(ctx, pool, table)
 		if err != nil {
 			log.Warnf("retention: listing partitions for %s: %v", table, err)
@@ -63,17 +95,6 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 				retentionDropped.Inc()
 				log.Infof("retention: dropped partition %s (older than %s)", part, cutoffYM)
 			}
-		}
-	}
-
-	for _, dt := range dateRetainedTables {
-		sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
-		tag, err := pool.Exec(ctx, sql, cutoff)
-		if err != nil {
-			log.Warnf("retention: purging %s: %v", dt.Table, err)
-		} else if tag.RowsAffected() > 0 {
-			retentionDropped.Add(float64(tag.RowsAffected()))
-			log.Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
 		}
 	}
 }
