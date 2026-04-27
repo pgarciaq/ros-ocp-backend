@@ -87,6 +87,9 @@ type Config struct {
 	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
 	MaxLookbackDays int     `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
+	// Koku masu API URL for fetching cost data (savings estimates)
+	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -259,6 +262,21 @@ func initConfig() {
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
+	viper.SetDefault("KOKU_MASU_URL", "")
+
+	// Unleash config
+	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")
+	viper.SetDefault("UnleashHostname", "0.0.0.0")
+	viper.SetDefault("UnleashScheme", "http")
+	viper.SetDefault("UnleashPort", 3063)
+	viper.SetDefault(
+		"UnleashFullURL",
+		fmt.Sprintf(
+			"%s://%s:%d/api/",
+			viper.GetString("UnleashScheme"),
+			viper.GetString("UnleashHostname"),
+			viper.GetInt("UnleashPort")),
+	)
 
 	// Hack till viper issue get fix - https://github.com/spf13/viper/issues/761
 	envKeysMap := &map[string]interface{}{}

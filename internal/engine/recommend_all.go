@@ -208,8 +208,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
 				pod_count_min, pod_count_max, pod_count_avg,
+				estimated_monthly_savings_usd,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -230,6 +231,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				pod_count_min = EXCLUDED.pod_count_min,
 				pod_count_max = EXCLUDED.pod_count_max,
 				pod_count_avg = EXCLUDED.pod_count_avg,
+				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
@@ -242,6 +244,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 			r.PodCountMin, r.PodCountMax, r.PodCountAvg,
+			r.EstimatedSavingsUSD,
 		)
 	}
 

@@ -26,6 +26,7 @@ const (
 	NotifHPAActive          int16 = 22
 	NotifInstanceNotInCat   int16 = 23
 	NotifInstanceDeprecated int16 = 24
+	NotifNoCostData         int16 = 25
 )
 
 const (

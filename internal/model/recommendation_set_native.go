@@ -107,6 +107,8 @@ type NativeRecommendationRow struct {
 	PodCountMax *int `gorm:"column:pod_count_max"`
 	PodCountAvg *int `gorm:"column:pod_count_avg"`
 
+	EstimatedSavingsUSD *float32 `gorm:"column:estimated_monthly_savings_usd"`
+
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
@@ -129,8 +131,9 @@ type NativeContainerResult struct {
 	WorkloadType    string                        `json:"workload_type"`
 	SourceID        string                        `json:"source_id"`
 	LastReported    string                        `json:"last_reported"`
-	Replicas        *ReplicaInfo                  `json:"replicas,omitempty"`
-	Recommendations map[string]TermRecommendation `json:"recommendations"`
+	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
+	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 }
 
 // NativeContainerID generates a deterministic UUID v5 from the composite key.
@@ -187,6 +190,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 			rs.notification_codes, rs.confidence_level, rs.stale,
 			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+			rs.estimated_monthly_savings_usd,
 			rs.updated_at,
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
@@ -271,6 +275,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+	rs.estimated_monthly_savings_usd,
 	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
@@ -408,17 +413,18 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		}
 
 		result := NativeContainerResult{
-			ID:              NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
-			ClusterAlias:    first.ClusterAlias,
-			ClusterUUID:     first.ClusterUUID,
-			Container:       first.ContainerName,
-			Project:         first.Namespace,
-			Workload:        first.Workload,
-			WorkloadType:    first.WorkloadType,
-			SourceID:        first.SourceID,
-			LastReported:    first.LastReported.Format(time.RFC3339),
-			Replicas:        replicas,
-			Recommendations: make(map[string]TermRecommendation),
+			ID:                      NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
+			ClusterAlias:            first.ClusterAlias,
+			ClusterUUID:             first.ClusterUUID,
+			Container:               first.ContainerName,
+			Project:                 first.Namespace,
+			Workload:                first.Workload,
+			WorkloadType:            first.WorkloadType,
+			SourceID:                first.SourceID,
+			LastReported:            first.LastReported.Format(time.RFC3339),
+			Replicas:                replicas,
+			EstimatedMonthlySavings: first.EstimatedSavingsUSD,
+			Recommendations:         make(map[string]TermRecommendation),
 		}
 
 		for _, r := range rowGroup {
