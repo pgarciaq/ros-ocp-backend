@@ -76,6 +76,12 @@ func StartAPIServer() {
 		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
 	}
 
+	// Historical tracking and quality metrics (native engine only).
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
+		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
+	}
+
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server
 		Handler:           app,

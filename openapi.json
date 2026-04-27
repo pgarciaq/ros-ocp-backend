@@ -988,6 +988,230 @@
           }
         }
       }
+    },
+    "/recommendations/openshift/history": {
+      "get": {
+        "tags": ["Historical Tracking"],
+        "summary": "Get recommendation history",
+        "description": "Returns paginated recommendation snapshots over time. Each row represents a recommendation that was computed for a specific container, term, and engine at a specific point in time. Only available when the native engine is enabled.",
+        "operationId": "getRecommendationHistory",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start of date range filter on recorded_at (inclusive). Defaults to first day of current month.",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-04-01"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End of date range filter on recorded_at (inclusive). Defaults to today.",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-04-28"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Filter by cluster alias (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Filter by namespace (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "workload",
+            "in": "query",
+            "description": "Filter by workload name (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "container",
+            "in": "query",
+            "description": "Filter by container name (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Filter by recommendation term",
+            "required": false,
+            "schema": { "type": "string", "enum": ["short", "medium", "long"] }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Filter by recommendation engine",
+            "required": false,
+            "schema": { "type": "string", "enum": ["cost", "performance"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 10 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to sort by",
+            "required": false,
+            "schema": { "type": "string", "enum": ["recorded_at", "cluster", "project", "workload", "container", "term", "engine"], "default": "recorded_at" }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction",
+            "required": false,
+            "schema": { "type": "string", "enum": ["ASC", "DESC"], "default": "DESC" }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Response format",
+            "required": false,
+            "schema": { "type": "string", "enum": ["json", "csv"], "default": "json" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HistoryList" }
+              },
+              "text/csv": {
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": { "description": "Bad request" },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable due to a database error" }
+        }
+      }
+    },
+    "/recommendations/openshift/quality": {
+      "get": {
+        "tags": ["Quality Metrics"],
+        "summary": "Get recommendation quality metrics",
+        "description": "Returns paginated quality metrics for recommendations, including stability percentage, adoption detection, OOM events after recommendation, and recommendation age. Only available when the native engine is enabled.",
+        "operationId": "getRecommendationQuality",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start of date range filter on measured_at (inclusive). Defaults to first day of current month.",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-04-01"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End of date range filter on measured_at (inclusive). Defaults to today.",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-04-28"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Filter by cluster alias (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Filter by namespace (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "workload",
+            "in": "query",
+            "description": "Filter by workload name (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "container",
+            "in": "query",
+            "description": "Filter by container name (exact match, repeatable)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 10 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to sort by",
+            "required": false,
+            "schema": { "type": "string", "enum": ["measured_at", "cluster", "project", "workload", "container", "stability", "adoption", "oom_events", "recommendation_age"], "default": "measured_at" }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction",
+            "required": false,
+            "schema": { "type": "string", "enum": ["ASC", "DESC"], "default": "DESC" }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Response format",
+            "required": false,
+            "schema": { "type": "string", "enum": ["json", "csv"], "default": "json" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QualityList" }
+              },
+              "text/csv": {
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": { "description": "Bad request" },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable due to a database error" }
+        }
+      }
     }
   },
   "components": {
@@ -2622,6 +2846,93 @@
             "type": "number",
             "minimum": 0
           }
+        }
+      },
+      "HistoryList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HistoryRow" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" }
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": { "type": "string" },
+              "previous": { "type": "string" },
+              "next": { "type": "string" },
+              "last": { "type": "string" }
+            }
+          }
+        }
+      },
+      "HistoryRow": {
+        "type": "object",
+        "properties": {
+          "recorded_at": { "type": "string", "format": "date-time" },
+          "cluster_uuid": { "type": "string", "format": "uuid" },
+          "cluster_alias": { "type": "string" },
+          "namespace": { "type": "string" },
+          "workload": { "type": "string" },
+          "container_name": { "type": "string" },
+          "term": { "type": "string", "enum": ["short", "medium", "long"] },
+          "engine": { "type": "string", "enum": ["cost", "performance"] },
+          "rec_cpu_request_millicores": { "type": "integer", "nullable": true },
+          "rec_cpu_limit_millicores": { "type": "integer", "nullable": true },
+          "rec_memory_request_kib": { "type": "integer", "nullable": true },
+          "rec_memory_limit_kib": { "type": "integer", "nullable": true },
+          "notification_codes": { "type": "array", "items": { "type": "integer" }, "nullable": true },
+          "confidence_level": { "type": "number", "format": "float", "nullable": true },
+          "estimated_monthly_savings_usd": { "type": "number", "format": "float", "nullable": true }
+        }
+      },
+      "QualityList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/QualityRow" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" }
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": { "type": "string" },
+              "previous": { "type": "string" },
+              "next": { "type": "string" },
+              "last": { "type": "string" }
+            }
+          }
+        }
+      },
+      "QualityRow": {
+        "type": "object",
+        "properties": {
+          "measured_at": { "type": "string", "format": "date-time" },
+          "cluster_uuid": { "type": "string", "format": "uuid" },
+          "cluster_alias": { "type": "string" },
+          "namespace": { "type": "string" },
+          "workload": { "type": "string" },
+          "container_name": { "type": "string" },
+          "stability_pct": { "type": "number", "format": "float", "nullable": true },
+          "adoption_detected": { "type": "boolean" },
+          "oom_events_after_rec": { "type": "integer", "nullable": true },
+          "recommendation_age_hours": { "type": "integer", "nullable": true }
         }
       }
     }
