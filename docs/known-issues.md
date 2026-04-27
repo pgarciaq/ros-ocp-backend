@@ -4,7 +4,7 @@ This document tracks features that are implemented in the ros-ocp-backend
 native engine but lack corresponding UI support in koku-ui, as well as
 features that are not yet implemented in the engine.
 
-Last updated: 2026-04-26
+Last updated: 2026-04-27
 
 ---
 
@@ -110,18 +110,45 @@ No workload-specific tuning (heap sizing, GC overhead detection). Would
 require JVM-aware metrics from the operator and a specialized recommendation
 model.
 
-### Replica Count / HPA Scaling
+### HPA Scaling Suggestions
 
 No horizontal scaling suggestions. `NotifHPASaturated` and `NotifHPAActive`
 notification codes exist but are never set by the native engine. Would
-require HPA status data from the cluster.
+require HPA status data from the cluster. (Note: replica count *display*
+is implemented -- see "Implemented" section -- but the engine does not
+suggest scaling replica count up or down.)
+
+### Replica Count Display
+
+**Engine status:** Fully implemented. `pod_count_min`, `pod_count_max`,
+`pod_count_avg` are computed from operator-reported `workload_pod_count`
+(primary) or distinct pod name counting (fallback). Persisted in
+`daily_container_digests` and `recommendation_sets`.
+
+**API status:** Fully implemented. `GET /recommendations/openshift/:id`
+returns `recommendations.replicas` with `min`, `max`, `avg` fields.
+CSV export includes pod count columns.
+
+**UI status:** Not implemented. The koku-ui does not display replica count
+information in the recommendation detail view.
 
 ### Total Cost Impact / Savings Estimate
 
-`EstimatedSavingsUSD` field exists in `ContainerRec` struct and
-`recommendation_history` schema, but is never populated. Would require
-integration with the koku cost model system to convert resource deltas
-into dollar amounts.
+**Engine status:** Fully implemented. `ApplySavingsEstimates()` in
+`internal/engine/savings.go` computes `EstimatedSavingsUSD` for each
+container recommendation using cost data fetched from a Koku masu
+internal endpoint (`GET /effective-rates/`). Savings include cost model
+rates (CPU + memory), infrastructure costs (raw + markup), and
+distributed overhead (platform, worker, storage, network, GPU),
+apportioned by the cost model's distribution type (cpu or memory) and
+scaled by replica count.
+
+**API status:** Fully implemented. `estimated_monthly_savings_usd` is
+returned in the recommendation detail response. When no cost data is
+available, a `NotifNoCostData` notification is included.
+
+**UI status:** Not implemented. The koku-ui does not display the estimated
+savings value in the recommendation detail view.
 
 ### PVC / Storage Rightsizing
 

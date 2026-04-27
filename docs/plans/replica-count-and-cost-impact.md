@@ -1,6 +1,6 @@
 # Replica Count and Cost Impact / Savings Estimate
 
-**Status**: Phase 1 (replica count) backend complete; **koku-ui changes pending** (display "N replicas" in recommendation detail view). Phase 2 (cost impact) design only.
+**Status**: Phase 1 (replica count) and Phase 2 (cost impact) backend complete; **koku-ui changes pending** (display replicas and estimated savings in recommendation detail view).
 
 ## Motivation
 
@@ -275,7 +275,7 @@ During a rollout where the operator is updated before ros-ocp-backend (or vice v
 
 ---
 
-## Phase 2: Cost Impact / Savings Estimate (Design Only)
+## Phase 2: Cost Impact / Savings Estimate
 
 ### Goal
 
