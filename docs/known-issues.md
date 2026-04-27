@@ -150,6 +150,35 @@ available, a `NotifNoCostData` notification is included.
 **UI status:** Not implemented. The koku-ui does not display the estimated
 savings value in the recommendation detail view.
 
+### Potential `gpu_distributed` Gap in Effective-Rates SQL
+
+**Status:** Unverified. Documenting for future investigation.
+
+The Koku masu `effective_rates` endpoint (`masu/api/effective_rates.py`)
+aggregates costs from `reporting_ocpusagelineitem_daily_summary` with a
+`data_source = 'Pod'` filter. The GPU distribution SQL
+(`distribute_unallocated_gpu_cost.sql`) inserts distributed rows with
+`data_source = 'GPU'` (hardcoded). This means `gpu_distributed` rows
+would not match the `data_source = 'Pod'` filter, and GPU distributed
+costs would be silently excluded from the savings calculation.
+
+Other distribution types are believed to be unaffected:
+- `platform_distributed`: inherits `data_source` from source rows (typically `'Pod'`)
+- `worker_distributed`: hardcoded `'Pod'`
+- `unattributed_storage`: inherits from source rows (typically `'Pod'` for user namespaces)
+- `unattributed_network`: inherits from source rows (typically `'Pod'` for user namespaces)
+
+**Practical impact today: none.** GPU-equipped on-prem clusters are rare,
+and our test environments have no GPU data. If/when GPU costs are present,
+the fix would be to change the SQL filter to
+`data_source IN ('Pod', 'GPU')` or remove the `data_source` filter
+entirely (with careful review of whether other data sources introduce
+double-counting).
+
+**Action needed:** Verify with actual GPU data whether `gpu_distributed`
+rows indeed have `data_source = 'GPU'` in the summary table, and if so,
+update the effective-rates SQL filter.
+
 ### PVC / Storage Rightsizing
 
 No storage recommendation logic. `NotifPVCOrphaned` notification code
