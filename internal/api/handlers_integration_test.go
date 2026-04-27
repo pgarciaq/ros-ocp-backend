@@ -89,7 +89,7 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		var response struct {
-			Data []model.NativeContainerResult `json:"data"`
+			Data []model.DetailResponse `json:"data"`
 			Meta struct {
 				Count int `json:"count"`
 			} `json:"meta"`
@@ -103,7 +103,7 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 		first := response.Data[0]
 		assert.Equal(t, testutil.TestClusterUUID, first.ClusterUUID)
 		assert.Equal(t, testutil.TestNamespace, first.Project)
-		assert.NotEmpty(t, first.Recommendations)
+		assert.NotEmpty(t, first.Recommendations.RecommendationTerms)
 	})
 
 	// CSV response test
@@ -173,7 +173,7 @@ func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var response struct {
-		Data []model.NativeContainerResult `json:"data"`
+		Data []model.DetailResponse `json:"data"`
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
@@ -230,7 +230,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 		require.Equal(t, http.StatusOK, listRec.Code)
 
 		var listResp struct {
-			Data []model.NativeContainerResult `json:"data"`
+			Data []model.DetailResponse `json:"data"`
 		}
 		err := json.Unmarshal(listRec.Body.Bytes(), &listResp)
 		require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.NativeContainerResult `json:"data"`
+			Data []model.DetailResponse `json:"data"`
 			Meta struct {
 				Count int `json:"count"`
 			} `json:"meta"`
@@ -383,7 +383,7 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.NativeContainerResult `json:"data"`
+			Data []model.DetailResponse `json:"data"`
 			Meta struct {
 				Count int `json:"count"`
 			} `json:"meta"`
@@ -482,7 +482,7 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var response struct {
-		Data []model.NativeContainerResult `json:"data"`
+		Data []model.DetailResponse `json:"data"`
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
@@ -556,7 +556,7 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var response struct {
-		Data []model.NativeContainerResult `json:"data"`
+		Data []model.DetailResponse `json:"data"`
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
@@ -651,7 +651,7 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var response struct {
-		Data []model.NativeContainerResult `json:"data"`
+		Data []model.DetailResponse `json:"data"`
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
