@@ -86,6 +86,9 @@ type Config struct {
 	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
 	MaxLookbackDays int     `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
+	// Koku masu API URL for fetching cost data (savings estimates)
+	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -235,6 +238,7 @@ func initConfig() {
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
+	viper.SetDefault("KOKU_MASU_URL", "")
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")

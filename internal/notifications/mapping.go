@@ -43,6 +43,7 @@ var Definitions = map[int16]notifDef{
 	22: {"INFO", "Workload is managed by an HPA — replica count recommendations suppressed"},
 	23: {"INFO", "Current instance type is not in the cloud catalog — no resizing needed"},
 	24: {"INFO", "Current instance type is deprecated — consider migrating to the recommended type"},
+	25: {"INFO", "No cost data available — savings estimate not computed"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

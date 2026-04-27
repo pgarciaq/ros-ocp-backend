@@ -1333,6 +1333,7 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 					pcMin,
 					pcMax,
 					pcAvg,
+					optionalFloat32Str(r.EstimatedMonthlySavings),
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),

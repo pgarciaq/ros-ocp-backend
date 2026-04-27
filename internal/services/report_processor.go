@@ -11,6 +11,7 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
@@ -428,6 +429,15 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 		return
 	}
 
+	// Step 0.5: Fetch cost data from Koku and compute savings estimates.
+	// clusterUUID in ROS is the same as cluster_id in Koku (OpenShift cluster ID).
+	costProvider := getCostDataProvider(appCfg)
+	costData, err := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+	if err != nil {
+		log.Warnf("native engine: cost data fetch failed for org=%s cluster=%s: %v (savings will be zero)", orgID, clusterUUID, err)
+	}
+	engine.ApplySavingsEstimates(results, costData)
+
 	// Step 1: Read old recommendations before overwrite (for stability_pct, adoption_detected)
 	containerKeys := engine.ContainerKeys(results)
 	oldRecs, err := engine.ReadOldRecommendations(ctx, pool, orgID, clusterUUID, containerKeys)
@@ -508,4 +518,14 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
 		log.Errorf("native namespace engine: writing history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 	}
+}
+
+// getCostDataProvider returns a CostDataProvider based on configuration.
+// Returns a NilCostDataProvider if KOKU_MASU_URL is not configured.
+func getCostDataProvider(cfg *config.Config) costdata.CostDataProvider {
+	if cfg.KokuMasuURL == "" {
+		return &costdata.NilCostDataProvider{}
+	}
+	timeout := time.Duration(cfg.GlobalHTTPClientTimeoutSecs) * time.Second
+	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
 }

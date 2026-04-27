@@ -36,11 +36,12 @@ type ReplicaInfo struct {
 // DetailRecommendations wraps the term-level data with monitoring_end_time,
 // current resource config, and top-level notifications.
 type DetailRecommendations struct {
-	Current             *DetailResourceConfig                      `json:"current,omitempty"`
-	Replicas            *ReplicaInfo                               `json:"replicas,omitempty"`
-	MonitoringEndTime   string                                     `json:"monitoring_end_time"`
-	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	RecommendationTerms map[string]DetailTerm                      `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig                      `json:"current,omitempty"`
+	Replicas                *ReplicaInfo                               `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	MonitoringEndTime       string                                     `json:"monitoring_end_time"`
+	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	RecommendationTerms     map[string]DetailTerm                      `json:"recommendation_terms"`
 }
 
 // DetailTerm holds plots and engine recommendations for a single term.
@@ -151,10 +152,11 @@ func BuildDetailResponse(
 	}
 
 	recs := DetailRecommendations{
-		Current:             current,
-		Replicas:            replicas,
-		MonitoringEndTime:   metStr,
-		RecommendationTerms: terms,
+		Current:                 current,
+		Replicas:                replicas,
+		EstimatedMonthlySavings: native.EstimatedMonthlySavings,
+		MonitoringEndTime:       metStr,
+		RecommendationTerms:     terms,
 	}
 	if len(allNotifications) > 0 {
 		recs.Notifications = allNotifications
