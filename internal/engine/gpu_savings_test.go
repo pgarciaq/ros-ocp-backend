@@ -68,8 +68,9 @@ func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	// full_gpu means no savings from MIG right-sizing
-	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
+	// full_gpu means no MIG savings, but cost data is available so we report $0
+	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
+	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
 }
 
 func TestApplyGPUSavings_WellUtilized(t *testing.T) {
@@ -83,7 +84,9 @@ func TestApplyGPUSavings_WellUtilized(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
+	// Well-utilized: cost data available, savings = $0 (not nil)
+	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
+	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
 }
 
 func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
@@ -98,8 +101,9 @@ func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	// No MIG profile recommended, so no MIG-based savings
-	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
+	// No MIG profile recommended, cost data available, so savings = $0
+	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
+	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
 }
 
 func TestApplyGPUSavings_NilRec(t *testing.T) {
