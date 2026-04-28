@@ -288,10 +288,8 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		}
 	}
 
-	if savings > 0 {
-		s := float32(math.Round(savings*100) / 100)
-		rec.EstimatedGPUSavingsUSD = &s
-	}
+	s := float32(math.Round(savings*100) / 100)
+	rec.EstimatedGPUSavingsUSD = &s
 }
 
 func gpuMonthlyRate(costData *costdata.ClusterCostData) float64 {
