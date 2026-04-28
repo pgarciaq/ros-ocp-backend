@@ -194,5 +194,183 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 
 	log.Infof("ProcessCSVToDigests: upserted %d digests for org=%s cluster=%s",
 		len(grouped), orgID, clusterUUID)
+
+	if err := upsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+		log.Warnf("ProcessCSVToDigests: GPU digest upsert failed (non-fatal): %v", err)
+	}
+
 	return nil
+}
+
+// EnsureGPUDigestPartitions creates monthly partitions of gpu_container_digests.
+func EnsureGPUDigestPartitions(ctx context.Context, pool *pgxpool.Pool, months map[time.Time]struct{}) {
+	for monthStart := range months {
+		monthEnd := monthStart.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("gpu_container_digests_%s", monthStart.Format("200601"))
+		sql := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF gpu_container_digests FOR VALUES FROM ('%s') TO ('%s')`,
+			partName,
+			monthStart.Format("2006-01-02"),
+			monthEnd.Format("2006-01-02"),
+		)
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			log.Warnf("EnsureGPUDigestPartitions: %s: %v (non-fatal)", partName, err)
+		}
+	}
+}
+
+// upsertGPUDigests extracts GPU rows from parsed CSV and writes daily aggregates
+// to the gpu_container_digests table. Rows without GPU data (HasGPU()==false)
+// are silently skipped.
+func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
+	type gpuKey struct {
+		date      time.Time
+		namespace string
+		workload  string
+		container string
+	}
+	type gpuAgg struct {
+		workloadType string
+		modelName    string
+		profileName  string
+		fbMinVals    []float64
+		fbMaxVals    []float64
+		fbAvgVals    []float64
+		tensorMin    []float64
+		tensorMax    []float64
+		tensorAvg    []float64
+		dramMin      []float64
+		dramMax      []float64
+		dramAvg      []float64
+		smMin        []float64
+		smMax        []float64
+		smAvg        []float64
+	}
+
+	groups := map[gpuKey]*gpuAgg{}
+	for _, r := range rows {
+		if !r.HasGPU() {
+			continue
+		}
+		day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
+		k := gpuKey{date: day, namespace: r.Namespace, workload: r.WorkloadName, container: r.ContainerName}
+		g, ok := groups[k]
+		if !ok {
+			g = &gpuAgg{
+				workloadType: r.WorkloadType,
+				modelName:    r.AcceleratorModelName,
+				profileName:  r.AcceleratorProfileName,
+			}
+			groups[k] = g
+		}
+		g.fbMinVals = append(g.fbMinVals, r.AcceleratorFBUsageMin)
+		g.fbMaxVals = append(g.fbMaxVals, r.AcceleratorFBUsageMax)
+		g.fbAvgVals = append(g.fbAvgVals, r.AcceleratorFBUsageAvg)
+		g.tensorMin = append(g.tensorMin, r.TensorPipeActiveMin)
+		g.tensorMax = append(g.tensorMax, r.TensorPipeActiveMax)
+		g.tensorAvg = append(g.tensorAvg, r.TensorPipeActiveAvg)
+		g.dramMin = append(g.dramMin, r.DRAMActiveMin)
+		g.dramMax = append(g.dramMax, r.DRAMActiveMax)
+		g.dramAvg = append(g.dramAvg, r.DRAMActiveAvg)
+		g.smMin = append(g.smMin, r.SMActiveMin)
+		g.smMax = append(g.smMax, r.SMActiveMax)
+		g.smAvg = append(g.smAvg, r.SMActiveAvg)
+	}
+
+	if len(groups) == 0 {
+		return nil
+	}
+
+	months := map[time.Time]struct{}{}
+	for k := range groups {
+		monthStart := time.Date(k.date.Year(), k.date.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[monthStart] = struct{}{}
+	}
+	EnsureGPUDigestPartitions(ctx, pool, months)
+
+	batch := &pgx.Batch{}
+	for k, g := range groups {
+		batch.Queue(`
+			INSERT INTO gpu_container_digests (
+				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+				gpu_model_name, gpu_profile_name,
+				fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
+				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
+				dram_active_min, dram_active_max, dram_active_avg,
+				sm_active_min, sm_active_max, sm_active_avg
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+			ON CONFLICT (cluster_uuid, namespace, workload, container_name, interval_start)
+			DO UPDATE SET
+				gpu_model_name = EXCLUDED.gpu_model_name,
+				gpu_profile_name = EXCLUDED.gpu_profile_name,
+				fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
+				fb_usage_max_mib = EXCLUDED.fb_usage_max_mib,
+				fb_usage_avg_mib = EXCLUDED.fb_usage_avg_mib,
+				tensor_pipe_active_min = EXCLUDED.tensor_pipe_active_min,
+				tensor_pipe_active_max = EXCLUDED.tensor_pipe_active_max,
+				tensor_pipe_active_avg = EXCLUDED.tensor_pipe_active_avg,
+				dram_active_min = EXCLUDED.dram_active_min,
+				dram_active_max = EXCLUDED.dram_active_max,
+				dram_active_avg = EXCLUDED.dram_active_avg,
+				sm_active_min = EXCLUDED.sm_active_min,
+				sm_active_max = EXCLUDED.sm_active_max,
+				sm_active_avg = EXCLUDED.sm_active_avg`,
+			k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
+			g.modelName, g.profileName,
+			minFloat(g.fbMinVals), maxFloat(g.fbMaxVals), meanFloat(g.fbAvgVals),
+			minFloat(g.tensorMin), maxFloat(g.tensorMax), meanFloat(g.tensorAvg),
+			minFloat(g.dramMin), maxFloat(g.dramMax), meanFloat(g.dramAvg),
+			minFloat(g.smMin), maxFloat(g.smMax), meanFloat(g.smAvg),
+		)
+	}
+
+	br := pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for range groups {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("upsert GPU digest: %w", err)
+		}
+	}
+
+	log.Infof("ProcessCSVToDigests: upserted %d GPU digests for org=%s cluster=%s",
+		len(groups), orgID, clusterUUID)
+	return nil
+}
+
+func minFloat(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	m := vals[0]
+	for _, v := range vals[1:] {
+		if v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func maxFloat(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	m := vals[0]
+	for _, v := range vals[1:] {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+func meanFloat(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
 }

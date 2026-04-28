@@ -208,10 +208,11 @@ observation time + variability"]
 
     subgraph phaseC [Phase C: Notifications and Savings]
         Notif10["NotifGPUUnderutilized code=10"]
-        Notif11["NotifGPUIdle code=11 NEW"]
-        Notif12["NotifGPUMemBound code=12 NEW"]
+        Notif26["NotifGPUIdle code=26 NEW"]
+        Notif27["NotifGPUMemBound code=27 NEW"]
+        Notif28["NotifGPUNoProfilingData code=28 NEW"]
         SavingsEst["Savings: full_gpu_cost x fraction_saved"]
-        Confidence --> Notif10 & Notif11 & Notif12
+        Confidence --> Notif10 & Notif26 & Notif27 & Notif28
         Confidence --> SavingsEst
     end
 
@@ -408,9 +409,10 @@ For MIG-capable GPUs where workload is underutilized:
 
 ### C1. Notification Codes
 
-- `NotifGPUUnderutilized = 10` (existing, now emitted)
-- `NotifGPUIdle = 11` (NEW): "GPU is allocated but idle (< 2%). Consider removing."
-- `NotifGPUMemBound = 12` (NEW): "Workload is memory-bandwidth bound."
+- `NotifGPUUnderutilized = 10` (existing, now emitted for underutilized GPUs)
+- `NotifGPUIdle = 26` (NEW): "GPU is allocated but idle (< 2%). Consider removing."
+- `NotifGPUMemBound = 27` (NEW): "Workload is memory-bandwidth bound."
+- `NotifGPUNoProfilingData = 28` (NEW): "Profiling metrics unavailable for this GPU."
 
 ### C2. GPU Savings Estimation
 
@@ -477,9 +479,41 @@ Update `openapi.json` with GPU fields, filters, and response schema.
 | `internal/engine/gpu_metadata.go` | NEW: GPU model specs + MIG profile catalog |
 | `internal/engine/gpu_recommender.go` | NEW: Classification, MIG selection, confidence |
 | `internal/engine/gpu_recommender_test.go` | NEW: Unit tests |
-| `internal/engine/notifications.go` | Add codes 11, 12 |
+| `internal/engine/notifications.go` | Add codes 26, 27, 28 |
 | `internal/engine/engine.go` | Call GPU recommender after CPU/memory |
 | `internal/model/recommendation_set_native.go` | Add GPU fields |
 | `internal/api/handlers_integration_test.go` | GPU integration tests |
 | `openapi.json` | GPU response schema and filters |
 | `docs/known-issues.md` | Update GPU section |
+
+### nise (test data generation)
+
+| File | Change |
+|---|---|
+| `nise/generators/ocp/ocp_generator.py` | Add 14 GPU columns to `OCP_ROS_USAGE_COLUMN`, `_gen_ros_gpu_metrics()`, `_enrich_ros_data_with_gpus()` |
+| `tests/test_ocp_generator.py` | 6 new tests for GPU ROS CSV columns |
+
+---
+
+## Implementation Status
+
+| Phase | Status | Notes |
+|---|---|---|
+| Phase 0: Operator metrics | **Done** | Removed DEV_GPU_UTIL/DEV_MEM_COPY_UTIL, added PROF_PIPE_TENSOR_ACTIVE/DRAM_ACTIVE/SM_ACTIVE |
+| Phase A: Ingestion | **Done** | Extended MetricRow, CSV parser, migration 000042, gpu_container_digests table |
+| Phase B: GPU engine | **Done** | GPU metadata (16 models), classification, MIG selection, confidence scoring |
+| Phase C: Notifications/savings | **Done** | Notification codes 10/26/27/28, savings placeholder |
+| Phase D: API response | **Done** | GPURecommendation struct, OpenAPI spec updated |
+| Nise: Test data generation | **Done** | ROS CSV generates GPU profiling metrics for Tier 1/Tier 2 GPUs |
+| E2E: Apollo cluster validation | **Pending** | Requires nise data generation + ingestion on cluster |
+
+### What's Not Yet Implemented
+
+- **GPU savings estimation from Koku cost data**: The `estimated_monthly_gpu_savings_usd`
+  field is a placeholder. Requires querying Koku `effective_rates` for GPU-specific costs.
+- **API filters** (`has_gpu`, `gpu_model`, `gpu_classification`): Query parameter
+  filtering is defined in the OpenAPI spec but not wired to the query handler.
+- **GPU daily digest aggregation pipeline**: The `gpu_container_digests` table exists
+  but the ingestion pipeline does not yet aggregate into it. GPU data flows from CSV
+  parsing through `MetricRow.HasGPU()` to the recommendation engine directly.
+- **Koku-UI**: Frontend display of GPU recommendations awaits UX mockups.
