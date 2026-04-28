@@ -92,10 +92,10 @@ type NativeRecommendationRow struct {
 	CurrentMemRequestKiB *int64 `gorm:"column:current_memory_request_kib"`
 	CurrentMemLimitKiB   *int64 `gorm:"column:current_memory_limit_kib"`
 
-	VariationCPURequestPct *int32 `gorm:"column:variation_cpu_request_pct"`
-	VariationCPULimitPct   *int32 `gorm:"column:variation_cpu_limit_pct"`
-	VariationMemRequestPct *int32 `gorm:"column:variation_memory_request_pct"`
-	VariationMemLimitPct   *int32 `gorm:"column:variation_memory_limit_pct"`
+	VariationCPURequestPct *int32   `gorm:"column:variation_cpu_request_pct"`
+	VariationCPULimitPct   *int32   `gorm:"column:variation_cpu_limit_pct"`
+	VariationMemRequestPct *int32   `gorm:"column:variation_memory_request_pct"`
+	VariationMemLimitPct   *int32   `gorm:"column:variation_memory_limit_pct"`
 	ConfidenceLevel        *float32 `gorm:"column:confidence_level"`
 	// SMALLINT[] caps values at 32767. Current notification codes (1-24) are
 	// well within range. If legacy 6-digit codes are ever needed, this column
@@ -122,18 +122,19 @@ func (NativeRecommendationRow) TableName() string {
 // NativeContainerResult is the API-ready format for a single container,
 // with all 6 recommendation variants nested.
 type NativeContainerResult struct {
-	ID              string                        `json:"id"`
-	ClusterAlias    string                        `json:"cluster_alias"`
-	ClusterUUID     string                        `json:"cluster_uuid"`
-	Container       string                        `json:"container"`
-	Project         string                        `json:"project"`
-	Workload        string                        `json:"workload"`
-	WorkloadType    string                        `json:"workload_type"`
-	SourceID        string                        `json:"source_id"`
-	LastReported    string                        `json:"last_reported"`
+	ID                      string                        `json:"id"`
+	ClusterAlias            string                        `json:"cluster_alias"`
+	ClusterUUID             string                        `json:"cluster_uuid"`
+	Container               string                        `json:"container"`
+	Project                 string                        `json:"project"`
+	Workload                string                        `json:"workload"`
+	WorkloadType            string                        `json:"workload_type"`
+	SourceID                string                        `json:"source_id"`
+	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
+	GPU                     *GPURecommendation            `json:"gpu,omitempty"`
 }
 
 // NativeContainerID generates a deterministic UUID v5 from the composite key.
@@ -166,10 +167,10 @@ type EngineRecommendation struct {
 	CurrentCPULimitMC      *int64                                     `json:"current_cpu_limit_millicores,omitempty"`
 	CurrentMemRequestKiB   *int64                                     `json:"current_memory_request_kib,omitempty"`
 	CurrentMemLimitKiB     *int64                                     `json:"current_memory_limit_kib,omitempty"`
-	VariationCPURequestPct *int32                                      `json:"variation_cpu_request_pct,omitempty"`
-	VariationCPULimitPct   *int32                                      `json:"variation_cpu_limit_pct,omitempty"`
-	VariationMemRequestPct *int32                                      `json:"variation_memory_request_pct,omitempty"`
-	VariationMemLimitPct   *int32                                      `json:"variation_memory_limit_pct,omitempty"`
+	VariationCPURequestPct *int32                                     `json:"variation_cpu_request_pct,omitempty"`
+	VariationCPULimitPct   *int32                                     `json:"variation_cpu_limit_pct,omitempty"`
+	VariationMemRequestPct *int32                                     `json:"variation_memory_request_pct,omitempty"`
+	VariationMemLimitPct   *int32                                     `json:"variation_memory_limit_pct,omitempty"`
 	ConfidenceLevel        *float32                                   `json:"confidence_level,omitempty"`
 	NotificationCodes      SmallintArray                              `json:"notification_codes"`
 	Notifications          map[string]notifications.NotificationEntry `json:"notifications"`

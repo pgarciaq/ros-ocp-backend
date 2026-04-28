@@ -23,6 +23,26 @@ type MetricRow struct {
 	MemRSSKiB        int64
 	OOMCount         int64
 	WorkloadPodCount int64
+
+	AcceleratorModelName   string
+	AcceleratorProfileName string
+	AcceleratorFBUsageMin  float64
+	AcceleratorFBUsageMax  float64
+	AcceleratorFBUsageAvg  float64
+	TensorPipeActiveMin    float64
+	TensorPipeActiveMax    float64
+	TensorPipeActiveAvg    float64
+	DRAMActiveMin          float64
+	DRAMActiveMax          float64
+	DRAMActiveAvg          float64
+	SMActiveMin            float64
+	SMActiveMax            float64
+	SMActiveAvg            float64
+}
+
+// HasGPU returns true if this row has GPU metric data.
+func (m *MetricRow) HasGPU() bool {
+	return m.AcceleratorModelName != ""
 }
 
 // DigestKey uniquely identifies a container-day combination for aggregation.

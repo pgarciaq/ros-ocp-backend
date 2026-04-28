@@ -6,6 +6,22 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
+// GPURecommendation holds GPU-specific recommendation data.
+type GPURecommendation struct {
+	CurrentGPUModel               string   `json:"current_gpu_model"`
+	CurrentGPUProfile             *string  `json:"current_gpu_profile"`
+	GPUClassification             string   `json:"gpu_classification,omitempty"`
+	RecommendedGPUProfile         *string  `json:"recommended_gpu_profile,omitempty"`
+	MemoryBoundDetected           bool     `json:"memory_bound_detected"`
+	GPUConfidence                 float32  `json:"gpu_confidence"`
+	TensorPipeActiveAvg           float32  `json:"tensor_pipe_active_avg"`
+	DRAMActiveAvg                 float32  `json:"dram_active_avg"`
+	SMActiveAvg                   float32  `json:"sm_active_avg"`
+	FBUsageMaxMiB                 float32  `json:"fb_usage_max_mib"`
+	EstimatedMonthlyGPUSavingsUSD *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
+	Notifications                 []int16  `json:"notifications,omitempty"`
+}
+
 // DetailResponse is the strongly-typed Kruize-compatible response for the
 // native detail endpoint. The JSON shape matches what koku-ui expects:
 //
@@ -24,6 +40,7 @@ type DetailResponse struct {
 	SourceID        string                `json:"source_id"`
 	LastReported    string                `json:"last_reported"`
 	Recommendations DetailRecommendations `json:"recommendations"`
+	GPU             *GPURecommendation    `json:"gpu,omitempty"`
 }
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.
@@ -173,6 +190,7 @@ func BuildDetailResponse(
 		SourceID:        native.SourceID,
 		LastReported:    native.LastReported,
 		Recommendations: recs,
+		GPU:             native.GPU,
 	}
 }
 

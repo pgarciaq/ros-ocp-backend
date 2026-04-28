@@ -323,9 +323,9 @@ func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {
 	assert.Greater(t, recCount, 0, "recommendations should still be generated without oom_count")
 }
 
-const testCSVHeader = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
+const testCSVHeader = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
-const testCSVHeaderNoOOM = "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg"
+const testCSVHeaderNoOOM = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg"
 
 func buildTestCSV(days int) string {
 	var sb strings.Builder
@@ -339,7 +339,7 @@ func buildTestCSV(days int) string {
 			for q := 0; q < 4; q++ {
 				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				end := start.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n",
+				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
 				))
@@ -371,8 +371,8 @@ func buildTestCSVWithOOM(days int) string {
 				if h%6 == 0 && q == 0 {
 					oomVal = 1
 				}
-				sb.WriteString(fmt.Sprintf("%s,%s,oom-ns,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
-				sb.WriteString(fmt.Sprintf("%s,%s,stable-ns,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
+				sb.WriteString(fmt.Sprintf("%s,%s,oom-ns,pod-oom,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
+				sb.WriteString(fmt.Sprintf("%s,%s,stable-ns,pod-st,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
 			}
 		}
 	}
@@ -393,7 +393,7 @@ func buildTestCSVWithoutOOMColumn(days int) string {
 			for q := 0; q < 4; q++ {
 				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				end := start.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
+				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
 				))

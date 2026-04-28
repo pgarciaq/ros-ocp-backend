@@ -3447,6 +3447,74 @@
           "oom_events_after_rec": { "type": "integer", "nullable": true },
           "recommendation_age_hours": { "type": "integer", "nullable": true }
         }
+      },
+      "GPURecommendation": {
+        "type": "object",
+        "description": "GPU-specific recommendation data. Present only for containers with attached GPU resources.",
+        "properties": {
+          "current_gpu_model": {
+            "type": "string",
+            "description": "DCGM-reported GPU model name",
+            "example": "NVIDIA A100-SXM4-80GB"
+          },
+          "current_gpu_profile": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current MIG profile name, or null for full GPU",
+            "example": "3g.40gb"
+          },
+          "gpu_classification": {
+            "type": "string",
+            "enum": ["idle", "underutilized", "memory_bound", "compute_bound_underutilized", "well_utilized"],
+            "description": "Utilization classification based on DCGM profiling metrics. Empty if profiling data unavailable (Tier 2 GPUs)."
+          },
+          "recommended_gpu_profile": {
+            "type": "string",
+            "nullable": true,
+            "description": "Recommended MIG profile, 'full_gpu', or null if no change recommended",
+            "example": "1g.10gb"
+          },
+          "memory_bound_detected": {
+            "type": "boolean",
+            "description": "True when DRAM bandwidth is saturated but tensor cores are underutilized"
+          },
+          "gpu_confidence": {
+            "type": "number",
+            "format": "float",
+            "description": "Confidence score (0.0-1.0) for the GPU recommendation"
+          },
+          "tensor_pipe_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average tensor core utilization (0.0-1.0) across observation window"
+          },
+          "dram_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average DRAM bandwidth utilization (0.0-1.0) across observation window"
+          },
+          "sm_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average streaming multiprocessor activity (0.0-1.0) across observation window"
+          },
+          "fb_usage_max_mib": {
+            "type": "number",
+            "format": "float",
+            "description": "Peak frame buffer usage in MiB across observation window"
+          },
+          "estimated_monthly_gpu_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Estimated monthly GPU cost savings in USD. Null if no cost data available."
+          },
+          "notifications": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data"
+          }
+        }
       }
     }
   }

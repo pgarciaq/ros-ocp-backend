@@ -27,6 +27,9 @@ const (
 	NotifInstanceNotInCat   int16 = 23
 	NotifInstanceDeprecated int16 = 24
 	NotifNoCostData         int16 = 25
+	NotifGPUIdle            int16 = 26
+	NotifGPUMemBound        int16 = 27
+	NotifGPUNoProfilingData int16 = 28
 )
 
 const (
