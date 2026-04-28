@@ -1032,59 +1032,47 @@ restarted to pick up the new image:
 
 ### Gaps That Remain in GPU/MIG Feature
 
-#### Gap 1: No Idle GPU in Test Data (E2E coverage gap)
+#### Gap 1: No Idle GPU in Test Data — CLOSED
 
-**Impact:** The `idle` classification → `savings = full GPU rate` code path is only
-unit-tested (`TestApplyGPUSavings_IdleGPU` passes). It has never been verified
-E2E on Apollo.
+**Resolution (commit `9dc532b` in nise):**
 
-**How to fix:** Add a GPU pod to the nise YAML with very low utilization:
-```yaml
-- pod:
-  pod_name: idle-gpu-pod
-  cpu_request: 1
-  cpu_limit: 2
-  mem_request_gb: 4
-  mem_limit_gb: 8
-  gpu:
-  gpu_model: Tesla T4
-  gpu_sm_active_avg: 0.01      # <5% triggers idle
-  gpu_tensor_pipe_active_avg: 0.0
-  gpu_dram_active_avg: 0.0
-  gpu_fb_usage_avg: 50          # MiB
-```
+Instead of trying to force specific metric values via nise YAML overrides
+(which ran into YAML wrapper-key indentation issues), we extended the
+`postprocess_ros_csvs.py` script to deterministically assign GPU scenarios
+to containers based on namespace/container hash, with explicit overrides
+for known test pods.
 
-Regenerate nise data, re-upload, and verify the API returns
-`gpu_classification: "idle"` and `estimated_monthly_gpu_savings_usd: 2500.0`.
+The example YAML (`examples/ros_ocp/ocp_static_data.yml`) now includes a
+`gpu-worker-1` node with 4 GPU pods covering all classification paths:
 
-**Effort:** ~30 minutes (update YAML, regenerate, upload, verify).
+| Pod | Model | Scenario | Expected Classification |
+|-----|-------|----------|------------------------|
+| `llm-finetune` | A100 | `well_utilized` | SM=0.67, Tensor=0.44 |
+| `abandoned-notebook` | A100 | `idle` | SM=0.003, Tensor=0.005 |
+| `embedding-server` | A100 | `underutilized` | SM=0.16, Tensor=0.09 |
+| `legacy-model` | V100 | `no_profiling` | Tier 2, no SM/Tensor |
 
-#### Gap 2: MIG Right-Sizing Not E2E Testable
+**Workflow:** `nise report ocp ...` → `postprocess_ros_csvs.py` → upload.
 
-**Impact:** The MIG recommendation code (`RecommendedGPUProfile` selection and
-`savings = (1 - rec_slices/total_slices) × rate` formula) is only unit-tested.
+Additionally, `_gen_ros_gpu_metrics` now accepts an `overrides` dict for
+direct unit-test control over metric values (used by 5 new unit tests in
+`GenRosGpuMetricsTest`).
 
-**Why it can't be E2E tested easily:** MIG recommendations require:
-1. A MIG-capable GPU model (A100, A30, H100, H200, B100, B200) in the data
-2. An `underutilized` or `memory_bound` classification (SM_ACTIVE < 30%)
-3. Frame buffer usage that fits in a smaller MIG slice (e.g., 8 GiB on an 80 GB A100 → recommend `1g.10gb`)
+**E2E verification:** Pending — the postprocessed data needs to be uploaded
+to Apollo and the API response checked for `gpu_classification: "idle"` and
+non-null savings on the idle pod.
 
-We could add this to nise test data:
-```yaml
-- pod:
-  pod_name: mig-candidate-pod
-  gpu:
-  gpu_model: NVIDIA A100-SXM4-80GB
-  gpu_sm_active_avg: 0.15        # underutilized
-  gpu_tensor_pipe_active_avg: 0.1
-  gpu_dram_active_avg: 0.05
-  gpu_fb_usage_avg: 8000         # 8 GiB → fits in 1g.10gb (10 GiB)
-```
+#### Gap 2: MIG Right-Sizing E2E Testable — CLOSED
 
-Expected result: `recommended_gpu_profile: "1g.10gb"` and
-`savings = (1 - 1/7) × 2500 = $2142.86/month`.
+**Resolution:** The same `postprocess_ros_csvs.py` approach makes MIG
+right-sizing E2E-testable.  The `embedding-server` pod gets an
+`underutilized` GPU scenario on a MIG-capable A100, so `SelectMIGProfile`
+will recommend a smaller MIG profile and compute savings.
 
-**Effort:** ~45 minutes.
+The nise `_gen_ros_gpu_metrics` overrides also support `mig_profile` for
+unit tests (tested in `GenRosGpuMetricsTest.test_mig_profile_with_overrides`).
+
+**E2E verification:** Pending — same as Gap 1, needs data uploaded to Apollo.
 
 #### Gap 3: No Time-Slicing Recommendation
 
