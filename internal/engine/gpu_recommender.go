@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 )
 
 // GPUClassification represents the utilization classification of a GPU workload.
@@ -245,4 +247,77 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 	}
 
 	return rec
+}
+
+// ApplyGPUSavings computes the GPU savings estimate using the gpu_cost_per_month
+// rate from the cost model. Modifies rec in-place.
+//
+// Savings logic:
+//   - idle: full GPU rate (could remove the GPU entirely)
+//   - MIG right-sized: (1 - recommended_slices/total_slices) * rate
+//   - well_utilized / no recommendation: $0
+//   - no cost data: nil (no estimate available)
+func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
+	if rec == nil {
+		return
+	}
+	if costData == nil {
+		return
+	}
+
+	gpuRate := gpuMonthlyRate(costData)
+	if gpuRate == 0 {
+		return
+	}
+
+	var savings float64
+
+	switch rec.Classification {
+	case GPUClassIdle:
+		savings = gpuRate
+	case GPUClassUnderutilized, GPUClassComputeBoundUnderutil, GPUClassMemoryBound:
+		if rec.RecommendedGPUProfile != "" && rec.RecommendedGPUProfile != "full_gpu" {
+			spec := MatchGPUModel(rec.GPUModelName)
+			if spec != nil {
+				totalSlices := migTotalSlices(spec)
+				recSlices := migProfileSlices(spec, rec.RecommendedGPUProfile)
+				if totalSlices > 0 && recSlices > 0 {
+					savings = (1.0 - float64(recSlices)/float64(totalSlices)) * gpuRate
+				}
+			}
+		}
+	}
+
+	if savings > 0 {
+		s := float32(math.Round(savings*100) / 100)
+		rec.EstimatedGPUSavingsUSD = &s
+	}
+}
+
+func gpuMonthlyRate(costData *costdata.ClusterCostData) float64 {
+	if costData == nil || costData.ConfiguredRates == nil {
+		return 0
+	}
+	rp, ok := costData.ConfiguredRates["gpu_cost_per_month"]
+	if !ok {
+		return 0
+	}
+	return rp.Infrastructure + rp.Supplementary
+}
+
+func migTotalSlices(spec *GPUModelSpec) int {
+	if spec == nil || len(spec.Profiles) == 0 {
+		return 0
+	}
+	last := spec.Profiles[len(spec.Profiles)-1]
+	return last.Slices
+}
+
+func migProfileSlices(spec *GPUModelSpec, profileName string) int {
+	for _, p := range spec.Profiles {
+		if p.Name == profileName {
+			return p.Slices
+		}
+	}
+	return 0
 }

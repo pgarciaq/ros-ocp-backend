@@ -782,6 +782,164 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	assert.True(t, notifFound, "at least one engine recommendation should have notifications")
 }
 
+func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	defer func() { database.DB = nil; database.Pool = nil }()
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'gpu-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+
+	// Seed CPU/memory digests + recommendations
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	err = engine.WriteRecommendations(ctx, pool, recs)
+	require.NoError(t, err)
+
+	// Seed GPU digests for the same container — idle GPU with profiling data
+	for i := 0; i < 7; i++ {
+		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			IntervalStart:       start.AddDate(0, 0, i),
+			ClusterUUID:         testutil.TestClusterUUID,
+			Namespace:           testutil.TestNamespace,
+			Workload:            testutil.TestWorkload,
+			WorkloadType:        testutil.TestWorkloadType,
+			ContainerName:       testutil.TestContainer,
+			GPUModelName:        "NVIDIA A100-SXM4-80GB",
+			GPUProfileName:      "",
+			FBUsageMinMiB:       100,
+			FBUsageMaxMiB:       500,
+			FBUsageAvgMiB:       250,
+			TensorPipeActiveMin: 0.001,
+			TensorPipeActiveMax: 0.01,
+			TensorPipeActiveAvg: 0.005,
+			DRAMActiveMin:       0.001,
+			DRAMActiveMax:       0.01,
+			DRAMActiveAvg:       0.005,
+			SMActiveMin:         0.001,
+			SMActiveMax:         0.01,
+			SMActiveAvg:         0.005,
+		})
+	}
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	t.Run("response includes GPU block", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+		var response struct {
+			Data []model.DetailResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.NotEmpty(t, response.Data)
+
+		found := false
+		for _, d := range response.Data {
+			if d.GPU != nil {
+				found = true
+				assert.Equal(t, "NVIDIA A100-SXM4-80GB", d.GPU.CurrentGPUModel)
+				assert.Equal(t, "idle", d.GPU.GPUClassification)
+				assert.Greater(t, d.GPU.GPUConfidence, float32(0))
+				break
+			}
+		}
+		assert.True(t, found, "at least one result should have GPU data")
+	})
+
+	t.Run("has_gpu=true filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?has_gpu=true", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.DetailResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		for _, d := range response.Data {
+			assert.NotNil(t, d.GPU, "has_gpu=true should only return items with GPU data")
+		}
+	})
+
+	t.Run("has_gpu=false filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?has_gpu=false", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.DetailResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		for _, d := range response.Data {
+			assert.Nil(t, d.GPU, "has_gpu=false should only return items without GPU data")
+		}
+	})
+
+	t.Run("gpu_model filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?gpu_model=A100", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.DetailResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.NotEmpty(t, response.Data)
+		for _, d := range response.Data {
+			require.NotNil(t, d.GPU)
+			assert.Contains(t, d.GPU.CurrentGPUModel, "A100")
+		}
+	})
+
+	t.Run("gpu_classification filter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?gpu_classification=idle", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.DetailResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.NotEmpty(t, response.Data)
+		for _, d := range response.Data {
+			require.NotNil(t, d.GPU)
+			assert.Equal(t, "idle", d.GPU.GPUClassification)
+		}
+	})
+}
+
 func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

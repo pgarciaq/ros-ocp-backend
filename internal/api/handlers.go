@@ -239,6 +239,22 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 	return c.JSON(http.StatusOK, nsRecommendationSet)
 }
 
+// parseGPUFilters extracts GPU-specific query parameters. These are applied
+// post-enrichment since GPU data lives in a separate table.
+func parseGPUFilters(c echo.Context) (hasGPU *bool, gpuModels, gpuClassifications []string) {
+	if v := c.QueryParam("has_gpu"); v != "" {
+		b := v == "true" || v == "1"
+		hasGPU = &b
+	}
+	if models := c.QueryParams()["gpu_model"]; len(models) > 0 {
+		gpuModels = models
+	}
+	if classes := c.QueryParams()["gpu_classification"]; len(classes) > 0 {
+		gpuClassifications = classes
+	}
+	return
+}
+
 // MapNativeQueryParameters parses query params using the native schema's column names.
 func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
@@ -317,7 +333,10 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(results)
+	enrichWithGPU(results, OrgID)
+
+	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
+	results, count = filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -397,7 +416,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	results, count, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	results, _, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
 		log.Errorf("unable to fetch native recommendations; %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -406,9 +425,12 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(results)
+	enrichWithGPU(results, OrgID)
 
-	return serveNativeList(c, results, int(count), apiListOptions)
+	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
+	results, count := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
+
+	return serveNativeList(c, results, count, apiListOptions)
 }
 
 // GetRecommendationSetWithFallback tries the native detail lookup first.
@@ -700,7 +722,7 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 	}
 
 	singleSlice := []model.NativeContainerResult{*result}
-	enrichWithGPU(singleSlice)
+	enrichWithGPU(singleSlice, orgID)
 	*result = singleSlice[0]
 
 	return model.BuildDetailResponse(result, plots, met)

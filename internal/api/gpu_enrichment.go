@@ -3,16 +3,20 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // enrichWithGPU queries gpu_container_digests and attaches GPU recommendations
-// to each NativeContainerResult that has GPU data. Modifies results in-place.
-func enrichWithGPU(results []model.NativeContainerResult) {
+// to each NativeContainerResult that has GPU data. Also fetches GPU cost rates
+// from Koku to compute savings estimates. Modifies results in-place.
+func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 	if len(results) == 0 {
 		return
 	}
@@ -31,6 +35,8 @@ func enrichWithGPU(results []model.NativeContainerResult) {
 		clusterMap[r.ClusterUUID] = append(clusterMap[r.ClusterUUID], i)
 	}
 
+	costProvider := getGPUCostProvider()
+
 	for clusterUUID, indices := range clusterMap {
 		gpuRecs, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now)
 		if err != nil {
@@ -41,6 +47,16 @@ func enrichWithGPU(results []model.NativeContainerResult) {
 			continue
 		}
 
+		var costData *costdata.ClusterCostData
+		if costProvider != nil && orgID != "" {
+			cd, err := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+			if err != nil {
+				log.Warnf("enrichWithGPU: cost data fetch failed for cluster %s: %v", clusterUUID, err)
+			} else {
+				costData = cd
+			}
+		}
+
 		for _, idx := range indices {
 			r := &results[idx]
 			key := fmt.Sprintf("%s/%s/%s", r.Project, r.Workload, r.Container)
@@ -48,9 +64,65 @@ func enrichWithGPU(results []model.NativeContainerResult) {
 			if !ok || gpuRec == nil {
 				continue
 			}
+			engine.ApplyGPUSavings(gpuRec, costData)
 			r.GPU = toGPURecommendation(gpuRec)
 		}
 	}
+}
+
+func getGPUCostProvider() costdata.CostDataProvider {
+	cfg := config.GetConfig()
+	if cfg.KokuMasuURL == "" {
+		return nil
+	}
+	timeout := time.Duration(cfg.GlobalHTTPClientTimeoutSecs) * time.Second
+	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
+}
+
+// filterGPUResults applies GPU-specific filters (has_gpu, gpu_model, gpu_classification)
+// to the result set. Returns a filtered copy; count is adjusted accordingly.
+func filterGPUResults(results []model.NativeContainerResult, hasGPU *bool, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
+	if hasGPU == nil && len(gpuModels) == 0 && len(gpuClassifications) == 0 {
+		return results, len(results)
+	}
+
+	filtered := make([]model.NativeContainerResult, 0, len(results))
+	for _, r := range results {
+		if hasGPU != nil {
+			hasGPUField := r.GPU != nil
+			if *hasGPU != hasGPUField {
+				continue
+			}
+		}
+		if len(gpuModels) > 0 {
+			if r.GPU == nil {
+				continue
+			}
+			if !matchesAny(r.GPU.CurrentGPUModel, gpuModels) {
+				continue
+			}
+		}
+		if len(gpuClassifications) > 0 {
+			if r.GPU == nil {
+				continue
+			}
+			if !matchesAny(r.GPU.GPUClassification, gpuClassifications) {
+				continue
+			}
+		}
+		filtered = append(filtered, r)
+	}
+	return filtered, len(filtered)
+}
+
+func matchesAny(value string, candidates []string) bool {
+	lower := strings.ToLower(value)
+	for _, c := range candidates {
+		if strings.Contains(lower, strings.ToLower(c)) {
+			return true
+		}
+	}
+	return false
 }
 
 func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
