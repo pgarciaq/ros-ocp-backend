@@ -5,11 +5,21 @@ See [gpu-recommendations.md](gpu-recommendations.md) for the design.
 
 ## Test Infrastructure
 
+### Nise GPU Data Generation (Implemented)
+
+Nise now generates GPU profiling columns in ROS CSVs (`--ros-ocp-info`). When a pod
+in the static YAML has a `gpus:` spec, the ROS container CSV includes 14 GPU columns:
+`accelerator_model_name`, `accelerator_profile_name`, `accelerator_frame_buffer_usage_{min,max,avg}`,
+`tensor_pipe_active_{min,max,avg}`, `dram_active_{min,max,avg}`, `sm_active_{min,max,avg}`.
+
+Tier 1 GPUs (T4, A10, A30, A100, H100, L40S) get all profiling metrics.
+Tier 2 GPUs (V100) get only frame buffer usage with empty PROF_ columns.
+Non-GPU pods get empty GPU columns.
+
 ### Synthetic GPU CSV Test Data
 
-Nise does not generate `accelerator_*` or PROF_ columns in ROS CSVs. We create
-synthetic test CSVs as Go string constants or embedded files. Each CSV fixture
-represents a specific GPU scenario.
+In addition to nise, we use synthetic test CSVs as Go string constants for unit tests.
+Each CSV fixture represents a specific GPU scenario.
 
 Required fixtures:
 
@@ -182,7 +192,7 @@ PROF_ values are 0.0-1.0 ratios, fb_usage is MiB.
 **Input:** 7 daily digests where `sm_active_avg < 0.02` for all days
 **Assert:**
 - Classification == "idle"
-- NotifGPUIdle (11) is emitted
+- NotifGPUIdle (26) is emitted
 
 ### B-T3. Workload classification: underutilized
 
@@ -306,20 +316,20 @@ PROF_ values are 0.0-1.0 ratios, fb_usage is MiB.
 
 ## Phase C: Notifications and Savings Tests
 
-### C-T1. NotifGPUIdle (code 11) emitted for idle GPU
+### C-T1. NotifGPUIdle (code 26) emitted for idle GPU
 
 **Type:** Unit test (Go)
 **File:** `internal/engine/gpu_recommender_test.go`
 **Steps:**
 1. Run recommender with idle fixture
-2. Assert notification code 11 is in the result
+2. Assert notification code 26 is in the result
 
-### C-T2. NotifGPUMemBound (code 12) emitted for memory-bound GPU
+### C-T2. NotifGPUMemBound (code 27) emitted for memory-bound GPU
 
 **Type:** Unit test (Go)
 **Steps:**
 1. Run recommender with memory-bound fixture
-2. Assert notification code 12 is in the result
+2. Assert notification code 27 is in the result
 3. Assert `memory_bound_detected` == true
 
 ### C-T3. GPU savings: idle GPU with cost data
@@ -415,12 +425,142 @@ PROF_ values are 0.0-1.0 ratios, fb_usage is MiB.
 
 ---
 
-## End-to-End Tests (Manual / Apollo Cluster)
+## End-to-End Tests
 
-These require a cluster with NVIDIA GPUs. They validate the full pipeline from
-operator collection through Koku ingestion to ros-ocp-backend display.
+### E2E-T0. Nise-simulated full pipeline (no GPU hardware required)
 
-### E2E-T1. Full pipeline: operator -> ingestion -> recommendation
+This is the primary E2E test. Uses nise to generate synthetic GPU data that flows
+through the full pipeline without requiring physical NVIDIA hardware.
+
+**Prereqs:** Cost Management on-prem deployment (Apollo SNO or docker compose),
+nise installed, sshuttle tunnel if remote cluster.
+
+**Steps:**
+
+1. **Create a static YAML** with GPU-equipped pods. Use the existing
+   `tests/ocp_gpu_static_report.yml` in nise as a starting point:
+
+   ```yaml
+   generators:
+     - OCPGenerator:
+         nodes:
+           - node:
+             node_name: gpu-node-1
+             cpu_cores: 32
+             memory_gig: 256
+             namespaces:
+               gpu-namespace:
+                 pods:
+                   - pod:
+                     pod_name: ml-training-pod
+                     cpu_request: 8
+                     mem_request_gig: 64
+                     cpu_limit: 16
+                     mem_limit_gig: 128
+                     gpus:
+                       - gpu:
+                         gpu_model: "A100"
+                         gpu_memory_capacity_mib: 40960
+                   - pod:
+                     pod_name: inference-pod
+                     cpu_request: 4
+                     mem_request_gig: 32
+                     cpu_limit: 8
+                     mem_limit_gig: 64
+                     gpus:
+                       - gpu:
+                         gpu_model: "Tesla T4"
+                         gpu_memory_capacity_mib: 15360
+                   - pod:
+                     pod_name: v100-legacy-pod
+                     cpu_request: 4
+                     mem_request_gig: 32
+                     cpu_limit: 8
+                     mem_limit_gig: 64
+                     gpus:
+                       - gpu:
+                         gpu_model: "V100"
+                         gpu_memory_capacity_mib: 32768
+   ```
+
+2. **Generate data with nise:**
+
+   ```bash
+   cd ~/dev/koku/nise
+   .venv/bin/nise report ocp \
+     --ros-ocp-info \
+     --static-report-file /tmp/gpu_static_data.yml \
+     --ocp-cluster-id my-ocp-cluster-3 \
+     --insights-upload /tmp/nise_gpu_output \
+     --daily-reports
+   ```
+
+3. **Verify GPU columns in generated CSV:**
+
+   ```bash
+   head -1 /tmp/nise_gpu_output/my-ocp-cluster-3/*/ros-openshift-container-*.csv | tr ',' '\n' | grep -n "accelerator\|tensor\|dram\|sm_active"
+   ```
+
+   Expected: columns for `accelerator_model_name`, `accelerator_profile_name`,
+   `accelerator_frame_buffer_usage_{min,max,avg}`, `tensor_pipe_active_{min,max,avg}`,
+   `dram_active_{min,max,avg}`, `sm_active_{min,max,avg}`.
+
+4. **Package and upload to MinIO** (if on-prem cluster):
+
+   ```bash
+   PAYLOAD=$(python3 -c "import uuid; print(uuid.uuid4().hex)")
+   cd /tmp/nise_gpu_output/my-ocp-cluster-3/<date-range>
+   tar czf /tmp/${PAYLOAD}.2026_04.tar.gz .
+   # Upload to MinIO without .tar.gz extension
+   ```
+
+5. **Trigger ingestion** via Masu API:
+
+   ```bash
+   curl -s "http://localhost:5042/api/cost-management/v1/ingest_ocp_payload/?org_id=1234567&payload_name=${PAYLOAD}.2026_04"
+   ```
+
+6. **Verify GPU data in database:**
+
+   ```sql
+   -- Check ros-ocp-backend processed the GPU columns
+   SELECT container_name, pod,
+          accelerator_model_name, accelerator_profile_name,
+          tensor_pipe_active_avg, dram_active_avg, sm_active_avg,
+          accelerator_frame_buffer_usage_avg
+   FROM daily_container_digests
+   WHERE accelerator_model_name IS NOT NULL AND accelerator_model_name != ''
+   LIMIT 10;
+   ```
+
+7. **Verify API returns GPU recommendations:**
+
+   ```bash
+   IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","type":"User","user":{"username":"user_dev","email":"user_dev@foo.com","is_org_admin":true,"access":{}}},"entitlements":{"cost_management":{"is_entitled":true}}}' | base64 -w0)
+
+   curl -s -H "x-rh-identity: $IDENTITY" \
+     "http://localhost:8000/api/cost-management/v1/recommendations/openshift?limit=10" \
+     | python3 -c "
+   import json, sys
+   d = json.load(sys.stdin)
+   for rec in d.get('data', []):
+       gpu = rec.get('recommendations', {}).get('gpu')
+       if gpu:
+           print(f'{rec[\"container\"]}: model={gpu[\"current_gpu_model\"]}, '
+                 f'class={gpu.get(\"gpu_classification\",\"N/A\")}, '
+                 f'confidence={gpu.get(\"gpu_confidence\",\"N/A\")}, '
+                 f'tensor={gpu.get(\"tensor_pipe_active_avg\",\"N/A\")}, '
+                 f'profile={gpu.get(\"recommended_gpu_profile\",\"N/A\")}')
+   "
+   ```
+
+**Expected results:**
+- A100 pod: classification present (idle/underutilized/etc.), profiling metrics non-zero
+- T4 pod: classification present, no MIG recommendation (T4 doesn't support MIG)
+- V100 pod: no classification (Tier 2), notification 28 (no profiling data),
+  FB usage present
+
+### E2E-T1. Full pipeline with real GPU hardware
 
 **Prereqs:** Apollo SNO with NVIDIA GPU, operator deployed, ros-ocp-backend deployed
 **Steps:**
@@ -433,24 +573,57 @@ operator collection through Koku ingestion to ros-ocp-backend display.
 
 ### E2E-T2. Tier 2 graceful degradation on V100
 
-**Prereqs:** Cluster with V100 GPU (or simulate by deploying DCGM Exporter
-without PROF_ metrics enabled)
+**Prereqs:** Cluster with V100 GPU (or simulate with nise using `gpu_model: "V100"`)
 **Steps:**
-1. Deploy a GPU workload
-2. Wait for operator data collection
-3. Verify CSV has blank PROF_ columns but populated FB columns
+1. Generate nise data with V100 GPU or deploy a V100 GPU workload
+2. Ingest the data
+3. Verify PROF_ columns are blank in the CSV (or zeros for nise data)
 4. Verify ros-ocp-backend produces FB-only recommendation
-5. Verify "profiling metrics unavailable" notification in API response
+5. Verify notification 28 (profiling metrics unavailable) in API response
 
 ### E2E-T3. MIG workload recommendation
 
-**Prereqs:** A100 or H100 with MIG enabled, at least 2 MIG instances
+**Prereqs:** A100 or H100 with MIG enabled, or nise data with `mig_instances`
 **Steps:**
-1. Deploy workloads on different MIG partitions
-2. Wait for operator data collection
+1. Generate nise data with MIG profiles or deploy workloads on MIG partitions
+2. Ingest the data
 3. Verify `accelerator_profile_name` is populated in CSV
 4. Verify ros-ocp-backend correctly identifies current MIG profile
 5. Verify recommended profile is reasonable given observed usage
+
+---
+
+## Nise Tests (Python)
+
+### N-T1. ROS CSV column definition includes GPU columns
+
+**Type:** Unit test (Python)
+**File:** `tests/test_ocp_generator.py::test_ros_usage_column_includes_gpu_columns`
+**Assert:** All 14 GPU columns present in `OCP_ROS_USAGE_COLUMN`
+
+### N-T2. GPU pod has profiling metrics (Tier 1)
+
+**Type:** Unit test (Python)
+**File:** `tests/test_ocp_generator.py::test_ros_data_gpu_pod_has_gpu_metrics`
+**Assert:** A100 pod has float values for tensor_pipe_active, dram_active, sm_active, FB usage
+
+### N-T3. Non-GPU pod has empty GPU columns
+
+**Type:** Unit test (Python)
+**File:** `tests/test_ocp_generator.py::test_ros_data_non_gpu_pod_has_empty_gpu_metrics`
+**Assert:** All 14 GPU columns are empty strings for non-GPU pods
+
+### N-T4. Tier 2 GPU has FB only, no PROF_ metrics
+
+**Type:** Unit test (Python)
+**File:** `tests/test_ocp_generator.py::test_ros_data_tier2_gpu_no_profiling_metrics`
+**Assert:** V100 pod has FB usage but empty tensor/dram/sm columns
+
+### N-T5. MIG GPU has profile name
+
+**Type:** Unit test (Python)
+**File:** `tests/test_ocp_generator.py::test_ros_data_mig_gpu_has_profile_name`
+**Assert:** MIG-enabled pod has `accelerator_profile_name` populated
 
 ---
 
@@ -466,6 +639,8 @@ without PROF_ metrics enabled)
 | C-T1 to C-T6 | C | Unit (Go) | No | No |
 | D-T1 to D-T5 | D | Integration (testcontainers) | Yes | No |
 | D-T6 | D | Verification | No | No |
+| N-T1 to N-T5 | Nise | Unit (Python) | No | No |
+| E2E-T0 | All | Manual (nise data) | Yes | No |
 | E2E-T1 to E2E-T3 | All | Manual (Apollo) | Yes | **Yes** |
 
 ### How to Run
@@ -475,8 +650,8 @@ without PROF_ metrics enabled)
 cd ros-ocp-backend && go test ./...
 
 # Only GPU-related unit tests
-go test ./internal/engine/ -run "GPU|Gpu|gpu"
-go test ./internal/ingestion/ -run "GPU|Gpu|gpu"
+go test ./internal/engine/ -run "TestMatchGPUModel|TestGPUModel|TestClassifyGPU|TestSelectMIG|TestGPUConfidence|TestRecommendGPU"
+go test ./internal/ingestion/ -run "GPU|HasGPU"
 
 # Integration tests (requires Docker for testcontainers)
 go test ./internal/api/ -run "Integration" -tags=integration
@@ -484,6 +659,9 @@ go test ./internal/engine/ -run "Integration" -tags=integration
 
 # Operator tests
 cd koku-metrics-operator && make test
+
+# Nise GPU tests (Python)
+cd nise && .venv/bin/python -m pytest tests/test_ocp_generator.py -k "gpu" -v
 ```
 
 ---
@@ -501,3 +679,13 @@ to pass without modification:
 - `internal/engine/migration_roundtrip_test.go` -- All migrations still reversible
 
 Any failure in these tests after GPU changes indicates a regression.
+
+### Nise regression tests
+
+Nise GPU changes must not break existing OCP data generation:
+
+```bash
+cd nise && .venv/bin/python -m pytest tests/test_ocp_generator.py -v
+```
+
+All 84 tests (78 existing + 6 GPU-specific) must pass.

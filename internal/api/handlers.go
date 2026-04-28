@@ -317,6 +317,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
+	enrichWithGPU(results)
+
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
 		filename := "recommendations-" + time.Now().Format("20060102")
@@ -403,6 +405,8 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 			"message": "unable to fetch records from database",
 		})
 	}
+
+	enrichWithGPU(results)
 
 	return serveNativeList(c, results, int(count), apiListOptions)
 }
@@ -694,6 +698,10 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 		}
 		met, _ = model.MonitoringEndTime(ctx, pool, key)
 	}
+
+	singleSlice := []model.NativeContainerResult{*result}
+	enrichWithGPU(singleSlice)
+	*result = singleSlice[0]
 
 	return model.BuildDetailResponse(result, plots, met)
 }

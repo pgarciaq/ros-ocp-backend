@@ -104,10 +104,32 @@ not label recommendations as "increase" / "decrease" / "well-sized".
 
 ### GPU Recommendations
 
-No GPU fields or recommendation logic in the native engine.
-`NotifGPUUnderutilized` notification code exists in constants but is never
-emitted. Would require GPU usage data from the koku-metrics-operator
-(already collected) to be ingested into ROS digests.
+**Engine status:** Implemented. The engine classifies GPU workloads using
+DCGM profiling metrics (`PROF_PIPE_TENSOR_ACTIVE`, `PROF_DRAM_ACTIVE`,
+`PROF_SM_ACTIVE`) into categories: idle, underutilized, memory-bound,
+compute-bound underutilized, and well-utilized. Supports MIG profile
+recommendations for A100/A30/H100/H200/B100/B200. Confidence scoring
+accounts for observation duration and workload variability. Two-tier
+GPU support: Turing+ (full profiling) and Volta/Pascal (frame-buffer only).
+
+**Data generation:** Nise generates GPU profiling metrics in ROS CSVs via
+`--ros-ocp-info`. Tier 1 GPUs (T4, A10, A30, A100, H100, L40S) get all
+profiling metrics; Tier 2 (V100) gets only frame buffer.
+
+**API status:** `GPURecommendation` block included in detail response with
+`current_gpu_model`, `gpu_classification`, `recommended_gpu_profile`,
+`gpu_confidence`, profiling metric averages, and savings estimate.
+GPU-specific notification codes: 10 (underutilized), 26 (idle),
+27 (memory-bound), 28 (no profiling data).
+
+**Not yet implemented:**
+- GPU savings estimation from Koku cost data (placeholder)
+- API query filters (`has_gpu`, `gpu_model`, `gpu_classification`)
+- GPU daily digest aggregation pipeline
+- Koku-UI display of GPU recommendations
+
+See `docs/plans/gpu-recommendations.md` for detailed design and
+`docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
 
 ### Java / JVM Recommendations
 
