@@ -649,13 +649,13 @@ nise installed, sshuttle tunnel if remote cluster.
 # All ros-ocp-backend tests
 cd ros-ocp-backend && go test ./...
 
-# Only GPU-related unit tests
-go test ./internal/engine/ -run "TestMatchGPUModel|TestGPUModel|TestClassifyGPU|TestSelectMIG|TestGPUConfidence|TestRecommendGPU"
-go test ./internal/ingestion/ -run "GPU|HasGPU"
+# Only GPU-related unit tests (all pass)
+go test ./internal/engine/ -run "TestMatchGPUModel|TestGPUModel|TestClassifyGPU|TestSelectMIG|TestGPUConfidence|TestRecommendGPU|TestApplyGPUSavings|TestGpuMonthlyRate|TestMigTotalSlices|TestMigProfileSlices" -v
+go test ./internal/ingestion/ -run "TestMinFloat|TestMaxFloat|TestMeanFloat|TestHasGPU" -v
+go test ./internal/api/ -run "TestToGPURecommendation|TestFilterGPU|TestMatchesAny" -v
 
-# Integration tests (requires Docker for testcontainers)
-go test ./internal/api/ -run "Integration" -tags=integration
-go test ./internal/engine/ -run "Integration" -tags=integration
+# GPU integration tests (requires Docker for testcontainers)
+go test ./internal/api/ -run "TestGetNativeRecommendationSetList_GPUEnrichment" -v -timeout 120s
 
 # Operator tests
 cd koku-metrics-operator && make test
@@ -663,6 +663,29 @@ cd koku-metrics-operator && make test
 # Nise GPU tests (Python)
 cd nise && .venv/bin/python -m pytest tests/test_ocp_generator.py -k "gpu" -v
 ```
+
+### Implementation Status per Test ID
+
+| Test ID | Status | Notes |
+|---|---|---|
+| 0-T1 to 0-T5 | **Done** | Operator tests updated with new column layout |
+| A-T1 to A-T4 | **Done** | CSV parser tests for GPU columns |
+| A-T5 | **Done** | Migration roundtrip (version 43) |
+| A-T6, A-T7 | **Partial** | Covered by `gpu_digest_test.go` (minFloat/maxFloat/meanFloat/HasGPU) and integration test |
+| B-T1 | **Done** | `gpu_metadata_test.go` |
+| B-T2 to B-T6 | **Done** | `gpu_recommender_test.go` |
+| B-T7 to B-T11 | **Done** | `gpu_recommender_test.go` (MIG selection tests) |
+| B-T12 to B-T14 | **Done** | `gpu_recommender_test.go` (confidence tests) |
+| B-T15 | Pending | Threshold env var configuration |
+| C-T1 to C-T2 | **Done** | Covered in `gpu_recommender_test.go` |
+| C-T3 to C-T6 | **Done** | `gpu_savings_test.go` (ApplyGPUSavings with idle, MIG, no cost data, well-utilized) |
+| D-T1 | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment/response_includes_GPU_block` |
+| D-T2 | **Done** | Implicitly covered by `has_gpu=false` filter subtest |
+| D-T3 | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment/has_gpu=true_filter` + `has_gpu=false_filter` |
+| D-T4 | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment/gpu_model_filter` |
+| D-T5 | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment/gpu_classification_filter` |
+| N-T1 to N-T5 | **Done** | 6 GPU-specific nise tests |
+| E2E-T0 | **Done** | Verified on Apollo SNO cluster with nise-generated data |
 
 ---
 

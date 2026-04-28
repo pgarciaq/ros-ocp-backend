@@ -416,10 +416,22 @@ For MIG-capable GPUs where workload is underutilized:
 
 ### C2. GPU Savings Estimation
 
-Via Koku `effective_rates` API:
-- **Idle**: savings = full GPU cost/month
-- **MIG right-sizing**: savings = `(1 - recommended_slices/7) * full_gpu_cost/month`
-- **No cost data**: savings = null, emit `NotifNoCostData`
+Via Koku `effective_rates` API (`/api/cost-management/v1/effective_rates/?cluster_uuid=<UUID>`):
+
+The `configured_rates` object includes `gpu_cost_per_month` with `infrastructure` and
+`supplementary` values. The total GPU monthly rate is `infrastructure + supplementary`.
+
+Savings logic (`ApplyGPUSavings()` in `gpu_recommender.go`):
+- **Idle**: savings = full GPU rate/month (could remove the GPU entirely)
+- **MIG right-sizing**: savings = `(1 - recommended_slices/total_slices) * full_gpu_rate/month`
+  where `total_slices` is the max MIG slices for the GPU model
+- **Well-utilized / no recommendation**: savings = $0
+- **No cost data**: savings = nil (no estimate available)
+
+The `enrichWithGPU()` function in `gpu_enrichment.go` fetches cost data from Koku
+via `HTTPCostDataProvider` and passes it to `ApplyGPUSavings()`. The Koku URL is
+configured via `KokuMasuURL` in the ROS config. If Koku is unreachable, savings
+are omitted (nil) rather than failing the request.
 
 ---
 
@@ -500,20 +512,30 @@ Update `openapi.json` with GPU fields, filters, and response schema.
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 0: Operator metrics | **Done** | Removed DEV_GPU_UTIL/DEV_MEM_COPY_UTIL, added PROF_PIPE_TENSOR_ACTIVE/DRAM_ACTIVE/SM_ACTIVE |
-| Phase A: Ingestion | **Done** | Extended MetricRow, CSV parser, migration 000042, gpu_container_digests table |
-| Phase B: GPU engine | **Done** | GPU metadata (16 models), classification, MIG selection, confidence scoring |
-| Phase C: Notifications/savings | **Done** | Notification codes 10/26/27/28, savings placeholder |
-| Phase D: API response | **Done** | GPURecommendation struct, OpenAPI spec updated |
+| Phase A: Ingestion | **Done** | Extended MetricRow, CSV parser, migration 000042, gpu_container_digests table, `upsertGPUDigests` pipeline |
+| Phase A+: GPU digest pipeline | **Done** | `upsertGPUDigests()` in `pipeline.go` aggregates hourly GPU metrics into daily digests in `gpu_container_digests`. Migration 000043 adds unique constraint for upsert correctness. |
+| Phase B: GPU engine | **Done** | GPU metadata (16 models), classification, MIG selection, confidence scoring, `QueryGPURecommendations()` in `gpu_query.go` |
+| Phase C: Notifications/savings | **Done** | Notification codes 10/26/27/28. `ApplyGPUSavings()` computes savings using `gpu_cost_per_month` from Koku `effective_rates` endpoint. |
+| Phase D: API response | **Done** | `enrichWithGPU()` in `gpu_enrichment.go` attaches GPU recommendations to `NativeContainerResult`. API filters: `has_gpu`, `gpu_model`, `gpu_classification` (post-enrichment in-memory filtering). OpenAPI spec updated. |
 | Nise: Test data generation | **Done** | ROS CSV generates GPU profiling metrics for Tier 1/Tier 2 GPUs |
-| E2E: Apollo cluster validation | **Pending** | Requires nise data generation + ingestion on cluster |
+| E2E: Apollo cluster validation | **Done** | Full pipeline verified: nise data → upload → Koku ingestion → ROS processing → gpu_container_digests → API response with GPU block |
+| Unit tests | **Done** | `gpu_digest_test.go`, `gpu_enrichment_test.go`, `gpu_filter_test.go`, `gpu_savings_test.go` |
+| Integration tests | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment` (5 subtests: GPU block, has_gpu filter, gpu_model filter, gpu_classification filter) |
 
 ### What's Not Yet Implemented
 
-- **GPU savings estimation from Koku cost data**: The `estimated_monthly_gpu_savings_usd`
-  field is a placeholder. Requires querying Koku `effective_rates` for GPU-specific costs.
-- **API filters** (`has_gpu`, `gpu_model`, `gpu_classification`): Query parameter
-  filtering is defined in the OpenAPI spec but not wired to the query handler.
-- **GPU daily digest aggregation pipeline**: The `gpu_container_digests` table exists
-  but the ingestion pipeline does not yet aggregate into it. GPU data flows from CSV
-  parsing through `MetricRow.HasGPU()` to the recommendation engine directly.
 - **Koku-UI**: Frontend display of GPU recommendations awaits UX mockups.
+- **Additional unit tests**: Some test plan items (A-T6/A-T7 daily aggregation, B-T1 to B-T15 individual classification scenarios, C-T1 to C-T6 individual notification/savings scenarios) have partial coverage through the integration test and `gpu_savings_test.go` but are not exhaustively implemented as separate test functions.
+
+### Key Files (GPU Pipeline)
+
+| File | Purpose |
+|---|---|
+| `internal/ingestion/pipeline.go` | `upsertGPUDigests()` — writes GPU daily digests from parsed CSV |
+| `internal/engine/gpu_query.go` | `QueryGPURecommendations()` — reads digests, calls `RecommendGPU()` |
+| `internal/api/gpu_enrichment.go` | `enrichWithGPU()` — attaches GPU recs + savings to API results; `filterGPUResults()` — in-memory GPU filtering |
+| `internal/api/handlers.go` | Calls `enrichWithGPU()` and `filterGPUResults()` in list/detail handlers |
+| `internal/engine/gpu_recommender.go` | Classification, MIG selection, confidence, `ApplyGPUSavings()` |
+| `internal/engine/gpu_metadata.go` | GPU model specs and MIG profile catalog |
+| `migrations/000042_create_gpu_container_digests.up.sql` | GPU digests table (partitioned) |
+| `migrations/000043_add_gpu_digests_unique_constraint.up.sql` | Unique constraint for upsert correctness |
