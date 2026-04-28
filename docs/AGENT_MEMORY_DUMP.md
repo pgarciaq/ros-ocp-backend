@@ -963,6 +963,188 @@ The user explicitly deferred PR creation. All work is on personal fork branches.
 
 ---
 
+## 16b. GPU and MIG Recommendations: Completion Status (as of 2026-04-29)
+
+This section provides a definitive assessment of what is done, what is verified,
+and what gaps remain in the GPU/MIG recommendation feature. It supersedes any
+partial status information elsewhere in this document.
+
+### Code-Complete and Unit/Integration Tested
+
+All of the following are implemented in Go, have passing unit tests, and have
+integration tests where applicable:
+
+| Component | Key File(s) | Tests |
+|---|---|---|
+| GPU classification engine (idle, underutilized, memory_bound, compute_bound_underutil, well_utilized) | `engine/gpu_recommender.go` | `engine/gpu_recommender_test.go` |
+| MIG profile recommendation (A100, A30, H100, H200, B100, B200) | `engine/gpu_recommender.go`, `engine/gpu_metadata.go` | `engine/gpu_recommender_test.go` |
+| GPU metadata for all NVIDIA datacenter GPUs (Pascal through Blackwell) | `engine/gpu_metadata.go` | `engine/gpu_metadata_test.go` |
+| GPU digest ingestion pipeline (`upsertGPUDigests`) | `ingestion/pipeline.go` | `ingestion/gpu_digest_test.go` |
+| GPU partition creation (`EnsureGPUDigestPartitions`) | `ingestion/pipeline.go` | (covered by integration tests) |
+| GPU query from `gpu_container_digests` | `engine/gpu_query.go` | (covered by handler integration test) |
+| GPU API enrichment (`enrichWithGPU`) | `api/gpu_enrichment.go` | `api/gpu_enrichment_test.go` |
+| GPU API filters (`has_gpu`, `gpu_model`, `gpu_classification`) | `api/gpu_enrichment.go` | `api/gpu_filter_test.go` |
+| GPU savings estimation (`ApplyGPUSavings`) | `engine/gpu_recommender.go` | `engine/gpu_savings_test.go` |
+| GPU savings helper functions (`gpuMonthlyRate`, `migTotalSlices`, `migProfileSlices`) | `engine/gpu_recommender.go` | `engine/gpu_savings_test.go` |
+| GPU notification codes (idle=26, memory_bound=27, no_profiling_data=28, underutilized=10) | `engine/gpu_recommender.go`, `engine/notifications.go` | Various |
+| `MetricRow.HasGPU()` detection | `ingestion/models.go` | `ingestion/gpu_digest_test.go` |
+| `toGPURecommendation` (GPURec → model.GPURecommendation) | `api/gpu_enrichment.go` | `api/gpu_enrichment_test.go` |
+| Handler integration test with GPU enrichment (5 subtests) | `api/handlers_integration_test.go` | `TestGetNativeRecommendationSetList_GPUEnrichment` |
+| Operator DCGM metric replacement (DEV_ → PROF_) | `koku-metrics-operator` branch | Unit tests in operator repo |
+| Nise GPU data generation (14 columns, Tier 1 + Tier 2) | `nise/generators/ocp/ocp_generator.py` | `tests/test_ocp_generator.py` (6 GPU tests) |
+| `gpu_container_digests` unique constraint migration | `migrations/000043_*` | `engine/migration_roundtrip_test.go` |
+
+### E2E Verified on Apollo (Confirmed Working)
+
+These were verified by deploying to the Apollo aarch64 SNO cluster and hitting
+the live API:
+
+- **GPU blocks appear in API responses** with correct model names:
+  - `v100-legacy` → V100 (Tier 2, classification=None, notification 28)
+  - `inference-server` → Tesla T4 (Tier 1, classification=well_utilized)
+  - `training-job` → A100 (Tier 1, classification=well_utilized)
+- **GPU filter `has_gpu=true`** correctly returns only the 3 GPU containers (out of 5 total)
+- **GPU filter `has_gpu=false`** correctly returns only the 2 non-GPU containers
+- **GPU filter `gpu_model=A100`** correctly returns only the A100 container
+- **GPU filter `gpu_classification=well_utilized`** correctly returns T4 + A100
+- **Koku `effective_rates` endpoint** returns `gpu_cost_per_month: {"infrastructure": 2500.0, "supplementary": 0.0}` for the test cluster
+- **`gpu_container_digests` table** has 12 rows (3 containers × 4 days) with correct GPU metrics
+- **Ingestion pipeline** correctly processes nise-generated GPU CSV data into the database
+
+### E2E Not Yet Verified on Apollo (Latest Code Pushed But Not Deployed)
+
+The following two commits are pushed to the branch and the arm64 image was built
+and pushed to the Apollo registry, but the ROS API pods have not yet been
+restarted to pick up the new image:
+
+| Fix | Commit | Expected Behavior After Deploy |
+|---|---|---|
+| `org_id` prefix stripped before calling Koku | `4f3d96a` | `enrichWithGPU` successfully fetches cost data from Koku `effective_rates` |
+| `ApplyGPUSavings` returns `$0` not `nil` for well-utilized | `c53f539` | All three GPU containers show `estimated_monthly_gpu_savings_usd: 0.0` instead of `null` |
+
+**To verify:** Restart the ROS API deployment (`oc rollout restart deployment/cost-onprem-ros-api -n cost-onprem`), port-forward, and hit the API with `has_gpu=true`. All three containers should show `estimated_monthly_gpu_savings_usd: 0.0`. The V100 (no classification) also gets `$0.0` because while it has no classification, cost data IS available — the engine can confirm there's no specific savings action to take.
+
+**Why `$0` for all three in current test data:** None of the test containers trigger a savings-producing classification:
+- T4 and A100 are `well_utilized` → no waste → $0
+- V100 has no classification (Tier 2) → no actionable savings recommendation → $0
+- There is no `idle` GPU in the test data (which would produce `savings = $2500`)
+- There is no MIG-right-sizable workload (which would produce fractional savings)
+
+### Gaps That Remain in GPU/MIG Feature
+
+#### Gap 1: No Idle GPU in Test Data (E2E coverage gap)
+
+**Impact:** The `idle` classification → `savings = full GPU rate` code path is only
+unit-tested (`TestApplyGPUSavings_IdleGPU` passes). It has never been verified
+E2E on Apollo.
+
+**How to fix:** Add a GPU pod to the nise YAML with very low utilization:
+```yaml
+- pod:
+  pod_name: idle-gpu-pod
+  cpu_request: 1
+  cpu_limit: 2
+  mem_request_gb: 4
+  mem_limit_gb: 8
+  gpu:
+  gpu_model: Tesla T4
+  gpu_sm_active_avg: 0.01      # <5% triggers idle
+  gpu_tensor_pipe_active_avg: 0.0
+  gpu_dram_active_avg: 0.0
+  gpu_fb_usage_avg: 50          # MiB
+```
+
+Regenerate nise data, re-upload, and verify the API returns
+`gpu_classification: "idle"` and `estimated_monthly_gpu_savings_usd: 2500.0`.
+
+**Effort:** ~30 minutes (update YAML, regenerate, upload, verify).
+
+#### Gap 2: MIG Right-Sizing Not E2E Testable
+
+**Impact:** The MIG recommendation code (`RecommendedGPUProfile` selection and
+`savings = (1 - rec_slices/total_slices) × rate` formula) is only unit-tested.
+
+**Why it can't be E2E tested easily:** MIG recommendations require:
+1. A MIG-capable GPU model (A100, A30, H100, H200, B100, B200) in the data
+2. An `underutilized` or `memory_bound` classification (SM_ACTIVE < 30%)
+3. Frame buffer usage that fits in a smaller MIG slice (e.g., 8 GiB on an 80 GB A100 → recommend `1g.10gb`)
+
+We could add this to nise test data:
+```yaml
+- pod:
+  pod_name: mig-candidate-pod
+  gpu:
+  gpu_model: NVIDIA A100-SXM4-80GB
+  gpu_sm_active_avg: 0.15        # underutilized
+  gpu_tensor_pipe_active_avg: 0.1
+  gpu_dram_active_avg: 0.05
+  gpu_fb_usage_avg: 8000         # 8 GiB → fits in 1g.10gb (10 GiB)
+```
+
+Expected result: `recommended_gpu_profile: "1g.10gb"` and
+`savings = (1 - 1/7) × 2500 = $2142.86/month`.
+
+**Effort:** ~45 minutes.
+
+#### Gap 3: No Time-Slicing Recommendation
+
+**Impact:** For non-MIG GPUs that are underutilized (e.g., T4), the engine flags
+the problem with notification code 10 (`NotifGPUUnderutilized`) but does NOT
+recommend a specific GPU time-sharing configuration (e.g., "share this GPU across
+3 pods"). This was explicitly marked as "Phase 2" in the GPU plan.
+
+**Why deferred:** GPU time-slicing configuration is highly cluster-specific
+(depends on NVIDIA device plugin configuration, MPS settings, and workload
+compatibility). Making actionable time-slicing recommendations requires
+understanding the cluster's GPU sharing configuration, which we don't currently
+collect.
+
+#### Gap 4: koku-ui Has No GPU Display
+
+**Impact:** The API returns complete GPU data (model, classification, profiling
+metrics, savings, MIG recommendations, notifications) but the frontend doesn't
+display any of it. Users can only see GPU recommendations via direct API calls.
+
+**Blocked on:** Stefan (UX designer) providing mockups for the GPU section of the
+recommendation detail view.
+
+#### Gap 5: Competitive Parity Assessment
+
+Our GPU engine is at parity or better than competitors in these areas:
+
+| Feature | Us | KubeCost | Cast.ai | Kruize |
+|---|---|---|---|---|
+| Idle detection | ✅ (SM_ACTIVE < 5%) | ✅ (DEV_GPU_UTIL) | ✅ | ✅ (DEV_GPU_UTIL) |
+| Underutilized flagging | ✅ (SM_ACTIVE < 30%) | ✅ (DEV_GPU_UTIL) | Limited | ✅ (DEV_GPU_UTIL) |
+| Memory-bound detection | ✅ (DRAM > 2×SM) | ❌ | ❌ | ❌ |
+| Accurate profiling metrics | ✅ (PROF_ metrics) | ❌ (DEV_ only) | ❌ | ❌ (DEV_ only) |
+| MIG recommendation | ✅ (A100/A30/H100/H200/B/B200) | ❌ | ❌ | ✅ (similar) |
+| Per-container GPU savings | ✅ ($, via Koku cost model) | ✅ | Node-level only | ❌ |
+| Time-slicing recommendation | ❌ (deferred) | ❌ | ❌ | ❌ |
+
+**Our unique advantage:** We are the only tool using DCGM PROF_ profiling metrics,
+which correctly identify memory-bound workloads that DEV_GPU_UTIL would
+misclassify as "well utilized". This matters for LLM inference, LoRA fine-tuning,
+and other HBM-bound workloads.
+
+### Summary: Is GPU/MIG Complete?
+
+**For code review / PR purposes: YES.** All features described in the GPU plan
+are implemented, unit-tested, and integration-tested. The classification algorithm,
+MIG recommendation logic, savings estimation, API filters, and notification codes
+all work correctly. The operator changes and nise data generation support the
+full feature.
+
+**For production readiness: ALMOST.** Two minor items remain:
+1. Deploy the latest image on Apollo and confirm `$0.00` savings appears (10 minutes)
+2. Optionally add idle + MIG test containers to nise for fuller E2E coverage (45 minutes)
+
+**For feature completeness vs competitors: YES**, with the exception of
+time-slicing recommendations (which no competitor offers either) and UI display
+(blocked on UX design).
+
+---
+
 ## 17. Development Environment and Testing
 
 ### Running Unit Tests
