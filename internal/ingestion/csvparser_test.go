@@ -124,9 +124,9 @@ func TestValidateMetricRow(t *testing.T) {
 func TestParseCSVRows(t *testing.T) {
 	t.Run("valid CSV with header", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
-			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
-			"2026-03-01 00:15:00 +0000 UTC,2026-03-01 00:30:00 +0000 UTC,test-ns,test-deploy,deployment,main,0.5,1.0,0.30,0.02,1048576.0,2097152.0,600000.0,300000.0,0",
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-1,test-deploy,deployment,main,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+			"2026-03-01 00:15:00 +0000 UTC,2026-03-01 00:30:00 +0000 UTC,test-ns,pod-2,test-deploy,deployment,main,0.5,1.0,0.30,0.02,1048576.0,2097152.0,600000.0,300000.0,0",
 		}, "\n")
 
 		rows, err := ParseCSVRows(strings.NewReader(csv))
@@ -139,7 +139,7 @@ func TestParseCSVRows(t *testing.T) {
 	})
 
 	t.Run("empty CSV returns empty slice", func(t *testing.T) {
-		csv := "interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n"
+		csv := "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n"
 		rows, err := ParseCSVRows(strings.NewReader(csv))
 		require.NoError(t, err)
 		assert.Empty(t, rows)
@@ -147,8 +147,8 @@ func TestParseCSVRows(t *testing.T) {
 
 	t.Run("NaN values cause row skip", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
-			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,NaN,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-nan,test-deploy,deployment,main,NaN,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
 		}, "\n")
 
 		rows, err := ParseCSVRows(strings.NewReader(csv))
@@ -158,8 +158,8 @@ func TestParseCSVRows(t *testing.T) {
 
 	t.Run("large values preserved as int64", func(t *testing.T) {
 		csv := strings.Join([]string{
-			"interval_start,interval_end,namespace,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
-			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,test-deploy,deployment,main,128.0,256.0,64.0,0.0,137438953472.0,274877906944.0,68719476736.0,34359738368.0,0",
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-big,test-deploy,deployment,main,128.0,256.0,64.0,0.0,137438953472.0,274877906944.0,68719476736.0,34359738368.0,0",
 		}, "\n")
 
 		rows, err := ParseCSVRows(strings.NewReader(csv))
@@ -211,6 +211,80 @@ func TestParseCSVRows_WorkloadPodCount(t *testing.T) {
 }
 
 // TestRoundHalfToEven verifies our rounding matches math.Round behavior.
+func TestMetricRow_HasGPU(t *testing.T) {
+	assert.False(t, (&MetricRow{}).HasGPU())
+	row := MetricRow{AcceleratorModelName: "NVIDIA A100"}
+	assert.True(t, row.HasGPU())
+}
+
+func TestParseCSVRows_GPUMetrics(t *testing.T) {
+	t.Run("parses GPU columns when present", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count," +
+				"accelerator_core_usage_percentage_min,accelerator_model_name,accelerator_profile_name," +
+				"accelerator_frame_buffer_usage_min,accelerator_frame_buffer_usage_max,accelerator_frame_buffer_usage_avg," +
+				"tensor_pipe_active_min,tensor_pipe_active_max,tensor_pipe_active_avg," +
+				"dram_active_min,dram_active_max,dram_active_avg," +
+				"sm_active_min,sm_active_max,sm_active_avg",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-gpu,train,deployment,app," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0," +
+				",NVIDIA-A100-SXM4-80GB,3g.40gb," +
+				"1024.5,2048.0,1536.25," +
+				"0.1,0.2,0.15," +
+				"0.3,0.4,0.35," +
+				"0.5,0.6,0.55",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.True(t, rows[0].HasGPU())
+		assert.Equal(t, "NVIDIA-A100-SXM4-80GB", rows[0].AcceleratorModelName)
+		assert.Equal(t, "3g.40gb", rows[0].AcceleratorProfileName)
+		assert.InDelta(t, 1024.5, rows[0].AcceleratorFBUsageMin, 1e-9)
+		assert.InDelta(t, 0.55, rows[0].SMActiveAvg, 1e-9)
+	})
+
+	t.Run("missing GPU columns leave zero defaults", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-only,svc,deployment,svc,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.False(t, rows[0].HasGPU())
+		assert.Empty(t, rows[0].AcceleratorProfileName)
+		assert.Zero(t, rows[0].TensorPipeActiveAvg)
+	})
+
+	t.Run("subset of GPU columns with blanks", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count," +
+				"accelerator_model_name,accelerator_profile_name,accelerator_frame_buffer_usage_min," +
+				"tensor_pipe_active_avg,dram_active_min,sm_active_max",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,gpu-ns,pod-half,wl,deployment,c1," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0," +
+				"Tesla-T4,,,0.42,,",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.True(t, rows[0].HasGPU())
+		assert.Empty(t, rows[0].AcceleratorProfileName)
+		assert.InDelta(t, 0.42, rows[0].TensorPipeActiveAvg, 1e-9)
+		assert.Zero(t, rows[0].AcceleratorFBUsageMin)
+	})
+}
+
 func TestRoundHalfToEven(t *testing.T) {
 	assert.Equal(t, int64(1), int64(math.Round(0.5)))
 	assert.Equal(t, int64(2), int64(math.Round(1.5)))

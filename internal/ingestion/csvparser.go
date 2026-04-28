@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -91,6 +92,21 @@ type csvColumnIndex struct {
 	memRSS           int
 	oomCount         int
 	workloadPodCount int
+	// GPU columns (optional; -1 when header absent).
+	acceleratorModelName           int
+	acceleratorProfileName         int
+	acceleratorFrameBufferUsageMin int
+	acceleratorFrameBufferUsageMax int
+	acceleratorFrameBufferUsageAvg int
+	tensorPipeActiveMin            int
+	tensorPipeActiveMax            int
+	tensorPipeActiveAvg            int
+	dramActiveMin                  int
+	dramActiveMax                  int
+	dramActiveAvg                  int
+	smActiveMin                    int
+	smActiveMax                    int
+	smActiveAvg                    int
 }
 
 func buildColumnIndex(header []string) (csvColumnIndex, error) {
@@ -99,6 +115,20 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1,
 		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
+		acceleratorModelName:           -1,
+		acceleratorProfileName:         -1,
+		acceleratorFrameBufferUsageMin: -1,
+		acceleratorFrameBufferUsageMax: -1,
+		acceleratorFrameBufferUsageAvg: -1,
+		tensorPipeActiveMin:            -1,
+		tensorPipeActiveMax:            -1,
+		tensorPipeActiveAvg:            -1,
+		dramActiveMin:                  -1,
+		dramActiveMax:                  -1,
+		dramActiveAvg:                  -1,
+		smActiveMin:                    -1,
+		smActiveMax:                    -1,
+		smActiveAvg:                    -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -136,6 +166,34 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.oomCount = i
 		case "workload_pod_count":
 			idx.workloadPodCount = i
+		case "accelerator_model_name":
+			idx.acceleratorModelName = i
+		case "accelerator_profile_name":
+			idx.acceleratorProfileName = i
+		case "accelerator_frame_buffer_usage_min":
+			idx.acceleratorFrameBufferUsageMin = i
+		case "accelerator_frame_buffer_usage_max":
+			idx.acceleratorFrameBufferUsageMax = i
+		case "accelerator_frame_buffer_usage_avg":
+			idx.acceleratorFrameBufferUsageAvg = i
+		case "tensor_pipe_active_min":
+			idx.tensorPipeActiveMin = i
+		case "tensor_pipe_active_max":
+			idx.tensorPipeActiveMax = i
+		case "tensor_pipe_active_avg":
+			idx.tensorPipeActiveAvg = i
+		case "dram_active_min":
+			idx.dramActiveMin = i
+		case "dram_active_max":
+			idx.dramActiveMax = i
+		case "dram_active_avg":
+			idx.dramActiveAvg = i
+		case "sm_active_min":
+			idx.smActiveMin = i
+		case "sm_active_max":
+			idx.smActiveMax = i
+		case "sm_active_avg":
+			idx.smActiveAvg = i
 		}
 	}
 	required := []struct {
@@ -208,6 +266,33 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 	}
 
 	return rows, nil
+}
+
+// optionalParseFloat parses an optional GPU metric cell. Missing column index,
+// short records, or empty/whitespace cells yield 0 with no error.
+func optionalParseFloat(record []string, col int, field string) (float64, error) {
+	if col < 0 || col >= len(record) {
+		return 0, nil
+	}
+	s := strings.TrimSpace(record[col])
+	if s == "" {
+		return 0, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", field, err)
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("%s: invalid value %s", field, s)
+	}
+	return f, nil
+}
+
+func optionalStringField(record []string, col int) string {
+	if col < 0 || col >= len(record) {
+		return ""
+	}
+	return strings.TrimSpace(record[col])
 }
 
 func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
@@ -287,6 +372,46 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			return row, fmt.Errorf("workload_pod_count: %w", err)
 		}
 		row.WorkloadPodCount = int64(math.Round(v))
+	}
+
+	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
+	row.AcceleratorProfileName = optionalStringField(record, idx.acceleratorProfileName)
+
+	if row.AcceleratorFBUsageMin, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMin, "accelerator_frame_buffer_usage_min"); err != nil {
+		return row, err
+	}
+	if row.AcceleratorFBUsageMax, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMax, "accelerator_frame_buffer_usage_max"); err != nil {
+		return row, err
+	}
+	if row.AcceleratorFBUsageAvg, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageAvg, "accelerator_frame_buffer_usage_avg"); err != nil {
+		return row, err
+	}
+	if row.TensorPipeActiveMin, err = optionalParseFloat(record, idx.tensorPipeActiveMin, "tensor_pipe_active_min"); err != nil {
+		return row, err
+	}
+	if row.TensorPipeActiveMax, err = optionalParseFloat(record, idx.tensorPipeActiveMax, "tensor_pipe_active_max"); err != nil {
+		return row, err
+	}
+	if row.TensorPipeActiveAvg, err = optionalParseFloat(record, idx.tensorPipeActiveAvg, "tensor_pipe_active_avg"); err != nil {
+		return row, err
+	}
+	if row.DRAMActiveMin, err = optionalParseFloat(record, idx.dramActiveMin, "dram_active_min"); err != nil {
+		return row, err
+	}
+	if row.DRAMActiveMax, err = optionalParseFloat(record, idx.dramActiveMax, "dram_active_max"); err != nil {
+		return row, err
+	}
+	if row.DRAMActiveAvg, err = optionalParseFloat(record, idx.dramActiveAvg, "dram_active_avg"); err != nil {
+		return row, err
+	}
+	if row.SMActiveMin, err = optionalParseFloat(record, idx.smActiveMin, "sm_active_min"); err != nil {
+		return row, err
+	}
+	if row.SMActiveMax, err = optionalParseFloat(record, idx.smActiveMax, "sm_active_max"); err != nil {
+		return row, err
+	}
+	if row.SMActiveAvg, err = optionalParseFloat(record, idx.smActiveAvg, "sm_active_avg"); err != nil {
+		return row, err
 	}
 
 	return row, nil
