@@ -49,7 +49,8 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 
 		var costData *costdata.ClusterCostData
 		if costProvider != nil && orgID != "" {
-			cd, err := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+			kokuOrgID := strings.TrimPrefix(orgID, "org")
+			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, clusterUUID, start, now)
 			if err != nil {
 				log.Warnf("enrichWithGPU: cost data fetch failed for cluster %s: %v", clusterUUID, err)
 			} else {
