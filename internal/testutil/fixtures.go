@@ -244,6 +244,64 @@ func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace s
 	}
 }
 
+// GPUDigestRow holds the fields for a single gpu_container_digests row.
+type GPUDigestRow struct {
+	IntervalStart       time.Time
+	ClusterUUID         string
+	Namespace           string
+	Workload            string
+	WorkloadType        string
+	ContainerName       string
+	GPUModelName        string
+	GPUProfileName      string
+	FBUsageMinMiB       float64
+	FBUsageMaxMiB       float64
+	FBUsageAvgMiB       float64
+	TensorPipeActiveMin float64
+	TensorPipeActiveMax float64
+	TensorPipeActiveAvg float64
+	DRAMActiveMin       float64
+	DRAMActiveMax       float64
+	DRAMActiveAvg       float64
+	SMActiveMin         float64
+	SMActiveMax         float64
+	SMActiveAvg         float64
+}
+
+// SeedGPUDigest inserts a single row into gpu_container_digests.
+func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
+	t.Helper()
+	ctx := context.Background()
+	monthStart := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := "gpu_container_digests_" + monthStart.Format("200601")
+	_, _ = pool.Exec(ctx, "CREATE TABLE IF NOT EXISTS "+partName+
+		" PARTITION OF gpu_container_digests FOR VALUES FROM ('"+monthStart.Format("2006-01-02")+
+		"') TO ('"+monthEnd.Format("2006-01-02")+"')")
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO gpu_container_digests (
+			interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+			gpu_model_name, gpu_profile_name,
+			fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
+			tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
+			dram_active_min, dram_active_max, dram_active_avg,
+			sm_active_min, sm_active_max, sm_active_avg
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+		ON CONFLICT (cluster_uuid, namespace, workload, container_name, interval_start)
+		DO UPDATE SET gpu_model_name = EXCLUDED.gpu_model_name`,
+		row.IntervalStart, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
+		row.GPUModelName, row.GPUProfileName,
+		row.FBUsageMinMiB, row.FBUsageMaxMiB, row.FBUsageAvgMiB,
+		row.TensorPipeActiveMin, row.TensorPipeActiveMax, row.TensorPipeActiveAvg,
+		row.DRAMActiveMin, row.DRAMActiveMax, row.DRAMActiveAvg,
+		row.SMActiveMin, row.SMActiveMax, row.SMActiveAvg,
+	)
+	if err != nil {
+		t.Fatalf("SeedGPUDigest: %v", err)
+	}
+}
+
 // SeedDigestSeriesFrom is like SeedDigestSeries but starts from the given date
 // instead of BaseDate. Use with RecentStart() for API integration tests.
 func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, baseCPU, cpuStep, baseMem, memStep int64) {
