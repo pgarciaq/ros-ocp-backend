@@ -12,6 +12,7 @@ type MetricRow struct {
 	WorkloadType  string
 	ContainerName string
 	Pod           string
+	Node          string
 
 	CPURequestMC     int64
 	CPULimitMC       int64

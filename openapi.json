@@ -1640,6 +1640,70 @@
           "503": { "description": "Service unavailable due to a database error" }
         }
       }
+    },
+    "/recommendations/openshift/nodes": {
+      "get": {
+        "tags": ["GPU Recommendations"],
+        "summary": "Get node-level GPU time-slicing recommendations",
+        "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing.",
+        "operationId": "getNodeRecommendations",
+        "parameters": [
+          {
+            "name": "node_name",
+            "in": "query",
+            "description": "Filter by node name (case-insensitive substring match)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "description": "Filter by GPU model name (case-insensitive substring match)",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of results per page. Use -1 to return all results.",
+            "required": false,
+            "schema": { "type": "integer", "default": 10, "minimum": -1 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Zero-based offset into results",
+            "required": false,
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sort field. Allowed values: node_name, cluster_uuid, gpu_model, recommended_replicas, confidence, total_node_savings",
+            "required": false,
+            "schema": { "type": "string", "default": "node_name", "enum": ["node_name", "cluster_uuid", "gpu_model", "recommended_replicas", "confidence", "total_node_savings"] }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction",
+            "required": false,
+            "schema": { "type": "string", "default": "desc", "enum": ["asc", "desc"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node-level GPU time-slicing recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NodeRecommendationListResponse" }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "500": { "description": "Internal server error" }
+        }
+      }
     }
   },
   "components": {
@@ -3514,6 +3578,71 @@
             "items": { "type": "integer" },
             "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data"
           }
+        }
+      },
+      "NodeRecommendationListResponse": {
+        "type": "object",
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/NodeRecommendationMeta" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NodeGPURecommendation" }
+          },
+          "links": { "$ref": "#/components/schemas/NodeRecommendationLinks" }
+        }
+      },
+      "NodeRecommendationMeta": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer", "description": "Total number of matching results (before pagination)" },
+          "limit": { "type": "integer", "description": "Page size" },
+          "offset": { "type": "integer", "description": "Zero-based offset into results" },
+          "total_savings_usd": { "type": "number", "format": "float", "nullable": true }
+        }
+      },
+      "NodeRecommendationLinks": {
+        "type": "object",
+        "properties": {
+          "first": { "type": "string" },
+          "previous": { "type": "string" },
+          "next": { "type": "string" },
+          "last": { "type": "string" }
+        }
+      },
+      "NodeGPURecommendation": {
+        "type": "object",
+        "properties": {
+          "node_name": { "type": "string" },
+          "cluster_uuid": { "type": "string" },
+          "recommendation_type": { "type": "string", "enum": ["gpu_time_slicing"] },
+          "gpu_model": { "type": "string" },
+          "recommended_replicas": { "type": "integer", "minimum": 2, "maximum": 8 },
+          "savings_per_gpu_usd": { "type": "number", "format": "float", "nullable": true },
+          "total_node_savings_usd": { "type": "number", "format": "float", "nullable": true },
+          "confidence": { "type": "number", "format": "float" },
+          "candidate_containers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NodeContainerRef" }
+          },
+          "impacted_containers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NodeContainerRef" }
+          },
+          "notification_codes": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Notification codes: 29=gpu_time_sharing_candidate"
+          }
+        }
+      },
+      "NodeContainerRef": {
+        "type": "object",
+        "properties": {
+          "namespace": { "type": "string" },
+          "workload": { "type": "string" },
+          "container": { "type": "string" },
+          "sm_active_avg": { "type": "number", "format": "float" },
+          "classification": { "type": "string" }
         }
       }
     }

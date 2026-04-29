@@ -20,6 +20,7 @@ const (
 	// Default DB columns for OrderBy.
 	DefaultContainerRecsDBColumn = "clusters.last_reported_at"
 	DefaultNsRecsDBColumn        = "clusters.last_reported_at"
+	DefaultNodeRecsOrderBy       = "node_name"
 )
 
 type ListOptions struct {
@@ -67,6 +68,15 @@ var ContainerAllowedOrderBy = OrderByMap{
 	"memory_variation_medium_performance": "recommendation_sets.memory_variation_medium_performance_pct",
 	"memory_variation_long_cost":          "recommendation_sets.memory_variation_long_cost_pct",
 	"memory_variation_long_performance":   "recommendation_sets.memory_variation_long_performance_pct",
+}
+
+var NodeRecsAllowedOrderBy = OrderByMap{
+	"node_name":            "node_name",
+	"cluster_uuid":         "cluster_uuid",
+	"gpu_model":            "gpu_model",
+	"recommended_replicas": "recommended_replicas",
+	"confidence":           "confidence",
+	"total_node_savings":   "total_node_savings_usd",
 }
 
 var NsAllowedOrderBy = OrderByMap{

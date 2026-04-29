@@ -254,6 +254,7 @@ type GPUDigestRow struct {
 	ContainerName       string
 	GPUModelName        string
 	GPUProfileName      string
+	NodeName            string
 	FBUsageMinMiB       float64
 	FBUsageMaxMiB       float64
 	FBUsageAvgMiB       float64
@@ -282,16 +283,16 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO gpu_container_digests (
 			interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
-			gpu_model_name, gpu_profile_name,
+			gpu_model_name, gpu_profile_name, node_name,
 			fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 			tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 			dram_active_min, dram_active_max, dram_active_avg,
 			sm_active_min, sm_active_max, sm_active_avg
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		ON CONFLICT (cluster_uuid, namespace, workload, container_name, interval_start)
-		DO UPDATE SET gpu_model_name = EXCLUDED.gpu_model_name`,
+		DO UPDATE SET gpu_model_name = EXCLUDED.gpu_model_name, node_name = EXCLUDED.node_name`,
 		row.IntervalStart, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
-		row.GPUModelName, row.GPUProfileName,
+		row.GPUModelName, row.GPUProfileName, row.NodeName,
 		row.FBUsageMinMiB, row.FBUsageMaxMiB, row.FBUsageAvgMiB,
 		row.TensorPipeActiveMin, row.TensorPipeActiveMax, row.TensorPipeActiveAvg,
 		row.DRAMActiveMin, row.DRAMActiveMax, row.DRAMActiveAvg,

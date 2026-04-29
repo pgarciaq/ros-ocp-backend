@@ -233,6 +233,7 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		workloadType string
 		modelName    string
 		profileName  string
+		nodeName     string // last-seen node for this container-day
 		fbMinVals    []float64
 		fbMaxVals    []float64
 		fbAvgVals    []float64
@@ -262,6 +263,9 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				profileName:  r.AcceleratorProfileName,
 			}
 			groups[k] = g
+		}
+		if r.Node != "" {
+			g.nodeName = r.Node
 		}
 		g.fbMinVals = append(g.fbMinVals, r.AcceleratorFBUsageMin)
 		g.fbMaxVals = append(g.fbMaxVals, r.AcceleratorFBUsageMax)
@@ -293,16 +297,17 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		batch.Queue(`
 			INSERT INTO gpu_container_digests (
 				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
-				gpu_model_name, gpu_profile_name,
+				gpu_model_name, gpu_profile_name, node_name,
 				fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 				dram_active_min, dram_active_max, dram_active_avg,
 				sm_active_min, sm_active_max, sm_active_avg
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 			ON CONFLICT (cluster_uuid, namespace, workload, container_name, interval_start)
 			DO UPDATE SET
 				gpu_model_name = EXCLUDED.gpu_model_name,
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
+				node_name = EXCLUDED.node_name,
 				fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
 				fb_usage_max_mib = EXCLUDED.fb_usage_max_mib,
 				fb_usage_avg_mib = EXCLUDED.fb_usage_avg_mib,
@@ -316,7 +321,7 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				sm_active_max = EXCLUDED.sm_active_max,
 				sm_active_avg = EXCLUDED.sm_active_avg`,
 			k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
-			g.modelName, g.profileName,
+			g.modelName, g.profileName, g.nodeName,
 			minFloat(g.fbMinVals), maxFloat(g.fbMaxVals), meanFloat(g.fbAvgVals),
 			minFloat(g.tensorMin), maxFloat(g.tensorMax), meanFloat(g.tensorAvg),
 			minFloat(g.dramMin), maxFloat(g.dramMax), meanFloat(g.dramAvg),

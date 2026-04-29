@@ -14,12 +14,14 @@ is temporal multiplexing with no memory isolation.
 
 ### Decision Summary
 
-| Question | Decision |
-|---|---|
-| Aggregation scope | Per-node (natural action boundary for device plugin config) |
-| Storage | New `node_recommendations` table (separate from `recommendation_sets`) |
-| API shape | New endpoint `GET /api/cost-management/v1/recommendations/openshift/nodes` |
-| Persistence | Computed at API-read time (matching existing GPU rec pattern), persisted later if perf requires |
+
+| Question          | Decision                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| Aggregation scope | Per-node (natural action boundary for device plugin config)                                     |
+| Storage           | New `node_recommendations` table (separate from `recommendation_sets`)                          |
+| API shape         | New endpoint `GET /api/cost-management/v1/recommendations/openshift/nodes`                      |
+| Persistence       | Computed at API-read time (matching existing GPU rec pattern), persisted later if perf requires |
+
 
 ---
 
@@ -100,6 +102,7 @@ type GPUContainerRef struct {
 **Algorithm — `ComputeNodeTimeslicingRecs`:**
 
 Input: a map of `node_name → []containerGPUInfo` where each entry has:
+
 - namespace, workload, container
 - the container's `*GPURec` (from `RecommendGPU`)
 - the GPU's `*GPUModelSpec` (from `MatchGPUModel`)
@@ -107,44 +110,38 @@ Input: a map of `node_name → []containerGPUInfo` where each entry has:
 For each node × GPU model combination:
 
 1. **Partition containers** into candidates (classification is `underutilized` or
-   `compute_bound_underutil`, AND no MIG recommendation was issued) and impacted
+  `compute_bound_underutil`, AND no MIG recommendation was issued) and impacted
    (classification is `well_utilized` or has a MIG recommendation).
-
 2. **Skip** if:
-   - Zero candidates (nothing to recommend)
-   - All containers are `idle` (recommend "remove GPU" instead, existing path)
-   - GPU model is MIG-capable and MIG recommendations were issued for all containers
-
+  - Zero candidates (nothing to recommend)
+  - All containers are `idle` (recommend "remove GPU" instead, existing path)
+  - GPU model is MIG-capable and MIG recommendations were issued for all containers
 3. **Check majority threshold:** `len(candidates) / len(all_gpu_containers) >= 0.5`.
-   If not met AND there are impacted containers, skip.  (If there are no
+  If not met AND there are impacted containers, skip.  (If there are no
    impacted containers, proceed even below 50% — all GPUs are underutilized.)
-
 4. **Compute replicas** from the average utilization of candidate containers:
-   ```
+  ```
    avg_sm   = mean(candidate SM_active_avg values)
    avg_dram = mean(candidate DRAM_active_avg values)
    avg_fb   = mean(candidate p98_FB / total_FB values)
    peak_utilization = max(avg_sm, avg_dram, avg_fb)
    replicas = floor(1.0 / peak_utilization)
    replicas = clamp(replicas, 2, 8)
-   ```
-
+  ```
 5. **Compute savings** (requires cost data, per-GPU monthly rate):
-   ```
+  ```
    savings_per_gpu = rate * (1 - 1/replicas)
    total_savings   = savings_per_gpu * len(candidate_containers)
-   ```
+  ```
    (Only candidates contribute savings; impacted containers don't save anything.)
-
 6. **Confidence:**
-   ```
+  ```
    base = average confidence across candidate GPURecs
    base *= 0.7                          # time-slicing penalty
    base *= (1 - 0.3 * len(impacted) / len(all_gpu))  # impacted containers penalty
-   ```
-
+  ```
 7. **Notification codes:** `NotifGPUTimeSharingCandidate` (29) for the node rec.
-   Each candidate container's `GPURec` also gets this code.
+  Each candidate container's `GPURec` also gets this code.
 
 **Tests:** `internal/engine/gpu_timeslicing_test.go`
 
@@ -191,6 +188,7 @@ Add `NodeName string` to the `GPUDigestRow` struct in `gpu_recommender.go`.
 Change the return type to include node mapping.  Two options:
 
 **Option A (preferred):** Return a second map alongside the existing one:
+
 ```go
 func QueryGPURecommendations(ctx, pool, clusterUUID, start, end) (
     map[string]*GPURec,          // key: "ns/workload/container"
@@ -222,6 +220,7 @@ nodeRecs := engine.ComputeNodeTimeslicingRecs(nodeContainers, costData)
 ```
 
 Store `nodeRecs` somewhere accessible to the API handler — either:
+
 - Attach to the response directly (if the node endpoint queries independently)
 - Or return from `enrichWithGPU` alongside the modified results
 
@@ -233,6 +232,7 @@ func queryNodeGPURecs(clusterUUIDs []string, orgID string) ([]model.NodeGPURecom
 ```
 
 This function:
+
 1. For each cluster, calls `QueryGPURecommendations` (with node map)
 2. Aggregates by node
 3. Calls `ComputeNodeTimeslicingRecs`
@@ -302,13 +302,15 @@ func (s *Server) GetNodeRecommendations(c echo.Context) error {
 
 Query parameters:
 
-| Param | Type | Description |
-|---|---|---|
-| `cluster_uuid` | string | Filter by cluster |
-| `node_name` | string | Filter by node name |
-| `gpu_model` | string | Filter by GPU model (e.g., "T4") |
-| `recommendation_type` | string | Filter by rec type (default: `gpu_time_slicing`) |
-| `min_savings_usd` | float | Only return recs with total savings above threshold |
+
+| Param                 | Type   | Description                                         |
+| --------------------- | ------ | --------------------------------------------------- |
+| `cluster_uuid`        | string | Filter by cluster                                   |
+| `node_name`           | string | Filter by node name                                 |
+| `gpu_model`           | string | Filter by GPU model (e.g., "T4")                    |
+| `recommendation_type` | string | Filter by rec type (default: `gpu_time_slicing`)    |
+| `min_savings_usd`     | float  | Only return recs with total savings above threshold |
+
 
 ### Phase 3c: Route registration
 
@@ -325,6 +327,7 @@ nativeGroup.GET("/recommendations/openshift/nodes", s.GetNodeRecommendations)
 **File:** `api/openapi.json` (or wherever the spec lives)
 
 Add:
+
 - `/recommendations/openshift/nodes` GET endpoint
 - `NodeGPURecommendation` schema
 - `NodeContainerRef` schema
@@ -332,16 +335,21 @@ Add:
 
 ---
 
-## Phase 4: Tests
+## Phase 4: Tests (TDD)
 
-### Unit tests
+**This phase uses strict TDD red-green-refactor.** See
+[plans/gpu-timeslicing-tdd-plan.md](plans/gpu-timeslicing-tdd-plan.md) for the
+full 21-cycle TDD plan with exact test code and execution order.
 
-| File | Tests |
-|---|---|
+### Summary of test files
+
+| File                                      | Tests                                                     |
+| ----------------------------------------- | --------------------------------------------------------- |
 | `internal/engine/gpu_timeslicing_test.go` | Algorithm: replicas, savings, confidence, skip conditions |
-| `internal/ingestion/csvparser_test.go` | Node column parsing (present and absent) |
-| `internal/ingestion/pipeline_test.go` | node_name persisted in gpu_container_digests |
-| `internal/api/handlers_node_recs_test.go` | API endpoint: filters, response shape, empty results |
+| `internal/ingestion/csvparser_test.go`    | Node column parsing (present and absent)                  |
+| `internal/ingestion/pipeline_test.go`     | node_name persisted in gpu_container_digests              |
+| `internal/api/handlers_node_recs_test.go` | API endpoint: filters, response shape, empty results      |
+| `internal/model/node_recommendation_test.go` | JSON serialization roundtrip                           |
 
 ### Integration / E2E tests
 
@@ -350,78 +358,155 @@ Add:
 3. Upload to Apollo
 4. Call `GET /recommendations/openshift/nodes?cluster_uuid=...`
 5. Verify:
-   - Node with underutilized T4s → `recommended_replicas` between 2-8
-   - Node with well-utilized A100s → no time-slicing recommendation
-   - Candidate containers listed with correct SM values
-   - Savings calculated when cost model has `gpu_cost_per_month` rate
+  - Node with underutilized T4s → `recommended_replicas` between 2-8
+  - Node with well-utilized A100s → no time-slicing recommendation
+  - Candidate containers listed with correct SM values
+  - Savings calculated when cost model has `gpu_cost_per_month` rate
 
 ---
 
-## Phase 5: Documentation and Memory Dump
+## Phase 5: Pagination, RBAC, and Documentation
 
-1. Update `docs/gpu-recommendations-plan.md` with time-slicing section
-2. Update `docs/AGENT_MEMORY_DUMP.md` — close Gap 3 (time-slicing)
-3. Update OpenAPI spec with new endpoint documentation
-4. Add node recommendation section to the test plan
+### Phase 5a: Pagination (limit, offset, order_by)
+
+The `/nodes` endpoint supports the same `listoptions` pattern as all other
+list endpoints for consistency:
+
+- `limit` (default 10, -1 for unlimited)
+- `offset` (default 0)
+- `order_by` (allowed: `node_name`, `cluster_uuid`, `gpu_model`,
+  `recommended_replicas`, `confidence`, `total_node_savings`)
+- `order_how` (`asc` or `desc`, default `desc`)
+
+Since node recommendations are computed in-memory (not via SQL), sorting
+and pagination are applied in Go after all recommendations are computed.
+The response uses the same `meta.count`/`meta.limit`/`meta.offset`/`links`
+shape as the standard `CollectionResponse`.
+
+**Files:**
+- `internal/api/listoptions/list_options.go` — `NodeRecsAllowedOrderBy` map,
+  `DefaultNodeRecsOrderBy` constant
+- `internal/api/handlers_node_recs.go` — `sortNodeRecs`, `applyNodePagination`,
+  `buildNodeLinks` helpers
+- `internal/model/node_recommendation.go` — `NodeRecommendationMeta` gains
+  `Limit`/`Offset` fields; `NodeRecommendationLinks` struct added
+
+### Phase 5b: RBAC for `/nodes` endpoint
+
+Two-tiered RBAC filtering matching the existing `/recommendations` pattern:
+
+1. **Cluster-level:** `openshift.cluster` permissions restrict which cluster
+   UUIDs are queried for GPU data.
+2. **Node-level:** `openshift.node` permissions restrict which node names
+   appear in the results. Uses the ZED schema's existing `openshift.node`
+   permission type.
+
+Since the handler uses `pgx` (not GORM), RBAC filtering is implemented as
+Go functions (`filterClustersByRBAC`, `filterNodeRecsByRBAC`) applied
+in-memory after computation.
+
+A `ResourceNode` type was also added to `internal/rbac/query_builder.go` for
+future use by GORM-based node queries.
+
+### Phase 5c: Documentation
+
+1. Update `docs/gpu-time-slicing-plan.md` with pagination and RBAC sections
+2. Update `docs/plans/gpu-recommendations-test-plan.md` Phase E status
+3. Update `docs/plans/gpu-timeslicing-tdd-plan.md` status
+4. Update OpenAPI spec with pagination parameters and links schema
 
 ---
 
-## Implementation Order
+## Implementation Order (TDD)
+
+Tests are written **before** production code in every step.  See
+[plans/gpu-timeslicing-tdd-plan.md](plans/gpu-timeslicing-tdd-plan.md) for
+the cycle-by-cycle breakdown.
 
 ```
-Phase 0a: MetricRow + CSV parser (node column)
-Phase 0b: Migration + pipeline (node_name in gpu_container_digests)
+TS-01: RED test for node column parsing → GREEN: MetricRow.Node + csvparser
+TS-02: RED test for DB persistence      → GREEN: migration 000044 + pipeline
     ↓
-Phase 1a: TimeslicingRec struct + ComputeNodeTimeslicingRecs algorithm
-Phase 1b: Notification code 29
+TS-03: RED test for notification code   → GREEN: NotifGPUTimeSharingCandidate = 29
+TS-04: RED test for result types        → GREEN: TimeslicingRec, GPUContainerRef
+TS-05: RED test for computeReplicas     → GREEN: pure function with clamping
+TS-06: RED test for confidence          → GREEN: computeTimeslicingConfidence
+TS-07: RED test for savings             → GREEN: computeTimeslicingSavings
+TS-08: RED test for partitioning        → GREEN: partitionContainers
+TS-09: RED test for orchestrator        → GREEN: ComputeNodeTimeslicingRec
+TS-10..TS-15: Edge cases and skip conditions (born green or minor fixes)
     ↓
-Phase 2a: QueryGPURecommendations returns node map
-Phase 2b: queryNodeGPURecs enrichment function
+TS-16: RED test for GPUDigestRow.NodeName → GREEN: add field
+TS-17: RED test for node map return       → GREEN: QueryGPURecommendations 3-return
     ↓
-Phase 3a: API model types
-Phase 3b: Handler
-Phase 3c: Route registration
-Phase 3d: OpenAPI spec
+TS-18: RED test for API model types     → GREEN: NodeGPURecommendation
+TS-19: RED test for empty endpoint      → GREEN: handler + route registration
+TS-20: RED test for endpoint with data  → GREEN: full wiring
+TS-21: RED test for API filters         → GREEN: filter logic
     ↓
-Phase 4:  Tests (unit + integration)
-Phase 5:  Documentation
+Phase 5: Documentation + OpenAPI spec
 ```
 
-Phases 0-1 can be committed independently.  Phases 2-3 are tightly coupled.
-Phase 4 should be done alongside each phase.
+Phases 0-1 (TS-01 through TS-15) can be committed independently.
+Phases 2-3 (TS-16 through TS-21) are tightly coupled.
+
+```
+Phase 5a: Pagination — limit, offset, order_by via listoptions
+Phase 5b: RBAC — cluster + node permission filtering
+Phase 5c: Documentation updates
+```
 
 ---
 
 ## Estimated Effort
 
-| Phase | Effort |
-|---|---|
-| Phase 0 (node ingestion) | ~1 hour |
-| Phase 1 (engine logic) | ~2 hours |
-| Phase 2 (wiring) | ~1.5 hours |
-| Phase 3 (API) | ~1.5 hours |
-| Phase 4 (tests) | ~2 hours |
-| Phase 5 (docs) | ~30 min |
 
-**Total: ~8.5 hours**
+| Phase                          | Effort     | Status     |
+| ------------------------------ | ---------- | ---------- |
+| Phase 0 (node ingestion)       | ~1 hour    | **Done**   |
+| Phase 1 (engine logic)         | ~2 hours   | **Done**   |
+| Phase 2 (wiring)               | ~1.5 hours | **Done**   |
+| Phase 3 (API)                  | ~1.5 hours | **Done**   |
+| Phase 4 (tests)                | ~2 hours   | **Done**   |
+| Phase 5a (pagination)          | ~1 hour    | **Done**   |
+| Phase 5b (RBAC)                | ~1.5 hours | **Done**   |
+| Phase 5c (docs + OpenAPI)      | ~30 min    | **Done**   |
+
+
+**Total: ~11 hours**
 
 ---
 
 ## Future Considerations
 
 - **Persistence:** If API-read-time computation becomes slow for large clusters
-  (hundreds of nodes), add a `node_recommendations` table and compute during the
-  ingestion pipeline (after GPU digests are written).  The API then reads from
-  the table.  This is a performance optimization, not a design change.
-
+(hundreds of nodes), add a `node_recommendations` table and compute during the
+ingestion pipeline (after GPU digests are written).  The API then reads from
+the table.  This is a performance optimization, not a design change.
 - **Node-level detail endpoint:** `GET /recommendations/openshift/nodes/:node-name`
-  with full history of time-slicing recommendations over time.
-
+with full history of time-slicing recommendations over time.
 - **Other node rec types:** Instance type recommendations and reserved instance
-  recommendations follow the same `node_recommendations` table pattern with
-  `recommendation_type = 'instance_type'` or `'reserved_instance'`.
-
+recommendations follow the same `node_recommendations` table pattern with
+`recommendation_type = 'instance_type'` or `'reserved_instance'`.
 - **UI:** Stefan's mockups will determine how node recs are displayed.  The API
-  shape is designed to support both a dedicated "Node Recommendations" page and
-  inline hints on the container recommendation detail view (via the
-  `NotifGPUTimeSharingCandidate` notification code on per-container recs).
+shape is designed to support both a dedicated "Node Recommendations" page and
+inline hints on the container recommendation detail view (via the
+`NotifGPUTimeSharingCandidate` notification code on per-container recs).
+
+---
+
+## Design Decisions
+
+Decisions made during design review.  See also
+[plans/gpu-recommendations.md](plans/gpu-recommendations.md) Phase E section E13
+for the canonical list with full rationale.
+
+| # | Decision | Summary |
+|---|---|---|
+| D1 | Node name: last-seen, not unique key | `node_name` is a regular column, overwritten on upsert. Pod rescheduling snaps to the new node. |
+| D2 | Savings = cost avoidance | Savings represent potential reduction if GPU provisioning is adjusted, not direct removal. |
+| D3 | FB = Frame Buffer | GPU video memory (HBM). `fb_usage_max / total_fb` limits safe time-slicing (shared memory). |
+| D4 | 1 container = 1 GPU (v1) | No `gpu_count` column yet. Multi-GPU containers treated as 1 GPU. Follow-up: add `gpu_request_count` to operator ROS CSV (~3h total across operator + backend). |
+| D5 | `node` column always present | In ROS CSV since ROS support was added (column 13). No minimum version concern. |
+| D6 | 7-day freshness for node recs | Use 30-day digest window but skip nodes with no data in the last 7 days. |
+| D7 | Container cross-reference | Candidate containers get notification 29 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block. |

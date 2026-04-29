@@ -18,11 +18,15 @@ type containerID struct {
 
 // QueryGPURecommendations reads gpu_container_digests for the given cluster and
 // time range, then calls RecommendGPU for each container that has GPU data.
-// Returns a map keyed by "namespace/workload/container" for fast lookup.
-func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time) (map[string]*GPURec, error) {
+// Returns:
+//   - recs: map keyed by "namespace/workload/container" → *GPURec
+//   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
+//   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
+func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time) (map[string]*GPURec, map[string]string, map[string]time.Time, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT interval_start, namespace, workload, container_name,
 			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
+			COALESCE(node_name, ''),
 			COALESCE(fb_usage_min_mib, 0), COALESCE(fb_usage_max_mib, 0), COALESCE(fb_usage_avg_mib, 0),
 			COALESCE(tensor_pipe_active_min, 0), COALESCE(tensor_pipe_active_max, 0), COALESCE(tensor_pipe_active_avg, 0),
 			COALESCE(dram_active_min, 0), COALESCE(dram_active_max, 0), COALESCE(dram_active_avg, 0),
@@ -33,34 +37,43 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 		ORDER BY namespace, workload, container_name, interval_start`,
 		clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
-		return nil, fmt.Errorf("query gpu_container_digests: %w", err)
+		return nil, nil, nil, fmt.Errorf("query gpu_container_digests: %w", err)
 	}
 	defer rows.Close()
 
 	grouped := map[string][]GPUDigestRow{}
+	lastNode := map[string]string{}
+	nodeLastSeen := map[string]time.Time{}
 	for rows.Next() {
 		var d GPUDigestRow
 		var ns, wl, cn string
 		err := rows.Scan(
 			&d.IntervalStart, &ns, &wl, &cn,
 			&d.GPUModelName, &d.GPUProfileName,
+			&d.NodeName,
 			&d.FBUsageMinMiB, &d.FBUsageMaxMiB, &d.FBUsageAvgMiB,
 			&d.TensorPipeActiveMin, &d.TensorPipeActiveMax, &d.TensorPipeActiveAvg,
 			&d.DRAMActiveMin, &d.DRAMActiveMax, &d.DRAMActiveAvg,
 			&d.SMActiveMin, &d.SMActiveMax, &d.SMActiveAvg,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("scan GPU digest row: %w", err)
+			return nil, nil, nil, fmt.Errorf("scan GPU digest row: %w", err)
 		}
 		key := fmt.Sprintf("%s/%s/%s", ns, wl, cn)
 		grouped[key] = append(grouped[key], d)
+		if d.NodeName != "" {
+			lastNode[key] = d.NodeName
+			if prev, ok := nodeLastSeen[d.NodeName]; !ok || d.IntervalStart.After(prev) {
+				nodeLastSeen[d.NodeName] = d.IntervalStart
+			}
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate GPU digest rows: %w", err)
+		return nil, nil, nil, fmt.Errorf("iterate GPU digest rows: %w", err)
 	}
 
 	if len(grouped) == 0 {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 
 	result := make(map[string]*GPURec, len(grouped))
@@ -73,5 +86,5 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 
 	log.Infof("QueryGPURecommendations: cluster=%s, %d containers with GPU data, %d recommendations",
 		clusterUUID, len(grouped), len(result))
-	return result, nil
+	return result, lastNode, nodeLastSeen, nil
 }

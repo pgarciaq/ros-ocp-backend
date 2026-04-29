@@ -285,6 +285,36 @@ func TestParseCSVRows_GPUMetrics(t *testing.T) {
 	})
 }
 
+func TestParseCSVRows_NodeColumn(t *testing.T) {
+	t.Run("node column present", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name,node," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-1,test-deploy,deployment,main,gpu-worker-1," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+		}, "\n")
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, "gpu-worker-1", rows[0].Node)
+	})
+
+	t.Run("node column missing", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-1,test-deploy,deployment,main," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+		}, "\n")
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, "", rows[0].Node)
+	})
+}
+
 func TestRoundHalfToEven(t *testing.T) {
 	assert.Equal(t, int64(1), int64(math.Round(0.5)))
 	assert.Equal(t, int64(2), int64(math.Round(1.5)))
