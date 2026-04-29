@@ -676,7 +676,7 @@ cd nise && .venv/bin/python -m pytest tests/test_ocp_generator.py -k "gpu" -v
 | B-T2 to B-T6 | **Done** | `gpu_recommender_test.go` |
 | B-T7 to B-T11 | **Done** | `gpu_recommender_test.go` (MIG selection tests) |
 | B-T12 to B-T14 | **Done** | `gpu_recommender_test.go` (confidence tests) |
-| B-T15 | Pending | Threshold env var configuration |
+| B-T15 | **Done** | `TestGpuThreshold_Default`, `_EnvOverride`, `_InvalidEnvFallsBack`, `_EmptyEnvFallsBack`, `TestClassifyGPUWorkload_IdleThresholdOverride`, `_MemBoundThresholdOverride` |
 | C-T1 to C-T2 | **Done** | Covered in `gpu_recommender_test.go` |
 | C-T3 to C-T6 | **Done** | `gpu_savings_test.go` (ApplyGPUSavings with idle, MIG, no cost data, well-utilized) |
 | D-T1 | **Done** | `TestGetNativeRecommendationSetList_GPUEnrichment/response_includes_GPU_block` |
@@ -919,7 +919,7 @@ All 84 tests (78 existing + 6 GPU-specific) must pass.
 | E-T14 | **Done** | `TestGetNodeRecommendations_WithData` + pagination integration tests |
 | E-T15 | **Done** | `TestGetNodeRecommendations_FilterByNodeName` |
 | E-T16 | **Done** | `TestGetNodeRecommendations_FilterByGPUModel` |
-| E-T17 | Pending | Container cross-reference (notification 29 on container recs) |
+| E-T17 | **Done** | `TestComputeNodeTimeslicingRec_SetsContainerCrossRef`, `TestToGPURecommendation_WithTimeslicingCrossRef`, `TestToGPURecommendation_NoTimeslicingCrossRef` |
 | E-T18 | **Done** | `TestComputeNodeTimeslicingRec_SetsNotifOnCandidates` |
 
 Additional tests beyond the original plan:

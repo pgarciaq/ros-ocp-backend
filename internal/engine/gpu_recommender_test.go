@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -169,4 +170,70 @@ func TestRecommendGPU_Tier2_V100(t *testing.T) {
 	assert.False(t, rec.HasProfilingData)
 	assert.Contains(t, rec.NotificationCodes, NotifGPUNoProfilingData)
 	assert.Equal(t, "", rec.RecommendedGPUProfile) // V100 is not MIG-capable in catalog
+}
+
+// --- B-T15: Threshold configuration via environment variables ---
+
+func TestGpuThreshold_Default(t *testing.T) {
+	val := gpuThreshold("ROS_GPU_TEST_NONEXISTENT_KEY", 0.42)
+	assert.InDelta(t, 0.42, val, 1e-9)
+}
+
+func TestGpuThreshold_EnvOverride(t *testing.T) {
+	t.Setenv("ROS_GPU_TEST_THRESHOLD", "0.07")
+	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.02)
+	assert.InDelta(t, 0.07, val, 1e-9)
+}
+
+func TestGpuThreshold_InvalidEnvFallsBack(t *testing.T) {
+	t.Setenv("ROS_GPU_TEST_THRESHOLD", "not_a_number")
+	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.02)
+	assert.InDelta(t, 0.02, val, 1e-9)
+}
+
+func TestGpuThreshold_EmptyEnvFallsBack(t *testing.T) {
+	os.Unsetenv("ROS_GPU_TEST_THRESHOLD")
+	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.25)
+	assert.InDelta(t, 0.25, val, 1e-9)
+}
+
+func TestClassifyGPUWorkload_IdleThresholdOverride(t *testing.T) {
+	// sm_active_avg = 0.03 is above the default idle threshold (0.02)
+	// but below a raised threshold (0.05)
+	digests := []GPUDigestRow{
+		digestRow(0.1, 0.1, 0.03, 1000),
+		digestRow(0.1, 0.1, 0.03, 1000),
+	}
+
+	// Default threshold: 0.03 > 0.02 → NOT idle
+	cls, hasProf := ClassifyGPUWorkload(digests)
+	assert.True(t, hasProf)
+	assert.NotEqual(t, GPUClassIdle, cls, "0.03 SM should not be idle with default threshold 0.02")
+
+	// Raise threshold: 0.03 < 0.05 → idle
+	orig := gpuIdleThreshold
+	gpuIdleThreshold = 0.05
+	defer func() { gpuIdleThreshold = orig }()
+
+	cls2, hasProf2 := ClassifyGPUWorkload(digests)
+	assert.True(t, hasProf2)
+	assert.Equal(t, GPUClassIdle, cls2, "0.03 SM should be idle with raised threshold 0.05")
+}
+
+func TestClassifyGPUWorkload_MemBoundThresholdOverride(t *testing.T) {
+	// dram=0.55, tensor=0.10 — below default mem-bound thresholds (dram>0.60, tensor<0.15)
+	digests := []GPUDigestRow{
+		digestRow(0.10, 0.55, 0.30, 1000),
+	}
+
+	cls, _ := ClassifyGPUWorkload(digests)
+	assert.NotEqual(t, GPUClassMemoryBound, cls, "should NOT be memory_bound with default DRAM threshold 0.60")
+
+	// Lower DRAM threshold so 0.55 qualifies
+	origDRAM := gpuMemBoundDRAM
+	gpuMemBoundDRAM = 0.50
+	defer func() { gpuMemBoundDRAM = origDRAM }()
+
+	cls2, _ := ClassifyGPUWorkload(digests)
+	assert.Equal(t, GPUClassMemoryBound, cls2, "should be memory_bound with lowered DRAM threshold 0.50")
 }

@@ -150,6 +150,14 @@ func isNodeFresh(lastSeen, now time.Time) bool {
 	return now.Sub(lastSeen) <= time.Duration(nodeFreshnessDays)*24*time.Hour
 }
 
+// AnnotateTimeslicingCandidates runs the time-slicing engine for the given node
+// group, stamping each candidate GPURec with TimeSlicingNode, TimeSlicingReplicas,
+// and notification code 29. Use this when you only need the side effects on
+// GPURec objects (e.g. container-level enrichment), not the full TimeslicingRec.
+func AnnotateTimeslicingCandidates(group NodeGPUGroup) {
+	ComputeNodeTimeslicingRec(group, nil)
+}
+
 // ComputeNodeTimeslicingRec produces a time-slicing recommendation for a single
 // node × GPU model group. Returns nil if the node is not a good candidate.
 func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32) *TimeslicingRec {
@@ -216,6 +224,8 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32) *Timeslicin
 			Classification: c.Rec.Classification,
 		})
 		c.Rec.NotificationCodes = append(c.Rec.NotificationCodes, NotifGPUTimeSharingCandidate)
+		c.Rec.TimeSlicingNode = group.NodeName
+		c.Rec.TimeSlicingReplicas = replicas
 	}
 	for _, c := range impacted {
 		rec.ImpactedContainers = append(rec.ImpactedContainers, GPUContainerRef{

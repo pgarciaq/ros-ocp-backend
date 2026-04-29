@@ -376,6 +376,71 @@ func TestComputeNodeTimeslicingRec_SetsNotifOnCandidates(t *testing.T) {
 	assert.NotContains(t, impactedRec.NotificationCodes, NotifGPUTimeSharingCandidate)
 }
 
+// --- E-T17: Container cross-reference fields on candidate GPURecs ---
+
+func TestComputeNodeTimeslicingRec_SetsContainerCrossRef(t *testing.T) {
+	rec1 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.12, DRAMActiveAvg: 0.05, Confidence: 0.8}
+	rec2 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.10, DRAMActiveAvg: 0.04, Confidence: 0.8}
+	impactedRec := &GPURec{Classification: GPUClassWellUtilized, SMActiveAvg: 0.55, DRAMActiveAvg: 0.20, Confidence: 0.8}
+
+	input := NodeGPUGroup{
+		NodeName: "gpu-worker-7", ClusterUUID: "c1", GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec1},
+			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
+			{Namespace: "ns", Workload: "wl", Container: "c3", Rec: impactedRec},
+		},
+	}
+	result := ComputeNodeTimeslicingRec(input, nil)
+	require.NotNil(t, result)
+
+	assert.Equal(t, "gpu-worker-7", rec1.TimeSlicingNode, "candidate should have node name")
+	assert.Equal(t, result.RecommendedReplicas, rec1.TimeSlicingReplicas, "candidate should have replicas")
+
+	assert.Equal(t, "gpu-worker-7", rec2.TimeSlicingNode)
+	assert.Equal(t, result.RecommendedReplicas, rec2.TimeSlicingReplicas)
+
+	assert.Equal(t, "", impactedRec.TimeSlicingNode, "impacted container should NOT have cross-ref")
+	assert.Equal(t, 0, impactedRec.TimeSlicingReplicas)
+}
+
+func TestComputeNodeTimeslicingRec_NoCandidatesNoCrossRef(t *testing.T) {
+	rec := &GPURec{Classification: GPUClassIdle, SMActiveAvg: 0.01, Confidence: 0.8}
+	input := NodeGPUGroup{
+		NodeName: "node-idle", ClusterUUID: "c1", GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec},
+		},
+	}
+	result := ComputeNodeTimeslicingRec(input, nil)
+	assert.Nil(t, result)
+	assert.Equal(t, "", rec.TimeSlicingNode, "no recommendation means no cross-ref")
+	assert.Equal(t, 0, rec.TimeSlicingReplicas)
+}
+
+// --- E-T17b: AnnotateTimeslicingCandidates wrapper ---
+
+func TestAnnotateTimeslicingCandidates(t *testing.T) {
+	rec1 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.12, DRAMActiveAvg: 0.05, Confidence: 0.8}
+	rec2 := &GPURec{Classification: GPUClassWellUtilized, SMActiveAvg: 0.55, DRAMActiveAvg: 0.20, Confidence: 0.8}
+
+	group := NodeGPUGroup{
+		NodeName: "node-ann", ClusterUUID: "c1", GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec1},
+			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
+		},
+	}
+	AnnotateTimeslicingCandidates(group)
+
+	assert.Equal(t, "node-ann", rec1.TimeSlicingNode)
+	assert.Greater(t, rec1.TimeSlicingReplicas, 0)
+	assert.Contains(t, rec1.NotificationCodes, NotifGPUTimeSharingCandidate)
+
+	assert.Equal(t, "", rec2.TimeSlicingNode, "impacted container should not be annotated")
+	assert.Equal(t, 0, rec2.TimeSlicingReplicas)
+}
+
 // --- TS-16: GPUDigestRow.NodeName ---
 
 func TestGPUDigestRow_HasNodeName(t *testing.T) {

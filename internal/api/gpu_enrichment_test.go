@@ -92,3 +92,41 @@ func TestToGPURecommendation_WithNotifications(t *testing.T) {
 	assert.NotNil(t, got)
 	assert.Equal(t, []int16{301, 302, 303}, got.Notifications)
 }
+
+// --- E-T17: Container cross-reference in toGPURecommendation ---
+
+func TestToGPURecommendation_WithTimeslicingCrossRef(t *testing.T) {
+	rec := &engine.GPURec{
+		GPUModelName:        "T4",
+		Classification:      engine.GPUClassUnderutilized,
+		SMActiveAvg:         0.12,
+		Confidence:          0.8,
+		NotificationCodes:   []int16{engine.NotifGPUTimeSharingCandidate},
+		TimeSlicingNode:     "gpu-worker-7",
+		TimeSlicingReplicas: 5,
+	}
+
+	got := toGPURecommendation(rec)
+	assert.NotNil(t, got)
+	assert.NotNil(t, got.TimeSlicingNode, "time_slicing_node should be set for candidates")
+	assert.Equal(t, "gpu-worker-7", *got.TimeSlicingNode)
+	assert.NotNil(t, got.TimeSlicingReplicas, "time_slicing_replicas should be set for candidates")
+	assert.Equal(t, 5, *got.TimeSlicingReplicas)
+	assert.Contains(t, got.Notifications, int16(engine.NotifGPUTimeSharingCandidate))
+}
+
+func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {
+	rec := &engine.GPURec{
+		GPUModelName:        "T4",
+		Classification:      engine.GPUClassWellUtilized,
+		SMActiveAvg:         0.65,
+		Confidence:          0.8,
+		TimeSlicingNode:     "",
+		TimeSlicingReplicas: 0,
+	}
+
+	got := toGPURecommendation(rec)
+	assert.NotNil(t, got)
+	assert.Nil(t, got.TimeSlicingNode, "non-candidates should have nil time_slicing_node")
+	assert.Nil(t, got.TimeSlicingReplicas, "non-candidates should have nil time_slicing_replicas")
+}
