@@ -3576,7 +3576,19 @@
           "notifications": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data"
+            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 29=time_slicing_candidate"
+          },
+          "time_slicing_node": {
+            "type": "string",
+            "nullable": true,
+            "description": "Node name where GPU time-slicing is recommended. Present only for containers that are time-slicing candidates (notification code 29).",
+            "example": "gpu-worker-7"
+          },
+          "time_slicing_replicas": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Recommended nvidia.com/gpu.replicas value (2-8) for the target node. Present only for containers that are time-slicing candidates (notification code 29).",
+            "example": 4
           }
         }
       },

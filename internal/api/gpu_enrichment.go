@@ -38,7 +38,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 	costProvider := getGPUCostProvider()
 
 	for clusterUUID, indices := range clusterMap {
-		gpuRecs, _, _, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now)
 		if err != nil {
 			log.Warnf("enrichWithGPU: failed for cluster %s: %v", clusterUUID, err)
 			continue
@@ -58,6 +58,15 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 			}
 		}
 
+		for _, gpuRec := range gpuRecs {
+			engine.ApplyGPUSavings(gpuRec, costData)
+		}
+
+		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
+		for _, group := range groups {
+			engine.AnnotateTimeslicingCandidates(group)
+		}
+
 		for _, idx := range indices {
 			r := &results[idx]
 			key := fmt.Sprintf("%s/%s/%s", r.Project, r.Workload, r.Container)
@@ -65,7 +74,6 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 			if !ok || gpuRec == nil {
 				continue
 			}
-			engine.ApplyGPUSavings(gpuRec, costData)
 			r.GPU = toGPURecommendation(gpuRec)
 		}
 	}
@@ -138,7 +146,7 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		recProfile = &p
 	}
 
-	return &model.GPURecommendation{
+	result := &model.GPURecommendation{
 		CurrentGPUModel:               rec.GPUModelName,
 		CurrentGPUProfile:             profile,
 		GPUClassification:             string(rec.Classification),
@@ -152,4 +160,13 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		EstimatedMonthlyGPUSavingsUSD: rec.EstimatedGPUSavingsUSD,
 		Notifications:                 rec.NotificationCodes,
 	}
+	if rec.TimeSlicingNode != "" {
+		n := rec.TimeSlicingNode
+		result.TimeSlicingNode = &n
+	}
+	if rec.TimeSlicingReplicas > 0 {
+		r := rec.TimeSlicingReplicas
+		result.TimeSlicingReplicas = &r
+	}
+	return result
 }

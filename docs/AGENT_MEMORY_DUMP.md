@@ -1404,7 +1404,7 @@ node group; if older than 7 days, skip.
 
 **TDD:** Added cycle TS-08c (`isNodeFresh`).
 
-### D7: Container-Level Cross-Reference
+### D7: Container-Level Cross-Reference — IMPLEMENTED
 
 **Decision:** When a container is a time-slicing candidate, its per-container
 GPU recommendation block gets:
@@ -1418,3 +1418,34 @@ This allows the UI to show both:
 - A banner on the container detail ("This GPU could benefit from N-way
   time-slicing on node X")
 - A link to the node-level recommendation endpoint for full details
+
+**Implementation details:**
+
+The two recommendation views (container-level and node-level) were originally
+independent. Container recommendations came from `enrichWithGPU` which called
+`QueryGPURecommendations` → `RecommendGPU` per container but never ran the
+time-slicing engine. Node recommendations came from `GetNodeRecommendations`
+which called `ComputeNodeTimeslicingRec` on grouped data.
+
+The fix wires the time-slicing engine into the container enrichment path:
+
+1. `enrichWithGPU` now calls `groupByNodeAndModel` + `ComputeNodeTimeslicingRec`
+   on each cluster's GPU data **before** mapping to API models
+2. `ComputeNodeTimeslicingRec` stamps each candidate `GPURec` with
+   `TimeSlicingNode` and `TimeSlicingReplicas` (plus notification 29, which
+   was already there)
+3. `toGPURecommendation` maps the new engine fields to nullable API model
+   fields (`*string`, `*int`) — nil when empty/zero so non-candidates get
+   clean JSON with no spurious fields
+
+**Files changed:**
+- `internal/engine/gpu_recommender.go` — `GPURec` struct: added fields
+- `internal/engine/gpu_timeslicing.go` — `ComputeNodeTimeslicingRec`: stamps candidates
+- `internal/model/detail_response.go` — `GPURecommendation`: added nullable fields
+- `internal/api/gpu_enrichment.go` — `enrichWithGPU`: runs time-slicing engine; `toGPURecommendation`: maps fields
+- `openapi.json` — documented `time_slicing_node`, `time_slicing_replicas`, updated notification 29 description
+
+**Tests:** `TestComputeNodeTimeslicingRec_SetsContainerCrossRef`,
+`TestComputeNodeTimeslicingRec_NoCandidatesNoCrossRef`,
+`TestToGPURecommendation_WithTimeslicingCrossRef`,
+`TestToGPURecommendation_NoTimeslicingCrossRef`

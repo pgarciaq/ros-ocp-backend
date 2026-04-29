@@ -1154,13 +1154,14 @@ Additional post-TDD work:
 | 7-day node freshness check wired into `ComputeNodeTimeslicingRec` | **Done** |
 | `QueryGPURecommendations` returns `nodeLastSeen` map (4th return) | **Done** |
 | OpenAPI spec updated with pagination params + links schema | **Done** |
+| E-T17: Container cross-reference (`time_slicing_node`, `time_slicing_replicas`) | **Done** |
 
 ### Test counts by package
 
 | Package | Unit tests | Integration tests |
 |---|---|---|
-| `internal/engine/` | 31 (timeslicing + existing) | — |
-| `internal/api/` | 32 (filter, sort, pagination, RBAC) | 18 (endpoint, org isolation, RBAC, pagination) |
+| `internal/engine/` | 33 (timeslicing + existing) | — |
+| `internal/api/` | 34 (filter, sort, pagination, RBAC, cross-ref) | 18 (endpoint, org isolation, RBAC, pagination) |
 | `internal/model/` | 3 (JSON roundtrip, pagination meta) | — |
 | `internal/rbac/` | 4 (ResourceNode, wildcard, disabled) | — |
 | `internal/ingestion/` | 1 (node column parsing) | — |

@@ -509,4 +509,4 @@ for the canonical list with full rationale.
 | D4 | 1 container = 1 GPU (v1) | No `gpu_count` column yet. Multi-GPU containers treated as 1 GPU. Follow-up: add `gpu_request_count` to operator ROS CSV (~3h total across operator + backend). |
 | D5 | `node` column always present | In ROS CSV since ROS support was added (column 13). No minimum version concern. |
 | D6 | 7-day freshness for node recs | Use 30-day digest window but skip nodes with no data in the last 7 days. |
-| D7 | Container cross-reference | Candidate containers get notification 29 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block. |
+| D7 | Container cross-reference (Done) | Candidate containers get notification 29 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block. `enrichWithGPU` now runs the time-slicing engine so container-level API responses include the cross-reference. |
