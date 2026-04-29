@@ -82,6 +82,11 @@ func StartAPIServer() {
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
 	}
 
+	// Node-level GPU recommendations (native engine only).
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/nodes", GetNodeRecommendations)
+	}
+
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server
 		Handler:           app,

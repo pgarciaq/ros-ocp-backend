@@ -24,6 +24,7 @@ const (
 // GPUDigestRow holds one daily GPU digest row for a single container.
 type GPUDigestRow struct {
 	IntervalStart       time.Time
+	NodeName            string
 	GPUModelName        string
 	GPUProfileName      string
 	FBUsageMinMiB       float32

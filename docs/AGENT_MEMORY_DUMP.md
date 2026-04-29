@@ -868,6 +868,7 @@ All endpoints under `/api/cost-management/v1/`:
 | `recommendations/openshift/settings/terms` | GET, PUT, DELETE | Custom timeframe configuration | ✅ Done |
 | `recommendations/openshift/history` | GET | Recommendation history (paginated, CSV export) | ✅ Done |
 | `recommendations/openshift/quality` | GET | Quality metrics (paginated, CSV export) | ✅ Done |
+| `recommendations/openshift/nodes` | GET | Node-level GPU time-slicing recommendations (paginated, RBAC) | ✅ Done |
 | `status` | GET | Health check | ✅ (pre-existing) |
 
 **Query parameters for list endpoint:**
@@ -1074,18 +1075,34 @@ unit tests (tested in `GenRosGpuMetricsTest.test_mig_profile_with_overrides`).
 
 **E2E verification:** Pending — same as Gap 1, needs data uploaded to Apollo.
 
-#### Gap 3: No Time-Slicing Recommendation
+#### Gap 3: Time-Slicing Recommendation — CLOSED
 
-**Impact:** For non-MIG GPUs that are underutilized (e.g., T4), the engine flags
-the problem with notification code 10 (`NotifGPUUnderutilized`) but does NOT
-recommend a specific GPU time-sharing configuration (e.g., "share this GPU across
-3 pods"). This was explicitly marked as "Phase 2" in the GPU plan.
+**Resolution:** Implemented in Phase 5 of the GPU time-slicing plan. The engine
+now computes per-node GPU time-slicing recommendations for non-MIG GPUs (T4, L4,
+L40, L40S, A10) that are underutilized.
 
-**Why deferred:** GPU time-slicing configuration is highly cluster-specific
-(depends on NVIDIA device plugin configuration, MPS settings, and workload
-compatibility). Making actionable time-slicing recommendations requires
-understanding the cluster's GPU sharing configuration, which we don't currently
-collect.
+**Implementation summary:**
+- New endpoint: `GET /recommendations/openshift/nodes` with full pagination
+  (`limit`, `offset`, `order_by`, `order_how`) and RBAC (cluster + node level)
+- Engine logic: `ComputeNodeTimeslicingRec` partitions containers into candidates
+  vs impacted, requires >=50% majority, computes replicas (clamped [2,8]) from
+  peak utilization, calculates per-GPU and total node savings
+- 7-day freshness check skips decommissioned/rescheduled nodes
+- Notification code 29 (`NotifGPUTimeSharingCandidate`) on both the node rec
+  and each candidate container's GPU block
+- Confidence: base 0.7 penalty × impacted container ratio penalty
+
+**Key files:**
+- `internal/engine/gpu_timeslicing.go` — core algorithm
+- `internal/api/handlers_node_recs.go` — API handler with RBAC and pagination
+- `internal/model/node_recommendation.go` — response types
+- `internal/api/listoptions/list_options.go` — `NodeRecsAllowedOrderBy`
+- `internal/rbac/query_builder.go` — `ResourceNode` type
+
+**Tests:** 72+ tests across engine (unit), api (unit + integration), model, rbac.
+
+**E2E verification:** Pending — needs nise data with multi-container nodes
+uploaded to Apollo.
 
 #### Gap 4: koku-ui Has No GPU Display
 
@@ -1108,7 +1125,7 @@ Our GPU engine is at parity or better than competitors in these areas:
 | Accurate profiling metrics | ✅ (PROF_ metrics) | ❌ (DEV_ only) | ❌ | ❌ (DEV_ only) |
 | MIG recommendation | ✅ (A100/A30/H100/H200/B/B200) | ❌ | ❌ | ✅ (similar) |
 | Per-container GPU savings | ✅ ($, via Koku cost model) | ✅ | Node-level only | ❌ |
-| Time-slicing recommendation | ❌ (deferred) | ❌ | ❌ | ❌ |
+| Time-slicing recommendation | ✅ (per-node, replicas 2-8) | ❌ | ❌ | ❌ |
 
 **Our unique advantage:** We are the only tool using DCGM PROF_ profiling metrics,
 which correctly identify memory-bound workloads that DEV_GPU_UTIL would
@@ -1250,7 +1267,8 @@ These rules were learned through painful debugging. Violating any of them will c
 | `recommend_namespace.go` | ~200 | Aggregate container recs to namespace level |
 | `gpu_recommender.go` | ~320 | GPU classification, MIG right-sizing, ApplyGPUSavings |
 | `gpu_metadata.go` | ~250 | GPU model specs, MIG profiles, MatchGPUModel |
-| `gpu_query.go` | ~100 | Query gpu_container_digests, produce GPURec map |
+| `gpu_query.go` | ~100 | Query gpu_container_digests, produce GPURec map + node maps |
+| `gpu_timeslicing.go` | ~250 | Time-slicing algorithm: partition, replicas, confidence, savings |
 | `savings.go` | ~200 | CPU/memory savings from Koku effective_rates |
 | `quality.go` | ~150 | 4 quality metrics: stability, adoption, OOM, age |
 | `history.go` | ~100 | Recommendation history snapshot writer |
@@ -1281,6 +1299,7 @@ These rules were learned through painful debugging. Violating any of them will c
 | `handlers_quality.go` | ~150 | Quality API handler |
 | `handlers_terms.go` | ~150 | Settings/terms CRUD handler |
 | `gpu_enrichment.go` | ~160 | GPU enrichment, cost fetch, savings, filtering |
+| `handlers_node_recs.go` | ~250 | Node-level GPU time-slicing: RBAC, pagination, sorting |
 | `server.go` | ~100 | Echo server setup, route registration |
 
 ### Model (`internal/model/`)
@@ -1290,6 +1309,7 @@ These rules were learned through painful debugging. Violating any of them will c
 | `recommendation_set_native.go` | ~300 | Native SQL queries for container recommendations |
 | `detail_response.go` | ~200 | Kruize-compatible strongly-typed response struct |
 | `boxplot.go` | ~150 | Boxplot assembly via percentile_cont() |
+| `node_recommendation.go` | ~60 | NodeGPURecommendation, pagination links, response types |
 | `types.go` | ~100 | GPURecommendation, NativeContainerResult structs |
 
 ### Cost Data (`internal/costdata/`)
@@ -1308,3 +1328,93 @@ These rules were learned through painful debugging. Violating any of them will c
 ### Migrations (`migrations/`)
 
 22 migration pairs (up/down) from 000022 through 000043.
+
+---
+
+## Section 17: GPU Time-Slicing Design Decisions (April 2026)
+
+During the design review of the Phase E time-slicing plan, seven design
+questions were raised and resolved.  All decisions are documented in
+`docs/plans/gpu-recommendations.md` (section E13) and
+`docs/gpu-time-slicing-plan.md` (Design Decisions table).
+
+### D1: Node Name Storage
+
+**Decision:** `node_name` is a regular (non-unique) column on
+`gpu_container_digests`.  On upsert, it gets overwritten with the latest
+value.  It is NOT part of the unique constraint.
+
+**Rationale:** GPU workloads rarely get rescheduled due to device plugin
+scheduling stickiness.  If rescheduled, the value snaps to the new node.
+Adding `node_name` to the unique constraint would cause duplicate rows.
+
+### D2: Savings Model
+
+**Decision:** Savings represent *cost avoidance* (potential), not direct
+cost reduction.  The formula `gpu_rate × (1 - 1/replicas)` plus a 0.7
+confidence penalty communicates this is contingent on infrastructure
+adjustment.
+
+**API qualifier:** "Estimated savings represent potential cost avoidance if
+GPU provisioning is adjusted to match effective utilization after enabling
+time-slicing."
+
+### D3: FB = Frame Buffer
+
+**Decision:** "FB" = Frame Buffer = GPU video memory (HBM on datacenter
+GPUs).  `DCGM_FI_DEV_FB_USED` reports MiB in use.  The FB fraction is
+`fb_usage_max / total_fb_capacity` where `total_fb_capacity` comes from
+`GPUModelSpec` (already in our codebase).
+
+**TDD:** Added cycle TS-08b (`avgCandidateUtilization`) to properly derive
+`fbFrac` from raw MiB values + model spec.
+
+### D4: One Container = One GPU (v1)
+
+**Decision:** v1 assumes 1 container = 1 GPU.  Multi-GPU containers are
+treated as having 1 GPU for savings calculation.
+
+**Future `gpu_count` effort estimate (if added):**
+- **Operator:** ~2 hours.  Add a new ROS query joining
+  `kube_pod_container_resource_requests{resource='nvidia_com_gpu'}` with the
+  container key.  This query already exists on the cost path.  Add
+  `GPURequestCount` field to `rosContainerRow`, add CSV column.
+- **ros-ocp-backend:** ~1 hour.  Parse new column, store in
+  `gpu_container_digests`, multiply savings by `gpu_count`.
+- Total: ~3 hours.  Not complex, but creates a breaking change in the CSV
+  schema requiring operator + backend version coordination.
+
+### D5: Node Column Always Present
+
+**Decision:** The `node` column is in position 13 (1-based) of the ROS
+container CSV, populated from DCGM `Hostname` label.  It has been there
+since the operator first added ROS support.  No minimum version concern.
+
+The DCGM profiling metrics (`PROF_PIPE_TENSOR_ACTIVE`, `PROF_DRAM_ACTIVE`,
+`PROF_SM_ACTIVE`) were added on our feature branch (commit `924de0f4`, not
+yet merged to `origin/main`).  Without profiling metrics, GPUs are
+classified as `no_profiling` (Tier 2) and time-slicing recommendations are
+not generated.
+
+### D6: Stale Node Recommendations
+
+**Decision:** Use 30-day digest window for data, but exclude nodes not
+seen in the last 7 days.  Implementation: check `max(interval_start)` per
+node group; if older than 7 days, skip.
+
+**TDD:** Added cycle TS-08c (`isNodeFresh`).
+
+### D7: Container-Level Cross-Reference
+
+**Decision:** When a container is a time-slicing candidate, its per-container
+GPU recommendation block gets:
+1. Notification code 29 (`NotifGPUTimeSharingCandidate`)
+2. `time_slicing_node` field (string, the target node name)
+3. `time_slicing_replicas` field (int, the recommended replica count)
+
+Impacted (non-candidate) containers do NOT get code 29 or the fields.
+
+This allows the UI to show both:
+- A banner on the container detail ("This GPU could benefit from N-way
+  time-slicing on node X")
+- A link to the node-level recommendation endpoint for full details

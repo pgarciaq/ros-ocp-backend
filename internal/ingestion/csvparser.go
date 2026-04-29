@@ -92,6 +92,8 @@ type csvColumnIndex struct {
 	memRSS           int
 	oomCount         int
 	workloadPodCount int
+	// Node column (optional; -1 when header absent).
+	node int
 	// GPU columns (optional; -1 when header absent).
 	acceleratorModelName           int
 	acceleratorProfileName         int
@@ -113,7 +115,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 	idx := csvColumnIndex{
 		intervalStart: -1, intervalEnd: -1, namespace: -1, workloadName: -1,
 		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
-		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1,
+		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
 		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		acceleratorModelName:           -1,
 		acceleratorProfileName:         -1,
@@ -146,6 +148,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.containerName = i
 		case "pod":
 			idx.pod = i
+		case "node":
+			idx.node = i
 		case "cpu_request_container_avg":
 			idx.cpuRequest = i
 		case "cpu_limit_container_avg":
@@ -313,6 +317,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	row.WorkloadType = record[idx.workloadType]
 	row.ContainerName = record[idx.containerName]
 	row.Pod = record[idx.pod]
+	row.Node = optionalStringField(record, idx.node)
 
 	row.CPURequestMC, err = CoreToMillicores(record[idx.cpuRequest])
 	if err != nil {

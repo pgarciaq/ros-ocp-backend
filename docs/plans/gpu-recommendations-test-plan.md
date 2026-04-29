@@ -712,3 +712,225 @@ cd nise && .venv/bin/python -m pytest tests/test_ocp_generator.py -v
 ```
 
 All 84 tests (78 existing + 6 GPU-specific) must pass.
+
+---
+
+## Phase E: Time-Slicing Tests
+
+### E-T1. Node name parsed from CSV
+
+**Type:** Unit test (Go)
+**File:** `internal/ingestion/csvparser_test.go`
+**Steps:**
+1. Parse a CSV row with a `node` column populated
+2. Assert `MetricRow.Node` == expected node name
+3. Parse a row with empty `node` column, assert `MetricRow.Node` == ""
+
+### E-T2. gpu_container_digests stores node_name
+
+**Type:** Integration test (Go)
+**File:** `internal/ingestion/pipeline_test.go` or `gpu_digest_test.go`
+**Steps:**
+1. Ingest CSV data with `node` column populated
+2. Query `gpu_container_digests` table
+3. Assert `node_name` column matches expected value
+4. Ingest data where `node` is empty, assert `node_name` == ""
+
+### E-T3. ComputeNodeTimeslicingRecs: basic 3-candidate scenario
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 4 GPU recs for node "gpu-t4-worker-1":
+  - 3 underutilized T4s (SM ~12%)
+  - 1 well-utilized T4 (SM ~67%)
+**Assert:**
+- Recommendation generated (>=50% candidates)
+- `RecommendedReplicas` == 4 (floor(1/0.12) clamped to 8, floor gives 8... clamp max is 8)
+- `CandidateContainers` has 3 entries
+- `ImpactedContainers` has 1 entry
+- Notification 29 emitted
+
+### E-T4. ComputeNodeTimeslicingRecs: all containers underutilized
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 2 GPU recs for node "all-underutil-node":
+  - 2 underutilized T4s (SM ~20%)
+**Assert:**
+- Recommendation generated (100% candidates, no impacted)
+- `ImpactedContainers` is empty
+- Confidence has no impacted penalty (only 0.7 base)
+
+### E-T5. ComputeNodeTimeslicingRecs: majority not met
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 4 GPU recs for a node:
+  - 1 underutilized T4
+  - 3 well-utilized T4s
+**Assert:**
+- No recommendation generated (<50% candidates)
+
+### E-T6. ComputeNodeTimeslicingRecs: skips MIG-capable GPUs with MIG recs
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 2 underutilized A100s on same node, both with MIG recommendations
+**Assert:**
+- No time-slicing recommendation (MIG takes precedence)
+
+### E-T7. ComputeNodeTimeslicingRecs: skips idle GPUs
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** Node with 2 idle T4s (SM < 0.02) and 1 underutilized T4
+**Assert:**
+- Idle GPUs not counted as candidates
+- If remaining candidates < 50%, no recommendation
+
+### E-T8. ComputeNodeTimeslicingRecs: skips memory-bound GPUs
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** Node with 2 memory-bound T4s and 1 underutilized T4
+**Assert:**
+- Memory-bound GPUs not counted as candidates
+
+### E-T9. Replicas clamping
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input cases:**
+- Very low utilization (SM 0.01) -> floor(1/0.01) = 100 -> clamped to 8
+- High utilization (SM 0.40) -> floor(1/0.40) = 2 -> stays at 2
+- Just below threshold (SM 0.51) -> floor(1/0.51) = 1 -> below 2, no recommendation
+**Assert:** Correct clamping in each case
+
+### E-T10. Savings calculation with cost data
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 3 candidate T4s, gpu_monthly_rate = $300, recommended_replicas = 4
+**Assert:**
+- `savings_per_gpu` = $300 * (1 - 1/4) = $225
+- `total_node_savings` = $225 * 3 = $675
+
+### E-T11. Savings nil when no cost data
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** Candidates present but no Koku cost data
+**Assert:**
+- `savings_per_gpu_usd` is nil
+- `total_node_savings_usd` is nil
+- Recommendation still generated (savings optional)
+
+### E-T12. Confidence calculation with impacted containers
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** 3 candidates (avg confidence 0.8) + 1 impacted, total 4 GPU containers
+**Assert:**
+- base = 0.8 * 0.7 = 0.56
+- impacted penalty = 1.0 - 0.3 * (1/4) = 0.925
+- final = 0.56 * 0.925 = 0.518
+
+### E-T13. Mixed GPU models on same node
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Input:** Node with 2 T4s (underutilized) and 1 L4 (underutilized)
+**Assert:**
+- Separate recommendations per GPU model
+- T4 recommendation has 2 candidates
+- L4 recommendation has 1 candidate (or skipped if < majority)
+
+### E-T14. API endpoint: GET /recommendations/openshift/nodes
+
+**Type:** Integration test (Go, httptest + testcontainers)
+**File:** `internal/api/handlers_node_recs_test.go`
+**Steps:**
+1. Seed database with gpu_container_digests for 2 nodes (different GPU models)
+2. GET `/recommendations/openshift/nodes`
+3. Assert response contains node-level recommendations
+4. Assert `meta.count` matches number of nodes with recommendations
+
+### E-T15. API filter: node_name
+
+**Type:** Integration test (Go)
+**Steps:**
+1. GET `/recommendations/openshift/nodes?node_name=gpu-t4-worker-1`
+2. Assert only recommendations for that node are returned
+
+### E-T16. API filter: gpu_model
+
+**Type:** Integration test (Go)
+**Steps:**
+1. GET `/recommendations/openshift/nodes?gpu_model=T4`
+2. Assert only T4 recommendations returned
+
+### E-T17. Container-level cross-reference
+
+**Type:** Integration test (Go)
+**Steps:**
+1. Seed data for a node with time-slicing candidates
+2. GET container-level recommendations for one of the candidate containers
+3. Assert notification code 29 appears in the container's GPU recommendation
+4. Assert time-slicing context is surfaced (node reference, recommended replicas)
+
+### E-T18. Notification code 29 emitted correctly
+
+**Type:** Unit test (Go)
+**File:** `internal/engine/gpu_timeslicing_test.go`
+**Steps:**
+1. Run `ComputeNodeTimeslicingRecs` with valid candidates
+2. Assert notification 29 in the TimeslicingRec result
+3. Assert notification 29 added to each candidate container's GPURec
+
+---
+
+### Phase E Test Matrix
+
+| Test ID | Type | DB Required | Notes |
+|---|---|---|---|
+| E-T1 | Unit | No | CSV parser |
+| E-T2 | Integration | Yes | Pipeline persistence |
+| E-T3 to E-T13 | Unit | No | Engine logic |
+| E-T14 to E-T17 | Integration | Yes | API + testcontainers |
+| E-T18 | Unit | No | Notification wiring |
+
+### Phase E Implementation Status
+
+| Test ID | Status | Notes |
+|---|---|---|
+| E-T1 | **Done** | `TestParseCSVRows_NodeColumn` in `csvparser_test.go` |
+| E-T2 | **Done** | `TestUpsertGPUDigests_StoresNodeName`, `_NodeNameEmptyWhenNotProvided` |
+| E-T3 | **Done** | `TestComputeNodeTimeslicingRec_HappyPath` |
+| E-T4 | **Done** | `TestComputeNodeTimeslicingRec_AllUnderutilized` |
+| E-T5 | **Done** | `TestComputeNodeTimeslicingRec_SkipBelowMajority` |
+| E-T6 | **Done** | `TestComputeNodeTimeslicingRec_SkipAllMIG` |
+| E-T7 | **Done** | `TestComputeNodeTimeslicingRec_SkipAllIdle` |
+| E-T8 | **Done** | `TestPartitionContainers/memory_bound_excluded` |
+| E-T9 | **Done** | `TestComputeReplicas` (8 sub-tests for clamping) |
+| E-T10 | **Done** | `TestComputeTimeslicingSavings/4_replicas_3_candidates` |
+| E-T11 | **Done** | `TestComputeTimeslicingSavings/no_cost_data` |
+| E-T12 | **Done** | `TestComputeTimeslicingConfidence` (6 sub-tests) |
+| E-T13 | **Done** | `TestComputeNodeTimeslicingRecs_MultipleGPUModels` |
+| E-T14 | **Done** | `TestGetNodeRecommendations_WithData` + pagination integration tests |
+| E-T15 | **Done** | `TestGetNodeRecommendations_FilterByNodeName` |
+| E-T16 | **Done** | `TestGetNodeRecommendations_FilterByGPUModel` |
+| E-T17 | Pending | Container cross-reference (notification 29 on container recs) |
+| E-T18 | **Done** | `TestComputeNodeTimeslicingRec_SetsNotifOnCandidates` |
+
+Additional tests beyond the original plan:
+
+| Test | Status | Notes |
+|---|---|---|
+| RBAC cluster filtering | **Done** | `TestGetNodeRecommendations_RBAC_FiltersByCluster` + 3 more integration tests |
+| RBAC node filtering | **Done** | `TestFilterNodeRecsByRBAC_*` (6 unit tests) + integration tests |
+| Pagination sort/offset/limit | **Done** | `TestSortNodeRecs_*` (6), `TestApplyNodePagination_*` (2), `TestBuildNodeLinks_*` (4) |
+| Pagination integration | **Done** | `TestGetNodeRecommendations_PaginationMeta`, `_OrderByConfidence`, `_InvalidOrderBy`, `_OffsetBeyondResults` |
+| 7-day freshness check | **Done** | `TestIsNodeFresh` (5 sub-tests), `TestComputeNodeTimeslicingRec_StaleNode/FreshNode/ZeroLastSeen` |
+| Node last seen tracking | **Done** | `TestQueryGPURecommendations_NodeLastSeenTracksMax` |
+| Org isolation | **Done** | `TestGetNodeRecommendations_OrgIsolation` |
+| ResourceNode RBAC type | **Done** | `TestAddRBACFilter_NodeResourceTypeAccepted` + 3 more in `rbac/` |

@@ -13,6 +13,7 @@ type ResourceType string
 const (
 	ResourceContainer ResourceType = "container"
 	ResourceProject   ResourceType = "namespace"
+	ResourceNode      ResourceType = "node"
 )
 
 func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resourceType ResourceType) error {
@@ -23,7 +24,7 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 
 	// Validate resource type
 	switch resourceType {
-	case ResourceContainer, ResourceProject:
+	case ResourceContainer, ResourceProject, ResourceNode:
 		// valid supported type
 	default:
 		return fmt.Errorf("unsupported resource type: %s", resourceType)
@@ -36,14 +37,14 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 
 	clusterPerms, hasCluster := userPermissions["openshift.cluster"]
 	projectPerms, hasProject := userPermissions["openshift.project"]
+	nodePerms, hasNode := userPermissions["openshift.node"]
 
 	clusterAll := hasCluster && utils.StringInSlice("*", clusterPerms)
 	projectAll := hasProject && utils.StringInSlice("*", projectPerms)
+	nodeAll := hasNode && utils.StringInSlice("*", nodePerms)
 
 	applyClusterFilter := func() {
-		if resourceType == ResourceContainer || resourceType == ResourceProject {
-			query = query.Where("clusters.cluster_uuid IN (?)", clusterPerms)
-		}
+		query = query.Where("clusters.cluster_uuid IN (?)", clusterPerms)
 	}
 
 	applyProjectFilter := func() {
@@ -55,20 +56,33 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 		}
 	}
 
-	// Both cluster + project permissions explicitly set
+	applyNodeFilter := func() {
+		if resourceType == ResourceNode {
+			query = query.Where("gpu_container_digests.node_name IN (?)", nodePerms)
+		}
+	}
+
+	if resourceType == ResourceNode {
+		if hasCluster && !clusterAll {
+			applyClusterFilter()
+		}
+		if hasNode && !nodeAll {
+			applyNodeFilter()
+		}
+		return nil
+	}
+
+	// Container / Project path (unchanged logic)
 	if hasCluster && hasProject {
 		switch {
 		case clusterAll && projectAll:
 			return nil
-
 		case clusterAll:
 			applyProjectFilter()
 			return nil
-
 		case projectAll:
 			applyClusterFilter()
 			return nil
-
 		default:
 			applyClusterFilter()
 			applyProjectFilter()
@@ -76,7 +90,6 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 		}
 	}
 
-	// Cluster-only permission -> access all projects in those clusters
 	if hasCluster && !hasProject {
 		if !clusterAll {
 			applyClusterFilter()
@@ -84,7 +97,6 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 		return nil
 	}
 
-	// Project-only permission -> access project across all clusters
 	if hasProject && !hasCluster {
 		if !projectAll {
 			applyProjectFilter()
