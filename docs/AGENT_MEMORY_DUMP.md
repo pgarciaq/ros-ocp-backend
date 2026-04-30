@@ -556,7 +556,7 @@ This returns:
 - File: `koku/masu/api/effective_rates.py`
 - Queries `CostModel` + `CostModelMap` to find the cost model for the given cluster
 - Queries `OCPUsageLineItemDailySummary` for namespace-level cost aggregates
-- Includes all distributed cost types (platform, worker, storage, network, GPU)
+- Includes all distributed cost types (platform, worker, storage, network, GPU) via `data_source IN ('Pod', 'GPU')` filter
 - **CRITICAL:** `org_id` parameter must be numeric (e.g., `1234567`), NOT prefixed with "org". The Koku code internally prepends "org" to form the schema name.
 
 ### CPU/Memory Savings Formula
@@ -916,13 +916,18 @@ All endpoints under `/api/cost-management/v1/`:
 
 ## 16. Known Issues, Gaps, and Future Work
 
-### gpu_distributed Cost Type Gap
+### ~~gpu_distributed Cost Type Gap~~ FIXED
 
-**Status:** Unverified. Documented in `docs/known-issues.md`.
+**Status:** Fixed in `koku/masu/api/effective_rates.py`.
 
-The Koku `effective_rates` endpoint filters `OCPUsageLineItemDailySummary` with `data_source = 'Pod'`. GPU distribution SQL (`distribute_unallocated_gpu_cost.sql`) inserts rows with `data_source = 'GPU'`. This means GPU distributed costs may be silently excluded from the savings calculation.
+The Koku `effective_rates` endpoint originally filtered `OCPUsageLineItemDailySummary` with `data_source = 'Pod'`, which excluded GPU distribution rows (`data_source = 'GPU'`). This caused `gpu_distributed` costs to be silently omitted from the namespace aggregates used by the ROS savings engine.
 
-**Practical impact today:** None — GPU-equipped on-prem clusters with cost models are extremely rare. The fix would be to change the SQL filter to `data_source IN ('Pod', 'GPU')`.
+**Fix:** Changed the SQL filter from `data_source = 'Pod'` to `data_source IN ('Pod', 'GPU')`. GPU rows only carry `distributed_cost` (CPU/memory usage hours are NULL), so this doesn't inflate usage aggregates. The `cost_model_rate_type` allowlist already controls which row types are summed.
+
+**Tests:** 3 new tests in `masu/test/api/test_effective_rates.py`:
+- `test_gpu_distributed_rows_included_in_namespace_aggregates`
+- `test_gpu_rows_do_not_inflate_cpu_memory_hours`
+- `test_mixed_pod_and_gpu_distributed_costs_sum_correctly`
 
 ### No Idle GPU in Test Data
 
