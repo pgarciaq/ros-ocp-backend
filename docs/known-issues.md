@@ -122,11 +122,22 @@ profiling metrics; Tier 2 (V100) gets only frame buffer.
 GPU-specific notification codes: 10 (underutilized), 26 (idle),
 27 (memory-bound), 28 (no profiling data).
 
+**Implemented but not listed above:**
+- GPU savings estimation from Koku cost data (`ApplyGPUSavings` in
+  `gpu_recommender.go`): reads `configured_rates["gpu_cost_per_month"]` from
+  the Koku `effective_rates` endpoint. Idle GPU = full monthly rate; MIG
+  right-sizing = fractional savings based on slice ratio. Wired into
+  `enrichWithGPU` and mapped to `estimated_monthly_gpu_savings_usd` in API.
+- Node-level time-slicing savings via `ComputeNodeTimeslicingRec` with
+  per-GPU and total-node dollar estimates on `GET /recommendations/openshift/nodes`.
+- Container-level time-slicing cross-reference (`time_slicing_node`,
+  `time_slicing_replicas`) on container GPU blocks.
+
 **Not yet implemented:**
-- GPU savings estimation from Koku cost data (placeholder)
 - API query filters (`has_gpu`, `gpu_model`, `gpu_classification`)
 - GPU daily digest aggregation pipeline
 - Koku-UI display of GPU recommendations
+- Container-level time-slicing dollar savings (node API has them, container enrichment does not)
 
 See `docs/plans/gpu-recommendations.md` for detailed design and
 `docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
