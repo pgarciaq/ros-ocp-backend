@@ -135,9 +135,12 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 - API query filters (`has_gpu`, `gpu_model`, `gpu_classification`) — parsed in
   `parseGPUFilters` (`handlers.go`), applied by `filterGPUResults`
   (`gpu_enrichment.go`). Documented in `openapi.json`.
+- GPU daily digest aggregation pipeline — `upsertGPUDigests` in `pipeline.go`
+  aggregates hourly CSV rows into daily `gpu_container_digests` rows during
+  ingestion. Partition creation, upsert-on-conflict, and retention sweep all
+  operational.
 
 **Not yet implemented:**
-- GPU daily digest aggregation pipeline
 - Koku-UI display of GPU recommendations
 - Container-level time-slicing dollar savings (node API has them, container enrichment does not)
 

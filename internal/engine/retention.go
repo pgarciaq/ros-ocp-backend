@@ -21,7 +21,9 @@ var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 // Tables retained by the general ROS_RETENTION_MONTHS setting.
 var retainedTables = []string{
 	"container_usage_samples",
+	"daily_container_digests",
 	"daily_namespace_digests",
+	"gpu_container_digests",
 	"namespace_usage_samples",
 }
 
