@@ -322,6 +322,35 @@
               ],
               "default": "cores"
             }
+          },
+          {
+            "name": "has_gpu",
+            "in": "query",
+            "description": "Filter by GPU presence. 'true' or '1' returns only containers with GPU data; 'false' or '0' returns only containers without GPU data.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false", "1", "0"]
+            }
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "description": "Filter by GPU model name (case-insensitive substring match, e.g. 'A100', 'T4'). Repeatable for OR logic.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gpu_classification",
+            "in": "query",
+            "description": "Filter by GPU workload classification (case-insensitive substring match). Repeatable for OR logic. Values: idle, underutilized, compute_bound_underutilized, memory_bound, well_utilized.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["idle", "underutilized", "compute_bound_underutilized", "memory_bound", "well_utilized"]
+            }
           }
         ],
         "responses": {
