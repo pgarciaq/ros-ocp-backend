@@ -934,3 +934,4 @@ Additional tests beyond the original plan:
 | Node last seen tracking | **Done** | `TestQueryGPURecommendations_NodeLastSeenTracksMax` |
 | Org isolation | **Done** | `TestGetNodeRecommendations_OrgIsolation` |
 | ResourceNode RBAC type | **Done** | `TestAddRBACFilter_NodeResourceTypeAccepted` + 3 more in `rbac/` |
+| gpu_distributed verification (Koku) | **Done** | `test_gpu_distributed_rows_included_in_namespace_aggregates`, `test_gpu_rows_do_not_inflate_cpu_memory_hours`, `test_mixed_pod_and_gpu_distributed_costs_sum_correctly` in `koku/masu/test/api/test_effective_rates.py` |

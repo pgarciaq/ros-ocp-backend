@@ -177,34 +177,33 @@ available, a `NotifNoCostData` notification is included.
 **UI status:** Not implemented. The koku-ui does not display the estimated
 savings value in the recommendation detail view.
 
-### Potential `gpu_distributed` Gap in Effective-Rates SQL
+### ~~Potential `gpu_distributed` Gap in Effective-Rates SQL~~ FIXED
 
-**Status:** Unverified. Documenting for future investigation.
+**Status:** Fixed. The SQL filter in `effective_rates.py` was changed from
+`data_source = 'Pod'` to `data_source IN ('Pod', 'GPU')`.
 
 The Koku masu `effective_rates` endpoint (`masu/api/effective_rates.py`)
-aggregates costs from `reporting_ocpusagelineitem_daily_summary` with a
-`data_source = 'Pod'` filter. The GPU distribution SQL
-(`distribute_unallocated_gpu_cost.sql`) inserts distributed rows with
-`data_source = 'GPU'` (hardcoded). This means `gpu_distributed` rows
-would not match the `data_source = 'Pod'` filter, and GPU distributed
-costs would be silently excluded from the savings calculation.
+aggregates costs from `reporting_ocpusagelineitem_daily_summary`. The original
+`data_source = 'Pod'` filter excluded GPU distribution rows (which use
+`data_source = 'GPU'`), silently omitting GPU distributed costs from savings.
 
-Other distribution types are believed to be unaffected:
+**Fix:** Changed SQL filter to `data_source IN ('Pod', 'GPU')`. This is safe
+because GPU rows only have `distributed_cost` populated (CPU/memory usage
+hours are NULL), so they don't inflate usage aggregates. The
+`cost_model_rate_type` allowlist already controls which row types are summed.
+
+**Tests added** in `masu/test/api/test_effective_rates.py`:
+- `test_gpu_distributed_rows_included_in_namespace_aggregates`
+- `test_gpu_rows_do_not_inflate_cpu_memory_hours`
+- `test_mixed_pod_and_gpu_distributed_costs_sum_correctly`
+
+Other distribution types are unaffected:
 - `platform_distributed`: inherits `data_source` from source rows (typically `'Pod'`)
 - `worker_distributed`: hardcoded `'Pod'`
 - `unattributed_storage`: inherits from source rows (typically `'Pod'` for user namespaces)
 - `unattributed_network`: inherits from source rows (typically `'Pod'` for user namespaces)
 
-**Practical impact today: none.** GPU-equipped on-prem clusters are rare,
-and our test environments have no GPU data. If/when GPU costs are present,
-the fix would be to change the SQL filter to
-`data_source IN ('Pod', 'GPU')` or remove the `data_source` filter
-entirely (with careful review of whether other data sources introduce
-double-counting).
-
-**Action needed:** Verify with actual GPU data whether `gpu_distributed`
-rows indeed have `data_source = 'GPU'` in the summary table, and if so,
-update the effective-rates SQL filter.
+**No remaining action needed.** The fix has been applied and tested.
 
 ### PVC / Storage Rightsizing
 
