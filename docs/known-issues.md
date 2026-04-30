@@ -132,9 +132,11 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   per-GPU and total-node dollar estimates on `GET /recommendations/openshift/nodes`.
 - Container-level time-slicing cross-reference (`time_slicing_node`,
   `time_slicing_replicas`) on container GPU blocks.
+- API query filters (`has_gpu`, `gpu_model`, `gpu_classification`) — parsed in
+  `parseGPUFilters` (`handlers.go`), applied by `filterGPUResults`
+  (`gpu_enrichment.go`). Documented in `openapi.json`.
 
 **Not yet implemented:**
-- API query filters (`has_gpu`, `gpu_model`, `gpu_classification`)
 - GPU daily digest aggregation pipeline
 - Koku-UI display of GPU recommendations
 - Container-level time-slicing dollar savings (node API has them, container enrichment does not)
