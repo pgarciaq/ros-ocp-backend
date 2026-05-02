@@ -269,7 +269,7 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	gpuRate := gpuMonthlyRate(costData)
+	gpuRate := GPUMonthlyRate(costData)
 	if gpuRate == 0 {
 		return
 	}
@@ -296,7 +296,9 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 	rec.EstimatedGPUSavingsUSD = &s
 }
 
-func gpuMonthlyRate(costData *costdata.ClusterCostData) float64 {
+// GPUMonthlyRate extracts the GPU monthly cost rate (infrastructure +
+// supplementary) from Koku cost data. Returns 0 if unavailable.
+func GPUMonthlyRate(costData *costdata.ClusterCostData) float64 {
 	if costData == nil || costData.ConfiguredRates == nil {
 		return 0
 	}

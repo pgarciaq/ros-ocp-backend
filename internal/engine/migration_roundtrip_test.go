@@ -42,7 +42,7 @@ func TestMigrationRoundtrip(t *testing.T) {
 	require.True(t, ok)
 	migrationsDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
 
-	// Step 1: Run all migrations up (through 033).
+	// Step 1: Run all migrations up.
 	m, err := migrate.New("file://"+migrationsDir, connStr)
 	require.NoError(t, err)
 	require.NoError(t, m.Up())
@@ -50,7 +50,7 @@ func TestMigrationRoundtrip(t *testing.T) {
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
 
-	// Step 2: Migrate down to version 25 (reverses 033 through 026).
+	// Step 2: Migrate down to version 25 (reverses 044 through 026).
 	m, err = migrate.New("file://"+migrationsDir, connStr)
 	require.NoError(t, err)
 	require.NoError(t, m.Migrate(25))
@@ -72,7 +72,7 @@ func TestMigrationRoundtrip(t *testing.T) {
 	ver, dirty, err := m.Version()
 	require.NoError(t, err)
 	assert.False(t, dirty, "migration state should not be dirty after roundtrip")
-	assert.Equal(t, uint(43), ver, "should be at latest migration version")
+	assert.Equal(t, uint(44), ver, "should be at latest migration version")
 	srcErr, dbErr = m.Close()
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)

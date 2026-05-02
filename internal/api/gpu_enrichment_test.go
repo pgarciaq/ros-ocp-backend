@@ -3,7 +3,9 @@ package api
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -162,4 +164,46 @@ func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {
 	assert.NotNil(t, got)
 	assert.Nil(t, got.TimeSlicingNode, "non-candidates should have nil time_slicing_node")
 	assert.Nil(t, got.TimeSlicingReplicas, "non-candidates should have nil time_slicing_replicas")
+}
+
+// --- enrichWithGPU orchestration tests ---
+
+func TestEnrichWithGPU_EmptyResults(t *testing.T) {
+	var results []model.NativeContainerResult
+	enrichWithGPU(results, "org1234567")
+}
+
+func TestEnrichWithGPU_NilPool(t *testing.T) {
+	results := []model.NativeContainerResult{
+		{ClusterUUID: "cluster-1", Project: "ns", Workload: "wl", Container: "c1"},
+	}
+	enrichWithGPU(results, "org1234567")
+	assert.Nil(t, results[0].GPU, "no DB pool means no GPU enrichment")
+}
+
+// --- GPUMonthlyRate (exported, shared helper) ---
+
+func TestGPUMonthlyRate_WithValidData(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"gpu_cost_per_month": {Infrastructure: 200.0, Supplementary: 50.0},
+		},
+	}
+	rate := engine.GPUMonthlyRate(cd)
+	assert.InDelta(t, 250.0, rate, 0.01)
+}
+
+func TestGPUMonthlyRate_NilCostData(t *testing.T) {
+	rate := engine.GPUMonthlyRate(nil)
+	assert.Equal(t, 0.0, rate)
+}
+
+func TestGPUMonthlyRate_MissingKey(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_cost_per_hour": {Infrastructure: 1.0, Supplementary: 0.5},
+		},
+	}
+	rate := engine.GPUMonthlyRate(cd)
+	assert.Equal(t, 0.0, rate)
 }

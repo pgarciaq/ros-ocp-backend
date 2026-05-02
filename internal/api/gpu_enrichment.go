@@ -60,7 +60,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 
 		var gpuRate *float32
 		if costData != nil {
-			if rate := gpuMonthlyRateFromCostData(costData); rate > 0 {
+			if rate := engine.GPUMonthlyRate(costData); rate > 0 {
 				r := float32(rate)
 				gpuRate = &r
 			}
