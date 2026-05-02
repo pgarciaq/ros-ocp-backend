@@ -116,12 +116,12 @@ func TestApplyGPUSavings_NilRec(t *testing.T) {
 }
 
 func TestGpuMonthlyRate(t *testing.T) {
-	assert.Equal(t, 0.0, gpuMonthlyRate(nil))
-	assert.Equal(t, 0.0, gpuMonthlyRate(&costdata.ClusterCostData{}))
-	assert.Equal(t, 0.0, gpuMonthlyRate(&costdata.ClusterCostData{
+	assert.Equal(t, 0.0, GPUMonthlyRate(nil))
+	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{}))
+	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{},
 	}))
-	assert.InDelta(t, 700.0, gpuMonthlyRate(&costdata.ClusterCostData{
+	assert.InDelta(t, 700.0, GPUMonthlyRate(&costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
 			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 200},
 		},

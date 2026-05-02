@@ -86,7 +86,7 @@ func GetNodeRecommendations(c echo.Context) error {
 
 		var gpuRate *float32
 		if costData != nil {
-			if rate := gpuMonthlyRateFromCostData(costData); rate > 0 {
+			if rate := engine.GPUMonthlyRate(costData); rate > 0 {
 				r := float32(rate)
 				gpuRate = &r
 			}
@@ -208,16 +208,6 @@ func groupByNodeAndModel(gpuRecs map[string]*engine.GPURec, nodeMap map[string]s
 	return result
 }
 
-func gpuMonthlyRateFromCostData(costData *costdata.ClusterCostData) float64 {
-	if costData == nil || costData.ConfiguredRates == nil {
-		return 0
-	}
-	rp, ok := costData.ConfiguredRates["gpu_cost_per_month"]
-	if !ok {
-		return 0
-	}
-	return rp.Infrastructure + rp.Supplementary
-}
 
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{

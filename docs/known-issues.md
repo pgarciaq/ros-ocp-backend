@@ -148,6 +148,19 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 **Not yet implemented:**
 - Koku-UI display of GPU recommendations
 
+**Known limitations (accepted risk):**
+- **Multi-GPU-model collision**: The `gpu_container_digests` unique index is
+  `(cluster_uuid, namespace, workload, container_name, interval_start)` without
+  `gpu_model_name`. If a container uses multiple GPU models on the same day
+  (hardware migration, multi-GPU pod), metrics are blended into one row and the
+  first model name wins. `QueryGPURecommendations` also picks the first row's
+  model for classification. This is acceptable because multi-model-per-container
+  scenarios are extremely rare in practice.
+- **Retention vs ingestion race**: `RunRetentionSweep` could DROP a partition
+  while `upsertGPUDigests` writes to it (e.g., during backfill of old data).
+  PostgreSQL locking makes this fail loud (write error) rather than corrupt.
+  Normal operation (recent data + 6-month retention) is unaffected.
+
 See `docs/plans/gpu-recommendations.md` for detailed design and
 `docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
 

@@ -345,11 +345,11 @@
           {
             "name": "gpu_classification",
             "in": "query",
-            "description": "Filter by GPU workload classification (case-insensitive substring match). Repeatable for OR logic. Values: idle, underutilized, compute_bound_underutilized, memory_bound, well_utilized.",
+            "description": "Filter by GPU workload classification (case-insensitive substring match). Repeatable for OR logic. Values: idle, underutilized, compute_bound_underutil, memory_bound, well_utilized.",
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["idle", "underutilized", "compute_bound_underutilized", "memory_bound", "well_utilized"]
+              "enum": ["idle", "underutilized", "compute_bound_underutil", "memory_bound", "well_utilized"]
             }
           }
         ],
@@ -3558,7 +3558,7 @@
           },
           "gpu_classification": {
             "type": "string",
-            "enum": ["idle", "underutilized", "memory_bound", "compute_bound_underutilized", "well_utilized"],
+            "enum": ["idle", "underutilized", "memory_bound", "compute_bound_underutil", "well_utilized"],
             "description": "Utilization classification based on DCGM profiling metrics. Empty if profiling data unavailable (Tier 2 GPUs)."
           },
           "recommended_gpu_profile": {
