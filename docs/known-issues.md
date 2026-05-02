@@ -140,9 +140,13 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   ingestion. Partition creation, upsert-on-conflict, and retention sweep all
   operational.
 
+- Container-level time-slicing dollar savings — `EstimatedTimeslicingSavingsUSD`
+  on `GPURec`, populated by `ComputeNodeTimeslicingRec` with the per-candidate
+  share of `SavingsPerGPU`. Exposed as `estimated_monthly_timeslicing_savings_usd`
+  in the container API response.
+
 **Not yet implemented:**
 - Koku-UI display of GPU recommendations
-- Container-level time-slicing dollar savings (node API has them, container enrichment does not)
 
 See `docs/plans/gpu-recommendations.md` for detailed design and
 `docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.

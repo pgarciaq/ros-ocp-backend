@@ -53,11 +53,12 @@ type GPURec struct {
 	DRAMActiveAvg          float32
 	SMActiveAvg            float32
 	FBUsageMaxMiB          float32
-	EstimatedGPUSavingsUSD *float32 // nil if no cost data
-	NotificationCodes      []int16
-	HasProfilingData       bool
-	TimeSlicingNode        string // set by ComputeNodeTimeslicingRec for candidates
-	TimeSlicingReplicas    int    // set by ComputeNodeTimeslicingRec for candidates
+	EstimatedGPUSavingsUSD         *float32 // nil if no cost data (idle/MIG savings)
+	EstimatedTimeslicingSavingsUSD *float32 // nil if no cost data (per-candidate share of node time-slicing savings)
+	NotificationCodes              []int16
+	HasProfilingData               bool
+	TimeSlicingNode                string // set by ComputeNodeTimeslicingRec for candidates
+	TimeSlicingReplicas            int    // set by ComputeNodeTimeslicingRec for candidates
 }
 
 func gpuThreshold(envKey string, defaultVal float64) float64 {

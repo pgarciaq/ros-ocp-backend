@@ -418,9 +418,9 @@ func TestComputeNodeTimeslicingRec_NoCandidatesNoCrossRef(t *testing.T) {
 	assert.Equal(t, 0, rec.TimeSlicingReplicas)
 }
 
-// --- E-T17b: AnnotateTimeslicingCandidates wrapper ---
+// --- E-T17b: ComputeNodeTimeslicingRec side effects with nil rate ---
 
-func TestAnnotateTimeslicingCandidates(t *testing.T) {
+func TestComputeNodeTimeslicingRec_NilRateStillAnnotatesCandidates(t *testing.T) {
 	rec1 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.12, DRAMActiveAvg: 0.05, Confidence: 0.8}
 	rec2 := &GPURec{Classification: GPUClassWellUtilized, SMActiveAvg: 0.55, DRAMActiveAvg: 0.20, Confidence: 0.8}
 
@@ -431,11 +431,12 @@ func TestAnnotateTimeslicingCandidates(t *testing.T) {
 			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
 		},
 	}
-	AnnotateTimeslicingCandidates(group)
+	ComputeNodeTimeslicingRec(group, nil)
 
 	assert.Equal(t, "node-ann", rec1.TimeSlicingNode)
 	assert.Greater(t, rec1.TimeSlicingReplicas, 0)
 	assert.Contains(t, rec1.NotificationCodes, NotifGPUTimeSharingCandidate)
+	assert.Nil(t, rec1.EstimatedTimeslicingSavingsUSD, "nil rate means no savings")
 
 	assert.Equal(t, "", rec2.TimeSlicingNode, "impacted container should not be annotated")
 	assert.Equal(t, 0, rec2.TimeSlicingReplicas)
@@ -507,6 +508,53 @@ func TestComputeNodeTimeslicingRec_ZeroLastSeen(t *testing.T) {
 	}
 	rec := ComputeNodeTimeslicingRec(input, nil)
 	assert.NotNil(t, rec, "zero LastSeen should be treated as fresh (backward compat)")
+}
+
+// --- Container-level time-slicing savings ---
+
+func TestComputeNodeTimeslicingRec_SetsTimeslicingSavingsOnCandidates(t *testing.T) {
+	gpuRate := float32(300.0)
+	rec1 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.12, DRAMActiveAvg: 0.05, Confidence: 0.8}
+	rec2 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.10, DRAMActiveAvg: 0.04, Confidence: 0.8}
+	impactedRec := &GPURec{Classification: GPUClassWellUtilized, SMActiveAvg: 0.55, DRAMActiveAvg: 0.20, Confidence: 0.8}
+
+	input := NodeGPUGroup{
+		NodeName: "node-1", ClusterUUID: "c1", GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec1},
+			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
+			{Namespace: "ns", Workload: "wl", Container: "c3", Rec: impactedRec},
+		},
+	}
+	result := ComputeNodeTimeslicingRec(input, &gpuRate)
+	require.NotNil(t, result)
+	require.NotNil(t, result.SavingsPerGPU)
+
+	require.NotNil(t, rec1.EstimatedTimeslicingSavingsUSD, "candidate should have time-slicing savings")
+	assert.Equal(t, *result.SavingsPerGPU, *rec1.EstimatedTimeslicingSavingsUSD)
+
+	require.NotNil(t, rec2.EstimatedTimeslicingSavingsUSD, "candidate should have time-slicing savings")
+	assert.Equal(t, *result.SavingsPerGPU, *rec2.EstimatedTimeslicingSavingsUSD)
+
+	assert.Nil(t, impactedRec.EstimatedTimeslicingSavingsUSD, "impacted container should NOT have time-slicing savings")
+}
+
+func TestComputeNodeTimeslicingRec_NoRateNoTimeslicingSavings(t *testing.T) {
+	rec1 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.12, DRAMActiveAvg: 0.05, Confidence: 0.8}
+	rec2 := &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.10, DRAMActiveAvg: 0.04, Confidence: 0.8}
+
+	input := NodeGPUGroup{
+		NodeName: "node-1", ClusterUUID: "c1", GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec1},
+			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
+		},
+	}
+	result := ComputeNodeTimeslicingRec(input, nil)
+	require.NotNil(t, result)
+
+	assert.Nil(t, rec1.EstimatedTimeslicingSavingsUSD, "no rate means no time-slicing savings")
+	assert.Nil(t, rec2.EstimatedTimeslicingSavingsUSD, "no rate means no time-slicing savings")
 }
 
 func TestComputeNodeTimeslicingRec_NoRate(t *testing.T) {
