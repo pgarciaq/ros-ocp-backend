@@ -3087,7 +3087,13 @@
             "type": "number",
             "format": "float",
             "nullable": true,
-            "description": "Estimated monthly GPU cost savings in USD. Null if no cost data available."
+            "description": "Estimated monthly GPU cost savings from idle removal or MIG right-sizing, in USD. Null if no cost data available."
+          },
+          "estimated_monthly_timeslicing_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Estimated monthly savings if GPU time-slicing is enabled on the node. Represents this container's share (savings_per_gpu from the node recommendation). Only set for time-slicing candidate containers with cost data available."
           },
           "notifications": {
             "type": "array",

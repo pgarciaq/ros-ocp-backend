@@ -58,13 +58,21 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 			}
 		}
 
+		var gpuRate *float32
+		if costData != nil {
+			if rate := gpuMonthlyRateFromCostData(costData); rate > 0 {
+				r := float32(rate)
+				gpuRate = &r
+			}
+		}
+
 		for _, gpuRec := range gpuRecs {
 			engine.ApplyGPUSavings(gpuRec, costData)
 		}
 
 		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
 		for _, group := range groups {
-			engine.AnnotateTimeslicingCandidates(group)
+			engine.ComputeNodeTimeslicingRec(group, gpuRate)
 		}
 
 		for _, idx := range indices {
@@ -157,8 +165,9 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		DRAMActiveAvg:                 rec.DRAMActiveAvg,
 		SMActiveAvg:                   rec.SMActiveAvg,
 		FBUsageMaxMiB:                 rec.FBUsageMaxMiB,
-		EstimatedMonthlyGPUSavingsUSD: rec.EstimatedGPUSavingsUSD,
-		Notifications:                 rec.NotificationCodes,
+		EstimatedMonthlyGPUSavingsUSD:         rec.EstimatedGPUSavingsUSD,
+		EstimatedMonthlyTimeslicingSavingsUSD: rec.EstimatedTimeslicingSavingsUSD,
+		Notifications:                         rec.NotificationCodes,
 	}
 	if rec.TimeSlicingNode != "" {
 		n := rec.TimeSlicingNode

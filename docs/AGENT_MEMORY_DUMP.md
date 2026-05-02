@@ -1435,22 +1435,33 @@ which called `ComputeNodeTimeslicingRec` on grouped data.
 The fix wires the time-slicing engine into the container enrichment path:
 
 1. `enrichWithGPU` now calls `groupByNodeAndModel` + `ComputeNodeTimeslicingRec`
-   on each cluster's GPU data **before** mapping to API models
+   on each cluster's GPU data **before** mapping to API models, passing
+   `gpuRate` derived from Koku cost data (same rate the node API uses)
 2. `ComputeNodeTimeslicingRec` stamps each candidate `GPURec` with
-   `TimeSlicingNode` and `TimeSlicingReplicas` (plus notification 29, which
-   was already there)
+   `TimeSlicingNode`, `TimeSlicingReplicas`, notification 29, and
+   `EstimatedTimeslicingSavingsUSD` (per-candidate share = `SavingsPerGPU`)
 3. `toGPURecommendation` maps the new engine fields to nullable API model
-   fields (`*string`, `*int`) — nil when empty/zero so non-candidates get
-   clean JSON with no spurious fields
+   fields — nil when empty/zero so non-candidates get clean JSON
+
+**Dollar savings semantics (two independent fields):**
+- `estimated_monthly_gpu_savings_usd` = idle removal / MIG right-sizing
+- `estimated_monthly_timeslicing_savings_usd` = per-container share of time-slicing savings
+  (`gpu_rate * (1 - 1/replicas)`)
+
+These represent different optimization strategies and are both exposed.
 
 **Files changed:**
-- `internal/engine/gpu_recommender.go` — `GPURec` struct: added fields
-- `internal/engine/gpu_timeslicing.go` — `ComputeNodeTimeslicingRec`: stamps candidates
-- `internal/model/detail_response.go` — `GPURecommendation`: added nullable fields
-- `internal/api/gpu_enrichment.go` — `enrichWithGPU`: runs time-slicing engine; `toGPURecommendation`: maps fields
-- `openapi.json` — documented `time_slicing_node`, `time_slicing_replicas`, updated notification 29 description
+- `internal/engine/gpu_recommender.go` — `GPURec` struct: `EstimatedTimeslicingSavingsUSD` field
+- `internal/engine/gpu_timeslicing.go` — `ComputeNodeTimeslicingRec`: stamps candidates with savings
+- `internal/model/detail_response.go` — `GPURecommendation`: `estimated_monthly_timeslicing_savings_usd`
+- `internal/api/gpu_enrichment.go` — `enrichWithGPU`: passes gpuRate; `toGPURecommendation`: maps field
+- `openapi.json` — documented both savings fields, `time_slicing_node`, `time_slicing_replicas`
 
 **Tests:** `TestComputeNodeTimeslicingRec_SetsContainerCrossRef`,
 `TestComputeNodeTimeslicingRec_NoCandidatesNoCrossRef`,
+`TestComputeNodeTimeslicingRec_SetsTimeslicingSavingsOnCandidates`,
+`TestComputeNodeTimeslicingRec_NoRateNoTimeslicingSavings`,
 `TestToGPURecommendation_WithTimeslicingCrossRef`,
-`TestToGPURecommendation_NoTimeslicingCrossRef`
+`TestToGPURecommendation_NoTimeslicingCrossRef`,
+`TestToGPURecommendation_WithTimeslicingSavings`,
+`TestToGPURecommendation_NoTimeslicingSavings`

@@ -115,6 +115,39 @@ func TestToGPURecommendation_WithTimeslicingCrossRef(t *testing.T) {
 	assert.Contains(t, got.Notifications, int16(engine.NotifGPUTimeSharingCandidate))
 }
 
+func TestToGPURecommendation_WithTimeslicingSavings(t *testing.T) {
+	savings := float32(225.0)
+	rec := &engine.GPURec{
+		GPUModelName:                   "T4",
+		Classification:                 engine.GPUClassUnderutilized,
+		SMActiveAvg:                    0.12,
+		Confidence:                     0.8,
+		NotificationCodes:              []int16{engine.NotifGPUTimeSharingCandidate},
+		TimeSlicingNode:                "gpu-worker-7",
+		TimeSlicingReplicas:            4,
+		EstimatedTimeslicingSavingsUSD: &savings,
+	}
+
+	got := toGPURecommendation(rec)
+	assert.NotNil(t, got)
+	assert.NotNil(t, got.EstimatedMonthlyTimeslicingSavingsUSD)
+	assert.InDelta(t, 225.0, *got.EstimatedMonthlyTimeslicingSavingsUSD, 0.01)
+}
+
+func TestToGPURecommendation_NoTimeslicingSavings(t *testing.T) {
+	rec := &engine.GPURec{
+		GPUModelName:                   "T4",
+		Classification:                 engine.GPUClassWellUtilized,
+		SMActiveAvg:                    0.65,
+		Confidence:                     0.8,
+		EstimatedTimeslicingSavingsUSD: nil,
+	}
+
+	got := toGPURecommendation(rec)
+	assert.NotNil(t, got)
+	assert.Nil(t, got.EstimatedMonthlyTimeslicingSavingsUSD)
+}
+
 func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {
 	rec := &engine.GPURec{
 		GPUModelName:        "T4",

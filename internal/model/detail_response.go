@@ -18,10 +18,11 @@ type GPURecommendation struct {
 	DRAMActiveAvg                 float32  `json:"dram_active_avg"`
 	SMActiveAvg                   float32  `json:"sm_active_avg"`
 	FBUsageMaxMiB                 float32  `json:"fb_usage_max_mib"`
-	EstimatedMonthlyGPUSavingsUSD *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
-	Notifications                 []int16  `json:"notifications,omitempty"`
-	TimeSlicingNode               *string  `json:"time_slicing_node,omitempty"`
-	TimeSlicingReplicas           *int     `json:"time_slicing_replicas,omitempty"`
+	EstimatedMonthlyGPUSavingsUSD         *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
+	EstimatedMonthlyTimeslicingSavingsUSD *float32 `json:"estimated_monthly_timeslicing_savings_usd,omitempty"`
+	Notifications                         []int16  `json:"notifications,omitempty"`
+	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`
+	TimeSlicingReplicas                   *int     `json:"time_slicing_replicas,omitempty"`
 }
 
 // DetailResponse is the strongly-typed Kruize-compatible response for the
