@@ -168,6 +168,7 @@ func TestRecommendGPU_Tier2_V100(t *testing.T) {
 	rec := RecommendGPU(digests)
 	require.NotNil(t, rec)
 	assert.False(t, rec.HasProfilingData)
+	assert.Equal(t, GPUClassNoProfiling, rec.Classification)
 	assert.Contains(t, rec.NotificationCodes, NotifGPUNoProfilingData)
 	assert.Equal(t, "", rec.RecommendedGPUProfile) // V100 is not MIG-capable in catalog
 }
