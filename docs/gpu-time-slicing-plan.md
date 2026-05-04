@@ -25,45 +25,15 @@ is temporal multiplexing with no memory isolation.
 
 ---
 
-## Phase 0: Ingest Node Name (prerequisite)
+## Phase 0: Ingest Node Name (prerequisite) — DONE
 
-**Problem:** The ROS CSV has a `node` column (position 6), but the ros-ocp-backend
-CSV parser does not map it.  `MetricRow`, `gpu_container_digests`, and
-`recommendation_sets` all lack node information.
+**Status:** Fully implemented.
 
-### Phase 0a: Add `node` to CSV parser and `MetricRow`
-
-**File:** `internal/ingestion/models.go`
-
-Add `Node string` field to `MetricRow`.
-
-**File:** `internal/ingestion/csvparser.go`
-
-Add `node int` to `csvColumnIndex`.  In `buildColumnIndex`, map `"node"` → `idx.node`.
-In `parseRecord`, set `row.Node = optionalStringField(record, idx.node)`.
-
-The `node` column is NOT required (older operator versions may not produce it);
-treat it as optional with empty-string default.
-
-**Tests:** `internal/ingestion/csvparser_test.go` — add test with and without `node`
-column in header.
-
-### Phase 0b: Store `node` in `gpu_container_digests`
-
-**Migration:** `000044_add_node_to_gpu_digests.up.sql`
-
-```sql
-ALTER TABLE gpu_container_digests ADD COLUMN IF NOT EXISTS node_name TEXT DEFAULT '';
-```
-
-Down: `ALTER TABLE gpu_container_digests DROP COLUMN IF EXISTS node_name;`
-
-**File:** `internal/ingestion/pipeline.go` — `upsertGPUDigests`
-
-Include `node_name` in the INSERT and the ON CONFLICT UPDATE.  Source the value
-from `MetricRow.Node`.
-
-**Tests:** `internal/ingestion/pipeline_test.go` — verify node_name is persisted.
+`MetricRow.Node` is populated by the CSV parser (`csvparser.go`), `node_name`
+is stored in `gpu_container_digests` (migration 000044), and
+`QueryGPURecommendations` returns a node map alongside GPU recommendations.
+The `node` column is optional — older operator versions without it produce
+empty-string defaults.
 
 ---
 

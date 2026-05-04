@@ -1,9 +1,15 @@
 // Paste below code in https://dbdiagram.io/d editor to get graphical(ERD) view of the database
+// Last updated: 2026-05-04
+
+// ============================================================
+// CORE TABLES (public schema)
+// ============================================================
 
 Table rh_accounts {
   id bigint [increment]
   account text
   org_id text [not null]
+  created_at timestamptz
   Indexes {
     id [pk]
     org_id [unique, type: btree]
@@ -14,7 +20,7 @@ Table clusters {
   id bigint [increment]
   tenant_id bigint [ref: > rh_accounts.id]
   source_id text [not null]
-  cluster_uuid text [not null]
+  cluster_uuid uuid [not null]
   cluster_alias text [not null]
   last_reported_at datetime
   Indexes {
@@ -37,7 +43,7 @@ Table workloads {
   Indexes {
     id [pk]
     cluster_id [name: "clusters.id_fkey", type: btree]
-    containers [type: gin] // gin index is not supported in dbdiagram.io so this will throw error
+    containers [type: gin]
   }
 }
 
@@ -54,14 +60,39 @@ Table workload_metrics {
   }
 }
 
+// ============================================================
+// RECOMMENDATION TABLES
+// ============================================================
+
 Table recommendation_sets {
   id uuid [increment]
   workload_id bigint [ref: > workloads.id]
   container_name text
+  container_id text
   monitoring_start_time datetime
   monitoring_end_time datetime
   recommendations jsonb
   updated_at datetime
+  // Native engine relational columns (migration 000028):
+  org_id text
+  cluster_uuid uuid
+  namespace text
+  workload text
+  workload_type text
+  // Variation percentage columns (migration 000023):
+  variation_cpu_request_pct real
+  variation_cpu_limit_pct real
+  variation_memory_request_pct real
+  variation_memory_limit_pct real
+  // Variation limit columns (migration 000038):
+  variation_cpu_request_mc bigint
+  variation_cpu_limit_mc bigint
+  variation_memory_request_kib bigint
+  variation_memory_limit_kib bigint
+  // Pod count columns (migration 000039):
+  pod_count_min bigint
+  pod_count_max bigint
+  pod_count_avg bigint
   Indexes {
     id [pk]
     workload_id [name: "workloads.id_fkey", type: btree]
@@ -83,4 +114,280 @@ Table historical_recommendation_sets {
     workload_id [name: "workloads.id_fkey", type: btree]
     (workload_id, container_name, monitoring_end_time) [unique, type: btree]
   }
+}
+
+Table namespace_recommendation_sets {
+  id uuid [increment]
+  workload_id bigint [ref: > workloads.id]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  monitoring_start_time datetime
+  monitoring_end_time datetime
+  recommendations jsonb
+  updated_at datetime
+  // Variation columns:
+  variation_cpu_request_pct real
+  variation_cpu_limit_pct real
+  variation_memory_request_pct real
+  variation_memory_limit_pct real
+  Indexes {
+    id [pk]
+    (org_id, cluster_uuid, namespace) [unique, type: btree]
+  }
+}
+
+Table historical_namespace_recommendation_sets {
+  id uuid [increment]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  monitoring_start_time datetime
+  monitoring_end_time datetime
+  recommendations jsonb
+  updated_at datetime
+  Indexes {
+    id [pk]
+  }
+}
+
+// ============================================================
+// DIGEST TABLES (partitioned by date — native engine)
+// ============================================================
+
+Table daily_container_digests {
+  bucket_date date [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  workload text [not null]
+  workload_type text [not null]
+  container_name text [not null]
+  // CPU percentiles (millicores):
+  cpu_request_p50_mc bigint
+  cpu_request_p60_mc bigint
+  cpu_request_p95_mc bigint
+  cpu_request_p98_mc bigint
+  cpu_request_p99_mc bigint
+  cpu_usage_p50_mc bigint
+  cpu_usage_p60_mc bigint
+  cpu_usage_p95_mc bigint
+  cpu_usage_p98_mc bigint
+  cpu_usage_p99_mc bigint
+  cpu_usage_max_mc bigint
+  cpu_throttle_p95_mc bigint
+  cpu_throttle_max_mc bigint
+  // Memory percentiles (KiB):
+  memory_request_p50_kib bigint
+  memory_request_p95_kib bigint
+  memory_usage_p50_kib bigint
+  memory_usage_p95_kib bigint
+  memory_usage_max_kib bigint
+  memory_rss_p95_kib bigint
+  memory_rss_max_kib bigint
+  // Aggregates:
+  oom_count_sum bigint
+  cpu_usage_mean_mc bigint
+  memory_usage_mean_kib bigint
+  sample_count bigint
+  // Memory percentile additions (migration 000037):
+  memory_request_p60_kib bigint
+  memory_request_p98_kib bigint
+  memory_request_p99_kib bigint
+  memory_usage_p60_kib bigint
+  memory_usage_p98_kib bigint
+  memory_usage_p99_kib bigint
+  // Pod count (migration 000039):
+  pod_count_min bigint
+  pod_count_max bigint
+  pod_count_avg bigint
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, workload, container_name, bucket_date) [pk]
+  }
+  Note: 'Partitioned by RANGE(bucket_date). 6-month retention.'
+}
+
+Table daily_namespace_digests {
+  bucket_date date [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  cpu_request_p50_mc bigint
+  cpu_request_p95_mc bigint
+  cpu_request_p98_mc bigint
+  cpu_usage_p50_mc bigint
+  cpu_usage_p95_mc bigint
+  cpu_usage_max_mc bigint
+  memory_request_p50_kib bigint
+  memory_request_p95_kib bigint
+  memory_usage_p50_kib bigint
+  memory_usage_p95_kib bigint
+  memory_usage_max_kib bigint
+  cpu_usage_mean_mc bigint
+  memory_usage_mean_kib bigint
+  sample_count bigint
+  // Namespace memory percentiles (migration 000034):
+  memory_request_p60_kib bigint
+  memory_request_p98_kib bigint
+  memory_request_p99_kib bigint
+  memory_usage_p60_kib bigint
+  memory_usage_p98_kib bigint
+  memory_usage_p99_kib bigint
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, bucket_date) [pk]
+  }
+  Note: 'Partitioned by RANGE(bucket_date). 6-month retention.'
+}
+
+Table gpu_container_digests {
+  id bigserial
+  interval_start timestamp [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  workload text [not null]
+  workload_type text [not null, default: 'deployment']
+  container_name text [not null]
+  gpu_model_name text [not null]
+  gpu_profile_name text
+  node_name text [default: '']
+  // Frame buffer:
+  fb_usage_min_mib real
+  fb_usage_max_mib real
+  fb_usage_avg_mib real
+  // Tensor pipe:
+  tensor_pipe_active_min real
+  tensor_pipe_active_max real
+  tensor_pipe_active_avg real
+  // DRAM:
+  dram_active_min real
+  dram_active_max real
+  dram_active_avg real
+  // SM:
+  sm_active_min real
+  sm_active_max real
+  sm_active_avg real
+
+  Indexes {
+    (id, interval_start) [pk]
+    (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start) [unique]
+  }
+  Note: 'Partitioned by RANGE(interval_start). 6-month retention.'
+}
+
+// ============================================================
+// USAGE SAMPLES (for boxplots — partitioned)
+// ============================================================
+
+Table container_usage_samples {
+  sample_time timestamptz [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  workload text [not null]
+  workload_type text [not null]
+  container_name text [not null]
+  cpu_usage_mc bigint [not null]
+  mem_usage_kib bigint [not null]
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, workload, container_name, sample_time) [pk]
+  }
+  Note: 'Partitioned by RANGE(sample_time). 6-month retention.'
+}
+
+Table namespace_usage_samples {
+  sample_time timestamptz [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  cpu_usage_mc bigint [not null]
+  mem_usage_kib bigint [not null]
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, sample_time) [pk]
+  }
+  Note: 'Partitioned by RANGE(sample_time). 6-month retention.'
+}
+
+// ============================================================
+// QUALITY AND HISTORY (partitioned)
+// ============================================================
+
+Table recommendation_quality {
+  measured_at timestamptz [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  workload text [not null]
+  container_name text [not null]
+  oom_events_after_rec bigint
+  stability_pct real
+  adoption_detected boolean [default: false]
+  recommendation_age_hours bigint
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, workload, container_name, measured_at) [pk]
+  }
+  Note: 'Partitioned by RANGE(measured_at). 6-month retention.'
+}
+
+Table recommendation_history {
+  recorded_at timestamptz [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  namespace text [not null]
+  workload text [not null]
+  container_name text [not null]
+  term text [not null]
+  engine text [not null]
+  rec_cpu_request_millicores bigint
+  rec_cpu_limit_millicores bigint
+  rec_memory_request_kib bigint
+  rec_memory_limit_kib bigint
+  notification_codes smallint[]
+  confidence_level real
+  estimated_monthly_savings_usd real
+  source_binary text
+
+  Indexes {
+    (org_id, cluster_uuid, namespace, workload, container_name, term, engine, recorded_at) [pk]
+  }
+  Note: 'Partitioned by RANGE(recorded_at). 6-month retention.'
+}
+
+// ============================================================
+// CONFIGURATION TABLES
+// ============================================================
+
+Table recommendation_profiles {
+  name text [pk]
+  description text
+  cpu_percentile double
+  mem_percentile double
+  safety_margin double [default: 0.15]
+  decay_halflife_hours double [default: 168]
+  is_default boolean [default: false]
+  created_at timestamptz
+  Note: 'Seeded with "cost" and "performance" profiles.'
+}
+
+Table org_recommendation_terms {
+  org_id text [not null]
+  term_ord smallint [not null, note: 'CHECK between 1 and 3']
+  window_days smallint [not null, note: 'CHECK between 1 and 90']
+  decay_halflife_hours real
+
+  Indexes {
+    (org_id, term_ord) [pk]
+  }
+  Note: 'Per-org term window overrides. Empty = defaults (1d/7d/15d).'
+}
+
+Table notification_code_definitions {
+  code smallint [pk]
+  description text [not null]
+  severity text [not null]
+  Note: 'Lookup table for recommendation notification codes.'
 }

@@ -4,7 +4,7 @@ This document tracks features that are implemented in the ros-ocp-backend
 native engine but lack corresponding UI support in koku-ui, as well as
 features that are not yet implemented in the engine.
 
-Last updated: 2026-04-28
+Last updated: 2026-05-04
 
 ---
 
@@ -100,14 +100,15 @@ not label recommendations as "increase" / "decrease" / "well-sized".
 
 ---
 
-## Features Not Implemented in Engine
+## Features Implemented in Engine
 
 ### GPU Recommendations
 
 **Engine status:** Implemented. The engine classifies GPU workloads using
 DCGM profiling metrics (`PROF_PIPE_TENSOR_ACTIVE`, `PROF_DRAM_ACTIVE`,
 `PROF_SM_ACTIVE`) into categories: idle, underutilized, memory-bound,
-compute-bound underutilized, and well-utilized. Supports MIG profile
+compute-bound underutilized, well-utilized, and no-profiling (for GPUs
+without DCGM metrics, e.g. Tier 2 V100). Supports MIG profile
 recommendations for A100/A30/H100/H200/B100/B200. Confidence scoring
 accounts for observation duration and workload variability. Two-tier
 GPU support: Turing+ (full profiling) and Volta/Pascal (frame-buffer only).
@@ -145,8 +146,8 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   share of `SavingsPerGPU`. Exposed as `estimated_monthly_timeslicing_savings_usd`
   in the container API response.
 
-**Not yet implemented:**
-- Koku-UI display of GPU recommendations
+**Not yet implemented in UI:**
+- Koku-UI display of GPU recommendations (classifications, savings, time-slicing)
 
 **Known limitations (accepted risk):**
 - **Retention vs ingestion race**: `RunRetentionSweep` could DROP a partition
@@ -156,20 +157,6 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 
 See `docs/plans/gpu-recommendations.md` for detailed design and
 `docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
-
-### Java / JVM Recommendations
-
-No workload-specific tuning (heap sizing, GC overhead detection). Would
-require JVM-aware metrics from the operator and a specialized recommendation
-model.
-
-### HPA Scaling Suggestions
-
-No horizontal scaling suggestions. `NotifHPASaturated` and `NotifHPAActive`
-notification codes exist but are never set by the native engine. Would
-require HPA status data from the cluster. (Note: replica count *display*
-is implemented -- see "Implemented" section -- but the engine does not
-suggest scaling replica count up or down.)
 
 ### Replica Count Display
 
@@ -203,33 +190,30 @@ available, a `NotifNoCostData` notification is included.
 **UI status:** Not implemented. The koku-ui does not display the estimated
 savings value in the recommendation detail view.
 
-### ~~Potential `gpu_distributed` Gap in Effective-Rates SQL~~ FIXED
+### `gpu_distributed` Gap in Effective-Rates SQL — FIXED
 
-**Status:** Fixed. The SQL filter in `effective_rates.py` was changed from
-`data_source = 'Pod'` to `data_source IN ('Pod', 'GPU')`.
+The Koku masu `effective_rates` endpoint SQL filter was changed from
+`data_source = 'Pod'` to `data_source IN ('Pod', 'GPU')` to include GPU
+distribution rows in savings calculations. Tests added in
+`masu/test/api/test_effective_rates.py`.
 
-The Koku masu `effective_rates` endpoint (`masu/api/effective_rates.py`)
-aggregates costs from `reporting_ocpusagelineitem_daily_summary`. The original
-`data_source = 'Pod'` filter excluded GPU distribution rows (which use
-`data_source = 'GPU'`), silently omitting GPU distributed costs from savings.
+---
 
-**Fix:** Changed SQL filter to `data_source IN ('Pod', 'GPU')`. This is safe
-because GPU rows only have `distributed_cost` populated (CPU/memory usage
-hours are NULL), so they don't inflate usage aggregates. The
-`cost_model_rate_type` allowlist already controls which row types are summed.
+## Features Not Yet Implemented in Engine
 
-**Tests added** in `masu/test/api/test_effective_rates.py`:
-- `test_gpu_distributed_rows_included_in_namespace_aggregates`
-- `test_gpu_rows_do_not_inflate_cpu_memory_hours`
-- `test_mixed_pod_and_gpu_distributed_costs_sum_correctly`
+### Java / JVM Recommendations
 
-Other distribution types are unaffected:
-- `platform_distributed`: inherits `data_source` from source rows (typically `'Pod'`)
-- `worker_distributed`: hardcoded `'Pod'`
-- `unattributed_storage`: inherits from source rows (typically `'Pod'` for user namespaces)
-- `unattributed_network`: inherits from source rows (typically `'Pod'` for user namespaces)
+No workload-specific tuning (heap sizing, GC overhead detection). Would
+require JVM-aware metrics from the operator and a specialized recommendation
+model.
 
-**No remaining action needed.** The fix has been applied and tested.
+### HPA Scaling Suggestions
+
+No horizontal scaling suggestions. `NotifHPASaturated` and `NotifHPAActive`
+notification codes exist but are never set by the native engine. Would
+require HPA status data from the cluster. (Note: replica count *display*
+is implemented — see above — but the engine does not suggest scaling replica
+count up or down.)
 
 ### PVC / Storage Rightsizing
 
@@ -246,6 +230,7 @@ into a storage-specific digest table.
 |----------|---------|--------|
 | `/recommendations/openshift` | GET | Implemented |
 | `/recommendations/openshift/:id` | GET | Implemented |
+| `/recommendations/openshift/nodes` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |
