@@ -19,6 +19,7 @@ const (
 	GPUClassMemoryBound           GPUClassification = "memory_bound"
 	GPUClassComputeBoundUnderutil GPUClassification = "compute_bound_underutil"
 	GPUClassWellUtilized          GPUClassification = "well_utilized"
+	GPUClassNoProfiling           GPUClassification = "no_profiling"
 )
 
 // GPUDigestRow holds one daily GPU digest row for a single container.
@@ -222,6 +223,7 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 	rec.FBUsageMaxMiB = float32(maxFB)
 
 	if !hasProf {
+		rec.Classification = GPUClassNoProfiling
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUNoProfilingData)
 		if spec != nil && spec.MIGSupported {
 			rec.RecommendedGPUProfile = SelectMIGProfile(spec, digests)
