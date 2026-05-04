@@ -1,9 +1,9 @@
 # Agent Memory Dump — ROS OCP Native Engine Development
 
-**Date:** 2026-04-29
+**Date:** 2026-05-04 (originally 2026-04-29; updated with E2E results)
 **Purpose:** Complete, authoritative context for any AI agent or human reviewer to understand, verify, or resume the work on the ros-ocp-backend native recommendation engine. Read this entire file before doing anything.
 
-**Scope:** 88 commits across 4 repositories, ~26,000 lines of Go/Python/SQL inserted, developed over 6 phases between March and April 2026.
+**Scope:** 90+ commits across 4 repositories, ~27,000 lines of Go/Python/SQL inserted, developed over 6 phases between March and May 2026. Full E2E validated on aarch64 SNO cluster.
 
 ---
 
@@ -734,14 +734,37 @@ podman push default-route-openshift-image-registry.apps.sno.karmalabs.corp/cost-
 | **Client** | `cost-management-operator` |
 | **JWT org_id** | `org1234567` |
 
-### Current Deployment State on Apollo
+### Current Deployment State on Apollo (as of 2026-05-04)
 
-- **ROS DB:** Migration version 43 in `costonprem_ros` database (user: `ros_user`)
+- **Helm chart:** `cost-onprem` with custom `sno-arm64-values.yaml` (`pullPolicy: Always`)
+- **ROS DB:** Migration version 45 in `costonprem_ros` database (user: `ros_user`)
 - **Koku DB:** Django migration `reporting: 0347` in `costonprem_koku` database (user: `koku_user`)
-- **KOKU_MASU_URL:** Set to `http://cost-onprem-koku-masu:8000` on the ROS API deployment
-- **Cost model:** Has `gpu_cost_per_month: $2500` (infrastructure) configured for the test cluster
+- **KOKU_MASU_URL:** Set on both `cost-onprem-ros-api` and `cost-onprem-ros-processor`
+- **Native engine:** `ROS_USE_NATIVE_ENGINE=true` (default)
+- **Cost model:** Has `gpu_cost_per_month: $5000` (infrastructure) configured for the test cluster
 - **Test cluster ID:** `d4e5f6a7-b8c9-0123-defa-444444444444` (provider UUID: `d665a309-ccbf-4510-bcdb-59db1f7e0da7`)
-- **GPU digest rows:** 12 (3 containers × 4 days)
+- **GPU digest rows:** 42 (3 containers × 14 days)
+- **GPU classifications verified:** idle, underutilized, well_utilized, no_profiling
+- **GPU savings verified:** $5,000/mo (idle), $4,166.67/mo (time-slicing underutil)
+- **Keycloak:** Disabled (JWT auth bypassed for E2E)
+- **MinIO:** Running as S3 backend (replaced S4 which had no arm64 support)
+- **UI:** Standalone nginx deployment with x-rh-identity header injection
+- **Image registry:** `image-registry.openshift-image-registry.svc:5000/cost-onprem/`
+
+### E2E Verification Results (2026-05-04)
+
+Full pipeline validated end-to-end:
+
+1. **Data generation:** 14 days of nise data with GPU workloads (`--ros-ocp-info`)
+2. **Postprocessing:** `postprocess_ros_csvs.py` applies deterministic GPU classification scenarios
+3. **Upload:** tarball to MinIO via ingress service
+4. **Koku processing:** Manifest processed, summary tables populated, cost model applied
+5. **ROS processing:** Container digests and GPU digests populated
+6. **Native engine:** Recommendations generated for all containers (medium term: 7-day window)
+7. **GPU enrichment:** Classifications, MIG profiles, time-slicing cross-references
+8. **Cost savings:** CPU/memory and GPU savings computed from effective_rates endpoint
+9. **API verified:** All fields present — `gpu_classification`, `current_gpu_model`, `estimated_monthly_gpu_savings_usd`
+10. **UI verified:** Optimizations tab shows recommendations with cost data
 
 ### E2E Data Generation and Upload Playbook
 
@@ -929,11 +952,12 @@ The Koku `effective_rates` endpoint originally filtered `OCPUsageLineItemDailySu
 - `test_gpu_rows_do_not_inflate_cpu_memory_hours`
 - `test_mixed_pod_and_gpu_distributed_costs_sum_correctly`
 
-### No Idle GPU in Test Data
+### ~~No Idle GPU in Test Data~~ FIXED
 
-Current nise GPU data generates `well_utilized` (T4, A100) and `no_profiling` (V100) containers. There's no `idle` GPU container in the test data, which means the idle classification code path is only unit-tested, not E2E-tested.
-
-**Fix:** Add a GPU pod with very low SM_ACTIVE values (<5%) to the nise YAML.
+**Status:** Fixed as of 2026-05-04. The `postprocess_ros_csvs.py` script on Apollo
+applies deterministic GPU classification scenarios (idle, underutilized,
+well_utilized, no_profiling) to nise-generated ROS CSVs. All four
+classifications are now E2E-verified on the Apollo SNO cluster.
 
 ### MIG Recommendations Not Testable E2E
 
@@ -982,7 +1006,7 @@ integration tests where applicable:
 
 | Component | Key File(s) | Tests |
 |---|---|---|
-| GPU classification engine (idle, underutilized, memory_bound, compute_bound_underutil, well_utilized) | `engine/gpu_recommender.go` | `engine/gpu_recommender_test.go` |
+| GPU classification engine (idle, underutilized, memory_bound, compute_bound_underutil, well_utilized, no_profiling) | `engine/gpu_recommender.go` | `engine/gpu_recommender_test.go` |
 | MIG profile recommendation (A100, A30, H100, H200, B100, B200) | `engine/gpu_recommender.go`, `engine/gpu_metadata.go` | `engine/gpu_recommender_test.go` |
 | GPU metadata for all NVIDIA datacenter GPUs (Pascal through Blackwell) | `engine/gpu_metadata.go` | `engine/gpu_metadata_test.go` |
 | GPU digest ingestion pipeline (`upsertGPUDigests`) | `ingestion/pipeline.go` | `ingestion/gpu_digest_test.go` |
