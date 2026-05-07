@@ -304,6 +304,19 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		queryParams["rs.container_name IN ?"] = containers
 	}
 
+	// Stale filter: by default, exclude stale. If ?stale=true, include all.
+	// If ?stale=false (explicit), exclude stale. If ?stale=only, show only stale.
+	staleParam := c.QueryParam("stale")
+	switch staleParam {
+	case "true":
+		// No filter — return both stale and non-stale
+	case "only":
+		queryParams["rs.stale = ?"] = true
+	default:
+		// "false" or unset: exclude stale (backward compatible)
+		queryParams["rs.stale = ?"] = false
+	}
+
 	return queryParams, nil
 }
 

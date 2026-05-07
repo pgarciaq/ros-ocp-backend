@@ -63,11 +63,38 @@ func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
 	assert.Empty(t, codes, "healthy workload with zero CPU limit should produce no notification codes")
 }
 
+func TestEvaluateNotifications_AbandonedWorkload(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, IsAbandoned: true, IsIdle: true, ConfidenceLevel: 0.8}
+	codes := EvaluateNotifications(rec, 3)
+	assert.Contains(t, codes, NotifAbandonedWorkload)
+	assert.NotContains(t, codes, NotifIdleWorkload, "abandoned supersedes idle")
+}
+
+func TestEvaluateNotifications_IdleNotAbandoned(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, IsAbandoned: false, IsIdle: true, ConfidenceLevel: 0.8}
+	codes := EvaluateNotifications(rec, 3)
+	assert.Contains(t, codes, NotifIdleWorkload)
+	assert.NotContains(t, codes, NotifAbandonedWorkload)
+}
+
+func TestEvaluateNotifications_StaleData(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, Stale: true, ConfidenceLevel: 0.8}
+	codes := EvaluateNotifications(rec, 3)
+	assert.Contains(t, codes, NotifStaleData)
+}
+
+func TestEvaluateNotifications_NotStale_NoCode(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, Stale: false, ConfidenceLevel: 0.8}
+	codes := EvaluateNotifications(rec, 3)
+	assert.NotContains(t, codes, NotifStaleData)
+}
+
 func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 	rec := ContainerRec{
 		DataDays:        1,
 		OOMCountSum:     2,
 		IsIdle:          true,
+		Stale:           true,
 		TrendSlope:      0,
 		ConfidenceLevel: 0.2,
 	}
@@ -75,5 +102,6 @@ func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 	assert.Contains(t, codes, NotifLowConfidence)
 	assert.Contains(t, codes, NotifOOMDetected)
 	assert.Contains(t, codes, NotifIdleWorkload)
-	assert.True(t, len(codes) >= 3)
+	assert.Contains(t, codes, NotifStaleData)
+	assert.True(t, len(codes) >= 4)
 }

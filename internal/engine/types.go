@@ -92,6 +92,7 @@ type ContainerRec struct {
 	NotificationCodes      []int16
 	TrendSlope             float64
 	IsIdle                 bool
+	IsAbandoned            bool
 	OOMCountSum            int64
 	DataDays               int
 	Stale                  bool

@@ -129,7 +129,7 @@ func RecommendAllNamespaces(
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
 
-		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > stalenessThreshold
+		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
 
 		for _, tc := range terms {
 			windowRows := filterByWindow(digestRows, end, tc.WindowDays)

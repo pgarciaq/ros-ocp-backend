@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -115,8 +116,8 @@ func RecommendAllWorkloads(
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
 
-		// Stale detection: if the most recent digest is older than 3 days, mark as stale.
-		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > stalenessThreshold
+		// Stale detection: if the most recent digest is older than the configured threshold, mark as stale.
+		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
 
 		for _, tc := range terms {
 			windowRows := filterByWindow(digestRows, end, tc.WindowDays)
@@ -145,6 +146,7 @@ func RecommendAllWorkloads(
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
+				abandoned := DetectAbandoned(windowRows)
 
 				rec := ContainerRec{
 					OrgID:                orgID,
@@ -166,6 +168,7 @@ func RecommendAllWorkloads(
 					ConfidenceLevel:      confidence,
 					TrendSlope:           cpuRec.TrendSlope,
 					IsIdle:               cpuRec.IsIdle,
+					IsAbandoned:          abandoned,
 					OOMCountSum:          oomTotal,
 					DataDays:             dataDays,
 					Stale:                stale,
@@ -360,7 +363,17 @@ func sumOOMCounts(rows []DigestRow) int64 {
 	return total
 }
 
-const stalenessThreshold = 3 * 24 * time.Hour // 3 days
+// DefaultStalenessThreshold is used when ROS_STALENESS_THRESHOLD_HOURS is not set.
+const DefaultStalenessThreshold = 3 * 24 * time.Hour // 72 hours
+
+// StalenessThreshold returns the configured staleness threshold duration.
+func StalenessThreshold() time.Duration {
+	cfg := config.GetConfig()
+	if cfg.StalenessThresholdHours > 0 {
+		return time.Duration(cfg.StalenessThresholdHours) * time.Hour
+	}
+	return DefaultStalenessThreshold
+}
 
 // latestDigest returns the DigestRow with the most recent BucketDate.
 func latestDigest(rows []DigestRow) DigestRow {
