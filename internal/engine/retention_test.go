@@ -177,6 +177,55 @@ func TestRunRetentionSweep_DropsOldDailyContainerDigestPartitions(t *testing.T) 
 	}
 }
 
+func TestRunRetentionSweep_PurgesStaleRecommendations(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	staleClusterUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+	// Insert a stale recommendation older than 30 days
+	oldDate := time.Now().UTC().AddDate(0, 0, -45)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		"org-stale-test", staleClusterUUID, "ns-test", "deploy-test", "Deployment",
+		"container-test", "medium_term", "cost", true, oldDate,
+	)
+	require.NoError(t, err)
+
+	// Insert a stale recommendation that is recent (should NOT be deleted)
+	recentDate := time.Now().UTC().AddDate(0, 0, -5)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		"org-stale-test", staleClusterUUID, "ns-test", "deploy-test", "Deployment",
+		"container-recent", "medium_term", "cost", true, recentDate,
+	)
+	require.NoError(t, err)
+
+	RunRetentionSweep(ctx, pool, 6)
+
+	// Old stale recommendation should be deleted
+	var countOld int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM recommendation_sets WHERE container_name = 'container-test' AND org_id = 'org-stale-test'",
+	).Scan(&countOld)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countOld, "old stale recommendation should be purged")
+
+	// Recent stale recommendation should still exist
+	var countRecent int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM recommendation_sets WHERE container_name = 'container-recent' AND org_id = 'org-stale-test'",
+	).Scan(&countRecent)
+	require.NoError(t, err)
+	assert.Equal(t, 1, countRecent, "recent stale recommendation should be kept")
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string

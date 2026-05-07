@@ -18,6 +18,9 @@ import (
 )
 
 func TestMigrationRoundtrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
 	// All migrations must survive a full up → down → up cycle without errors.
 	ctx := context.Background()
 
@@ -72,7 +75,7 @@ func TestMigrationRoundtrip(t *testing.T) {
 	ver, dirty, err := m.Version()
 	require.NoError(t, err)
 	assert.False(t, dirty, "migration state should not be dirty after roundtrip")
-	assert.Equal(t, uint(45), ver, "should be at latest migration version")
+	assert.Equal(t, uint(46), ver, "should be at latest migration version")
 	srcErr, dbErr = m.Close()
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
