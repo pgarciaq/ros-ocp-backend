@@ -21,8 +21,12 @@ import (
 // SetupTestDB spins up a PostgreSQL 16 container via testcontainers,
 // runs all golang-migrate migrations, and returns a *pgxpool.Pool.
 // The container and pool are cleaned up automatically via t.Cleanup().
+// Skipped automatically in short mode (-short flag).
 func SetupTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
 	ctx := context.Background()
 
 	pgContainer, err := postgres.Run(ctx,
