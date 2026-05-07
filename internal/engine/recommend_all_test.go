@@ -321,7 +321,7 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 	// digest is 5 days old, which exceeds the 3-day staleness threshold.
 	if len(results) > 0 {
 		daysSinceLatest := time.Since(end.Truncate(24 * time.Hour))
-		if daysSinceLatest > stalenessThreshold {
+		if daysSinceLatest > StalenessThreshold() {
 			for _, r := range results {
 				assert.True(t, r.Stale, "recommendations from old data should be stale")
 			}

@@ -109,6 +109,8 @@ type NativeRecommendationRow struct {
 
 	EstimatedSavingsUSD *float32 `gorm:"column:estimated_monthly_savings_usd"`
 
+	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
+
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
@@ -196,8 +198,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("rs.stale = false")
+		Where("ra.org_id = ?", orgID)
 
 	query = ApplyNativeRBAC(query, userPerms)
 	query = ApplyQueryParams(query, queryParams)
@@ -208,8 +209,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		Select("COUNT(DISTINCT (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name))").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("rs.stale = false")
+		Where("ra.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms)
 	countQuery = ApplyQueryParams(countQuery, queryParams)
 	t0 := time.Now()

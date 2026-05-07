@@ -76,6 +76,24 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 			log.Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
 		}
 	}
+
+	// Stale recommendation archive: delete stale recommendations that haven't
+	// received new data in staleArchiveDays (default 30 days).
+	staleArchiveDays := cfg.StaleArchiveDays
+	if staleArchiveDays <= 0 {
+		staleArchiveDays = 30
+	}
+	staleCutoff := time.Now().UTC().AddDate(0, 0, -staleArchiveDays)
+	tag, err := pool.Exec(ctx,
+		"DELETE FROM recommendation_sets WHERE stale = true AND updated_at < $1",
+		staleCutoff,
+	)
+	if err != nil {
+		log.Warnf("retention: purging stale recommendations: %v", err)
+	} else if tag.RowsAffected() > 0 {
+		retentionDropped.Add(float64(tag.RowsAffected()))
+		log.Infof("retention: purged %d stale recommendations (older than %s)", tag.RowsAffected(), staleCutoff.Format("2006-01-02"))
+	}
 }
 
 func sweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []string, cutoffYM string) {

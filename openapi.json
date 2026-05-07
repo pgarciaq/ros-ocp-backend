@@ -351,6 +351,17 @@
               "type": "string",
               "enum": ["idle", "underutilized", "compute_bound_underutil", "memory_bound", "well_utilized", "no_profiling"]
             }
+          },
+          {
+            "name": "stale",
+            "in": "query",
+            "description": "Filter by staleness state. A recommendation is 'stale' when no new usage data has been received within the staleness threshold (default 72 hours). Values: 'false' (default, exclude stale), 'true' (include all), 'only' (show only stale recommendations).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false", "only"],
+              "default": "false"
+            }
           }
         ],
         "responses": {
@@ -1726,6 +1737,27 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/NodeRecommendationListResponse" }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/recommendations/openshift/fleet-summary": {
+      "get": {
+        "tags": ["Fleet Summary"],
+        "summary": "Get fleet-level recommendation summary",
+        "description": "Returns aggregate statistics across all container recommendations for the authenticated organization. Provides a high-level overview of fleet health including counts of active, idle, and abandoned containers, total estimated monthly savings, and cluster count. Only considers medium_term cost-engine recommendations.",
+        "operationId": "getFleetSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Fleet summary statistics",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FleetSummaryResponse" }
               }
             }
           },
@@ -3690,6 +3722,37 @@
           "container": { "type": "string" },
           "sm_active_avg": { "type": "number", "format": "float" },
           "classification": { "type": "string" }
+        }
+      },
+      "FleetSummaryResponse": {
+        "type": "object",
+        "description": "Aggregate statistics across all container recommendations for the organization.",
+        "properties": {
+          "total_containers": {
+            "type": "integer",
+            "description": "Total number of containers with recommendations (including stale)"
+          },
+          "active_containers": {
+            "type": "integer",
+            "description": "Number of containers with non-stale recommendations"
+          },
+          "idle_containers": {
+            "type": "integer",
+            "description": "Number of containers flagged as idle (CPU < 10mc AND memory < 10 MiB)"
+          },
+          "abandoned_containers": {
+            "type": "integer",
+            "description": "Number of containers flagged as abandoned (zero CPU AND zero memory usage)"
+          },
+          "total_monthly_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "description": "Sum of estimated monthly savings across all active (non-stale) recommendations, in USD"
+          },
+          "cluster_count": {
+            "type": "integer",
+            "description": "Number of distinct clusters with recommendations"
+          }
         }
       }
     }

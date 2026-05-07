@@ -50,8 +50,13 @@ func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
 	if rec.OOMCountSum > 0 {
 		codes = append(codes, NotifOOMDetected)
 	}
-	if rec.IsIdle {
+	if rec.IsAbandoned {
+		codes = append(codes, NotifAbandonedWorkload)
+	} else if rec.IsIdle {
 		codes = append(codes, NotifIdleWorkload)
+	}
+	if rec.Stale {
+		codes = append(codes, NotifStaleData)
 	}
 	if rec.TrendSlope > memTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)

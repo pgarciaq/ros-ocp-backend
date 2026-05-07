@@ -92,6 +92,14 @@ type Config struct {
 	// (one row per container per term per engine per run).
 	HistoryRetentionDays int `mapstructure:"ROS_HISTORY_RETENTION_DAYS"`
 
+	// Staleness threshold in hours. Recommendations with no new data beyond
+	// this threshold are marked stale. Defaults to 72 (3 days).
+	StalenessThresholdHours int `mapstructure:"ROS_STALENESS_THRESHOLD_HOURS"`
+
+	// Stale archive days. Stale recommendations older than this are deleted
+	// during the retention sweep. Defaults to 30.
+	StaleArchiveDays int `mapstructure:"ROS_STALE_ARCHIVE_DAYS"`
+
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 

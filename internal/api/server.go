@@ -103,6 +103,11 @@ func StartAPIServer() {
 		v1.GET("/recommendations/openshift/nodes", GetNodeRecommendations)
 	}
 
+	// Fleet-level summary (native engine only).
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
+	}
+
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server
 		Handler:           app,

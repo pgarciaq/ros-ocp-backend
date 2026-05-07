@@ -445,6 +445,12 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 		log.Errorf("native engine: reading old recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 	}
 
+	// Step 1b: Adoption detection — compare current resource values against prior recommendations.
+	if oldRecs != nil {
+		adoptedKeys := engine.FindAdoptedContainers(results, oldRecs)
+		engine.MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys)
+	}
+
 	// Step 2: Write new recommendations (overwrites old values)
 	if err := engine.WriteRecommendations(ctx, pool, results); err != nil {
 		log.Errorf("native engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
