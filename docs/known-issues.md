@@ -4,7 +4,7 @@ This document tracks features that are implemented in the ros-ocp-backend
 native engine but lack corresponding UI support in koku-ui, as well as
 features that are not yet implemented in the engine.
 
-Last updated: 2026-05-04
+Last updated: 2026-05-07
 
 ---
 
@@ -224,6 +224,20 @@ into a storage-specific digest table.
 
 ---
 
+## Recently Implemented Lifecycle Features
+
+See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full details.
+
+- **Staleness detection (F55):** `?stale=` API filter, configurable threshold,
+  archive sweep, `NotifStaleData` notification.
+- **Idle/abandoned detection (F26):** Combined CPU+memory idle (< 10mc AND < 10 MiB),
+  zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
+- **Adoption detection (F54):** Compares current requests to prior recommendation
+  (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
+- **Fleet summary (F33):** `GET /recommendations/fleet-summary` aggregate endpoint.
+
+---
+
 ## API Endpoint Summary
 
 | Endpoint | Methods | Status |
@@ -231,6 +245,7 @@ into a storage-specific digest table.
 | `/recommendations/openshift` | GET | Implemented |
 | `/recommendations/openshift/:id` | GET | Implemented |
 | `/recommendations/openshift/nodes` | GET | Implemented |
+| `/recommendations/openshift/fleet-summary` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |
