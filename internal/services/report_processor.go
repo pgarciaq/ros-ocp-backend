@@ -103,6 +103,10 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			processNamespaceCSVNative(file, kafkaMsg)
 			continue
 		}
+		if cfg.UseNativeEngine && csvType == types.PayloadTypeStorage {
+			processStorageCSVNative(file, kafkaMsg)
+			continue
+		}
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
@@ -524,6 +528,45 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
 		log.Errorf("native namespace engine: writing history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 	}
+}
+
+func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
+	log := logging.GetLogger()
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native storage engine: unable to fetch CSV from URL: %v", err)
+		return
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	if err := ingestion.ProcessStorageCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+		log.Errorf("native storage engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		log.Errorf("native storage engine: PVC recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	if len(results) == 0 {
+		log.Infof("native storage engine: no PVC recommendations for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
+
+	if err := engine.WritePVCRecommendations(ctx, pool, results); err != nil {
+		log.Errorf("native storage engine: writing PVC recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+	log.Infof("native storage engine: wrote %d PVC recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
 }
 
 // getCostDataProvider returns a CostDataProvider based on configuration.

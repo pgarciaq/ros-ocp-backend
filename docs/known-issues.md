@@ -217,10 +217,26 @@ count up or down.)
 
 ### PVC / Storage Rightsizing
 
-No storage recommendation logic. `NotifPVCOrphaned` notification code
-exists but is unused. Would require PVC capacity/usage time series from
-the operator (already collected in storage_usage CSVs) to be ingested
-into a storage-specific digest table.
+**Engine status:** Implemented. The engine reads the existing
+`cm-openshift-storage-usage-YYYYMM.csv` from the operator tarball,
+aggregates daily PVC digests (`daily_pvc_digests` table), and produces
+right-sizing recommendations (`pvc_recommendation_sets` table).
+
+**Classifications:**
+- **Oversized** — usage/capacity < 20% sustained (recommends 2x max usage)
+- **Near-full** — usage/capacity > 85% (warns, recommends expansion)
+- **Orphaned** — zero usage for 3+ days (`NotifPVCOrphaned`)
+- **Healthy** — usage between 20-85%
+
+Growth trend projection (linear regression on daily avg usage) estimates
+days-to-full for capacity planning.
+
+**API status:** `GET /recommendations/openshift/pvcs` with filters for
+`cluster_uuid`, `namespace`, `recommendation_type`, pagination.
+
+**Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full).
+
+**UI status:** Not implemented.
 
 ---
 
@@ -246,6 +262,7 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift/:id` | GET | Implemented |
 | `/recommendations/openshift/nodes` | GET | Implemented |
 | `/recommendations/openshift/fleet-summary` | GET | Implemented |
+| `/recommendations/openshift/pvcs` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |

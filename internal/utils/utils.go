@@ -354,10 +354,11 @@ func isItFirstOfMonth(d time.Time) bool {
 }
 
 func DetermineCSVType(fileName string) types.PayloadType {
-	isNamespace := strings.Contains(fileName, "namespace")
-
-	if isNamespace {
+	if strings.Contains(fileName, "namespace") {
 		return types.PayloadTypeNamespace
+	}
+	if strings.Contains(fileName, "storage") {
+		return types.PayloadTypeStorage
 	}
 	return types.PayloadTypeContainer
 }

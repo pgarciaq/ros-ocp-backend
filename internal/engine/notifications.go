@@ -30,6 +30,8 @@ const (
 	NotifGPUIdle            int16 = 26
 	NotifGPUMemBound        int16 = 27
 	NotifGPUNoProfilingData int16 = 28
+	NotifPVCOversized      int16 = 29
+	NotifPVCNearFull       int16 = 30
 )
 
 const (

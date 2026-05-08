@@ -1765,6 +1765,61 @@
           "500": { "description": "Internal server error" }
         }
       }
+    },
+    "/recommendations/openshift/pvcs": {
+      "get": {
+        "tags": ["PVC Recommendations"],
+        "summary": "List PVC right-sizing recommendations",
+        "description": "Returns PVC (PersistentVolumeClaim) right-sizing recommendations for the authenticated organization. Identifies oversized PVCs (usage < 20% capacity), near-full PVCs (usage > 85% capacity), orphaned PVCs (zero usage), and projects growth trends with days-to-full estimates.",
+        "operationId": "getPVCRecommendations",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "description": "Filter by cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "description": "Filter by namespace",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "recommendation_type",
+            "in": "query",
+            "description": "Filter by recommendation type",
+            "schema": {
+              "type": "string",
+              "enum": ["oversized", "near_full", "orphaned", "healthy"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results (1-100, default 20)",
+            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of results to skip",
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of PVC recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PVCRecommendationListResponse" }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "500": { "description": "Internal server error" }
+        }
+      }
     }
   },
   "components": {
@@ -3752,6 +3807,89 @@
           "cluster_count": {
             "type": "integer",
             "description": "Number of distinct clusters with recommendations"
+          }
+        }
+      },
+      "PVCRecommendation": {
+        "type": "object",
+        "description": "A single PVC right-sizing recommendation.",
+        "properties": {
+          "cluster_uuid": { "type": "string", "format": "uuid" },
+          "namespace": { "type": "string" },
+          "persistentvolumeclaim": { "type": "string" },
+          "persistentvolume": { "type": "string" },
+          "storageclass": { "type": "string" },
+          "capacity_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current PVC capacity in bytes"
+          },
+          "usage_bytes_max": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum observed usage in bytes across all days"
+          },
+          "usage_ratio": {
+            "type": "number",
+            "format": "float",
+            "description": "Ratio of max usage to capacity (0.0 to 1.0)"
+          },
+          "recommendation_type": {
+            "type": "string",
+            "enum": ["oversized", "near_full", "orphaned", "healthy"],
+            "description": "Classification: oversized (<20% used), near_full (>85% used), orphaned (0 usage), healthy (normal)"
+          },
+          "recommended_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recommended PVC size in bytes (null for healthy/orphaned)"
+          },
+          "days_to_full": {
+            "type": "integer",
+            "description": "Projected days until PVC reaches capacity based on growth trend (null if no growth or insufficient data)"
+          },
+          "growth_bytes_per_day": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Estimated daily growth in bytes (from linear regression on average usage)"
+          },
+          "notifications": {
+            "type": "object",
+            "description": "Notification entries keyed by code",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "message": { "type": "string" },
+                "code": { "type": "integer" }
+              }
+            }
+          },
+          "data_days": {
+            "type": "integer",
+            "description": "Number of days of data available for this PVC"
+          },
+          "resize_note": {
+            "type": "string",
+            "description": "Operational guidance for acting on the recommendation (e.g., Kubernetes does not support in-place PVC shrinking)"
+          }
+        }
+      },
+      "PVCRecommendationListResponse": {
+        "type": "object",
+        "description": "Paginated list of PVC right-sizing recommendations.",
+        "properties": {
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": { "type": "integer", "description": "Number of results in this page" },
+              "limit": { "type": "integer", "description": "Maximum results per page" },
+              "offset": { "type": "integer", "description": "Number of results skipped" }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PVCRecommendation" }
           }
         }
       }
