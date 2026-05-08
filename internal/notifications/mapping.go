@@ -44,6 +44,11 @@ var Definitions = map[int16]notifDef{
 	23: {"INFO", "Current instance type is not in the cloud catalog — no resizing needed"},
 	24: {"INFO", "Current instance type is deprecated — consider migrating to the recommended type"},
 	25: {"INFO", "No cost data available — savings estimate not computed"},
+	26: {"INFO", "GPU utilization below idle threshold — consider removing GPU request"},
+	27: {"INFO", "GPU memory-bound — consider MIG profile with more HBM"},
+	28: {"INFO", "No GPU profiling data available — classification limited to frame buffer"},
+	29: {"INFO", "PVC capacity significantly exceeds sustained usage — consider shrinking"},
+	30: {"WARNING", "PVC usage approaching capacity — consider expanding or investigate growth"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

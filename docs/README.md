@@ -28,6 +28,7 @@
 | Document | Scope |
 |----------|-------|
 | [features-f26-f33-f54-f55.md](features-f26-f33-f54-f55.md) | Staleness, idle/abandoned detection, adoption, fleet summary |
+| [features-f27-pvc-rightsizing.md](features-f27-pvc-rightsizing.md) | PVC right-sizing: oversized, near-full, orphaned, growth trend |
 | [known-issues.md](known-issues.md) | Feature status tracker: implemented, missing UI, not yet started |
 | [kruize-vs-native-comparison.md](kruize-vs-native-comparison.md) | Comparison between Kruize and native engine |
 | [native-engine-performance.md](native-engine-performance.md) | Native engine performance benchmarks |
