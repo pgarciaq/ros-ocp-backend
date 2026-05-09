@@ -131,13 +131,57 @@ When multiple classifications apply, use this precedence (highest first):
 
 ### Configuration
 
-| Env Variable | Default | Description |
-|-------------|---------|-------------|
-| `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` | 7 | Minimum age before orphaned classification; also defines "active" ceiling |
-| `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` | 30 | Minimum age for "never restored" |
-| `ROS_SNAPSHOT_STALE_DAYS` | 90 | Threshold for staleness and redundant age filter |
-| `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | Max snapshots to keep per source PVC before flagging older ones |
-| `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | How long to keep raw inventory rows |
+All classification thresholds are user-configurable via API. If the
+corresponding environment variable is set, the value becomes **read-only**
+(the API returns `403 Forbidden` on PUT attempts). This allows operators to
+lock down thresholds in managed deployments while letting self-managed users
+tune them.
+
+| Setting | Env Variable (locks value) | Default | API key | Description |
+|---------|---------------------------|---------|---------|-------------|
+| Orphan age | `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` | 7 | `orphan_age_days` | Min age before orphaned; also "active" ceiling |
+| Never-restored age | `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` | 30 | `never_restored_days` | Min age for "never restored" |
+| Staleness threshold | `ROS_SNAPSHOT_STALE_DAYS` | 90 | `stale_days` | Age threshold for staleness and redundant filter |
+| Redundant threshold | `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | `redundant_threshold` | Max snapshots to keep per PVC before flagging |
+| Inventory retention | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | (not exposed) | Raw inventory row retention (operational) |
+
+### Settings API
+
+```
+GET  /api/cost-management/v1/recommendations/openshift/settings/snapshot
+PUT  /api/cost-management/v1/recommendations/openshift/settings/snapshot
+```
+
+**GET response:**
+```json
+{
+  "orphan_age_days": 7,
+  "never_restored_days": 30,
+  "stale_days": 90,
+  "redundant_threshold": 3,
+  "cost_per_gib_month_usd": 0.05,
+  "locked_fields": ["stale_days"]
+}
+```
+
+`locked_fields` lists any settings whose value was set via environment variable
+and cannot be changed via API.
+
+**PUT request** (partial updates allowed):
+```json
+{
+  "orphan_age_days": 14,
+  "cost_per_gib_month_usd": 0.02
+}
+```
+
+Returns `403` with an error message if any requested field is in `locked_fields`.
+
+### Resolution Order
+
+1. If the env variable is set → use that value (locked, API returns it as read-only)
+2. If the user has set a value via API → use that (stored in `snapshot_settings`)
+3. Otherwise → use the compiled-in default
 
 ## Cost Rate Configuration
 
@@ -188,31 +232,9 @@ StorageClass alone.
 
 `ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var, default: `0.05`
 
-### API for Cost Rate Management
-
-```
-GET  /api/cost-management/v1/recommendations/openshift/settings/snapshot-cost-rate
-PUT  /api/cost-management/v1/recommendations/openshift/settings/snapshot-cost-rate
-```
-
-**GET response:**
-```json
-{
-  "cost_per_gib_month_usd": 0.05,
-  "source": "default"
-}
-```
-
-**PUT request:**
-```json
-{
-  "cost_per_gib_month_usd": 0.02
-}
-```
-
-After a PUT, `source` changes to `"user"`. The setting is stored per-org in
-a `snapshot_settings` table (or reuse the existing `user_settings` pattern
-if available).
+The cost rate is managed through the unified settings API (see "Settings API"
+above). When set via env var, it appears in `locked_fields` and cannot be
+changed via API. The setting is stored per-org in `snapshot_settings`.
 
 ### Cost Formula
 
@@ -327,15 +349,26 @@ CREATE TABLE snapshot_recommendation_sets (
 );
 ```
 
-### `snapshot_cost_settings` (per-org)
+### `snapshot_settings` (per-org)
+
+Stores user-configurable thresholds and cost rate. All columns have defaults
+matching the compiled-in values. A row is created on first PUT.
 
 ```sql
-CREATE TABLE snapshot_cost_settings (
-    org_id              TEXT PRIMARY KEY,
-    cost_per_gib_month_usd REAL NOT NULL DEFAULT 0.05,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE snapshot_settings (
+    org_id                  TEXT PRIMARY KEY,
+    orphan_age_days         INT NOT NULL DEFAULT 7,
+    never_restored_days     INT NOT NULL DEFAULT 30,
+    stale_days              INT NOT NULL DEFAULT 90,
+    redundant_threshold     INT NOT NULL DEFAULT 3,
+    cost_per_gib_month_usd  REAL NOT NULL DEFAULT 0.05,
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+
+The settings API reads from this table, falling back to defaults when no row
+exists. Environment variables override any stored value and mark the field as
+locked (read-only via API).
 
 ## API Endpoints
 
@@ -409,14 +442,10 @@ CREATE TABLE snapshot_cost_settings (
 }
 ```
 
-### Get/Set Snapshot Cost Rate
+### Get/Set Snapshot Settings
 
-```
-GET  /api/cost-management/v1/recommendations/openshift/settings/snapshot-cost-rate
-PUT  /api/cost-management/v1/recommendations/openshift/settings/snapshot-cost-rate
-```
-
-See "Cost Rate Configuration" section above for request/response shapes.
+See "Settings API" in the Configuration section above. The unified endpoint
+covers both classification thresholds and cost rate.
 
 ## Notification Codes (Proposed)
 
@@ -577,11 +606,11 @@ classify → API) without waiting for the operator implementation.
 
 - Add `PayloadTypeSnapshot` to `DetermineCSVType()`
 - Create migrations for `snapshot_inventory`, `snapshot_recommendation_sets`,
-  and `snapshot_cost_settings`
+  and `snapshot_settings`
 - Implement CSV parser, classification engine (including managed detection),
   cost calculation, API handler
 - Add notification codes 31-35
-- Add settings API for cost rate
+- Add unified settings API (GET/PUT with env-var locking)
 - Follow the same pattern as PVC right-sizing (F27)
 
 ### Phase 4: Testing
@@ -635,7 +664,19 @@ classify → API) without waiting for the operator implementation.
    cost estimates. The `volume_snapshot_class` field is already collected and
    can be used for per-class rates in v2 without additional operator changes.
 
-9. **E2E test infrastructure**: Integration testing on real clusters requires
+9. **Koku cost model gap — per-StorageClass rates**: The OpenShift cost model
+   in Koku only supports a single `storage_gb_usage_per_month` /
+   `storage_gb_request_per_month` rate across all StorageClasses. The only way
+   to differentiate is via tag-based rates (user labels PVCs with a tag key
+   like `storageclass` and defines tag rates per value). This is a known gap
+   in the Koku cost model system — it has no native concept of per-StorageClass
+   pricing. For snapshots, we avoid this gap entirely by collecting
+   `volume_snapshot_class` as a first-class field and supporting per-class cost
+   rates in the v2 API (no tag labeling needed). A similar approach could
+   eventually be adopted for PVC cost models in Koku itself (using
+   `PVC.spec.storageClassName` directly instead of requiring user-applied tags).
+
+10. **E2E test infrastructure**: Integration testing on real clusters requires
    a CSI driver with snapshot support (the `snapshot.storage.k8s.io` CRDs and
    a VolumeSnapshotClass must exist). Not all test environments provide this.
    Backend unit/integration tests use nise-generated data and testcontainers,
