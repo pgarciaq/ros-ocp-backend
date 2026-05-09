@@ -512,7 +512,7 @@ In `koku/masu/external/kafka_msg_handler.py`, after building `ros_reports` from
 files:
 
 ```python
-_ros_extra_patterns = ("storage-usage",)
+_ros_extra_patterns = ("storage-usage", "snapshot-inventory")
 ros_reports.extend(
     (f, payload_path.with_name(f))
     for f in manifest_files
@@ -520,9 +520,9 @@ ros_reports.extend(
 )
 ```
 
-This makes F27 functional immediately for all existing clusters. The pattern
-tuple can be extended for future files if needed (though Strategy B is
-preferred for new files).
+This makes F27 and snapshot-inventory functional immediately for all existing
+clusters. The pattern tuple can be extended for future files if needed (though
+Strategy B is preferred for new files).
 
 ### Strategy B: Operator Manifest Placement (For Snapshots)
 
@@ -554,6 +554,45 @@ ClassifySnapshots() -> apply cost rate -> WriteSnapshotRecommendations()
     v
 GET /recommendations/openshift/snapshots
 ```
+
+### CRITICAL: Filename Substring Convention
+
+`ros-ocp-backend` identifies CSV file types by checking for **substrings** in
+the filename (see `DetermineCSVType()` in `internal/ingestion/csv_type.go`).
+For snapshot inventory, the detection checks for the substring **"snapshot"**.
+
+Two different producers generate snapshot-inventory CSVs with different prefixes:
+
+| Producer | Filename pattern | Contains "snapshot"? |
+|----------|-----------------|---------------------|
+| **nise** (test data generator) | `cm-openshift-snapshot-inventory-YYYYMM.csv` | Yes |
+| **koku-metrics-operator** | `ros-openshift-snapshot-inventory-YYYYMM.csv` | Yes |
+
+Both work because both contain "snapshot". The Koku listener also has a safety
+net (`_ros_extra_patterns` tuple contains `"snapshot-inventory"`) that routes
+files with this substring to the ROS topic even if they appear only in
+`manifest.files` instead of `resource_optimization_files`.
+
+**Invariants that MUST be preserved:**
+
+1. Any new filename for snapshot data MUST contain the substring `"snapshot"`
+   (otherwise `ros-ocp-backend` won't recognize it)
+2. The filename SHOULD also contain `"snapshot-inventory"` to be caught by the
+   Koku listener safety net (if the file ends up in `manifest.files`)
+3. If you rename the operator output prefix (e.g., from `ros-openshift-` to
+   something else), ensure "snapshot" remains in the filename
+4. If `DetermineCSVType()` is ever changed to use exact-match instead of
+   substring-match, update ALL producers to use the same prefix
+
+**Why different prefixes exist:**
+
+- `cm-openshift-*`: Convention used by nise for cost-management CSVs
+- `ros-openshift-*`: Convention used by the operator for ROS-specific CSVs
+
+The mismatch is cosmetic and harmless because detection is substring-based.
+Standardizing to a single prefix would require coordinated changes in nise,
+the operator, and the backend — and would gain nothing given the current
+substring matching.
 
 ## Implementation Phases
 
