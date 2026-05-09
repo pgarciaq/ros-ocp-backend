@@ -357,6 +357,9 @@ func DetermineCSVType(fileName string) types.PayloadType {
 	if strings.Contains(fileName, "namespace") {
 		return types.PayloadTypeNamespace
 	}
+	if strings.Contains(fileName, "snapshot") {
+		return types.PayloadTypeSnapshot
+	}
 	if strings.Contains(fileName, "storage") {
 		return types.PayloadTypeStorage
 	}

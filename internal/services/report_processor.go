@@ -107,6 +107,10 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			processStorageCSVNative(file, kafkaMsg)
 			continue
 		}
+		if cfg.UseNativeEngine && csvType == types.PayloadTypeSnapshot {
+			processSnapshotCSVNative(file, kafkaMsg)
+			continue
+		}
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
@@ -567,6 +571,60 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 		return
 	}
 	log.Infof("native storage engine: wrote %d PVC recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
+}
+
+func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
+	log := logging.GetLogger()
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native snapshot engine: unable to fetch CSV from URL: %v", err)
+		return
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	if err := ingestion.ProcessSnapshotCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+		log.Errorf("native snapshot engine: ingestion failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	// Resolve settings for this org
+	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID)
+	if err != nil {
+		log.Errorf("native snapshot engine: settings resolution failed for org=%s: %v", orgID, err)
+		return
+	}
+
+	// Classify snapshots
+	recs, err := engine.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
+	if err != nil {
+		log.Errorf("native snapshot engine: classification failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+
+	if len(recs) > 0 {
+		if err := engine.WriteSnapshotRecommendations(ctx, pool, recs); err != nil {
+			log.Errorf("native snapshot engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			return
+		}
+		log.Infof("native snapshot engine: wrote %d snapshot recommendations for org=%s cluster=%s", len(recs), orgID, clusterUUID)
+	}
+
+	// Reconcile: remove recommendations for snapshots no longer in inventory
+	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		log.Errorf("native snapshot engine: reconciliation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+	if removed > 0 {
+		log.Infof("native snapshot engine: reconciled (removed) %d stale recommendations for org=%s cluster=%s", removed, orgID, clusterUUID)
+	}
 }
 
 // getCostDataProvider returns a CostDataProvider based on configuration.

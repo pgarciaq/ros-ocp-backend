@@ -1,0 +1,146 @@
+package api
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/platform-go-middlewares/identity"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+)
+
+// SnapshotRecommendationResponse is a single snapshot recommendation in the API response.
+type SnapshotRecommendationResponse struct {
+	ClusterUUID         string                                     `json:"cluster_uuid"`
+	Namespace           string                                     `json:"namespace"`
+	SnapshotName        string                                     `json:"snapshot_name"`
+	SourcePVCName       string                                     `json:"source_pvc_name"`
+	VolumeSnapshotClass string                                     `json:"volume_snapshot_class,omitempty"`
+	StorageClass        string                                     `json:"storageclass,omitempty"`
+	CreationTimestamp   string                                     `json:"creation_timestamp"`
+	RestoreSizeBytes    int64                                      `json:"restore_size_bytes"`
+	AgeDays             int                                        `json:"age_days"`
+	SourcePVCExists     bool                                       `json:"source_pvc_exists"`
+	RestoredPVCCount    int                                        `json:"restored_pvc_count"`
+	ManagedBy           string                                     `json:"managed_by,omitempty"`
+	RecommendationType  string                                     `json:"recommendation_type"`
+	EstimatedMonthlyCost *float32                                  `json:"estimated_monthly_cost_usd,omitempty"`
+	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+}
+
+// SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
+type SnapshotRecommendationListResponse struct {
+	Meta struct {
+		Count  int `json:"count"`
+		Limit  int `json:"limit"`
+		Offset int `json:"offset"`
+	} `json:"meta"`
+	Data []SnapshotRecommendationResponse `json:"data"`
+}
+
+// GetSnapshotRecommendations handles GET /recommendations/openshift/snapshots.
+func GetSnapshotRecommendations(c echo.Context) error {
+	XRHID := c.Get("Identity").(identity.XRHID)
+	orgID := XRHID.Identity.OrgID
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	// Pagination
+	limit := 20
+	offset := 0
+	if l := c.QueryParam("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
+			limit = v
+		}
+	}
+	if o := c.QueryParam("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	// Optional filters
+	clusterFilter := c.QueryParam("cluster_uuid")
+	namespaceFilter := c.QueryParam("namespace")
+	typeFilter := c.QueryParam("recommendation_type")
+
+	query := `
+		SELECT cluster_uuid, namespace, snapshot_name, source_pvc_name,
+			volume_snapshot_class, storageclass, creation_timestamp,
+			restore_size_bytes, age_days, source_pvc_exists, restored_pvc_count,
+			managed_by, recommendation_type, estimated_monthly_cost_usd,
+			notification_codes
+		FROM snapshot_recommendation_sets
+		WHERE org_id = $1`
+	args := []interface{}{orgID}
+	argIdx := 2
+
+	if clusterFilter != "" {
+		query += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
+		args = append(args, clusterFilter)
+		argIdx++
+	}
+	if namespaceFilter != "" {
+		query += ` AND namespace = $` + strconv.Itoa(argIdx)
+		args = append(args, namespaceFilter)
+		argIdx++
+	}
+	if typeFilter != "" {
+		query += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
+		args = append(args, typeFilter)
+		argIdx++
+	}
+
+	query += ` ORDER BY age_days DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := pool.Query(c.Request().Context(), query, args...)
+	if err != nil {
+		log.Errorf("snapshot recommendation query failed for org=%s: %v", orgID, err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch snapshot recommendations",
+		})
+	}
+	defer rows.Close()
+
+	var data []SnapshotRecommendationResponse
+	for rows.Next() {
+		var r SnapshotRecommendationResponse
+		var codes []int16
+		var creationTS interface{}
+		if err := rows.Scan(
+			&r.ClusterUUID, &r.Namespace, &r.SnapshotName, &r.SourcePVCName,
+			&r.VolumeSnapshotClass, &r.StorageClass, &creationTS,
+			&r.RestoreSizeBytes, &r.AgeDays, &r.SourcePVCExists, &r.RestoredPVCCount,
+			&r.ManagedBy, &r.RecommendationType, &r.EstimatedMonthlyCost,
+			&codes,
+		); err != nil {
+			log.Errorf("scanning snapshot recommendation row: %v", err)
+			continue
+		}
+		if ts, ok := creationTS.(interface{ Format(string) string }); ok {
+			r.CreationTimestamp = ts.Format("2006-01-02T15:04:05Z")
+		}
+		r.Notifications = notifications.MapToKruizeFormat(codes)
+		data = append(data, r)
+	}
+
+	resp := SnapshotRecommendationListResponse{}
+	resp.Meta.Count = len(data)
+	resp.Meta.Limit = limit
+	resp.Meta.Offset = offset
+	resp.Data = data
+	if resp.Data == nil {
+		resp.Data = []SnapshotRecommendationResponse{}
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}

@@ -49,6 +49,11 @@ var Definitions = map[int16]notifDef{
 	28: {"INFO", "No GPU profiling data available — classification limited to frame buffer"},
 	29: {"INFO", "PVC capacity significantly exceeds sustained usage — consider shrinking"},
 	30: {"WARNING", "PVC usage approaching capacity — consider expanding or investigate growth"},
+	31: {"WARNING", "Source PVC was deleted; snapshot may no longer be needed"},
+	32: {"INFO", "Snapshot has never been used to restore a volume"},
+	33: {"INFO", "Newer snapshot exists for the same PVC"},
+	34: {"INFO", "Snapshot older than retention threshold with no known usage"},
+	35: {"INFO", "Snapshot is managed by backup tool — review retention policy for cost optimization"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

@@ -29,9 +29,14 @@ const (
 	NotifNoCostData         int16 = 25
 	NotifGPUIdle            int16 = 26
 	NotifGPUMemBound        int16 = 27
-	NotifGPUNoProfilingData int16 = 28
-	NotifPVCOversized      int16 = 29
-	NotifPVCNearFull       int16 = 30
+	NotifGPUNoProfilingData   int16 = 28
+	NotifPVCOversized        int16 = 29
+	NotifPVCNearFull         int16 = 30
+	NotifSnapshotOrphaned    int16 = 31
+	NotifSnapshotNeverUsed   int16 = 32
+	NotifSnapshotRedundant   int16 = 33
+	NotifSnapshotStale       int16 = 34
+	NotifSnapshotManaged     int16 = 35
 )
 
 const (
