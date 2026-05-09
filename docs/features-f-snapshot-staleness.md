@@ -67,12 +67,29 @@ These are lightweight point-in-time queries — no watches or informers required
 
 | Classification | Rule | Notification |
 |----------------|------|--------------|
-| **Orphaned** | Source PVC no longer exists AND snapshot older than 7 days | "Source PVC was deleted; snapshot may no longer be needed" |
-| **Never restored** | `restored_pvc_count == 0` AND age > 30 days AND not managed | "Snapshot has never been used to restore a volume" |
-| **Redundant** | Multiple snapshots for same source PVC; this one is not the most recent AND not managed | "Newer snapshot exists for the same PVC" |
-| **Stale** | Age > configurable threshold (default 90 days) AND never restored AND not managed | "Snapshot older than retention threshold with no known usage" |
+| **Orphaned** | Source PVC no longer exists AND age > `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` (7) | "Source PVC was deleted; snapshot may no longer be needed" |
+| **Never restored** | `restored_pvc_count == 0` AND age > `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` (30) AND not managed | "Snapshot has never been used to restore a volume" |
+| **Redundant** | More than `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` (3) snapshots for same source PVC AND this one is not among the N most recent AND age > `ROS_SNAPSHOT_STALE_DAYS` (90) AND not managed | "Newer snapshot exists for the same PVC" |
+| **Stale** | Age > `ROS_SNAPSHOT_STALE_DAYS` (90) AND never restored AND not managed | "Snapshot older than retention threshold with no known usage" |
 | **Managed** | Labels indicate a backup tool manages this snapshot | "Snapshot is managed by [tool] — review retention policy for cost optimization" |
-| **Active** | Recently created OR has been restored from | No notification |
+| **Active** | Age < `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` (7) OR `restored_pvc_count > 0` | No notification |
+
+### Redundant Detection Details
+
+The redundant classification avoids flagging intentional retention windows
+(e.g., 7 daily snapshots kept by a cron job). A snapshot is only flagged
+redundant when ALL of these are true:
+
+1. There are more than `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` snapshots for the
+   same `source_pvc_name` within the same namespace
+2. This snapshot is NOT among the N most recent (where N = threshold)
+3. This snapshot is older than `ROS_SNAPSHOT_STALE_DAYS`
+4. This snapshot is not managed by a known backup tool
+
+This means a team keeping 7 recent daily snapshots gets zero noise (all are
+within the staleness window), while a team with 50 accumulating snapshots
+spanning 2 years gets redundancy alerts on the old ones beyond their retention
+count.
 
 ### Managed Snapshot Detection
 
@@ -116,9 +133,10 @@ When multiple classifications apply, use this precedence (highest first):
 
 | Env Variable | Default | Description |
 |-------------|---------|-------------|
-| `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` | 7 | Minimum age before orphaned classification |
+| `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` | 7 | Minimum age before orphaned classification; also defines "active" ceiling |
 | `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` | 30 | Minimum age for "never restored" |
-| `ROS_SNAPSHOT_STALE_DAYS` | 90 | Threshold for staleness |
+| `ROS_SNAPSHOT_STALE_DAYS` | 90 | Threshold for staleness and redundant age filter |
+| `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | Max snapshots to keep per source PVC before flagging older ones |
 | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | How long to keep raw inventory rows |
 
 ## Cost Rate Configuration
@@ -132,6 +150,39 @@ tier:
 - Azure Managed Disk: ~$0.05/GiB/month
 - Ceph/ODF (on-prem): Near-zero for COW snapshots with low churn; user
   should set based on their actual pool economics
+
+### Per-StorageClass Cost Rates (v2 — Not in Initial Implementation)
+
+Different StorageClasses have different snapshot costs (e.g., gp3 vs io2 on
+AWS, SSD vs HDD). The initial implementation uses a single org-wide rate.
+
+**How we can distinguish StorageClasses in the future:**
+
+The CSV already includes both `storageclass` (from the source PVC's
+`.spec.storageClassName`) and `volume_snapshot_class` (from the snapshot's
+`.spec.volumeSnapshotClassName`). These are first-class Kubernetes fields —
+no user labeling required. The operator resolves them directly:
+
+- `storageclass`: `PVC.spec.storageClassName` (e.g., `gp3`, `ceph-rbd-ssd`)
+- `volume_snapshot_class`: `VolumeSnapshot.spec.volumeSnapshotClassName`
+  (e.g., `csi-aws-vsc`, `ocs-storagecluster-rbdplugin-snapclass`)
+
+For v2, the cost rate API could accept per-`volume_snapshot_class` rates:
+
+```json
+{
+  "default_cost_per_gib_month_usd": 0.05,
+  "overrides": {
+    "csi-aws-vsc-io2": 0.10,
+    "ocs-storagecluster-rbdplugin-snapclass": 0.001
+  }
+}
+```
+
+This eliminates the need for user-applied labels. The `volume_snapshot_class`
+is the correct abstraction because snapshot cost is determined by the CSI
+driver (which the VolumeSnapshotClass encapsulates), not by the PVC's
+StorageClass alone.
 
 ### Default Rate
 
@@ -578,3 +629,16 @@ classify → API) without waiting for the operator implementation.
 7. **Backup tool label evolution**: New backup tools or label conventions may
    emerge. The managed-detection logic should be configurable or at least
    easy to extend (a simple list of label prefixes).
+
+8. **Per-StorageClass cost granularity**: v1 uses a single org-wide cost rate.
+   Clusters with mixed storage tiers (e.g., gp3 + io2) will get approximate
+   cost estimates. The `volume_snapshot_class` field is already collected and
+   can be used for per-class rates in v2 without additional operator changes.
+
+9. **E2E test infrastructure**: Integration testing on real clusters requires
+   a CSI driver with snapshot support (the `snapshot.storage.k8s.io` CRDs and
+   a VolumeSnapshotClass must exist). Not all test environments provide this.
+   Backend unit/integration tests use nise-generated data and testcontainers,
+   so they work anywhere. Operator E2E tests specifically need a cluster with
+   CSI snapshot capability (e.g., AWS EBS CSI, ODF/Ceph CSI, or hostpath CSI
+   provisioner for CI).
