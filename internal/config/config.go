@@ -102,6 +102,15 @@ type Config struct {
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
+	// Snapshot staleness detection thresholds. When set via env var, the
+	// corresponding field is locked (read-only via the settings API).
+	SnapshotOrphanAgeDays        int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
+	SnapshotNeverRestoredDays    int     `mapstructure:"ROS_SNAPSHOT_NEVER_RESTORED_DAYS"`
+	SnapshotStaleDays            int     `mapstructure:"ROS_SNAPSHOT_STALE_DAYS"`
+	SnapshotRedundantThreshold   int     `mapstructure:"ROS_SNAPSHOT_REDUNDANT_THRESHOLD"`
+	SnapshotCostPerGiBMonth      float64 `mapstructure:"ROS_SNAPSHOT_COST_PER_GIB_MONTH"`
+	SnapshotInventoryRetentionH  int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS"`
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -253,6 +262,12 @@ func initConfig() {
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("KOKU_MASU_URL", "")
+	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
+	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
+	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)
+	viper.SetDefault("ROS_SNAPSHOT_REDUNDANT_THRESHOLD", 3)
+	viper.SetDefault("ROS_SNAPSHOT_COST_PER_GIB_MONTH", 0.05)
+	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")

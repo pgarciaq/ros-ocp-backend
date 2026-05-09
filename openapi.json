@@ -1392,6 +1392,173 @@
           "500": { "description": "Internal server error" }
         }
       }
+    },
+    "/recommendations/openshift/snapshots": {
+      "get": {
+        "tags": ["Snapshot Recommendations"],
+        "summary": "List snapshot staleness recommendations",
+        "description": "Returns VolumeSnapshot recommendations for the authenticated organization. Identifies orphaned snapshots (source PVC deleted), stale snapshots (age exceeds threshold), never-restored snapshots, redundant snapshots (newer exists for same PVC), and managed snapshots (backup tool detected).",
+        "operationId": "getSnapshotRecommendations",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "description": "Filter by cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "description": "Filter by namespace",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "recommendation_type",
+            "in": "query",
+            "description": "Filter by recommendation type",
+            "schema": {
+              "type": "string",
+              "enum": ["orphaned", "never_restored", "redundant", "stale", "managed", "active"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results (1-100, default 20)",
+            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of results to skip",
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of snapshot recommendations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "offset": { "type": "integer" }
+                      }
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "cluster_uuid": { "type": "string", "format": "uuid" },
+                          "namespace": { "type": "string" },
+                          "snapshot_name": { "type": "string" },
+                          "source_pvc_name": { "type": "string" },
+                          "volume_snapshot_class": { "type": "string" },
+                          "storageclass": { "type": "string" },
+                          "creation_timestamp": { "type": "string", "format": "date-time" },
+                          "restore_size_bytes": { "type": "integer", "format": "int64" },
+                          "age_days": { "type": "integer" },
+                          "source_pvc_exists": { "type": "boolean" },
+                          "restored_pvc_count": { "type": "integer" },
+                          "managed_by": { "type": "string" },
+                          "recommendation_type": { "type": "string" },
+                          "estimated_monthly_cost_usd": { "type": "number" },
+                          "notifications": { "type": "object" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/snapshot": {
+      "get": {
+        "tags": ["Snapshot Settings"],
+        "summary": "Get snapshot settings",
+        "description": "Returns the current snapshot classification thresholds and cost rate for the authenticated organization. Fields locked by environment variables are listed in `locked_fields`.",
+        "operationId": "getSnapshotSettings",
+        "responses": {
+          "200": {
+            "description": "Current snapshot settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orphan_age_days": { "type": "integer", "description": "Minimum age (days) before a snapshot with deleted source PVC is orphaned" },
+                    "never_restored_days": { "type": "integer", "description": "Minimum age (days) for 'never restored' classification" },
+                    "stale_days": { "type": "integer", "description": "Age threshold (days) for staleness" },
+                    "redundant_threshold": { "type": "integer", "description": "Max snapshots to keep per PVC before flagging redundant" },
+                    "cost_per_gib_month_usd": { "type": "number", "description": "Cost rate per GiB per month for estimation" },
+                    "locked_fields": { "type": "array", "items": { "type": "string" }, "description": "Fields locked by environment variables (read-only via API)" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "500": { "description": "Internal server error" }
+        }
+      },
+      "put": {
+        "tags": ["Snapshot Settings"],
+        "summary": "Update snapshot settings",
+        "description": "Updates snapshot classification thresholds and cost rate. Partial updates supported. Returns 403 if any requested field is locked by an environment variable.",
+        "operationId": "putSnapshotSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orphan_age_days": { "type": "integer" },
+                  "never_restored_days": { "type": "integer" },
+                  "stale_days": { "type": "integer" },
+                  "redundant_threshold": { "type": "integer" },
+                  "cost_per_gib_month_usd": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated snapshot settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orphan_age_days": { "type": "integer" },
+                    "never_restored_days": { "type": "integer" },
+                    "stale_days": { "type": "integer" },
+                    "redundant_threshold": { "type": "integer" },
+                    "cost_per_gib_month_usd": { "type": "number" },
+                    "locked_fields": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request body" },
+          "401": { "description": "User is not authorized" },
+          "403": { "description": "Field is locked by environment variable" },
+          "500": { "description": "Internal server error" }
+        }
+      }
     }
   },
   "components": {

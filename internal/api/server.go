@@ -97,6 +97,13 @@ func StartAPIServer() {
 		v1.GET("/recommendations/openshift/pvcs", GetPVCRecommendations)
 	}
 
+	// Snapshot staleness recommendations (native engine only).
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/snapshots", GetSnapshotRecommendations)
+		v1.GET("/recommendations/openshift/settings/snapshot", GetSnapshotSettings)
+		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
+	}
+
 	s := http.Server{
 		Addr:              ":" + cfg.API_PORT, // local dev server
 		Handler:           app,

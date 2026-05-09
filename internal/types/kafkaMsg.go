@@ -8,6 +8,7 @@ const (
 	PayloadTypeContainer PayloadType = "container"
 	PayloadTypeNamespace PayloadType = "namespace"
 	PayloadTypeStorage   PayloadType = "storage"
+	PayloadTypeSnapshot  PayloadType = "snapshot"
 )
 
 type KafkaMsg struct {
