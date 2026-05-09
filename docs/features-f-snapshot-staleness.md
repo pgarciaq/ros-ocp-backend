@@ -118,6 +118,18 @@ This approach:
   $10/month — is your 90-day retention policy still appropriate?")
 - Avoids noisy false positives on properly-managed snapshots
 
+### Empty `source_pvc_name` Handling
+
+VolumeSnapshots created from pre-provisioned VolumeSnapshotContent may have
+no source PVC. When `source_pvc_name` is empty:
+
+- **Skip:** Orphaned (can't check if source PVC exists) and Redundant (can't
+  group by source PVC)
+- **Still apply:** Stale, Never-restored, Managed, Active
+
+These snapshots still appear in the API with `source_pvc_name: ""` and can
+still receive stale/never-restored notifications. They are not hidden.
+
 ### Classification Priority
 
 When multiple classifications apply, use this precedence (highest first):
