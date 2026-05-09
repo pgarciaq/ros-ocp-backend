@@ -226,6 +226,32 @@ DELETE FROM snapshot_inventory WHERE ingested_at < NOW() - INTERVAL '48 hours';
 
 Classified snapshot recommendations. One row per snapshot per cluster.
 
+**Removal policy:** Recommendations are removed via active reconciliation
+during each ingestion cycle. After classifying the latest inventory for a
+cluster, any recommendation whose snapshot is no longer present in the
+inventory is deleted:
+
+```sql
+DELETE FROM snapshot_recommendation_sets
+WHERE org_id = :org_id AND cluster_uuid = :cluster_uuid
+AND (namespace, snapshot_name) NOT IN (
+    SELECT DISTINCT namespace, snapshot_name
+    FROM snapshot_inventory
+    WHERE org_id = :org_id AND cluster_uuid = :cluster_uuid
+    AND ingested_at >= NOW() - INTERVAL '6 hours'
+);
+```
+
+**User-facing timeline:** User deletes snapshot → next operator upload
+(≤6 hours) omits it → next ingestion reconciles → recommendation removed
+from API.
+
+**Edge cases:**
+- Operator temporarily down: no ingestion = no reconciliation = recommendations
+  persist (correct — don't delete on silence)
+- Cluster stops reporting entirely: recommendations stay until the cluster is
+  deregistered or a stale-cluster sweep fires (parallels F55 container staleness)
+
 ```sql
 CREATE TABLE snapshot_recommendation_sets (
     id                  BIGSERIAL PRIMARY KEY,
