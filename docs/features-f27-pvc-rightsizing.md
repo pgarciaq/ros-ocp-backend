@@ -9,7 +9,13 @@ usage and classifies PVCs to help reduce storage costs and prevent outages.
 
 The koku-metrics-operator already collects PVC metrics and writes them as
 `cm-openshift-storage-usage-YYYYMM.csv` files in the upload tarball. No operator
-changes are required.
+changes are required for data collection.
+
+> **File routing (implemented):** The storage CSV is in the manifest `files`
+> array (cost pipeline). The Koku listener was updated to also route it to the
+> ROS Kafka topic — see `koku/masu/external/kafka_msg_handler.py` (the
+> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](features-f-snapshot-staleness.md#two-strategies-both-documented) for the
+> architectural rationale behind this "Strategy A" approach.
 
 **CSV columns used:**
 - `interval_start`, `interval_end` — time window
