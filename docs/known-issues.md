@@ -222,6 +222,11 @@ count up or down.)
 aggregates daily PVC digests (`daily_pvc_digests` table), and produces
 right-sizing recommendations (`pvc_recommendation_sets` table).
 
+**Deployment prerequisite (resolved):** The storage CSV is in `manifest.files`
+(cost pipeline). The Koku listener (`kafka_msg_handler.py`) was updated to also
+route `storage-usage` files to the ROS Kafka topic via `_ros_extra_patterns`.
+See the snapshot staleness design doc for architectural context.
+
 **Classifications:**
 - **Oversized** — usage/capacity < 20% sustained (recommends 2x max usage)
 - **Near-full** — usage/capacity > 85% (warns, recommends expansion)
