@@ -1,10 +1,68 @@
-# Known Issues and Missing UI Integration
+# Feature Status — Native Recommendation Engine
 
-This document tracks features that are implemented in the ros-ocp-backend
-native engine but lack corresponding UI support in koku-ui, as well as
-features that are not yet implemented in the engine.
+This document tracks the implementation status of all features in the
+ros-ocp-backend native engine, their API availability, UI support in
+koku-ui, and known issues. **Code-verified** against the actual Go source —
+not aspirational.
 
-Last updated: 2026-05-07
+Last updated: 2026-05-10
+
+---
+
+## Executive Summary (for customer discussions)
+
+### What We Have Today
+
+The native Go recommendation engine is **production-ready** on plain
+PostgreSQL 16 (no TimescaleDB or special extensions required).
+
+| Category | Feature | Status |
+|----------|---------|--------|
+| **Container recs** | CPU recommendations (percentile-based, adaptive margin) | **Shipping** |
+| **Container recs** | Memory recommendations (percentile-based, OOM-aware) | **Shipping** |
+| **Container recs** | Data decay weighting (configurable half-life per term) | **Shipping** |
+| **Container recs** | OOM detection & feedback (logarithmic memory bump) | **Shipping** |
+| **Container recs** | Custom timeframes (1–90 day windows, 3 terms per org) | **Shipping** |
+| **Container recs** | Idle / abandoned workload detection | **Shipping** |
+| **Container recs** | CPU trend analysis (least-squares slope) | **Shipping** |
+| **Container recs** | Dollar savings estimates (via Koku cost data) | **Shipping** |
+| **Container recs** | Replica count display (min/max/avg pod count) | **Shipping** |
+| **Container recs** | Recommendation history tracking | **Shipping** |
+| **Container recs** | Recommendation quality (stability %, adoption detection) | **Shipping** |
+| **Container recs** | Box plots (five-number summary from usage samples) | **Shipping** |
+| **Namespace recs** | Namespace-level CPU + memory recommendations | **Ready, feature-flagged** |
+| **GPU** | GPU workload classification (idle/underutilized/memory-bound/compute-bound) | **Shipping** |
+| **GPU** | MIG profile selection (A100/A30/H100/H200/B100/B200) | **Shipping** |
+| **GPU** | Node-level time-slicing guidance (nvidia.com/gpu.replicas) | **Shipping** |
+| **GPU** | GPU savings estimates (from Koku cost model rates) | **Shipping** |
+| **Storage** | PVC right-sizing (oversized/near-full/orphaned/healthy + growth trend) | **Shipping** |
+| **Snapshots** | Snapshot staleness detection (orphaned/stale/never-restored/redundant) | **Shipping** |
+| **Fleet** | Fleet summary (cross-cluster aggregate) | **Shipping** |
+| **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
+| **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
+
+### What's Next (Not Yet Implemented)
+
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| VM recommendations | Virtual machine right-sizing for OpenShift Virtualization | Medium |
+| Node CPU/memory right-sizing | Underutilized / overcommitted / stranded resource detection | Medium |
+| MachineSet right-sizing | Instance type + replica count recommendations | High |
+| Cloud instance catalog | AWS/Azure/GCP instance type database for cross-cloud right-sizing | Medium |
+| JVM/Quarkus recommendations | Java-runtime-specific tuning (heap, GC) | Medium |
+| HPA detection | Informational notifications for HPA-managed workloads | Low |
+| Full Kruize removal | Remove legacy Kruize code path (native is default, legacy is fallback) | Low |
+| Keyset pagination | Cursor-based pagination for large orgs (currently offset/limit) | Low |
+| Shadow mode | Production dual-engine comparison (offline CLI tool exists) | Low |
+
+### Known Caveats
+
+| Issue | Impact | Severity |
+|-------|--------|----------|
+| Performance vs cost profiles store identical values | Both DB rows use cost-side outputs | Low — functional but redundant |
+| Memory trend notification uses CPU slope at container level | `NotifMemoryTrendingUp` checks CPU trend (namespace level is correct) | Low — cosmetic |
+| Notification code 29 collision | PVC_OVERSIZED and GPUTimeSharingCandidate share code 29 | Medium — affects notification text for GPU time-slicing |
+| Namespace recs disabled by default | Requires `DISABLE_NAMESPACE_RECOMMENDATION=false` or Unleash flag | By design — opt-in per customer |
 
 ---
 
