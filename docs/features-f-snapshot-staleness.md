@@ -1,7 +1,7 @@
 # Snapshot Staleness Detection — Design Document
 
-**Status:** Design (not yet implemented)
-**Dependencies:** Requires operator change (new CSV collector) + Koku listener routing update
+**Status:** Implemented (backend, operator, nise, koku listener)
+**Dependencies:** All resolved — operator collector, Koku listener routing, nise data generation
 
 ## Problem Statement
 

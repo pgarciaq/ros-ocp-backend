@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -93,6 +94,19 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	} else if tag.RowsAffected() > 0 {
 		retentionDropped.Add(float64(tag.RowsAffected()))
 		log.Infof("retention: purged %d stale recommendations (older than %s)", tag.RowsAffected(), staleCutoff.Format("2006-01-02"))
+	}
+
+	// Snapshot inventory retention: purge raw rows older than configured hours (default 48h).
+	snapRetentionH := cfg.SnapshotInventoryRetentionH
+	if snapRetentionH <= 0 {
+		snapRetentionH = 48
+	}
+	purged, err := ingestion.PurgeSnapshotInventory(ctx, pool, snapRetentionH)
+	if err != nil {
+		log.Warnf("retention: %v", err)
+	} else if purged > 0 {
+		retentionDropped.Add(float64(purged))
+		log.Infof("retention: purged %d snapshot_inventory rows (older than %dh)", purged, snapRetentionH)
 	}
 }
 
