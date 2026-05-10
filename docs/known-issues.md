@@ -52,7 +52,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | JVM/Quarkus recommendations | Java-runtime-specific tuning (heap, GC) | Medium |
 | HPA detection | Informational notifications for HPA-managed workloads | Low |
 | Full Kruize removal | Remove legacy Kruize code path (native is default, legacy is fallback) | Low |
-| Keyset pagination | Cursor-based pagination for large orgs (currently offset/limit) | Low |
+| Keyset pagination | Cursor-based pagination for large orgs (see below) | Low |
 | Shadow mode | Production dual-engine comparison (offline CLI tool exists) | Low |
 
 ### Known Caveats
@@ -373,3 +373,92 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift/quality` | GET | Implemented |
 | `/recommendations/openshift/snapshots` | GET | Implemented |
 | `/recommendations/openshift/settings/snapshot` | GET, PUT | Implemented |
+
+---
+
+## Future Improvement: Keyset Pagination
+
+### Current State
+
+Both **Koku** (Django REST Framework) and **ros-ocp-backend** (Go/Echo) use
+offset/limit pagination across all list endpoints:
+
+```
+GET /recommendations/openshift?offset=200&limit=50
+→ DB: SELECT ... ORDER BY x LIMIT 50 OFFSET 200
+```
+
+This works by scanning and discarding `offset` rows before returning `limit`
+rows. Performance degrades linearly with page depth — page 100 at 50
+items/page requires the DB to scan 5,000 rows to return 50.
+
+### What Keyset Pagination Does
+
+Instead of a numeric offset, the client passes an opaque cursor encoding the
+last row's sort key:
+
+```
+GET /recommendations/openshift?after=eyJ1cGRhdGVkX2F0Ij...&limit=50
+→ DB: SELECT ... WHERE (namespace, workload) > ('proj-x', 'deploy-y')
+      ORDER BY namespace, workload LIMIT 50
+```
+
+The DB seeks directly to the cursor position using the index — O(1) per page
+regardless of depth. No rows are scanned and discarded.
+
+### Performance Comparison
+
+| Page depth | Offset/limit | Keyset |
+|------------|--------------|--------|
+| Page 1 | ~1ms | ~1ms |
+| Page 10 | ~2ms | ~1ms |
+| Page 100 | ~15ms | ~1ms |
+| Page 1000 | ~150ms | ~1ms |
+
+(Approximate PostgreSQL timings for a 50k-row table with appropriate indexes.)
+
+### Where It Would Help
+
+| Service | Endpoint | Why |
+|---------|----------|-----|
+| ros-ocp-backend | `/recommendations/openshift` | Large orgs with 10k+ containers across clusters |
+| ros-ocp-backend | `/recommendations/openshift/history` | History grows at ~1 row/container/term/engine/day |
+| ros-ocp-backend | `/recommendations/openshift/pvcs` | Clusters with thousands of PVCs |
+| Koku | `/reports/openshift/costs/?group_by[project]=*` | Orgs with hundreds of projects |
+| Koku | `/tags/openshift/` | Tags with many distinct values |
+
+### Implementation Path
+
+**ros-ocp-backend (Go):**
+- Add `after` query parameter to `ListAPIOptions`
+- Decode cursor → `WHERE (sort_col) > (cursor_value)` SQL clause
+- Encode last row's sort key into `next` cursor in response `links`
+- Keep `offset`/`limit` as fallback (backward compatible)
+
+**Koku (Django):**
+- Django REST Framework ships `CursorPagination` built-in:
+  ```python
+  from rest_framework.pagination import CursorPagination
+  class RecommendationCursorPagination(CursorPagination):
+      page_size = 50
+      ordering = '-updated_at'
+  ```
+- Requires a unique or near-unique indexed ordering column (timestamps +
+  tiebreaker on `id` or composite key)
+
+### Trade-offs
+
+| Pro | Con |
+|-----|-----|
+| O(1) per page at any depth | No random access ("jump to page N") |
+| Consistent results under concurrent writes | Requires stable sort order |
+| Index-only scan (no seq scan for offset) | Client must store opaque cursor |
+| Works with infinite scroll / streaming UIs | Breaking API change (new param format) |
+
+### When to Implement
+
+This is **not urgent**. Current scale (< 5,000 containers per org) is well
+within offset/limit performance. Prioritize when:
+- A customer reports slow pagination on deep pages
+- The history table exceeds 100k rows per org
+- The UI moves to infinite-scroll (no page numbers)
