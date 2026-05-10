@@ -90,7 +90,8 @@ type ContainerRec struct {
 	ConfidenceLevel        float32
 	EstimatedSavingsUSD    float32
 	NotificationCodes      []int16
-	TrendSlope             float64
+	CPUTrendSlope          float64
+	MemTrendSlope          float64
 	IsIdle                 bool
 	IsAbandoned            bool
 	OOMCountSum            int64

@@ -59,10 +59,15 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 
 | Issue | Impact | Severity |
 |-------|--------|----------|
-| Performance vs cost profiles store identical values | Both DB rows use cost-side outputs | Low — functional but redundant |
-| Memory trend notification uses CPU slope at container level | `NotifMemoryTrendingUp` checks CPU trend (namespace level is correct) | Low — cosmetic |
-| Notification code 29 collision | PVC_OVERSIZED and GPUTimeSharingCandidate share code 29 | Medium — affects notification text for GPU time-slicing |
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback |
+
+### Recently Fixed Caveats
+
+| Issue | Fix | Commit |
+|-------|-----|--------|
+| Performance vs cost profiles stored identical values | `recommend_all.go` / `recommend_namespace.go` now select `PerfRequest*`/`PerfLimit*` when `profile == "performance"` | This commit |
+| Memory trend notification used CPU slope at container level | Added separate `CPUTrendSlope` and `MemTrendSlope` to `ContainerRec`; `EvaluateNotifications` now checks `MemTrendSlope` | This commit |
+| Notification code 29 collision (PVC_OVERSIZED vs GPUTimeSharingCandidate) | `NotifGPUTimeSharingCandidate` reassigned to code 36; `NotifPVCOversized` remains 29 | This commit |
 
 ---
 

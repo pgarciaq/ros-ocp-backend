@@ -65,7 +65,7 @@ func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
 	if rec.Stale {
 		codes = append(codes, NotifStaleData)
 	}
-	if rec.TrendSlope > memTrendSlopeThreshold {
+	if rec.MemTrendSlope > memTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)
 	}
 

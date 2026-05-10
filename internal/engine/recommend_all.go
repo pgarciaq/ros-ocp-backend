@@ -144,38 +144,52 @@ func RecommendAllWorkloads(
 					memCfg.OOMMaxBump = 1.0
 				}
 
-				cpuRec := RecommendCPU(windowRows, cpuCfg)
-				memRec := RecommendMemory(windowRows, memCfg)
-				abandoned := DetectAbandoned(windowRows)
+			cpuRec := RecommendCPU(windowRows, cpuCfg)
+			memRec := RecommendMemory(windowRows, memCfg)
+			abandoned := DetectAbandoned(windowRows)
 
-				rec := ContainerRec{
-					OrgID:                orgID,
-					ClusterUUID:          clusterUUID,
-					Namespace:            key.Namespace,
-					Workload:             key.Workload,
-					WorkloadType:         key.WorkloadType,
-					ContainerName:        key.ContainerName,
-					Term:                 tc.Name,
-					Engine:               profile,
-					RecCPURequestMC:      cpuRec.CostRequestMC,
-					RecCPULimitMC:        cpuRec.CostLimitMC,
-					RecMemRequestKiB:     memRec.CostRequestKiB,
-					RecMemLimitKiB:       memRec.CostLimitKiB,
-					CurrentCPURequestMC:  currentCPUReqMC,
-					CurrentCPULimitMC:    currentCPULimMC,
-					CurrentMemRequestKiB: currentMemReqKiB,
-					CurrentMemLimitKiB:   currentMemLimKiB,
-					ConfidenceLevel:      confidence,
-					TrendSlope:           cpuRec.TrendSlope,
-					IsIdle:               cpuRec.IsIdle,
-					IsAbandoned:          abandoned,
-					OOMCountSum:          oomTotal,
-					DataDays:             dataDays,
-					Stale:                stale,
-					PodCountMin:          pcMin,
-					PodCountMax:          pcMax,
-					PodCountAvg:          pcAvg,
-				}
+			var recCPUReq, recCPULim, recMemReq, recMemLim int64
+			if profile == "performance" {
+				recCPUReq = cpuRec.PerfRequestMC
+				recCPULim = cpuRec.PerfLimitMC
+				recMemReq = memRec.PerfRequestKiB
+				recMemLim = memRec.PerfLimitKiB
+			} else {
+				recCPUReq = cpuRec.CostRequestMC
+				recCPULim = cpuRec.CostLimitMC
+				recMemReq = memRec.CostRequestKiB
+				recMemLim = memRec.CostLimitKiB
+			}
+
+			rec := ContainerRec{
+				OrgID:                orgID,
+				ClusterUUID:          clusterUUID,
+				Namespace:            key.Namespace,
+				Workload:             key.Workload,
+				WorkloadType:         key.WorkloadType,
+				ContainerName:        key.ContainerName,
+				Term:                 tc.Name,
+				Engine:               profile,
+				RecCPURequestMC:      recCPUReq,
+				RecCPULimitMC:        recCPULim,
+				RecMemRequestKiB:     recMemReq,
+				RecMemLimitKiB:       recMemLim,
+				CurrentCPURequestMC:  currentCPUReqMC,
+				CurrentCPULimitMC:    currentCPULimMC,
+				CurrentMemRequestKiB: currentMemReqKiB,
+				CurrentMemLimitKiB:   currentMemLimKiB,
+				ConfidenceLevel:      confidence,
+				CPUTrendSlope:        cpuRec.TrendSlope,
+				MemTrendSlope:        memRec.TrendSlope,
+				IsIdle:               cpuRec.IsIdle,
+				IsAbandoned:          abandoned,
+				OOMCountSum:          oomTotal,
+				DataDays:             dataDays,
+				Stale:                stale,
+				PodCountMin:          pcMin,
+				PodCountMax:          pcMax,
+				PodCountAvg:          pcAvg,
+			}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
