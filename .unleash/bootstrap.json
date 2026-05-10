@@ -9,22 +9,22 @@
     ],
     "features": [
         {
-            "name": "rosocp.namespace_enabled",
+            "name": "rosocp.namespace_disabled",
             "project": "rosocp",
-            "enabled": true,
+            "enabled": false,
             "strategies": [
                 {
                     "name": "flexibleRollout",
                     "parameters": {
                         "rollout": "100",
                         "stickiness": "orgId",
-                        "groupId": "rosocp.namespace_enabled"
+                        "groupId": "rosocp.namespace_disabled"
                     },
                     "constraints": [
                         {
                             "contextName": "orgId",
                             "operator": "IN",
-                            "values": ["3340851"]
+                            "values": []
                         }
                     ]
                 }

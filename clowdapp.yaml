@@ -308,8 +308,8 @@ parameters:
   value: 'INFO'
 - name: RECOMMENDATION_POLLER_LOG_LEVEL
   value: 'INFO'
-- description: Disable namespace recommendations feature
+- description: "Deprecated: namespace recs are enabled by default. Use Unleash flag rosocp.namespace_disabled to disable per-org."
   name: DISABLE_NAMESPACE_RECOMMENDATION
-  value: "true"
+  value: "false"
 - name: PARTITION_DELETE_INTERVAL
   value: "0 0 */15 * *" # Runs at 12:00 AM, every 15 days.

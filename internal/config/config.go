@@ -76,7 +76,9 @@ type Config struct {
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`
 	SourceApiPrefix  string `mapstructure:"SOURCES_API_PREFIX"`
 
-	// Namespace recommendation config
+	// Namespace recommendation config (kept for backward compat; ignored by engine logic)
+	// Deprecated: namespace recs are enabled by default. Use Unleash
+	// flag "rosocp.namespace_disabled" to disable per-org on cloud.
 	DisableNamespaceRecommendation bool `mapstructure:"DISABLE_NAMESPACE_RECOMMENDATION"`
 
 	// Native recommendation engine (replaces Kruize pipeline)
@@ -252,7 +254,7 @@ func initConfig() {
 	viper.SetDefault("READ_HEADER_TIMEOUT", 15)
 	viper.SetDefault("RECORD_LIMIT_CSV", 1000)
 	viper.SetDefault("CSV_STREAM_INTERVAL", 100)
-	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", true)
+	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", false)
 	viper.SetDefault("ROS_USE_NATIVE_ENGINE", true)
 	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
