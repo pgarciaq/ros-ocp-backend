@@ -243,6 +243,36 @@ days-to-full for capacity planning.
 
 **UI status:** Not implemented.
 
+### Snapshot Staleness Detection
+
+**Engine status:** Fully implemented. The engine ingests
+`snapshot-inventory` CSVs from the operator tarball, classifies snapshots
+(orphaned, stale, never-restored, redundant, managed, active), calculates
+estimated monthly cost, and persists recommendations. Reconciliation removes
+recommendations for snapshots no longer reported by the operator.
+
+**Data pipeline:** Operator collects VolumeSnapshot objects via Kubernetes API
+and writes `ros-openshift-snapshot-inventory-YYYYMM.csv` to
+`resource_optimization_files`. Koku listener has a safety-net pattern
+(`"snapshot-inventory"` in `_ros_extra_patterns`). Nise generates test data
+via `--ros-ocp-info`.
+
+**API status:** Fully implemented.
+`GET /api/cost-management/v1/recommendations/openshift/snapshots` returns
+paginated snapshot recommendations with filters for `cluster_uuid`,
+`namespace`, and `recommendation_type`. Settings API at
+`GET|PUT /api/cost-management/v1/recommendations/openshift/settings/snapshot`
+manages per-org thresholds and cost rate with env-var locking.
+
+**Notification codes:** 31 (orphaned), 32 (never restored), 33 (redundant),
+34 (stale), 35 (managed).
+
+**UI status:** Not implemented. No snapshot recommendations view or settings
+page in koku-ui.
+
+See [features-f-snapshot-staleness.md](./features-f-snapshot-staleness.md)
+for full design details.
+
 ---
 
 ## Recently Implemented Lifecycle Features
@@ -255,7 +285,7 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
   zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
 - **Adoption detection (F54):** Compares current requests to prior recommendation
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
-- **Fleet summary (F33):** `GET /recommendations/fleet-summary` aggregate endpoint.
+- **Fleet summary (F33):** `GET /recommendations/openshift/fleet-summary` aggregate endpoint.
 
 ---
 
@@ -273,3 +303,5 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |
 | `/recommendations/openshift/history` | GET | Implemented |
 | `/recommendations/openshift/quality` | GET | Implemented |
+| `/recommendations/openshift/snapshots` | GET | Implemented |
+| `/recommendations/openshift/settings/snapshot` | GET, PUT | Implemented |
