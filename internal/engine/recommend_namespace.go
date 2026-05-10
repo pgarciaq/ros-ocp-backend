@@ -145,30 +145,43 @@ func RecommendAllNamespaces(
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
 				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
 
-				cpuRec := RecommendCPU(windowRows, cpuCfg)
-				memRec := RecommendMemory(windowRows, memCfg)
+			cpuRec := RecommendCPU(windowRows, cpuCfg)
+			memRec := RecommendMemory(windowRows, memCfg)
 
-			rec := NamespaceRec{
-				OrgID:                orgID,
-				ClusterUUID:          clusterUUID,
-				Namespace:            key.Namespace,
-				Term:                 tc.Name,
-				Engine:               profile,
-				RecCPURequestMC:      cpuRec.CostRequestMC,
-				RecCPULimitMC:        cpuRec.CostLimitMC,
-				RecMemRequestKiB:     memRec.CostRequestKiB,
-				RecMemLimitKiB:       memRec.CostLimitKiB,
-				CurrentCPURequestMC:  currentCPUReqMC,
-				CurrentCPULimitMC:    currentCPULimMC,
-				CurrentMemRequestKiB: currentMemReqKiB,
-				CurrentMemLimitKiB:   currentMemLimKiB,
-				ConfidenceLevel:      confidence,
-				MemTrendSlope:        memRec.TrendSlope,
-				DataDays:             dataDays,
-				Stale:                stale,
-				MonitoringStartTime:  monStart,
-				MonitoringEndTime:    end,
+			var recCPUReq, recCPULim, recMemReq, recMemLim int64
+			if profile == "performance" {
+				recCPUReq = cpuRec.PerfRequestMC
+				recCPULim = cpuRec.PerfLimitMC
+				recMemReq = memRec.PerfRequestKiB
+				recMemLim = memRec.PerfLimitKiB
+			} else {
+				recCPUReq = cpuRec.CostRequestMC
+				recCPULim = cpuRec.CostLimitMC
+				recMemReq = memRec.CostRequestKiB
+				recMemLim = memRec.CostLimitKiB
 			}
+
+		rec := NamespaceRec{
+			OrgID:                orgID,
+			ClusterUUID:          clusterUUID,
+			Namespace:            key.Namespace,
+			Term:                 tc.Name,
+			Engine:               profile,
+			RecCPURequestMC:      recCPUReq,
+			RecCPULimitMC:        recCPULim,
+			RecMemRequestKiB:     recMemReq,
+			RecMemLimitKiB:       recMemLim,
+			CurrentCPURequestMC:  currentCPUReqMC,
+			CurrentCPULimitMC:    currentCPULimMC,
+			CurrentMemRequestKiB: currentMemReqKiB,
+			CurrentMemLimitKiB:   currentMemLimKiB,
+			ConfidenceLevel:      confidence,
+			MemTrendSlope:        memRec.TrendSlope,
+			DataDays:             dataDays,
+			Stale:                stale,
+			MonitoringStartTime:  monStart,
+			MonitoringEndTime:    end,
+		}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)

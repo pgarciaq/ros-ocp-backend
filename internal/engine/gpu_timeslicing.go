@@ -4,8 +4,8 @@ import "time"
 
 const (
 	// NotifGPUTimeSharingCandidate is emitted on containers and nodes where
-	// GPU time-slicing is recommended.
-	NotifGPUTimeSharingCandidate int16 = 29
+	// GPU time-slicing is recommended. Code 36 (code 29 is NotifPVCOversized).
+	NotifGPUTimeSharingCandidate int16 = 36
 
 	nodeFreshnessDays             = 7
 	timeslicingBasePenalty        = float32(0.7)

@@ -11,7 +11,7 @@ import (
 // --- TS-03: Notification constant ---
 
 func TestNotifGPUTimeSharingCandidate_Exists(t *testing.T) {
-	assert.Equal(t, int16(29), NotifGPUTimeSharingCandidate)
+	assert.Equal(t, int16(36), NotifGPUTimeSharingCandidate)
 }
 
 // --- TS-04: Result types ---

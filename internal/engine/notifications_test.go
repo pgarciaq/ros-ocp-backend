@@ -31,9 +31,15 @@ func TestEvaluateNotifications_IdleWorkload(t *testing.T) {
 }
 
 func TestEvaluateNotifications_MemoryTrendingUp(t *testing.T) {
-	rec := ContainerRec{DataDays: 7, TrendSlope: 500.0, ConfidenceLevel: 0.8}
+	rec := ContainerRec{DataDays: 7, MemTrendSlope: 500.0, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
 	assert.Contains(t, codes, NotifMemoryTrendingUp)
+}
+
+func TestEvaluateNotifications_CPUTrendDoesNotTriggerMemoryNotif(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, CPUTrendSlope: 500.0, MemTrendSlope: 0, ConfidenceLevel: 0.8}
+	codes := EvaluateNotifications(rec, 3)
+	assert.NotContains(t, codes, NotifMemoryTrendingUp)
 }
 
 func TestEvaluateNotifications_HealthyWorkload_NoCodes(t *testing.T) {
@@ -41,7 +47,8 @@ func TestEvaluateNotifications_HealthyWorkload_NoCodes(t *testing.T) {
 		DataDays:        7,
 		OOMCountSum:     0,
 		IsIdle:          false,
-		TrendSlope:      0,
+		CPUTrendSlope:   0,
+		MemTrendSlope:   0,
 		ConfidenceLevel: 0.9,
 	}
 	codes := EvaluateNotifications(rec, 3)
@@ -49,14 +56,12 @@ func TestEvaluateNotifications_HealthyWorkload_NoCodes(t *testing.T) {
 }
 
 func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
-	// T-1.9: When CurrentCPULimitMC is zero (limit not set on the pod),
-	// EvaluateNotifications should not panic or produce spurious codes.
-	// A healthy workload with missing limits should still have no codes.
 	rec := ContainerRec{
 		DataDays:        7,
 		OOMCountSum:     0,
 		IsIdle:          false,
-		TrendSlope:      0,
+		CPUTrendSlope:   0,
+		MemTrendSlope:   0,
 		ConfidenceLevel: 0.9,
 	}
 	codes := EvaluateNotifications(rec, 3)
@@ -95,7 +100,8 @@ func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 		OOMCountSum:     2,
 		IsIdle:          true,
 		Stale:           true,
-		TrendSlope:      0,
+		CPUTrendSlope:   0,
+		MemTrendSlope:   0,
 		ConfidenceLevel: 0.2,
 	}
 	codes := EvaluateNotifications(rec, 3)

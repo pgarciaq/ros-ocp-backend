@@ -54,6 +54,7 @@ var Definitions = map[int16]notifDef{
 	33: {"INFO", "Newer snapshot exists for the same PVC"},
 	34: {"INFO", "Snapshot older than retention threshold with no known usage"},
 	35: {"INFO", "Snapshot is managed by backup tool — review retention policy for cost optimization"},
+	36: {"INFO", "GPU time-slicing candidate — workload may benefit from shared GPU scheduling"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible
