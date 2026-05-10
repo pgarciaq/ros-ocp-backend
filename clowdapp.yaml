@@ -311,7 +311,7 @@ parameters:
   value: 'INFO'
 - name: RECOMMENDATION_POLLER_LOG_LEVEL
   value: 'INFO'
-- description: Disable namespace recommendations feature
+- description: "Deprecated: namespace recs are enabled by default. Use Unleash flag rosocp.namespace_disabled to disable per-org."
   name: DISABLE_NAMESPACE_RECOMMENDATION
   value: "false"
 - description: Update Kruize performance profile flag

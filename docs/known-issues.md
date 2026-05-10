@@ -30,7 +30,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Container recs** | Recommendation history tracking | **Shipping** |
 | **Container recs** | Recommendation quality (stability %, adoption detection) | **Shipping** |
 | **Container recs** | Box plots (five-number summary from usage samples) | **Shipping** |
-| **Namespace recs** | Namespace-level CPU + memory recommendations | **Ready, feature-flagged** |
+| **Namespace recs** | Namespace-level CPU + memory recommendations | **Shipping (enabled by default)** |
 | **GPU** | GPU workload classification (idle/underutilized/memory-bound/compute-bound) | **Shipping** |
 | **GPU** | MIG profile selection (A100/A30/H100/H200/B100/B200) | **Shipping** |
 | **GPU** | Node-level time-slicing guidance (nvidia.com/gpu.replicas) | **Shipping** |
@@ -62,7 +62,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Performance vs cost profiles store identical values | Both DB rows use cost-side outputs | Low — functional but redundant |
 | Memory trend notification uses CPU slope at container level | `NotifMemoryTrendingUp` checks CPU trend (namespace level is correct) | Low — cosmetic |
 | Notification code 29 collision | PVC_OVERSIZED and GPUTimeSharingCandidate share code 29 | Medium — affects notification text for GPU time-slicing |
-| Namespace recs disabled by default | Requires `DISABLE_NAMESPACE_RECOMMENDATION=false` or Unleash flag | By design — opt-in per customer |
+| Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback |
 
 ---
 
@@ -86,8 +86,13 @@ decay parameters.
 
 ### Namespace Recommendations
 
-**Engine status:** Fully implemented. `RecommendAllNamespaces()` produces
+**Engine status:** Fully implemented and **enabled by default**. No env var
+or feature flag needed for on-prem. `RecommendAllNamespaces()` produces
 namespace-level recommendations from `daily_namespace_digests`.
+
+**Feature gating:** On cloud (console.redhat.com), namespace recs can be
+disabled per-org via the Unleash kill switch `rosocp.namespace_disabled`.
+On-prem has no Unleash, so namespace recs are unconditionally enabled.
 
 **API status:** Fully implemented. `GET /openshift/namespace/recommendations`
 and `GET /recommendations/openshift/namespace/:recommendation-id` endpoints
