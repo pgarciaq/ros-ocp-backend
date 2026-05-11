@@ -217,6 +217,45 @@ func TestComputePodCounts_FallbackDistinctPods(t *testing.T) {
 	})
 }
 
+func TestComputeReplicaCounts(t *testing.T) {
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	t.Run("returns latest hour values", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, DesiredReplicas: 3, AvailableReplicas: 3},
+			{IntervalStart: base.Add(time.Hour), DesiredReplicas: 5, AvailableReplicas: 4},
+		}
+		desired, available := computeReplicaCounts(rows)
+		assert.Equal(t, int64(5), desired)
+		assert.Equal(t, int64(4), available)
+	})
+
+	t.Run("takes max within same hour", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, DesiredReplicas: 2, AvailableReplicas: 1},
+			{IntervalStart: base.Add(5 * time.Minute), DesiredReplicas: 4, AvailableReplicas: 3},
+		}
+		desired, available := computeReplicaCounts(rows)
+		assert.Equal(t, int64(4), desired)
+		assert.Equal(t, int64(3), available)
+	})
+
+	t.Run("empty rows returns zeros", func(t *testing.T) {
+		desired, available := computeReplicaCounts(nil)
+		assert.Equal(t, int64(0), desired)
+		assert.Equal(t, int64(0), available)
+	})
+
+	t.Run("all zeros returns zeros", func(t *testing.T) {
+		rows := []MetricRow{
+			{IntervalStart: base, DesiredReplicas: 0, AvailableReplicas: 0},
+		}
+		desired, available := computeReplicaCounts(rows)
+		assert.Equal(t, int64(0), desired)
+		assert.Equal(t, int64(0), available)
+	})
+}
+
 func TestMinMaxAvgOfMap(t *testing.T) {
 	t.Run("single entry", func(t *testing.T) {
 		m := map[hourKey]int64{{2026, 3, 1, 10}: 5}

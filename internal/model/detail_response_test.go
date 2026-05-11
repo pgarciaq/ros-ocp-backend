@@ -334,6 +334,40 @@ func TestBuildDetailResponse_ReplicasInJSON(t *testing.T) {
 	assert.Equal(t, float64(2), replicas["avg"])
 }
 
+func TestBuildDetailResponse_ReplicasWithDesiredAvailable(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Replicas:    &ReplicaInfo{Min: 2, Max: 5, Avg: 3, Desired: 5, Available: 4, Source: "kube_state_metrics"},
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{CPURequestMillicores: &cpuReq},
+			},
+		},
+	}
+
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	require.NotNil(t, detail.Recommendations.Replicas)
+	assert.Equal(t, 5, detail.Recommendations.Replicas.Desired)
+	assert.Equal(t, 4, detail.Recommendations.Replicas.Available)
+	assert.Equal(t, "kube_state_metrics", detail.Recommendations.Replicas.Source)
+
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+	recs := raw["recommendations"].(map[string]interface{})
+	replicas := recs["replicas"].(map[string]interface{})
+	assert.Equal(t, float64(5), replicas["desired"])
+	assert.Equal(t, float64(4), replicas["available"])
+	assert.Equal(t, "kube_state_metrics", replicas["source"])
+}
+
 func TestBuildDetailResponse_NoNotifications(t *testing.T) {
 	cpuReq := int64(100)
 	native := &NativeContainerResult{

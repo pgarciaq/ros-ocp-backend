@@ -99,6 +99,7 @@ func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResu
 	}
 
 	podCountMin, podCountMax, podCountAvg := computePodCounts(rows)
+	desiredReplicas, availableReplicas := computeReplicaCounts(rows)
 
 	return ContainerDigestResult{
 		Key:              key,
@@ -132,9 +133,11 @@ func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResu
 		CPUUsageMeanMC:   cpuUseD.Mean,
 		MemUsageMeanKiB:  memUseD.Mean,
 		SampleCount:      cpuUseD.Count,
-		PodCountMin:      podCountMin,
-		PodCountMax:      podCountMax,
-		PodCountAvg:      podCountAvg,
+		PodCountMin:       podCountMin,
+		PodCountMax:       podCountMax,
+		PodCountAvg:       podCountAvg,
+		DesiredReplicas:   desiredReplicas,
+		AvailableReplicas: availableReplicas,
 	}
 }
 
@@ -172,9 +175,11 @@ type ContainerDigestResult struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
-	PodCountMin      int64
-	PodCountMax      int64
-	PodCountAvg      int64
+	PodCountMin       int64
+	PodCountMax       int64
+	PodCountAvg       int64
+	DesiredReplicas   int64
+	AvailableReplicas int64
 }
 
 // computePodCounts derives per-day pod count min/max/avg from hourly buckets.
@@ -259,6 +264,68 @@ func minMaxAvgOfMap(m map[hourKey]int64) (int64, int64, int64) {
 	}
 	avg := int64(math.Round(sum / float64(len(m))))
 	return minV, maxV, avg
+}
+
+// computeReplicaCounts returns the most-recent-hour max of desired and
+// available replicas. This gives an authoritative snapshot of the replica
+// spec state at the end of the digest window. Returns 0 if the column
+// was absent (all values zero).
+func computeReplicaCounts(rows []MetricRow) (desired, available int64) {
+	if len(rows) == 0 {
+		return 0, 0
+	}
+
+	// Group by hour and take max per hour.
+	desiredPerHour := make(map[hourKey]int64)
+	availPerHour := make(map[hourKey]int64)
+	for _, r := range rows {
+		h := truncateToHour(r.IntervalStart)
+		if r.DesiredReplicas > desiredPerHour[h] {
+			desiredPerHour[h] = r.DesiredReplicas
+		}
+		if r.AvailableReplicas > availPerHour[h] {
+			availPerHour[h] = r.AvailableReplicas
+		}
+	}
+
+	// Take the latest hour's value.
+	var latestH hourKey
+	first := true
+	for h := range desiredPerHour {
+		if first {
+			latestH = h
+			first = false
+			continue
+		}
+		hTime := time.Date(h.year, h.month, h.day, h.hour, 0, 0, 0, time.UTC)
+		latestTime := time.Date(latestH.year, latestH.month, latestH.day, latestH.hour, 0, 0, 0, time.UTC)
+		if hTime.After(latestTime) {
+			latestH = h
+		}
+	}
+	if !first {
+		desired = desiredPerHour[latestH]
+	}
+
+	// Repeat for available (might have different hours present).
+	first = true
+	for h := range availPerHour {
+		if first {
+			latestH = h
+			first = false
+			continue
+		}
+		hTime := time.Date(h.year, h.month, h.day, h.hour, 0, 0, 0, time.UTC)
+		latestTime := time.Date(latestH.year, latestH.month, latestH.day, latestH.hour, 0, 0, 0, time.UTC)
+		if hTime.After(latestTime) {
+			latestH = h
+		}
+	}
+	if !first {
+		available = availPerHour[latestH]
+	}
+
+	return desired, available
 }
 
 func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {

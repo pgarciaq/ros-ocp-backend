@@ -210,6 +210,79 @@ func TestParseCSVRows_WorkloadPodCount(t *testing.T) {
 	})
 }
 
+func TestParseCSVRows_ReplicaColumns(t *testing.T) {
+	t.Run("with desired_replicas and available_replicas", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg," +
+				"oom_count,workload_pod_count,desired_replicas,available_replicas",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,prod,pod-a,web,deployment,app," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0,3.0,5.0,4.0",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, int64(3), rows[0].WorkloadPodCount)
+		assert.Equal(t, int64(5), rows[0].DesiredReplicas)
+		assert.Equal(t, int64(4), rows[0].AvailableReplicas)
+	})
+
+	t.Run("without replica columns (old operator)", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg," +
+				"oom_count,workload_pod_count",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,prod,pod-a,web,deployment,app," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0,3.0",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, int64(3), rows[0].WorkloadPodCount)
+		assert.Equal(t, int64(0), rows[0].DesiredReplicas)
+		assert.Equal(t, int64(0), rows[0].AvailableReplicas)
+	})
+
+	t.Run("replica columns with float values are rounded", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg," +
+				"oom_count,workload_pod_count,desired_replicas,available_replicas",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,prod,pod-a,web,deployment,app," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0,3.0,3.7,2.4",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, int64(4), rows[0].DesiredReplicas)
+		assert.Equal(t, int64(2), rows[0].AvailableReplicas)
+	})
+
+	t.Run("empty replica columns treated as zero", func(t *testing.T) {
+		csv := strings.Join([]string{
+			"interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+				"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+				"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg," +
+				"oom_count,workload_pod_count,desired_replicas,available_replicas",
+			"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,prod,pod-a,web,deployment,app," +
+				"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0,3.0,,",
+		}, "\n")
+
+		rows, err := ParseCSVRows(strings.NewReader(csv))
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		assert.Equal(t, int64(3), rows[0].WorkloadPodCount)
+		assert.Equal(t, int64(0), rows[0].DesiredReplicas)
+		assert.Equal(t, int64(0), rows[0].AvailableReplicas)
+	})
+}
+
 // TestRoundHalfToEven verifies our rounding matches math.Round behavior.
 func TestMetricRow_HasGPU(t *testing.T) {
 	assert.False(t, (&MetricRow{}).HasGPU())

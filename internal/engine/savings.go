@@ -8,6 +8,17 @@ import (
 
 const hoursPerMonth = 730.0
 
+// replicaCountForSavings returns the best available replica count for savings
+// multiplication. Prefers authoritative desired_replicas from kube-state-metrics
+// when available, falling back to pod_count_avg (derived from workload_pod_count
+// or distinct pod names).
+func replicaCountForSavings(rec *ContainerRec) float64 {
+	if rec.DesiredReplicas > 0 {
+		return float64(rec.DesiredReplicas)
+	}
+	return float64(rec.PodCountAvg)
+}
+
 // ApplySavingsEstimates computes EstimatedSavingsUSD for each recommendation
 // using cost data from Koku. If costData is nil (Koku unavailable or not
 // configured), all savings remain 0 and NotifNoCostData is appended.
@@ -47,7 +58,7 @@ func computeSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType str
 	cpuDeltaCores := float64(rec.CurrentCPURequestMC-rec.RecCPURequestMC) / 1000.0
 	memDeltaGiB := float64(rec.CurrentMemRequestKiB-rec.RecMemRequestKiB) / (1024.0 * 1024.0)
 
-	podCountAvg := float64(rec.PodCountAvg)
+	podCountAvg := replicaCountForSavings(rec)
 	if podCountAvg < 1.0 {
 		podCountAvg = 1.0
 	}
@@ -81,7 +92,7 @@ func computeIdleSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType
 	cpuCores := float64(rec.CurrentCPURequestMC) / 1000.0
 	memGiB := float64(rec.CurrentMemRequestKiB) / (1024.0 * 1024.0)
 
-	podCountAvg := float64(rec.PodCountAvg)
+	podCountAvg := replicaCountForSavings(rec)
 	if podCountAvg < 1.0 {
 		podCountAvg = 1.0
 	}

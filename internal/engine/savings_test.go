@@ -292,6 +292,58 @@ func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) 
 	assert.InDelta(t, 730.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
 }
 
+func TestReplicaCountForSavings_PrefersDesiredOverPodCount(t *testing.T) {
+	tests := []struct {
+		name            string
+		desiredReplicas int64
+		podCountAvg     int64
+		want            float64
+	}{
+		{"desired > 0, uses desired", 5, 3, 5.0},
+		{"desired == 0, falls back to pod count", 0, 3, 3.0},
+		{"both zero", 0, 0, 0.0},
+		{"desired == 1, pod count == 10", 1, 10, 1.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := &ContainerRec{
+				DesiredReplicas: tt.desiredReplicas,
+				PodCountAvg:    tt.podCountAvg,
+			}
+			got := replicaCountForSavings(rec)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestApplySavingsEstimates_UsesDesiredReplicas(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "cpu",
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: 730.0, // $1/core-hour
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:           "ns1",
+			CurrentCPURequestMC: 500, // 0.5 cores
+			RecCPURequestMC:     200, // 0.2 cores
+			PodCountAvg:         2,   // fallback
+			DesiredReplicas:     5,   // authoritative - should be used
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	// Delta: 0.3 cores * $1/core-hour * 730 hours * 5 replicas = $1095
+	assert.InDelta(t, 1095.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+}
+
 func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		DistributionType: "cpu",

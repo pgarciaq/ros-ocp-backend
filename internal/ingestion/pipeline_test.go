@@ -132,6 +132,57 @@ func TestProcessCSVToDigests_SamplesIdempotent(t *testing.T) {
 	assert.Equal(t, 1, count, "upsert should not duplicate rows")
 }
 
+func TestProcessCSVToDigests_ReplicaColumns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	csvWithReplicas := "interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+		"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+		"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg," +
+		"oom_count,workload_pod_count,desired_replicas,available_replicas\n" +
+		"2026-04-01 00:00:00 +0000 UTC,2026-04-01 00:15:00 +0000 UTC,replica-ns,pod-r1,web-deploy,deployment,app," +
+		"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0,3.0,5.0,4.0\n" +
+		"2026-04-01 00:15:00 +0000 UTC,2026-04-01 00:30:00 +0000 UTC,replica-ns,pod-r2,web-deploy,deployment,app," +
+		"0.5,1.0,0.30,0.02,1048576.0,2097152.0,600000.0,300000.0,0,3.0,5.0,5.0"
+
+	reader := strings.NewReader(csvWithReplicas)
+	err := ProcessCSVToDigests(ctx, pool, reader, "org-replica-test", "33333333-3333-3333-3333-333333333333")
+	require.NoError(t, err)
+
+	var desiredReplicas, availableReplicas int
+	err = pool.QueryRow(ctx,
+		`SELECT desired_replicas, available_replicas FROM daily_container_digests
+		 WHERE org_id = $1 AND namespace = $2`,
+		"org-replica-test", "replica-ns").Scan(&desiredReplicas, &availableReplicas)
+	require.NoError(t, err)
+	assert.Equal(t, 5, desiredReplicas, "desired_replicas should be stored as max across rows in latest hour")
+	assert.Equal(t, 5, availableReplicas, "available_replicas should be stored as max across rows in latest hour")
+}
+
+func TestProcessCSVToDigests_ReplicaColumns_ZeroWhenAbsent(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// CSV without replica columns (old operator format)
+	csv := csvHeader + "\n" +
+		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC",
+			"no-replica-ns", "pod-old", "old-deploy", "deployment", "main",
+			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+
+	reader := strings.NewReader(csv)
+	err := ProcessCSVToDigests(ctx, pool, reader, "org-no-replica", "44444444-4444-4444-4444-444444444444")
+	require.NoError(t, err)
+
+	var desiredReplicas, availableReplicas *int
+	err = pool.QueryRow(ctx,
+		`SELECT desired_replicas, available_replicas FROM daily_container_digests
+		 WHERE org_id = $1 AND namespace = $2`,
+		"org-no-replica", "no-replica-ns").Scan(&desiredReplicas, &availableReplicas)
+	require.NoError(t, err)
+	assert.Equal(t, 0, *desiredReplicas, "desired_replicas should be 0 when columns absent")
+	assert.Equal(t, 0, *availableReplicas, "available_replicas should be 0 when columns absent")
+}
+
 const csvHeader = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
 func csvRow(start, end, ns, pod, wl, wlType, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
