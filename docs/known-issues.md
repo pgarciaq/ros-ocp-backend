@@ -37,7 +37,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **GPU** | GPU savings estimates (from Koku cost model rates) | **Shipping** |
 | **Storage** | PVC right-sizing (oversized/near-full/orphaned/healthy + growth trend) | **Shipping** |
 | **Snapshots** | Snapshot staleness detection (orphaned/stale/never-restored/redundant) | **Shipping** |
-| **Node recs** | Node CPU/memory right-sizing (Tier 1: underutilized, overcommitted, stranded) | **Shipping (enabled by default)** |
+| **Node recs** | Node CPU/memory right-sizing (Tier 1: underutilized, overcommitted, EMA-smoothed stranded detection) | **Shipping (enabled by default)** |
 | **Fleet** | Fleet summary (cross-cluster aggregate) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
 | **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
@@ -47,7 +47,6 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Feature | Description | Complexity |
 |---------|-------------|------------|
 | VM recommendations | Virtual machine right-sizing for OpenShift Virtualization | Medium |
-| ~~Node CPU/memory right-sizing~~ | ~~Underutilized / overcommitted / stranded resource detection~~ | **Implemented and shipping (enabled by default)** |
 | MachineSet right-sizing | Instance type + replica count recommendations | High |
 | Cloud instance catalog | AWS/Azure/GCP instance type database for cross-cloud right-sizing | Medium |
 | JVM/Quarkus recommendations | Java-runtime-specific tuning (heap, GC) | Medium |
@@ -182,6 +181,44 @@ not label recommendations as "increase" / "decrease" / "well-sized".
 ---
 
 ## Features Implemented in Engine
+
+### Node CPU/Memory Right-Sizing (Tier 1)
+
+**Engine status:** Fully implemented and **enabled by default**. `RecommendNodes()`
+evaluates daily node digests and produces per-node recommendations.
+
+**Detection signals:**
+- **Underutilized:** Both CPU and memory p95 below threshold (default 30%)
+- **Overcommitted:** CPU request/allocatable ratio exceeds threshold (default 150%)
+- **Stranded resources:** EMA-smoothed normalized imbalance detection — per-day
+  `|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)` is smoothed with EMA (alpha = 0.3)
+  and flagged when the final value exceeds the threshold (default 0.6). This is
+  relative (not absolute), works across low/high utilization, and dampens transient
+  spikes from batch jobs.
+- **Trend slope:** Linear regression on EMA-smoothed daily CPU utilization
+
+**Data pipeline:** Operator emits `node_capacity_cpu_cores` and
+`node_capacity_memory_bytes` in ROS CSVs → parser → `daily_node_digests` →
+engine → `node_recommendations` table. Falls back to request-based estimates
+when capacity data is unavailable.
+
+**Configuration (env vars):**
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_NODE_UNDERUTIL_THRESHOLD` | 0.30 | p95 below this = underutilized |
+| `ROS_NODE_OVERCOMMIT_THRESHOLD` | 1.50 | Request/allocatable ratio above this = overcommitted |
+| `ROS_NODE_ALLOCATABLE_FACTOR` | 0.93 | Fraction of capacity considered allocatable |
+| `ROS_NODE_MIN_DATA_DAYS` | 3 | Minimum days of data before producing recommendations |
+| `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed imbalance above this = stranded |
+| `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha (higher = less smoothing) |
+
+**API status:** `GET /recommendations/openshift/nodes/utilization` returns
+per-node utilization, overcommit ratios, stranded resource flags, and trend slopes.
+
+**Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources).
+
+**UI status:** Not implemented. Requires a node recommendations view and a null
+state for the 3-day cold start period.
 
 ### GPU Recommendations
 
