@@ -1613,9 +1613,11 @@ These are lightweight gauge-based queries against kube-state-metrics (no `rate()
    - Emit `WARNING_NODE_OVERCOMMITTED` with overcommit ratio and risk level
    - Note: Moderate overcommit (100-150%) is normal and expected in Kubernetes; only flag extreme cases
 
-3. **Stranded resources detection:**
-   - CPU utilization > 70% but memory utilization < 25% → CPU-bound, memory stranded
-   - Memory utilization > 70% but CPU utilization < 25% → Memory-bound, CPU stranded
+3. **Stranded resources detection (EMA-smoothed imbalance):**
+   - Per-day normalized imbalance: `|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)`
+   - Series smoothed with EMA (alpha = `ROS_NODE_EMA_ALPHA`, default 0.3) to dampen transient spikes
+   - If final smoothed imbalance exceeds `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default 0.6), the lower-utilized resource is flagged as stranded
+   - Relative metric — works across low-utilization and high-utilization nodes without fixed absolute thresholds
    - Emit `STRANDED_RESOURCES` (code 13) with recommendation: "Consider CPU-optimized instances" or "Consider memory-optimized instances"
    - This is the highest-impact Tier 1 insight — it directly informs instance type selection
 
@@ -2845,6 +2847,8 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Archive stale recommendations after this many days |
 | `ROS_ENABLE_EPHEMERAL_STORAGE` | false | Ephemeral storage recs (informational only — cadvisor metrics unreliable through OCP 4.21) |
 | `ROS_ENABLE_NODEJS_RECS` | false | Node.js heap informational recs (OFF by default) |
+| `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed normalized imbalance threshold for stranded resource detection |
+| `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha for trend slope and stranded imbalance (higher = less smoothing) |
 | ~~`ROS_ENABLE_NODE_RECS`~~ | _(removed)_ | Node recommendations now enabled unconditionally |
 | `ROS_ENABLE_FLEET_SUMMARY` | false | Fleet-level cross-cluster summary endpoint |
 | `ROS_INSTANCE_CATALOG_REFRESH_HOURS` | 24 | Cloud instance type catalog refresh interval |
