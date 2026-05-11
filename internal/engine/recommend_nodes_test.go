@@ -10,13 +10,12 @@ import (
 
 func defaultNodeRecConfig() NodeRecConfig {
 	return NodeRecConfig{
-		UnderutilThreshold:    0.30,
-		OvercommitThreshold:   1.50,
-		AllocatableFactor:     0.93,
-		MinDataDays:           3,
-		StrandedHighThreshold: 0.70,
-		StrandedLowThreshold:  0.25,
-		EMAAlpha:              0.3,
+		UnderutilThreshold:         0.30,
+		OvercommitThreshold:        1.50,
+		AllocatableFactor:          0.93,
+		MinDataDays:                3,
+		StrandedImbalanceThreshold: 0.6,
+		EMAAlpha:                   0.3,
 	}
 }
 
@@ -202,33 +201,51 @@ func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
 	assert.True(t, results[0].IsUnderutilized)
 }
 
-func TestRecommendNodes_StrandedThresholdsConfigurable(t *testing.T) {
+func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
 	allocCPU := ptr64(16000)
 	allocMem := ptr64(65536)
 
-	// CPU p95 = 10000/16000 = 0.625, Mem p95 = 8000/65536 = 0.122
-	// With defaults (high=0.70, low=0.25), no stranded detection
-	// With relaxed thresholds (high=0.60, low=0.15), should detect stranded memory
+	// CPU p95 = 10000/16000 = 0.625, Mem p95 = 20000/65536 = 0.305
+	// imbalance = |0.625 - 0.305| / 0.625 = 0.512 — below 0.6 default
 	digests := []NodeDigestRow{
-		makeDigestRow("node-x", 1, 9000, 10000, 7000, 8000, 12000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-x", 2, 9200, 10200, 7200, 8200, 12000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-x", 3, 9100, 10100, 7100, 8100, 12000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-x", 1, 9000, 10000, 18000, 20000, 12000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-x", 2, 9200, 10200, 18500, 20500, 12000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-x", 3, 9100, 10100, 18200, 20200, 12000, 32000, allocCPU, allocMem),
 	}
 
-	// Default thresholds: not stranded
+	// Default threshold (0.6): not stranded (imbalance ~0.51)
 	cfgDefault := defaultNodeRecConfig()
 	results := RecommendNodes(digests, cfgDefault)
 	require.Len(t, results, 1)
-	assert.Nil(t, results[0].StrandedResource, "should not detect stranded with default thresholds")
+	assert.Nil(t, results[0].StrandedResource, "should not detect stranded with default 0.6 threshold")
 
-	// Relaxed thresholds: now detects stranded memory
-	cfgRelaxed := defaultNodeRecConfig()
-	cfgRelaxed.StrandedHighThreshold = 0.60
-	cfgRelaxed.StrandedLowThreshold = 0.15
-	results = RecommendNodes(digests, cfgRelaxed)
+	// Lowered threshold (0.4): now detects stranded memory (cpu > mem)
+	cfgLowered := defaultNodeRecConfig()
+	cfgLowered.StrandedImbalanceThreshold = 0.4
+	results = RecommendNodes(digests, cfgLowered)
 	require.Len(t, results, 1)
-	require.NotNil(t, results[0].StrandedResource, "should detect stranded with relaxed thresholds")
+	require.NotNil(t, results[0].StrandedResource, "should detect stranded with lowered threshold")
 	assert.Equal(t, "memory", *results[0].StrandedResource)
+}
+
+func TestRecommendNodes_StrandedTransientSpikeDampened(t *testing.T) {
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	// Days 1-4: balanced (CPU ~0.50, MEM ~0.46). Day 3: transient spike (CPU ~0.88, MEM ~0.12)
+	digests := []NodeDigestRow{
+		makeDigestRow("node-t", 1, 7500, 8000, 28000, 30000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-t", 2, 7600, 8100, 28500, 30500, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-t", 3, 13000, 14000, 7000, 8000, 12000, 48000, allocCPU, allocMem), // spike
+		makeDigestRow("node-t", 4, 7700, 8200, 29000, 31000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-t", 5, 7500, 8000, 28000, 30000, 12000, 48000, allocCPU, allocMem),
+	}
+
+	cfg := defaultNodeRecConfig()
+	results := RecommendNodes(digests, cfg)
+	require.Len(t, results, 1)
+	assert.Nil(t, results[0].StrandedResource,
+		"single-day spike should be dampened by EMA and not trigger stranded detection")
 }
 
 func TestEmaSmooth(t *testing.T) {

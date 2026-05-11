@@ -110,9 +110,8 @@ type Config struct {
 	NodeOvercommitThreshold  float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
 	NodeAllocatableFactor    float64 `mapstructure:"ROS_NODE_ALLOCATABLE_FACTOR"`
 	NodeMinDataDays          int     `mapstructure:"ROS_NODE_MIN_DATA_DAYS"`
-	NodeStrandedHighThreshold float64 `mapstructure:"ROS_NODE_STRANDED_HIGH_THRESHOLD"`
-	NodeStrandedLowThreshold  float64 `mapstructure:"ROS_NODE_STRANDED_LOW_THRESHOLD"`
-	NodeEMAAlpha              float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
+	NodeStrandedImbalanceThreshold float64 `mapstructure:"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD"`
+	NodeEMAAlpha                   float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -301,8 +300,7 @@ func initConfig() {
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)
 	viper.SetDefault("ROS_NODE_MIN_DATA_DAYS", 3)
-	viper.SetDefault("ROS_NODE_STRANDED_HIGH_THRESHOLD", 0.70)
-	viper.SetDefault("ROS_NODE_STRANDED_LOW_THRESHOLD", 0.25)
+	viper.SetDefault("ROS_NODE_STRANDED_IMBALANCE_THRESHOLD", 0.6)
 	viper.SetDefault("ROS_NODE_EMA_ALPHA", 0.3)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)

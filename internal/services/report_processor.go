@@ -506,13 +506,12 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	}
 
 	cfg := engine.NodeRecConfig{
-		UnderutilThreshold:    appCfg.NodeUnderutilThreshold,
-		OvercommitThreshold:   appCfg.NodeOvercommitThreshold,
-		AllocatableFactor:     appCfg.NodeAllocatableFactor,
-		MinDataDays:           appCfg.NodeMinDataDays,
-		StrandedHighThreshold: appCfg.NodeStrandedHighThreshold,
-		StrandedLowThreshold:  appCfg.NodeStrandedLowThreshold,
-		EMAAlpha:              appCfg.NodeEMAAlpha,
+		UnderutilThreshold:         appCfg.NodeUnderutilThreshold,
+		OvercommitThreshold:        appCfg.NodeOvercommitThreshold,
+		AllocatableFactor:          appCfg.NodeAllocatableFactor,
+		MinDataDays:                appCfg.NodeMinDataDays,
+		StrandedImbalanceThreshold: appCfg.NodeStrandedImbalanceThreshold,
+		EMAAlpha:                   appCfg.NodeEMAAlpha,
 	}
 	recs := engine.RecommendNodes(digests, cfg)
 	if len(recs) == 0 {
