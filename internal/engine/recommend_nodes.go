@@ -27,13 +27,12 @@ type NodeDigestRow struct {
 
 // NodeRecConfig holds configuration parameters for the node recommendation engine.
 type NodeRecConfig struct {
-	UnderutilThreshold    float64
-	OvercommitThreshold   float64
-	AllocatableFactor     float64
-	MinDataDays           int
-	StrandedHighThreshold float64
-	StrandedLowThreshold  float64
-	EMAAlpha              float64
+	UnderutilThreshold         float64
+	OvercommitThreshold        float64
+	AllocatableFactor          float64
+	MinDataDays                int
+	StrandedImbalanceThreshold float64
+	EMAAlpha                   float64
 }
 
 // NodeRec holds the computed recommendation for a single node.
@@ -84,6 +83,7 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 		maxMemReqs   int64
 		maxPodCount  int64
 		cpuMeans     []float64
+		imbalances   []float64
 	)
 
 	for _, d := range days {
@@ -102,7 +102,21 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 			memUtilSum95 += memUtil95
 			validDays++
 
-			cpuMeans = append(cpuMeans, float64(d.CPUUsageP50MC)/float64(allocCPU))
+			cpuMeans = append(cpuMeans, cpuUtil50)
+
+			high := cpuUtil95
+			if memUtil95 > high {
+				high = memUtil95
+			}
+			if high > 1e-9 {
+				diff := cpuUtil95 - memUtil95
+				if diff < 0 {
+					diff = -diff
+				}
+				imbalances = append(imbalances, diff/high)
+			} else {
+				imbalances = append(imbalances, 0)
+			}
 		}
 
 		if d.MaxCPURequestsMC > maxRequests {
@@ -150,23 +164,30 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 		}
 	}
 
-	// Stranded resources: one dimension high, other low
-	highThresh := cfg.StrandedHighThreshold
-	lowThresh := cfg.StrandedLowThreshold
-	if highThresh == 0 {
-		highThresh = 0.70
-	}
-	if lowThresh == 0 {
-		lowThresh = 0.25
-	}
-	if avgCPU95 > highThresh && avgMem95 < lowThresh {
-		s := "memory"
-		rec.StrandedResource = &s
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifStrandedResources)
-	} else if avgMem95 > highThresh && avgCPU95 < lowThresh {
-		s := "cpu"
-		rec.StrandedResource = &s
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifStrandedResources)
+	// Stranded resources: EMA-smoothed normalized imbalance detection.
+	// imbalance(day) = |cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)
+	// If the smoothed imbalance exceeds the threshold, the lower resource is stranded.
+	if len(imbalances) >= cfg.MinDataDays {
+		imbalanceThresh := cfg.StrandedImbalanceThreshold
+		if imbalanceThresh == 0 {
+			imbalanceThresh = 0.6
+		}
+		alpha := cfg.EMAAlpha
+		if alpha == 0 {
+			alpha = 0.3
+		}
+		smoothed := emaSmooth(imbalances, alpha)
+		finalImbalance := smoothed[len(smoothed)-1]
+		if finalImbalance > imbalanceThresh {
+			if avgCPU95 > avgMem95 {
+				s := "memory"
+				rec.StrandedResource = &s
+			} else {
+				s := "cpu"
+				rec.StrandedResource = &s
+			}
+			rec.NotificationCodes = append(rec.NotificationCodes, NotifStrandedResources)
+		}
 	}
 
 	// Trend slope via linear regression on EMA-smoothed daily CPU utilization
