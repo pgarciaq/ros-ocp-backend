@@ -107,6 +107,9 @@ type NativeRecommendationRow struct {
 	PodCountMax *int `gorm:"column:pod_count_max"`
 	PodCountAvg *int `gorm:"column:pod_count_avg"`
 
+	DesiredReplicas   *int `gorm:"column:desired_replicas"`
+	AvailableReplicas *int `gorm:"column:available_replicas"`
+
 	EstimatedSavingsUSD *float32 `gorm:"column:estimated_monthly_savings_usd"`
 
 	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
@@ -417,6 +420,13 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 				Min: derefInt(first.PodCountMin),
 				Max: derefInt(first.PodCountMax),
 				Avg: derefInt(first.PodCountAvg),
+			}
+			if first.DesiredReplicas != nil && *first.DesiredReplicas > 0 {
+				replicas.Desired = *first.DesiredReplicas
+				replicas.Available = derefInt(first.AvailableReplicas)
+				replicas.Source = "kube_state_metrics"
+			} else {
+				replicas.Source = "derived"
 			}
 		}
 

@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-11
+Last updated: 2026-05-11 (PromQL replica query bug fix, live Prometheus validation)
 
 ---
 
@@ -42,25 +42,70 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
 | **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
 
+### Implementation Statistics (from requirements.md audit)
+
+| Category | Total REQs | Implemented | Partial | Not Impl | Deferred |
+|----------|-----------|-------------|---------|----------|----------|
+| Phase 0 (Bug fixes) | 12 | 11 | 0 | 1 | 0 |
+| Phase 1 (Engine) | 12 | 11 | 0 | 1 | 0 |
+| Phase 2 (Pipeline) | 7 | 6 | 1 | 0 | 0 |
+| Phase 3 (Computation) | 5 | 3 | 1 | 1 | 0 |
+| Phase 4 (OOM) | 5 | 5 | 0 | 0 | 0 |
+| Phase 5 (GPU) | 7 | 6 | 0 | 0 | 1 |
+| Phase 6 (Quality) | 5 | 4 | 0 | 1 | 0 |
+| Phase 7 (Savings) | 6 | 6 | 0 | 0 | 0 |
+| Phase 8 (Advanced) | 4 | 0 | 0 | 4 | 0 |
+| Phase 8b (VM) | 9 | 0 | 0 | 9 | 0 |
+| Phase 8c (Node) | 11 | 7 | 2 | 2 | 0 |
+| Phase 9 (JVM) | 5 | 0 | 0 | 5 | 0 |
+| Phase 10 (Kruize removal) | 8 | 3 | 2 | 3 | 0 |
+| **TOTAL** | **96** | **62** | **6** | **27** | **1** |
+
 ### What's Next (Not Yet Implemented)
 
-| Feature | Description | Complexity |
-|---------|-------------|------------|
-| VM recommendations | Virtual machine right-sizing for OpenShift Virtualization | Medium |
-| MachineSet right-sizing | Instance type + replica count recommendations | High |
-| Cloud instance catalog | AWS/Azure/GCP instance type database for cross-cloud right-sizing | Medium |
-| JVM/Quarkus recommendations | Java-runtime-specific tuning (heap, GC) | Medium |
-| HPA detection | Informational notifications for HPA-managed workloads | Low |
-| Full Kruize removal | Remove legacy Kruize code path (native is default, legacy is fallback) | Low |
-| Keyset pagination | Cursor-based pagination for large orgs (see below) | Low |
-| Shadow mode | Production dual-engine comparison (offline CLI tool exists) | Low |
+| Feature | REQs | Description | Complexity | Priority |
+|---------|------|-------------|------------|----------|
+| Full Kruize removal | REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5 | Remove legacy Kruize code path (native is default, legacy is fallback) | Low | **High** — blocks deployment simplification |
+| MachineSet right-sizing (Tier 2) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | Instance type + replica count recommendations via cloud catalog | High | Medium |
+| VM recommendations | REQ-8b.1 – REQ-8b.9 | Virtual machine right-sizing for OpenShift Virtualization | Medium | Medium |
+| On-demand real-time recs | REQ-3.4 | API-time recommendation for custom timeframe requests | Low | Low |
+| Poison message DLQ | REQ-0.7 | Dead-letter topic for Kafka messages that fail after max retries | Low | Low |
+| Shadow mode | REQ-1.12 | Production dual-engine comparison (offline CLI tool exists) | Low | Low |
+| Keyset pagination | — | Cursor-based pagination for large orgs (see below) | Low | Low |
+| ~~Replica count from operator~~ | ~~REQ-7.1~~ | **DONE** — Operator now emits `desired_replicas` and `available_replicas`; backend stores and exposes via API. | — | — |
+
+### Not Planned for Current MVP
+
+These features are documented in `requirements.md` but are explicitly
+**not planned** for the current MVP release. They require new operator
+Prometheus queries, external runtime detection, or upstream fixes.
+
+| Feature | REQs | Reason |
+|---------|------|--------|
+| HPA optimization | REQ-8.1 | Needs 8 new operator queries; low customer demand |
+| Ephemeral storage | REQ-8.2 | cadvisor metrics unreliable through OCP 4.21; pending upstream fix |
+| Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
+| ResourceQuota recs | REQ-8.4 | Needs 2 new operator queries; namespace recs partially address this |
+| Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
+| JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
+| Cloud instance catalog | REQ-8c.6 | External API integration (AWS/Azure/GCP pricing); required for MachineSet Tier 2 |
+| MachineAutoscaler (Tier 3) | REQ-8c.7 | Cloud-only; depends on Tier 2 MachineSet implementation |
+| Multi-GPU awareness | REQ-5.5 | Needs per-device utilization from operator; niche ML workloads |
+| Confidence bounds | ~~REQ-1.4~~ | Statistical methodology not designed; cost/performance dual-model provides range |
+| QoS class recommendations | ~~REQ-6.2~~ | Implicit from request/limit values; revisit if user research demands |
+| Engine versioning | REQ-3.5 (full) | Unit tests exist; formal semantic versioning scheme deferred |
 
 ### Known Caveats
 
-| Issue | Impact | Severity |
-|-------|--------|----------|
-| Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback |
-| Node recommendation cold start (3 days) | New clusters return empty results from `/recommendations/openshift/nodes/utilization` until 3 days of data accumulates | Low — by design for accuracy |
+| Issue | Impact | Severity | REQs |
+|-------|--------|----------|------|
+| Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback | REQ-1.13 |
+| Node recommendation cold start (3 days) | New clusters return empty results from `/recommendations/openshift/nodes/utilization` until 3 days of data accumulates | Low — by design for accuracy | REQ-8c.3 |
+| Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain Kruize client code. Native engine runs alongside, not instead of. | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
+| `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
+| Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
+| Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
+| No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 
 #### Node Recommendation Cold Start
 
@@ -73,6 +118,38 @@ recommendations view explaining: "Collecting data — recommendations will appea
 after 3 days of usage data." This avoids user confusion when the endpoint
 returns an empty `data` array during the warm-up period.
 
+#### Replica Count and Short-Lived Pods
+
+The operator's `ros:desired_replicas` and `ros:available_replicas` PromQL queries
+work by:
+
+1. Computing the workload-level replica count (e.g., `max by(namespace, workload)
+   (kube_deployment_spec_replicas)`)
+2. Broadcasting that value to per-pod CSV rows via a join on
+   `kube_pod_container_info` with a `max_over_time(...[15m])` window
+
+This means a pod must appear in at least one Prometheus scrape within the most
+recent 15-minute window to receive the broadcast. If a pod dies before being
+scraped, its CSV rows will have `desired_replicas = 0`.
+
+**Why this is not a practical concern:**
+
+- The replica count is workload-level. If *any* pod in the workload matches
+  (which happens for any workload surviving > 1 scrape interval), the value
+  propagates correctly during digest computation (`computeReplicaCounts` takes
+  the max across all rows in an hour).
+- Short-lived pods that miss the join just contribute `0`; sibling pods provide
+  the correct non-zero value.
+- The only failure mode is a workload where *every* pod crash-loops before being
+  scraped. Such workloads have operational problems far more pressing than
+  missing replica metadata, and the fallback (`"source": "derived"`) still
+  provides an approximation.
+
+**Mitigation if needed in future:** Increase `max_over_time` from `15m` to `1h`
+in the operator PromQL queries. This is a one-line change but trades off
+freshness after scale-down events. The 15-minute window is consistent with the
+existing `workload-pod-count` query.
+
 ### Recently Fixed Caveats
 
 | Issue | Fix | Commit |
@@ -80,6 +157,7 @@ returns an empty `data` array during the warm-up period.
 | Performance vs cost profiles stored identical values | `recommend_all.go` / `recommend_namespace.go` now select `PerfRequest*`/`PerfLimit*` when `profile == "performance"` | This commit |
 | Memory trend notification used CPU slope at container level | Added separate `CPUTrendSlope` and `MemTrendSlope` to `ContainerRec`; `EvaluateNotifications` now checks `MemTrendSlope` | This commit |
 | Notification code 29 collision (PVC_OVERSIZED vs GPUTimeSharingCandidate) | `NotifGPUTimeSharingCandidate` reassigned to code 36; `NotifPVCOversized` remains 29 | This commit |
+| PromQL `group_left` bug in replica count queries | `ros:desired_replicas` and `ros:available_replicas` used `(replica_counts) * on(namespace, workload) group_left(container, pod) (pod_info)` which fails with multi-replica workloads ("many-to-many matching not allowed"). Fixed by swapping operands: `(pod_info) * on(namespace, workload) group_left() (replica_counts)`. Discovered during live Prometheus validation on SNO cluster. | `koku-metrics-operator/internal/collector/queries.go` |
 
 ---
 
@@ -280,12 +358,16 @@ See `docs/plans/gpu-recommendations.md` for detailed design and
 
 **Engine status:** Fully implemented. `pod_count_min`, `pod_count_max`,
 `pod_count_avg` are computed from operator-reported `workload_pod_count`
-(primary) or distinct pod name counting (fallback). Persisted in
-`daily_container_digests` and `recommendation_sets`.
+(primary) or distinct pod name counting (fallback). Additionally,
+`desired_replicas` and `available_replicas` are collected from
+authoritative kube-state-metrics via the operator (REQ-7.1). Persisted
+in `daily_container_digests` and `recommendation_sets`.
 
 **API status:** Fully implemented. `GET /recommendations/openshift/:id`
-returns `recommendations.replicas` with `min`, `max`, `avg` fields.
-CSV export includes pod count columns.
+returns `recommendations.replicas` with `min`, `max`, `avg`, `desired`,
+`available`, and `source` fields. `source` is `"kube_state_metrics"`
+when authoritative data is available, or `"derived"` for pod-count
+fallback. CSV export includes pod count columns.
 
 **UI status:** Not implemented. The koku-ui does not display replica count
 information in the recommendation detail view.
@@ -319,21 +401,46 @@ distribution rows in savings calculations. Tests added in
 
 ## Features Not Yet Implemented in Engine
 
-### Java / JVM Recommendations
+### Java / JVM Recommendations (REQ-9.1 – REQ-9.5)
 
 No workload-specific tuning (heap sizing, GC overhead detection). Would
 require JVM-aware metrics from the operator and a specialized recommendation
-model.
+model. **Not planned for current MVP.**
 
-### HPA Scaling Suggestions
+### HPA Scaling Suggestions (REQ-8.1)
 
 No horizontal scaling suggestions. `NotifHPASaturated` and `NotifHPAActive`
 notification codes exist but are never set by the native engine. Would
 require HPA status data from the cluster. (Note: replica count *display*
 is implemented — see above — but the engine does not suggest scaling replica
-count up or down.)
+count up or down.) **Not planned for current MVP.**
 
-### PVC / Storage Rightsizing
+### VM Recommendations (REQ-8b.1 – REQ-8b.9)
+
+No virtual machine right-sizing. Notification codes 18-19 (VM-related) exist
+but no engine logic, no ingestion, no API endpoints. Requires 12 new operator
+Prometheus queries and a dedicated daily digest pipeline. **Planned for future
+release — depends on OpenShift Virtualization adoption.**
+
+### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5)
+
+Node Tier 1 (utilization visibility) is implemented. MachineSet Tier 2
+(right-sizing with cloud catalog) and Tier 3 (MachineAutoscaler) are not.
+Requires MachineSet queries in the operator, cloud instance catalog
+integration, and new API endpoints. **Planned for future release.**
+
+### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
+
+The native engine runs alongside the legacy code path. Kruize client code
+(`internal/utils/kruize/`), internal Kafka topic references, and deployment
+manifests remain. Removal is **next priority** after stabilization of all
+currently implemented features.
+
+---
+
+## Implemented Features — Detailed Status
+
+### PVC / Storage Rightsizing (REQ-6.3)
 
 **Engine status:** Implemented. The engine reads the existing
 `cm-openshift-storage-usage-YYYYMM.csv` from the operator tarball,
@@ -361,7 +468,7 @@ days-to-full for capacity planning.
 
 **UI status:** Not implemented.
 
-### Snapshot Staleness Detection
+### Snapshot Staleness Detection (REQ-6.5)
 
 **Engine status:** Fully implemented. The engine ingests
 `snapshot-inventory` CSVs from the operator tarball, classifies snapshots
@@ -397,13 +504,16 @@ for full design details.
 
 See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full details.
 
-- **Staleness detection (F55):** `?stale=` API filter, configurable threshold,
+- **Staleness detection (F55, REQ-10.8):** `?stale=` API filter, configurable threshold,
   archive sweep, `NotifStaleData` notification.
-- **Idle/abandoned detection (F26):** Combined CPU+memory idle (< 10mc AND < 10 MiB),
+- **Idle/abandoned detection (F26, REQ-6.1):** Combined CPU+memory idle (< 10mc AND < 10 MiB),
   zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
-- **Adoption detection (F54):** Compares current requests to prior recommendation
+- **Adoption detection (F54, REQ-10.7):** Compares current requests to prior recommendation
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
-- **Fleet summary (F33):** `GET /recommendations/openshift/fleet-summary` aggregate endpoint.
+- **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` aggregate endpoint.
+- **Box plots (REQ-6.6):** Five-number summary (min, Q1, median, Q3, max) per term for containers and namespaces.
+- **Quality metrics (F53, REQ-10.6):** Stability %, adoption detection, OOM events after rec.
+- **History tracking (F56):** Time-series of past recs in `recommendation_history`, API at `/history`.
 
 ---
 
@@ -414,6 +524,7 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift` | GET | Implemented |
 | `/recommendations/openshift/:id` | GET | Implemented |
 | `/recommendations/openshift/nodes` | GET | Implemented |
+| `/recommendations/openshift/nodes/utilization` | GET | Implemented |
 | `/recommendations/openshift/fleet-summary` | GET | Implemented |
 | `/recommendations/openshift/pvcs` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |

@@ -48,9 +48,12 @@ type DetailResponse struct {
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.
 type ReplicaInfo struct {
-	Min int `json:"min"`
-	Max int `json:"max"`
-	Avg int `json:"avg"`
+	Min       int    `json:"min"`
+	Max       int    `json:"max"`
+	Avg       int    `json:"avg"`
+	Desired   int    `json:"desired,omitempty"`
+	Available int    `json:"available,omitempty"`
+	Source    string `json:"source,omitempty"`
 }
 
 // DetailRecommendations wraps the term-level data with monitoring_end_time,

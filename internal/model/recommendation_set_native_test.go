@@ -261,6 +261,136 @@ func TestAssembleNativeResults_ZeroPodCountMax(t *testing.T) {
 	}
 }
 
+func TestAssembleNativeResults_SourceFieldKubeStateMetrics(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	pcMin := 2
+	pcMax := 5
+	pcAvg := 3
+	desired := 5
+	available := 4
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:       "cluster-1",
+			Namespace:         "ns",
+			Workload:          "deploy",
+			WorkloadType:      "deployment",
+			ContainerName:     "main",
+			Term:              "short",
+			Engine:            "cost",
+			RecCPURequestMC:   &cpuReq,
+			PodCountMin:       &pcMin,
+			PodCountMax:       &pcMax,
+			PodCountAvg:       &pcAvg,
+			DesiredReplicas:   &desired,
+			AvailableReplicas: &available,
+			UpdatedAt:         now,
+			LastReported:      now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas == nil {
+		t.Fatal("expected replicas to be populated")
+	}
+	if results[0].Replicas.Source != "kube_state_metrics" {
+		t.Errorf("expected source=kube_state_metrics, got %q", results[0].Replicas.Source)
+	}
+	if results[0].Replicas.Desired != 5 {
+		t.Errorf("expected desired=5, got %d", results[0].Replicas.Desired)
+	}
+	if results[0].Replicas.Available != 4 {
+		t.Errorf("expected available=4, got %d", results[0].Replicas.Available)
+	}
+}
+
+func TestAssembleNativeResults_SourceFieldDerived(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	pcMin := 2
+	pcMax := 5
+	pcAvg := 3
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:     "cluster-1",
+			Namespace:       "ns",
+			Workload:        "deploy",
+			WorkloadType:    "deployment",
+			ContainerName:   "main",
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: &cpuReq,
+			PodCountMin:     &pcMin,
+			PodCountMax:     &pcMax,
+			PodCountAvg:     &pcAvg,
+			UpdatedAt:       now,
+			LastReported:    now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas == nil {
+		t.Fatal("expected replicas to be populated")
+	}
+	if results[0].Replicas.Source != "derived" {
+		t.Errorf("expected source=derived, got %q", results[0].Replicas.Source)
+	}
+	if results[0].Replicas.Desired != 0 {
+		t.Errorf("expected desired=0 (omitted), got %d", results[0].Replicas.Desired)
+	}
+	if results[0].Replicas.Available != 0 {
+		t.Errorf("expected available=0 (omitted), got %d", results[0].Replicas.Available)
+	}
+}
+
+func TestAssembleNativeResults_SourceFieldDerived_ZeroDesired(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	pcMin := 2
+	pcMax := 5
+	pcAvg := 3
+	zero := 0
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:       "cluster-1",
+			Namespace:         "ns",
+			Workload:          "deploy",
+			WorkloadType:      "deployment",
+			ContainerName:     "main",
+			Term:              "short",
+			Engine:            "cost",
+			RecCPURequestMC:   &cpuReq,
+			PodCountMin:       &pcMin,
+			PodCountMax:       &pcMax,
+			PodCountAvg:       &pcAvg,
+			DesiredReplicas:   &zero,
+			AvailableReplicas: &zero,
+			UpdatedAt:         now,
+			LastReported:      now,
+		},
+	}
+
+	results := assembleNativeResults(rows)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Replicas == nil {
+		t.Fatal("expected replicas to be populated")
+	}
+	if results[0].Replicas.Source != "derived" {
+		t.Errorf("expected source=derived when desired_replicas=0, got %q", results[0].Replicas.Source)
+	}
+}
+
 func TestDerefInt(t *testing.T) {
 	v := 42
 	if derefInt(&v) != 42 {

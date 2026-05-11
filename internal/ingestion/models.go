@@ -25,6 +25,11 @@ type MetricRow struct {
 	OOMCount         int64
 	WorkloadPodCount int64
 
+	// Replica fields (optional; from kube-state-metrics via operator).
+	// Zero when the column is absent from the CSV.
+	DesiredReplicas   int64
+	AvailableReplicas int64
+
 	// Node capacity fields (optional; from cost management pod CSV).
 	// Zero when the column is absent from the CSV.
 	NodeCapacityCPUMC  int64

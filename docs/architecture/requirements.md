@@ -1,6 +1,6 @@
 # ros-ocp-backend with Superpowers — Requirements Document
 
-> **Date:** 2026-03-26 (last updated: 2026-05-10)
+> **Date:** 2026-03-26 (last updated: 2026-05-11)
 > **Last triage:** 2026-03-26 — all repos triaged against `main` (autotune: `mvp_demo`). Added REQ-5.6 (cost-aware GPU recs leveraging Koku MIG support). All existing requirements remain valid.
 > **Risk review:** 2026-03-26 — 17 architectural risks/gaps identified and resolved. Added: decay workaround for `rollup()`, separate hypertables per metric domain, OOM column, continuous aggregate refresh policy, recommendation history hypertable, RBAC/pagination for new endpoints, Koku cost integration, Go-side CSV validation, Kafka partitioning by cluster, UI pending notes, recommendation quality metrics, per-capability feature flags.
 > **Second review:** 2026-03-26 — 14 additional issues resolved. Fixed: cluster_uuid TEXT→UUID, dual-model percentile output (cost+perf in single pass), customer-defined percentile parameters, Phase 1→3 dependency (CA DDL in Phase 2), shadow mode (Go exact vs PL/pgSQL t-digest), business hours dropped (decay+percentile sufficient), namespace recommendation coverage (REQ-1.13), NFR-2 memory consumers, §18 oom_count, compression/retention for all hypertables, on-prem /ingest auth, OQ#2/#11 marked resolved, recommendation_sets PK with term+engine, dollar savings precision (rates + markup + distributed cost note), continuous aggregates for GPU/PVC/VM.
@@ -39,6 +39,7 @@
 > **PVC right-sizing (2026-05-05 – 2026-05-06):** PVC right-sizing recommendations (F27). Classifications: oversized (< 20% usage), near-full (> 85%), orphaned (zero usage 3+ days), healthy. Growth trend projection via linear regression. `GET /recommendations/openshift/pvcs` API endpoint. Notification codes 20 (orphaned), 29 (oversized), 30 (near-full).
 > **Snapshot staleness detection (2026-05-06 – 2026-05-09):** Snapshot staleness design doc and file routing architecture. Classification rules (orphaned, stale, never-restored, redundant, managed, active). Unified settings API with env-var locking. Snapshot recommendation removal policy. End-to-end implementation: ingestion, classification, API (`GET .../snapshots`, `GET|PUT .../settings/snapshot`). Retention sweep for snapshot inventory. Notification codes 31–35. Critical filename substring convention documented.
 > **Node right-sizing and feature enablement (2026-05-10):** (1) **Node/namespace recs enabled by default**: Removed `ROS_ENABLE_NODE_RECS` feature gate. Namespace recs unconditional on-prem; cloud gated by Unleash kill switch `rosocp.namespace_disabled`. (2) **Tier 2 operator capacity data**: koku-metrics-operator emits `node_capacity_cpu_cores`/`node_capacity_memory_bytes` in ROS CSVs; parser and digest pipeline wired; `resolveAllocatable()` prefers capacity over request-based fallback. (3) **EMA trend smoothing**: configurable `ROS_NODE_EMA_ALPHA` (default 0.3) applied to daily CPU utilization before linear regression. (4) **EMA imbalance stranded detection**: Replaced two fixed thresholds with single `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default 0.6) using EMA-smoothed `|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)`. (5) **Nise**: ROS CSV generator updated for node capacity columns. (6) **3 correctness bugs fixed** in recommendation engine. (7) **Documentation**: known-issues updated, keyset pagination documented as future improvement.
+> **Exact replica count collection (2026-05-10 – 2026-05-11):** (1) **Operator PromQL queries**: Added `ros:desired_replicas` and `ros:available_replicas` to koku-metrics-operator. Queries join `kube_deployment_spec_replicas`/`kube_statefulset_replicas`/`kube_daemonset_status_desired_number_scheduled` (and available equivalents) with per-pod `kube_pod_container_info` via `namespace_workload_pod:kube_pod_owner:relabel` recording rule. (2) **Operator CSV columns**: `desired_replicas`, `available_replicas` added to `rosContainerRow` header and data. (3) **Backend ingestion**: CSV parser, digest computation (`computeReplicaCounts`), pipeline INSERT/UPDATE for `daily_container_digests`. Migration 000055 adds columns to `daily_container_digests` and `recommendation_sets`. (4) **Engine**: `latestReplicaCounts()` selects most recent non-zero values. `replicaCountForSavings()` prefers `DesiredReplicas` over `PodCountAvg` for savings multiplication. (5) **API**: `ReplicaInfo` extended with `Desired`, `Available`, `Source` (`"kube_state_metrics"` or `"derived"`). (6) **Nise**: `desired_replicas`/`available_replicas` columns in ROS CSV generator. (7) **Critical PromQL bug found and fixed during live validation**: Original queries used `(replica_counts) * on(namespace, workload) group_left(container, pod) (pod_info)` which fails with multi-replica workloads ("many-to-many matching not allowed" error). Fixed by swapping operands: `(pod_info) * on(namespace, workload) group_left() (replica_counts)`. Validated against real Prometheus/Thanos on SNO cluster with 27 results matching `oc get deployment` output. (8) **11 new tests** across all three repos covering CSV parsing, savings preference, API source field, pipeline integration, and migration roundtrip.
 > **Status:** Draft — Pending Review
 > **Parent document:** [ROS OCP Architecture & Performance Analysis](./performance-analysis.md)
 > **Scope:** Complete redesign of the ROS OCP remote recommendation pipeline — drop Kruize from the remote path, implement native Go recommendation engine, adopt daily digest tables on plain PostgreSQL for metrics storage, relational columns instead of JSONB, and all identified optimizations, fixes, and new recommendation types.
@@ -97,118 +98,121 @@ This table provides a **feature-level** view of the entire project. Each row is 
 
 ### Infrastructure & Pipeline Features
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F1 | **Daily digest metrics pipeline** | Replace `workload_metrics` JSONB with `daily_container_digests` partitioned table. Go computes exact percentiles in memory during CSV ingestion; only pre-aggregated daily digests stored in PostgreSQL. Raw CSVs remain in S3. | 2 | REQ-2.1, REQ-2.2, REQ-2.4, REQ-2.6, REQ-2.7 | No | Active | **Net-new** — Legacy uses `workload_metrics` JSONB table (unbounded growth, ~5.7 TB at 50K containers/91d). | PostgreSQL 16+ with optional `pg_partman` for partition lifecycle. Works on AWS RDS, on-prem StatefulSet, any managed PG. |
-| F2 | **Integer types pipeline** | `int64` in Go, `BIGINT` in PostgreSQL — one type end-to-end for all numeric metrics. CPU in millicores, memory in KiB, counts as integers. ros-ocp-backend converts float CSV values (cores, bytes) to `int64` at parse time. Eliminates float precision loss and type-choice complexity. ~10% storage overhead vs mixed INT/BIGINT, accepted for simplicity. No operator change required. | 2 | REQ-2.3 | No | Active | **Net-new** — Legacy pipeline uses `float64` throughout (CSV, Go structs, Kruize Java `Double`, PostgreSQL `DOUBLE PRECISION`). | CSV format unchanged — operator continues writing Prometheus floats verbatim. Conversion happens in ros-ocp-backend's CSV parser. |
-| F3 | **Relational recommendation columns** | Replace `recommendations` JSONB with typed SQL columns in `recommendation_sets`. Zero `json.Unmarshal`, direct GORM scan. | 2 | REQ-2.5 | No | Active | **Net-new** — Legacy stores recommendations as opaque `datatypes.JSON` column requiring marshal/unmarshal on every read/write. | Dual-write during migration, then drop JSONB. PK becomes `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`. |
-| F4 | **Go-side exact percentiles** | Exact percentiles computed in Go via `slices.Sort()` on ~96 integer values per container per day during CSV ingestion. Pre-computed percentiles (p50, p60, p95, p98, p99) stored in `daily_container_digests`. Go recommendation engine reads pre-computed values directly — no runtime percentile computation in SQL. | 2, 3 | REQ-3.1, REQ-3.2, REQ-3.5 | No | Active | **Net-new** — Legacy Kruize uses `Collections.sort()` on full `ArrayList<Double>` (O(n log n), up to 8,736 elements per 15-day term) for exact percentiles. | No statistical extensions needed. Exact (not approximate) percentiles. Shadow-mode validation (REQ-1.12). |
-| F5 | **Go recommendation engine** | All recommendation math (CPU, memory, idle, PVC, namespace, nodes, GPU, JVM, HPA, MachineSet) runs in Go. The "read once, compute N terms" pattern reads the maximum window of daily digests once per cluster (single batch query), computes all customer-defined terms from the same in-memory buffer (decay weighting, percentile selection, margin, trend), and batch-writes all results via `COPY FROM`. | 1, 3 | REQ-1.10, REQ-1.11, REQ-3.2 | No | Active | **Net-new** — Legacy requires 4N HTTP round-trips per hour (N containers) to Kruize for `updateResults` + `updateRecommendations`. | Replaces the earlier hybrid PL/pgSQL + Go design. All logic in Go for customer-defined terms efficiency. |
-| F6 | **Customer-defined recommendation periods** | Each customer configures their own 3 term windows (1–90 days each), replacing the fixed short/medium/long terms. The Go engine reads the maximum window once and computes all terms from the same in-memory buffer. | 3 | REQ-3.3, REQ-1.8 | No | Active | **Net-new** — Legacy Kruize only supports fixed `short_term` (1d) / `medium_term` (7d) / `long_term` (15d) windows. ros-ocp-backend API has `start_date`/`end_date` filters but only on `monitoring_end_time`, not on recommendation computation window. | Defaults: 1d/7d/15d (hardcoded in Go, zero DB cost). Overrides stored in `org_recommendation_terms` table. Percentile models in `recommendation_profiles`. Business hours intentionally deferred. |
-| F7 | **On-demand real-time recommendations** | API-time recommendation via Go computation (~1-5ms) for custom timeframe requests, supplementing batch pre-computation. Go reads daily digests for the requested window and computes recommendations in memory. | 3 | REQ-3.4 | No | Active | **Net-new** — Legacy is batch-only (Kruize computes recs on `/updateRecommendations` call, results cached until next poll). | Gated behind `ROS_ENABLE_REALTIME_RECS`. |
-| F8 | **Two-binary deployment** | New `ros-ocp-backend-superpowers` is a separate Go module. Old binary untouched (zero regression). External routing via Kafka consumer groups (SaaS) or Helm chart (on-prem). | All | §2, §20 | No | Active | **Net-new** — Legacy is a single binary (`ros-ocp-backend`) coupled to Kruize. | On-prem ships only the new binary. SaaS runs both during transition. Operator is unaffected — it just uploads to the ingress endpoint regardless of which binary consumes the data. |
-| ~~F9~~ | ~~**On-prem ingestion (no Kafka)**~~ | ~~HTTP `/ingest` endpoint + directory watch. mTLS auth via OpenShift service-serving certs, `ROS_INGEST_TOKEN` fallback. PostgreSQL advisory locks for concurrency.~~ | ~~10~~ | ~~REQ-10.3, NFR-1~~ | ~~No~~ | **Removed** | ~~**Net-new** — Legacy is SaaS-only.~~ | **Removed:** On-prem deploys AMQ Streams (Kafka) via the cost-onprem chart. The on-prem ingestion path is identical to SaaS (Kafka + S3). No separate `/ingest` endpoint needed. |
-| F10 | **Remove Kruize dependency** | Eliminate all Kruize HTTP calls, Kruize PostgreSQL, performance profiles, internal Kafka topic, deployment manifests. | 10 | REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5 | No | Active | **Net-new** — Architectural simplification; legacy requires 4 infrastructure services (ros-ocp + Kruize + 2× PostgreSQL). | Kruize remains for `local_monitoring` and HPO — only removed from remote ROS path. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F1 | **Daily digest metrics pipeline** | Replace `workload_metrics` JSONB with `daily_container_digests` partitioned table. Go computes exact percentiles in memory during CSV ingestion; only pre-aggregated daily digests stored in PostgreSQL. Raw CSVs remain in S3. | 2 | REQ-2.1, REQ-2.2, REQ-2.4, REQ-2.6, REQ-2.7 | No | Active | **YES** | **Net-new** — Legacy uses `workload_metrics` JSONB table (unbounded growth, ~5.7 TB at 50K containers/91d). | PostgreSQL 16+ with optional `pg_partman` for partition lifecycle. Works on AWS RDS, on-prem StatefulSet, any managed PG. |
+| F2 | **Integer types pipeline** | `int64` in Go, `BIGINT` in PostgreSQL — one type end-to-end for all numeric metrics. CPU in millicores, memory in KiB, counts as integers. ros-ocp-backend converts float CSV values (cores, bytes) to `int64` at parse time. Eliminates float precision loss and type-choice complexity. ~10% storage overhead vs mixed INT/BIGINT, accepted for simplicity. No operator change required. | 2 | REQ-2.3 | No | Active | **YES** | **Net-new** — Legacy pipeline uses `float64` throughout (CSV, Go structs, Kruize Java `Double`, PostgreSQL `DOUBLE PRECISION`). | CSV format unchanged — operator continues writing Prometheus floats verbatim. Conversion happens in ros-ocp-backend's CSV parser. |
+| F3 | **Relational recommendation columns** | Replace `recommendations` JSONB with typed SQL columns in `recommendation_sets`. Zero `json.Unmarshal`, direct GORM scan. | 2 | REQ-2.5 | No | Active | **YES** | **Net-new** — Legacy stores recommendations as opaque `datatypes.JSON` column requiring marshal/unmarshal on every read/write. | Dual-write during migration, then drop JSONB. PK becomes `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`. |
+| F4 | **Go-side exact percentiles** | Exact percentiles computed in Go via `slices.Sort()` on ~96 integer values per container per day during CSV ingestion. Pre-computed percentiles (p50, p60, p95, p98, p99) stored in `daily_container_digests`. Go recommendation engine reads pre-computed values directly — no runtime percentile computation in SQL. | 2, 3 | REQ-3.1, REQ-3.2, REQ-3.5 | No | Active | **YES** | **Net-new** — Legacy Kruize uses `Collections.sort()` on full `ArrayList<Double>` (O(n log n), up to 8,736 elements per 15-day term) for exact percentiles. | No statistical extensions needed. Exact (not approximate) percentiles. Shadow-mode validation (REQ-1.12). |
+| F5 | **Go recommendation engine** | All recommendation math (CPU, memory, idle, PVC, namespace, nodes, GPU, JVM, HPA, MachineSet) runs in Go. The "read once, compute N terms" pattern reads the maximum window of daily digests once per cluster (single batch query), computes all customer-defined terms from the same in-memory buffer (decay weighting, percentile selection, margin, trend), and batch-writes all results via `COPY FROM`. | 1, 3 | REQ-1.10, REQ-1.11, REQ-3.2 | No | Active | **YES** | **Net-new** — Legacy requires 4N HTTP round-trips per hour (N containers) to Kruize for `updateResults` + `updateRecommendations`. | Replaces the earlier hybrid PL/pgSQL + Go design. All logic in Go for customer-defined terms efficiency. |
+| F6 | **Customer-defined recommendation periods** | Each customer configures their own 3 term windows (1–90 days each), replacing the fixed short/medium/long terms. The Go engine reads the maximum window once and computes all terms from the same in-memory buffer. | 3 | REQ-3.3, REQ-1.8 | No | Active | **YES** | **Net-new** — Legacy Kruize only supports fixed `short_term` (1d) / `medium_term` (7d) / `long_term` (15d) windows. ros-ocp-backend API has `start_date`/`end_date` filters but only on `monitoring_end_time`, not on recommendation computation window. | Defaults: 1d/7d/15d (hardcoded in Go, zero DB cost). Overrides stored in `org_recommendation_terms` table. Percentile models in `recommendation_profiles`. Business hours intentionally deferred. |
+| F7 | **On-demand real-time recommendations** | API-time recommendation via Go computation (~1-5ms) for custom timeframe requests, supplementing batch pre-computation. Go reads daily digests for the requested window and computes recommendations in memory. | 3 | REQ-3.4 | No | Active | **NO** | **Net-new** — Legacy is batch-only (Kruize computes recs on `/updateRecommendations` call, results cached until next poll). | Gated behind `ROS_ENABLE_REALTIME_RECS`. |
+| F8 | **Two-binary deployment** | New `ros-ocp-backend-superpowers` is a separate Go module. Old binary untouched (zero regression). External routing via Kafka consumer groups (SaaS) or Helm chart (on-prem). | All | §2, §20 | No | Active | **NO** | **Net-new** — Legacy is a single binary (`ros-ocp-backend`) coupled to Kruize. | On-prem ships only the new binary. SaaS runs both during transition. Operator is unaffected — it just uploads to the ingress endpoint regardless of which binary consumes the data. |
+| ~~F9~~ | ~~**On-prem ingestion (no Kafka)**~~ | ~~HTTP `/ingest` endpoint + directory watch. mTLS auth via OpenShift service-serving certs, `ROS_INGEST_TOKEN` fallback. PostgreSQL advisory locks for concurrency.~~ | ~~10~~ | ~~REQ-10.3, NFR-1~~ | ~~No~~ | **Removed** | N/A | ~~**Net-new** — Legacy is SaaS-only.~~ | **Removed:** On-prem deploys AMQ Streams (Kafka) via the cost-onprem chart. The on-prem ingestion path is identical to SaaS (Kafka + S3). No separate `/ingest` endpoint needed. |
+| F10 | **Remove Kruize dependency** | Eliminate all Kruize HTTP calls, Kruize PostgreSQL, performance profiles, internal Kafka topic, deployment manifests. | 10 | REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5 | No | Active | **NO** | **Net-new** — Architectural simplification; legacy requires 4 infrastructure services (ros-ocp + Kruize + 2× PostgreSQL). | Kruize remains for `local_monitoring` and HPO — only removed from remote ROS path. |
 
 ### Container Recommendation Features
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F11 | **CPU recommendation (fixed algorithm)** | Single consistent algorithm for all CPU levels (no 1-core discontinuity). `cpu_effective = max(usage_max, usage_avg + throttle_avg)`. No per-pod estimation. | 1 | REQ-1.1, REQ-1.2 | No | Active | **Enhanced** — Kruize has a piecewise algorithm that switches behavior at 1 CPU core (`CPU_ONE_CORE`): below 1 core it uses `max(cpuMaxValues)`, above it uses `percentile()`. Also estimates `numPods` from `cpuUsageSum/cpuUsageAvg` causing incorrect per-pod splitting. Both bugs removed. | Removes two critical Kruize bugs. |
-| F12 | **Cost and Performance models** | Dual-model output per container: cost (p60 CPU / p95 mem) and performance (p98 CPU / p100 mem), both with configurable safety margin. Single-pass computation. | 1 | REQ-1.3, REQ-1.6, REQ-1.7 | No | Active | **Enhanced** — Kruize has cost (p60 CPU / p100 mem) and performance (p98 CPU / p100 mem) models, but percentiles are hardcoded in `PercentileConstants`. New system: percentiles are configurable profile parameters, memory cost model uses p95 (not p100), and adds configurable safety margin. | Customer-defined percentiles supported via `recommendation_profiles` (and future profile UI). |
-| F13 | **Memory recommendation (basic)** | `max()` instead of p100 sort, adaptive tail-spread CV margin (15-50%), separate request/limit. | 1 | REQ-1.5, REQ-1.6 | No | Active | **Enhanced** — Kruize memory uses `usage_percentile + 20% buffer` with `min(percentile, spike+5%)` heuristic, `limit = request` (same value). New system: `max()` aggregation (O(1) vs O(n log n) sort for p100), data-driven adaptive margin via `(p95 - p50) / mean` (15-50% vs fixed 20%), and separate request/limit recommendations. | — |
-| F14 | **Customer-defined term support** | Three recommendation terms per customer, each configurable from 1–90 days. Defaults: 1d/7d/15d (hardcoded in Go). Exponential decay weighting per term. Overrides in `org_recommendation_terms` table. | 1 | REQ-1.8 | No | Active | **Enhanced** — Kruize has fixed `short_term` (1d) / `medium_term` (7d) / `long_term` (15d) terms. New system: customer-defined windows (any 1–90 day range), configurable decay half-lives, minimum data thresholds scale with window size. | Decay half-lives default: short=none, medium=72h, long=168h. Customers override via `org_recommendation_terms` (future API). |
-| F15 | **Notification system** | Structured notification codes (21 defined) with severity levels. Reference table in DB and API endpoint. | 1 | REQ-1.9, REQ-1.14 | No | Active | **Enhanced** — Kruize defines ~30 notification codes internally, but ros-ocp-backend filters to only 4 notice codes (`323004`, `323005`, `324003`, `324004`) plus uses `111000` internally. New system: 21 curated codes in DB reference table, all exposed to API via `/notification-codes` endpoint, `UPPER_SNAKE_CASE` naming. | `UPPER_SNAKE_CASE` naming convention. Codes exposed via `/notification-codes` endpoint. |
-| F16 | **Namespace recommendations** | Namespace-level CPU/memory recommendations using `daily_namespace_digests` aggregate. Same dual-model, decay, percentile parameterization as containers. | 1 | REQ-1.13 | No | Active | **Enhanced** — Legacy has namespace recommendations (gated behind `rosocp.namespace_enabled` Unleash flag), using same Kruize pipeline with separate experiments. New system: relational columns, daily digest aggregates, same algorithmic improvements as containers (no 1-core bug, adaptive margin, decay). | Stored in `namespace_recommendation_sets` with relational columns. |
-| F17 | **Shadow-mode validation** | Parallel new Go superpowers engine + legacy Kruize pipeline; reconciliation logs divergences beyond tolerance (1mc / 1 KiB). | 1 | REQ-1.12 | No | Active | **Net-new** — No validation mechanism exists in legacy pipeline. | Gated behind `ROS_ENABLE_SHADOW_MODE`. Disable after ≥1 week validation. |
-| F18 | **OOM-aware memory recommendations** | OOM event collection, exponential backoff (1.3×/1.6×/2.0×), `oom_floor` in limit calculation. | 4 | REQ-4.1, REQ-4.2, REQ-4.3, REQ-4.6 | Yes (1 new query) | Active | **Net-new** — Kruize does not use OOM kill events. Memory recommendation is purely usage-based (percentile + buffer). | Gated behind `ROS_USE_OOM_FEEDBACK`. |
-| F19 | **Memory trend detection** | Linear regression on daily mean memory; projects 7 days forward. `WARNING_MEMORY_TRENDING_UP` notification if leak detected. | 4 | REQ-4.4 | No | Active | **Net-new** — No trend detection in legacy pipeline. | Triggers notification only (not automatic limit increase). |
-| F20 | **Confidence bounds** | Separate lower/upper bounds on recommendations. | — | ~~REQ-1.4~~ | — | **Deferred** | **Same (deferred)** — Kruize has `confidence_level` field in schema but it is always `0.0` (never computed). Both systems defer this. | Cost/performance dual-model already provides actionable range. **Future work:** the daily digest schema stores multiple percentiles (p50, p60, p95, p98, p99, max) which could inform confidence bounds, but the statistical methodology for container workload distributions needs design. Revisit when customer demand emerges. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F11 | **CPU recommendation (fixed algorithm)** | Single consistent algorithm for all CPU levels (no 1-core discontinuity). `cpu_effective = max(usage_max, usage_avg + throttle_avg)`. No per-pod estimation. | 1 | REQ-1.1, REQ-1.2 | No | Active | **YES** | **Enhanced** — Kruize has a piecewise algorithm that switches behavior at 1 CPU core (`CPU_ONE_CORE`): below 1 core it uses `max(cpuMaxValues)`, above it uses `percentile()`. Also estimates `numPods` from `cpuUsageSum/cpuUsageAvg` causing incorrect per-pod splitting. Both bugs removed. | Removes two critical Kruize bugs. |
+| F12 | **Cost and Performance models** | Dual-model output per container: cost (p60 CPU / p95 mem) and performance (p98 CPU / p100 mem), both with configurable safety margin. Single-pass computation. | 1 | REQ-1.3, REQ-1.6, REQ-1.7 | No | Active | **YES** | **Enhanced** — Kruize has cost (p60 CPU / p100 mem) and performance (p98 CPU / p100 mem) models, but percentiles are hardcoded in `PercentileConstants`. New system: percentiles are configurable profile parameters, memory cost model uses p95 (not p100), and adds configurable safety margin. | Customer-defined percentiles supported via `recommendation_profiles` (and future profile UI). |
+| F13 | **Memory recommendation (basic)** | `max()` instead of p100 sort, adaptive tail-spread CV margin (15-50%), separate request/limit. | 1 | REQ-1.5, REQ-1.6 | No | Active | **YES** | **Enhanced** — Kruize memory uses `usage_percentile + 20% buffer` with `min(percentile, spike+5%)` heuristic, `limit = request` (same value). New system: `max()` aggregation (O(1) vs O(n log n) sort for p100), data-driven adaptive margin via `(p95 - p50) / mean` (15-50% vs fixed 20%), and separate request/limit recommendations. | — |
+| F14 | **Customer-defined term support** | Three recommendation terms per customer, each configurable from 1–90 days. Defaults: 1d/7d/15d (hardcoded in Go). Exponential decay weighting per term. Overrides in `org_recommendation_terms` table. | 1 | REQ-1.8 | No | Active | **YES** | **Enhanced** — Kruize has fixed `short_term` (1d) / `medium_term` (7d) / `long_term` (15d) terms. New system: customer-defined windows (any 1–90 day range), configurable decay half-lives, minimum data thresholds scale with window size. | Decay half-lives default: short=none, medium=72h, long=168h. Customers override via `org_recommendation_terms` (future API). |
+| F15 | **Notification system** | Structured notification codes (35 defined) with severity levels. Reference table in DB and API endpoint. | 1 | REQ-1.9, REQ-1.14 | No | Active | **YES** | **Enhanced** — Kruize defines ~30 notification codes internally, but ros-ocp-backend filters to only 4 notice codes (`323004`, `323005`, `324003`, `324004`) plus uses `111000` internally. New system: 35 curated codes in DB reference table, all exposed to API via `/notification-codes` endpoint, `UPPER_SNAKE_CASE` naming. | `UPPER_SNAKE_CASE` naming convention. Codes exposed via `/notification-codes` endpoint. |
+| F16 | **Namespace recommendations** | Namespace-level CPU/memory recommendations using `daily_namespace_digests` aggregate. Same dual-model, decay, percentile parameterization as containers. | 1 | REQ-1.13 | No | Active | **YES** | **Enhanced** — Legacy has namespace recommendations (gated behind `rosocp.namespace_enabled` Unleash flag), using same Kruize pipeline with separate experiments. New system: relational columns, daily digest aggregates, same algorithmic improvements as containers (no 1-core bug, adaptive margin, decay). | Stored in `namespace_recommendation_sets` with relational columns. |
+| F17 | **Shadow-mode validation** | Parallel new Go superpowers engine + legacy Kruize pipeline; reconciliation logs divergences beyond tolerance (1mc / 1 KiB). | 1 | REQ-1.12 | No | Active | **NO** | **Net-new** — No validation mechanism exists in legacy pipeline. | Gated behind `ROS_ENABLE_SHADOW_MODE`. Disable after ≥1 week validation. |
+| F18 | **OOM-aware memory recommendations** | OOM event collection, exponential backoff (1.3×/1.6×/2.0×), `oom_floor` in limit calculation. | 4 | REQ-4.1, REQ-4.2, REQ-4.3, REQ-4.6 | Yes (1 new query) | Active | **YES** | **Net-new** — Kruize does not use OOM kill events. Memory recommendation is purely usage-based (percentile + buffer). | Gated behind `ROS_USE_OOM_FEEDBACK`. |
+| F19 | **Memory trend detection** | Linear regression on daily mean memory; projects 7 days forward. `WARNING_MEMORY_TRENDING_UP` notification if leak detected. | 4 | REQ-4.4 | No | Active | **YES** | **Net-new** — No trend detection in legacy pipeline. | Triggers notification only (not automatic limit increase). |
+| F20 | **Confidence bounds** | Separate lower/upper bounds on recommendations. | — | ~~REQ-1.4~~ | — | **Deferred** | **NO** | **Same (deferred)** — Kruize has `confidence_level` field in schema but it is always `0.0` (never computed). Both systems defer this. | Cost/performance dual-model already provides actionable range. **Future work:** the daily digest schema stores multiple percentiles (p50, p60, p95, p98, p99, max) which could inform confidence bounds, but the statistical methodology for container workload distributions needs design. Revisit when customer demand emerges. |
 
 ### GPU Recommendation Features
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F21 | **GPU MIG bin-packing** | Port Kruize algorithm to Go. Smallest MIG profile whose resources ≥ p95 usage. | 5 | REQ-5.1 | No | Active | **Enhanced** — Kruize has accelerator recommendations using usage percentiles, MIG detection via Instaslice UUID/profile, and framebuffer-based partitioning. However, Kruize has known bugs: gating logic only recognizes A100/H100/H200, and framebuffer gap logic is incomplete (TODO comments). New system: ported to Go with bug fixes, proper bin-packing against profile lookup table. | Gated behind `ROS_ENABLE_GPU_RECS`. |
-| F22 | **B200/RTX PRO GPU support** | Fix gating bug (only A100/H100/H200 recognized). Add B200, RTX PRO 5000/6000 to lookup table. | 5 | REQ-5.2, REQ-5.3 | No | Active | **Enhanced** — Kruize `AcceleratorDecisionHandler` has an allowlist gating bug: GPUs not in the hardcoded list (`A100`, `H100`, `H200`) are silently skipped with `328001 accelerator not supported`. New system: data-driven lookup table. | Data-driven lookup table for extensibility. |
-| F23 | **GPU underutilization detection** | Flag containers with <10% GPU core + memory usage. `GPU_UNDERUTILIZED` notification with savings estimate. | 5 | REQ-5.4 | No | Active | **Net-new** — Kruize does not detect underutilized GPUs. | Configurable threshold (`ROS_GPU_UNDERUTIL_THRESHOLD`). |
-| F24 | **Cost-aware GPU recs** | Integrate Koku MIG cost data for current vs recommended GPU profile dollar savings. | 5 | REQ-5.6 | No | Active | **Net-new** — Kruize provides no dollar cost integration for GPU recommendations. | Depends on Koku GPU cost API stability. |
-| F25 | **Multi-GPU awareness** | Detect containers with multiple GPUs (4-GPU at 25% each). | 5 | REQ-5.5 | Yes | **Deferred** (Low) | **Net-new** — Kruize assumes single accelerator per container (comments note this limitation). Both systems defer full multi-GPU support. | Current algorithm assumes 1 GPU/container. **Future work:** requires per-device utilization metrics from operator (`DCGM_FI_DEV_GPU_UTIL` per device UUID), new CSV columns, and bin-packing algorithm across device count × MIG profile. Primarily benefits ML training workloads. Revisit when multi-GPU adoption grows. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F21 | **GPU MIG bin-packing** | Port Kruize algorithm to Go. Smallest MIG profile whose resources ≥ p95 usage. | 5 | REQ-5.1 | No | Active | **YES** | **Enhanced** — Kruize has accelerator recommendations using usage percentiles, MIG detection via Instaslice UUID/profile, and framebuffer-based partitioning. However, Kruize has known bugs: gating logic only recognizes A100/H100/H200, and framebuffer gap logic is incomplete (TODO comments). New system: ported to Go with bug fixes, proper bin-packing against profile lookup table. | Gated behind `ROS_ENABLE_GPU_RECS`. |
+| F22 | **B200/RTX PRO GPU support** | Fix gating bug (only A100/H100/H200 recognized). Add B200, RTX PRO 5000/6000 to lookup table. | 5 | REQ-5.2, REQ-5.3 | No | Active | **YES** | **Enhanced** — Kruize `AcceleratorDecisionHandler` has an allowlist gating bug: GPUs not in the hardcoded list (`A100`, `H100`, `H200`) are silently skipped with `328001 accelerator not supported`. New system: data-driven lookup table. | Data-driven lookup table for extensibility. |
+| F23 | **GPU underutilization detection** | Flag containers with <10% GPU core + memory usage. `GPU_UNDERUTILIZED` notification with savings estimate. | 5 | REQ-5.4 | No | Active | **YES** | **Net-new** — Kruize does not detect underutilized GPUs. | Configurable threshold (`ROS_GPU_UNDERUTIL_THRESHOLD`). |
+| F24 | **Cost-aware GPU recs** | Integrate Koku MIG cost data for current vs recommended GPU profile dollar savings. | 5 | REQ-5.6 | No | Active | **YES** | **Net-new** — Kruize provides no dollar cost integration for GPU recommendations. | Depends on Koku GPU cost API stability. |
+| F25 | **Multi-GPU awareness** | Detect containers with multiple GPUs (4-GPU at 25% each). | 5 | REQ-5.5 | Yes | **Deferred** (Low) | **NO** | **Net-new** — Kruize assumes single accelerator per container (comments note this limitation). Both systems defer full multi-GPU support. | Current algorithm assumes 1 GPU/container. **Future work:** requires per-device utilization metrics from operator (`DCGM_FI_DEV_GPU_UTIL` per device UUID), new CSV columns, and bin-packing algorithm across device count × MIG profile. Primarily benefits ML training workloads. Revisit when multi-GPU adoption grows. |
+| F25a | **GPU time-slicing recommendations** | Node-level NVIDIA `nvidia.com/gpu.replicas` consolidation guidance. Container-level cross-reference with per-container savings. | 5 | REQ-5.7 | No | Active | **YES** | **Net-new** — No time-slicing analysis in legacy pipeline. | Exposed via `/recommendations/openshift/nodes` endpoint. |
 
 ### New Recommendation Types — Tier 1
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F26 | **Idle/abandoned workload detection** | CPU + memory utilization <1% → idle. Zero usage → abandoned. Estimated savings. | 6 | REQ-6.1 | No | Active | **Enhanced** — Kruize has basic CPU idle detection: if derived CPU request ≤1 millicore, emits `NOTICE_CPU_RECORDS_ARE_IDLE` and nullifies CPU recommendation. Memory "idle" is only zero-usage (`NOTICE_MEMORY_RECORDS_ARE_ZERO`). New system: combined CPU+memory threshold, separate idle vs abandoned classification, estimated resource savings, configurable thresholds. | Gated behind `ROS_ENABLE_IDLE_DETECTION` (ON by default). Configurable threshold. |
-| F27 | **PVC right-sizing** | Compare PVC usage vs capacity. Flag oversized (>80% unused), near-full (>85%), orphaned (0 usage). Growth trend projection. | 6 | REQ-6.3 | No | Active | **Net-new** — No PVC recommendations in legacy pipeline. | No new Prometheus queries, no operator change. Operator already scrapes `cost:persistentvolumeclaim_*` and writes `cm-openshift-storage-usage-YYYYMM.csv`. ros-ocp-backend reads this existing CSV. On-prem: reads from ingested tarball. SaaS: Koku `kafka_msg_handler.py` routing updated to also send storage CSV to ROS consumer. |
-| F28 | **Go GOMAXPROCS/GOMEMLIMIT** | Detect Go workloads via `go_info`. Recommend `GOMEMLIMIT = 0.9 × mem_limit` and `GOMAXPROCS = ceil(cpu_limit)`. | 6 | REQ-6.4 | Yes (1 query) | Active | **Net-new** — No Go runtime recommendations in legacy pipeline. | — |
-| F29 | **QoS class recommendations** | Explicit Guaranteed/Burstable/BestEffort recommendation. | — | ~~REQ-6.2~~ | — | **Deferred** | **Net-new (deferred)** — Not in legacy. | Implicit from CPU/memory request/limit values. Revisit if user research demands. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F26 | **Idle/abandoned workload detection** | CPU + memory utilization <1% → idle. Zero usage → abandoned. Estimated savings. | 6 | REQ-6.1 | No | Active | **YES** | **Enhanced** — Kruize has basic CPU idle detection: if derived CPU request ≤1 millicore, emits `NOTICE_CPU_RECORDS_ARE_IDLE` and nullifies CPU recommendation. Memory "idle" is only zero-usage (`NOTICE_MEMORY_RECORDS_ARE_ZERO`). New system: combined CPU+memory threshold, separate idle vs abandoned classification, estimated resource savings, configurable thresholds. | Gated behind `ROS_ENABLE_IDLE_DETECTION` (ON by default). Configurable threshold. |
+| F27 | **PVC right-sizing** | Compare PVC usage vs capacity. Flag oversized (>80% unused), near-full (>85%), orphaned (0 usage). Growth trend projection. | 6 | REQ-6.3 | No | Active | **YES** | **Net-new** — No PVC recommendations in legacy pipeline. | No new Prometheus queries, no operator change. Operator already scrapes `cost:persistentvolumeclaim_*` and writes `cm-openshift-storage-usage-YYYYMM.csv`. ros-ocp-backend reads this existing CSV. On-prem: reads from ingested tarball. SaaS: Koku `kafka_msg_handler.py` routing updated to also send storage CSV to ROS consumer. |
+| F28 | **Go GOMAXPROCS/GOMEMLIMIT** | Detect Go workloads via `go_info`. Recommend `GOMEMLIMIT = 0.9 × mem_limit` and `GOMAXPROCS = ceil(cpu_limit)`. | 6 | REQ-6.4 | Yes (1 query) | Active | **NO** | **Net-new** — No Go runtime recommendations in legacy pipeline. | — |
+| F29 | **QoS class recommendations** | Explicit Guaranteed/Burstable/BestEffort recommendation. | — | ~~REQ-6.2~~ | — | **Deferred** | **NO** | **Net-new (deferred)** — Not in legacy. | Implicit from CPU/memory request/limit values. Revisit if user research demands. |
+| F29a | **Snapshot staleness detection** | VolumeSnapshot classification: orphaned, stale, never-restored, redundant, managed, active. Configurable settings with env-var locking. | 6 | REQ-6.5 | No | Active | **YES** | **Net-new** — No snapshot analysis in legacy pipeline. | Settings API with env-var locking for operator-controlled deployments. |
+| F29b | **Box plots / five-number summary** | Per-term usage distribution visualization (min, Q1, median, Q3, max) from daily digest data. Available for containers and namespaces. | 3 | REQ-6.6 | No | Active | **YES** | **Net-new** — No usage distribution visualization in legacy pipeline. | Embedded in detail API response. |
 
 ### Replica Count & Cost Integration
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F30 | **Replica count collection** | Collect `desired_replicas` / `available_replicas` from deployment/statefulset/daemonset metrics. | 7 | REQ-7.1, REQ-7.2, REQ-7.4 | Yes (2-4 queries) | Active | **Net-new** — Legacy namespace CSV includes pod count metrics as inputs, but these are not used for scaling. Kruize uses `numPods` only internally for per-pod estimation (a bug). No replica count surfaced to API. | Fallback: derive from distinct pod count if operator too old. |
-| F31 | **Total impact (resource savings × replicas)** | `per_container_savings × desired_replicas` = total savings in millicores/KiB. | 7 | REQ-7.3 | No | Active | **Net-new** — Legacy shows `variation` as percentage change vs current (per-container only). No total-impact-across-replicas calculation exists. | — |
-| F32 | **Dollar savings via Koku cost models** | Query Koku `/cost-models/` API for CPU/memory rates + markup. Cache hourly. `estimated_monthly_savings_usd` per recommendation. | 7 | REQ-7.5 | No | Active | **Net-new** — No dollar cost integration in legacy pipeline. | Graceful degradation: `null` if Koku unreachable or `ROS_ENABLE_COST_INTEGRATION=false`. Distributed costs not captured (secondary benefit). |
-| F33 | **Fleet-level summary** | Cross-cluster aggregated savings, adoption rates, top opportunities by org_id. | 7 | REQ-7.6 | No | Active | **Net-new** — No fleet-level aggregation in legacy pipeline. | Gated behind `ROS_ENABLE_FLEET_SUMMARY`. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F30 | **Replica count collection** | Collect `desired_replicas` / `available_replicas` from deployment/statefulset/daemonset metrics. | 7 | REQ-7.1, REQ-7.2, REQ-7.4 | Yes (2-4 queries) | Active | **YES** | Operator queries `kube_deployment_spec_replicas`, `kube_statefulset_replicas`, `kube_daemonset_status_desired_number_scheduled` (and available equivalents). Backend stores per-digest. API exposes `desired`, `available`, `source` in `ReplicaInfo`. Fallback to pod count when operator columns absent. | Fallback: derive from distinct pod count if operator too old. |
+| F31 | **Total impact (resource savings × replicas)** | `per_container_savings × desired_replicas` = total savings in millicores/KiB. | 7 | REQ-7.3 | No | Active | **YES** | **Net-new** — Legacy shows `variation` as percentage change vs current (per-container only). No total-impact-across-replicas calculation exists. | — |
+| F32 | **Dollar savings via Koku cost models** | Query Koku `/cost-models/` API for CPU/memory rates + markup. Cache hourly. `estimated_monthly_savings_usd` per recommendation. | 7 | REQ-7.5 | No | Active | **YES** | **Net-new** — No dollar cost integration in legacy pipeline. | Graceful degradation: `null` if Koku unreachable or `ROS_ENABLE_COST_INTEGRATION=false`. Distributed costs not captured (secondary benefit). |
+| F33 | **Fleet-level summary** | Cross-cluster aggregated savings, adoption rates, top opportunities by org_id. | 7 | REQ-7.6 | No | Active | **YES** | **Net-new** — No fleet-level aggregation in legacy pipeline. | Gated behind `ROS_ENABLE_FLEET_SUMMARY`. |
 
 ### New Recommendation Types — Tier 2
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F34 | **HPA optimization** | Saturated HPA (at max), idle HPA (at min), flapping (>10 events/hr), combined VPA+HPA advice. | 8 | REQ-8.1 | Yes (8 queries) | Active | **Net-new** — No HPA analysis in legacy pipeline. | Open question: combined VPA+HPA priority (Q9). |
-| F35 | **Ephemeral storage recommendations** | Right-size ephemeral storage requests/limits. | 8 | REQ-8.2 | Yes (4 queries) | Active (informational only) | **Net-new** — No ephemeral storage recommendations in legacy pipeline. | OFF by default (`ROS_ENABLE_EPHEMERAL_STORAGE=false`). cadvisor metrics unreliable through OCP 4.21. Pending upstream fix. |
-| F36 | **Node.js heap advisory** | Detect Node.js via `nodejs_version_info`. Emit "set `--max-old-space-size` to 75% of mem limit" notification. | 8 | REQ-8.3 | Yes (1 query) | Active (informational only) | **Net-new** — No Node.js runtime recommendations in legacy pipeline. | Weakest recommendation type. OFF by default (`ROS_ENABLE_NODEJS_RECS=false`). No actionable numeric value. |
-| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **Net-new** — No ResourceQuota analysis in legacy pipeline. | — |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F34 | **HPA optimization** | Saturated HPA (at max), idle HPA (at min), flapping (>10 events/hr), combined VPA+HPA advice. | 8 | REQ-8.1 | Yes (8 queries) | Active | **NO** | **Net-new** — No HPA analysis in legacy pipeline. | Open question: combined VPA+HPA priority (Q9). |
+| F35 | **Ephemeral storage recommendations** | Right-size ephemeral storage requests/limits. | 8 | REQ-8.2 | Yes (4 queries) | Active (informational only) | **NO** | **Net-new** — No ephemeral storage recommendations in legacy pipeline. | OFF by default (`ROS_ENABLE_EPHEMERAL_STORAGE=false`). cadvisor metrics unreliable through OCP 4.21. Pending upstream fix. |
+| F36 | **Node.js heap advisory** | Detect Node.js via `nodejs_version_info`. Emit "set `--max-old-space-size` to 75% of mem limit" notification. | 8 | REQ-8.3 | Yes (1 query) | Active (informational only) | **NO** | **Net-new** — No Node.js runtime recommendations in legacy pipeline. | Weakest recommendation type. OFF by default (`ROS_ENABLE_NODEJS_RECS=false`). No actionable numeric value. |
+| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **NO** | **Net-new** — No ResourceQuota analysis in legacy pipeline. | — |
 
 ### VM Recommendations
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F38 | **VM CPU/memory right-sizing** | OpenShift Virtualization VMs: p95 CPU rounded to whole vCPUs, p95 memory rounded to whole GiB. Guest OS-aware baselines (Windows 2 GiB, Linux 0.5 GiB). 40% hysteresis to avoid restart churn. | 8b | REQ-8b.1, REQ-8b.2, REQ-8b.3, REQ-8b.4, REQ-8b.5, REQ-8b.7, REQ-8b.8 | Yes (12 queries) | Active | **Net-new** — No VM recommendations in legacy pipeline. | Gated behind `ROS_ENABLE_VM_RECS`. VMs identified via `kubevirt_vmi_info`. |
-| F39 | **VM disk size & IOPS** | Disk size rec (MAX usage + 30d growth + 25% headroom, round to 10 GiB). IOPS/throughput p95 (informational). | 8b | REQ-8b.4 | Yes (included above) | Active | **Net-new** | IOPS informational only (Q17). Actionable storage class recs deferred. |
-| F40 | **VM idle detection** | `cpu_p95 < 50mc AND mem_p95 < 512 MiB` → idle VM. | 8b | REQ-8b.4 | No | Active | **Net-new** | — |
-| F41 | **VM API endpoints** | `/virtual-machines` list + `/:id` detail, same filter/pagination as containers. | 8b | REQ-8b.6 | No | Active | **Net-new** | — |
-| F42 | **VM instance type recommendation** | If `VirtualMachineInstancetype` resources available, recommend smallest-fit. | 8b | REQ-8b.9 | Yes (1 query) | Active (Low) | **Net-new** | Deferred within 8b if instance types not yet widely used. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F38 | **VM CPU/memory right-sizing** | OpenShift Virtualization VMs: p95 CPU rounded to whole vCPUs, p95 memory rounded to whole GiB. Guest OS-aware baselines (Windows 2 GiB, Linux 0.5 GiB). 40% hysteresis to avoid restart churn. | 8b | REQ-8b.1, REQ-8b.2, REQ-8b.3, REQ-8b.4, REQ-8b.5, REQ-8b.7, REQ-8b.8 | Yes (12 queries) | Active | **NO** | **Net-new** — No VM recommendations in legacy pipeline. | Gated behind `ROS_ENABLE_VM_RECS`. VMs identified via `kubevirt_vmi_info`. |
+| F39 | **VM disk size & IOPS** | Disk size rec (MAX usage + 30d growth + 25% headroom, round to 10 GiB). IOPS/throughput p95 (informational). | 8b | REQ-8b.4 | Yes (included above) | Active | **NO** | **Net-new** | IOPS informational only (Q17). Actionable storage class recs deferred. |
+| F40 | **VM idle detection** | `cpu_p95 < 50mc AND mem_p95 < 512 MiB` → idle VM. | 8b | REQ-8b.4 | No | Active | **NO** | **Net-new** | — |
+| F41 | **VM API endpoints** | `/virtual-machines` list + `/:id` detail, same filter/pagination as containers. | 8b | REQ-8b.6 | No | Active | **NO** | **Net-new** | — |
+| F42 | **VM instance type recommendation** | If `VirtualMachineInstancetype` resources available, recommend smallest-fit. | 8b | REQ-8b.9 | Yes (1 query) | Active (Low) | **NO** | **Net-new** | Deferred within 8b if instance types not yet widely used. |
 
 ### Node & MachineSet Recommendations
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F43 | **Node utilization visibility (Tier 1)** | Underutilized (<30% both CPU+mem), overcommitted (>150% request/allocatable), stranded resources (CPU vs memory imbalance). Per-node p50/p95 utilization, trend slope. | 8c | REQ-8c.1, REQ-8c.2, REQ-8c.2b, REQ-8c.3, REQ-8c.8, REQ-8c.9, REQ-8c.11 | Yes (routing existing + 2 new queries) | Active | **Net-new** — Legacy pipeline has node data in CSV (node labels, capacity) but only as a dimension for container recs, not as a recommendation target. | Enabled by default. On-prem = capacity planning; cloud = scale-down. |
-| F44 | **MachineSet right-sizing (Tier 2)** | Aggregate utilization across MachineSet nodes. Replica count recommendation (`rec = ceil(current × util / target)`). Instance type recommendation from cloud catalog (smallest-fit). Stranded resource → family switch. PDB notification. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (3-5 queries) | Active | **Net-new** | Go heuristic (not PL/pgSQL). 20% minimum savings hysteresis. 2-replica HA floor. |
-| F45 | **MachineAutoscaler optimization (Tier 3)** | Saturated/idle/flapping/missing autoscaler detection. Suggested min/max adjustments. | 8c | REQ-8c.7 | Yes (2 queries, optional) | Active | **Net-new** | Cloud-only (bare metal N/A). |
-| F46 | **Cloud instance type catalog** | Live catalog from AWS Bulk Pricing JSON, Azure Retail Prices API, GCP machineTypes API. Daily refresh. In-memory cache. | 8c | REQ-8c.6 | No | Active | **Net-new** | AWS Tier 1: public JSON (no auth). Tier 2: optional `ec2:DescribeInstanceTypes` if customer adds IAM perm. |
-| F47 | **Node/MachineSet API endpoints** | `/nodes`, `/nodes/:node`, `/machinesets`, `/machinesets/:name`. Filter by utilization, instance type, stranded resource. | 8c | REQ-8c.10 | No | Active | **Net-new** | — |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F43 | **Node utilization visibility (Tier 1)** | Underutilized (<30% both CPU+mem), overcommitted (>150% request/allocatable), stranded resources (CPU vs memory imbalance). Per-node p50/p95 utilization, trend slope. | 8c | REQ-8c.1, REQ-8c.2, REQ-8c.2b, REQ-8c.3, REQ-8c.8, REQ-8c.9, REQ-8c.11 | Yes (routing existing + 2 new queries) | Active | **YES** | **Net-new** — Legacy pipeline has node data in CSV (node labels, capacity) but only as a dimension for container recs, not as a recommendation target. | Enabled by default. On-prem = capacity planning; cloud = scale-down. |
+| F44 | **MachineSet right-sizing (Tier 2)** | Aggregate utilization across MachineSet nodes. Replica count recommendation (`rec = ceil(current × util / target)`). Instance type recommendation from cloud catalog (smallest-fit). Stranded resource → family switch. PDB notification. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (3-5 queries) | Active | **NO** | **Net-new** | Go heuristic (not PL/pgSQL). 20% minimum savings hysteresis. 2-replica HA floor. |
+| F45 | **MachineAutoscaler optimization (Tier 3)** | Saturated/idle/flapping/missing autoscaler detection. Suggested min/max adjustments. | 8c | REQ-8c.7 | Yes (2 queries, optional) | Active | **NO** | **Net-new** | Cloud-only (bare metal N/A). |
+| F46 | **Cloud instance type catalog** | Live catalog from AWS Bulk Pricing JSON, Azure Retail Prices API, GCP machineTypes API. Daily refresh. In-memory cache. | 8c | REQ-8c.6 | No | Active | **NO** | **Net-new** | AWS Tier 1: public JSON (no auth). Tier 2: optional `ec2:DescribeInstanceTypes` if customer adds IAM perm. |
+| F47 | **Node/MachineSet API endpoints** | `/nodes`, `/nodes/:node`, `/machinesets`, `/machinesets/:name`. Filter by utilization, instance type, stranded resource. | 8c | REQ-8c.10 | No | Active | **PARTIAL** | **Net-new** — Node endpoints exist (`/nodes`, `/nodes/utilization`). MachineSet endpoints not implemented. |
 
 ### JVM/Quarkus Runtime Recommendations
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F48 | **JVM runtime detection** | Detect Hotspot vs Semeru/OpenJ9 from `jvm_info` or image name heuristic. | 9 | REQ-9.1 | Yes (optional) | Active | **Enhanced** — Kruize has `HotspotLayerRecommendationHandler` and `SemeruLayerRecommendationHandler` registered in `LayerRecommendationHandlerRegistry`, but detection relies on the performance profile wiring. New system: proactive detection from `jvm_info` metric or container image name heuristic. | — |
-| F49 | **MaxRAMPercentage recommendation** | Recommend heap percentage based on actual `jvm_memory_used_bytes` utilization (if available), or heuristic defaults. | 9 | REQ-9.2 | No | Active | **Enhanced** — Kruize `HotspotLayerRecommendationHandler` recommends `MaxRAMPercentage` from memory limit, but uses fixed heuristic (no JVM metrics). New system: data-driven from actual `jvm_memory_used_bytes` when available, heuristic fallback otherwise. | — |
-| F50 | **GC policy recommendation** | Data-driven GC selection based on pause metrics. Respects JDK version constraints (ZGC ≥15, Shenandoah ≥12). | 9 | REQ-9.3 | No | Active | **Enhanced** — Kruize has GC policy recommendation in `HotspotLayerRecommendationHandler`, but selection logic is heuristic (no pause metric analysis). New system: data-driven from actual GC pause duration/frequency metrics with JDK version gating. | — |
-| F51 | **Quarkus thread pool** | `core-threads = max(8, 2 × ceil(cores))`, `queue-size = 2 × core-threads`. Fix `THREADS_PER_CORE=1` undersizing. | 9 | REQ-9.4 | No | Active | **Enhanced** — Kruize `QuarkusLayerRecommendationHandler` computes `core-threads` from CPU limit, but uses `THREADS_PER_CORE=1` (should be 2). New system fixes the multiplier and adds `queue-size` with floor of 8. | — |
-| F52 | **Semeru consistency** | Use `ceil()` for CPU core rounding (not `round()`). | 9 | REQ-9.5 | No | Active | **Bug fix** — Kruize `SemeruLayerRecommendationHandler` uses `round()` for CPU core values, which can round down (e.g., 1.1 → 1). New system uses `ceil()` to ensure the container always has sufficient cores. | — |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F48 | **JVM runtime detection** | Detect Hotspot vs Semeru/OpenJ9 from `jvm_info` or image name heuristic. | 9 | REQ-9.1 | Yes (optional) | Active | **NO** | **Enhanced** — Kruize has `HotspotLayerRecommendationHandler` and `SemeruLayerRecommendationHandler` registered in `LayerRecommendationHandlerRegistry`, but detection relies on the performance profile wiring. New system: proactive detection from `jvm_info` metric or container image name heuristic. | — |
+| F49 | **MaxRAMPercentage recommendation** | Recommend heap percentage based on actual `jvm_memory_used_bytes` utilization (if available), or heuristic defaults. | 9 | REQ-9.2 | No | Active | **NO** | **Enhanced** — Kruize `HotspotLayerRecommendationHandler` recommends `MaxRAMPercentage` from memory limit, but uses fixed heuristic (no JVM metrics). New system: data-driven from actual `jvm_memory_used_bytes` when available, heuristic fallback otherwise. | — |
+| F50 | **GC policy recommendation** | Data-driven GC selection based on pause metrics. Respects JDK version constraints (ZGC ≥15, Shenandoah ≥12). | 9 | REQ-9.3 | No | Active | **NO** | **Enhanced** — Kruize has GC policy recommendation in `HotspotLayerRecommendationHandler`, but selection logic is heuristic (no pause metric analysis). New system: data-driven from actual GC pause duration/frequency metrics with JDK version gating. | — |
+| F51 | **Quarkus thread pool** | `core-threads = max(8, 2 × ceil(cores))`, `queue-size = 2 × core-threads`. Fix `THREADS_PER_CORE=1` undersizing. | 9 | REQ-9.4 | No | Active | **NO** | **Enhanced** — Kruize `QuarkusLayerRecommendationHandler` computes `core-threads` from CPU limit, but uses `THREADS_PER_CORE=1` (should be 2). New system fixes the multiplier and adds `queue-size` with floor of 8. | — |
+| F52 | **Semeru consistency** | Use `ceil()` for CPU core rounding (not `round()`). | 9 | REQ-9.5 | No | Active | **NO** | **Bug fix** — Kruize `SemeruLayerRecommendationHandler` uses `round()` for CPU core values, which can round down (e.g., 1.1 → 1). New system uses `ceil()` to ensure the container always has sufficient cores. | — |
 
 ### Quality, Observability & Lifecycle
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F53 | **Recommendation quality metrics** | OOM rate after recs, recommendation stability (drift between cycles), adoption detection. Prometheus metrics + `/quality` endpoint. | 10 | REQ-10.6 | No | Active | **Net-new** — Legacy has Prometheus metrics (Echo middleware) for request counts/latency, but no recommendation quality metrics (OOM rate, stability, adoption). Kruize has Micrometer logging for notification-level metrics tags but nothing application-facing. | Simplified: dropped `accuracy_score` (needs app-level feedback unavailable). |
-| F54 | **Recommendation adoption detection** | Compare current resource requests vs prior recommendation. If within 15% tolerance, mark "likely applied". Track adoption rate per cluster/org. | 10 | REQ-10.7 | No | Active | **Net-new** — No adoption detection in legacy pipeline. | `recommendation_applied_at` column + `RECOMMENDATION_APPLIED` notification. |
-| F55 | **Recommendation staleness detection** | Flag recs with no new data for >48h. Archive after 30d. API `?stale=false` filter. | 10 | REQ-10.8 | No | Active | **Net-new** — Legacy has `RecommendationPollIntervalHours` for re-polling cadence and `NeedRecommOnFirstOfMonth` logic, but no explicit staleness flag or API filter. | `stale` column + `STALE_DATA` notification. |
-| F56 | **Recommendation history** | Time-series of all past recommendations in `recommendation_history` partitioned table. Retained 90d (old partitions dropped). API endpoint `/:id/history`. | 10 | R5 (risk resolution), §18 | No | Active | **Enhanced** — Legacy has `HistoricalRecommendationSet` and `HistoricalNamespaceRecommendationSet` tables (JSONB, partitioned, upsert on conflict). New system: `recommendation_history` partitioned table with 90d retention and a dedicated `/:id/history` API endpoint (legacy has no history API). | Replaces `historical_recommendation_sets` JSONB table. |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F53 | **Recommendation quality metrics** | OOM rate after recs, recommendation stability (drift between cycles), adoption detection. Prometheus metrics + `/quality` endpoint. | 10 | REQ-10.6 | No | Active | **YES** | **Net-new** — Legacy has Prometheus metrics (Echo middleware) for request counts/latency, but no recommendation quality metrics (OOM rate, stability, adoption). Kruize has Micrometer logging for notification-level metrics tags but nothing application-facing. | Simplified: dropped `accuracy_score` (needs app-level feedback unavailable). |
+| F54 | **Recommendation adoption detection** | Compare current resource requests vs prior recommendation. If within 15% tolerance, mark "likely applied". Track adoption rate per cluster/org. | 10 | REQ-10.7 | No | Active | **YES** | **Net-new** — No adoption detection in legacy pipeline. | `recommendation_applied_at` column + `RECOMMENDATION_APPLIED` notification. |
+| F55 | **Recommendation staleness detection** | Flag recs with no new data for >48h. Archive after 30d. API `?stale=false` filter. | 10 | REQ-10.8 | No | Active | **YES** | **Net-new** — Legacy has `RecommendationPollIntervalHours` for re-polling cadence and `NeedRecommOnFirstOfMonth` logic, but no explicit staleness flag or API filter. | `stale` column + `STALE_DATA` notification. |
+| F56 | **Recommendation history** | Time-series of all past recommendations in `recommendation_history` partitioned table. Retained 90d (old partitions dropped). API endpoint `/:id/history`. | 10 | R5 (risk resolution), §18 | No | Active | **YES** | **Enhanced** — Legacy has `HistoricalRecommendationSet` and `HistoricalNamespaceRecommendationSet` tables (JSONB, partitioned, upsert on conflict). New system: `recommendation_history` partitioned table with 90d retention and a dedicated `/:id/history` API endpoint (legacy has no history API). | Replaces `historical_recommendation_sets` JSONB table. |
 
 ### Critical Bug Fixes (Current Codebase)
 
-| # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
-|---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F57 | **RBAC crash fixes** | Fix nil pointer dereference on HTTP error + `strings.Split` OOB on malformed permission. | 0 | REQ-0.1, REQ-0.2 | No | Active | **Bug fix** — Crashes exist in current ros-ocp-backend `main` branch. | Ship as hotfix to current binary. |
-| F58 | **API 200-on-error fix** | Return 500 on DB failure instead of 200 with empty data. | 0 | REQ-0.3 | No | Active | **Bug fix** — Current API returns HTTP 200 with empty data on database errors. | — |
-| F59 | **Kafka resilience fixes** | Type assertion panic, subscribe failure, poison message DLQ, SendMessage retry. | 0 | REQ-0.4, REQ-0.5, REQ-0.7, REQ-0.12 | No | Active | **Bug fix** — Multiple Kafka-related crash and resilience issues in current binary. | — |
-| F60 | **HTTP timeout + misc fixes** | Client timeouts on all HTTP, GORM `.Where()` bug, date parse error handling, deterministic iteration, log reduction. | 0 | REQ-0.6, REQ-0.8, REQ-0.9, REQ-0.10, REQ-0.11 | No | Active | **Bug fix** — Multiple code quality and correctness issues in current binary. | — |
+| # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
+|---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
+| F57 | **RBAC crash fixes** | Fix nil pointer dereference on HTTP error + `strings.Split` OOB on malformed permission. | 0 | REQ-0.1, REQ-0.2 | No | Active | **YES** | **Bug fix** — Crashes exist in current ros-ocp-backend `main` branch. | Ship as hotfix to current binary. |
+| F58 | **API 200-on-error fix** | Return 500 on DB failure instead of 200 with empty data. | 0 | REQ-0.3 | No | Active | **YES** | **Bug fix** — Current API returns HTTP 200 with empty data on database errors. | — |
+| F59 | **Kafka resilience fixes** | Type assertion panic, subscribe failure, poison message DLQ, SendMessage retry. | 0 | REQ-0.4, REQ-0.5, REQ-0.7, REQ-0.12 | No | Active | **PARTIAL** | **Bug fix** — Multiple Kafka-related crash and resilience issues in current binary. DLQ (REQ-0.7) not yet implemented. | — |
+| F60 | **HTTP timeout + misc fixes** | Client timeouts on all HTTP, GORM `.Where()` bug, date parse error handling, deterministic iteration, log reduction. | 0 | REQ-0.6, REQ-0.8, REQ-0.9, REQ-0.10, REQ-0.11 | No | Active | **YES** | **Bug fix** — Multiple code quality and correctness issues in current binary. | — |
 
 ### Multi-timescale merge (Removed)
 
@@ -533,7 +537,7 @@ These are crash bugs and correctness issues in the current ros-ocp-backend that 
 
 **Required changes:** Set `Timeout: 30 * time.Second` on all HTTP clients.
 
-### REQ-0.7: Fix poison message infinite redelivery [MEDIUM]
+### REQ-0.7: Fix poison message infinite redelivery [MEDIUM] — NOT IMPLEMENTED
 
 **Source:** Analysis §20.9
 
@@ -754,7 +758,7 @@ err := engine.RecommendAllWorkloads(ctx, orgID, clusterUUID, start, end)
 
 One read of digest rows, all terms computed in process memory, then one batch write.
 
-### REQ-1.12: Shadow-mode validation [HIGH]
+### REQ-1.12: Shadow-mode validation [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §29
 
@@ -830,7 +834,7 @@ A reconciliation job compares the two and logs divergences. Any mismatch exceedi
 
 **No operator change required.** This eliminates the operator dependency and any deployment ordering concerns. All existing operators work without modification.
 
-### REQ-2.4: Eliminate `workload_metrics` JSONB table [HIGH]
+### REQ-2.4: Eliminate `workload_metrics` JSONB table [HIGH] — PARTIAL
 
 **Source:** Analysis §3, §25, §27
 
@@ -1047,7 +1051,7 @@ ORDER BY namespace, workload, container_name, bucket_date;
 
 **Business hours: intentionally deferred.** With exponential decay weighting (REQ-3.2), recent data naturally dominates recommendations. The p98 percentile already captures business-hour peak usage — overnight low-usage periods barely affect it. The p60 cost model includes overnight lows by design (it accepts occasional throttling). Adding proper business-hour support would require per-customer timezone configuration, DST handling, per-namespace overrides, UI for hour/day selection, and query-time row filtering — significant complexity for marginal improvement. If a customer needs business-hours-only sizing, they can use custom timeframes to select specific weekday date ranges manually.
 
-### REQ-3.4: Real-time recommendation computation via Go [MEDIUM]
+### REQ-3.4: Real-time recommendation computation via Go [MEDIUM] — NOT IMPLEMENTED
 
 **Source:** Analysis §25.5, §29
 
@@ -1059,7 +1063,7 @@ ORDER BY namespace, workload, container_name, bucket_date;
 
 This eliminates the recommendation polling loop and provides always-fresh recommendations for any custom timeframe. The batch path runs after each ingestion cycle for pre-computation of the customer's configured terms; the on-demand path supplements it for ad-hoc custom timeframe requests.
 
-### REQ-3.5: Recommendation engine testing and versioning [HIGH]
+### REQ-3.5: Recommendation engine testing and versioning [HIGH] — PARTIAL
 
 **Source:** Analysis §29
 
@@ -1178,13 +1182,13 @@ memory_limit = max(memory_limit_from_percentile, last_oom_limit × backoff_multi
 2. Recommend "Consider removing GPU from this container" in the notification detail.
 3. Estimate savings: `current_gpu_cost × (1 - utilization_fraction)`.
 
-### REQ-5.5: Multi-GPU awareness (future) [LOW]
+### REQ-5.5: Multi-GPU awareness (future) [LOW] — DEFERRED
 
 **Source:** Analysis §17
 
 **Required behavior (deferred):** Detect containers with multiple GPUs via DCGM device count metric. Current algorithm assumes 1 GPU per container. A 4-GPU container at 25% each looks like 1 GPU at 25%, potentially recommending a single small MIG partition instead of "you need 4 GPUs."
 
-### REQ-5.6: Leverage Koku MIG cost data for cost-aware GPU recommendations [MEDIUM]
+### REQ-5.6: Leverage Koku MIG cost data for cost-aware GPU recommendations [MEDIUM] — IMPLEMENTED
 
 **Source:** March 2026 triage — Koku `main` now has MIG GPU cost support
 
@@ -1197,6 +1201,24 @@ memory_limit = max(memory_limit_from_percentile, last_oom_limit × backoff_multi
 4. This cross-references ROS optimization data with Koku cost data — alignment on `cluster_id`, `namespace`, `node`, and `gpu_uuid` / `mig_instance_id`.
 
 **Note — Koku MIG dual-path gap (verified 2026-04-05):** MIG data reaches the Parquet/Hive layer (the post-processor parses `mig_profile`, derives `mig_slice_count`, `gpu_max_slices`, `mig_memory_capacity_mib`), and the `self_hosted_sql/` on-prem path has full MIG support. However, **two Trino SQL templates do not propagate MIG columns** in SaaS: (1) `trino_sql/openshift/cost_model/monthly_cost_gpu.sql` constructs `all_labels` with only `gpu-model`, `gpu-vendor`, `gpu-memory-mib` — MIG labels (`gpu-mode`, `mig-profile`, `mig-slice-count`, `gpu-max-slices`, `mig-strategy`, `mig-memory-mib`) are omitted; (2) `trino_sql/openshift/ui_summary/reporting_ocp_gpu_summary_p_usage_only.sql` reads from the Hive table but does not select MIG columns. The shared PostgreSQL UI summary (`sql/openshift/ui_summary/reporting_ocp_gpu_summary_p.sql`) extracts MIG from `all_labels`, but in SaaS those labels are empty because the Trino cost model SQL didn't include them. Result: `OCPGpuSummaryP` MIG columns are NULL in SaaS. The model, API endpoints (`reports/openshift/gpu/`, `mig_profiles/`), and UI (feature flag `cost-management.koku-ui-hccm.mig`) are all wired and ready — only the two Trino SQL templates need updating. Additionally, `PriceList` / `PriceListCostModelMap` models exist in `cost_models/models.py` but have no API endpoints yet. The operator MIG branch (`cost-7178-mig-metrics`) has not been merged to `main`.
+
+### REQ-5.7: GPU time-slicing recommendations [HIGH] — IMPLEMENTED
+
+**Source:** Implementation sprint 2026-05-03
+
+**Context:** Extends the per-container GPU MIG bin-packing (REQ-5.1) with **node-level time-slicing guidance**. When MIG partitioning is not supported or not cost-effective, NVIDIA time-slicing via `nvidia.com/gpu.replicas` can consolidate multiple low-utilization containers onto fewer physical GPUs.
+
+**Required behavior:**
+1. Group GPU containers by node and GPU model from `gpu_container_digests`.
+2. Partition containers into time-slicing candidates (SM utilization < threshold, e.g. 30%) and impacted (non-candidate containers sharing the same GPU node).
+3. Compute recommended replica count from average candidate SM, DRAM, and frame-buffer utilization.
+4. Compute confidence score from average candidate utilization confidence and ratio of candidates to total containers.
+5. Compute per-GPU and total estimated monthly dollar savings from Koku cost data (if available).
+6. Expose via `GET /recommendations/openshift/nodes` API endpoint with pagination and RBAC.
+7. Cross-reference at container level: `time_slicing_node` and `time_slicing_replicas` fields in the container recommendation detail response.
+8. Per-container `estimated_monthly_timeslicing_savings_usd` field.
+
+**Code:** `internal/engine/gpu_timeslicing.go` — `ComputeNodeTimeslicingRec()`, `partitionContainers()`, `computeReplicas()`.
 
 ---
 
@@ -1240,7 +1262,7 @@ These require zero or minimal new operator queries and have the highest impact.
 **No operator change required.** The operator already scrapes `cost:persistentvolumeclaim_capacity_bytes`, `cost:persistentvolumeclaim_request_bytes`, and `cost:persistentvolumeclaim_usage_bytes` and writes them to `cm-openshift-storage-usage-YYYYMM.csv` (listed in `manifest.files` for Koku). ros-ocp-backend reads this existing CSV directly — no data duplication needed:
 - **Both SaaS and on-prem:** Koku's `ROSReportShipper` extracts the storage CSV from the tarball, uploads it to S3, and includes its path in the Kafka message to `hccm.ros.events`. ros-ocp-backend reads the CSV from S3 — same flow as pod usage CSVs. The only Koku change needed is a routing update in `kafka_msg_handler.py` to include the storage CSV in the ROS Kafka message (server-side change in the `koku` repo, not an operator change).
 
-### REQ-6.4: Go GOMAXPROCS/GOMEMLIMIT [HIGH]
+### REQ-6.4: Go GOMAXPROCS/GOMEMLIMIT [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.4
 
@@ -1253,33 +1275,57 @@ These require zero or minimal new operator queries and have the highest impact.
 4. If container CPU limit is fractional (e.g., 2.5 cores): recommend `GOMAXPROCS = ceil(cpu_limit)` and note that `uber-go/automaxprocs` library handles this automatically.
 5. Estimate performance impact: "Setting GOMAXPROCS to match CPU quota can improve performance by 2–10x for CPU-bound Go workloads."
 
+### REQ-6.5: Snapshot staleness detection [HIGH] — IMPLEMENTED
+
+**Source:** Implementation sprint 2026-05-06
+
+**Context:** VolumeSnapshots in OpenShift accumulate over time and can become orphaned, stale, or redundant, consuming storage without value. This feature classifies snapshot health and flags actionable findings.
+
+**Required behavior:**
+1. Ingest VolumeSnapshot inventory from the operator's `cm-openshift-snapshot-YYYYMM.csv` (existing CSV type routed to ros-ocp-backend).
+2. Classify each snapshot into one of: `orphaned` (source PVC deleted), `stale` (age > configurable threshold, default 30d), `never_restored` (no restore event recorded), `redundant` (superseded by newer snapshot of same PVC), `managed` (owned by a backup tool like Velero/OADP), `active` (recently created and in use).
+3. Persist classifications to `snapshot_recommendations` table.
+4. Expose via `GET /recommendations/openshift/snapshots` API endpoint with pagination, filtering by classification.
+5. Configurable settings via `GET|PUT /recommendations/openshift/settings/snapshot` (stale threshold, classification toggles), with env-var locking for operator-controlled deployments.
+6. Notification codes: 31 (orphaned), 32 (never-used), 33 (redundant), 34 (stale), 35 (managed).
+7. Reconciliation: remove stale recommendation rows for snapshots no longer in inventory.
+
+**Code:** `internal/engine/snapshot_classify.go`, `internal/engine/snapshot_settings.go`, `internal/ingestion/snapshot.go`, `internal/api/handlers_snapshot.go`, `internal/api/handlers_snapshot_settings.go`.
+
+### REQ-6.6: Box plots / five-number summary visualization [HIGH] — IMPLEMENTED
+
+**Source:** Implementation sprint 2026-04-28
+
+**Context:** Provides visual context for why a recommendation was chosen. Users can see the distribution of their workload's CPU/memory usage over the recommendation window, overlaid with the recommended request/limit values.
+
+**Required behavior:**
+1. For each container or namespace recommendation, compute a five-number summary (min, Q1, median, Q3, max) from daily digest percentile data over the active term window.
+2. Expose box plot data in the detail API response for both containers (`/recommendations/openshift/:id`) and namespaces (`/recommendations/openshift/namespace/:id`).
+3. Support per-term box plots (short/medium/long term windows produce different distributions).
+4. Respect customer-defined term windows from `org_recommendation_terms`.
+
+**Code:** `internal/model/boxplot.go` — `AssembleBoxplots()`, `AssembleNamespaceBoxplots()`.
+
 ---
 
 ## 11. Phase 7: Replica Count and Total Impact (Weeks 10–14)
 
-### REQ-7.1: Collect desired replica counts [HIGH]
+### REQ-7.1: Collect desired replica counts [HIGH] — IMPLEMENTED
 
 **Source:** Analysis §26
 
-**Operator changes:** Add 2–4 new Prometheus queries:
+**Operator changes:** Two unified PromQL queries (`ros:desired_replicas`, `ros:available_replicas`) in `koku-metrics-operator/internal/collector/queries.go`. Each query:
+1. Computes workload-level replica count by unifying deployment/statefulset/daemonset metrics via `label_replace`
+2. Filters by ROS namespace opt-in labels (`insights_cost_management_optimizations` or `cost_management_optimizations`)
+3. Broadcasts to per-pod container rows via join on `kube_pod_container_info` + `namespace_workload_pod:kube_pod_owner:relabel` recording rule
 
-```promql
-ros:deployment_replicas_desired:
-  max by (namespace, deployment) (kube_deployment_spec_replicas)
-  * on(namespace) group_left kube_namespace_labels{...ROS filter...}
+**Critical implementation note:** The pod-info side (many-per-workload) must be the LEFT operand with `group_left()`, and the replica-count side (one-per-workload) must be the RIGHT operand. Using the reverse order causes "many-to-many matching not allowed" errors with multi-replica workloads. This was caught and fixed during live Prometheus validation on an SNO cluster.
 
-ros:statefulset_replicas_desired:
-  max by (namespace, statefulset) (kube_statefulset_replicas)
-  * on(namespace) group_left kube_namespace_labels{...ROS filter...}
-
-ros:daemonset_desired_scheduled:
-  max by (namespace, daemonset) (kube_daemonset_status_desired_number_scheduled)
-  * on(namespace) group_left kube_namespace_labels{...ROS filter...}
-```
-
-Optional: `kube_deployment_status_replicas_available` for health context.
+**Validated against:** Real Thanos Querier on SNO cluster (OpenShift). Both queries returned 27 correct results for the `cost-onprem` namespace, matching `oc get deployment` output exactly. The `namespace_workload_pod:kube_pod_owner:relabel` recording rule is a standard OpenShift monitoring recording rule (confirmed present).
 
 New CSV columns: `desired_replicas`, `available_replicas` (per workload row).
+
+**Code:** `koku-metrics-operator/internal/collector/queries.go` (PromQL), `types.go` (CSV struct), `test_files/test_data/desired-replicas` and `available-replicas` (test data).
 
 ### REQ-7.2: Store and expose replica count [HIGH]
 
@@ -1362,11 +1408,25 @@ total_monthly_savings_usd = cpu_dollar_savings + mem_dollar_savings
 
 **Authentication:** Use the same `x-rh-identity` header (from the Kafka message metadata or service account).
 
+### REQ-7.6: Fleet-level summary [HIGH] — IMPLEMENTED
+
+**Source:** Implementation sprint 2026-05-04
+
+**Context:** Provides a cross-cluster aggregated view of optimization status for an entire organization. Executives and platform teams need a single endpoint to assess total savings potential and adoption progress.
+
+**Required behavior:**
+1. Aggregate recommendations across all clusters for a given `org_id`.
+2. Return: total estimated monthly savings (USD), total workloads with recommendations, adoption rate (% of recs applied), top opportunities (highest savings workloads).
+3. Expose via `GET /recommendations/openshift/fleet-summary` API endpoint.
+4. RBAC-filtered: only includes clusters the requesting user has access to.
+
+**Code:** `internal/api/handlers_fleet.go` — `GetFleetSummary()`.
+
 ---
 
 ## 12. Phase 8: New Recommendation Types — Tier 2 (Weeks 14–20)
 
-### REQ-8.1: HPA optimization [HIGH]
+### REQ-8.1: HPA optimization [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.3
 
@@ -1389,7 +1449,7 @@ kube_horizontalpodautoscaler_labels
 4. If VPA recommendation × min_replicas > current total: suggest coordinated VPA+HPA adjustment.
 5. Detect HPA flapping: >10 scale events per hour.
 
-### REQ-8.2: Ephemeral storage recommendations [LOW — informational only, pending upstream fix]
+### REQ-8.2: Ephemeral storage recommendations [LOW — informational only, pending upstream fix] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.6
 
@@ -1399,7 +1459,7 @@ kube_horizontalpodautoscaler_labels
 
 **Scope:** Gated behind `ROS_ENABLE_EPHEMERAL_STORAGE=false` (OFF by default). **Fundamental limitation:** As of OpenShift 4.21 (the latest release, March 2026, based on Kubernetes 1.34), there is no reliable pod-level ephemeral storage usage metric. The `container_fs_usage_bytes` metric has documented unreliability with containerd runtimes (cAdvisor issue [#2785](https://github.com/google/cadvisor/issues/2785), still open). Red Hat KB [#6993297](https://access.redhat.com/solutions/6993297) confirms no dedicated metric exists for per-pod ephemeral storage consumption. This is NOT version-gated — it's a fundamental cadvisor/containerd gap that persists across all current OCP versions. Recommendations based on unreliable metrics could cause pod evictions. Keep OFF by default; re-evaluate when upstream cadvisor fixes land. When enabled, treat output as informational only — never auto-apply.
 
-### REQ-8.3: Node.js heap recommendations [LOW — informational only]
+### REQ-8.3: Node.js heap recommendations [LOW — informational only] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.7
 
@@ -1412,7 +1472,7 @@ kube_horizontalpodautoscaler_labels
 
 **Note:** This is the weakest recommendation type in the system. Gate behind `ROS_ENABLE_NODEJS_RECS=false` (OFF by default).
 
-### REQ-8.4: ResourceQuota recommendations [MEDIUM]
+### REQ-8.4: ResourceQuota recommendations [MEDIUM] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.8
 
@@ -1434,7 +1494,7 @@ This phase adds right-sizing recommendations for OpenShift Virtualization virtua
 
 **Why:** VM sprawl (idle/oversized VMs) is the #1 cost problem in virtualization environments (Flexera, Densify report 20-40% of VMs are idle or oversized). OpenShift Virtualization adoption is growing rapidly, and current ROS has zero VM awareness.
 
-### REQ-8b.1: Operator — VM ROS Prometheus queries [HIGH]
+### REQ-8b.1: Operator — VM ROS Prometheus queries [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.4
 
@@ -1461,7 +1521,7 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 
 **Future optimization (not in scope):** The operator currently also collects ~11 `cost:vm_*` queries at 60-min granularity for Koku cost calculations (`cm-openshift-vm-usage-YYYYMM.csv`). There is significant overlap — 7 of the 12 `ros:vm_*` queries scrape the same Prometheus series. A future cross-repo optimization could unify VM data collection: the operator collects once at 15-min (ROS granularity), and Koku aggregates to hourly during ingestion, eliminating the duplicate `cost:vm_*` queries. This requires coordinated changes in koku-metrics-operator, koku, and ros-ocp-backend, so it is deferred to post-MVP.
 
-### REQ-8b.2: VM daily digest table [HIGH]
+### REQ-8b.2: VM daily digest table [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.6
 
@@ -1473,7 +1533,7 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 
 **Integer types:** All numeric metrics stored as BIGINT — `int64` end-to-end, consistent with the container pipeline (see REQ-2.3).
 
-### REQ-8b.3: CSV ingestion — VM parser [HIGH]
+### REQ-8b.3: CSV ingestion — VM parser [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.9
 
@@ -1483,7 +1543,7 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 3. Compute daily digests in Go memory and upsert into `daily_vm_digests`.
 4. Do NOT route VM CSVs through the container pipeline (separate parser, separate table).
 
-### REQ-8b.4: Go — `recommendVM()` [HIGH]
+### REQ-8b.4: Go — `recommendVM()` [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.7
 
@@ -1498,13 +1558,13 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 
 **Output:** VM name, current/recommended vCPUs, current/recommended GiB memory, disk size recommendation, IOPS profile, idle/oversized flags.
 
-### REQ-8b.5: Batch entry point — extend `recommendAllWorkloads()` [HIGH]
+### REQ-8b.5: Batch entry point — extend `recommendAllWorkloads()` [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.8
 
 **Required behavior:** Extend `recommendAllWorkloads()` to add the VM recommendation step after container recommendations. VM recommendations stored in `vm_recommendations` table via `INSERT ... ON CONFLICT DO UPDATE`.
 
-### REQ-8b.6: API — VM recommendation endpoint [HIGH]
+### REQ-8b.6: API — VM recommendation endpoint [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.9
 
@@ -1514,7 +1574,7 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 3. Return structured response: `current` (vCPUs, GiB, disk), `recommended` (vCPUs, GiB, disk), `iops_profile` (read/write p95), `flags` (idle, oversized, abandoned).
 4. Support the same timeframe parameters as container recommendations.
 
-### REQ-8b.7: ros-ocp-backend — VM workload type [MEDIUM]
+### REQ-8b.7: ros-ocp-backend — VM workload type [MEDIUM] — NOT IMPLEMENTED
 
 **Source:** Analysis §30
 
@@ -1523,13 +1583,13 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 2. Update `aggregator.go` whitelist to accept VM workload type.
 3. Route VM data to the VM-specific parser and digest table (not the container pipeline).
 
-### REQ-8b.8: Operator — VM detection heuristic [LOW]
+### REQ-8b.8: Operator — VM detection heuristic [LOW] — NOT IMPLEMENTED
 
 **Source:** Analysis §30
 
 **Required behavior:** VMs MUST be identified by the presence of `kubevirt_vmi_info{phase='running'}` joining on `name` and `namespace`. Do NOT rely on pod labels — use the KubeVirt-native metric directly.
 
-### REQ-8b.9: Instance type recommendation (optional, Phase 2) [LOW]
+### REQ-8b.9: Instance type recommendation (optional, Phase 2) [LOW] — NOT IMPLEMENTED
 
 **Source:** Analysis §30.5
 
@@ -1641,7 +1701,7 @@ These are lightweight gauge-based queries against kube-state-metrics (no `rate()
 
 **Output:** Stored in `node_recommendations` table via `INSERT ... ON CONFLICT DO UPDATE`.
 
-### REQ-8c.4: Operator — MachineSet Prometheus queries [HIGH]
+### REQ-8c.4: Operator — MachineSet Prometheus queries [HIGH] — NOT IMPLEMENTED
 
 **Required:** 3–5 new Prometheus queries:
 
@@ -1667,7 +1727,7 @@ ros:machineautoscaler_max:
 
 **New CSV columns** (appended to node CSV or separate `ros-openshift-machineset-<YYYYMM>.csv`): `machineset_name`, `machineset_replicas`, `machineset_available_replicas`, `machineset_desired_replicas`, `autoscaler_min`, `autoscaler_max`.
 
-### REQ-8c.5: Tier 2 — MachineSet right-sizing [HIGH]
+### REQ-8c.5: Tier 2 — MachineSet right-sizing [HIGH] — NOT IMPLEMENTED
 
 **Required:** MachineSet Prometheus queries (REQ-8c.4) + instance type catalog (REQ-8c.6).
 
@@ -1698,7 +1758,7 @@ ros:machineautoscaler_max:
    - PDB data does NOT algorithmically change the replica count recommendation (mapping PDB → pods → nodes → MachineSets is a multi-hop join that risks incorrect recommendations). Instead, the notification alerts the operator to review manually.
    - **Known limitation:** PDB-aware replica count adjustment is deferred. PDB compliance is complex (namespace-scoped PDBs vs cluster-scoped MachineSets, multiple PDBs per node) and incorrect enforcement could prevent valid scale-down operations.
 
-### REQ-8c.6: Instance type catalog — Cloud API integration [MEDIUM]
+### REQ-8c.6: Instance type catalog — Cloud API integration [MEDIUM] — NOT IMPLEMENTED
 
 **Required behavior:** Maintain a live catalog of cloud instance types for AWS, Azure, and GCP, populated via cloud APIs rather than an embedded static file. This ensures the catalog is always up-to-date and covers all instance types including custom/new ones.
 
@@ -1759,7 +1819,7 @@ Customers may be running on instance types that are no longer listed in cloud pr
 
 4. **Cost comparison for unlisted types:** If the current instance type has no catalog entry, the cost comparison in the recommendation shows `current_cost = NULL` (unknown) and `recommended_cost = <value>`. The API response includes a `cost_savings` field only when both values are known. For unlisted types, the recommendation is based purely on capacity right-sizing, not cost savings.
 
-### REQ-8c.7: Tier 3 — MachineAutoscaler optimization [MEDIUM]
+### REQ-8c.7: Tier 3 — MachineAutoscaler optimization [MEDIUM] — NOT IMPLEMENTED
 
 **Required:** MachineAutoscaler queries (REQ-8c.4, optional set).
 
@@ -1793,7 +1853,7 @@ Tier 2 and Tier 3 (MachineSet right-sizing, autoscaler) also run in **Go** — t
 
 **Required behavior:** Invoke `recommendNodes()` from the same Go batch pipeline as container recommendations (e.g. within or immediately after `recommendAllWorkloads()`). Node recommendations run **after** container recommendations (since container request sums inform overcommit detection). MachineSet recommendations (Tier 2/3) run in the same Go batch after Tier 1 node rows are written.
 
-### REQ-8c.10: API — Node & MachineSet recommendation endpoints [HIGH]
+### REQ-8c.10: API — Node & MachineSet recommendation endpoints [HIGH] — PARTIAL
 
 **Required behavior:**
 
@@ -1808,7 +1868,7 @@ Tier 2 and Tier 3 (MachineSet right-sizing, autoscaler) also run in **Go** — t
 
 2. Support filtering by `cluster_uuid`, `node`, `machineset_name`, `instance_type`, `is_underutilized`, `is_overcommitted`, `stranded_resource`.
 
-### REQ-8c.11: Database — Node and MachineSet recommendation tables [HIGH]
+### REQ-8c.11: Database — Node and MachineSet recommendation tables [HIGH] — PARTIAL
 
 ```sql
 CREATE TABLE node_recommendations (
@@ -1946,7 +2006,7 @@ CREATE TABLE machineset_recommendations (
 
 ## 13. Phase 9: JVM/Quarkus Runtime Recommendations (Weeks 16–20)
 
-### REQ-9.1: JVM runtime detection [HIGH]
+### REQ-9.1: JVM runtime detection [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §18
 
@@ -1956,7 +2016,7 @@ CREATE TABLE machineset_recommendations (
 
 Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
 
-### REQ-9.2: MaxRAMPercentage recommendation [HIGH]
+### REQ-9.2: MaxRAMPercentage recommendation [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §18
 
@@ -1967,7 +2027,7 @@ Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
    - If heap utilization data available: `max(heap_utilization + 0.10, 0.50) × 100` (at least 50%, with 10% headroom over peak).
    - If no heap data: container ≤ 512MB → 50%, container > 512MB → 80% (Kruize defaults, preserved).
 
-### REQ-9.3: GC policy recommendation [HIGH]
+### REQ-9.3: GC policy recommendation [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §18
 
@@ -1979,7 +2039,7 @@ Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
    - Use heuristic: ≤ 2 cores → SerialGC; 2–4 cores → ParallelGC or G1; > 4 cores → G1 or ZGC.
 3. Respect JDK version constraints: ZGC requires JDK 15+, Shenandoah requires JDK 12+.
 
-### REQ-9.4: Quarkus thread pool recommendation [HIGH]
+### REQ-9.4: Quarkus thread pool recommendation [HIGH] — NOT IMPLEMENTED
 
 **Source:** Analysis §18
 
@@ -1989,7 +2049,7 @@ Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
 3. Recommend `quarkus.thread-pool.queue-size = 2 × core-threads`.
 4. **Do not** use `THREADS_PER_CORE = 1` — this undersizes by 50%+ vs Quarkus defaults.
 
-### REQ-9.5: Semeru consistency [MEDIUM]
+### REQ-9.5: Semeru consistency [MEDIUM] — NOT IMPLEMENTED
 
 **Source:** Analysis §18
 
@@ -1999,7 +2059,7 @@ Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
 
 ## 14. Phase 10: Remove Kruize Dependency (Weeks 18–22)
 
-### REQ-10.1: Remove Kruize API calls [HIGH]
+### REQ-10.1: Remove Kruize API calls [HIGH] — NOT IMPLEMENTED
 
 **Required behavior:** Remove all code paths that call Kruize endpoints:
 - `/createExperiment`
@@ -2011,11 +2071,11 @@ Detect JVM vendor: Hotspot vs Semeru/OpenJ9 from `jvm_info` labels.
 
 Remove: `internal/utils/kruize/` directory, `internal/types/kruizePayload/` directory, Kruize-related configuration variables (`KRUIZE_URL`, `KRUIZE_HOST`, `KRUIZE_PORT`, etc.).
 
-### REQ-10.2: Remove internal recommendation Kafka topic [MEDIUM]
+### REQ-10.2: Remove internal recommendation Kafka topic [MEDIUM] — NOT IMPLEMENTED
 
 **Required behavior:** The `rosocp.kruize.recommendations` topic was an internal coordination mechanism between the report processor and recommendation poller. With native Go computation, recommendations are computed synchronously during ingestion (or on-demand at API time). Remove the producer, consumer, and topic configuration.
 
-### REQ-10.3: Simplify ingestion pipeline [HIGH]
+### REQ-10.3: Simplify ingestion pipeline [HIGH] — PARTIAL
 
 **Required behavior:** The new ingestion flow is:
 
@@ -2051,7 +2111,7 @@ Offsets are committed **manually** (`enable.auto.commit: false`). Error behavior
 
 **Consumer lag monitoring:** Expose `ros_kafka_consumer_lag` Prometheus gauge (messages behind head of partition). Alert if lag exceeds threshold (e.g., 1000 messages for >10 minutes) — indicates processing bottleneck or repeated seek-back.
 
-### REQ-10.4: Remove Kruize from deployment manifests [MEDIUM]
+### REQ-10.4: Remove Kruize from deployment manifests [MEDIUM] — NOT IMPLEMENTED
 
 **Required behavior:** Update Helm charts, docker-compose files, and deployment configurations to remove:
 - Kruize container/pod
@@ -2064,7 +2124,7 @@ And add (if not already present from Phase 2):
 - **On-prem:** The `cost-onprem-chart` already ships PostgreSQL 16 — no database upgrade needed.
 - **SaaS:** The Clowder-provisioned RDS instance must be upgraded from version 13 to at least **version 16** (`clowdapp.yaml` `database.version: 16`). AWS RDS supports PG 16. This aligns with Koku SaaS (already on PG 16).
 
-### REQ-10.5: Update health checks and container resources [LOW]
+### REQ-10.5: Update health checks and container resources [LOW] — PARTIAL
 
 **Required behavior:** Remove Kruize health check from ros-ocp-backend startup validation (`Setup_kruize_performance_profile` becomes unnecessary). Replace with `/healthz`, `/readyz` probe endpoints (NFR-4).
 
@@ -3310,7 +3370,7 @@ Risks identified during the 2026-03-26 review, with their resolutions.
 | ~~REQ-6.2 QoS class~~ | §23.5 | ~~6~~ | ~~Medium~~ | — | — | — DEFERRED (implicit from CPU/memory recs) |
 | REQ-6.3 PVC right-sizing | §23.2 | 6 | High | No | No | Yes |
 | REQ-6.4 Go GOMAXPROCS | §23.4 | 6 | High | Yes | No | Yes |
-| REQ-7.1 Replica queries | §26 | 7 | High | Yes | No | No |
+| REQ-7.1 Replica queries | §26 | 7 | High | Yes | Yes | No |
 | REQ-7.2 Store replicas | §26 | 7 | High | No | Yes | Yes |
 | REQ-7.3 Total savings | §26 | 7 | High | No | No | Yes |
 | REQ-7.4 Fallback replicas | §26 | 7 | Medium | No | No | No |

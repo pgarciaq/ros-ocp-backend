@@ -91,7 +91,9 @@ type csvColumnIndex struct {
 	memUsage         int
 	memRSS           int
 	oomCount         int
-	workloadPodCount int
+	workloadPodCount  int
+	desiredReplicas   int
+	availableReplicas int
 	// Node column (optional; -1 when header absent).
 	node int
 	// Node capacity columns (optional; from cost management pod CSV).
@@ -121,6 +123,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
 		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
 		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
+		desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName:           -1,
 		acceleratorProfileName:         -1,
 		acceleratorFrameBufferUsageMin: -1,
@@ -178,6 +181,10 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.oomCount = i
 		case "workload_pod_count":
 			idx.workloadPodCount = i
+		case "desired_replicas":
+			idx.desiredReplicas = i
+		case "available_replicas":
+			idx.availableReplicas = i
 		case "accelerator_model_name":
 			idx.acceleratorModelName = i
 		case "accelerator_profile_name":
@@ -385,6 +392,21 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			return row, fmt.Errorf("workload_pod_count: %w", err)
 		}
 		row.WorkloadPodCount = int64(math.Round(v))
+	}
+
+	if idx.desiredReplicas >= 0 && idx.desiredReplicas < len(record) && record[idx.desiredReplicas] != "" {
+		v, err := strconv.ParseFloat(record[idx.desiredReplicas], 64)
+		if err != nil {
+			return row, fmt.Errorf("desired_replicas: %w", err)
+		}
+		row.DesiredReplicas = int64(math.Round(v))
+	}
+	if idx.availableReplicas >= 0 && idx.availableReplicas < len(record) && record[idx.availableReplicas] != "" {
+		v, err := strconv.ParseFloat(record[idx.availableReplicas], 64)
+		if err != nil {
+			return row, fmt.Errorf("available_replicas: %w", err)
+		}
+		row.AvailableReplicas = int64(math.Round(v))
 	}
 
 	if idx.nodeCapacityCPUCores >= 0 && idx.nodeCapacityCPUCores < len(record) && record[idx.nodeCapacityCPUCores] != "" {

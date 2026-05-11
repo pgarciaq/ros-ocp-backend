@@ -60,6 +60,7 @@ func RecommendAllWorkloads(
 			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
 			COALESCE(sample_count, 0),
 			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
+			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
 			namespace, workload, workload_type, container_name
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
@@ -90,6 +91,7 @@ func RecommendAllWorkloads(
 			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
 			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
 			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
+			&d.DesiredReplicas, &d.AvailableReplicas,
 			&ns, &wl, &wlType, &cn,
 		)
 		if err != nil {
@@ -129,6 +131,7 @@ func RecommendAllWorkloads(
 			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
 			oomTotal := sumOOMCounts(windowRows)
 			pcMin, pcMax, pcAvg := aggregatePodCounts(windowRows)
+			desiredReplicas, availableReplicas := latestReplicaCounts(windowRows)
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
@@ -189,6 +192,8 @@ func RecommendAllWorkloads(
 				PodCountMin:          pcMin,
 				PodCountMax:          pcMax,
 				PodCountAvg:          pcAvg,
+				DesiredReplicas:      desiredReplicas,
+				AvailableReplicas:    availableReplicas,
 			}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
@@ -225,9 +230,10 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
 				pod_count_min, pod_count_max, pod_count_avg,
+				desired_replicas, available_replicas,
 				estimated_monthly_savings_usd,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -248,6 +254,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				pod_count_min = EXCLUDED.pod_count_min,
 				pod_count_max = EXCLUDED.pod_count_max,
 				pod_count_avg = EXCLUDED.pod_count_avg,
+				desired_replicas = EXCLUDED.desired_replicas,
+				available_replicas = EXCLUDED.available_replicas,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
@@ -261,6 +269,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			r.VariationMemRequestPct, r.VariationMemLimitPct,
 			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 			r.PodCountMin, r.PodCountMax, r.PodCountAvg,
+			r.DesiredReplicas, r.AvailableReplicas,
 			r.EstimatedSavingsUSD,
 		)
 	}
@@ -367,6 +376,20 @@ func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {
 		pcAvg = int64(math.Round(sumAvg / float64(count)))
 	}
 	return
+}
+
+// latestReplicaCounts returns the desired and available replica counts from
+// the most recent DigestRow that has a non-zero desired_replicas value.
+func latestReplicaCounts(rows []DigestRow) (desired, available int64) {
+	var latestDate time.Time
+	for _, r := range rows {
+		if r.DesiredReplicas > 0 && r.BucketDate.After(latestDate) {
+			latestDate = r.BucketDate
+			desired = r.DesiredReplicas
+			available = r.AvailableReplicas
+		}
+	}
+	return desired, available
 }
 
 func sumOOMCounts(rows []DigestRow) int64 {
