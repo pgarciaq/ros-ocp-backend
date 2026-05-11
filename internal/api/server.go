@@ -85,6 +85,7 @@ func StartAPIServer() {
 	// Node-level GPU recommendations (native engine only).
 	if cfg.UseNativeEngine {
 		v1.GET("/recommendations/openshift/nodes", GetNodeRecommendations)
+		v1.GET("/recommendations/openshift/nodes/utilization", GetNodeUtilizationRecs)
 	}
 
 	// Fleet-level summary (native engine only).

@@ -391,3 +391,57 @@ Table notification_code_definitions {
   severity text [not null]
   Note: 'Lookup table for recommendation notification codes.'
 }
+
+// ============================================================
+// NODE RIGHT-SIZING TABLES (Tier 1)
+// ============================================================
+
+Table daily_node_digests {
+  bucket_date date [not null]
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  node text [not null]
+  cpu_usage_p50_mc bigint
+  cpu_usage_p95_mc bigint
+  mem_usage_p50_kib bigint
+  mem_usage_p95_kib bigint
+  max_cpu_allocatable_mc bigint [note: 'NULL when capacity not available from CSV']
+  max_mem_allocatable_kib bigint [note: 'NULL when capacity not available from CSV']
+  max_cpu_requests_mc bigint
+  max_mem_requests_kib bigint
+  max_pod_count bigint
+  instance_type text
+  machineset_name text
+  sample_count bigint
+
+  Indexes {
+    (org_id, cluster_uuid, node, bucket_date) [pk]
+  }
+  Note: 'Partitioned by RANGE(bucket_date). Aggregated from pod CSV rows by node per day.'
+}
+
+Table node_recommendations {
+  org_id text [not null]
+  cluster_uuid uuid [not null]
+  node text [not null]
+  cpu_util_p50 real
+  cpu_util_p95 real
+  mem_util_p50 real
+  mem_util_p95 real
+  cpu_overcommit_ratio real
+  is_underutilized boolean
+  is_overcommitted boolean
+  stranded_resource text [note: 'cpu or memory when imbalanced']
+  pod_count bigint
+  pod_capacity bigint
+  instance_type text
+  machineset_name text
+  trend_slope real
+  notification_codes smallint[]
+  updated_at timestamptz [default: `now()`]
+
+  Indexes {
+    (org_id, cluster_uuid, node) [pk]
+  }
+  Note: 'Latest node utilization analysis (enabled by default).'
+}

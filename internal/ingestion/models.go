@@ -25,6 +25,11 @@ type MetricRow struct {
 	OOMCount         int64
 	WorkloadPodCount int64
 
+	// Node capacity fields (optional; from cost management pod CSV).
+	// Zero when the column is absent from the CSV.
+	NodeCapacityCPUMC  int64
+	NodeCapacityMemKiB int64
+
 	AcceleratorModelName   string
 	AcceleratorProfileName string
 	AcceleratorFBUsageMin  float64

@@ -1,0 +1,218 @@
+package engine_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+)
+
+// TestNodeRecommendationPipeline_Integration exercises the full node
+// recommendation pipeline end-to-end with a real PostgreSQL database:
+//
+//  1. Seed daily_node_digests with known data
+//  2. Run QueryNodeDigests to verify retrieval
+//  3. Run RecommendNodes to compute recommendations
+//  4. Run PersistNodeRecommendations to write results
+//  5. Re-query and verify the recommendations are stored correctly
+//
+// This test is skipped in short mode (-short flag) since it requires Docker.
+func TestNodeRecommendationPipeline_Integration(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		 VALUES (1, $1, 'node-test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	end := start.AddDate(0, 0, 7)
+
+	seedNodeDigests(t, pool, orgID, clusterUUID, start, 8)
+
+	t.Run("QueryNodeDigests returns seeded data", func(t *testing.T) {
+		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end.AddDate(0, 0, 1))
+		require.NoError(t, err)
+		require.NotEmpty(t, digests)
+
+		nodeNames := map[string]bool{}
+		for _, d := range digests {
+			nodeNames[d.Node] = true
+		}
+		assert.True(t, nodeNames["underutilized-node"], "should find underutilized-node")
+		assert.True(t, nodeNames["overcommitted-node"], "should find overcommitted-node")
+		assert.True(t, nodeNames["healthy-node"], "should find healthy-node")
+	})
+
+	t.Run("RecommendNodes produces correct classifications", func(t *testing.T) {
+		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end.AddDate(0, 0, 1))
+		require.NoError(t, err)
+
+		cfg := engine.NodeRecConfig{
+			UnderutilThreshold:  0.30,
+			OvercommitThreshold: 1.0,
+			AllocatableFactor:   0.90,
+			MinDataDays:         3,
+		}
+		recs := engine.RecommendNodes(digests, cfg)
+		require.NotEmpty(t, recs)
+
+		recByNode := map[string]engine.NodeRec{}
+		for _, r := range recs {
+			recByNode[r.Node] = r
+		}
+
+		if underutil, ok := recByNode["underutilized-node"]; ok {
+			assert.True(t, underutil.IsUnderutilized, "underutilized-node should be flagged")
+			assert.False(t, underutil.IsOvercommitted)
+			assert.Contains(t, underutil.NotificationCodes, int16(11))
+		} else {
+			t.Error("expected underutilized-node in recommendations")
+		}
+
+		if overcommit, ok := recByNode["overcommitted-node"]; ok {
+			assert.True(t, overcommit.IsOvercommitted, "overcommitted-node should be flagged")
+			assert.Contains(t, overcommit.NotificationCodes, int16(12))
+		} else {
+			t.Error("expected overcommitted-node in recommendations")
+		}
+
+		if healthy, ok := recByNode["healthy-node"]; ok {
+			assert.False(t, healthy.IsUnderutilized)
+			assert.False(t, healthy.IsOvercommitted)
+			assert.Empty(t, healthy.NotificationCodes)
+		} else {
+			t.Error("expected healthy-node in recommendations")
+		}
+	})
+
+	t.Run("PersistNodeRecommendations writes and upserts", func(t *testing.T) {
+		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end.AddDate(0, 0, 1))
+		require.NoError(t, err)
+
+		cfg := engine.NodeRecConfig{
+			UnderutilThreshold:  0.30,
+			OvercommitThreshold: 1.0,
+			AllocatableFactor:   0.90,
+			MinDataDays:         3,
+		}
+		recs := engine.RecommendNodes(digests, cfg)
+		require.NotEmpty(t, recs)
+
+		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs)
+		require.NoError(t, err)
+
+		var count int
+		err = pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`,
+			orgID, clusterUUID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, len(recs), count)
+
+		var isUnderutilized bool
+		err = pool.QueryRow(ctx,
+			`SELECT is_underutilized FROM node_recommendations WHERE org_id = $1 AND node = $2`,
+			orgID, "underutilized-node").Scan(&isUnderutilized)
+		require.NoError(t, err)
+		assert.True(t, isUnderutilized)
+
+		// Upsert: run again, should not fail or duplicate
+		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs)
+		require.NoError(t, err)
+
+		err = pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`,
+			orgID, clusterUUID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, len(recs), count, "upsert should not duplicate rows")
+	})
+}
+
+// seedNodeDigests inserts test data into daily_node_digests for three nodes
+// with distinct profiles: underutilized, overcommitted, and healthy.
+func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string, start time.Time, days int) {
+	t.Helper()
+
+	type nodeProfile struct {
+		node            string
+		cpuUsageP50     int64
+		cpuUsageP95     int64
+		memUsageP50     int64
+		memUsageP95     int64
+		maxCPUAllocMC   int64
+		maxMemAllocKiB  int64
+		maxCPURequestMC int64
+		maxMemRequestKiB int64
+		maxPodCount     int64
+	}
+
+	profiles := []nodeProfile{
+		{
+			node: "underutilized-node",
+			// Very low usage (10-15% of 8000mc / 32M KiB)
+			cpuUsageP50: 800, cpuUsageP95: 1200,
+			memUsageP50: 3200, memUsageP95: 4800,
+			maxCPUAllocMC: 8000, maxMemAllocKiB: 33554432,
+			maxCPURequestMC: 2000, maxMemRequestKiB: 8388608,
+			maxPodCount: 5,
+		},
+		{
+			node: "overcommitted-node",
+			// Requests exceed allocatable (overcommit ratio > 1.0)
+			cpuUsageP50: 3500, cpuUsageP95: 3800,
+			memUsageP50: 14000000, memUsageP95: 15000000,
+			maxCPUAllocMC: 4000, maxMemAllocKiB: 16777216,
+			maxCPURequestMC: 5000, maxMemRequestKiB: 20000000,
+			maxPodCount: 25,
+		},
+		{
+			node: "healthy-node",
+			// Moderate usage (50-60% of allocatable), requests below allocatable
+			cpuUsageP50: 4000, cpuUsageP95: 4800,
+			memUsageP50: 16000000, memUsageP95: 19000000,
+			maxCPUAllocMC: 8000, maxMemAllocKiB: 33554432,
+			maxCPURequestMC: 6000, maxMemRequestKiB: 25000000,
+			maxPodCount: 15,
+		},
+	}
+
+	ctx := context.Background()
+	for _, p := range profiles {
+		for i := 0; i < days; i++ {
+			date := start.AddDate(0, 0, i)
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO daily_node_digests (
+					bucket_date, org_id, cluster_uuid, node,
+					cpu_usage_p50_mc, cpu_usage_p95_mc,
+					mem_usage_p50_kib, mem_usage_p95_kib,
+					max_cpu_allocatable_mc, max_mem_allocatable_kib,
+					max_cpu_requests_mc, max_mem_requests_kib,
+					max_pod_count, sample_count
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO UPDATE SET
+					cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
+				date, orgID, clusterUUID, p.node,
+				p.cpuUsageP50+int64(i*10), p.cpuUsageP95+int64(i*15),
+				p.memUsageP50+int64(i*100), p.memUsageP95+int64(i*150),
+				p.maxCPUAllocMC, p.maxMemAllocKiB,
+				p.maxCPURequestMC, p.maxMemRequestKiB,
+				p.maxPodCount, int64(24),
+			); err != nil {
+				t.Fatalf("seedNodeDigests: insert failed for %s day %d: %v", p.node, i, err)
+			}
+		}
+	}
+}

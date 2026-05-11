@@ -94,6 +94,9 @@ type csvColumnIndex struct {
 	workloadPodCount int
 	// Node column (optional; -1 when header absent).
 	node int
+	// Node capacity columns (optional; from cost management pod CSV).
+	nodeCapacityCPUCores  int
+	nodeCapacityMemBytes  int
 	// GPU columns (optional; -1 when header absent).
 	acceleratorModelName           int
 	acceleratorProfileName         int
@@ -116,6 +119,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		intervalStart: -1, intervalEnd: -1, namespace: -1, workloadName: -1,
 		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
+		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
 		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		acceleratorModelName:           -1,
 		acceleratorProfileName:         -1,
@@ -150,6 +154,10 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.pod = i
 		case "node":
 			idx.node = i
+		case "node_capacity_cpu_cores":
+			idx.nodeCapacityCPUCores = i
+		case "node_capacity_memory_bytes":
+			idx.nodeCapacityMemBytes = i
 		case "cpu_request_container_avg":
 			idx.cpuRequest = i
 		case "cpu_limit_container_avg":
@@ -377,6 +385,19 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			return row, fmt.Errorf("workload_pod_count: %w", err)
 		}
 		row.WorkloadPodCount = int64(math.Round(v))
+	}
+
+	if idx.nodeCapacityCPUCores >= 0 && idx.nodeCapacityCPUCores < len(record) && record[idx.nodeCapacityCPUCores] != "" {
+		row.NodeCapacityCPUMC, err = CoreToMillicores(record[idx.nodeCapacityCPUCores])
+		if err != nil {
+			row.NodeCapacityCPUMC = 0
+		}
+	}
+	if idx.nodeCapacityMemBytes >= 0 && idx.nodeCapacityMemBytes < len(record) && record[idx.nodeCapacityMemBytes] != "" {
+		row.NodeCapacityMemKiB, err = BytesToKiB(record[idx.nodeCapacityMemBytes])
+		if err != nil {
+			row.NodeCapacityMemKiB = 0
+		}
 	}
 
 	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
