@@ -495,7 +495,7 @@ func parseNativeClusterParams(value string, mode string) ([]string, []string, er
 		}
 		return []string{"c.cluster_uuid" + suffix}, []string{value}, nil
 	}
-	s, err := sanitizeParamValue("cluster", value, model.ClusterMaxLen, true)
+	s, err := sanitizeParamValue("cluster", value, model.ClusterMaxLen, true, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -531,7 +531,7 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 			allSQLClauses = append(allSQLClauses, sqlClauses...)
 			allParamVals = append(allParamVals, paramVals...)
 		default:
-			s, err := sanitizeParamValue(param, val, maxLen, allowDot)
+			s, err := sanitizeParamValue(param, val, maxLen, allowDot, false)
 			if err != nil {
 				return nil, err
 			}

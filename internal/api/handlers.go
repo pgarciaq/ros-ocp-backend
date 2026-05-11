@@ -541,6 +541,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 			unitChoices,
 			setk8sUnits,
 			recSets[i].Recommendations,
+			&recSets[i].StoredVariationPcts,
 		)
 	}
 
@@ -599,6 +600,7 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 		unitChoices,
 		setk8sUnits,
 		recSet.Recommendations,
+		&recSet.StoredVariationPcts,
 	)
 	return c.JSON(http.StatusOK, recSet)
 }
