@@ -163,7 +163,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 
 | # | Feature | Description | Phase | REQs | Operator? | Status | vs Legacy | Clarifications |
 |---|---------|-------------|-------|------|-----------|--------|-----------|----------------|
-| F43 | **Node utilization visibility (Tier 1)** | Underutilized (<30% both CPU+mem), overcommitted (>150% request/allocatable), stranded resources (CPU vs memory imbalance). Per-node p50/p95 utilization, trend slope. | 8c | REQ-8c.1, REQ-8c.2, REQ-8c.2b, REQ-8c.3, REQ-8c.8, REQ-8c.9, REQ-8c.11 | Yes (routing existing + 2 new queries) | Active | **Net-new** — Legacy pipeline has node data in CSV (node labels, capacity) but only as a dimension for container recs, not as a recommendation target. | Gated behind `ROS_ENABLE_NODE_RECS`. On-prem = capacity planning; cloud = scale-down. |
+| F43 | **Node utilization visibility (Tier 1)** | Underutilized (<30% both CPU+mem), overcommitted (>150% request/allocatable), stranded resources (CPU vs memory imbalance). Per-node p50/p95 utilization, trend slope. | 8c | REQ-8c.1, REQ-8c.2, REQ-8c.2b, REQ-8c.3, REQ-8c.8, REQ-8c.9, REQ-8c.11 | Yes (routing existing + 2 new queries) | Active | **Net-new** — Legacy pipeline has node data in CSV (node labels, capacity) but only as a dimension for container recs, not as a recommendation target. | Enabled by default. On-prem = capacity planning; cloud = scale-down. |
 | F44 | **MachineSet right-sizing (Tier 2)** | Aggregate utilization across MachineSet nodes. Replica count recommendation (`rec = ceil(current × util / target)`). Instance type recommendation from cloud catalog (smallest-fit). Stranded resource → family switch. PDB notification. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (3-5 queries) | Active | **Net-new** | Go heuristic (not PL/pgSQL). 20% minimum savings hysteresis. 2-replica HA floor. |
 | F45 | **MachineAutoscaler optimization (Tier 3)** | Saturated/idle/flapping/missing autoscaler detection. Suggested min/max adjustments. | 8c | REQ-8c.7 | Yes (2 queries, optional) | Active | **Net-new** | Cloud-only (bare metal N/A). |
 | F46 | **Cloud instance type catalog** | Live catalog from AWS Bulk Pricing JSON, Azure Retail Prices API, GCP machineTypes API. Daily refresh. In-memory cache. | 8c | REQ-8c.6 | No | Active | **Net-new** | AWS Tier 1: public JSON (no auth). Tier 2: optional `ec2:DescribeInstanceTypes` if customer adds IAM perm. |
@@ -2845,7 +2845,7 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Archive stale recommendations after this many days |
 | `ROS_ENABLE_EPHEMERAL_STORAGE` | false | Ephemeral storage recs (informational only — cadvisor metrics unreliable through OCP 4.21) |
 | `ROS_ENABLE_NODEJS_RECS` | false | Node.js heap informational recs (OFF by default) |
-| `ROS_ENABLE_NODE_RECS` | false | Node/MachineSet recommendations |
+| ~~`ROS_ENABLE_NODE_RECS`~~ | _(removed)_ | Node recommendations now enabled unconditionally |
 | `ROS_ENABLE_FLEET_SUMMARY` | false | Fleet-level cross-cluster summary endpoint |
 | `ROS_INSTANCE_CATALOG_REFRESH_HOURS` | 24 | Cloud instance type catalog refresh interval |
 | ~~`ROS_INGEST_TOKEN`~~ | ~~(empty)~~ | ~~Removed — on-prem uses same Kafka + S3 path as SaaS (see NFR-9)~~ |

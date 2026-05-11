@@ -9,6 +9,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -483,6 +484,44 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) {
 	oomCounts := engine.OOMCountsByContainer(results)
 	if err := engine.WriteRecommendationQuality(ctx, pool, results, oldRecs, oomCounts); err != nil {
 		log.Errorf("native engine: writing quality metrics failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	}
+
+	// Step 4: Node-level recommendations (Tier 1 right-sizing).
+	runNodeRecommendations(ctx, pool, orgID, clusterUUID, start, now, appCfg)
+}
+
+// runNodeRecommendations queries daily_node_digests for the cluster, computes
+// Tier 1 node utilization signals, and persists the results.
+func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config) {
+	log := logging.GetLogger()
+
+	digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end)
+	if err != nil {
+		log.Warnf("node recs: query digests failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		return
+	}
+	if len(digests) == 0 {
+		log.Infof("node recs: no node digests for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
+
+	cfg := engine.NodeRecConfig{
+		UnderutilThreshold:    appCfg.NodeUnderutilThreshold,
+		OvercommitThreshold:   appCfg.NodeOvercommitThreshold,
+		AllocatableFactor:     appCfg.NodeAllocatableFactor,
+		MinDataDays:           appCfg.NodeMinDataDays,
+		StrandedHighThreshold: appCfg.NodeStrandedHighThreshold,
+		StrandedLowThreshold:  appCfg.NodeStrandedLowThreshold,
+		EMAAlpha:              appCfg.NodeEMAAlpha,
+	}
+	recs := engine.RecommendNodes(digests, cfg)
+	if len(recs) == 0 {
+		log.Infof("node recs: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
+		return
+	}
+
+	if err := engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs); err != nil {
+		log.Errorf("node recs: persist failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 	}
 }
 

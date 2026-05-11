@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS node_recommendations (
+    org_id               TEXT NOT NULL,
+    cluster_uuid         UUID NOT NULL,
+    node                 TEXT NOT NULL,
+    cpu_util_p50         REAL,
+    cpu_util_p95         REAL,
+    mem_util_p50         REAL,
+    mem_util_p95         REAL,
+    cpu_overcommit_ratio REAL,
+    is_underutilized     BOOLEAN,
+    is_overcommitted     BOOLEAN,
+    stranded_resource    TEXT,
+    pod_count            BIGINT,
+    pod_capacity         BIGINT,
+    instance_type        TEXT,
+    machineset_name      TEXT,
+    trend_slope          REAL,
+    notification_codes   SMALLINT[],
+    updated_at           TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (org_id, cluster_uuid, node)
+);

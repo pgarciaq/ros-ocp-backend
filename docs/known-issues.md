@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ---
 
@@ -37,6 +37,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **GPU** | GPU savings estimates (from Koku cost model rates) | **Shipping** |
 | **Storage** | PVC right-sizing (oversized/near-full/orphaned/healthy + growth trend) | **Shipping** |
 | **Snapshots** | Snapshot staleness detection (orphaned/stale/never-restored/redundant) | **Shipping** |
+| **Node recs** | Node CPU/memory right-sizing (Tier 1: underutilized, overcommitted, stranded) | **Shipping (enabled by default)** |
 | **Fleet** | Fleet summary (cross-cluster aggregate) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
 | **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
@@ -46,7 +47,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Feature | Description | Complexity |
 |---------|-------------|------------|
 | VM recommendations | Virtual machine right-sizing for OpenShift Virtualization | Medium |
-| Node CPU/memory right-sizing | Underutilized / overcommitted / stranded resource detection | Medium |
+| ~~Node CPU/memory right-sizing~~ | ~~Underutilized / overcommitted / stranded resource detection~~ | **Implemented and shipping (enabled by default)** |
 | MachineSet right-sizing | Instance type + replica count recommendations | High |
 | Cloud instance catalog | AWS/Azure/GCP instance type database for cross-cloud right-sizing | Medium |
 | JVM/Quarkus recommendations | Java-runtime-specific tuning (heap, GC) | Medium |
@@ -60,6 +61,18 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Issue | Impact | Severity |
 |-------|--------|----------|
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback |
+| Node recommendation cold start (3 days) | New clusters return empty results from `/recommendations/openshift/nodes/utilization` until 3 days of data accumulates | Low — by design for accuracy |
+
+#### Node Recommendation Cold Start
+
+Node recommendations require at least 3 days of ingested container usage data
+before any results appear. This is intentional: fewer data points produce
+unreliable utilization percentiles and trend slopes.
+
+**UI requirement:** `koku-ui` needs a null/empty state for the node
+recommendations view explaining: "Collecting data — recommendations will appear
+after 3 days of usage data." This avoids user confusion when the endpoint
+returns an empty `data` array during the warm-up period.
 
 ### Recently Fixed Caveats
 

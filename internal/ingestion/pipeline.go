@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 // EnsureSamplePartitions creates monthly partitions of container_usage_samples
@@ -199,7 +201,22 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 		log.Warnf("ProcessCSVToDigests: GPU digest upsert failed (non-fatal): %v", err)
 	}
 
+	if err := upsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+		log.Warnf("ProcessCSVToDigests: node digest upsert failed (non-fatal): %v", err)
+	}
+
 	return nil
+}
+
+// upsertNodeDigests aggregates container rows by node and day, then writes
+// daily_node_digests. Rows without a node field are silently skipped.
+func upsertNodeDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
+	accumulators := AggregateNodeDigests(rows)
+	if len(accumulators) == 0 {
+		return nil
+	}
+	cfg := config.GetConfig()
+	return FlushNodeDigests(ctx, pool, accumulators, orgID, clusterUUID, cfg.NodeAllocatableFactor)
 }
 
 // EnsureGPUDigestPartitions creates monthly partitions of gpu_container_digests.
