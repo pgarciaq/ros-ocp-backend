@@ -122,16 +122,13 @@ func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
 	var err error
 
 	if idx.intervalStart >= 0 && idx.intervalStart < len(record) {
-		row.IntervalStart, err = time.Parse("2006-01-02 15:04:05+00:00", strings.TrimSpace(record[idx.intervalStart]))
+		row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
 		if err != nil {
-			row.IntervalStart, err = time.Parse(time.RFC3339, strings.TrimSpace(record[idx.intervalStart]))
-			if err != nil {
-				return row, fmt.Errorf("parse interval_start: %w", err)
-			}
+			return row, fmt.Errorf("parse interval_start: %w", err)
 		}
 	}
 	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
-		row.IntervalEnd, _ = time.Parse("2006-01-02 15:04:05+00:00", strings.TrimSpace(record[idx.intervalEnd]))
+		row.IntervalEnd, _ = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
 	}
 	if idx.namespace >= 0 && idx.namespace < len(record) {
 		row.Namespace = strings.TrimSpace(record[idx.namespace])
@@ -148,6 +145,9 @@ func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
 	if idx.capacityBytes >= 0 && idx.capacityBytes < len(record) {
 		row.CapacityBytes = parseIntOrByteSeconds(record[idx.capacityBytes])
 	}
+	if row.CapacityBytes == 0 && idx.capacityByteSeconds >= 0 && idx.capacityByteSeconds < len(record) {
+		row.CapacityBytes = parseIntOrByteSeconds(record[idx.capacityByteSeconds])
+	}
 	if idx.requestByteSeconds >= 0 && idx.requestByteSeconds < len(record) {
 		row.RequestByteSeconds = parseIntOrByteSeconds(record[idx.requestByteSeconds])
 	}
@@ -155,6 +155,25 @@ func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
 		row.UsageByteSeconds = parseIntOrByteSeconds(record[idx.usageByteSeconds])
 	}
 	return row, nil
+}
+
+// parseFlexibleTimestamp handles the various timestamp formats produced
+// by koku-metrics-operator and Nise:
+//   - "2006-01-02 15:04:05 +0000 UTC"  (operator & Nise)
+//   - "2006-01-02 15:04:05+00:00"      (alternative)
+//   - time.RFC3339                       ("2006-01-02T15:04:05Z07:00")
+func parseFlexibleTimestamp(s string) (time.Time, error) {
+	for _, layout := range []string{
+		"2006-01-02 15:04:05 +0000 UTC",
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05+00:00",
+		time.RFC3339,
+	} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized timestamp format: %q", s)
 }
 
 func parseIntOrByteSeconds(s string) int64 {
