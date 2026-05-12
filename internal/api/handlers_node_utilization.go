@@ -57,7 +57,7 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 			COALESCE(nr.trend_slope, 0), nr.notification_codes,
 			nr.updated_at
 		FROM node_recommendations nr
-		JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid::text
+		JOIN clusters c ON nr.cluster_uuid::text = c.cluster_uuid::text
 		JOIN rh_accounts a ON c.tenant_id = a.id
 		WHERE a.org_id = $1`
 

@@ -303,6 +303,29 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 	return results
 }
 
+// EnsurePVCDigestPartitions creates monthly partitions of daily_pvc_digests
+// for all months present in the digests slice (non-fatal on error).
+func EnsurePVCDigestPartitions(ctx context.Context, pool *pgxpool.Pool, digests []PVCDigestResult) {
+	months := map[time.Time]struct{}{}
+	for _, d := range digests {
+		monthStart := time.Date(d.BucketDate.Year(), d.BucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[monthStart] = struct{}{}
+	}
+	for monthStart := range months {
+		monthEnd := monthStart.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("daily_pvc_digests_%s", monthStart.Format("200601"))
+		sql := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_pvc_digests FOR VALUES FROM ('%s') TO ('%s')`,
+			partName,
+			monthStart.Format("2006-01-02"),
+			monthEnd.Format("2006-01-02"),
+		)
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			log.Warnf("EnsurePVCDigestPartitions: %s: %v (non-fatal)", partName, err)
+		}
+	}
+}
+
 // UpsertPVCDigests writes daily PVC digests to the database.
 func UpsertPVCDigests(ctx context.Context, pool *pgxpool.Pool, digests []PVCDigestResult, orgID, clusterUUID string) error {
 	if len(digests) == 0 {
@@ -354,6 +377,7 @@ func ProcessStorageCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 	}
 
 	digests := ComputePVCDigests(rows)
+	EnsurePVCDigestPartitions(ctx, pool, digests)
 	if err := UpsertPVCDigests(ctx, pool, digests, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("upserting PVC digests: %w", err)
 	}

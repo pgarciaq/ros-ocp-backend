@@ -391,3 +391,235 @@ func TestBuildDetailResponse_NoNotifications(t *testing.T) {
 	shortTerm := detail.Recommendations.RecommendationTerms["short_term"]
 	assert.Nil(t, shortTerm.Notifications, "term notifications should be nil when empty")
 }
+
+func TestBuildNamespaceDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
+	cpuReq := int64(4720)
+	cpuLim := int64(8000)
+	memReq := int64(2048)
+	memLim := int64(4096)
+	curCPUReq := int64(3000)
+	curCPULim := int64(6000)
+	curMemReq := int64(1024)
+	curMemLim := int64(2048)
+	varCPUReq := int32(-20)
+	varCPULim := int32(10)
+	varMemReq := int32(50)
+	varMemLim := int32(25)
+
+	native := &NativeNamespaceResult{
+		ID:           "ns-test-uuid",
+		ClusterAlias: "my-cluster",
+		ClusterUUID:  "22222222-2222-2222-2222-222222222222",
+		Project:      "kube-system",
+		SourceID:     "src-1",
+		LastReported: "2026-04-10T12:00:00Z",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{
+					CPURequestMillicores:   &cpuReq,
+					CPULimitMillicores:     &cpuLim,
+					MemRequestKiB:          &memReq,
+					MemLimitKiB:            &memLim,
+					CurrentCPURequestMC:    &curCPUReq,
+					CurrentCPULimitMC:      &curCPULim,
+					CurrentMemRequestKiB:   &curMemReq,
+					CurrentMemLimitKiB:     &curMemLim,
+					VariationCPURequestPct: &varCPUReq,
+					VariationCPULimitPct:   &varCPULim,
+					VariationMemRequestPct: &varMemReq,
+					VariationMemLimitPct:   &varMemLim,
+					Notifications: map[string]notifications.NotificationEntry{
+						"1": {Type: "info", Message: "Short Term Available", Code: 1},
+					},
+				},
+				Performance: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+					MemRequestKiB:        &memReq,
+				},
+			},
+			"monitoring_end_time": "2026-04-09T23:00:00Z",
+		},
+	}
+
+	plots := map[string]*NativePlot{
+		"short_term": {
+			DataPoints: 3,
+			PlotsData: map[string]NativePlotsData{
+				"2026-04-10T00:00:00.000Z": {
+					CPUUsage:    &BoxPlotDetails{Min: 0.5, Q1: 1.0, Median: 1.5, Q3: 2.0, Max: 2.5, Format: "cores"},
+					MemoryUsage: &BoxPlotDetails{Min: 256, Q1: 512, Median: 768, Q3: 1024, Max: 1280, Format: "MiB"},
+				},
+			},
+		},
+	}
+	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
+
+	detail := BuildNamespaceDetailResponse(native, plots, met)
+
+	assert.Equal(t, "ns-test-uuid", detail.ID)
+	assert.Equal(t, "my-cluster", detail.ClusterAlias)
+	assert.Equal(t, "22222222-2222-2222-2222-222222222222", detail.ClusterUUID)
+	assert.Equal(t, "kube-system", detail.Project)
+	assert.Equal(t, "src-1", detail.SourceID)
+	assert.Equal(t, "2026-04-10T12:00:00Z", detail.LastReported)
+	assert.Equal(t, "2026-04-10T00:00:00Z", detail.Recommendations.MonitoringEndTime)
+
+	shortTerm, ok := detail.Recommendations.RecommendationTerms["short_term"]
+	require.True(t, ok)
+	assert.Equal(t, float64(24), shortTerm.DurationInHours)
+
+	require.NotNil(t, shortTerm.Plots)
+	assert.Equal(t, 3, shortTerm.Plots.DataPoints)
+
+	require.NotNil(t, shortTerm.RecommendationEngines)
+	cost := shortTerm.RecommendationEngines.Cost
+	require.NotNil(t, cost)
+	require.NotNil(t, cost.Config)
+	require.NotNil(t, cost.Config.Requests)
+	require.NotNil(t, cost.Config.Requests.CPU)
+	assert.InDelta(t, 4.72, cost.Config.Requests.CPU.Amount, 0.001)
+	assert.Equal(t, "cores", cost.Config.Requests.CPU.Format)
+	require.NotNil(t, cost.Config.Requests.Memory)
+	assert.InDelta(t, 2.0, cost.Config.Requests.Memory.Amount, 0.001)
+	assert.Equal(t, "MiB", cost.Config.Requests.Memory.Format)
+	require.NotNil(t, cost.Config.Limits)
+	require.NotNil(t, cost.Config.Limits.CPU)
+	assert.InDelta(t, 8.0, cost.Config.Limits.CPU.Amount, 0.001)
+	require.NotNil(t, cost.Config.Limits.Memory)
+	assert.InDelta(t, 4.0, cost.Config.Limits.Memory.Amount, 0.001)
+
+	require.NotNil(t, cost.Variation)
+	require.NotNil(t, cost.Variation.Requests)
+	require.NotNil(t, cost.Variation.Requests.CPU)
+	assert.Equal(t, float64(-20), cost.Variation.Requests.CPU.Amount)
+	assert.Equal(t, "percentage", cost.Variation.Requests.CPU.Format)
+	require.NotNil(t, cost.Variation.Requests.Memory)
+	assert.Equal(t, float64(50), cost.Variation.Requests.Memory.Amount)
+	require.NotNil(t, cost.Variation.Limits)
+	require.NotNil(t, cost.Variation.Limits.CPU)
+	assert.Equal(t, float64(10), cost.Variation.Limits.CPU.Amount)
+	require.NotNil(t, cost.Variation.Limits.Memory)
+	assert.Equal(t, float64(25), cost.Variation.Limits.Memory.Amount)
+
+	require.NotNil(t, cost.Notifications)
+	assert.Contains(t, cost.Notifications, "1")
+
+	require.NotNil(t, detail.Recommendations.Current)
+	require.NotNil(t, detail.Recommendations.Current.Requests)
+	require.NotNil(t, detail.Recommendations.Current.Requests.CPU)
+	assert.InDelta(t, 3.0, detail.Recommendations.Current.Requests.CPU.Amount, 0.001)
+	assert.Equal(t, "cores", detail.Recommendations.Current.Requests.CPU.Format)
+	require.NotNil(t, detail.Recommendations.Current.Requests.Memory)
+	assert.InDelta(t, 1.0, detail.Recommendations.Current.Requests.Memory.Amount, 0.001)
+	require.NotNil(t, detail.Recommendations.Current.Limits)
+	require.NotNil(t, detail.Recommendations.Current.Limits.CPU)
+	assert.InDelta(t, 6.0, detail.Recommendations.Current.Limits.CPU.Amount, 0.001)
+	require.NotNil(t, detail.Recommendations.Current.Limits.Memory)
+	assert.InDelta(t, 2.0, detail.Recommendations.Current.Limits.Memory.Amount, 0.001)
+
+	require.NotNil(t, shortTerm.Notifications)
+	assert.Contains(t, shortTerm.Notifications, "1")
+	require.NotNil(t, detail.Recommendations.Notifications)
+	assert.Contains(t, detail.Recommendations.Notifications, "1")
+}
+
+func TestBuildNamespaceDetailResponse_JSONKeys(t *testing.T) {
+	cpuReq := int64(500)
+	curCPU := int64(250)
+
+	native := &NativeNamespaceResult{
+		ID:           "ns-uuid",
+		ClusterUUID:  "22222222-2222-2222-2222-222222222222",
+		Project:      "default",
+		LastReported: "2026-04-10T12:00:00Z",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+					CurrentCPURequestMC:  &curCPU,
+				},
+			},
+		},
+	}
+
+	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
+	detail := BuildNamespaceDetailResponse(native, nil, met)
+
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+
+	assert.NotContains(t, raw, "container", "namespace response should not have 'container'")
+	assert.NotContains(t, raw, "workload", "namespace response should not have 'workload'")
+	assert.NotContains(t, raw, "workload_type", "namespace response should not have 'workload_type'")
+	assert.NotContains(t, raw, "gpu", "namespace response should not have 'gpu'")
+
+	recs, ok := raw["recommendations"].(map[string]interface{})
+	require.True(t, ok)
+
+	_, hasTerms := recs["recommendation_terms"]
+	assert.True(t, hasTerms, "should have 'recommendation_terms'")
+	_, hasMET := recs["monitoring_end_time"]
+	assert.True(t, hasMET, "should have 'monitoring_end_time'")
+	_, hasCurrent := recs["current"]
+	assert.True(t, hasCurrent, "should have 'current'")
+
+	terms := recs["recommendation_terms"].(map[string]interface{})
+	st := terms["short_term"].(map[string]interface{})
+	engines := st["recommendation_engines"].(map[string]interface{})
+	costEng := engines["cost"].(map[string]interface{})
+
+	config := costEng["config"].(map[string]interface{})
+	requests := config["requests"].(map[string]interface{})
+	cpu := requests["cpu"].(map[string]interface{})
+	_, hasAmount := cpu["amount"]
+	assert.True(t, hasAmount, "cpu should have 'amount'")
+	_, hasFormat := cpu["format"]
+	assert.True(t, hasFormat, "cpu should have 'format'")
+
+	assert.NotContains(t, costEng, "cpu_request_millicores", "should NOT have flat fields")
+}
+
+func TestBuildNamespaceDetailResponse_NoCurrent(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeNamespaceResult{
+		ID:          "ns-uuid",
+		ClusterUUID: "22222222-2222-2222-2222-222222222222",
+		Project:     "default",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+				},
+			},
+		},
+	}
+
+	detail := BuildNamespaceDetailResponse(native, nil, time.Time{})
+	assert.Nil(t, detail.Recommendations.Current, "current should be nil when no current_* fields")
+	assert.Equal(t, "", detail.Recommendations.MonitoringEndTime)
+}
+
+func TestBuildNamespaceDetailResponse_SkipsMonitoringEndTimeKey(t *testing.T) {
+	cpuReq := int64(100)
+	native := &NativeNamespaceResult{
+		ID:          "ns-uuid",
+		ClusterUUID: "22222222-2222-2222-2222-222222222222",
+		Project:     "default",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{CPURequestMillicores: &cpuReq},
+			},
+			"monitoring_end_time": "2026-04-09T23:00:00Z",
+		},
+	}
+
+	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
+	detail := BuildNamespaceDetailResponse(native, nil, met)
+
+	_, hasMetKey := detail.Recommendations.RecommendationTerms["monitoring_end_time"]
+	assert.False(t, hasMetKey, "monitoring_end_time should not appear as a term")
+	assert.Equal(t, "2026-04-10T00:00:00Z", detail.Recommendations.MonitoringEndTime)
+}
