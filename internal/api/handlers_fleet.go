@@ -42,7 +42,7 @@ func GetFleetSummary(c echo.Context) error {
 			COALESCE(SUM(estimated_monthly_savings_usd) FILTER (WHERE stale = false), 0) AS total_monthly_savings_usd,
 			COUNT(DISTINCT cluster_uuid) AS cluster_count
 		FROM recommendation_sets
-		WHERE org_id = $1 AND term = 'medium_term' AND engine = 'cost'`,
+		WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'`,
 		orgID,
 	).Scan(
 		&summary.TotalContainers,

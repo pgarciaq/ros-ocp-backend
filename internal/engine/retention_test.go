@@ -191,7 +191,7 @@ func TestRunRetentionSweep_PurgesStaleRecommendations(t *testing.T) {
 			container_name, term, engine, stale, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		"org-stale-test", staleClusterUUID, "ns-test", "deploy-test", "Deployment",
-		"container-test", "medium_term", "cost", true, oldDate,
+		"container-test", "medium", "cost", true, oldDate,
 	)
 	require.NoError(t, err)
 
@@ -203,7 +203,7 @@ func TestRunRetentionSweep_PurgesStaleRecommendations(t *testing.T) {
 			container_name, term, engine, stale, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		"org-stale-test", staleClusterUUID, "ns-test", "deploy-test", "Deployment",
-		"container-recent", "medium_term", "cost", true, recentDate,
+		"container-recent", "medium", "cost", true, recentDate,
 	)
 	require.NoError(t, err)
 
