@@ -206,7 +206,7 @@ func classifySnapshot(
 	}
 
 	// 6. Active: recent OR has restores
-	return "active", nil
+	return "active", []int16{}
 }
 
 // isAmongNewest checks whether the snapshot at `idx` is among the N most recent

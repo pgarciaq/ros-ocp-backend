@@ -224,7 +224,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	var rows []NativeRecommendationRow
 	err := query.
 		Order("rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine").
-		Offset(opts.Offset * 6).Limit(opts.Limit * 6).
+		Offset(opts.Offset * 4).Limit(opts.Limit * 4).
 		Find(&rows).Error
 	if err != nil {
 		return nil, 0, err

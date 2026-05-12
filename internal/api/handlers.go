@@ -429,7 +429,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	results, _, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	results, totalCount, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
 		log.Errorf("unable to fetch native recommendations; %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -441,7 +441,12 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	enrichWithGPU(results, OrgID)
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
+	results, filteredCount := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
+
+	count := totalCount
+	if hasGPU != nil || len(gpuModels) > 0 || len(gpuClassifications) > 0 {
+		count = filteredCount
+	}
 
 	return serveNativeList(c, results, count, apiListOptions)
 }
@@ -669,8 +674,8 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		interfaceSlice := make([]any, len(results))
-		for i, v := range results {
-			interfaceSlice[i] = v
+		for i := range results {
+			interfaceSlice[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
 		return c.JSON(http.StatusOK, response)
@@ -743,52 +748,40 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 	return model.BuildDetailResponse(result, plots, met)
 }
 
-// enrichNativeNamespaceDetail fetches boxplots for a native namespace
-// recommendation and embeds them into the response alongside monitoring_end_time.
-func enrichNativeNamespaceDetail(orgID string, result *model.NativeNamespaceResult) *model.NativeNamespaceResult {
+// enrichNativeNamespaceDetail fetches boxplots and monitoring_end_time for a
+// native namespace recommendation and returns it in the Kruize-compatible
+// NamespaceDetailResponse shape.
+func enrichNativeNamespaceDetail(orgID string, result *model.NativeNamespaceResult) *model.NamespaceDetailResponse {
 	ctx := context.Background()
 	pool := db.GetPool()
-	if pool == nil {
-		return result
+
+	plots := map[string]*model.NativePlot{}
+	var met time.Time
+
+	if pool != nil {
+		key := model.NamespaceKey{
+			OrgID:       orgID,
+			ClusterUUID: result.ClusterUUID,
+			Namespace:   result.Project,
+		}
+
+		for termKey := range result.Recommendations {
+			if termKey == "monitoring_end_time" {
+				continue
+			}
+			p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey, orgID)
+			if err != nil {
+				log.Warnf("namespace boxplot assembly failed for %s/%s term %s: %v", key.ClusterUUID, key.Namespace, termKey, err)
+			}
+			if p != nil {
+				plots[termKey] = p
+			}
+		}
+
+		met, _ = model.NamespaceMonitoringEndTime(ctx, pool, key)
 	}
 
-	key := model.NamespaceKey{
-		OrgID:       orgID,
-		ClusterUUID: result.ClusterUUID,
-		Namespace:   result.Project,
-	}
-
-	termPlots := map[string]*model.NativePlot{}
-	for termKey := range result.Recommendations {
-		if termKey == "monitoring_end_time" {
-			continue
-		}
-		p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey, orgID)
-		if err != nil {
-			log.Warnf("namespace boxplot assembly failed for %s/%s term %s: %v", key.ClusterUUID, key.Namespace, termKey, err)
-		}
-		if p != nil {
-			termPlots[termKey] = p
-		}
-	}
-
-	met, _ := model.NamespaceMonitoringEndTime(ctx, pool, key)
-	if !met.IsZero() && met.Year() > 1 {
-		result.Recommendations["monitoring_end_time"] = met.UTC().Format(time.RFC3339)
-	}
-
-	for termKey, plot := range termPlots {
-		termVal, ok := result.Recommendations[termKey]
-		if !ok {
-			continue
-		}
-		if termRec, ok := termVal.(model.TermRecommendation); ok {
-			termRec.Plots = plot
-			result.Recommendations[termKey] = termRec
-		}
-	}
-
-	return result
+	return model.BuildNamespaceDetailResponse(result, plots, met)
 }
 
 func GetAppStatus(c echo.Context) error {

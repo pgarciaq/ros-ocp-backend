@@ -294,3 +294,96 @@ func mergeNotifications(dst map[string]notifications.NotificationEntry, eng *Det
 		dst[k] = v
 	}
 }
+
+// NamespaceDetailResponse is the Kruize-compatible response for namespace
+// recommendations. It mirrors DetailResponse but without container-specific
+// fields (Container, Workload, WorkloadType, GPU).
+type NamespaceDetailResponse struct {
+	ID              string               `json:"id"`
+	ClusterAlias    string               `json:"cluster_alias"`
+	ClusterUUID     string               `json:"cluster_uuid"`
+	Project         string               `json:"project"`
+	SourceID        string               `json:"source_id"`
+	LastReported    string               `json:"last_reported"`
+	Recommendations DetailRecommendations `json:"recommendations"`
+}
+
+// BuildNamespaceDetailResponse converts a NativeNamespaceResult (with flat
+// EngineRecommendation fields like cpu_request_millicores) into the nested
+// Kruize-compatible format (requests.cpu.amount / requests.cpu.format).
+func BuildNamespaceDetailResponse(
+	native *NativeNamespaceResult,
+	plots map[string]*NativePlot,
+	monitoringEndTime time.Time,
+) *NamespaceDetailResponse {
+	terms := make(map[string]DetailTerm)
+	allNotifications := map[string]notifications.NotificationEntry{}
+	var current *DetailResourceConfig
+
+	for termKey, termVal := range native.Recommendations {
+		if termKey == "monitoring_end_time" {
+			continue
+		}
+		termRec, ok := termVal.(TermRecommendation)
+		if !ok {
+			continue
+		}
+
+		costEngine := toDetailEngine(termRec.Cost)
+		perfEngine := toDetailEngine(termRec.Performance)
+
+		termNotifs := map[string]notifications.NotificationEntry{}
+		mergeNotifications(termNotifs, costEngine)
+		mergeNotifications(termNotifs, perfEngine)
+
+		for k, v := range termNotifs {
+			allNotifications[k] = v
+		}
+
+		dt := DetailTerm{
+			DurationInHours: termDurationHours[termKey],
+			RecommendationEngines: &DetailEngines{
+				Cost:        costEngine,
+				Performance: perfEngine,
+			},
+		}
+		if len(termNotifs) > 0 {
+			dt.Notifications = termNotifs
+		}
+		if p, ok := plots[termKey]; ok {
+			dt.Plots = p
+		}
+		terms[termKey] = dt
+
+		if current == nil {
+			current = extractCurrent(termRec.Cost)
+		}
+		if current == nil {
+			current = extractCurrent(termRec.Performance)
+		}
+	}
+
+	var metStr string
+	if !monitoringEndTime.IsZero() && monitoringEndTime.Year() > 1 {
+		metStr = monitoringEndTime.UTC().Format(time.RFC3339)
+	}
+
+	recs := DetailRecommendations{
+		Current:             current,
+		MonitoringEndTime:   metStr,
+		RecommendationTerms: terms,
+	}
+	if len(allNotifications) > 0 {
+		recs.Notifications = allNotifications
+	}
+
+	return &NamespaceDetailResponse{
+		ID:              native.ID,
+		ClusterAlias:    native.ClusterAlias,
+		ClusterUUID:     native.ClusterUUID,
+		Project:         native.Project,
+		SourceID:        native.SourceID,
+		LastReported:    native.LastReported,
+		Recommendations: recs,
+	}
+}
