@@ -77,11 +77,6 @@ type Config struct {
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`
 	SourceApiPrefix  string `mapstructure:"SOURCES_API_PREFIX"`
 
-	// Namespace recommendation config (kept for backward compat; ignored by engine logic)
-	// Deprecated: namespace recs are enabled by default. Use Unleash
-	// flag "rosocp.namespace_disabled" to disable per-org on cloud.
-	DisableNamespaceRecommendation bool `mapstructure:"DISABLE_NAMESPACE_RECOMMENDATION"`
-
 	// Native recommendation engine (replaces Kruize pipeline)
 	UseNativeEngine bool    `mapstructure:"ROS_USE_NATIVE_ENGINE"`
 	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`

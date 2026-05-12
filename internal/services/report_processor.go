@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -15,7 +14,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -90,11 +88,6 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	for _, file := range kafkaMsg.Files {
 		csvType = utils.DetermineCSVType(file)
-		if strings.Contains(file, "namespace") {
-			if !featureflags.IsNamespaceEnabled(kafkaMsg.Metadata.Org_id) {
-				continue
-			}
-		}
 
 		if cfg.UseNativeEngine && csvType == types.PayloadTypeContainer {
 			processContainerCSVNative(file, kafkaMsg)
