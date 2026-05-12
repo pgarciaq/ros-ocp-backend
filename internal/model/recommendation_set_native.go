@@ -185,27 +185,6 @@ type EngineRecommendation struct {
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]NativeContainerResult, int, error) {
 	db := database.GetDB()
 
-	query := db.Table("recommendation_sets rs").
-		Select(`rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
-			rs.container_name, rs.term, rs.engine,
-			rs.rec_cpu_request_millicores, rs.rec_cpu_limit_millicores,
-			rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
-			rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
-			rs.current_memory_request_kib, rs.current_memory_limit_kib,
-			rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
-			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
-			rs.notification_codes, rs.confidence_level, rs.stale,
-			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
-			rs.estimated_monthly_savings_usd,
-			rs.updated_at,
-			c.source_id, c.cluster_alias, c.last_reported_at`).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
-
-	query = ApplyNativeRBAC(query, userPerms)
-	query = ApplyQueryParams(query, queryParams)
-
 	// Total count of distinct containers (for pagination metadata).
 	var totalContainers int64
 	countQuery := db.Table("recommendation_sets rs").
@@ -221,10 +200,39 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	}
 	log.Infof("native list count query: %dms (%d containers)", time.Since(t0).Milliseconds(), totalContainers)
 
+	// Subquery: paginate by distinct containers, then fetch all term/engine rows
+	// for the selected page. This is independent of how many rows per container exist.
+	pageSubquery := db.Table("recommendation_sets rs").
+		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID)
+	pageSubquery = ApplyNativeRBAC(pageSubquery, userPerms)
+	pageSubquery = ApplyQueryParams(pageSubquery, queryParams)
+	pageSubquery = pageSubquery.Order("rs.namespace, rs.workload, rs.container_name").
+		Offset(opts.Offset).Limit(opts.Limit)
+
 	var rows []NativeRecommendationRow
-	err := query.
+	err := db.Table("recommendation_sets rs").
+		Select(`rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
+			rs.container_name, rs.term, rs.engine,
+			rs.rec_cpu_request_millicores, rs.rec_cpu_limit_millicores,
+			rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
+			rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
+			rs.current_memory_request_kib, rs.current_memory_limit_kib,
+			rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
+			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
+			rs.notification_codes, rs.confidence_level, rs.stale,
+			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+			rs.estimated_monthly_savings_usd,
+			rs.updated_at,
+			c.source_id, c.cluster_alias, c.last_reported_at`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
+			AND page.namespace = rs.namespace
+			AND page.workload = rs.workload
+			AND page.container_name = rs.container_name`, pageSubquery).
 		Order("rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine").
-		Offset(opts.Offset * 4).Limit(opts.Limit * 4).
 		Find(&rows).Error
 	if err != nil {
 		return nil, 0, err
