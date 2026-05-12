@@ -11,7 +11,6 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -216,7 +215,7 @@ func requestAndSaveRecommendation(kafkaMsg types.RecommendationKafkaMsg, recomme
 
 	}
 
-	if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeNamespace && featureflags.IsNamespaceEnabled(kafkaMsg.Metadata.Org_id) {
+	if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeNamespace {
 		namespaceRecommendation, err := fetchRecommendationFromKruize(
 			experiment_name, maxEndTimeFromReport, types.PayloadTypeNamespace)
 		if err != nil {
@@ -352,7 +351,7 @@ func PollForRecommendations(msg *kafka.Message, consumer_object *kafka.Consumer)
 			log.Errorf("error while checking for container recommendation_set record: %s", checkRecommExistsErr.Error())
 			return
 		}
-	} else if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeNamespace && featureflags.IsNamespaceEnabled(kafkaMsg.Metadata.Org_id) {
+	} else if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeNamespace {
 		recommendation_stored_in_db, checkRecommExistsErr = model.GetFirstNamespaceRecommendationSetsByWorkloadID(workloadID)
 		if checkRecommExistsErr != nil {
 			log.Errorf("error while checking for namespace recommendation_set record: %s", checkRecommExistsErr.Error())

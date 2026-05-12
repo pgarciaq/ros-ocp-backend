@@ -7,28 +7,5 @@
             "token": "rosocp:dev.token"
         }
     ],
-    "features": [
-        {
-            "name": "rosocp.namespace_disabled",
-            "project": "rosocp",
-            "enabled": false,
-            "strategies": [
-                {
-                    "name": "flexibleRollout",
-                    "parameters": {
-                        "rollout": "100",
-                        "stickiness": "orgId",
-                        "groupId": "rosocp.namespace_disabled"
-                    },
-                    "constraints": [
-                        {
-                            "contextName": "orgId",
-                            "operator": "IN",
-                            "values": []
-                        }
-                    ]
-                }
-            ]
-        }
-    ]
+    "features": []
 }
