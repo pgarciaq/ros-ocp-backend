@@ -122,7 +122,7 @@ func RecommendAllWorkloads(
 		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
 
 		for _, tc := range terms {
-			windowRows := filterByWindow(digestRows, end, tc.WindowDays)
+			windowRows := filterByWindow(digestRows, latest.BucketDate, tc.WindowDays)
 			if len(windowRows) < tc.MinDataDays {
 				continue
 			}
