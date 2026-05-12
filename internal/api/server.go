@@ -61,10 +61,20 @@ func StartAPIServer() {
 	}
 
 	// Project/Namespace — native engine with Kruize fallback, or legacy-only.
+	// Canonical paths (consistent with nodes, pvcs, snapshots pattern):
+	//   GET /recommendations/openshift/namespaces
+	//   GET /recommendations/openshift/namespaces/:recommendation-id
+	// Legacy paths (preserved for backward compatibility with IQE, OpenAPI spec):
+	//   GET /openshift/namespace/recommendations
+	//   GET /recommendations/openshift/namespace/:recommendation-id
 	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetListWithFallback)
+		v1.GET("/recommendations/openshift/namespaces/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
 		v1.GET("/openshift/namespace/recommendations", GetNamespaceRecommendationSetListWithFallback)
 		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
 	} else {
+		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetList)
+		v1.GET("/recommendations/openshift/namespaces/:recommendation-id", GetNamespaceRecommendationSet)
 		v1.GET("/openshift/namespace/recommendations", GetNamespaceRecommendationSetList)
 		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
 	}
