@@ -132,14 +132,14 @@ func RecommendAllNamespaces(
 		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
 
 		for _, tc := range terms {
-			windowRows := filterByWindow(digestRows, end, tc.WindowDays)
+			windowRows := filterByWindow(digestRows, latest.BucketDate, tc.WindowDays)
 			if len(windowRows) < tc.MinDataDays {
 				continue
 			}
 
 			dataDays := len(windowRows)
 			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
-			monStart := end.AddDate(0, 0, -tc.WindowDays)
+			monStart := latest.BucketDate.AddDate(0, 0, -tc.WindowDays)
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)

@@ -477,3 +477,27 @@ func TestNamespaceRec_VariationFields(t *testing.T) {
 		t.Errorf("expected variation 100, got %d", rec.VariationCPURequestPct)
 	}
 }
+
+func TestRecommendAllNamespaces_ShortTermWithFutureEnd(t *testing.T) {
+	// Simulates real-world: data from 3 days ago, engine runs today (end > latest digest).
+	// Short-term must still produce results because the window is anchored to the
+	// latest digest date, not to end.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "test-ns", 3, 200, 10, 524288, 1024)
+
+	latestDigestDate := testutil.BaseDate.AddDate(0, 0, 2)
+	futureEnd := latestDigestDate.AddDate(0, 0, 5)
+
+	results, err := RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, futureEnd)
+	require.NoError(t, err)
+
+	termsSeen := map[string]bool{}
+	for _, r := range results {
+		termsSeen[r.Term] = true
+	}
+
+	assert.True(t, termsSeen["short"],
+		"short-term must be produced even when end is days after the latest digest")
+}

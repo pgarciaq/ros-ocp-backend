@@ -610,3 +610,32 @@ func TestOOMMaxBumpClamp(t *testing.T) {
 		}
 	}
 }
+
+func TestRecommendAllWorkloads_ShortTermWithFutureEnd(t *testing.T) {
+	// Simulates the real-world scenario: data was ingested yesterday but the
+	// engine runs today (end = now > latest digest). Before the fix, short-term
+	// (WindowDays=1) would find 0 rows because it anchored to end=today, not
+	// to the latest digest date. Now it anchors to the latest digest date.
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedDigestSeries(t, pool, 3, 200, 10, 524288, 1024)
+
+	// end is 5 days after the latest digest (BaseDate+2), simulating
+	// "engine runs well after last data upload"
+	latestDigestDate := testutil.BaseDate.AddDate(0, 0, 2)
+	futureEnd := latestDigestDate.AddDate(0, 0, 5)
+
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, futureEnd, OOMConfig{})
+	require.NoError(t, err)
+
+	termsSeen := map[string]bool{}
+	for _, r := range results {
+		termsSeen[r.Term] = true
+	}
+
+	assert.True(t, termsSeen["short"],
+		"short-term must be produced even when end is days after the latest digest")
+	assert.True(t, termsSeen["medium"] || termsSeen["long"],
+		"medium or long term should also be produced with 3 days of data")
+}
