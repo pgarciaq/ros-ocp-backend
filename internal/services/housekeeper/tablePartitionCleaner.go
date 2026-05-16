@@ -27,6 +27,7 @@ func DeletePartitions() {
 	}
 
 	tx := db.Exec("SELECT drop_ros_partition(?)", partitionTableDate)
+	// drop_ros_partition only considers partitions of ROS-owned parent tables (see migration 000011).
 	if tx.Error != nil {
 		fmt.Println(tx.Error.Error())
 	}

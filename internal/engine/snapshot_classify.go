@@ -8,36 +8,39 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
 )
+
+// snapshotInventoryFreshHours is the recent-ingest window used when reading
+// snapshot_inventory for classification and for reconcile NOT EXISTS checks.
+const snapshotInventoryFreshHours = 6
 
 // SnapshotSettings holds resolved snapshot classification thresholds.
 type SnapshotSettings struct {
-	OrphanAgeDays       int
-	NeverRestoredDays   int
-	StaleDays           int
-	RedundantThreshold  int
-	CostPerGiBMonth     float64
+	OrphanAgeDays      int
+	NeverRestoredDays  int
+	StaleDays          int
+	RedundantThreshold int
+	CostPerGiBMonth    float64
 }
 
 // SnapshotRec is a classified snapshot recommendation.
 type SnapshotRec struct {
-	OrgID               string
-	ClusterUUID         string
-	Namespace           string
-	SnapshotName        string
-	SourcePVCName       string
-	VolumeSnapshotClass string
-	StorageClass        string
-	CreationTimestamp   time.Time
-	RestoreSizeBytes    int64
-	AgeDays             int
-	SourcePVCExists     bool
-	RestoredPVCCount    int
-	ManagedBy           string
-	RecommendationType  string
+	OrgID                string
+	ClusterUUID          string
+	Namespace            string
+	SnapshotName         string
+	SourcePVCName        string
+	VolumeSnapshotClass  string
+	StorageClass         string
+	CreationTimestamp    time.Time
+	RestoreSizeBytes     int64
+	AgeDays              int
+	SourcePVCExists      bool
+	RestoredPVCCount     int
+	ManagedBy            string
+	RecommendationType   string
 	EstimatedMonthlyCost *float32
-	NotificationCodes   []int16
+	NotificationCodes    []int16
 }
 
 // pvcGroup holds the indices of snapshots sharing the same source PVC.
@@ -78,9 +81,9 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 			restore_size_bytes, source_pvc_exists, restored_pvc_count, labels
 		FROM snapshot_inventory
 		WHERE org_id = $1 AND cluster_uuid = $2
-			AND ingested_at >= NOW() - INTERVAL '6 hours'
+			AND ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
 		ORDER BY namespace, snapshot_name, ingested_at DESC`,
-		orgID, clusterUUID,
+		orgID, clusterUUID, snapshotInventoryFreshHours,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying snapshot inventory: %w", err)
@@ -95,13 +98,15 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 			&r.VolumeSnapshotClass, &r.StorageClass, &r.CreationTimestamp,
 			&r.RestoreSizeBytes, &r.SourcePVCExists, &r.RestoredPVCCount, &r.Labels,
 		); err != nil {
-			log.Errorf("scanning snapshot inventory row: %v", err)
-			continue
+			return nil, fmt.Errorf("scanning snapshot inventory row: %w", err)
 		}
 		if r.Labels == nil {
 			r.Labels = make(map[string]string)
 		}
 		inventory = append(inventory, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating snapshot inventory: %w", err)
 	}
 
 	if len(inventory) == 0 {
@@ -282,18 +287,56 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 	return nil
 }
 
-// ReconcileSnapshotRecommendations removes recommendations for snapshots no
-// longer present in the inventory (deleted from the cluster).
-func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (int64, error) {
+// ReconcileSnapshotRecommendations deletes rows from snapshot_recommendation_sets
+// (ROS resource optimization data only; unrelated to Koku tables) when a snapshot
+// no longer appears in snapshot_inventory within the fresh window.
+//
+// Inventory gating (staleGraceHours from ROS_SNAPSHOT_STALE_GRACE_HOURS, default 48):
+//
+//   - Normal path: rows exist in snapshot_inventory within the last 6 hours → run
+//     DELETE for recommendations whose snapshot is absent from that fresh inventory.
+//
+//   - Transient gap: rows exist within staleGraceHours but none within 6 hours → skip
+//     reconcile. Ingest may have paused briefly; deleting would risk wiping valid rows
+//     because NOT EXISTS against an empty fresh inventory would match everything.
+//
+//   - Stale / abandoned cluster: no snapshot_inventory rows within staleGraceHours →
+//     run DELETE anyway. The cluster has stopped reporting; clearing orphaned ROS rows
+//     is preferable to leaving stale recommendations indefinitely.
+func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, staleGraceHours int) (int64, error) {
+	if staleGraceHours <= 0 {
+		staleGraceHours = 48
+	}
+
+	var cntFresh, cntGrace int64
+	err := pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM snapshot_inventory
+			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
+			   AND ingested_at >= NOW() - ($3 * INTERVAL '1 hour')),
+			(SELECT COUNT(*) FROM snapshot_inventory
+			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
+			   AND ingested_at >= NOW() - ($4 * INTERVAL '1 hour'))`,
+		orgID, clusterUUID, snapshotInventoryFreshHours, staleGraceHours,
+	).Scan(&cntFresh, &cntGrace)
+	if err != nil {
+		return 0, fmt.Errorf("count snapshot inventory: %w", err)
+	}
+
+	if cntGrace > 0 && cntFresh == 0 {
+		return 0, nil
+	}
+
 	tag, err := pool.Exec(ctx, `
-		DELETE FROM snapshot_recommendation_sets
-		WHERE org_id = $1 AND cluster_uuid = $2
-		AND (namespace, snapshot_name) NOT IN (
-			SELECT DISTINCT namespace, snapshot_name
-			FROM snapshot_inventory
-			WHERE org_id = $1 AND cluster_uuid = $2
-			AND ingested_at >= NOW() - INTERVAL '6 hours'
-		)`, orgID, clusterUUID)
+		DELETE FROM snapshot_recommendation_sets srs
+		WHERE srs.org_id = $1 AND srs.cluster_uuid = $2::uuid
+		  AND NOT EXISTS (
+			SELECT 1 FROM snapshot_inventory si
+			WHERE si.org_id = $1 AND si.cluster_uuid = $2::uuid
+			  AND si.namespace = srs.namespace
+			  AND si.snapshot_name = srs.snapshot_name
+			  AND si.ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
+		)`, orgID, clusterUUID, snapshotInventoryFreshHours)
 	if err != nil {
 		return 0, fmt.Errorf("reconciling snapshot recommendations: %w", err)
 	}
