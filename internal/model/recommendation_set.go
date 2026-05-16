@@ -15,10 +15,18 @@ import (
 )
 
 type RecommendationSet struct {
-	ID            string `gorm:"primaryKey;not null;autoIncrement"`
-	WorkloadID    uint
-	Workload      Workload `gorm:"foreignKey:WorkloadID"`
-	ContainerName string
+	// Composite primary key columns (migration 000028). Legacy Kruize responses are stored
+	// as one JSON blob per container using term=short, engine=cost.
+	OrgID         string `gorm:"column:org_id;primaryKey"`
+	ClusterUUID   string `gorm:"column:cluster_uuid;primaryKey"`
+	Namespace     string `gorm:"column:namespace;primaryKey"`
+	Workload      string `gorm:"column:workload;primaryKey"`
+	ContainerName string `gorm:"column:container_name;primaryKey"`
+	Term          string `gorm:"column:term;primaryKey"`
+	Engine        string `gorm:"column:engine;primaryKey"`
+
+	WorkloadID   uint `gorm:"column:workload_id"`
+	WorkloadType string `gorm:"column:workload_type"`
 
 	CPURequestCurrent    *float64 `gorm:"column:cpu_request_current;type:numeric(10,4)"`
 	MemoryRequestCurrent *float64 `gorm:"column:memory_request_current;type:numeric(20,4)"`
@@ -108,9 +116,11 @@ func (r *RecommendationSet) GetRecommendationSets(orgID string, opts listoptions
 		}
 	}
 
-	query.Count(&count)
+	if err := query.Count(&count).Error; err != nil {
+		return recommendationSets, 0, err
+	}
 	// OrderBy/OrderHow come from ListAPIOptions (allowlisted); secondary sort for stable ordering.
-	query = query.Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).Order("recommendation_sets.id ASC")
+	query = query.Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).Order("recommendation_sets.container_id ASC")
 
 	limit := opts.Limit
 	if opts.Format == "csv" {
@@ -130,7 +140,7 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 	var recommendationSet RecommendationSetResult
 
 	query := getRecommendationQuery(orgID)
-	query.Where("recommendation_sets.container_id = ?", recommendationID)
+	query = query.Where("recommendation_sets.container_id = ?", recommendationID)
 
 	if err := rbac.AddRBACFilter(
 		query,
@@ -146,8 +156,18 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 
 func (r *RecommendationSet) CreateRecommendationSet(tx *gorm.DB) error {
 	result := tx.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "workload_id"}, {Name: "container_name"}},
+		Columns: []clause.Column{
+			{Name: "org_id"},
+			{Name: "cluster_uuid"},
+			{Name: "namespace"},
+			{Name: "workload"},
+			{Name: "container_name"},
+			{Name: "term"},
+			{Name: "engine"},
+		},
 		DoUpdates: clause.AssignmentColumns([]string{
+			"workload_id",
+			"workload_type",
 			"monitoring_start_time",
 			"monitoring_end_time",
 			"recommendations",

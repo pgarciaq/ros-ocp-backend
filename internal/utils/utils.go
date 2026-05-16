@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -22,14 +23,95 @@ import (
 var log *logrus.Entry = logging.GetLogger()
 var cfg *config.Config = config.GetConfig()
 
+const (
+	envCSVDownloadTimeoutSecs = "ROS_CSV_DOWNLOAD_TIMEOUT_SECONDS"
+	envCSVMaxBodyBytes        = "ROS_CSV_MAX_BODY_BYTES"
+	envCSVAllowedHosts        = "ROS_CSV_ALLOWED_HOSTS"
+	// Default max download size for Kafka-triggered CSV URLs. Native ingestion streams
+	// from this bounded reader (See ReadCSVBodyFromUrl); legacy ReadCSVFromUrl still
+	// loads the full parsed [][]string into memory and often duplicates into a dataframe,
+	// so this cap is the main OOM defense for hostile or oversized payloads.
+	// 512 MiB fits large daily cluster exports while bounding worst-case RSS.
+	defaultCSVMaxBodyBytes = 512 * 1024 * 1024
+)
+
+func csvMaxBodyBytes() int64 {
+	v := strings.TrimSpace(os.Getenv(envCSVMaxBodyBytes))
+	if v == "" {
+		return defaultCSVMaxBodyBytes
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n <= 0 {
+		return defaultCSVMaxBodyBytes
+	}
+	return n
+}
+
+func csvDownloadHTTPClient() *http.Client {
+	timeoutSecs := 60
+	if v := strings.TrimSpace(os.Getenv(envCSVDownloadTimeoutSecs)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			timeoutSecs = n
+		}
+	}
+	tr := &http.Transport{
+		DisableKeepAlives: true,
+	}
+	return &http.Client{
+		Timeout:   time.Duration(timeoutSecs) * time.Second,
+		Transport: tr,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("CSV download redirects are disabled")
+		},
+	}
+}
+
+func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse CSV URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("CSV URL scheme must be http or https")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("CSV URL must include a host")
+	}
+	if allowed := strings.TrimSpace(os.Getenv(envCSVAllowedHosts)); allowed != "" {
+		ok := false
+		for _, h := range strings.Split(allowed, ",") {
+			if strings.EqualFold(strings.TrimSpace(h), host) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return nil, fmt.Errorf("CSV URL host %q is not allowed by ROS_CSV_ALLOWED_HOSTS", host)
+		}
+	}
+	return u, nil
+}
+
+func getCSVHTTPResponse(rawURL string) (*http.Response, error) {
+	u, err := validateCSVDownloadURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := csvDownloadHTTPClient().Get(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("fetch CSV: %w", err)
+	}
+	return resp, nil
+}
+
 // HTTPClient is the shared HTTP client for lightweight outbound requests
 // (health checks, RBAC, experiment creation). The timeout is driven by
 // GLOBAL_HTTP_CLIENT_TIMEOUT_SECS (default 30s) to prevent indefinite
 // hangs when downstream services are slow or unresponsive. See FLPATH-3407.
 //
-// Heavy Kruize calls (/updateResults, /updateRecommendations) and large
-// downloads (ReadCSVFromUrl) intentionally use the default http client
-// until we have Prometheus latency data to set informed timeouts.
+// Heavy Kruize calls (/updateResults, /updateRecommendations) should continue to use HTTPClient.
+// ReadCSVFromUrl / ReadCSVBodyFromUrl use a dedicated bounded client (see csvDownloadHTTPClient).
 // TODO(FLPATH-3407): add per-endpoint Prometheus histogram to measure
 // Kruize API latency, then set per-call timeouts:
 //
@@ -97,24 +179,28 @@ func Setup_kruize_performance_profile() {
 
 }
 
-// ReadCSVBodyFromUrl fetches a CSV URL and returns the response body as an io.ReadCloser.
-// The caller is responsible for closing the body.
-func ReadCSVBodyFromUrl(url string) (io.ReadCloser, error) {
-	// CSV downloads are heavy; use bare http per PR #603 convention
-	resp, err := http.Get(url)
+// ReadCSVBodyFromUrl fetches a CSV URL and returns the response body as an
+// io.ReadCloser wrapped with http.MaxBytesReader (limit ROS_CSV_MAX_BODY_BYTES).
+// Data is not buffered entirely here—callers typically stream via csv.Reader—
+// but each row still allocates; the byte cap limits download size only.
+func ReadCSVBodyFromUrl(rawURL string) (io.ReadCloser, error) {
+	resp, err := getCSVHTTPResponse(rawURL)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		resp.Body.Close()
-		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, url)
+		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, rawURL)
 	}
-	return resp.Body, nil
+	return http.MaxBytesReader(nil, resp.Body, csvMaxBodyBytes()), nil
 }
 
-func ReadCSVFromUrl(url string) ([][]string, error) {
-	// TODO(FLPATH-3407): use a bounded client once we have latency data for CSV downloads
-	resp, err := http.Get(url)
+// ReadCSVFromUrl fetches a CSV URL and parses the entire file into [][]string via
+// csv.Reader.ReadAll—peak memory is proportional to file size (plus CSV parsing overhead).
+// Legacy Kruize paths often copy again into a dataframe. Prefer native ingestion with
+// ReadCSVBodyFromUrl when possible; the download is still capped by MaxBytesReader.
+func ReadCSVFromUrl(rawURL string) ([][]string, error) {
+	resp, err := getCSVHTTPResponse(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +209,13 @@ func ReadCSVFromUrl(url string) ([][]string, error) {
 	}()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, url)
+		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, rawURL)
 	}
 
-	reader := csv.NewReader(resp.Body)
+	reader := csv.NewReader(http.MaxBytesReader(nil, resp.Body, csvMaxBodyBytes()))
 	data, err := reader.ReadAll()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read CSV: %w", err)
 	}
 
 	return data, nil

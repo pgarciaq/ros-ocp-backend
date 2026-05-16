@@ -2,13 +2,72 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestValidateCSVDownloadURLHTTPS(t *testing.T) {
+	u, err := validateCSVDownloadURL("https://bucket.s3.amazonaws.com/object.csv")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if u.Scheme != "https" || u.Hostname() != "bucket.s3.amazonaws.com" {
+		t.Fatalf("unexpected URL: %#v", u)
+	}
+}
+
+func TestValidateCSVDownloadURLRejectsFTP(t *testing.T) {
+	_, err := validateCSVDownloadURL("ftp://evil.example/x.csv")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
+	t.Setenv(envCSVAllowedHosts, "good.example,other.example")
+
+	_, err := validateCSVDownloadURL("https://bad.example/a.csv")
+	if err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("expected allowlist error, got %v", err)
+	}
+	_, err = validateCSVDownloadURL("https://good.example/a.csv")
+	if err != nil {
+		t.Fatalf("expected allowed host: %v", err)
+	}
+}
+
+func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://evil.example/x", http.StatusFound)
+	}))
+	defer ts.Close()
+
+	_, err := ReadCSVFromUrl(ts.URL + "/file.csv")
+	if err == nil || !strings.Contains(err.Error(), "redirect") {
+		t.Fatalf("expected redirect error, got %v", err)
+	}
+}
+
+func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
+	t.Setenv(envCSVMaxBodyBytes, "16")
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = io.WriteString(w, strings.Repeat("a", 256))
+	}))
+	defer ts.Close()
+
+	_, err := ReadCSVFromUrl(ts.URL + "/big.csv")
+	if err == nil {
+		t.Fatal("expected error for oversized body")
+	}
+}
 
 func TestHTTPClientTimeoutMatchesConfig(t *testing.T) {
 	secs := cfg.GlobalHTTPClientTimeoutSecs
