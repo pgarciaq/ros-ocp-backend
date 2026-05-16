@@ -192,10 +192,30 @@ func parseSnapshotRecord(record []string, idx snapshotHeaderIdx) (SnapshotRow, e
 
 	// Populate interval fields if available (not strictly required)
 	if idx.intervalStart >= 0 && idx.intervalStart < len(record) {
-		row.IntervalStart, _ = time.Parse(time.RFC3339, strings.TrimSpace(record[idx.intervalStart]))
+		raw := strings.TrimSpace(record[idx.intervalStart])
+		if raw != "" {
+			ts, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				ts, err = time.Parse("2006-01-02 15:04:05+00:00", raw)
+				if err != nil {
+					return row, fmt.Errorf("parse interval_start %q: %w", raw, err)
+				}
+			}
+			row.IntervalStart = ts
+		}
 	}
 	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
-		row.IntervalEnd, _ = time.Parse(time.RFC3339, strings.TrimSpace(record[idx.intervalEnd]))
+		raw := strings.TrimSpace(record[idx.intervalEnd])
+		if raw != "" {
+			ts, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				ts, err = time.Parse("2006-01-02 15:04:05+00:00", raw)
+				if err != nil {
+					return row, fmt.Errorf("parse interval_end %q: %w", raw, err)
+				}
+			}
+			row.IntervalEnd = ts
+		}
 	}
 
 	return row, nil

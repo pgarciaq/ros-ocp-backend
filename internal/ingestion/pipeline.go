@@ -13,6 +13,28 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
+// maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
+const maxPgxBatchQueue = 500
+
+// pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch (chunked batches must run on one tx).
+type pgxBatchSender interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+}
+
+func flushQueuedBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, queued int) error {
+	if queued == 0 {
+		return nil
+	}
+	br := sender.SendBatch(ctx, batch)
+	defer br.Close()
+	for range queued {
+		if _, err := br.Exec(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EnsureSamplePartitions creates monthly partitions of container_usage_samples
 // for every month that appears in the ingested data. Idempotent via IF NOT EXISTS.
 func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow) {
@@ -42,9 +64,20 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 		return nil
 	}
 
-	batch := &pgx.Batch{}
-	for _, r := range rows {
-		batch.Queue(`
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for usage samples: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for start := 0; start < len(rows); start += maxPgxBatchQueue {
+		end := start + maxPgxBatchQueue
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := &pgx.Batch{}
+		for _, r := range rows[start:end] {
+			batch.Queue(`
 			INSERT INTO container_usage_samples (
 				sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				cpu_usage_mc, mem_usage_kib
@@ -53,19 +86,17 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 			DO UPDATE SET
 				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
 				mem_usage_kib = EXCLUDED.mem_usage_kib`,
-			r.IntervalStart, orgID, clusterUUID,
-			r.Namespace, r.WorkloadName, r.WorkloadType, r.ContainerName,
-			r.CPUUsageMC, r.MemUsageKiB,
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range rows {
-		if _, err := br.Exec(); err != nil {
+				r.IntervalStart, orgID, clusterUUID,
+				r.Namespace, r.WorkloadName, r.WorkloadType, r.ContainerName,
+				r.CPUUsageMC, r.MemUsageKiB,
+			)
+		}
+		if err := flushQueuedBatch(ctx, tx, batch, end-start); err != nil {
 			return fmt.Errorf("upsert usage sample: %w", err)
 		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit usage samples tx: %w", err)
 	}
 	return nil
 }
@@ -124,10 +155,22 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	}
 	EnsureDigestPartitions(ctx, pool, digestKeys)
 
-	batch := &pgx.Batch{}
-	for key, group := range grouped {
-		d := ComputeContainerDigest(key, group)
-		batch.Queue(`
+	txDigests, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for container digests: %w", err)
+	}
+	defer txDigests.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(digestKeys) {
+			chunkEnd = len(digestKeys)
+		}
+		batch := &pgx.Batch{}
+		for _, key := range digestKeys[chunkStart:chunkEnd] {
+			group := grouped[key]
+			d := ComputeContainerDigest(key, group)
+			batch.Queue(`
 			INSERT INTO daily_container_digests (
 				bucket_date, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				cpu_request_p50_mc, cpu_request_p60_mc, cpu_request_p95_mc, cpu_request_p98_mc, cpu_request_p99_mc,
@@ -156,16 +199,29 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 				cpu_request_p50_mc = EXCLUDED.cpu_request_p50_mc,
 				cpu_request_p60_mc = EXCLUDED.cpu_request_p60_mc,
 				cpu_request_p95_mc = EXCLUDED.cpu_request_p95_mc,
+				cpu_request_p98_mc = EXCLUDED.cpu_request_p98_mc,
+				cpu_request_p99_mc = EXCLUDED.cpu_request_p99_mc,
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
+				cpu_usage_p60_mc = EXCLUDED.cpu_usage_p60_mc,
 				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
+				cpu_usage_p98_mc = EXCLUDED.cpu_usage_p98_mc,
+				cpu_usage_p99_mc = EXCLUDED.cpu_usage_p99_mc,
 				cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
+				cpu_throttle_p95_mc = EXCLUDED.cpu_throttle_p95_mc,
+				cpu_throttle_max_mc = EXCLUDED.cpu_throttle_max_mc,
 				memory_request_p50_kib = EXCLUDED.memory_request_p50_kib,
 				memory_request_p60_kib = EXCLUDED.memory_request_p60_kib,
 				memory_request_p95_kib = EXCLUDED.memory_request_p95_kib,
+				memory_request_p98_kib = EXCLUDED.memory_request_p98_kib,
+				memory_request_p99_kib = EXCLUDED.memory_request_p99_kib,
 				memory_usage_p50_kib = EXCLUDED.memory_usage_p50_kib,
 				memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
 				memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
+				memory_usage_p98_kib = EXCLUDED.memory_usage_p98_kib,
+				memory_usage_p99_kib = EXCLUDED.memory_usage_p99_kib,
 				memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
+				memory_rss_p95_kib = EXCLUDED.memory_rss_p95_kib,
+				memory_rss_max_kib = EXCLUDED.memory_rss_max_kib,
 				oom_count_sum = EXCLUDED.oom_count_sum,
 				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
 				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
@@ -174,40 +230,39 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 				pod_count_max = EXCLUDED.pod_count_max,
 				pod_count_avg = EXCLUDED.pod_count_avg,
 				desired_replicas = EXCLUDED.desired_replicas,
-				available_replicas = EXCLUDED.available_replicas`,
-			key.BucketDate.Format("2006-01-02"),
-			orgID, clusterUUID,
-			key.Namespace, key.Workload, key.WorkloadType, key.ContainerName,
-			d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
-			d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
-			d.CPUThrottleP95MC, d.CPUThrottleMaxMC,
-			d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
-			d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
-			d.MemRSSP95KiB, d.MemRSSMaxKiB,
-			d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
-			d.PodCountMin, d.PodCountMax, d.PodCountAvg,
-			d.DesiredReplicas, d.AvailableReplicas,
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range grouped {
-		if _, err := br.Exec(); err != nil {
+				available_replicas = EXCLUDED.available_replicas,
+				workload_type = EXCLUDED.workload_type`,
+				key.BucketDate.Format("2006-01-02"),
+				orgID, clusterUUID,
+				key.Namespace, key.Workload, key.WorkloadType, key.ContainerName,
+				d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
+				d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
+				d.CPUThrottleP95MC, d.CPUThrottleMaxMC,
+				d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
+				d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
+				d.MemRSSP95KiB, d.MemRSSMaxKiB,
+				d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
+				d.PodCountMin, d.PodCountMax, d.PodCountAvg,
+				d.DesiredReplicas, d.AvailableReplicas,
+			)
+		}
+		if err := flushQueuedBatch(ctx, txDigests, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert digest: %w", err)
 		}
+	}
+	if err := txDigests.Commit(ctx); err != nil {
+		return fmt.Errorf("commit container digests tx: %w", err)
 	}
 
 	log.Infof("ProcessCSVToDigests: upserted %d digests for org=%s cluster=%s",
 		len(grouped), orgID, clusterUUID)
 
 	if err := upsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		log.Warnf("ProcessCSVToDigests: GPU digest upsert failed (non-fatal): %v", err)
+		return fmt.Errorf("GPU digest upsert: %w", err)
 	}
 
 	if err := upsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		log.Warnf("ProcessCSVToDigests: node digest upsert failed (non-fatal): %v", err)
+		return fmt.Errorf("node digest upsert: %w", err)
 	}
 
 	return nil
@@ -314,9 +369,29 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 	}
 	EnsureGPUDigestPartitions(ctx, pool, months)
 
-	batch := &pgx.Batch{}
+	txGPU, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for GPU digests: %w", err)
+	}
+	defer txGPU.Rollback(ctx)
+
+	type gpuGroupEntry struct {
+		key gpuKey
+		agg *gpuAgg
+	}
+	gpuEntries := make([]gpuGroupEntry, 0, len(groups))
 	for k, g := range groups {
-		batch.Queue(`
+		gpuEntries = append(gpuEntries, gpuGroupEntry{key: k, agg: g})
+	}
+	for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(gpuEntries) {
+			chunkEnd = len(gpuEntries)
+		}
+		batch := &pgx.Batch{}
+		for _, entry := range gpuEntries[chunkStart:chunkEnd] {
+			k, g := entry.key, entry.agg
+			batch.Queue(`
 			INSERT INTO gpu_container_digests (
 				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
 				gpu_model_name, gpu_profile_name, node_name,
@@ -341,22 +416,20 @@ func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				sm_active_min = EXCLUDED.sm_active_min,
 				sm_active_max = EXCLUDED.sm_active_max,
 				sm_active_avg = EXCLUDED.sm_active_avg`,
-			k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
-			g.modelName, g.profileName, g.nodeName,
-			minFloat(g.fbMinVals), maxFloat(g.fbMaxVals), meanFloat(g.fbAvgVals),
-			minFloat(g.tensorMin), maxFloat(g.tensorMax), meanFloat(g.tensorAvg),
-			minFloat(g.dramMin), maxFloat(g.dramMax), meanFloat(g.dramAvg),
-			minFloat(g.smMin), maxFloat(g.smMax), meanFloat(g.smAvg),
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range groups {
-		if _, err := br.Exec(); err != nil {
+				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
+				g.modelName, g.profileName, g.nodeName,
+				minFloat(g.fbMinVals), maxFloat(g.fbMaxVals), meanFloat(g.fbAvgVals),
+				minFloat(g.tensorMin), maxFloat(g.tensorMax), meanFloat(g.tensorAvg),
+				minFloat(g.dramMin), maxFloat(g.dramMax), meanFloat(g.dramAvg),
+				minFloat(g.smMin), maxFloat(g.smMax), meanFloat(g.smAvg),
+			)
+		}
+		if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert GPU digest: %w", err)
 		}
+	}
+	if err := txGPU.Commit(ctx); err != nil {
+		return fmt.Errorf("commit GPU digests tx: %w", err)
 	}
 
 	log.Infof("ProcessCSVToDigests: upserted %d GPU digests for org=%s cluster=%s",
