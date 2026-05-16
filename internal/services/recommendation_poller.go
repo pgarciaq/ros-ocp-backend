@@ -162,6 +162,16 @@ func requestAndSaveRecommendation(kafkaMsg types.RecommendationKafkaMsg, recomme
 			}
 
 			containers := recommendation[0].Kubernetes_objects[0].Containers
+			var wl model.Workload
+			if err := database.GetDB().Preload("Cluster").First(&wl, kafkaMsg.Metadata.Workload_id).Error; err != nil {
+				log.Errorf("recommendation poller: workload id %d not found: %v", kafkaMsg.Metadata.Workload_id, err)
+				return poll_cycle_complete
+			}
+			orgID := wl.OrgId
+			if orgID == "" {
+				orgID = kafkaMsg.Metadata.Org_id
+			}
+			clusterUUID := wl.Cluster.ClusterUUID
 			for _, container := range containers {
 				if kruize.IsValidRecommendation(container.Recommendations, experiment_name, maxEndTimeFromReport, types.PayloadTypeContainer) {
 					for _, v := range container.Recommendations.Data {
@@ -173,6 +183,13 @@ func requestAndSaveRecommendation(kafkaMsg types.RecommendationKafkaMsg, recomme
 						extractedRecommVals := model.ExtractRecommendationColumnValues(v)
 						// Create RecommendationSet entry into the table.
 						recommendationSet := model.RecommendationSet{
+							OrgID:                               orgID,
+							ClusterUUID:                         clusterUUID,
+							Namespace:                           wl.Namespace,
+							Workload:                            wl.WorkloadName,
+							WorkloadType:                        string(wl.WorkloadType),
+							Term:                                "short",
+							Engine:                              "cost",
 							WorkloadID:                          kafkaMsg.Metadata.Workload_id,
 							ContainerName:                       container.Container_name,
 							CPURequestCurrent:                   extractedRecommVals.CPURequestCurrent,
@@ -383,7 +400,7 @@ func PollForRecommendations(msg *kafka.Message, consumer_object *kafka.Consumer)
 			switch modelType := recommendation_stored_in_db.(type) {
 			case model.RecommendationSet:
 				lastRecommRecordDate = modelType.MonitoringEndTime.UTC()
-				lastRecommRecordID = modelType.ID
+				lastRecommRecordID = modelType.Namespace + "/" + modelType.Workload + "/" + modelType.ContainerName
 			case model.NamespaceRecommendationSet:
 				lastRecommRecordDate = modelType.MonitoringEndTime.UTC()
 				lastRecommRecordID = modelType.ID

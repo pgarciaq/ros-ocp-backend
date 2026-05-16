@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-11 (PromQL replica query bug fix, live Prometheus validation)
+Last updated: 2026-05-16 (Kafka unparsable-message logging caveat — `490-issues.md` **#149**)
 
 ---
 
@@ -106,6 +106,34 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
+| Unparsable Kafka messages log full payload | Fix for **`490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`490-issues.md` #149** |
+
+#### Unparsable Kafka message logging (sensitive payload fields)
+
+When ingestion encounters JSON/validation failures on the ROS report Kafka path,
+the handler logs the **full raw payload** alongside the error. This was added so
+operators can reconstruct or forward poison messages after failures that would
+otherwise commit the offset with no replay path (see **`490-issues.md` #149** —
+`commitOnPermanentFailure` / permanent failure handling).
+
+**Fields of note in logged payloads:**
+
+- **`org_id`** — tenant identifier
+- **`cluster_uuid`** — cluster identifier
+- **File URLs** — object storage locations; **presigned URLs** may embed
+  credentials or time-limited signing material in query parameters
+
+**Hardening options** (pick based on org policy rather than a single default):
+
+- **Redact or strip query strings** from presigned URLs before logging (or log
+  only bucket/key prefixes where sufficient).
+- **Avoid durable plaintext logging** of full payloads: route failures to a
+  **secure dead-letter topic** or isolated retention bucket with stricter access,
+  and keep correlation IDs in general application logs instead.
+
+This caveat aligns with the broader **poison message / DLQ** gap tracked as
+REQ-0.7 in the executive summary; **`490-issues.md` #149** documents the
+correctness and observability trade-offs for the current path.
 
 #### Node Recommendation Cold Start
 
@@ -286,7 +314,6 @@ when capacity data is unavailable.
 | `ROS_NODE_UNDERUTIL_THRESHOLD` | 0.30 | p95 below this = underutilized |
 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | 1.50 | Request/allocatable ratio above this = overcommitted |
 | `ROS_NODE_ALLOCATABLE_FACTOR` | 0.93 | Fraction of capacity considered allocatable |
-| `ROS_NODE_MIN_DATA_DAYS` | 3 | Minimum days of data before producing recommendations |
 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed imbalance above this = stranded |
 | `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha (higher = less smoothing) |
 

@@ -123,32 +123,35 @@ var seedCmd = &cobra.Command{
 		db.Where(&model.Cluster{ClusterAlias: "BarAlias"}).FirstOrCreate(&cluster2)
 
 		workload1 := &model.Workload{
-			Cluster:        *cluster1,
-			ExperimentName: "exfoo",
-			Namespace:      "a_proj_rxu",
-			WorkloadType:   workload.Replicaset,
-			WorkloadName:   "replicaset_proj_rxu",
-			Containers:     []string{"node", "postgres", "apache"},
+			OrgId:            rhAccount1.OrgId,
+			Cluster:          *cluster1,
+			ExperimentName:   "exfoo",
+			Namespace:        "a_proj_rxu",
+			WorkloadType:     workload.Replicaset,
+			WorkloadName:     "replicaset_proj_rxu",
+			Containers:       []string{"node", "postgres", "apache"},
 		}
 		db.Where(&model.Workload{Namespace: "a_proj_rxu"}).FirstOrCreate(&workload1)
 
 		workload2 := &model.Workload{
-			Cluster:        *cluster1,
-			ExperimentName: "exbar",
-			Namespace:      "b_proj_rxu",
-			WorkloadType:   workload.Statefulset,
-			WorkloadName:   "stateful_proj_rxu",
-			Containers:     []string{"redis", "nginx"},
+			OrgId:            rhAccount1.OrgId,
+			Cluster:          *cluster1,
+			ExperimentName:   "exbar",
+			Namespace:        "b_proj_rxu",
+			WorkloadType:     workload.Statefulset,
+			WorkloadName:     "stateful_proj_rxu",
+			Containers:       []string{"redis", "nginx"},
 		}
 		db.Where(&model.Workload{WorkloadType: workload.Statefulset}).FirstOrCreate(&workload2)
 
 		workload3 := &model.Workload{
-			Cluster:        *cluster2,
-			ExperimentName: "exapp",
-			Namespace:      "c_proj_rxu",
-			WorkloadType:   workload.Deployment,
-			WorkloadName:   "deployment_proj_rxu",
-			Containers:     []string{"node", "postgres", "apache"},
+			OrgId:            rhAccount1.OrgId,
+			Cluster:          *cluster2,
+			ExperimentName:   "exapp",
+			Namespace:        "c_proj_rxu",
+			WorkloadType:     workload.Deployment,
+			WorkloadName:     "deployment_proj_rxu",
+			Containers:       []string{"node", "postgres", "apache"},
 		}
 		db.Where(&model.Workload{WorkloadType: workload.Deployment}).FirstOrCreate(&workload3)
 
@@ -333,52 +336,87 @@ var seedCmd = &cobra.Command{
 		}
 
 		recommendationSet1 := &model.RecommendationSet{
-			Workload:            *workload1,
-			ContainerName:       "postgres",
-			MonitoringStartTime: time.Now().Add(-time.Hour * 3),
-			MonitoringEndTime:   time.Now().Add(-time.Hour * 2),
-			Recommendations:     datatypes.JSON(jsonrecommendationSetData1),
-			UpdatedAt:           time.Now(),
+			OrgID:                               rhAccount1.OrgId,
+			ClusterUUID:                         cluster1.ClusterUUID,
+			Namespace:                           workload1.Namespace,
+			Workload:                            workload1.WorkloadName,
+			WorkloadType:                        string(workload1.WorkloadType),
+			Term:                                "short",
+			Engine:                              "cost",
+			WorkloadID:                          workload1.ID,
+			ContainerName:                       "postgres",
+			MonitoringStartTime:                 time.Now().Add(-time.Hour * 3),
+			MonitoringEndTime:                   time.Now().Add(-time.Hour * 2),
+			Recommendations:                     datatypes.JSON(jsonrecommendationSetData1),
+			UpdatedAt:                           time.Now(),
 		}
 		db.Where(&model.RecommendationSet{Recommendations: jsonrecommendationSetData1}).FirstOrCreate(&recommendationSet1)
 
 		recommendationSet2 := &model.RecommendationSet{
-			Workload:            *workload1,
-			ContainerName:       "postgres",
-			MonitoringStartTime: time.Now().Add(-time.Hour * 2),
-			MonitoringEndTime:   time.Now().Add(-time.Hour * 1),
-			Recommendations:     datatypes.JSON(jsonrecommendationSetData2),
-			UpdatedAt:           time.Now(),
+			OrgID:                               rhAccount1.OrgId,
+			ClusterUUID:                         cluster1.ClusterUUID,
+			Namespace:                           workload1.Namespace,
+			Workload:                            workload1.WorkloadName,
+			WorkloadType:                        string(workload1.WorkloadType),
+			Term:                                "short",
+			Engine:                              "cost",
+			WorkloadID:                          workload1.ID,
+			ContainerName:                       "postgres",
+			MonitoringStartTime:                 time.Now().Add(-time.Hour * 2),
+			MonitoringEndTime:                   time.Now().Add(-time.Hour * 1),
+			Recommendations:                     datatypes.JSON(jsonrecommendationSetData2),
+			UpdatedAt:                           time.Now(),
 		}
 		db.Where(&model.RecommendationSet{Recommendations: jsonrecommendationSetData2}).FirstOrCreate(&recommendationSet2)
 
 		recommendationSet3 := &model.RecommendationSet{
-			Workload:            *workload1,
-			ContainerName:       "hadoop",
-			MonitoringStartTime: time.Now().Add(-time.Hour * 3),
-			MonitoringEndTime:   time.Now().Add(-time.Hour * 2),
-			Recommendations:     datatypes.JSON(jsonrecommendationSetData2),
-			UpdatedAt:           time.Now(),
+			OrgID:                               rhAccount1.OrgId,
+			ClusterUUID:                         cluster1.ClusterUUID,
+			Namespace:                           workload1.Namespace,
+			Workload:                            workload1.WorkloadName,
+			WorkloadType:                        string(workload1.WorkloadType),
+			Term:                                "short",
+			Engine:                              "cost",
+			WorkloadID:                          workload1.ID,
+			ContainerName:                       "hadoop",
+			MonitoringStartTime:                 time.Now().Add(-time.Hour * 3),
+			MonitoringEndTime:                   time.Now().Add(-time.Hour * 2),
+			Recommendations:                     datatypes.JSON(jsonrecommendationSetData2),
+			UpdatedAt:                           time.Now(),
 		}
 		db.Where(&model.RecommendationSet{ContainerName: "hadoop"}).FirstOrCreate(&recommendationSet3)
 
 		recommendationSet4 := &model.RecommendationSet{
-			Workload:            *workload2,
-			ContainerName:       "nginx",
-			MonitoringStartTime: time.Now().Add(-time.Hour * 3),
-			MonitoringEndTime:   time.Now().Add(-time.Hour * 2),
-			Recommendations:     datatypes.JSON(jsonrecommendationSetData2),
-			UpdatedAt:           time.Now(),
+			OrgID:                               rhAccount1.OrgId,
+			ClusterUUID:                         cluster1.ClusterUUID,
+			Namespace:                           workload2.Namespace,
+			Workload:                            workload2.WorkloadName,
+			WorkloadType:                        string(workload2.WorkloadType),
+			Term:                                "short",
+			Engine:                              "cost",
+			WorkloadID:                          workload2.ID,
+			ContainerName:                       "nginx",
+			MonitoringStartTime:                 time.Now().Add(-time.Hour * 3),
+			MonitoringEndTime:                   time.Now().Add(-time.Hour * 2),
+			Recommendations:                     datatypes.JSON(jsonrecommendationSetData2),
+			UpdatedAt:                           time.Now(),
 		}
 		db.Where(&model.RecommendationSet{ContainerName: "nginx"}).FirstOrCreate(&recommendationSet4)
 
 		recommendationSet5 := &model.RecommendationSet{
-			Workload:            *workload3,
-			ContainerName:       "redis",
-			MonitoringStartTime: time.Now().Add(-time.Hour * 3),
-			MonitoringEndTime:   time.Now().Add(-time.Hour * 2),
-			Recommendations:     datatypes.JSON(jsonrecommendationSetData2),
-			UpdatedAt:           time.Now(),
+			OrgID:                               rhAccount1.OrgId,
+			ClusterUUID:                         cluster2.ClusterUUID,
+			Namespace:                           workload3.Namespace,
+			Workload:                            workload3.WorkloadName,
+			WorkloadType:                        string(workload3.WorkloadType),
+			Term:                                "short",
+			Engine:                              "cost",
+			WorkloadID:                          workload3.ID,
+			ContainerName:                       "redis",
+			MonitoringStartTime:                 time.Now().Add(-time.Hour * 3),
+			MonitoringEndTime:                   time.Now().Add(-time.Hour * 2),
+			Recommendations:                     datatypes.JSON(jsonrecommendationSetData2),
+			UpdatedAt:                           time.Now(),
 		}
 		db.Where(&model.RecommendationSet{ContainerName: "redis"}).FirstOrCreate(&recommendationSet5)
 
