@@ -17,12 +17,12 @@ type containerID struct {
 }
 
 // QueryGPURecommendations reads gpu_container_digests for the given cluster and
-// time range, then calls RecommendGPU for each container that has GPU data.
+// time range, then calls RecommendGPU for each container × term.
 // Returns:
-//   - recs: map keyed by "namespace/workload/container" → *GPURec
+//   - recs: map keyed by "namespace/workload/container" → []*GPURec (one per term)
 //   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
 //   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
-func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time) (map[string]*GPURec, map[string]string, map[string]time.Time, error) {
+func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time, terms []TermConfig) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT interval_start, namespace, workload, container_name,
 			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
@@ -76,15 +76,59 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 		return nil, nil, nil, nil
 	}
 
-	result := make(map[string]*GPURec, len(grouped))
-	for key, digests := range grouped {
-		rec := RecommendGPU(digests)
-		if rec != nil {
-			result[key] = rec
+	result := make(map[string][]*GPURec, len(grouped))
+	for key, allDigests := range grouped {
+		latest := latestGPUDigest(allDigests)
+		for _, tc := range terms {
+			windowDigests := filterGPUByWindow(allDigests, latest.IntervalStart, tc.WindowDays)
+			if len(windowDigests) < tc.MinDataDays {
+				continue
+			}
+			rec := RecommendGPU(windowDigests)
+			if rec != nil {
+				rec.Term = tc.Name
+				result[key] = append(result[key], rec)
+			}
 		}
 	}
 
-	log.Infof("QueryGPURecommendations: cluster=%s, %d containers with GPU data, %d recommendations",
-		clusterUUID, len(grouped), len(result))
+	log.Infof("QueryGPURecommendations: cluster=%s, %d containers with GPU data, %d container-term recommendations",
+		clusterUUID, len(grouped), countGPURecs(result))
 	return result, lastNode, nodeLastSeen, nil
+}
+
+// filterGPUByWindow returns GPU digest rows within the last windowDays
+// from endDate (inclusive), anchored to the latest data point.
+func filterGPUByWindow(rows []GPUDigestRow, endDate time.Time, windowDays int) []GPUDigestRow {
+	cutoff := endDate.AddDate(0, 0, -(windowDays - 1))
+	var result []GPUDigestRow
+	for _, r := range rows {
+		d := r.IntervalStart.Truncate(24 * time.Hour)
+		if !d.Before(cutoff.Truncate(24*time.Hour)) && !d.After(endDate.Truncate(24*time.Hour)) {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+// latestGPUDigest returns the GPUDigestRow with the most recent IntervalStart.
+func latestGPUDigest(rows []GPUDigestRow) GPUDigestRow {
+	if len(rows) == 0 {
+		return GPUDigestRow{}
+	}
+	best := rows[0]
+	for _, r := range rows[1:] {
+		if r.IntervalStart.After(best.IntervalStart) {
+			best = r
+		}
+	}
+	return best
+}
+
+func countGPURecs(m map[string][]*GPURec) int {
+	n := 0
+	for _, recs := range m {
+		n += len(recs)
+	}
+	return n
 }

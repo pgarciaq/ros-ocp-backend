@@ -65,9 +65,11 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			UnderutilThreshold:  0.30,
 			OvercommitThreshold: 1.0,
 			AllocatableFactor:   0.90,
-			MinDataDays:         3,
 		}
-		recs := engine.RecommendNodes(digests, cfg)
+		terms := []engine.TermConfig{
+			{Name: "medium", WindowDays: 30, MinDataDays: 3},
+		}
+		recs := engine.RecommendNodes(digests, cfg, terms)
 		require.NotEmpty(t, recs)
 
 		recByNode := map[string]engine.NodeRec{}
@@ -107,12 +109,15 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			UnderutilThreshold:  0.30,
 			OvercommitThreshold: 1.0,
 			AllocatableFactor:   0.90,
-			MinDataDays:         3,
 		}
-		recs := engine.RecommendNodes(digests, cfg)
+		terms := []engine.TermConfig{
+			{Name: "medium", WindowDays: 30, MinDataDays: 3},
+		}
+		recs := engine.RecommendNodes(digests, cfg, terms)
 		require.NotEmpty(t, recs)
 
-		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs)
+		validTerms := []string{"medium"}
+		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms)
 		require.NoError(t, err)
 
 		var count int
@@ -130,7 +135,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		assert.True(t, isUnderutilized)
 
 		// Upsert: run again, should not fail or duplicate
-		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs)
+		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms)
 		require.NoError(t, err)
 
 		err = pool.QueryRow(ctx,

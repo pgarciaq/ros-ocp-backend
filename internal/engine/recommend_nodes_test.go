@@ -13,9 +13,14 @@ func defaultNodeRecConfig() NodeRecConfig {
 		UnderutilThreshold:         0.30,
 		OvercommitThreshold:        1.50,
 		AllocatableFactor:          0.93,
-		MinDataDays:                3,
 		StrandedImbalanceThreshold: 0.6,
 		EMAAlpha:                   0.3,
+	}
+}
+
+func singleMediumTerm() []TermConfig {
+	return []TermConfig{
+		{Name: "medium", WindowDays: 30, MinDataDays: 3},
 	}
 }
 
@@ -45,7 +50,7 @@ func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 		makeDigestRow("node-1", 2, 1000, 2000, 5000, 8000, 8000, 16000, ptr64(16000), ptr64(64000)),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	assert.Empty(t, results, "should not produce recs with < 3 days of data")
 }
 
@@ -61,7 +66,7 @@ func TestRecommendNodes_Underutilized(t *testing.T) {
 		makeDigestRow("node-idle", 4, 500, 900, 2000, 3800, 8000, 32000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	rec := results[0]
 
@@ -82,7 +87,7 @@ func TestRecommendNodes_Overcommitted(t *testing.T) {
 		makeDigestRow("node-hot", 3, 6100, 7600, 20500, 28500, 14000, 30000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	rec := results[0]
 
@@ -104,7 +109,7 @@ func TestRecommendNodes_StrandedCPU(t *testing.T) {
 		makeDigestRow("node-mem", 3, 1100, 2100, 50500, 55500, 8000, 60000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	rec := results[0]
 
@@ -125,7 +130,7 @@ func TestRecommendNodes_StrandedMemory(t *testing.T) {
 		makeDigestRow("node-cpu", 3, 12200, 14200, 5200, 8200, 14000, 32000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	rec := results[0]
 
@@ -146,7 +151,7 @@ func TestRecommendNodes_NormalNode(t *testing.T) {
 		makeDigestRow("node-ok", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	rec := results[0]
 
@@ -172,7 +177,7 @@ func TestRecommendNodes_MultipleNodes(t *testing.T) {
 		makeDigestRow("node-b", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 2)
 
 	recMap := map[string]NodeRec{}
@@ -194,7 +199,7 @@ func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
 		makeDigestRow("node-nap", 3, 550, 1100, 2200, 4200, 8000, 32000, nil, nil),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	// With requests=8000 and factor=0.93, effective alloc = 8000/0.93 ≈ 8602
 	// CPU p95 avg ≈ 1100/8602 ≈ 0.128 (below 0.30 threshold)
@@ -215,14 +220,14 @@ func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
 
 	// Default threshold (0.6): not stranded (imbalance ~0.51)
 	cfgDefault := defaultNodeRecConfig()
-	results := RecommendNodes(digests, cfgDefault)
+	results := RecommendNodes(digests, cfgDefault, singleMediumTerm())
 	require.Len(t, results, 1)
 	assert.Nil(t, results[0].StrandedResource, "should not detect stranded with default 0.6 threshold")
 
 	// Lowered threshold (0.4): now detects stranded memory (cpu > mem)
 	cfgLowered := defaultNodeRecConfig()
 	cfgLowered.StrandedImbalanceThreshold = 0.4
-	results = RecommendNodes(digests, cfgLowered)
+	results = RecommendNodes(digests, cfgLowered, singleMediumTerm())
 	require.Len(t, results, 1)
 	require.NotNil(t, results[0].StrandedResource, "should detect stranded with lowered threshold")
 	assert.Equal(t, "memory", *results[0].StrandedResource)
@@ -242,7 +247,7 @@ func TestRecommendNodes_StrandedTransientSpikeDampened(t *testing.T) {
 	}
 
 	cfg := defaultNodeRecConfig()
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	assert.Nil(t, results[0].StrandedResource,
 		"single-day spike should be dampened by EMA and not trigger stranded detection")
@@ -308,10 +313,64 @@ func TestTrendSlope_SpikesDampened(t *testing.T) {
 		makeDigestRow("node-spike", 5, 5050, 6050, 30000, 40000, 8000, 48000, allocCPU, allocMem),
 	}
 
-	results := RecommendNodes(digests, cfg)
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
 	require.Len(t, results, 1)
 	// With EMA smoothing, the spike should be dampened and the trend should be
 	// approximately flat (near zero) rather than strongly positive
 	assert.InDelta(t, 0.0, float64(results[0].TrendSlope), 0.05,
 		"EMA-smoothed trend should be near-zero for a node with a single spike")
+}
+
+func TestRecommendNodes_ShortTermWithFutureEnd(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	digests := []NodeDigestRow{
+		makeDigestRow("node-recent", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-recent", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-recent", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
+	}
+
+	terms := []TermConfig{
+		{Name: "short", WindowDays: 1, MinDataDays: 1},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3},
+		{Name: "long", WindowDays: 15, MinDataDays: 7},
+	}
+
+	results := RecommendNodes(digests, cfg, terms)
+
+	termMap := map[string]NodeRec{}
+	for _, r := range results {
+		termMap[r.Term] = r
+	}
+
+	require.Contains(t, termMap, "short", "short-term should be produced with 1 day of data")
+	require.Contains(t, termMap, "medium", "medium-term should be produced with 3 days of data")
+	assert.NotContains(t, termMap, "long", "long-term requires 7 days but only 3 available")
+
+	assert.Equal(t, "short", termMap["short"].Term)
+	assert.Equal(t, "medium", termMap["medium"].Term)
+}
+
+func TestFilterNodeByWindow(t *testing.T) {
+	rows := []NodeDigestRow{
+		{BucketDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), Node: "n1"},
+		{BucketDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), Node: "n1"},
+		{BucketDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC), Node: "n1"},
+		{BucketDate: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), Node: "n1"},
+		{BucketDate: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), Node: "n1"},
+	}
+
+	endDate := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
+
+	result := filterNodeByWindow(rows, endDate, 1)
+	require.Len(t, result, 1)
+	assert.Equal(t, 5, result[0].BucketDate.Day())
+
+	result = filterNodeByWindow(rows, endDate, 3)
+	require.Len(t, result, 3)
+
+	result = filterNodeByWindow(rows, endDate, 30)
+	require.Len(t, result, 5)
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -35,25 +36,31 @@ func GetNodeRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	emptyResp := model.NodeRecommendationListResponse{
-		Meta:  model.NodeRecommendationMeta{Count: 0, Limit: opts.Limit, Offset: opts.Offset},
-		Data:  []model.NodeGPURecommendation{},
-		Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
-	}
-
 	pool := database.GetPool()
 	if pool == nil {
-		return c.JSON(http.StatusOK, emptyResp)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
 	}
 
 	ctx := context.Background()
 	now := time.Now().UTC()
-	start := now.AddDate(0, 0, -30)
+
+	terms, err := engine.LoadTermConfig(ctx, pool, orgIDStr)
+	if err != nil {
+		log.Warnf("GetNodeRecommendations: load term config failed: %v", err)
+		terms = engine.DefaultTerms()
+	}
+	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
-		log.Warnf("GetNodeRecommendations: failed to get clusters: %v", err)
-		return c.JSON(http.StatusOK, emptyResp)
+		log.Errorf("GetNodeRecommendations: failed to get clusters: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
 	}
 
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
@@ -61,10 +68,12 @@ func GetNodeRecommendations(c echo.Context) error {
 	costProvider := getGPUCostProvider()
 
 	var allRecs []model.NodeGPURecommendation
+	var gpuClusterErrors []error
 	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms)
 		if err != nil {
 			log.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
+			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
 			continue
 		}
 		if gpuRecs == nil {
@@ -101,11 +110,23 @@ func GetNodeRecommendations(c echo.Context) error {
 		}
 	}
 
+	var warnings []string
+	if len(gpuClusterErrors) > 0 {
+		log.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
+		switch len(gpuClusterErrors) {
+		case 1:
+			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))
+		default:
+			warnings = append(warnings, fmt.Sprintf("GPU data unavailable for %d clusters", len(gpuClusterErrors)))
+		}
+	}
+
 	allRecs = filterNodeRecsByRBAC(allRecs, userPerms)
 
 	nodeNameFilter := c.QueryParam("node_name")
 	gpuModelFilter := c.QueryParam("gpu_model")
-	allRecs = filterNodeRecs(allRecs, nodeNameFilter, gpuModelFilter)
+	termFilter := c.QueryParam("term")
+	allRecs = filterNodeRecs(allRecs, nodeNameFilter, gpuModelFilter, termFilter)
 
 	if allRecs == nil {
 		allRecs = []model.NodeGPURecommendation{}
@@ -135,9 +156,23 @@ func GetNodeRecommendations(c echo.Context) error {
 			Offset:          opts.Offset,
 			TotalSavingsUSD: totalSavings,
 		},
-		Data:  paged,
-		Links: buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
+		Data:     paged,
+		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
+		Warnings: warnings,
 	})
+}
+
+const maxGPUWarningErrLen = 160
+
+func briefGPUEnrichmentErr(err error) string {
+	if err == nil {
+		return "unknown error"
+	}
+	s := err.Error()
+	if len(s) <= maxGPUWarningErrLen {
+		return s
+	}
+	return s[:maxGPUWarningErrLen] + "..."
 }
 
 func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
@@ -165,14 +200,15 @@ func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 	return uuids, rows.Err()
 }
 
-func groupByNodeAndModel(gpuRecs map[string]*engine.GPURec, nodeMap map[string]string, nodeLastSeen map[string]time.Time, clusterUUID string) []engine.NodeGPUGroup {
+func groupByNodeAndModel(gpuRecs map[string][]*engine.GPURec, nodeMap map[string]string, nodeLastSeen map[string]time.Time, clusterUUID string) []engine.NodeGPUGroup {
 	type groupKey struct {
 		node  string
 		model string
+		term  string
 	}
 	grouped := map[groupKey]*engine.NodeGPUGroup{}
 
-	for key, rec := range gpuRecs {
+	for key, recs := range gpuRecs {
 		nodeName := nodeMap[key]
 		if nodeName == "" {
 			continue
@@ -182,23 +218,26 @@ func groupByNodeAndModel(gpuRecs map[string]*engine.GPURec, nodeMap map[string]s
 			continue
 		}
 
-		gk := groupKey{node: nodeName, model: rec.GPUModelName}
-		g, ok := grouped[gk]
-		if !ok {
-			g = &engine.NodeGPUGroup{
-				NodeName:    nodeName,
-				ClusterUUID: clusterUUID,
-				GPUModel:    rec.GPUModelName,
-				LastSeen:    nodeLastSeen[nodeName],
+		for _, rec := range recs {
+			gk := groupKey{node: nodeName, model: rec.GPUModelName, term: rec.Term}
+			g, ok := grouped[gk]
+			if !ok {
+				g = &engine.NodeGPUGroup{
+					NodeName:    nodeName,
+					ClusterUUID: clusterUUID,
+					GPUModel:    rec.GPUModelName,
+					Term:        rec.Term,
+					LastSeen:    nodeLastSeen[nodeName],
+				}
+				grouped[gk] = g
 			}
-			grouped[gk] = g
+			g.Containers = append(g.Containers, engine.NodeGPUContainer{
+				Namespace: parts[0],
+				Workload:  parts[1],
+				Container: parts[2],
+				Rec:       rec,
+			})
 		}
-		g.Containers = append(g.Containers, engine.NodeGPUContainer{
-			Namespace: parts[0],
-			Workload:  parts[1],
-			Container: parts[2],
-			Rec:       rec,
-		})
 	}
 
 	result := make([]engine.NodeGPUGroup, 0, len(grouped))
@@ -208,11 +247,11 @@ func groupByNodeAndModel(gpuRecs map[string]*engine.GPURec, nodeMap map[string]s
 	return result
 }
 
-
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{
 		NodeName:            tsRec.NodeName,
 		ClusterUUID:         tsRec.ClusterUUID,
+		Term:                tsRec.Term,
 		RecommendationType:  "gpu_time_slicing",
 		GPUModel:            tsRec.GPUModel,
 		RecommendedReplicas: tsRec.RecommendedReplicas,
@@ -248,8 +287,8 @@ func toNodeGPURecommendation(tsRec *engine.TimeslicingRec) model.NodeGPURecommen
 	return rec
 }
 
-func filterNodeRecs(recs []model.NodeGPURecommendation, nodeName, gpuModel string) []model.NodeGPURecommendation {
-	if nodeName == "" && gpuModel == "" {
+func filterNodeRecs(recs []model.NodeGPURecommendation, nodeName, gpuModel, term string) []model.NodeGPURecommendation {
+	if nodeName == "" && gpuModel == "" && term == "" {
 		return recs
 	}
 	filtered := make([]model.NodeGPURecommendation, 0, len(recs))
@@ -258,6 +297,9 @@ func filterNodeRecs(recs []model.NodeGPURecommendation, nodeName, gpuModel strin
 			continue
 		}
 		if gpuModel != "" && !strings.Contains(strings.ToLower(r.GPUModel), strings.ToLower(gpuModel)) {
+			continue
+		}
+		if term != "" && !strings.EqualFold(r.Term, term) {
 			continue
 		}
 		filtered = append(filtered, r)

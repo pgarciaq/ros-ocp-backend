@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -32,19 +33,24 @@ func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]Te
 	}
 	defer rows.Close()
 
+	defaults := DefaultTerms()
 	var customs []TermConfig
 	for rows.Next() {
 		var ord int
 		var windowDays int
-		var decayHL float32
+		var decayHL sql.NullFloat64
 		if err := rows.Scan(&ord, &windowDays, &decayHL); err != nil {
 			return nil, err
+		}
+		decay := defaults[ord-1].DecayHalfLifeHours
+		if decayHL.Valid {
+			decay = decayHL.Float64
 		}
 		customs = append(customs, TermConfig{
 			Name:               termNames[ord-1],
 			WindowDays:         windowDays,
 			MinDataDays:        computeMinDataDays(windowDays),
-			DecayHalfLifeHours: float64(decayHL),
+			DecayHalfLifeHours: decay,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -55,6 +61,18 @@ func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]Te
 		return DefaultTerms(), nil
 	}
 	return customs, nil
+}
+
+// MaxWindowDays returns the largest WindowDays across the given terms,
+// with a floor of minFloor (use 0 for no floor).
+func MaxWindowDays(terms []TermConfig, minFloor int) int {
+	max := minFloor
+	for _, tc := range terms {
+		if tc.WindowDays > max {
+			max = tc.WindowDays
+		}
+	}
+	return max
 }
 
 // computeMinDataDays returns the minimum data days required for a given window.

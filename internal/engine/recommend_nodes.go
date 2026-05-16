@@ -30,14 +30,14 @@ type NodeRecConfig struct {
 	UnderutilThreshold         float64
 	OvercommitThreshold        float64
 	AllocatableFactor          float64
-	MinDataDays                int
 	StrandedImbalanceThreshold float64
 	EMAAlpha                   float64
 }
 
-// NodeRec holds the computed recommendation for a single node.
+// NodeRec holds the computed recommendation for a single node within a single term.
 type NodeRec struct {
 	Node                string
+	Term                string
 	CPUUtilP50          float32
 	CPUUtilP95          float32
 	MemUtilP50          float32
@@ -52,22 +52,57 @@ type NodeRec struct {
 }
 
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
-// It returns one NodeRec per node that has at least minDataDays of data.
-func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig) []NodeRec {
+// It produces one NodeRec per node per term. Each term's recommendation uses only
+// the digest rows within that term's window, anchored to the node's latest digest date.
+func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConfig) []NodeRec {
 	grouped := map[string][]NodeDigestRow{}
 	for _, d := range digests {
 		grouped[d.Node] = append(grouped[d.Node], d)
 	}
 
 	var results []NodeRec
-	for node, days := range grouped {
-		if len(days) < cfg.MinDataDays {
-			continue
+	for node, allDays := range grouped {
+		latest := latestNodeDigest(allDays)
+
+		for _, tc := range terms {
+			windowDays := filterNodeByWindow(allDays, latest.BucketDate, tc.WindowDays)
+			if len(windowDays) < tc.MinDataDays {
+				continue
+			}
+			rec := evaluateNode(node, windowDays, cfg)
+			rec.Term = tc.Name
+			results = append(results, rec)
 		}
-		rec := evaluateNode(node, days, cfg)
-		results = append(results, rec)
 	}
 	return results
+}
+
+// filterNodeByWindow returns node digest rows within the last windowDays
+// from endDate (inclusive), mirroring filterByWindow for container digests.
+func filterNodeByWindow(rows []NodeDigestRow, endDate time.Time, windowDays int) []NodeDigestRow {
+	cutoff := endDate.AddDate(0, 0, -(windowDays - 1))
+	var result []NodeDigestRow
+	for _, r := range rows {
+		d := r.BucketDate.Truncate(24 * time.Hour)
+		if !d.Before(cutoff.Truncate(24*time.Hour)) && !d.After(endDate.Truncate(24*time.Hour)) {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+// latestNodeDigest returns the NodeDigestRow with the most recent BucketDate.
+func latestNodeDigest(rows []NodeDigestRow) NodeDigestRow {
+	if len(rows) == 0 {
+		return NodeDigestRow{}
+	}
+	best := rows[0]
+	for _, r := range rows[1:] {
+		if r.BucketDate.After(best.BucketDate) {
+			best = r
+		}
+	}
+	return best
 }
 
 func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec {
@@ -167,7 +202,7 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 	// Stranded resources: EMA-smoothed normalized imbalance detection.
 	// imbalance(day) = |cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)
 	// If the smoothed imbalance exceeds the threshold, the lower resource is stranded.
-	if len(imbalances) >= cfg.MinDataDays {
+	if len(imbalances) >= 2 {
 		imbalanceThresh := cfg.StrandedImbalanceThreshold
 		if imbalanceThresh == 0 {
 			imbalanceThresh = 0.6
@@ -303,7 +338,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 }
 
 // PersistNodeRecommendations upserts computed node recommendations into the database.
-func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recs []NodeRec) error {
+func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recs []NodeRec, validTerms []string) error {
 	if len(recs) == 0 {
 		return nil
 	}
@@ -317,13 +352,13 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 	for _, r := range recs {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO node_recommendations (
-				org_id, cluster_uuid, node,
+				org_id, cluster_uuid, node, term,
 				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 				cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 				stranded_resource, pod_count, trend_slope, notification_codes,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())
-			ON CONFLICT (org_id, cluster_uuid, node) DO UPDATE SET
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())
+			ON CONFLICT (org_id, cluster_uuid, node, term) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
 				mem_util_p50 = EXCLUDED.mem_util_p50,
@@ -336,13 +371,26 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				trend_slope = EXCLUDED.trend_slope,
 				notification_codes = EXCLUDED.notification_codes,
 				updated_at = now()`,
-			orgID, clusterUUID, r.Node,
+			orgID, clusterUUID, r.Node, r.Term,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
 			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted,
 			r.StrandedResource, r.PodCount, r.TrendSlope, r.NotificationCodes,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)
+		}
+	}
+
+	// Remove rows for terms no longer in the active config (stale term cleanup).
+	if len(validTerms) > 0 {
+		_, err = tx.Exec(ctx, `
+			DELETE FROM node_recommendations
+			WHERE org_id = $1 AND cluster_uuid = $2
+			  AND term != ALL($3)`,
+			orgID, clusterUUID, validTerms,
+		)
+		if err != nil {
+			return fmt.Errorf("cleanup stale terms: %w", err)
 		}
 	}
 

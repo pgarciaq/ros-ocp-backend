@@ -68,6 +68,47 @@ func TestLoadTermConfig_ReturnsCustomTerms_WhenOverridesExist(t *testing.T) {
 	assert.InDelta(t, 720.0, terms[2].DecayHalfLifeHours, 0.001)
 }
 
+func TestLoadTermConfig_NULLDecayUsesDefaultHalfLifeForTermOrd(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `INSERT INTO org_recommendation_terms (org_id, term_ord, window_days, decay_halflife_hours)
+		VALUES ('org-null-decay', 1, 5, NULL), ('org-null-decay', 2, 20, NULL)`)
+	require.NoError(t, err)
+
+	terms, err := LoadTermConfig(ctx, pool, "org-null-decay")
+	require.NoError(t, err)
+	require.Len(t, terms, 2)
+
+	def := DefaultTerms()
+	assert.InDelta(t, def[0].DecayHalfLifeHours, terms[0].DecayHalfLifeHours, 0.001,
+		"NULL decay for short term should use default short half-life")
+	assert.InDelta(t, def[1].DecayHalfLifeHours, terms[1].DecayHalfLifeHours, 0.001,
+		"NULL decay for medium term should use default medium half-life")
+	assert.Equal(t, 5, terms[0].WindowDays)
+	assert.Equal(t, 20, terms[1].WindowDays)
+}
+
+func TestMaxWindowDays(t *testing.T) {
+	tests := []struct {
+		name     string
+		terms    []TermConfig
+		minFloor int
+		want     int
+	}{
+		{"defaults with floor 30", DefaultTerms(), 30, 30},
+		{"defaults with floor 0", DefaultTerms(), 0, 15},
+		{"custom large window", []TermConfig{{WindowDays: 90}, {WindowDays: 7}}, 30, 90},
+		{"empty terms returns floor", []TermConfig{}, 30, 30},
+		{"nil terms returns floor", nil, 30, 30},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, MaxWindowDays(tt.terms, tt.minFloor))
+		})
+	}
+}
+
 func TestLoadTermConfig_MinDataDaysScaling(t *testing.T) {
 	tests := []struct {
 		name        string

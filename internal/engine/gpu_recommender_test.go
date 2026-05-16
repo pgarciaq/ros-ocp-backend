@@ -238,3 +238,40 @@ func TestClassifyGPUWorkload_MemBoundThresholdOverride(t *testing.T) {
 	cls2, _ := ClassifyGPUWorkload(digests)
 	assert.Equal(t, GPUClassMemoryBound, cls2, "should be memory_bound with lowered DRAM threshold 0.50")
 }
+
+func TestFilterGPUByWindow(t *testing.T) {
+	rows := []GPUDigestRow{
+		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.1},
+		{IntervalStart: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.2},
+		{IntervalStart: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.3},
+		{IntervalStart: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.4},
+		{IntervalStart: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.5},
+	}
+
+	endDate := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
+
+	result := filterGPUByWindow(rows, endDate, 1)
+	require.Len(t, result, 1)
+	assert.Equal(t, 5, result[0].IntervalStart.Day())
+
+	result = filterGPUByWindow(rows, endDate, 3)
+	require.Len(t, result, 3)
+
+	result = filterGPUByWindow(rows, endDate, 30)
+	require.Len(t, result, 5)
+}
+
+func TestLatestGPUDigest(t *testing.T) {
+	rows := []GPUDigestRow{
+		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+		{IntervalStart: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)},
+		{IntervalStart: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
+	}
+	latest := latestGPUDigest(rows)
+	assert.Equal(t, 5, latest.IntervalStart.Day())
+}
+
+func TestLatestGPUDigest_Empty(t *testing.T) {
+	latest := latestGPUDigest(nil)
+	assert.True(t, latest.IntervalStart.IsZero())
+}

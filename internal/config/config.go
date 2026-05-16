@@ -103,7 +103,6 @@ type Config struct {
 	NodeUnderutilThreshold   float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
 	NodeOvercommitThreshold  float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
 	NodeAllocatableFactor    float64 `mapstructure:"ROS_NODE_ALLOCATABLE_FACTOR"`
-	NodeMinDataDays          int     `mapstructure:"ROS_NODE_MIN_DATA_DAYS"`
 	NodeStrandedImbalanceThreshold float64 `mapstructure:"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD"`
 	NodeEMAAlpha                   float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
 
@@ -115,6 +114,9 @@ type Config struct {
 	SnapshotRedundantThreshold   int     `mapstructure:"ROS_SNAPSHOT_REDUNDANT_THRESHOLD"`
 	SnapshotCostPerGiBMonth      float64 `mapstructure:"ROS_SNAPSHOT_COST_PER_GIB_MONTH"`
 	SnapshotInventoryRetentionH  int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS"`
+	// SnapshotStaleGraceHours bounds how long we tolerate missing *fresh* inventory
+	// before treating the cluster as abandoned for snapshot_recommendation_sets cleanup.
+	SnapshotStaleGraceHours int `mapstructure:"ROS_SNAPSHOT_STALE_GRACE_HOURS"`
 
 	//Unleash config
 	UnleashClientAccessToken string
@@ -270,7 +272,6 @@ func initConfig() {
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)
-	viper.SetDefault("ROS_NODE_MIN_DATA_DAYS", 3)
 	viper.SetDefault("ROS_NODE_STRANDED_IMBALANCE_THRESHOLD", 0.6)
 	viper.SetDefault("ROS_NODE_EMA_ALPHA", 0.3)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
@@ -279,6 +280,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_REDUNDANT_THRESHOLD", 3)
 	viper.SetDefault("ROS_SNAPSHOT_COST_PER_GIB_MONTH", 0.05)
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
+	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")
