@@ -71,6 +71,38 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	namespaceFilter := c.QueryParam("namespace")
 	typeFilter := c.QueryParam("recommendation_type")
 
+	ctx := c.Request().Context()
+
+	filterSQL := ""
+	args := []interface{}{orgID}
+	argIdx := 2
+
+	if clusterFilter != "" {
+		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
+		args = append(args, clusterFilter)
+		argIdx++
+	}
+	if namespaceFilter != "" {
+		filterSQL += ` AND namespace = $` + strconv.Itoa(argIdx)
+		args = append(args, namespaceFilter)
+		argIdx++
+	}
+	if typeFilter != "" {
+		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
+		args = append(args, typeFilter)
+		argIdx++
+	}
+
+	countQuery := `SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1` + filterSQL
+	var total int
+	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		log.Errorf("snapshot recommendation count failed for org=%s: %v", orgID, err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"status":  "error",
+			"message": "unable to count snapshot recommendations",
+		})
+	}
+
 	query := `
 		SELECT cluster_uuid, namespace, snapshot_name, source_pvc_name,
 			volume_snapshot_class, storageclass, creation_timestamp,
@@ -78,30 +110,12 @@ func GetSnapshotRecommendations(c echo.Context) error {
 			managed_by, recommendation_type, estimated_monthly_cost_usd,
 			notification_codes
 		FROM snapshot_recommendation_sets
-		WHERE org_id = $1`
-	args := []interface{}{orgID}
-	argIdx := 2
-
-	if clusterFilter != "" {
-		query += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
-		argIdx++
-	}
-	if namespaceFilter != "" {
-		query += ` AND namespace = $` + strconv.Itoa(argIdx)
-		args = append(args, namespaceFilter)
-		argIdx++
-	}
-	if typeFilter != "" {
-		query += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
-		args = append(args, typeFilter)
-		argIdx++
-	}
+		WHERE org_id = $1` + filterSQL
 
 	query += ` ORDER BY age_days DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	args = append(args, limit, offset)
+	pageArgs := append(args, limit, offset)
 
-	rows, err := pool.Query(c.Request().Context(), query, args...)
+	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
 		log.Errorf("snapshot recommendation query failed for org=%s: %v", orgID, err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
@@ -124,7 +138,10 @@ func GetSnapshotRecommendations(c echo.Context) error {
 			&codes,
 		); err != nil {
 			log.Errorf("scanning snapshot recommendation row: %v", err)
-			continue
+			return c.JSON(http.StatusInternalServerError, echo.Map{
+				"status":  "error",
+				"message": "unable to read snapshot recommendation rows",
+			})
 		}
 		if ts, ok := creationTS.(interface{ Format(string) string }); ok {
 			r.CreationTimestamp = ts.Format("2006-01-02T15:04:05Z")
@@ -132,9 +149,16 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		r.Notifications = notifications.MapToKruizeFormat(codes)
 		data = append(data, r)
 	}
+	if err := rows.Err(); err != nil {
+		log.Errorf("snapshot recommendation row iteration failed for org=%s: %v", orgID, err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch snapshot recommendations",
+		})
+	}
 
 	resp := SnapshotRecommendationListResponse{}
-	resp.Meta.Count = len(data)
+	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
 	resp.Data = data

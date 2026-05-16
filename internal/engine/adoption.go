@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -47,12 +49,13 @@ func FindAdoptedContainers(results []ContainerRec, oldRecs map[containerKey]OldR
 
 // MarkAdopted updates recommendation_sets to set recommendation_applied_at = NOW()
 // for the given containers, and appends NotifRecApplied to notification_codes.
-func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, keys []containerKey) {
+func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, keys []containerKey) error {
 	if len(keys) == 0 {
-		return
+		return nil
 	}
 
 	now := time.Now().UTC()
+	var errs []error
 	for _, key := range keys {
 		tag, err := pool.Exec(ctx, `
 			UPDATE recommendation_sets
@@ -68,8 +71,10 @@ func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID str
 		)
 		if err != nil {
 			log.Warnf("adoption: marking %s/%s/%s: %v", key.Namespace, key.Workload, key.ContainerName, err)
+			errs = append(errs, fmt.Errorf("%s/%s/%s: %w", key.Namespace, key.Workload, key.ContainerName, err))
 		} else if tag.RowsAffected() > 0 {
 			log.Infof("adoption: detected for %s/%s/%s in cluster %s", key.Namespace, key.Workload, key.ContainerName, clusterUUID)
 		}
 	}
+	return errors.Join(errs...)
 }

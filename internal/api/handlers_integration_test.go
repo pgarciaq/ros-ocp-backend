@@ -860,11 +860,14 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 
 		found := false
 		for _, d := range response.Data {
-			if d.GPU != nil {
+			if len(d.GPU) > 0 {
 				found = true
-				assert.Equal(t, "NVIDIA A100-SXM4-80GB", d.GPU.CurrentGPUModel)
-				assert.Equal(t, "idle", d.GPU.GPUClassification)
-				assert.Greater(t, d.GPU.GPUConfidence, float32(0))
+				for _, gpuRec := range d.GPU {
+					assert.Equal(t, "NVIDIA A100-SXM4-80GB", gpuRec.CurrentGPUModel)
+					assert.Equal(t, "idle", gpuRec.GPUClassification)
+					assert.Greater(t, gpuRec.GPUConfidence, float32(0))
+					break
+				}
 				break
 			}
 		}
@@ -883,7 +886,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 		}
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 		for _, d := range response.Data {
-			assert.NotNil(t, d.GPU, "has_gpu=true should only return items with GPU data")
+			assert.NotEmpty(t, d.GPU, "has_gpu=true should only return items with GPU data")
 		}
 	})
 
@@ -899,7 +902,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 		}
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 		for _, d := range response.Data {
-			assert.Nil(t, d.GPU, "has_gpu=false should only return items without GPU data")
+			assert.Empty(t, d.GPU, "has_gpu=false should only return items without GPU data")
 		}
 	})
 
@@ -916,8 +919,11 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 		require.NotEmpty(t, response.Data)
 		for _, d := range response.Data {
-			require.NotNil(t, d.GPU)
-			assert.Contains(t, d.GPU.CurrentGPUModel, "A100")
+			require.NotEmpty(t, d.GPU)
+			for _, gpuRec := range d.GPU {
+				assert.Contains(t, gpuRec.CurrentGPUModel, "A100")
+				break
+			}
 		}
 	})
 
@@ -934,8 +940,11 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 		require.NotEmpty(t, response.Data)
 		for _, d := range response.Data {
-			require.NotNil(t, d.GPU)
-			assert.Equal(t, "idle", d.GPU.GPUClassification)
+			require.NotEmpty(t, d.GPU)
+			for _, gpuRec := range d.GPU {
+				assert.Equal(t, "idle", gpuRec.GPUClassification)
+				break
+			}
 		}
 	})
 }

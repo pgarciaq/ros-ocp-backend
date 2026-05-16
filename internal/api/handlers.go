@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -288,20 +289,32 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 	queryParams["rs.updated_at < ?"] = endTimestamp
 
-	if clusters := c.QueryParams()["cluster"]; len(clusters) > 0 {
-		queryParams["c.cluster_alias IN ?"] = clusters
+	var filterErrs []error
+	workloadTypeVals := slices.Concat(
+		c.QueryParams()["workload_type"],
+		c.QueryParams()["filter[exact:workload_type]"],
+		c.QueryParams()["exclude[workload_type]"],
+	)
+	if err := validateWorkloadTypeValues(workloadTypeVals); err != nil {
+		filterErrs = append(filterErrs, err)
 	}
-	if projects := c.QueryParams()["project"]; len(projects) > 0 {
-		queryParams["rs.namespace IN ?"] = projects
+	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true); err != nil {
+		filterErrs = append(filterErrs, err)
 	}
-	if workloads := c.QueryParams()["workload"]; len(workloads) > 0 {
-		queryParams["rs.workload IN ?"] = workloads
+	if err := applyNativeParamFilter(c, queryParams, "project", "rs.namespace", model.NamespaceMaxLen, false); err != nil {
+		filterErrs = append(filterErrs, err)
 	}
-	if workloadTypes := c.QueryParams()["workload_type"]; len(workloadTypes) > 0 {
-		queryParams["rs.workload_type IN ?"] = workloadTypes
+	if err := applyNativeParamFilter(c, queryParams, "workload", "rs.workload", model.ClusterMaxLen, true); err != nil {
+		filterErrs = append(filterErrs, err)
 	}
-	if containers := c.QueryParams()["container"]; len(containers) > 0 {
-		queryParams["rs.container_name IN ?"] = containers
+	if err := applyNativeParamFilter(c, queryParams, "workload_type", "rs.workload_type", model.NamespaceMaxLen, false); err != nil {
+		filterErrs = append(filterErrs, err)
+	}
+	if err := applyNativeParamFilter(c, queryParams, "container", "rs.container_name", model.NamespaceMaxLen, false); err != nil {
+		filterErrs = append(filterErrs, err)
+	}
+	if len(filterErrs) > 0 {
+		return queryParams, errors.Join(filterErrs...)
 	}
 
 	// Stale filter: by default, exclude stale. If ?stale=true, include all.

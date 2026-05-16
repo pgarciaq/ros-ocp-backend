@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -235,6 +236,7 @@ func computePVCGrowthSlope(digests []PVCDigestRow) float64 {
 
 // WritePVCRecommendations upserts PVC recommendations to the database.
 func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) error {
+	var errs []error
 	for _, rec := range recs {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO pvc_recommendation_sets (
@@ -266,7 +268,8 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 		)
 		if err != nil {
 			log.Warnf("WritePVCRecommendations: upsert failed for %s/%s: %v", rec.Namespace, rec.PVC, err)
+			errs = append(errs, fmt.Errorf("%s/%s: %w", rec.Namespace, rec.PVC, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }

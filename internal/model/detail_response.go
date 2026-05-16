@@ -43,7 +43,7 @@ type DetailResponse struct {
 	SourceID        string                `json:"source_id"`
 	LastReported    string                `json:"last_reported"`
 	Recommendations DetailRecommendations `json:"recommendations"`
-	GPU             *GPURecommendation    `json:"gpu,omitempty"`
+	GPU             map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.

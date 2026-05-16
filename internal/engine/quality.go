@@ -48,7 +48,7 @@ func ReadOldRecommendations(
 	args := []any{orgID, clusterUUID}
 	sb.WriteString(`
 		SELECT namespace, workload, COALESCE(workload_type, ''), container_name,
-			rec_cpu_request_millicores, rec_memory_request_kib, updated_at
+			COALESCE(rec_cpu_request_millicores, 0), COALESCE(rec_memory_request_kib, 0), updated_at
 		FROM recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'
 			AND (namespace, workload, container_name) IN (`)
@@ -132,7 +132,8 @@ func WriteRecommendationQuality(
 		return nil
 	}
 
-	now := time.Now().UTC()
+	nowClock := time.Now().UTC()
+	measuredAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
 	seen := map[containerKey]bool{}
 	batch := &pgx.Batch{}
 
@@ -160,7 +161,7 @@ func WriteRecommendationQuality(
 			memVar := computeVariation(old.RecMemRequestKiB, r.RecMemRequestKiB)
 			stabilityPct = ComputeStabilityPct(cpuVar, memVar)
 			adopted = DetectAdoption(r.CurrentCPURequestMC, r.CurrentMemRequestKiB, old.RecCPURequestMC, old.RecMemRequestKiB)
-			ageHours = ComputeRecommendationAgeHours(old.UpdatedAt, now)
+			ageHours = ComputeRecommendationAgeHours(old.UpdatedAt, nowClock)
 		} else {
 			stabilityPct = 1.0
 		}
@@ -178,7 +179,7 @@ func WriteRecommendationQuality(
 				stability_pct = EXCLUDED.stability_pct,
 				adoption_detected = EXCLUDED.adoption_detected,
 				recommendation_age_hours = EXCLUDED.recommendation_age_hours`,
-			now, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName,
+			measuredAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName,
 			oomEventsAfter, stabilityPct, adopted, ageHours,
 		)
 	}
