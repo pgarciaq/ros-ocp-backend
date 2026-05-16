@@ -1,0 +1,2395 @@
+# ROS-OCP Comprehensive Audit: 490 Issues
+
+**Date:** 2026-05-13 (severity merge-stub audit: **2026-05-16**)
+**Scope:** ros-ocp-backend, koku, nise, koku-metrics-operator
+**Context:** Audit performed after implementing term-based windowing for Node and GPU recommendations
+
+---
+
+## Table of Contents
+
+- [Severity Distribution](#severity-distribution)
+- [Repository Impact Summary](#repository-impact-summary)
+- [P0 Critical Issues (#1–#3, #6, #7, #39, #60)](#p0--critical)
+- [P1 High Issues (22 retained)](#p1--high)
+- [P2 Medium Issues (14-233, includes demoted #15)](#p2--medium)
+- [P3 Low Issues (234-490)](#p3--low)
+- [No-op Because Kruize (moved from P0–P3)](#no-op-because-kruize)
+- [Remediation Plan](#remediation-plan)
+
+---
+
+## Severity Distribution
+
+| Severity | Count | Description |
+|----------|-------|-------------|
+| **P0 Critical** | 7 | Data loss, security vulnerabilities, shared-DB partition drops, consumer stall semantics that prevent progress |
+| **P1 High** | 22 | Silent failures, wrong results, operational blindness |
+| **P2 Medium** | 157 | Degraded UX, performance, inconsistency, init-time process exits |
+| **P3 Low** | 243 | Style, naming, documentation—includes **22** merge-stub rows (two additional stubs **#102**, **#130** live under **P2**) |
+| **Kruize no-op** | 35 | Legacy Kruize-only paths (**35** substantive rows + **2** appendix merge stubs **#388→#194**, **#392→#178** = **37** numbered rows in this section) |
+
+## Repository Impact Summary
+
+| Repository | P0 | P1 | P2 | P3 | Total |
+|------------|----|----|----|----|-------|
+| **ros-ocp-backend** | 7 | 22 | 157 | 243 | ~429 |
+| **koku** | 0 | 1 | 3 | 5 | ~9 |
+| **nise** | 0 | 0 | 0 | 10 | ~10 |
+| **koku-metrics-operator** | 0 | 0 | 0 | 5 | ~5 |
+
+---
+
+## P0 — Critical
+
+### Security
+
+**#1 — IDOR in `GetRecommendationSetByID`: missing `query = query.Where(...)` assignment**
+- Repo: ros-ocp-backend
+- File: `internal/model/recommendation_set.go`
+- The container_id filter is never applied. `query.Where(...)` is called but the result is not assigned back. `query.First()` returns the first row in the org regardless of requested ID. Any authenticated user can read any recommendation in their org.
+- Effort: Small
+
+**#2 — SSRF via Kafka `Files` URLs (legacy + native CSV fetch)**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go` (`ReadCSVFromUrl`, `ReadCSVBodyFromUrl`)
+- Both helpers use bare `http.Get(url)` with no timeout, no URL allowlist, no response size cap, and redirects followed. Attacker-controlled URLs in Kafka messages can probe internal networks, pull unbounded payloads, or chain redirects into internal services. **`ReadCSVBodyFromUrl` is on the native-engine path** (`processContainerCSVNative`, namespace/storage/snapshot natives in `internal/services/report_processor.go`); **`ReadCSVFromUrl` remains on the legacy Kruize dataframe path** when `UseNativeEngine` is false or a file type is not handled natively.
+- Effort: Medium
+
+**#3 — `GetFleetSummary` has no RBAC cluster filtering**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_fleet.go`
+- Users with scoped cluster permissions can see org-wide fleet aggregates. Authorization bypass for restricted users.
+- Effort: Small
+
+### Data Loss / Corruption
+
+**#6 — Snapshot reconcile `NOT IN (empty subquery)` mass-deletes all recommendations**
+- Repo: ros-ocp-backend
+- File: `internal/engine/snapshot_classify.go`
+- If `snapshot_inventory` has no rows in the last 6 hours, the subquery returns empty. SQL `NOT IN` against an empty set evaluates TRUE for all rows, deleting every snapshot recommendation for that cluster.
+- Effort: Small
+
+**#7 — `KAFKA_AUTO_COMMIT=false` + upload processor = messages never committed on success**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`, `internal/kafka/consumer.go`
+- `ProcessReport` only calls `CommitMessage` for poison messages. Turning off auto-commit globally means successful messages are redelivered infinitely.
+- Effort: Small
+
+### Promoted from P1 — availability / resource exhaustion / cross-service data loss
+
+**#39 — `pgx.Batch` sizes unbounded** *(promoted to P0 from P1)*
+- Repo: ros-ocp-backend
+- Files: `internal/ingestion/pipeline.go`, `internal/engine/recommend_all.go`
+- Batch size equals `len(rows)` or `len(recs)` — process OOM is a production-killing failure mode on large clusters, not merely slow queries.
+- Effort: Medium
+
+**#60 — `drop_ros_partition` scans ALL partitions in database** *(promoted to P0 from P1)*
+- Repo: ros-ocp-backend
+- File: `migrations/000011_delete_partition_function.up.sql`, `internal/services/housekeeper/tablePartitionCleaner.go`
+- Function selects **every** `relispartition` table in the PostgreSQL instance matching date bounds—not scoped to ROS parent tables. On a shared database this can `DROP` unrelated products’ partitions (confirmed from migration SQL: global `pg_class` scan).
+- Effort: Small
+
+---
+
+## P1 — High
+
+*Triage note (2026-05-16): 28 issues formerly listed here were downgraded to P2/P3 or promoted to P0—see sections above and “Triaged from P1” under P2/P3. **22** items remain at P1 after a further P2 audit (2026-05-16) promoted seven native-path correctness issues from P2—see “Promoted from P2” below.*
+
+### Silent failures / wrong results / materially misleading API
+
+**#19 — Zero transaction boundaries across native pipeline**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- Digests, recommendations, savings, adoption, history, quality, node recs are all independent DB phases. Failure at any stage leaves prior writes committed with no rollback.
+- Effort: Large
+
+**#20 — `ProcessCSVToDigests` returns nil after GPU/node digest failures**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/pipeline.go`
+- GPU and node digest errors are logged as warnings. Function returns nil — caller sees success.
+- Effort: Small
+
+**#21 — `WriteRecommendations` uses `pgx.Batch` without explicit transaction**
+- Repo: ros-ocp-backend
+- File: `internal/engine/recommend_all.go`
+- Each queued statement auto-commits independently. Partial batch failure leaves some containers updated and others not.
+- Effort: Medium
+
+**#22 — `ReadOldRecommendations` failure causes early return, skipping quality AND node recs**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- New container recommendations are already committed, but quality metrics and node recs are never computed.
+- Effort: Small
+
+**#26 — `MarkAdopted` logs per-key errors but returns no aggregate error**
+- Repo: ros-ocp-backend
+- File: `internal/engine/adoption.go`
+- Caller cannot detect partial adoption failures.
+- Effort: Small
+
+**#27 — Cost data fetch failure results in savings=0 with no API-visible signal**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- Users see "$0 savings" with no indication that cost data was unavailable.
+- Effort: Medium
+
+**#28 — `LoadTermConfig` failure silently degrades to defaults**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- No metric, no API header, no user-visible signal that custom terms were ignored.
+- Effort: Small
+
+**#30 — `Count()` error never checked in `GetRecommendationSets`**
+- Repo: ros-ocp-backend
+- File: `internal/model/recommendation_set.go`
+- DB errors during count are silently ignored — callers get incorrect `meta.count` values.
+- Effort: Small
+
+**#31 — `Count()` error never checked in `GetNamespaceRecommendationSetList`**
+- Repo: ros-ocp-backend
+- File: `internal/model/namespace_recommendation_set.go`
+- Same issue for namespace list endpoint.
+- Effort: Small
+
+**#32 — `apiErrResponse` returns `200 {}` when `EnableUserAPIErr=false`**
+- Repo: ros-ocp-backend
+- File: `internal/api/utils.go`
+- Production default silently turns errors into empty success responses.
+- Effort: Small
+
+**#33 — Node utilization always returns 200 even on DB errors**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_utilization.go`
+- Query failure produces empty 200 — indistinguishable from "no data."
+- Effort: Small
+
+**#34 — Container digest upsert only updates subset of columns**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/pipeline.go`
+- Many percentiles, throttle metrics, and RSS values NOT in `DO UPDATE SET`. Re-ingesting same day leaves mixed old/new values.
+- Effort: Medium
+
+**#36 — `OnConflict` columns `(workload_id, container_name)` don't match current PK**
+- Repo: ros-ocp-backend
+- File: `internal/model/recommendation_set.go`
+- Post-migration PK includes `term` and `engine` — upsert conflict target is incomplete.
+- Effort: Medium
+
+### Analytics integrity
+
+**#62 — History/quality rows multiply on reprocessing**
+- Repo: ros-ocp-backend
+- Files: `internal/engine/history.go`, `internal/engine/quality.go`
+- `measured_at := time.Now()` creates new timestamp per run — reprocessing creates additional rows.
+- Effort: Medium
+
+**#63 — Cost savings stale when Koku rates change**
+- Repo: ros-ocp-backend, koku
+- No mechanism to trigger re-computation of `estimated_monthly_savings_usd` when upstream cost models are updated.
+- Effort: Medium
+
+### Promoted from P2 — native API / ingestion correctness *(2026-05-16)*
+
+**#75 — Native container list ignores `exclude[]` and `filter[exact:]`** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers.go` (`MapNativeQueryParameters`), `internal/model/recommendation_set_native.go`
+- `MapNativeQueryParameters` only applies plain `cluster`/`project`/… `IN` filters. Documented `exclude[]` and `filter[exact:]` clauses are implemented on the legacy path via `MapQueryParameters` / `applyParamFilter`, so clients sending those params on the native list get **silently broader results** than requested—wrong dashboards and compliance-filtered views without an error.
+
+**#79 — PVC/Snapshot `meta.count` = page length, not total count** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- Container lists expose total row/container counts for pagination; PVC/Snapshot handlers set count from `len(page)` — **`meta.count` is always wrong** whenever the list spans more than one page. Clients cannot implement correct pagination or totals.
+
+**#141 — `continue` after `rows.Scan` error in 4 API handlers** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- Files: `handlers_node_utilization.go`, `handlers_snapshot.go`, `handlers_pvc.go`, `snapshot_classify.go`
+- On scan failure the loop skips the row and still returns **200 OK** with a **truncated list**—same failure mode class as **#33** (empty-body success on query failure): operators see partial inventory/utilization as if it were complete.
+
+**#149 — `commitOnPermanentFailure` commits offset with no dead-letter queue** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- Invalid JSON / validation failures commit the Kafka offset with only logs—payload is **dropped with no replay path**. That is permanent **ingestion data loss** for those reports (distinct from operational poison handling if a DLQ existed).
+
+**#151 — `WritePVCRecommendations` logs errors but always returns nil** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/engine/pvc_recommend.go`
+- Per-row upsert failures are logged and swallowed; the pipeline and pollers treat the phase as **successful**, so PVC recommendations can be missing with no surfaced error—same class as other silent partial-write issues (**#21**, **#26**).
+
+**#160 — `ingestion/snapshot.go` silently ignores interval parse errors** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- `row.IntervalStart`, `row.IntervalEnd` use `_, _ = time.Parse(...)` — parse failures yield zero times that still flow into classification/Recommendation logic. Snapshot recommendations can be **wrong or wildly misclassified** without a visible ingest failure.
+
+**#210 — Node GPU handler returns 200 with empty data on per-cluster DB errors** *(promoted to P1 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_recs.go`
+- `QueryGPURecommendations` errors log a warning and `continue`, omitting that cluster’s GPU recs; response is **200 with partial or empty data**, indistinguishable from “no GPUs.” Aligns with **#33** / **#141** as a materially misleading success response.
+
+---
+
+## P2 — Medium
+
+*Severity audit (2026-05-16): Seven issues promoted to **P1** (see “Promoted from P2” under P1)—silent wrong filtering/pagination metadata, masked GPU/utilization success responses, swallowed PVC writes, poison Kafka commits without DLQ, ignored snapshot interval parses. Fifteen issues demoted to **P3** (see “Triaged from P2” under P3)—mostly dev-only compose/Makefile noise, theoretical singleton races, dead code, naming/overflow nits, and stdout lint. **#15** demoted from **P0 → P2** (2026-05-16 final audit): only init-time `os.Exit` when cost-application lookup fails, not a runtime outage vector.*
+
+### Process hygiene / Availability (downgraded from P0)
+
+**#14 — `os.Exit` in library-style code: `config.go`, `db.go`, `kafka/consumer.go`** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Files: `internal/config/config.go`, `internal/db/db.go`, `internal/kafka/consumer.go`
+- Crashes the entire process on init failure. Impossible to test, embed, or retry gracefully. If DB, Kafka, or config can't initialize, the process genuinely can't function. Exiting fast is defensible — Kubernetes restarts it. Code hygiene / testability concern, not data loss or security.
+- Effort: Medium
+
+**#16 — `panic()` in `config.go` on Kafka CA write failure** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/config/config.go`
+- Process panics instead of returning an error. If Kafka CA bundle file can't be written, the process can't connect to Kafka anyway. Init-time panic is debatable but defensible.
+- Effort: Small
+
+**#15 — `os.Exit(1)` when Sources listener cannot resolve cost application ID** *(demoted from P0 — 2026-05-16 audit; earlier text incorrectly claimed a background goroutine exit.)*
+- Repo: ros-ocp-backend
+- File: `internal/services/housekeeper/sourcesCleaner.go`
+- Only `StartSourcesListenerService` startup calls `os.Exit(1)` if `GetCostApplicationID()` fails—before `kafka.StartConsumer` runs. This is **init-time** failure (crash-looping pod), not “transient Kafka kills the whole server mid-flight.” Operational class aligns with **#14** (hard exits on fatal bootstrap), not cross-request data corruption or auth bypass.
+- Effort: Small
+
+### Triaged from P1 — correctness / hygiene *(downgraded to P2, 2026-05-16)*
+
+**#13 — Type assertions without comma-ok in 20+ handler sites** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Files: `internal/api/handlers*.go`
+- Pattern `c.Get("Identity").(identity.XRHID)` panics if middleware is misconfigured. **Not a silent failure** — panics are loud and typically crash the request or process; severity is misconfiguration / availability under bad deploys, not wrong numeric results.
+- Effort: Medium
+
+**#25 — Partition creation failures are warn-only** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/pipeline.go`
+- Subsequent INSERTs fail with PostgreSQL “no partition” — failure becomes explicit shortly after; operational friction rather than long-lived silent wrong answers.
+- Effort: Small
+
+**#35 — `ORDER BY recommendation_sets.id` references dropped column** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/model/recommendation_set.go`
+- Works via `container_id AS id` alias — fragile ordering/pagination contract and migration coupling; **stale wrong recommendations** risk is secondary to maintainability.
+- Effort: Small
+
+**#37 — `workload_type` never updated on digest conflict** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/pipeline.go`
+- Wrong workload kind label until manual correction — UX/metadata inconsistency, not silent corruption of usage math.
+- Effort: Small
+
+### Triaged from P1 — performance / ops *(downgraded to P2)*
+
+**#40 — Node utilization handler loads ALL rows then paginates in Go** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_utilization.go`
+- Memory/latency scale with tenant size — classic P2 scaling concern.
+- Effort: Medium
+
+**#41 — Node GPU handler aggregates across all clusters in memory** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_recs.go`
+- Same class as #40.
+- Effort: Medium
+
+**#42 — Zero `CREATE INDEX CONCURRENTLY` in any migration** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `migrations/`
+- Deploy-time locking — operational pain, not incorrect query results.
+- Effort: Medium
+
+**#43 — `limit=-1` bypasses pagination on multiple endpoints** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/listoptions/list_options.go`
+- Footgun for memory/latency; opt-in abuse pattern.
+- Effort: Small
+
+**#44 — Retention DELETE without LIMIT** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/engine/retention.go`
+- Long transactions / replication stall risk — overlaps theme with later P2 items (e.g. #130).
+- Effort: Small
+
+### Triaged from P1 — observability / resilience *(downgraded to P2)*
+
+**#45 — `/status` endpoint is static JSON — no dependency health checks** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers.go`
+- Kubernetes sees “healthy” while dependencies are down — **operational blind spot**, but logs/alerts often exist elsewhere; not fake business metrics.
+- Effort: Medium
+
+**#46 — No DB query latency metrics** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Missing histograms — standard P2 observability gap.
+- Effort: Medium
+
+**#47 — No Kafka consumer lag metric** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Same — lag visible via Kafka tooling in many deployments.
+- Effort: Medium
+
+**#48 — No recommendation computation duration metric** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Timing gaps for tuning — P2.
+- Effort: Small
+
+**#49 — No circuit breaker for any downstream service** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Hardening pattern; absence degrades cascade behavior, not a deterministic wrong answer.
+- Effort: Medium
+
+**#50 — Kafka auto-commit on upload processor** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/kafka/consumer.go`, `internal/config/config.go` (`KAFKA_AUTO_COMMIT` defaults **true**)
+- At-most-once window if the process dies after librdkafka commits but before work completes — real, but the **default Kafka consumer tradeoff**, overlapping operational concerns with #7 (manual commit path) and #58 (shutdown). Treat as reliability hardening, not the same class as wrong `meta.count` or corrupt upserts.
+- Effort: Medium
+
+**#52 — Processor/poller probes hit `/metrics` not a health endpoint** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `clowdapp.yaml`
+- Liveness vs readiness mismatch — P2 operations.
+- Effort: Small
+
+**#53 — No backpressure when DB is slow** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Consumer/readahead vs DB throughput — P2 resilience.
+- Effort: Medium
+
+### Triaged from P1 — concurrency / lifecycle *(downgraded to P2)*
+
+**#57 — Global `log` reassignment in `Set_request_details`** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/logging/logging.go`
+- Possible crossed log context under extreme concurrency — diagnostic quality, not silent wrong ROS math.
+- Effort: Medium
+
+**#58 — Kafka consumer has no graceful shutdown** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/kafka/consumer.go`
+- Abrupt stop vs #7/#50 delivery semantics — **no demonstrated data-loss path beyond existing Kafka tradeoffs**.
+- Effort: Medium
+
+**#59 — CSV export goroutines have no request-context cancellation** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers.go`
+- Wasted CPU/DB after client disconnect — P2 resource hygiene.
+- Effort: Small
+
+### Triaged from P1 — data hygiene *(downgraded to P2)*
+
+**#61 — Cluster/org deletion doesn't cascade to analytics tables** *(downgraded to P2)*
+- Repo: ros-ocp-backend
+- Files: `internal/services/housekeeper/sourcesCleaner.go`
+- Orphan rows — storage drift and confusing stale reads for deleted clusters; **not active corruption** of live reconciled recommendations for active tenants.
+- Effort: Medium
+
+### OpenAPI Specification vs Implementation (64-83)
+
+**#64 — Missing `servers` entry in OpenAPI spec**
+- Repo: ros-ocp-backend
+- File: `openapi.json`
+- No `servers` entry; clients don't know the real prefix `/api/cost-management/v1/`.
+
+**#65 — Undocumented endpoints: `/namespaces`, `/namespaces/:id`, `/nodes/utilization`, `/status`**
+- Repo: ros-ocp-backend
+- File: `internal/api/server.go` vs `openapi.json`
+- These routes exist in `server.go` but have no corresponding entry in `openapi.json`.
+
+**#66 — Undocumented `term` query parameter on `GET /nodes`**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_recs.go`
+- The handler reads `c.QueryParam("term")` but the spec doesn't document this filter.
+
+**#67 — Feature-gated routes exist unconditionally in spec**
+- Repo: ros-ocp-backend
+- If `UseNativeEngine` is false, many documented endpoints return 404.
+
+**#68 — `RecommendationList.meta.limit.maximum: 10` contradicts reality (max 100)**
+- Repo: ros-ocp-backend
+- File: `openapi.json`
+- `openapi.json` advertises a lower max page size than `list_options` allows—SDK validators reject calls the API accepts.
+
+**#69 — `limit=-1` accepted but spec says `minimum: 1`**
+- Repo: ros-ocp-backend
+- File: `internal/api/listoptions/list_options.go`
+- `ListAPIOptions` accepts `limit=-1` (unbounded scans) while OpenAPI claims `minimum: 1`—easy accidental full-table reads.
+
+**#70 — Native container list returns `DetailResponse` items; spec documents `Recommendations`**
+- Repo: ros-ocp-backend
+- Handlers return native `DetailResponse` JSON (GPU replicas, notifications, plots) but the spec still documents legacy `Recommendations` rows.
+
+**#71 — `GPURecommendation` schema never `$ref`'d**
+- Repo: ros-ocp-backend
+- File: `openapi.json`
+- OpenAPI defines components that no operation references (or omits referenced shapes), so codegen and validators miss real request/response bodies.
+
+**#72 — RBAC denial returns 403; spec documents 401**
+- Repo: ros-ocp-backend
+- File: `internal/api/middleware/rbac.go`
+- `middleware.Rbac` sends `403 Forbidden` while the spec labels it `401 User is not authorized`.
+
+**#73 — Container list 503 schema says `{"error":"..."}` but handlers return `{"status":"error","message":"..."}`**
+- Repo: ros-ocp-backend
+- Schema/implementation shape mismatch.
+
+**#74 — Namespace CSV support documented but handler returns 406**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers.go`
+- `GetNamespaceRecommendationSetList` rejects CSV with Not Acceptable.
+
+**#76 — `CollectionResponse.links.first` points to current page, not first page**
+- Repo: ros-ocp-backend
+- File: `internal/api/utils.go`
+- Uses current offset instead of 0.
+
+**#77 — `CollectionResponse.links.last` points to next page, not last page**
+- Repo: ros-ocp-backend
+- File: `internal/api/utils.go`
+- Uses `offset+limit` instead of computing the actual last page offset.
+
+**#78 — PVC/Snapshot lists have no `links` in response**
+- Repo: ros-ocp-backend
+- Files: `internal/api/handlers_pvc.go`, `internal/api/handlers_snapshot.go`
+- Inconsistent with container/namespace lists that include pagination links.
+
+**#80 — Mixed 500 vs 503 for DB errors across endpoints**
+- Repo: ros-ocp-backend
+- Fleet/PVC/Snapshot use 500; container lists use 503 — same error class, different codes.
+
+**#81 — Namespace legacy returns 200 for empty recommendations; container legacy returns 404**
+- Repo: ros-ocp-backend
+- Asymmetric behavior for equivalent "no data" conditions.
+
+**#82 — `status: "error"` vs `"not_found"` for missing resources**
+- Repo: ros-ocp-backend
+- Fallback detail uses "error"; legacy detail uses "not_found" — clients must handle both.
+
+**#83 — `links` type differs: `Links` struct vs `map[string]*string` vs absent**
+- Repo: ros-ocp-backend
+- Three different shapes for the same concept across endpoints.
+
+### Migrations Safety (84-103)
+
+**#84 — 000028: heavy DDL+DML in one transaction — high outage risk**
+- Repo: ros-ocp-backend
+- File: `migrations/000028_alter_recommendation_sets_add_relational_columns.up.sql`
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#85 — 000028.down.sql: `SET NOT NULL` fails if NULLs exist**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#86 — 000058.down.sql: deletes all non-medium term rows (destructive rollback)**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#87 — 000036.down.sql: deletes all native namespace rows (destructive rollback)**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#88 — 000012.down.sql: re-adds UNIQUE(account) — fails if duplicates exist**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#89 — 000041.up.sql: `cluster_uuid::uuid` cast fails on invalid data**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#90 — 000045.up.sql: unique index without CONCURRENTLY on populated table**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#91 — 000058.up.sql: drops and recreates primary key — ACCESS EXCLUSIVE lock**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#92 — ON DELETE CASCADE on workloads/clusters — massive cascaded deletes**
+- Repo: ros-ocp-backend
+- FK `ON DELETE CASCADE` from workloads/clusters fans out huge deletes—single API delete can stall Postgres.
+
+**#93 — 000038.down.sql: cannot restore pre-ROUND fractional values (lossy)**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#94 — 000022.down.sql: drops columns without copying values back**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#95 — 000029.down.sql: `DROP TABLE ... CASCADE` can drop dependent objects**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#96 — Different default `term` values: 000028 defaults `short`, 000058 defaults `medium`**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#97 — 000046 adds `recommendation_applied_at` redundantly (already in 000028)**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#98 — Misleading rollback comments in 000033, 000056, 000057**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#99 — Partition trigger on workloads depends on non-NULL `metrics_upload_at`**
+- Repo: ros-ocp-backend
+- If NULL, partition bounds are undefined — behavioral fragility.
+
+**#100 — Migration 000058 can deadlock with live PersistNodeRecommendations**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#102 —** *(merged into **#42** — same finding: no `CREATE INDEX CONCURRENTLY` in migrations.)*
+
+**#103 — Each migration file runs in single transaction — long-running implicit locks**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+### Container / Deployment (104-118)
+
+**#106 — Base images not pinned by digest**
+- Repo: ros-ocp-backend
+- File: `Dockerfile`
+- `ubi9/ubi-minimal:latest` and `ubi10/go-toolset:1.25` use tags only — builds are not reproducible and vulnerable to supply-chain attacks.
+
+**#108 — No binary hardening (`-ldflags "-s -w"`)**
+- Repo: ros-ocp-backend
+- File: `Dockerfile`
+- Production binary retains symbol tables and debug info — larger image, easier reverse engineering.
+
+**#109 — CGO dependency is implicit**
+- Repo: ros-ocp-backend
+- File: `Dockerfile`
+- `confluent-kafka-go` requires CGO but `CGO_ENABLED` is never explicitly set in the Dockerfile — behavior changes if base image defaults change.
+
+**#111 — No container image scanning in CI**
+- Repo: ros-ocp-backend
+- File: `.github/workflows/build.yml`
+- No Trivy, Grype, Hadolint, or `govulncheck` step — known CVEs in dependencies go undetected.
+
+**#112 — `actions/checkout@v2` in CI workflow (outdated)**
+- Repo: ros-ocp-backend
+- CI/workflows lag best practices—older actions, unpinned linters, or missing supply-chain checks increase breakage and vulnerability risk.
+
+**#114 — Housekeeper ClowdApp deployment has no liveness/readiness probes**
+- Repo: ros-ocp-backend
+- File: `clowdapp.yaml`
+- Failures go undetected by the platform.
+
+**#115 — `delete-rosocp-partitions` CronJob has no resource limits**
+- Repo: ros-ocp-backend
+- File: `clowdapp.yaml`
+- Can consume unbounded memory on the cluster.
+
+### Memory / Performance (119-138)
+
+**#119 — Native CSV parsing materializes full `[]MetricRow` in memory**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/csvparser.go`
+- Despite streaming from HTTP, `ParseCSVRows` accumulates all rows before processing — no streaming digest computation.
+
+**#120 — GPU digest `[]float64` slices grow unbounded per container-day**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/pipeline.go`
+- Dense GPU telemetry (many samples per day) creates large intermediate allocations with no cap.
+
+**#122 — `UpdateRecommendationJSON` does `json.Unmarshal` into `map[string]interface{}` per row**
+- Repo: ros-ocp-backend
+- File: `internal/api/utils.go`
+- On legacy list endpoints, this runs for every item in the page — high CPU and allocation churn.
+
+**#123 — `LoadTermConfig` queried on every GPU-enriched API request (uncached)**
+- Repo: ros-ocp-backend
+- File: `internal/api/gpu_enrichment.go`
+- Term JSON is fetched from Postgres on each enrichment—high QPS detail views amplify DB load without memoization.
+
+**#124 — `filterByWindow` re-scans digest rows for each term**
+- Repo: ros-ocp-backend
+- File: `internal/engine/recommend_all.go`
+- Called per container × per term — redundant scanning when terms could share pre-filtered windows.
+
+**#125 — No pre-allocation hints on slice `append` in hot paths**
+- Repo: ros-ocp-backend
+- Files: `csvparser.go`, `recommend_all.go`, `pipeline.go`
+- `ParseCSVRows`, `GroupCSVRows`, `RecommendAllWorkloads`, digest upserts — all grow slices from zero without capacity hints.
+
+**#126 — `Convert2DarrayToMap` allocates third copy of CSV data**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- `Convert2DarrayToMap` rebuilds the CSV matrix again after parsing—triples memory churn on large ROS uploads.
+
+**#127 — RBAC `request_user_access` recursive calls with `io.ReadAll`**
+- Repo: ros-ocp-backend
+- File: `internal/api/middleware/rbac.go`
+- Deep pagination with large permission sets accumulates all pages in memory via recursive append.
+
+**#129 — Missing composite indexes for native list queries**
+- Repo: ros-ocp-backend
+- Native listings filter on `org_id` + `cluster_uuid` + `updated_at` + `stale` — no evidence of a composite index covering this exact pattern.
+
+**#130 —** *(merged into **#44** — same retention sweep: unbounded `DELETE` volume / txn duration.)*
+
+**#131 — No connection pool exhaustion handling (MaxConns=10)**
+- Repo: ros-ocp-backend
+- File: `internal/db/db.go`
+- Tiny pool caps stall bursts; no queue metrics differentiate saturation from slow SQL.
+
+**#133 — Retention sweep has no checkpoint — interrupted sweep is asymmetric**
+- Repo: ros-ocp-backend
+- File: `internal/engine/retention.go`
+- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+
+**#134 — `RunRetentionSweep` returns nothing — callers cannot detect failure**
+- Repo: ros-ocp-backend
+- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+
+**#135 — Metrics Echo server goroutine has no shutdown hook**
+- Repo: ros-ocp-backend
+- File: `internal/api/server.go`
+- Auxiliary HTTP servers start without lifecycle hooks—goroutines leak or block clean shutdown.
+
+**#136 — `Start_prometheus_server` ignores `ListenAndServe` error**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- `_ = http.ListenAndServe(...)` — port conflicts or binding failures are silent.
+
+**#137 — Retention ticker goroutine uses `context.Background()` — uncancellable**
+- Repo: ros-ocp-backend
+- File: `cmd/start.go`
+- `StartRetentionTicker` in `cmd/start.go` receives a non-cancellable context, so it cannot be stopped during graceful shutdown.
+
+### Error Handling Patterns (139-158)
+
+**#139 — `context.Background()` in 8+ HTTP handlers**
+- Repo: ros-ocp-backend
+- Files: `handlers_node_utilization.go`, `handlers_node_recs.go`, `handlers_terms.go`, `handlers.go`, `gpu_enrichment.go`
+- Disables request cancellation and deadline propagation.
+
+**#140 — Brittle `err.Error()` string matching in 5 locations**
+- Repo: ros-ocp-backend
+- Files: `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go`
+- `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go` all use `strings.Contains(err.Error(), "...")` — breaks with error wrapping or locale changes.
+
+**#142 — Injectable SQL via `BucketSQL` in `boxplot.go`**
+- Repo: ros-ocp-backend
+- File: `internal/model/boxplot.go`
+- `fmt.Sprintf` injects `tw.BucketSQL` directly into a query — if that value is ever influenced by stored config or user input, it's SQL injection.
+
+**#143 — 12+ `_ =` assignments ignoring meaningful errors**
+- Repo: ros-ocp-backend
+- Files: `config.go`, `pvc.go`, `handlers.go`, `consumer.go`, `utils.go`, `snapshot.go`, etc.
+- Config binding, timestamp parsing (`pvc.go:131`), pipe closes, body closes, URL unescaping errors all silently discarded.
+
+**#144 — `fmt.Sprintf("DELETE FROM %s", table)` in retention.go**
+- Repo: ros-ocp-backend
+- File: `internal/engine/retention.go`
+- While currently from a trusted slice, if `retainedTables` ever included dynamic values, this is identifier injection.
+
+**#145 — `NilCostDataProvider.GetEffectiveRates` returns `(nil, nil)` — double-nil footgun**
+- Repo: ros-ocp-backend
+- File: `internal/costdata/provider.go`
+- `GetEffectiveRates` returns `(nil, nil)`—callers can't distinguish "no provider" from "success, empty".
+
+**#146 — Namespace pipeline has identical partial-commit risks**
+- Repo: ros-ocp-backend
+- File: `internal/engine/recommend_namespace.go`
+- `WriteNamespaceRecommendations` and `WriteNamespaceRecommendationHistory` use the same non-transactional batch pattern.
+
+**#147 — No compensation logic anywhere — failed partial writes never cleaned up**
+- Repo: ros-ocp-backend
+- Failed pipeline stages leave earlier writes committed—no saga or cleanup compensates partial ROS state.
+
+**#150 — `PersistNodeRecommendations` transaction can partially succeed**
+- Repo: ros-ocp-backend
+- File: `internal/engine/recommend_nodes.go`
+- Batch INSERT succeeds but stale-term DELETE fails (or vice versa) if the transaction is interrupted between statements.
+
+### Date/Time Handling (159-171)
+
+**#159 — CSV parse layout `"2006-01-02 15:04:05 -0700 MST"` is brittle**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/csvparser.go`
+- Requires the literal zone abbreviation "MST" in input. CSVs with "UTC", "GMT", or other abbreviations may fail to parse even with correct offsets.
+
+**#161 — Koku `effective_rates.py` uses `BETWEEN` with date strings against `usage_start`**
+- Repo: koku
+- File: `koku/masu/api/effective_rates.py`
+- If `usage_start` has a time component, rows later on the last day may be excluded (off-by-one). No validation of date format or ordering.
+
+**#162 — Go `costdata/provider.go` formats dates using Time's location, not explicit UTC**
+- Repo: ros-ocp-backend
+- File: `internal/costdata/provider.go`
+- `GetEffectiveRates` builds `start_date`/`end_date` query params with `time.Format("2006-01-02")`, which uses each `time.Time`'s location—dates near midnight can shift versus strict UTC calendar intent.
+
+**#163 — Mix of `time.Now()` (local) and `time.Now().UTC()` across codebase**
+- Repo: ros-ocp-backend
+- Mixing local wall time and UTC creates ambiguous `TIMESTAMPTZ` comparisons across handlers.
+
+**#164 — `Truncate(24*time.Hour)` safe only if BucketDate is always UTC**
+- Repo: ros-ocp-backend
+- If any non-UTC time enters the pipeline, truncation aligns to the wrong calendar day.
+
+**#165 — No validation of `start_date`/`end_date` params in `effective_rates.py`**
+- Repo: koku
+- File: `koku/masu/api/effective_rates.py`
+- Malformed strings pass directly into SQL — relies entirely on PostgreSQL's error handling.
+
+**#166 — `gpu_query.go` formats dates as strings for range query (implicit cast)**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_query.go`
+- `interval_start` is filtered with `YYYY-MM-DD` strings from `start.Format`/`end.Format`; behavior depends on PostgreSQL comparing `timestamp`/`timestamptz` to date literals consistently with digest storage.
+
+**#167 — Koku `DateHelper` may return timezone-aware non-UTC times**
+- Repo: koku
+- Django `timezone.now()` depends on `TIME_ZONE` setting — the `effective_rates` view defaults to `dh.this_month_start` and `dh.today` which may not be UTC midnight.
+
+**#168 — `handlers_snapshot.go` forces `Z` suffix without converting to UTC**
+- Repo: ros-ocp-backend
+- If input were non-UTC, labeling output as `Z` without conversion produces incorrect timestamps.
+
+**#169 — Decay/freshness use `Sub().Hours()` instead of calendar days**
+- Repo: ros-ocp-backend
+- Decay math uses raw hour deltas—not calendar days—so month/DST boundaries skew freshness scoring.
+
+**#170 — `gpu_timeslicing.go` calls `time.Now().UTC()` internally (not injectable)**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_timeslicing.go`
+- `ComputeNodeTimeslicingRec` uses `time.Now().UTC()` for freshness (`isNodeFresh`)—tests cannot freeze time without refactor; subtle drift if system clock wrong.
+
+### GORM / Model Layer (172-181)
+
+**#172 — Dynamic `Where(key, values)` in `ApplyQueryParams` without per-key allowlist**
+- Repo: ros-ocp-backend
+- File: `internal/model/recommendation_set_native.go`
+- `ApplyQueryParams` builds `Where(key, values)` from query strings without per-column allowlists—filter injection risk.
+
+**#173 — Namespace native pagination `offset*6 / limit*6` assumes 6 rows per namespace**
+- Repo: ros-ocp-backend
+- File: `internal/model/namespace_recommendation_set_native.go`
+- Pagination assumes six recommendation rows per namespace—extra terms or schema changes break paging.
+
+**#174 — `applyNSQueryParams` same dynamic-key concern**
+- Repo: ros-ocp-backend
+- Namespace listings reuse unconstrained dynamic filters—unexpected columns or operators reach GORM.
+
+**#175 — Reusing `*gorm.DB` after `Count` then `Scan` on same chain**
+- Repo: ros-ocp-backend
+- Dynamic filters or count/`Scan` chaining can produce wrong SQL, overflow ints, or skipped errors for lists.
+
+### Configuration (182-199)
+
+**#182 — `MaxLookbackDays` negative value inverts time window — no bounds validation**
+- Repo: ros-ocp-backend
+- File: `internal/config/config.go`
+- Negative lookback flips windows without validation—could ingest ancient noise or empty ranges.
+
+**#183 — GPU thresholds bypass central config via `os.Getenv`**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_recommender.go`
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#184 — `allow.auto.create.topics: true` on consumer and producer**
+- Repo: ros-ocp-backend
+- On shared Kafka clusters, can auto-create topics with default retention/partitions — operational hazard.
+
+**#185 — Dev-only defaults ship as production defaults**
+- Repo: ros-ocp-backend
+- File: `internal/config/config.go`
+- `DBssl=disable`, `DBPassword=postgres`, `RBAC_ENABLE=false`, `UnleashClientAccessToken=rosocp:dev.token` — dangerous if deployed without overriding.
+
+**#186 — `mapstructure.Decode(nil cfg)` during `initConfig` — fragile env binding**
+- Repo: ros-ocp-backend
+- `mapstructure.Decode` into partially-filled structs makes unset env vars silently zero-valued—production misconfiguration.
+
+**#187 — `DISABLE_NAMESPACE_RECOMMENDATION` documented but never implemented**
+- Repo: ros-ocp-backend
+- An env var or toggle is documented or defaulted but no code reads it, so operators believe they disabled behavior that still runs.
+
+**#188 — `ROS_STALENESS_THRESHOLD_HOURS` has no `viper.SetDefault`**
+- Repo: ros-ocp-backend
+- Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
+
+**#189 — Producer config sets `enable.auto.commit` (consumer-specific property)**
+- Repo: ros-ocp-backend
+- File: `internal/kafka/producer.go`
+- Misplaced in librdkafka producer config — likely ignored but confusing.
+
+**#190 — Switching `USE_NATIVE_ENGINE` doesn't migrate or clean up other engine's data**
+- Repo: ros-ocp-backend
+- Toggling engines doesn't purge the other's rows—UI mixes stale legacy/native recommendations.
+
+**#191 — Unleash initialized but no feature flags are actually read**
+- Repo: ros-ocp-backend
+- `featureflags.Init()` runs, consumes resources, but `flags.go` is empty — false sense of flag coverage.
+
+**#192 — No fatal validation for empty required configs**
+- Repo: ros-ocp-backend
+- Missing required settings don't abort startup—service runs half-configured until runtime failures.
+
+**#195 — No config hot-reload — restart required for all changes**
+- Repo: ros-ocp-backend
+- Operators must bounce pods for every tuning change—slow iteration and higher outage windows.
+
+**#196 — `ROS_STALE_ARCHIVE_DAYS` has no `viper.SetDefault`**
+- Repo: ros-ocp-backend
+- Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
+
+**#197 — `PutTermSettings` has no request body size limit**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_terms.go`
+- `json.NewDecoder` reads unbounded request bodies — memory DoS vector.
+
+**#198 — Sources Kafka listener destructive on `Application.destroy` without strong validation**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+### API Response Consistency (200-214)
+
+**#200 — Node utilization uses absolute URLs in links; `CollectionResponse` uses relative**
+- Repo: ros-ocp-backend
+- Node utilization emits absolute `links` while other collections use relative paths—clients concatenate incorrectly.
+
+**#201 — CSV float precision: 2 decimals in history, 3 in native export**
+- Repo: ros-ocp-backend
+- `handlers_history` rounds floats to 2dp vs 3dp on native export—same metric differs by CSV surface.
+
+**#202 — Only history/quality set `Cache-Control` headers**
+- Repo: ros-ocp-backend
+- Most GETs omit cache headers—browsers may cache volatile recommendation JSON.
+
+**#203 — `UpdateRecommendationJSON` can return nil — `recommendations` serializes as `null`**
+- Repo: ros-ocp-backend
+- Legacy serializer emits JSON `null`—strict OpenAPI clients expecting arrays explode.
+
+**#204 — Error responses leak internal Go error strings**
+- Repo: ros-ocp-backend
+- Handlers forward raw Go errors—reveals SQL/table names to tenants.
+
+**#205 — `buildNodeLinks` `First` uses current offset instead of 0**
+- Repo: ros-ocp-backend
+- `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
+
+**#206 — `buildNodeLinks` `Last` uses `offset+limit` (next page, not last)**
+- Repo: ros-ocp-backend
+- `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
+
+**#207 — `previous` link omitted when `offset <= limit` (wrong for first pages with non-zero offset)**
+- Repo: ros-ocp-backend
+- `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
+
+**#208 — Native namespace list returns richer shape than documented `NamespaceRecommendation`**
+- Repo: ros-ocp-backend
+- Live namespace payloads embed nested structs excluded from `NamespaceRecommendation` schema.
+
+**#209 — History CSV omits `notification_codes` column (present in JSON)**
+- Repo: ros-ocp-backend
+- CSV exporter skips `notification_codes` present in JSON—analysts lose RCA columns.
+
+**#211 — PVC/Snapshot handlers return 503 when pool nil; spec documents only 500**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#212 — `apiErrResponse` shape differs from spec (has `status` field not documented)**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#213 — `PutSnapshotSettings` 403 returns `err.Error()` — may expose internals**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#214 — Inconsistent date formats: RFC3339, fixed layout, `Time.String()` across responses**
+- Repo: ros-ocp-backend
+- Mix of RFC3339, logging layouts, and `Time.String()` breaks deterministic parsing.
+
+### Test Reliability (215-233)
+
+**#215 — `handlers_fleet_integration_test.go` sets `database.DB`/`Pool` without `t.Cleanup`**
+- Repo: ros-ocp-backend
+- Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
+
+**#216 — `handlers_terms_integration_test.go` same: no cleanup of global DB/Pool**
+- Repo: ros-ocp-backend
+- Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
+
+**#217 — `migration_roundtrip_test.go` asserts `ver == 55` — already wrong (58 migrations exist)**
+- Repo: ros-ocp-backend
+- Expected schema version is hard-coded—new migrations merge without failing CI, so drift hides until prod boot.
+
+**#218 — `TestAssembleNamespaceBoxplots_LongTerm_Under5ms` asserts wall-clock timing**
+- Repo: ros-ocp-backend
+- Flakes on slow CI runners or loaded machines.
+
+**#219 — `namespace/namespace_test.go` uses `os.ReadFile` with relative path**
+- Repo: ros-ocp-backend
+- `os.ReadFile` relies on cwd—`go test ./...` from other dirs fails.
+
+**#220 — GPU recommender tests mutate package-level threshold vars (not parallel-safe)**
+- Repo: ros-ocp-backend
+- Tests entangle globals, wall time, or stale constants—CI flakes and false passes undermine regressions.
+
+**#221 — `TestAggregatePermissions` checks lengths but not element values**
+- Repo: ros-ocp-backend
+- Asserts slice lengths only—incorrect permission entries still pass.
+
+**#222 — `api_test.go TestMapQueryParameters` asserts against current month boundaries**
+- Repo: ros-ocp-backend
+- Calendar-coupled — can fail if test run spans month rollover at UTC midnight.
+
+**#223 — No build tags separate unit from integration tests**
+- Repo: ros-ocp-backend
+- Integration tests (requiring Docker/testcontainers) only skip via `testing.Short()` — no opt-in `-tags=integration` discipline.
+
+**#224 — `config_test.go` uses `os.Setenv`/`os.Unsetenv` without `t.Parallel` guard**
+- Repo: ros-ocp-backend
+- Environment mutation is process-wide — breaks if future tests run in parallel.
+
+**#225 — Retention only tested in `retention_test.go` (no API-level test)**
+- Repo: ros-ocp-backend
+- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+
+**#226 — Cost data fetching tests don't verify timeout/retry/401 error paths**
+- Repo: ros-ocp-backend
+- Only happy-path and basic 500 tested via httptest.
+
+**#227 — No contract tests against Koku's effective_rates API**
+- Repo: ros-ocp-backend
+- Tests mock the shape — if Koku changes response format, nothing catches it until production.
+
+**#228 — Fixtures `BaseDate` uses `time.Now()` at package init**
+- Repo: ros-ocp-backend
+- Long-running test binaries can have fixtures drift from "7 days ago" expectations.
+
+**#229 — `migration_roundtrip_test.go` duplicates container bootstrap logic**
+- Repo: ros-ocp-backend
+- Doesn't reuse `testutil.SetupTestDB` — maintenance drift, different error handling.
+
+**#230 — Native/history/quality filter params have no max count cap**
+- Repo: ros-ocp-backend
+- Unlike legacy `MaxCountPerQueryParam`, native filters accept unlimited repeated `cluster`/`project` values — can build enormous `IN (...)` clauses.
+
+**#231 — `workload_type IN ?` without enum check on native path**
+- Repo: ros-ocp-backend
+- Native filters accept arbitrary workload types—typos become empty results without validation.
+
+**#232 — RBAC `response.Links.Next` concatenated into URL without validation**
+- Repo: ros-ocp-backend
+- If RBAC service returns an unexpected `Next` value, it could redirect the internal request to an attacker-controlled host.
+
+**#233 — Housekeeper logs full Kafka message payloads on error**
+- Repo: ros-ocp-backend
+- Could expose sensitive data (identities, org structures) to log aggregation systems.
+
+---
+
+## P3 — Low
+
+### Security / Credentials (downgraded from P0)
+
+**#4 — Identity header fully trusted without signature verification** *(downgraded to P3)*
+- Repo: ros-ocp-backend
+- File: `internal/api/middleware/identity.go`
+- `x-rh-identity` is decoded and used as-is. By-design in the Red Hat platform architecture. In SaaS, 3scale/turnpike validates the header upstream. In on-prem, the Envoy gateway validates Keycloak JWT and constructs the header. The ROS backend never directly faces the internet in either deployment mode.
+- Effort: Medium
+
+**#5 — `scripts/.env` tracked in git with MinIO credentials** *(downgraded to P3)*
+- Repo: ros-ocp-backend
+- File: `scripts/.env`
+- `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` committed in repo history. Not in `.gitignore`. However, these are dev-only MinIO keys used only by the local `scripts/docker-compose.yml` ingress service, not production secrets. The `Makefile` has `include scripts/.env` (hard dependency). Fix: change to `-include`, add `scripts/.env` to `.gitignore`, create `scripts/.env.example` with placeholders.
+- Effort: Small
+
+### Triaged from P1 — developer experience *(downgraded to P3, 2026-05-16)*
+
+**#51 — No distributed tracing** *(downgraded to P3)*
+- Repo: ros-ocp-backend
+- No OpenTelemetry-style traces across Kafka → DB → API — valuable for deep debugging, but logs/metrics usually suffice for ROS ops; does not change computed recommendations.
+- Effort: Large
+
+### Triaged from P2 *(demoted to P3, 2026-05-16)*
+
+**#54 — Lazy singleton race in `config.GetConfig()`** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/config/config.go`
+- Global `cfg` is read/assigned without `sync.Once`; concurrent first callers could theoretically race `initConfig()`. Typical API startup loads config from one thread before accepting requests — production impact is negligible.
+
+**#55 — Lazy singleton race in `db.GetPool()`** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/db/db.go`
+- Same class as #54.
+
+**#56 — Lazy singleton race in Kafka producer** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/kafka/producer.go`
+- Same class as #54.
+
+**#101 — `serveLegacyList`/`serveLegacyDetail` defined but never called (dead code)** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Unreachable helpers confuse reviewers but do not affect runtime behavior.
+
+**#104 — Hardcoded `ENCRYPTION_KEY` in `docker-compose.yml`** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `scripts/docker-compose.yml`
+- Dev-only compose default — same class as **#5** (local scripts), not a shipped production secret.
+
+**#105 — Hardcoded Unleash token `rosocp:dev.token` in compose + Makefile** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Dev-local token; production must override — operational hygiene only.
+
+**#107 — No `HEALTHCHECK` in Dockerfile** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- OpenShift/Kubernetes probes cover real deployments; Docker `--standalone` ergonomics only.
+
+**#110 — Poor Docker layer caching (single `COPY . .`)** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `Dockerfile`
+- CI/developer iteration time — no customer-facing impact.
+
+**#113 — `golangci-lint` installed as `latest` in Makefile** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Non-reproducible lint pinning — contributor friction, not runtime risk.
+
+**#116 — Makefile embeds identity JSON with org_id and cert-auth structure** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Example/test identity payload for local `curl` flows — not a production credential.
+
+**#117 — No resource limits in docker-compose.yml** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Local developer compose only.
+
+**#118 — Unpinned images in compose (`:latest`, untagged)** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `scripts/docker-compose.yml`
+- Same — dev reproducibility, not production chart defaults.
+
+**#171 — `monStart` variable name misleading** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/engine/recommend_namespace.go`
+- Naming/readability risk on future edits — no incorrect behavior by itself.
+
+**#176 — `int64` to `int` for count values (32-bit overflow edge case)** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- Would require absurd tenant cardinality on 32-bit builds — theoretical.
+
+**#193 — `fmt.Println("Config initialized")` in production** *(demoted to P3 from P2)*
+- Repo: ros-ocp-backend
+- File: `internal/config/config.go`
+- Log pipeline noise — observability polish, not incorrect ROS output.
+
+### Retention / Data Cleanup (234-243)
+
+**#234 — `node_recommendations` and `daily_node_digests` missing from `retainedTables`**
+- Repo: ros-ocp-backend
+- File: `internal/engine/retention.go`
+- Retention helper omits node digest tables—GPU/node guidance rows never prune.
+
+**#235 — GPU metadata `matchGPUModelKey` collision: A10 vs A10G**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_metadata.go`
+- Heuristic key normalization conflates distinct NVIDIA SKUs—VRAM/spec lookups attach to the wrong `GPUModelSpec`.
+
+**#236 — `gpu_timeslicing.go` `nodeFreshnessDays = 7` is hardcoded**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_timeslicing.go`
+- Freshness gate for time-slicing uses package const `nodeFreshnessDays = 7`—operators cannot tune staleness without code change.
+
+**#237 — `computeTimeslicingSavings` scales monthly rate by candidate count**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_timeslicing.go`
+- Total node savings multiply per-GPU hypothetical savings by `nCandidates`; multi-GPU nodes or non-uniform device billing can make this linear extrapolation wrong.
+
+**#238 — `WeightedPercentile` function misnamed as weighted average**
+- Repo: ros-ocp-backend
+- Function implements an average but reads like percentile—misleading savings math.
+
+**#239 — GPU digests `modelName := digests[0].GPUModelName` assumes homogeneous GPU**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#240 — Org offboarding documented but not implemented**
+- Repo: ros-ocp-backend
+- Docs promise org teardown hooks that don't exist—customer data lingers after subscription ends.
+
+**#241 — Kafka at-least-once + upserts = asymmetric idempotency (history/quality multiply)**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#243 — `DeleteTermSettings` lacks a transaction**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_terms.go`
+- Deletes + inserts term rows without a transaction—partial state if interrupted.
+
+### Engine / Math (244-263)
+
+**#244 — `evaluateNode` uses `lastDay := days[len(days)-1]` for overcommit — could be an outlier day**
+- Repo: ros-ocp-backend
+- Overcommit logic keys off the final digest day only—spiky outliers distort node sizing.
+
+**#245 — `stranded_resource` detection requires `len(imbalances) >= 2` (hardcoded threshold)**
+- Repo: ros-ocp-backend
+- Detector demands two imbalances—single dimensional skew never flags stranded capacity.
+
+**#246 — `filterClustersByRBAC` returns full list if `openshift.cluster` permission absent**
+- Repo: ros-ocp-backend
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#247 — RBAC `request_user_access` recursive pagination — stack depth unbounded**
+- Repo: ros-ocp-backend
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#248 — `GetTermSettings` `isDefault` check is fragile (length + first element only)**
+- Repo: ros-ocp-backend
+- Default detection inspects slice length/first element only—unexpected ordering marks wrong default.
+
+**#249 — `PutTermSettings` does DELETE then re-INSERT without transaction wrapping**
+- Repo: ros-ocp-backend
+- Replace-all pattern lacks txn—callers can observe empty term windows mid-update.
+
+**#250 — `ComputeNodeTimeslicingRec` called live on each API request (not persisted)**
+- Repo: ros-ocp-backend
+- File: `internal/engine/gpu_timeslicing.go`, GPU node handlers
+- Time-slicing recommendations are recomputed when serving API responses rather than read from a persisted table—expensive and non-stable across identical calls if inputs drift.
+
+**#251 — `computeMinDataDays` returns `windowDays/2` rounded down — short windows may require only 1 day**
+- Repo: ros-ocp-backend
+- Half-window thresholds let sparse clusters qualify with a single day of telemetry.
+
+**#252 — Decay calculation for short term with 0 `DecayHalfLifeHours` — division concerns**
+- Repo: ros-ocp-backend
+- Zero half-life branches risk divide-by-zero or flat weights for short terms.
+
+**#253 — `DetectIdle` / `DetectAbandoned` thresholds are hardcoded**
+- Repo: ros-ocp-backend
+- Idle/abandon thresholds live as literals—can't tune per org/cluster.
+
+**#254 — `ComputeAdaptiveMargin` behavior on edge cases (0 data points, single point)**
+- Repo: ros-ocp-backend
+- Margin solver lacks guards for <2 samples—outputs unstable recommendations.
+
+**#255 — Linear regression `trend_slope` on 1-2 data points is meaningless**
+- Repo: ros-ocp-backend
+- With only one or two digest samples, fitted slope is dominated by noise—UI may still surface a “trend” with misleading confidence.
+
+**#256 — EMA decay weighting unvalidated for extreme halflife values**
+- Repo: ros-ocp-backend
+- Extreme half-life env values aren’t validated—weights collapse to 0 or 1.
+
+**#257 — `FindAdoptedContainers` logic may false-positive on coincidental matches**
+- Repo: ros-ocp-backend
+- File: `internal/engine/adoption.go`
+- Adoption marks workloads whose current requests fall within tolerance of *any* prior recommendation snapshot—unrelated workloads that happen to share numeric requests could be flagged adopted (unlikely but possible).
+
+**#258 — `ReadOldRecommendations` fetches short/cost recommendations only**
+- Repo: ros-ocp-backend
+- Poller ignores non-short/non-cost terms—GPU/long recommendations never hydrate history.
+
+**#259 — `ApplyGPUSavings` modifies recs in-place (caller may not expect mutation)**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#260 — `ApplySavingsEstimates` with nil costData silently sets $0 savings**
+- Repo: ros-ocp-backend
+- Nil cost provider yields `$0` savings without surfacing missing-rate errors.
+
+**#261 — Snapshot classification `managedToolPrefixes` is a global mutable slice**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#262 — `computeSavings` / `computeIdleSavings` edge cases (negative costs)**
+- Repo: ros-ocp-backend
+- Negative cost inputs aren't clamped—downstream JSON may show nonsense savings.
+
+**#263 — `GPUConfidence` score algorithm not documented or validated**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+### Ingestion Pipeline (264-280)
+
+**#264 — Panics on short CSV records in `csvparser.go`**
+- Repo: ros-ocp-backend
+- File: `internal/ingestion/csvparser.go`
+- `csvparser` indexes columns without length checks—ragged rows panic ingestion.
+
+**#265 — Missing validation for NaN/Inf/negative values after float parsing**
+- Repo: ros-ocp-backend
+- Parsed floats skip validation—bad telemetry becomes Inf/NaN inside DB JSON.
+
+**#266 — Order-dependent GPU digest processing in `pipeline.go`**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#267 — `gpu_query.go` `lastNode` tracking uses string key — assumes unique namespace+workload+container**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#268 — Precision loss during MiB conversion in `detail_response.go`**
+- Repo: ros-ocp-backend
+- File: `internal/model/detail_response.go`
+- Float conversions for MiB/GiB display round or truncate—edge values can disagree slightly with raw digest integers.
+
+**#270 — Inconsistent JSON serialization for empty slices in models**
+- Repo: ros-ocp-backend
+- Some structs emit `[]` vs omitted fields inconsistently—clients can't rely on presence.
+
+**#271 — `processContainerCSVNative` calls `runNodeRecommendations` synchronously**
+- Repo: ros-ocp-backend
+- Blocking node recommendation inside CSV ingest lengthens Kafka latency.
+
+**#272 — `report_processor.go` uses untrimmed `orgID` for cost data fetch**
+- Repo: ros-ocp-backend
+- Cost fetch passes org IDs with inconsistent `org` prefix trimming—404 or wrong tenant.
+
+**#273 — `gpu_enrichment.go` trims orgID (`strings.TrimPrefix("org")`) — inconsistent with other callers**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#274 — `processContainerCSVNative` passes `MaxLookbackDays` start to node recs (should use term window)**
+- Repo: ros-ocp-backend
+- Negative lookback flips windows without validation—could ingest ancient noise or empty ranges.
+
+**#275 — Node recs start date overridden to `MaxWindowDays` in report_processor but not documented**
+- Repo: ros-ocp-backend
+- Hidden overrides change effective windows—docs and UI disagree with backend.
+
+**#276 — CSV streaming goroutines lose stack trace on panic (recovered in defer)**
+- Repo: ros-ocp-backend
+- CSV endpoints buffer entire outputs or mismatch decimal columns versus JSON—OOM risk and analyst confusion.
+
+**#132 — `ReadCSVFromUrl` uses `http.DefaultClient` with no timeout**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- Large or slow downloads can hang indefinitely on the **legacy** dataframe path. **Native parity:** `ReadCSVBodyFromUrl` uses the same bare `http.Get` pattern for all native CSV downloads—same hang risk (see **#2**, **#148**, **#242**).
+- Effort: Small
+
+**#148 — Kafka-triggered CSV fetch uses `http.Get` with no timeout**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- Slow/hung responses block the upload consumer—no deadline, no cancellation. Applies to **`ReadCSVBodyFromUrl`** on native ingestion as well as **`ReadCSVFromUrl`** on legacy ingestion.
+- Effort: Small
+
+**#242 — CSV URL fetch uses default HTTP client (follows redirects, no timeout)**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- Redirect and timeout hazards match **#132**/**#148** for both `ReadCSVFromUrl` and **`ReadCSVBodyFromUrl`** (native path).
+- Effort: Small
+
+**#278 — `BoxPlot` `MonitoringEndTime` date parsing uses wrong format**
+- Repo: ros-ocp-backend
+- File: `internal/model/boxplot.go`
+- `BoxPlot` parsing assumes the wrong timestamp layout—plots shift intervals.
+
+**#279 — `BoxPlot` panics on out-of-range `term_ord`**
+- Repo: ros-ocp-backend
+- Out-of-range `term_ord` panics—bad migration/data bricks namespace detail.
+
+**#280 — `BoxPlot` mutable global `StoredVariationSpecs` state contamination risk**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+### API Handlers (281-310)
+
+**#281 — Panics due to missing `Identity` assertion in multiple handlers**
+- Repo: ros-ocp-backend
+- Handlers cast Echo context without comma-ok—middleware mis-order panics.
+
+**#282 — `handlers_snapshot_settings.go` brittle error check via `strings.Contains`**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#283 — `handlers_fleet.go` hardcoded logic and magic numbers**
+- Repo: ros-ocp-backend
+- Fleet summary embeds magic ratios/constants—can't reflect changing SLAs.
+
+**#284 — `handlers_fleet.go` missing time scope in summary query — shows stale data**
+- Repo: ros-ocp-backend
+- Fleet queries ignore requested reporting windows—numbers never match detail pages.
+
+**#285 — Resource leaks in CSV streaming goroutines for history/quality**
+- Repo: ros-ocp-backend
+- CSV endpoints buffer entire outputs or mismatch decimal columns versus JSON—OOM risk and analyst confusion.
+
+**#286 — GORM `Count` return value not assigned in `recommendation_set.go`**
+- Repo: ros-ocp-backend
+- Dynamic filters or count/`Scan` chaining can produce wrong SQL, overflow ints, or skipped errors for lists.
+
+**#287 — `SkipSanitizationForContainer` allows ILIKE wildcards (`%`, `_`)**
+- Repo: ros-ocp-backend
+- Allows `%`/`_` wildcards through to SQL ILIKE—unexpected broad matches.
+
+**#288 — `buildModeClause` string concatenation for SQL (safe but fragile)**
+- Repo: ros-ocp-backend
+- String-built SQL fragments work today but resist auditing—easy to regress.
+
+**#289 — No `422` status code used — validation issues return 400**
+- Repo: ros-ocp-backend
+- Validation failures reuse HTTP 400—clients can't distinguish malformed JSON from business-rule violations.
+
+**#290 — `formatPrecisionValuesToStr` / `fmt.Sprint` inconsistent numeric formatting**
+- Repo: ros-ocp-backend
+- Mixed formatters between CSV and JSON paths—very small or large floats can stringify differently across surfaces.
+
+**#291 — `PathUnescape` errors ignored in URL parsing**
+- Repo: ros-ocp-backend
+- File: `internal/api/utils.go`
+- Ignored URL decode errors propagate garbage identifiers into queries.
+
+**#292 — `MaxIntervalEndTime` relies on fragile `ConvertStringToTime` layout**
+- Repo: ros-ocp-backend
+- Time parsing relies on a single layout—slightly different RFC3339 variants slip through as zero times.
+
+**#293 — Snapshot settings GET/PUT response shape not clearly documented**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#294 — CSV export not streaming — builds entire output before response starts**
+- Repo: ros-ocp-backend
+- CSV endpoints buffer entire outputs or mismatch decimal columns versus JSON—OOM risk and analyst confusion.
+
+**#295 — `persistentvolumeclaim` as one JSON key (no underscores) inconsistent with others**
+- Repo: ros-ocp-backend
+- JSON uses camel blob key `persistentvolumeclaim` unlike snake_case neighbors—client quirks.
+
+**#296 — Node utilization no RBAC check for clusters**
+- Repo: ros-ocp-backend
+- File: `internal/api/handlers_node_utilization.go`
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#297 — `api_test.go` oversized container/project passes without error (weak validation)**
+- Repo: ros-ocp-backend
+- Validation tests accept oversized IDs—doesn't enforce API limits.
+
+**#298 — `RecordLimitCSV` vs `limit` inconsistency between native and legacy**
+- Repo: ros-ocp-backend
+- CSV row caps differ between native and legacy paths—exports truncate unexpectedly.
+
+**#299 — `getDate` preserves `d.Location()` — "first of month" can disagree across callers**
+- Repo: ros-ocp-backend
+- `time.Location` on digest buckets can disagree across handlers—month boundaries shift near TZ boundaries.
+
+**#300 — `report_processor.go` `LastReportedAt: time.Now()` without UTC**
+- Repo: ros-ocp-backend
+- `time.Now()` without UTC mixes zones—cross-region comparisons of freshness drift.
+
+**#301 — Unbounded queries when `limit` handling defaults to large values**
+- Repo: ros-ocp-backend
+- Fallback limits can balloon—accidental large scans pull entire recommendation tables.
+
+**#302 — Fleet summary no time-scoped data — potentially showing historical data**
+- Repo: ros-ocp-backend
+- Fleet aggregates skip explicit reporting windows—operators see cumulative history instead of scoped KPIs.
+
+**#303 — Stale detection based on digest date, not ingestion time — delayed uploads false-positive**
+- Repo: ros-ocp-backend
+- Stale flags key off CSV bucket dates, not ingest time—late uploads look stale or vice versa.
+
+**#304 — Partial digest updates skew percentiles while "latest day" looks fresh**
+- Repo: ros-ocp-backend
+- Percentiles mix historical CSV revisions—single-day freshness hides blended distributions.
+
+**#305 — No validation that `Next` URL from RBAC is a same-host relative path**
+- Repo: ros-ocp-backend
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#306 — `$ref` to `Recommendations` schema in OpenAPI doesn't match `DetailResponse`**
+- Repo: ros-ocp-backend
+- OpenAPI defines components that no operation references (or omits referenced shapes), so codegen and validators miss real request/response bodies.
+
+**#307 — Node GPU response `term` field missing from OpenAPI schema**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#308 — `apiErrResponse` sometimes used, sometimes direct `c.JSON` — inconsistent behavior with toggle**
+- Repo: ros-ocp-backend
+- `EnableUserAPIErr` toggles between helper and raw JSON—error UX differs per deployment.
+
+**#309 — Error shapes: `{"status":"error","message":"..."}` vs `{"message":"..."}` vs `{}`**
+- Repo: ros-ocp-backend
+- Multiple JSON error envelopes coexist—SDKs must special-case every endpoint.
+
+**#310 — `GetRecommendationSetWithFallback` native miss returns `"error"` vs legacy `"not_found"`**
+- Repo: ros-ocp-backend
+- Native vs legacy detail endpoints use different status strings for misses—breaks strict clients.
+
+### Observability Gaps (311-330)
+
+**#311 —** *(merged into **#47** — duplicate Kafka consumer lag observability gap.)*
+
+**#312 —** *(merged into **#48** — duplicate recommendation-duration metric gap.)*
+
+**#313 —** *(merged into **#49** — duplicate “no circuit breaker” resilience gap.)*
+
+**#314 —** *(merged into **#233** — duplicate housekeeper Kafka payload logging.)*
+
+**#315 —** *(merged into **#51** — duplicate distributed tracing gap.)*
+
+**#316 —** *(merged into **#52** — duplicate probes-targeting-`/metrics` concern.)*
+
+**#317 —** *(merged into **#53** — duplicate DB backpressure / consumer readahead concern.)*
+
+**#318 — Inconsistent structured fields — `log.Errorf` vs `WithFields`**
+- Repo: ros-ocp-backend
+- Mix of formatted strings vs structured logging—Loki queries can't rely on consistent labels.
+
+**#319 — Many errors lack `request_id`/`org_id` context**
+- Repo: ros-ocp-backend
+- Errors omit tracing/org identifiers—multi-tenant incidents are harder to bisect.
+
+**#320 — `featureflags.Init()` failure non-fatal — logged and continued**
+- Repo: ros-ocp-backend
+- Unleash bootstrap failures are warn-only—runtime assumes flags succeeded.
+
+**#321 — No SLO definitions or alert rules in-repo**
+- Repo: ros-ocp-backend
+- No committed SLO YAML—on-call lacks baseline budgets.
+
+**#322 — DB temporarily unavailable = Fatal on init, no coordinated consumer pause**
+- Repo: ros-ocp-backend
+- Postgres blips crash consumers instead of backing off—brief outages become full restarts.
+
+**#323 — Kafka temporarily unavailable = hard exit, no retry**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#324 — Producer retries exist but Koku HTTP does not retry**
+- Repo: ros-ocp-backend
+- Asymmetric retry policies—Kafka duplicates safe paths while HTTP drops rate lookups.
+
+**#325 — Offset semantics differ: auto-commit on upload vs manual on poller**
+- Repo: ros-ocp-backend
+- Upload processor auto-commit differs from poller manual offsets—duplicate handling diverges by pipeline.
+
+**#326 — OpenTelemetry in go.mod as indirect — unused**
+- Repo: ros-ocp-backend
+- Tracing deps ship unused—707 investigations lack span continuity.
+
+**#327 — No runbooks maintained in-repo**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#328 — Echo HTTP metrics only on API server, not processor/poller**
+- Repo: ros-ocp-backend
+- HTTP instrumentation covers API pods only—workers lack RED metrics parity.
+
+**#329 — `rosocp_quality_partition_missing_total` metric name inconsistent (double underscore)**
+- Repo: ros-ocp-backend
+- Prometheus names violate conventions—Grafana dashboards referencing wrong series.
+
+**#330 — No metric for successful vs failed ingestion messages**
+- Repo: ros-ocp-backend
+- No counter distinguishing poison vs happy paths—alerts can't trigger on error rates.
+
+**#277 — Metrics skewed toward legacy paths — few native-engine-specific series**
+- Repo: ros-ocp-backend
+- Existing Prometheus instrumentation emphasizes legacy/Kruize-era names (`rosocp_kruize_*` and related). Deployments running **only** `UseNativeEngine` lack comparable phase counters (digest vs recommend vs persist vs node/GPU/PVC/snapshot stages)—SLOs and dashboards under-report native behavior.
+- Effort: Medium
+
+**#467 — Prometheus coverage gaps when native engine replaces Kruize**
+- Repo: ros-ocp-backend
+- Histograms/counters wrap legacy pipeline operations; native write paths can appear artificially quiet in `/metrics` despite heavy work. Complements **#277**; fixing both likely shares one instrumentation pass.
+- Effort: Medium
+
+### Concurrency (331-340)
+
+**#331 — Global `DB`, `Pool` in `db.go` — singleton hazard without sync**
+- Repo: ros-ocp-backend
+- Mutable package globals lack synchronization; concurrent startup or requests can duplicate connections or observe torn config.
+
+**#332 — Global `logger`, `log` in `logging.go` — nil races during init**
+- Repo: ros-ocp-backend
+- Mutable package globals lack synchronization; concurrent startup or requests can duplicate connections or observe torn config.
+
+**#333 — Global producer `p` in `producer.go` — written without locks**
+- Repo: ros-ocp-backend
+- Mutable package globals lack synchronization; concurrent startup or requests can duplicate connections or observe torn config.
+
+**#334 — Global `HTTPClient` in `utils.go` — safe for reads but init race possible**
+- Repo: ros-ocp-backend
+- Mutable package globals lack synchronization; concurrent startup or requests can duplicate connections or observe torn config.
+
+**#335 — `cost_app_id` global in `sourcesCleaner.go` — written at startup**
+- Repo: ros-ocp-backend
+- Mutable global for Sources cleanup—parallel housekeeping could clobber state.
+
+**#336 — Global config `cfg` in `report_processor.go` — reassigned per ProcessReport**
+- Repo: ros-ocp-backend
+- Each `ProcessReport` overwrites the package-level `cfg` pointer—concurrent ingestion could read partially updated configuration.
+
+**#337 — `gpuModels` map in `gpu_metadata.go` — read-only after init (safe if never mutated)**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#338 — `Definitions` map in `notifications/mapping.go` — read-only (same caveat)**
+- Repo: ros-ocp-backend
+- `notifications/mapping.Definitions` is a large global map; accidental mutation at runtime would corrupt API notification text.
+
+**#339 — `managedToolPrefixes` in `snapshot_classify.go` — read-only slice**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#340 — `BaseDate` in `fixtures.go` — drifts with real time at package init**
+- Repo: ros-ocp-backend
+- `fixtures.BaseDate` anchored at import time—tests drift vs calendar-sensitive logic.
+
+### Data Integrity Edge Cases (341-360)
+
+**#341 — Concurrent Kafka messages same cluster can race on upserts**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#342 — Snapshot reconcile sensitive to concurrent processors**
+- Repo: ros-ocp-backend
+- `ReconcileSnapshotRecommendations` deletes rows missing from recent inventory while ingest may still refresh inventory—ordering races could transiently delete rows (similar concurrency theme as **#341**).
+
+**#343 — `ReadOldRecommendations` then `WriteRecommendations` not one transaction**
+- Repo: ros-ocp-backend
+- Poller reads prior recommendations and writes new rows outside one DB transaction—crash mid-flight yields inconsistent history.
+
+**#344 — Terms API writes can overlap with background processor reads**
+- Repo: ros-ocp-backend
+- Term-setting HTTP transactions overlap ingestion reads—transient inconsistent windows.
+
+**#345 — Partition creation race between retention drop and ingestion create**
+- Repo: ros-ocp-backend
+- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+
+**#346 — `container_usage_samples` PK does not include `workload_type`**
+- Repo: ros-ocp-backend
+- Primary key omits workload_type—distinct deployments collapse into one row.
+
+**#347 — Same-key concurrent upserts: last writer wins (non-deterministic)**
+- Repo: ros-ocp-backend
+- High concurrency on identical keys yields arbitrary winners—recommendation flapping.
+
+**#348 — Cost savings computed at ingestion time — never refreshed automatically**
+- Repo: ros-ocp-backend
+- Savings snapshots freeze when Koku rates move—UI shows stale dollars.
+
+**#349 — `recommendation_sets` PK doesn't include `workload_type` — collisions possible**
+- Repo: ros-ocp-backend
+- Composite PK ignores workload_type—rolling restart workloads collide.
+
+**#350 — Stale detection: delayed uploads can mark fresh data as stale**
+- Repo: ros-ocp-backend
+- Stale heuristics compare digest timestamps to "now" without upload lag—slow clusters look unhealthy.
+
+**#351 — Stale detection: backdated CSV could mark non-stale incorrectly**
+- Repo: ros-ocp-backend
+- Stale logic trusts CSV timestamps—operators gaming dates skew freshness badges.
+
+**#352 — No reconcile step for containers/namespaces (only snapshots reconcile)**
+- Repo: ros-ocp-backend
+- Snapshot recommendations have explicit inventory reconcile; container/namespace recommendation rows depend on retention or manual deletes—deleted workloads may leave stale rows longer.
+
+**#353 — No mechanism to re-trigger recommendations when only cost model changes**
+- Repo: ros-ocp-backend, koku
+- No Kafka/event hook when Koku cost models change—`estimated_monthly_savings_usd` stays stale until manual re-ingestion.
+
+**#354 — Partial digest update means percentiles from different CSV versions mix**
+- Repo: ros-ocp-backend
+- Percentiles mix historical CSV revisions—single-day freshness hides blended distributions.
+
+**#355 — GPU digest date range uses string format — type mismatch risk**
+- Repo: ros-ocp-backend
+- Date windows carried as formatted strings invite parsing mismatches versus `DATE`/`TIMESTAMPTZ` columns—queries may drop GPU rows quietly.
+
+**#356 — `notification_code_definitions` seeded via migration — no runtime update path**
+- Repo: ros-ocp-backend
+- Notification metadata ships only through SQL seeds—product/content teams cannot refresh definitions without a migration cut.
+
+**#357 — Adoption marking is not transactional with recommendation write**
+- Repo: ros-ocp-backend
+- Adoption updates aren't tied to recommendation commits—partial states confuse UI.
+
+**#358 — Quality `measured_at` key is wall-clock — not deterministic**
+- Repo: ros-ocp-backend
+- `measured_at` uses wall clock—reprocessed rows duplicate instead of idempotent upserts.
+
+**#359 — History partition creation can fail silently (EnsureHistoryPartitions warn-only)**
+- Repo: ros-ocp-backend
+- Partition creation logs warnings—INSERT failures surface only at runtime.
+
+**#360 — Retention tables list is manually maintained — easy to forget new tables**
+- Repo: ros-ocp-backend
+- Retention table lists are manual—new partitioned tables may never prune, bloating storage and backups.
+
+### Nise / Operator / Koku Integration (361-380)
+
+**#361 — Nise GPU metric generation may not match operator CSV headers**
+- Repo: nise
+- File: `nise/generators/ocp/ocp_generator.py`
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#362 — Koku GPU column names in `masu/util/ocp/common.py` must align with operator**
+- Repo: koku
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#363 — Operator `manifest.json` date fields (`start`, `end`) must exist for Koku processing**
+- Repo: koku-metrics-operator
+- Operator manifest/queries can drift from ros-ocp-backend parsers without shared schema tests.
+
+**#364 — Nise `--ros-ocp-info` flag required for container-level ROS data — easy to forget**
+- Repo: nise
+- Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
+
+**#365 — Operator GPU CSV header defined in `types.go` — changes break ROS parser**
+- Repo: koku-metrics-operator
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#366 — Koku `ros_report_shipper.py` Kafka message format must match ROS consumer**
+- Repo: koku
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#367 — Koku `kafka_msg_handler.py` ships ROS reports to S3 — path format must match**
+- Repo: koku
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#368 — Nise doesn't generate GPU data for all edge cases (single GPU, MIG profiles)**
+- Repo: nise
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#369 — Operator `packaging.go` manifest must include `resource_optimization_files`**
+- Repo: koku-metrics-operator
+- Operator manifest/queries can drift from ros-ocp-backend parsers without shared schema tests.
+
+**#370 — Koku `effective_rates` endpoint has no authentication/authorization**
+- Repo: koku
+- File: `koku/masu/api/effective_rates.py`
+- Koku ingestion/effective-rates behavior is assumed—silent mismatches break ROS savings math.
+
+**#371 — Nise OCP generator timestamp format must match ROS CSV parser expectations**
+- Repo: nise
+- Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
+
+**#372 — Koku Masu URL configuration not validated in ROS config**
+- Repo: ros-ocp-backend
+- ROS trusts `MASU_URL`/cost endpoints from env without probing TLS/host reachability—misprints fail late during savings.
+
+**#373 — No integration test verifying end-to-end: Nise -> Koku -> Kafka -> ROS**
+- Repo: ros-ocp-backend, koku, nise
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#374 — Operator Prometheus query changes can silently break ROS expectations**
+- Repo: koku-metrics-operator
+- Operator manifest/queries can drift from ros-ocp-backend parsers without shared schema tests.
+
+**#375 — Koku effective_rates SQL assumes specific table schema — not versioned**
+- Repo: koku
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#376 — ROS costdata provider error messages don't distinguish auth vs network vs 404**
+- Repo: ros-ocp-backend
+- Cost provider collapses auth 401, network timeouts, and JSON errors—operators can't tell credential vs outage vs schema drift.
+
+**#377 — No schema registry or contract testing between Koku Kafka and ROS consumer**
+- Repo: koku, ros-ocp-backend
+- Missing fuzz or contract coverage leaves parsers and external APIs under-validated for hostile or evolving inputs.
+
+**#378 — Nise `--write-monthly` flag behavior differs from `--daily-reports`**
+- Repo: nise
+- Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
+
+**#379 — Operator ClusterVersion CR read can fail — cluster_id may be empty**
+- Repo: koku-metrics-operator
+- Operator manifest/queries can drift from ros-ocp-backend parsers without shared schema tests.
+
+**#380 — Nise static YAML date format must be exact — no validation on nise side**
+- Repo: nise
+- Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
+
+### Dead Code / Naming (381-400)
+
+**#381 —** *(merged into **#101** — dead `serveLegacyList`/`serveLegacyDetail` helpers.)*
+
+**#382 —** *(merged into **#187** — `DISABLE_NAMESPACE_RECOMMENDATION` documented but unused.)*
+
+**#383 — `LogFormater` typo in config (should be Formatter)**
+- Repo: ros-ocp-backend
+- Config key typo breaks log formatter wiring—operators misconfigure tracing.
+
+**#384 — Migration 000010 filename typo: `worload` instead of `workload`**
+- Repo: ros-ocp-backend
+- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+
+**#385 —** *(merged into **#171** — misleading `monStart` naming in namespace recommendations.)*
+
+**#386 — Unused `featureflags/flags.go` — empty package**
+- Repo: ros-ocp-backend
+- Unused modules suggest scaffolding that never shipped—dead imports obscure real feature-flag wiring.
+
+**#387 —** *(merged into **#97** — redundant `recommendation_applied_at` migration.)*
+
+**#389 — OpenTelemetry indirect dependencies — never wired**
+- Repo: ros-ocp-backend
+- `go.mod` lists OpenTelemetry only as indirect deps—no tracer/meter wired despite pulling the stack.
+
+**#390 — `initConfig` decode error printed to stdout (not logged)**
+- Repo: ros-ocp-backend
+- Decode errors print to stdout instead of logger—lost in aggregated logs.
+
+**#391 — `cfg` package var in `report_processor.go` shadows config function**
+- Repo: ros-ocp-backend
+- `cfg` reassignment per message breaks assumptions about immutability mid-flight.
+
+**#393 — `err.Error()` message in Identity middleware says "marshal" but means "unmarshal"**
+- Repo: ros-ocp-backend
+- Middleware error text says "marshal" when failures are unmarshalling—misroutes debugging.
+
+**#396 — Migration 000033 comment references wrong migration (says 000031)**
+- Repo: ros-ocp-backend
+- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+
+**#397 — Migration 000056 comment references wrong migration (says 000024)**
+- Repo: ros-ocp-backend
+- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+
+**#398 — Migration 000057 comment references wrong migration (says 000025)**
+- Repo: ros-ocp-backend
+- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+
+**#399 —** *(merged into **#236** — hardcoded `nodeFreshnessDays = 7`.)*
+
+**#400 — `gpuIdleThreshold`, etc. bypass central config struct**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+### Minor Performance (401-420)
+
+**#401 — Maps without size hints in hot paths (recommend_all, pipeline, digest)**
+- Repo: ros-ocp-backend
+- Hot-path maps grow via realloc—extra GC during ingestion spikes.
+
+**#402 — String concatenation for SQL in `handlers_node_utilization.go`**
+- Repo: ros-ocp-backend
+- `query += " AND ..."` repeated per filter — minor but suboptimal vs a builder.
+
+**#403 — `ParseCSVRows` no capacity hint on `[]MetricRow` append**
+- Repo: ros-ocp-backend
+- `ParseCSVRows` appends into zero-cap slices—large ROS uploads realloc repeatedly.
+
+**#404 — `GroupCSVRows` map no capacity hint**
+- Repo: ros-ocp-backend
+- `GroupCSVRows` builds maps without preallocation—extra hashing churn grouping CSV rows.
+
+**#405 — `filterGPUResults` + `matchesAny` is O(rows x gpu_terms x filters)**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#406 — `filterByWindow` allocates new slice per call (per container x per term)**
+- Repo: ros-ocp-backend
+- Allocates fresh slices per term iteration—multi-term clusters pay quadratic copies.
+
+**#407 — GPU digest `append` slices per sample without pre-allocation**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#409 — `io.ReadAll` on RBAC/Kruize/Sources bodies — moderate memory per response**
+- Repo: ros-ocp-backend
+- RBAC/Sources responses read entirely into RAM via `io.ReadAll`—large IT inventories spike RSS.
+
+**#410 — Benchmark tool uses same unbounded patterns as production**
+- Repo: ros-ocp-backend
+- Profiling binaries reuse production unbounded batches—benchmarks mislead capacity planning.
+
+**#411 — `unique()` utility builds list with zero-cap slice + append**
+- Repo: ros-ocp-backend
+- `unique()` builds slices from zero capacity—micro allocations in tight loops.
+
+**#412 —** *(merged into **#126** — duplicate `Convert2DarrayToMap` allocation churn.)*
+
+**#413 — `MetricRow` and digest structs passed by value in several helpers**
+- Repo: ros-ocp-backend
+- Large structs copied per helper—CPU churn digesting wide CSV rows.
+
+**#414 — `UpdateRecommendationJSON` runs json.Unmarshal for every list item on legacy path**
+- Repo: ros-ocp-backend
+- JSON encode/decode skips tags or errors—fields silently drop or structs drift from Kruize payloads.
+
+**#415 — No streaming for CSV export — builds entire output before streaming**
+- Repo: ros-ocp-backend
+- CSV endpoints buffer entire outputs or mismatch decimal columns versus JSON—OOM risk and analyst confusion.
+
+**#416 — No query result caching for term config per org**
+- Repo: ros-ocp-backend
+- Term settings hit Postgres per request—could memoize per org.
+
+**#417 — `LoadTermConfig` called twice in same ingestion cycle (once for containers, once for nodes)**
+- Repo: ros-ocp-backend
+- Same ingestion pass loads term JSON twice—duplicate IO.
+
+**#418 — `StalenessThreshold()` calls `GetConfig()` on every invocation — no cache**
+- Repo: ros-ocp-backend
+- Each check walks viper—could memoize after config reload.
+
+**#419 — Recommendations computed per-container then batch-written — could stream writes**
+- Repo: ros-ocp-backend
+- All recommendations materialized before flush—spikes RSS on huge clusters.
+
+**#420 — `RecommendAllWorkloads` builds full results slice before any writes**
+- Repo: ros-ocp-backend
+- All recommendations materialized before flush—spikes RSS on huge clusters.
+
+### Test Anti-Patterns (421-445)
+
+**#421 — Many `assert.NotNil` without value checks in GPU/savings/PVC tests**
+- Repo: ros-ocp-backend
+- Assertions stop once pointers are non-nil—zeroed structs or nonsense numerics still satisfy tests.
+
+**#422 — `api_test.go` cases where `wantErr: false` for oversized inputs**
+- Repo: ros-ocp-backend
+- Negative tests expect success on illegal payloads—coverage lies.
+
+**#423 — Tests call unexported helpers (implementation coupling)**
+- Repo: ros-ocp-backend
+- Tests reach private funcs—refactors break suites without semantic signal.
+
+**#424 —** *(merged into **#217** — stale hard-coded Flyway/migration version in round-trip test.)*
+
+**#425 — No `t.Parallel()` usage in most test files**
+- Repo: ros-ocp-backend
+- Suites default to serial execution—integration timings balloon even where cases are isolated.
+
+**#426 — Config tests use `os.Setenv` (process-wide, not isolated)**
+- Repo: ros-ocp-backend
+- `os.Setenv` leaks across tests—order-dependent failures.
+
+**#427 — Integration tests only skip via `testing.Short()` — no build tags**
+- Repo: ros-ocp-backend
+- Integration suites gated only by `-short`—no `-tags=integration` isolation.
+
+**#428 — GPU threshold tests mutate globals with `defer` restore (not parallel-safe)**
+- Repo: ros-ocp-backend
+- Tests entangle globals, wall time, or stale constants—CI flakes and false passes undermine regressions.
+
+**#429 —** *(merged into **#219** — `namespace_test.go` cwd-relative fixtures.)*
+
+**#430 —** *(merged into **#218** — wall-clock / timing-dependent boxplot test.)*
+
+**#432 —** *(merged into **#228** — `fixtures.BaseDate` tied to package init time.)*
+
+**#433 — `RecentStart()` vs `BaseDate` can diverge intent in long test runs**
+- Repo: ros-ocp-backend
+- Relative date helpers diverge from frozen fixtures—month-boundary tests drift.
+
+**#434 —** *(merged into **#227** — no contract tests vs live Koku `effective_rates`.)*
+
+**#435 —** *(merged into **#225** — retention lacks API-level regression coverage.)*
+
+**#436 — Cost data tests only verify happy path + basic 500**
+- Repo: ros-ocp-backend
+- Cost client tests skip auth/timeouts—prod regressions unnoticed.
+
+**#437 — `migration_roundtrip_test.go` duplicates container bootstrap**
+- Repo: ros-ocp-backend
+- Test harness repeats Postgres bootstrap wiring already encapsulated elsewhere—schema tweaks must be edited in multiple files.
+
+**#438 — `TruncateTable` exists but is never used in tests**
+- Repo: ros-ocp-backend
+- Shared truncation helper is dead code—suites hand-roll DELETEs and miss faster table resets.
+
+**#439 — No test for RBAC filtering on node utilization endpoint**
+- Repo: ros-ocp-backend
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#440 — No test for concurrent Kafka message processing**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#441 — No test for `limit=-1` behavior on list endpoints**
+- Repo: ros-ocp-backend
+- Unbounded list behavior lacks regression coverage.
+
+**#442 — No test for stale term cleanup in `PersistNodeRecommendations`**
+- Repo: ros-ocp-backend
+- `PersistNodeRecommendations` term pruning isn't asserted—DB grows silently.
+
+**#443 — Pre-existing test failures (`TestClassifySnapshot_Active*`) on base branch**
+- Repo: ros-ocp-backend
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#444 — No fuzz testing for CSV parser**
+- Repo: ros-ocp-backend
+- Missing fuzz or contract coverage leaves parsers and external APIs under-validated for hostile or evolving inputs.
+
+**#445 — No test for `EnableUserAPIErr` toggle behavior**
+- Repo: ros-ocp-backend
+- Toggle hiding errors isn't tested—prod vs dev responses diverge unnoticed.
+
+### Documentation / Spec (446-465)
+
+**#446 — `docs/architecture/requirements.md` describes `/healthz`, `/readyz` — not implemented**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#447 — Requirements doc describes consumer pause on PG down — not implemented**
+- Repo: ros-ocp-backend
+- Architecture doc promises paused consumers—real binary exits immediately.
+
+**#448 — Requirements doc describes circuit breakers — not implemented**
+- Repo: ros-ocp-backend
+- File: `docs/architecture/requirements.md`
+- Documentation promises circuit-breaking behavior around downstream dependencies; code uses plain HTTP clients with no breaker pattern—operators misjudge failure modes.
+
+**#449 —** *(merged into **#71** — orphan `GPURecommendation` OpenAPI component.)*
+
+**#450 — OpenAPI paths omit `/api/cost-management/v1` prefix**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#451 — No documented API versioning strategy**
+- Repo: ros-ocp-backend
+- Clients lack guidance on `/v1` compatibility—breaking changes surprise embedders.
+
+**#452 — No changelog for API breaking changes**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#453 — `docs/plans/` reference phase-0 critical fixes — status unclear**
+- Repo: ros-ocp-backend
+- Planning docs reference ancient phases—new hires chase completed work.
+
+**#454 — No documentation of Kafka message schema**
+- Repo: ros-ocp-backend
+- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+
+**#455 — No documentation of retention policy behavior**
+- Repo: ros-ocp-backend
+- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+
+**#456 — No documentation of stale detection algorithm**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#457 — No documentation of cost data integration contract**
+- Repo: ros-ocp-backend, koku
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#458 — No documentation of GPU classification thresholds**
+- Repo: ros-ocp-backend
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#459 — No documentation of distribution/aggregation math**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#460 — No documentation of RBAC permission model for ROS**
+- Repo: ros-ocp-backend
+- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+
+**#461 — OpenAPI spec for container detail references `RecommendationBoxPlots` — doesn't match `DetailResponse`**
+- Repo: ros-ocp-backend
+- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+
+**#462 — No migration guide for legacy-to-native engine transition**
+- Repo: ros-ocp-backend
+- No documented cutover/cleanup plan when flipping `USE_NATIVE_ENGINE`—clusters accumulate contradictory recommendation rows.
+
+**#463 — `performance-analysis.md` references issues that may already be fixed**
+- Repo: ros-ocp-backend
+- Static perf write-up may cite fixed hotspots—performance work aims wrong files.
+
+**#464 — No operational runbook for common failure modes**
+- Repo: ros-ocp-backend
+- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+
+**#465 — `AGENT_MEMORY_DUMP.md` may contain stale analysis**
+- Repo: ros-ocp-backend
+- Scratch analysis checked into repo—may contradict shipped behavior.
+
+### Remaining Minor Issues (468-490)
+
+**#468 —** *(merged into **#329** — Prometheus metric name double-underscore typo.)*
+
+**#469 — `cmd/aggregator.go` panics on I/O errors instead of returning errors**
+- Repo: ros-ocp-backend
+- Benchmark CLI panics on disk errors instead of printing diagnostics.
+
+**#470 — `cmd/compare/main.go` hard exits on failure (no cleanup)**
+- Repo: ros-ocp-backend
+- `compare` exits fatally without flushing files—scripts lose partial output.
+
+**#471 — `cmd/db.go` seed/demo timestamps from `time.Now()` — not reproducible**
+- Repo: ros-ocp-backend
+- Seed/demo commands stamp `time.Now()` into fixtures—replays differ run-to-run.
+
+**#472 — Go version drift: `go.mod` 1.25.0 vs CI 1.25.8 vs Dockerfile go-toolset:1.25**
+- Repo: ros-ocp-backend
+- Three different Go toolchain pins diverge—developers, CI, and images can disagree on language/stdlib behavior across releases.
+
+**#473 — CodeQL action uses `@v2` — should be `@v3`/`@v4`**
+- Repo: ros-ocp-backend
+- CodeQL `@v2` lags current GitHub releases—misses fixes from `@v3`/`@v4` and may stop working when runners deprecate Node runtimes.
+
+**#474 — `update-go-deps.yml` uses broad `go get -u ./...` — breaking updates risk**
+- Repo: ros-ocp-backend
+- Workflow blindly `go get -u ./...`—accidentally majors incompatible libs.
+
+**#475 — No `govulncheck` step in CI**
+- Repo: ros-ocp-backend
+- Supply-chain scans omit `govulncheck`—known vulnerable stdlib or module paths ship until external scanners notice.
+
+**#476 — `.dockerignore` excludes Dockerfile from context (works but confusing)**
+- Repo: ros-ocp-backend
+- Build context omits the Dockerfile itself—reviewers cannot diff layer instructions inside PR patches even though builds succeed.
+
+**#477 — `microdnf update` in Dockerfile — non-reproducible builds**
+- Repo: ros-ocp-backend
+- Container build/dev-compose choices hurt reproducibility and security: floating tags, missing probes/limits, or dev secrets in defaults.
+
+**#479 — Default DB passwords `postgres` in compose**
+- Repo: ros-ocp-backend
+- Container build/dev-compose choices hurt reproducibility and security: floating tags, missing probes/limits, or dev secrets in defaults.
+
+**#480 — Broad port publishing in compose (many ports exposed)**
+- Repo: ros-ocp-backend
+- Container build/dev-compose choices hurt reproducibility and security: floating tags, missing probes/limits, or dev secrets in defaults.
+
+**#481 — No TLS in compose (Kafka PLAINTEXT, HTTP services)**
+- Repo: ros-ocp-backend
+- Container build/dev-compose choices hurt reproducibility and security: floating tags, missing probes/limits, or dev secrets in defaults.
+
+**#482 — `clowdapp.yaml` Database version 13 — may need alignment**
+- Repo: ros-ocp-backend
+- Template pins older Postgres—features/migrations may assume newer.
+
+**#483 — Nise GPU data generation doesn't cover MIG profiles**
+- Repo: nise
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#484 — Nise doesn't generate multi-GPU-model clusters**
+- Repo: nise
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#485 — Nise doesn't generate edge-case dates (month boundaries, leap years)**
+- Repo: nise
+- Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
+
+**#486 — Operator GPU queries may not cover all NVIDIA device plugin variants**
+- Repo: koku-metrics-operator
+- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+
+**#487 — Operator manifest `version` field not validated by ROS consumer**
+- Repo: koku-metrics-operator, ros-ocp-backend
+- Operator manifest/queries can drift from ros-ocp-backend parsers without shared schema tests.
+
+**#488 — Operator PVC volume tracking may differ from ROS PVC parser expectations**
+- Repo: koku-metrics-operator
+- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+
+**#489 — `Getwd` error ignored in `cmd/aggregator.go`**
+- Repo: ros-ocp-backend
+- Ignored working-directory errors mis-locate assets in CLI tools.
+
+**#490 —** *(merged into **#136** — ignored `ListenAndServe` error on Prometheus sidecar.)*
+
+---
+
+## No-op Because Kruize
+
+These findings apply only to the **legacy Kruize integration path** (Kruize HTTP clients, Kruize payload parsing, and the legacy dataframe CSV path after `ReadCSVFromUrl`). When deployments use the **native ros-ocp-backend recommendation engine** (`UseNativeEngine` / native pipeline) without that integration, they do not drive production behavior for those code paths—so remediation priority drops accordingly.
+
+**Re-triage (2026-05-16):** **#2**, **#132**, **#148**, and **#242** were moved back to **P0**/**P2** because `ReadCSVBodyFromUrl` (native ingestion in `report_processor.go`) shares the same unsafe `http.Get` behavior as `ReadCSVFromUrl`. **#277** and **#467** were moved to **P3** observability—they describe **missing native-engine metrics**, not Kruize-only behavior.
+
+**#8 — `Update_results` non-201 HTTP responses treated as success**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- Function returns `(payload_data, nil)` even when HTTP status indicates failure. Callers believe update succeeded — silent data loss.
+- Effort: Small
+
+**#9 — `Update_recommendations` ignores non-400 HTTP errors**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- 401, 403, 500, 502, 503 from Kruize all fall through without returning an error. Callers believe the call succeeded.
+- Effort: Small
+
+**#10 — HTTP response body never closed on `Create_kruize_experiments` success (201)**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- On the success path, response body is never read or closed. Leaks HTTP connections — pool exhaustion under sustained load.
+- Effort: Small
+
+**#11 — Unbounded recursion in `Update_results`/`UpdateNamespaceResults` on performance profile error**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- If Kruize keeps returning `"performanceProfile is null"`, recursive retry has no depth limit. Stack overflow.
+- Effort: Small
+
+**#12 — `err.Errors[0].Message` without length check in container update path**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- If Kruize returns an empty `Errors` array, this panics with index out of range.
+- Effort: Small
+
+**#17 — `map[string]interface{}` type assertions in Kruize payloads panic on wrong types**
+- Repo: ros-ocp-backend
+- Files: `internal/utils/kruize/kruize_api.go`, `internal/types/kruizePayload/common.go`, `internal/types/kruizePayload/updateResult.go`
+- `resdata["message"].(string)`, `c["image_name"].(string)`, etc. panic if keys are missing or wrong type.
+- Effort: Medium
+
+**#18 — `Setup_kruize_performance_profile` defer panics on nil response**
+- Repo: ros-ocp-backend
+- File: `internal/utils/utils.go`
+- If `HTTPClient.Post` fails, `res` is nil and `defer res.Body.Close()` panics.
+- Effort: Small
+
+**#23 — Legacy path commits metrics chunk-by-chunk**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- If a middle chunk fails, earlier chunks' data remains committed — partial workload data. *(Only in the legacy branch after `ReadCSVFromUrl` → `Update_results` / `UpdateNamespaceResults` → `BatchInsertWorkloadMetrics`; native engine uses `ReadCSVBodyFromUrl` and does not insert `workload_metrics` via Kruize chunks.)*
+- Effort: Medium
+
+**#24 — Kafka produce failure for recommendation requests is logged but not retried**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- Workload + metrics exist in DB without a Kruize experiment request ever being sent. *(Kafka message is produced only for `internal/services/recommendation_poller.go` to drive Kruize recommendation fetch — not used by the native write path.)*
+- Effort: Small
+
+**#29 — No HTTP timeout on Kruize `Update_*` calls**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- Uses `http.Post` / bare `http.Client{}` with zero timeout. Consumer hangs indefinitely.
+- Effort: Small
+
+**#38 — Legacy pipeline loads entire CSV into memory twice**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`, `internal/utils/utils.go`
+- `ReadCSVFromUrl` returns `[][]string`, then `dataframe.LoadRecords` copies it again — 2x peak RSS. *(Native engine paths call `ReadCSVBodyFromUrl` and stream into ingestion — this double-buffer pattern applies only when `UseNativeEngine` is off or the file type falls through to the legacy Kruize CSV branch.)*
+- Effort: Large
+
+### Moved from P2/P3 (native-engine triage, 2026-05-16)
+
+These items were previously listed as **P2 Medium** or **P3 Low** but apply **only** when the legacy Kruize pipeline is active (`recommendation_poller.go`, `kruize_api.go`, chunked `workload_metrics` writes after `ReadCSVFromUrl`, `internal/types/kruizePayload/*`, etc.). *(**#132**, **#148**, **#242** were removed here on **2026-05-16** — they apply to native ingestion via `ReadCSVBodyFromUrl` and were restored under **P2** Ingestion Pipeline.)*
+
+**#121 — Legacy `transactionForContainerRecommendation` is N+1 per row**
+- Repo: ros-ocp-backend
+- File: `internal/services/recommendation_poller.go`
+- One ORM INSERT per container/term inside a loop — no batching.
+
+**#128 — `json.Marshal(container.Metrics)` per container on legacy ingestion**
+- Repo: ros-ocp-backend
+- File: `internal/services/report_processor.go`
+- JSON encode/decode skips tags or errors—fields silently drop or structs drift from Kruize payloads.
+
+**#138 — `experimentCreateAttempt` global bool read/written without locks**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- Mutable package globals lack synchronization; concurrent startup or requests can duplicate connections or observe torn config.
+
+**#152 — `io.ReadAll` errors silently ignored in 6+ Kruize locations**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- `io.ReadAll` errors are ignored across Kruize helpers—truncated bodies deserialize as success.
+
+**#153 — `DeleteExperimentFromKruize` logs wrong error variable on HTTP failure**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- Logs `err` from `NewRequest`/`Do` (often nil), not the HTTP status — misleading operational logs.
+
+**#154 — Fragile string matching on 5 different Kruize error messages**
+- Repo: ros-ocp-backend
+- File: `internal/utils/kruize/kruize_api.go`
+- Branches compare `err.Error()` against five Kruize strings—upstream wording changes break retry logic silently.
+
+**#155 — Partial multi-container commits + Kafka commit in recommendation poller**
+- Repo: ros-ocp-backend
+- File: `internal/services/recommendation_poller.go`
+- Some containers get valid recommendations committed while others fail — Kafka offset is committed anyway.
+
+**#156 — Failed type assertions in poller produce silent skip**
+- Repo: ros-ocp-backend
+- File: `internal/services/recommendation_poller.go`
+- If Kruize response doesn't match expected Go types, `ok` is false, loop body skips, function returns `false` with no error log.
+
+**#157 — `UpdateResponseData` interval fields have no JSON tags — never unmarshal**
+- Repo: ros-ocp-backend
+- File: `internal/types/kruizePayload/updateResult.go`
+- JSON encode/decode skips tags or errors—fields silently drop or structs drift from Kruize payloads.
+
+**#158 — Transaction `defer recover()` absorbs panics without re-panicking**
+- Repo: ros-ocp-backend
+- File: `internal/services/recommendation_poller.go`
+- After rollback, panics in transaction helpers are swallowed — caller may not see the failure clearly.
+
+**#177 — `AssertAndConvertToString` silently converts unknown types to empty string**
+- Repo: ros-ocp-backend
+- File: `internal/types/kruizePayload/common.go`
+- Unknown metric types stringify to empty—silent data loss in Kruize bridging.
+
+**#178 — Kruize version hardcoded `"1.0"` in container vs config-driven in namespace** *(merged with #392)*
+- Repo: ros-ocp-backend
+- Container payloads pin `Version:"1.0"` while namespace path reads config—experiments drift between workload kinds.
+- Hard-coded Kruize API version ignores env/config—cluster upgrades cannot negotiate capabilities.
+
+**#179 — `GetUpdateResultPayload` date conversion failures log and continue (groups skipped)**
+- Repo: ros-ocp-backend
+- File: `internal/types/kruizePayload/updateResult.go`
+- Date parse failures log and skip entire workload groups—partial Kruize imports.
+
+**#180 — `commitKafkaMsg` swallows commit errors**
+- Repo: ros-ocp-backend
+- File: `internal/services/recommendation_poller.go`
+- Offset commit failures are logged but not propagated — consumer believes it committed successfully.
+
+**#181 — Debug-level logging of full Kruize request/response bodies**
+- Repo: ros-ocp-backend
+- If debug logging is ever enabled in production, potentially sensitive workload data flows to log aggregation.
+
+**#194 — `KRUIZE_HOST`/`KRUIZE_PORT` not exposed as config fields** *(merged with #388)*
+- Repo: ros-ocp-backend
+- Only feed a default URL string — operators who set them without `KRUIZE_URL` get silent misconfiguration.
+- Host/port env vars only contribute to a synthesized default URL—they are not real config fields, so partial overrides silently collapse to wrong endpoints.
+
+**#199 — Kruize API calls use bare `http.Client{}` / `http.Post` without timeouts**
+- Repo: ros-ocp-backend
+- Multiple helpers reuse default `http.Client`/`Post` with zero timeouts—slow Kruize wedges ingestion goroutines indefinitely.
+
+**#269 — Silent skipping of recommendations in `recommendation_poller.go`**
+- Repo: ros-ocp-backend
+- Poller continues after recoverable errors—workloads silently skip updates.
+
+**#388 — → merged into #194**
+
+**#392 — → merged into #178**
+
+**#394 — Comment in delete experiment says "create" URL used for delete**
+- Repo: ros-ocp-backend
+- Mislabeled log/comments reference create URLs—hard to operate Kruize during incidents.
+
+**#395 — `deletion_err_log(err)` gets wrong error variable**
+- Repo: ros-ocp-backend
+- Logs the wrong `error` value—masks actual HTTP failure causes.
+
+**#408 — `json.Marshal(container.Metrics)` per container interval (high write amplification)**
+- Repo: ros-ocp-backend
+- Legacy path `json.Marshal`s full `container.Metrics` per interval—massive JSONB rewrite amplification.
+
+**#431 — No mock for Kruize in unit tests (only httptest servers in integration)**
+- Repo: ros-ocp-backend
+- Unit suites lack httptest doubles for Kruize—regressions slip until heavier integration runs.
+
+**#466 — `json.Marshal(data)` error ignored in `DeleteExperimentFromKruize`**
+- Repo: ros-ocp-backend
+- Ignoring `json.Marshal` errors in delete payload construction—broken DELETE bodies still POST.
+
+**#478 — Verbose Kruize logging `LOG_ALL_HTTP_REQ_AND_RESPONSE=true` in compose**
+- Repo: ros-ocp-backend
+- File: `scripts/docker-compose.yml` (`kruize-autotune` service)
+- Enables full HTTP request/response logging for the bundled Kruize/autotune container — noisy and potentially sensitive in shared dev environments.
+
+---
+
+## Remediation Plan
+
+### Recommended Execution Order
+
+#### Week 1: Stop the Bleeding (P0)
+
+1. Fix IDOR `GetRecommendationSetByID` (#1) — `query = query.Where(...)`
+2. Harden Kafka CSV URL fetch (#2) — bounded client, allowlist or validated egress, response size limits for **`ReadCSVBodyFromUrl`** and **`ReadCSVFromUrl`**
+3. Fix snapshot mass-delete (#6) — change `NOT IN` to `NOT EXISTS` or handle empty subquery
+4. Add RBAC to fleet summary (#3)
+5. Fix Kafka commit logic (#7) — add explicit commit on success path when auto-commit is disabled
+6. Bound `pgx.Batch` / chunk writes (#39) *(promoted from P1 — OOM killer)*
+7. Scope `drop_ros_partition` to ROS tables only (#60) *(promoted from P1 — shared-DB partition drops)*
+
+*(**#15** removed from this sprint — demoted to **P2**: Sources listener exits only if cost-application lookup fails at startup; replace `os.Exit` with logged fatal-return behavior alongside **#14** hygiene.)*
+
+#### Week 2: Silent Failures (remaining P1)
+
+1. Fix `apiErrResponse` (#32) — set `EnableUserAPIErr = true` or remove toggle
+2. Fix `Count()` error checks (#30, #31)
+3. Fix digest upsert completeness (#34) and `OnConflict` target (#36)
+4. Surface cost/Koku failures beyond `$0` savings (#27) and term-config degradation (#28)
+5. Harden Kafka delivery semantics (#7, #50, #58) — explicit commits vs auto-commit defaults *(mostly P2 operational work)*
+6. Native list/API correctness *(promoted from P2, 2026-05-16)* — `MapNativeQueryParameters` filter parity (**#75**), PVC/Snapshot **`meta.count`** (**#79**), row scan error handling (**#141**), poison-message commits (**#149**), PVC write error propagation (**#151**), snapshot interval parse failures (**#160**), GPU handler masking per-cluster failures (**#210**)
+
+#### Week 3: Data Safety (remaining P1)
+
+1. Add transactions to native pipeline (#19, #21) — wrap batch operations
+2. Fix `ProcessCSVToDigests` error propagation (#20) and `ReadOldRecommendations` early-return (#22)
+3. Deduplicate or version history/quality rows on re-run (#62)
+4. Emit/trigger savings refresh when Koku rates change (#63)
+
+#### Week 4: Operations & scale (P2 backlog — formerly overstated as P1)
+
+1. Add health checks to `/status` (#45) — DB ping, Kafka connectivity
+2. Add DB/Kafka/latency metrics (#46, #47, #48)
+3. Optional hygiene: `sync.Once` for config/db/producer lazy init (**#54–#56**, demoted to **P3** — low production risk)
+4. Add graceful Kafka shutdown (#58)
+5. SQL-level pagination for node handlers (#40, #41)
+
+#### Ongoing: P2/P3
+
+- OpenAPI spec alignment (monthly)
+- Migration safety review (per-migration)
+- Container hardening (quarterly)
+- Test reliability improvements (continuous)
+- Documentation updates (with each feature)
+
+### Koku Changes Summary
+
+| Priority | Issue | File |
+|----------|-------|------|
+| P2 | Fix `BETWEEN` date semantics in effective_rates (#161) | `koku/masu/api/effective_rates.py` |
+| P2 | Add date validation to effective_rates params (#165) | `koku/masu/api/effective_rates.py` |
+| P1 | Emit event when cost model changes for ROS re-computation (#63) | `koku/masu/processor/ocp/ocp_cost_model_cost_updater.py` |
+| P3 | Verify GPU column alignment with operator (#362) | `koku/masu/util/ocp/common.py` |
+| P3 | Verify effective_rates auth model (#370) | `koku/masu/api/effective_rates.py` |
+
+### Nise Changes Summary
+
+| Priority | Issue | File |
+|----------|-------|------|
+| P3 | GPU metric generation alignment with operator headers (#361) | `nise/generators/ocp/ocp_generator.py` |
+| P3 | Add MIG profile test data (#483) | `nise/generators/ocp/ocp_generator.py` |
+| P3 | Add multi-GPU-model clusters (#484) | `nise/generators/ocp/ocp_generator.py` |
+| P3 | Edge-case dates in test data (#485) | `nise/report.py` |
+| P3 | Timestamp format alignment (#371) | `nise/generators/ocp/ocp_generator.py` |
+
+### Operator Changes Summary
+
+| Priority | Issue | File |
+|----------|-------|------|
+| P3 | Verify GPU CSV header field alignment (#365) | `internal/collector/types.go` |
+| P3 | Manifest date field consistency (#363, #369) | `internal/packaging/packaging.go` |
+| P3 | GPU device plugin query coverage (#486) | `internal/collector/` |
+| P3 | Manifest version field documentation (#487) | `internal/packaging/packaging.go` |
+
+---
+
+## Final Audit Notes
+
+**Audit date:** 2026-05-16.
+
+### Summary of changes
+
+1. **Native vs Kruize triage correction (2026-05-16, appendix review):** **#2** (SSRF / unbounded Kafka CSV URL fetch) moved from the Kruize appendix to **P0** because **`ReadCSVBodyFromUrl`** — used by all native CSV ingest paths in `internal/services/report_processor.go` — shares the same bare `http.Get` behavior as **`ReadCSVFromUrl`**. **#132**, **#148**, **#242** restored to **P2** Ingestion Pipeline (timeouts/redirects/default client). **#277** and **#467** restored to **P3** Observability — they describe gaps in **native-engine** Prometheus coverage, not legacy-only defects. Severity counts: **P0** 6→7, **P2** 154→157, **P3** 241→243, Kruize appendix substantive 41→35, native substantive total 423→429.
+
+2. **P0 → P2 demotion (#15):** Source review shows `os.Exit(1)` only when `GetCostApplicationID()` fails during **startup** of `StartSourcesListenerService`, before the consumer loop—not a background goroutine terminating on arbitrary Kafka errors. Severity aligns with **#14** (bootstrap hardening), not auth bypass or cross-tenant data loss.
+
+3. **Merge stubs (26 rows total):** Duplicate narratives consolidated onto canonical lower-numbered issues—**#102→#42**, **#130→#44**, **#311–#317→#47–#53**, **#381→#101**, **#382→#187**, **#385→#171**, **#387→#97**, **#399→#236**, **#412→#126**, **#424→#217**, **#429→#219**, **#430→#218**, **#432→#228**, **#434→#227**, **#435→#225**, **#449→#71**, **#468→#329**, **#490→#136**. *(Kruize appendix already had **#388→#194**, **#392→#178**.)*
+
+4. **Description fixes:** Replaced twelve bogus “automated heuristic / editorial pass” bullets with code-grounded text (**#162**, **#166**, **#170**, **#236–#237**, **#250**, **#255**, **#257**, **#268**, **#290**, **#342**, **#352**, **#448**). Renamed **#237** title to match `computeTimeslicingSavings` behavior.
+
+5. **Counting convention:** Severity table counts **substantive** rows (`**#N — …**` without “merged into”). Stub rows retain issue numbers for traceability but should not be double-counted in remediation estimates.
+
+### Final definitive counts
+
+| Bucket | Substantive rows |
+|--------|------------------|
+| **P0** | 7 |
+| **P1** | 22 |
+| **P2** | 157 |
+| **P3** | 243 |
+| **Native total (substantive)** | **429** |
+| **Merge stubs (native numbered rows)** | **24** |
+| **Kruize no-op substantive** | **35** |
+| **Kruize merge stubs** | **2** |
+| **Grand total `**#…**` rows in file** | **490** |
+
+### Borderline / reader judgment calls
+
+- **#197 (`PutTermSettings` unbounded body)** — Arguably **P1** DoS if the endpoint is reachable by any authenticated tenant user at scale; left **P2** here because typical payloads are small and operators often gate ingress.
+
+- **#232 / #305 (RBAC `Next` URL chaining)** — SSRF-style escalation depends on IT/RBAC returning a hostile `Next`; plausible **P1** if RBAC is considered untrusted input—currently **P2** as realistic exploit requires compromised or malicious RBAC responses.
+
+- **#370 (Koku `effective_rates` auth model)** — Internal Masu-only vs accidentally exposed changes severity between **P2** and **P0**; classification assumes network segmentation—confirm deployment architecture.
+
+- **#172 / #174 (dynamic GORM column keys)** — If Echo query parsing ever maps user-controlled strings to column names, classification rises toward **P1** security; as written it is defensive depth (**P2**) pending proof of untrusted keys reaching `Where`.
+
+- **#232 vs #305:** Same mitigation theme (validate RBAC pagination URLs); consider merging in a future editorial pass—left distinct because one emphasizes recursion (**#232**) and the other same-host validation (**#305**).
