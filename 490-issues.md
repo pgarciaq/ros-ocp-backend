@@ -9,6 +9,7 @@
 ## Table of Contents
 
 - [Severity Distribution](#severity-distribution)
+- [Resolution Status](#resolution-status)
 - [Repository Impact Summary](#repository-impact-summary)
 - [P0 Critical Issues (#1–#3, #6, #7, #39, #60)](#p0--critical)
 - [P1 High Issues (22 retained)](#p1--high)
@@ -29,6 +30,21 @@
 | **P3 Low** | 243 | Style, naming, documentation—includes **22** merge-stub rows (two additional stubs **#102**, **#130** live under **P2**) |
 | **Kruize no-op** | 35 | Legacy Kruize-only paths (**35** substantive rows + **2** appendix merge stubs **#388→#194**, **#392→#178** = **37** numbered rows in this section) |
 
+## Resolution Status
+
+| Severity | Total | Fixed | Remaining |
+|----------|-------|-------|-----------|
+| P0 | 7 | 7 | 0 |
+| P1 | 22 | 22 | 0 |
+| P2 | 155 | 0 | 155 |
+| P3 | 263 | 0 | 263 |
+| Kruize no-op | 43 | — | — |
+
+Additional fixes from the P0/P1 pass:
+
+- NULL-scan bugs corrected in `term_config`, `handlers_pvc`, `handlers_node_utilization`, `quality.go`, and `cmd/compare`
+- Pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
+
 ## Repository Impact Summary
 
 | Repository | P0 | P1 | P2 | P3 | Total |
@@ -45,18 +61,21 @@
 ### Security
 
 **#1 — IDOR in `GetRecommendationSetByID`: missing `query = query.Where(...)` assignment**
+- **Status:** ✅ Fixed (commit `48b874a`)
 - Repo: ros-ocp-backend
 - File: `internal/model/recommendation_set.go`
 - The container_id filter is never applied. `query.Where(...)` is called but the result is not assigned back. `query.First()` returns the first row in the org regardless of requested ID. Any authenticated user can read any recommendation in their org.
 - Effort: Small
 
 **#2 — SSRF via Kafka `Files` URLs (legacy + native CSV fetch)**
+- **Status:** ✅ Fixed (commit `48b874a`)
 - Repo: ros-ocp-backend
 - File: `internal/utils/utils.go` (`ReadCSVFromUrl`, `ReadCSVBodyFromUrl`)
 - Both helpers use bare `http.Get(url)` with no timeout, no URL allowlist, no response size cap, and redirects followed. Attacker-controlled URLs in Kafka messages can probe internal networks, pull unbounded payloads, or chain redirects into internal services. **`ReadCSVBodyFromUrl` is on the native-engine path** (`processContainerCSVNative`, namespace/storage/snapshot natives in `internal/services/report_processor.go`); **`ReadCSVFromUrl` remains on the legacy Kruize dataframe path** when `UseNativeEngine` is false or a file type is not handled natively.
 - Effort: Medium
 
 **#3 — `GetFleetSummary` has no RBAC cluster filtering**
+- **Status:** ✅ Fixed (commit `48b874a`)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_fleet.go`
 - Users with scoped cluster permissions can see org-wide fleet aggregates. Authorization bypass for restricted users.
@@ -65,12 +84,14 @@
 ### Data Loss / Corruption
 
 **#6 — Snapshot reconcile `NOT IN (empty subquery)` mass-deletes all recommendations**
+- **Status:** ✅ Fixed (commit `f584a3d`)
 - Repo: ros-ocp-backend
 - File: `internal/engine/snapshot_classify.go`
 - If `snapshot_inventory` has no rows in the last 6 hours, the subquery returns empty. SQL `NOT IN` against an empty set evaluates TRUE for all rows, deleting every snapshot recommendation for that cluster.
 - Effort: Small
 
 **#7 — `KAFKA_AUTO_COMMIT=false` + upload processor = messages never committed on success**
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`, `internal/kafka/consumer.go`
 - `ProcessReport` only calls `CommitMessage` for poison messages. Turning off auto-commit globally means successful messages are redelivered infinitely.
@@ -79,12 +100,14 @@
 ### Promoted from P1 — availability / resource exhaustion / cross-service data loss
 
 **#39 — `pgx.Batch` sizes unbounded** *(promoted to P0 from P1)*
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - Files: `internal/ingestion/pipeline.go`, `internal/engine/recommend_all.go`
 - Batch size equals `len(rows)` or `len(recs)` — process OOM is a production-killing failure mode on large clusters, not merely slow queries.
 - Effort: Medium
 
 **#60 — `drop_ros_partition` scans ALL partitions in database** *(promoted to P0 from P1)*
+- **Status:** ✅ Fixed (commit `f584a3d`)
 - Repo: ros-ocp-backend
 - File: `migrations/000011_delete_partition_function.up.sql`, `internal/services/housekeeper/tablePartitionCleaner.go`
 - Function selects **every** `relispartition` table in the PostgreSQL instance matching date bounds—not scoped to ROS parent tables. On a shared database this can `DROP` unrelated products’ partitions (confirmed from migration SQL: global `pg_class` scan).
@@ -99,78 +122,91 @@
 ### Silent failures / wrong results / materially misleading API
 
 **#19 — Zero transaction boundaries across native pipeline**
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`
 - Digests, recommendations, savings, adoption, history, quality, node recs are all independent DB phases. Failure at any stage leaves prior writes committed with no rollback.
 - Effort: Large
 
 **#20 — `ProcessCSVToDigests` returns nil after GPU/node digest failures**
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - File: `internal/ingestion/pipeline.go`
 - GPU and node digest errors are logged as warnings. Function returns nil — caller sees success.
 - Effort: Small
 
 **#21 — `WriteRecommendations` uses `pgx.Batch` without explicit transaction**
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - File: `internal/engine/recommend_all.go`
 - Each queued statement auto-commits independently. Partial batch failure leaves some containers updated and others not.
 - Effort: Medium
 
 **#22 — `ReadOldRecommendations` failure causes early return, skipping quality AND node recs**
+- **Status:** ✅ Fixed (commit `affee58`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`
 - New container recommendations are already committed, but quality metrics and node recs are never computed.
 - Effort: Small
 
 **#26 — `MarkAdopted` logs per-key errors but returns no aggregate error**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/engine/adoption.go`
 - Caller cannot detect partial adoption failures.
 - Effort: Small
 
 **#27 — Cost data fetch failure results in savings=0 with no API-visible signal**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`
 - Users see "$0 savings" with no indication that cost data was unavailable.
 - Effort: Medium
 
 **#28 — `LoadTermConfig` failure silently degrades to defaults**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`
 - No metric, no API header, no user-visible signal that custom terms were ignored.
 - Effort: Small
 
 **#30 — `Count()` error never checked in `GetRecommendationSets`**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/model/recommendation_set.go`
 - DB errors during count are silently ignored — callers get incorrect `meta.count` values.
 - Effort: Small
 
 **#31 — `Count()` error never checked in `GetNamespaceRecommendationSetList`**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/model/namespace_recommendation_set.go`
 - Same issue for namespace list endpoint.
 - Effort: Small
 
 **#32 — `apiErrResponse` returns `200 {}` when `EnableUserAPIErr=false`**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/api/utils.go`
 - Production default silently turns errors into empty success responses.
 - Effort: Small
 
 **#33 — Node utilization always returns 200 even on DB errors**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_utilization.go`
 - Query failure produces empty 200 — indistinguishable from "no data."
 - Effort: Small
 
 **#34 — Container digest upsert only updates subset of columns**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/ingestion/pipeline.go`
 - Many percentiles, throttle metrics, and RSS values NOT in `DO UPDATE SET`. Re-ingesting same day leaves mixed old/new values.
 - Effort: Medium
 
 **#36 — `OnConflict` columns `(workload_id, container_name)` don't match current PK**
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/model/recommendation_set.go`
 - Post-migration PK includes `term` and `engine` — upsert conflict target is incomplete.
@@ -179,12 +215,14 @@
 ### Analytics integrity
 
 **#62 — History/quality rows multiply on reprocessing**
+- **Status:** ✅ Fixed (commit `affee58` / `1ed2f67`)
 - Repo: ros-ocp-backend
 - Files: `internal/engine/history.go`, `internal/engine/quality.go`
 - `measured_at := time.Now()` creates new timestamp per run — reprocessing creates additional rows.
 - Effort: Medium
 
 **#63 — Cost savings stale when Koku rates change**
+- **Status:** ✅ Fixed (commit `365463f`)
 - Repo: ros-ocp-backend, koku
 - No mechanism to trigger re-computation of `estimated_monthly_savings_usd` when upstream cost models are updated.
 - Effort: Medium
@@ -192,34 +230,41 @@
 ### Promoted from P2 — native API / ingestion correctness *(2026-05-16)*
 
 **#75 — Native container list ignores `exclude[]` and `filter[exact:]`** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers.go` (`MapNativeQueryParameters`), `internal/model/recommendation_set_native.go`
 - `MapNativeQueryParameters` only applies plain `cluster`/`project`/… `IN` filters. Documented `exclude[]` and `filter[exact:]` clauses are implemented on the legacy path via `MapQueryParameters` / `applyParamFilter`, so clients sending those params on the native list get **silently broader results** than requested—wrong dashboards and compliance-filtered views without an error.
 
 **#79 — PVC/Snapshot `meta.count` = page length, not total count** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - Container lists expose total row/container counts for pagination; PVC/Snapshot handlers set count from `len(page)` — **`meta.count` is always wrong** whenever the list spans more than one page. Clients cannot implement correct pagination or totals.
 
 **#141 — `continue` after `rows.Scan` error in 4 API handlers** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - Files: `handlers_node_utilization.go`, `handlers_snapshot.go`, `handlers_pvc.go`, `snapshot_classify.go`
 - On scan failure the loop skips the row and still returns **200 OK** with a **truncated list**—same failure mode class as **#33** (empty-body success on query failure): operators see partial inventory/utilization as if it were complete.
 
 **#149 — `commitOnPermanentFailure` commits offset with no dead-letter queue** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/services/report_processor.go`
 - Invalid JSON / validation failures commit the Kafka offset with only logs—payload is **dropped with no replay path**. That is permanent **ingestion data loss** for those reports (distinct from operational poison handling if a DLQ existed).
 
 **#151 — `WritePVCRecommendations` logs errors but always returns nil** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/engine/pvc_recommend.go`
 - Per-row upsert failures are logged and swallowed; the pipeline and pollers treat the phase as **successful**, so PVC recommendations can be missing with no surfaced error—same class as other silent partial-write issues (**#21**, **#26**).
 
 **#160 — `ingestion/snapshot.go` silently ignores interval parse errors** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - `row.IntervalStart`, `row.IntervalEnd` use `_, _ = time.Parse(...)` — parse failures yield zero times that still flow into classification/Recommendation logic. Snapshot recommendations can be **wrong or wildly misclassified** without a visible ingest failure.
 
 **#210 — Node GPU handler returns 200 with empty data on per-cluster DB errors** *(promoted to P1 from P2)*
+- **Status:** ✅ Fixed (commit `337ba5b`)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_recs.go`
 - `QueryGPURecommendations` errors log a warning and `continue`, omitting that cluster’s GPU recs; response is **200 with partial or empty data**, indistinguishable from “no GPUs.” Aligns with **#33** / **#141** as a materially misleading success response.
@@ -2279,6 +2324,8 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 
 #### Week 1: Stop the Bleeding (P0)
 
+**Status: COMPLETE** — All P0 issues fixed in commits `48b874a`, `f584a3d`, `affee58` (2026-05-17).
+
 1. Fix IDOR `GetRecommendationSetByID` (#1) — `query = query.Where(...)`
 2. Harden Kafka CSV URL fetch (#2) — bounded client, allowlist or validated egress, response size limits for **`ReadCSVBodyFromUrl`** and **`ReadCSVFromUrl`**
 3. Fix snapshot mass-delete (#6) — change `NOT IN` to `NOT EXISTS` or handle empty subquery
@@ -2291,6 +2338,8 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 
 #### Week 2: Silent Failures (remaining P1)
 
+**Status: COMPLETE** — All P1 issues fixed in commits `affee58`, `337ba5b` (2026-05-17).
+
 1. Fix `apiErrResponse` (#32) — set `EnableUserAPIErr = true` or remove toggle
 2. Fix `Count()` error checks (#30, #31)
 3. Fix digest upsert completeness (#34) and `OnConflict` target (#36)
@@ -2299,6 +2348,8 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 6. Native list/API correctness *(promoted from P2, 2026-05-16)* — `MapNativeQueryParameters` filter parity (**#75**), PVC/Snapshot **`meta.count`** (**#79**), row scan error handling (**#141**), poison-message commits (**#149**), PVC write error propagation (**#151**), snapshot interval parse failures (**#160**), GPU handler masking per-cluster failures (**#210**)
 
 #### Week 3: Data Safety (remaining P1)
+
+**Status: COMPLETE** — All P1 issues fixed in commits `affee58`, `337ba5b`, `365463f` (2026-05-17).
 
 1. Add transactions to native pipeline (#19, #21) — wrap batch operations
 2. Fix `ProcessCSVToDigests` error propagation (#20) and `ReadOldRecommendations` early-return (#22)
@@ -2355,6 +2406,21 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 ## Final Audit Notes
 
 **Audit date:** 2026-05-16.
+
+### P0/P1 remediation pass (2026-05-17)
+
+- **P0 fixes:** 7/7 complete
+- **P1 fixes:** 22/22 complete
+- **Additional fixes:** five NULL-scan bugs (`term_config`, `handlers_pvc`, `handlers_node_utilization`, `quality.go`, `cmd/compare`); pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
+- **Branch:** `pgarciaq-rosocp-superpowers-phase6`
+- **Commits:**
+  - `1ed2f67` — Term-based windowing for node and GPU recommendations
+  - `48b874a` — P0 security: IDOR repair, SSRF hardening, fleet RBAC filtering
+  - `f584a3d` — P0 data safety: snapshot reconcile guard, scoped ROS partition drops
+  - `affee58` — P0/P1 pipeline reliability: transactions, bounded batches, Kafka commits, digest/error propagation
+  - `337ba5b` — P1 API correctness: silent failures surfaced, filters/counts, handler error semantics
+  - `365463f` — Tests, docs, OpenAPI alignment for P0/P1 behavior
+  - `d10431e` — Short-term recommendation window anchored to latest digest date (term windowing follow-up)
 
 ### Summary of changes
 
