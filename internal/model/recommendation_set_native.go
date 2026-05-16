@@ -139,7 +139,7 @@ type NativeContainerResult struct {
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
-	GPU                     *GPURecommendation            `json:"gpu,omitempty"`
+	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
 // NativeContainerID generates a deterministic UUID v5 from the composite key.

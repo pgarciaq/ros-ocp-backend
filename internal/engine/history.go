@@ -18,7 +18,10 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 		return nil
 	}
 
-	now := time.Now().UTC()
+	// Bucket to UTC midnight so re-processing the same calendar day upserts instead of
+	// multiplying history rows (#62).
+	nowClock := time.Now().UTC()
+	recordedAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
 	batch := &pgx.Batch{}
 
 	for _, r := range recs {
@@ -41,7 +44,7 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 				confidence_level = EXCLUDED.confidence_level,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				source_binary = EXCLUDED.source_binary`,
-			now, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName,
+			recordedAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName,
 			r.Term, r.Engine,
 			r.RecCPURequestMC, r.RecCPULimitMC,
 			r.RecMemRequestKiB, r.RecMemLimitKiB,

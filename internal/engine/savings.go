@@ -22,6 +22,10 @@ func replicaCountForSavings(rec *ContainerRec) float64 {
 // ApplySavingsEstimates computes EstimatedSavingsUSD for each recommendation
 // using cost data from Koku. If costData is nil (Koku unavailable or not
 // configured), all savings remain 0 and NotifNoCostData is appended.
+//
+// Stored USD values reflect rates from the last successful cost fetch during
+// report processing; upstream Koku cost-model changes do not refresh ROS rows
+// until new metrics are processed and GetEffectiveRates runs again (#63).
 func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostData) {
 	if costData == nil {
 		for i := range recs {

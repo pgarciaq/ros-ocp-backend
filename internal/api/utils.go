@@ -1473,8 +1473,9 @@ func GenerateAndStreamCSV(w io.Writer, recommendationSets []model.Recommendation
 // ParamError.UserErr from apiErrResponse is available for per-error override if needed in future.
 func apiErrResponse(c echo.Context, err error, status int, userMsg string) error {
 	log.Error(err.Error())
+	resp := echo.Map{}
 	if EnableUserAPIErr {
-		return c.JSON(status, echo.Map{"status": "error", "message": userMsg})
+		resp = echo.Map{"status": "error", "message": userMsg}
 	}
-	return c.JSON(http.StatusOK, echo.Map{})
+	return c.JSON(status, resp)
 }
