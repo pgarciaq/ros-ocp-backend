@@ -1,7 +1,4 @@
--- Registry of ROS-managed partitioned parent tables for drop_ros_partition().
--- ROS tables live in public (same schema as the rest of this service); selection is
--- by parent name / pattern, not by schema. Add a row when introducing a new
--- partitioned digest/history parent.
+-- Upgrade path for databases that ran older 000011/000059 without the registry table.
 CREATE TABLE IF NOT EXISTS ros_partitioned_parent_registry (
     id SERIAL PRIMARY KEY,
     match_kind TEXT NOT NULL CHECK (match_kind IN ('exact', 'like')),
@@ -30,9 +27,6 @@ DECLARE
     partitionTables TEXT[];
     partitionTable TEXT;
 BEGIN
-    -- Select ROS-owned RANGE partitions whose lower bound is before tableDate.
-    -- Scoped via pg_inherits + ros_partitioned_parent_registry so we never DROP
-    -- partitions belonging to other products on a shared PostgreSQL instance.
     SELECT array_agg(partition_table::TEXT) INTO partitionTables FROM (
         SELECT c.relname AS partition_table,
                matches[1]::date AS min_rangeval,
