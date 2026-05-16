@@ -21,6 +21,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -293,12 +294,16 @@ func runNativeEngine(ctx context.Context, pool *pgxpool.Pool, csvData []byte, or
 		return nil, fmt.Errorf("ingest: %w", err)
 	}
 
-	// Determine date range from the digests
-	var minDate, maxDate time.Time
-	err := pool.QueryRow(ctx, `SELECT MIN(bucket_date), MAX(bucket_date) FROM daily_container_digests WHERE org_id=$1 AND cluster_uuid=$2`, orgID, clusterID).Scan(&minDate, &maxDate)
+	// Determine date range from the digests (aggregates are NULL when no rows exist).
+	var minD, maxD sql.NullTime
+	err := pool.QueryRow(ctx, `SELECT MIN(bucket_date), MAX(bucket_date) FROM daily_container_digests WHERE org_id=$1 AND cluster_uuid=$2`, orgID, clusterID).Scan(&minD, &maxD)
 	if err != nil {
 		return nil, fmt.Errorf("query date range: %w", err)
 	}
+	if !minD.Valid || !maxD.Valid {
+		return nil, fmt.Errorf("no digest rows for org=%s cluster=%s", orgID, clusterID)
+	}
+	minDate, maxDate := minD.Time, maxD.Time
 
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterID, minDate, maxDate, engine.OOMConfig{})
 	if err != nil {

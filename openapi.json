@@ -3865,18 +3865,18 @@
           "notifications": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 29=time_slicing_candidate"
+            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate"
           },
           "time_slicing_node": {
             "type": "string",
             "nullable": true,
-            "description": "Node name where GPU time-slicing is recommended. Present only for containers that are time-slicing candidates (notification code 29).",
+            "description": "Node name where GPU time-slicing is recommended. Present only for containers that are time-slicing candidates (notification code 36).",
             "example": "gpu-worker-7"
           },
           "time_slicing_replicas": {
             "type": "integer",
             "nullable": true,
-            "description": "Recommended nvidia.com/gpu.replicas value (2-8) for the target node. Present only for containers that are time-slicing candidates (notification code 29).",
+            "description": "Recommended nvidia.com/gpu.replicas value (2-8) for the target node. Present only for containers that are time-slicing candidates (notification code 36).",
             "example": 4
           }
         }
@@ -3889,7 +3889,12 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/NodeGPURecommendation" }
           },
-          "links": { "$ref": "#/components/schemas/NodeRecommendationLinks" }
+          "links": { "$ref": "#/components/schemas/NodeRecommendationLinks" },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional warnings about degraded data quality (e.g., GPU enrichment failures, scan errors)"
+          }
         }
       },
       "NodeRecommendationMeta": {
@@ -3932,7 +3937,7 @@
           "notification_codes": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "Notification codes: 29=gpu_time_sharing_candidate"
+            "description": "Notification codes: 36=gpu_time_sharing_candidate"
           }
         }
       },
