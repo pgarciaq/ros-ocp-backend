@@ -20,7 +20,7 @@ func TestFilterNodeRecs_NoFilters(t *testing.T) {
 		{NodeName: "node-1", GPUModel: "T4"},
 		{NodeName: "node-2", GPUModel: "A100"},
 	}
-	result := filterNodeRecs(recs, "", "")
+	result := filterNodeRecs(recs, "", "", "")
 	assert.Len(t, result, 2)
 }
 
@@ -30,7 +30,7 @@ func TestFilterNodeRecs_ByNodeName(t *testing.T) {
 		{NodeName: "gpu-worker-2", GPUModel: "T4"},
 		{NodeName: "cpu-only-node", GPUModel: "A100"},
 	}
-	result := filterNodeRecs(recs, "gpu-worker-1", "")
+	result := filterNodeRecs(recs, "gpu-worker-1", "", "")
 	assert.Len(t, result, 1)
 	assert.Equal(t, "gpu-worker-1", result[0].NodeName)
 }
@@ -39,7 +39,7 @@ func TestFilterNodeRecs_ByNodeNameCaseInsensitive(t *testing.T) {
 	recs := []model.NodeGPURecommendation{
 		{NodeName: "GPU-Worker-1", GPUModel: "T4"},
 	}
-	result := filterNodeRecs(recs, "gpu-worker-1", "")
+	result := filterNodeRecs(recs, "gpu-worker-1", "", "")
 	assert.Len(t, result, 1)
 }
 
@@ -49,7 +49,7 @@ func TestFilterNodeRecs_ByGPUModel(t *testing.T) {
 		{NodeName: "node-2", GPUModel: "NVIDIA A100-SXM4-80GB"},
 		{NodeName: "node-3", GPUModel: "NVIDIA T4"},
 	}
-	result := filterNodeRecs(recs, "", "A100")
+	result := filterNodeRecs(recs, "", "A100", "")
 	assert.Len(t, result, 1)
 	assert.Equal(t, "node-2", result[0].NodeName)
 }
@@ -60,7 +60,7 @@ func TestFilterNodeRecs_BothFilters(t *testing.T) {
 		{NodeName: "node-1", GPUModel: "A100"},
 		{NodeName: "node-2", GPUModel: "T4"},
 	}
-	result := filterNodeRecs(recs, "node-1", "T4")
+	result := filterNodeRecs(recs, "node-1", "T4", "")
 	assert.Len(t, result, 1)
 	assert.Equal(t, "node-1", result[0].NodeName)
 	assert.Equal(t, "T4", result[0].GPUModel)
@@ -70,19 +70,19 @@ func TestFilterNodeRecs_NoMatch(t *testing.T) {
 	recs := []model.NodeGPURecommendation{
 		{NodeName: "node-1", GPUModel: "T4"},
 	}
-	result := filterNodeRecs(recs, "nonexistent", "")
+	result := filterNodeRecs(recs, "nonexistent", "", "")
 	assert.Len(t, result, 0)
 }
 
 func TestGroupByNodeAndModel(t *testing.T) {
-	rec1 := &engine.GPURec{GPUModelName: "T4", Classification: engine.GPUClassUnderutilized, SMActiveAvg: 0.1}
-	rec2 := &engine.GPURec{GPUModelName: "T4", Classification: engine.GPUClassUnderutilized, SMActiveAvg: 0.2}
-	rec3 := &engine.GPURec{GPUModelName: "A100", Classification: engine.GPUClassWellUtilized, SMActiveAvg: 0.7}
+	rec1 := &engine.GPURec{GPUModelName: "T4", Term: "medium", Classification: engine.GPUClassUnderutilized, SMActiveAvg: 0.1}
+	rec2 := &engine.GPURec{GPUModelName: "T4", Term: "medium", Classification: engine.GPUClassUnderutilized, SMActiveAvg: 0.2}
+	rec3 := &engine.GPURec{GPUModelName: "A100", Term: "medium", Classification: engine.GPUClassWellUtilized, SMActiveAvg: 0.7}
 
-	gpuRecs := map[string]*engine.GPURec{
-		"ns1/wl1/c1": rec1,
-		"ns1/wl1/c2": rec2,
-		"ns2/wl2/c3": rec3,
+	gpuRecs := map[string][]*engine.GPURec{
+		"ns1/wl1/c1": {rec1},
+		"ns1/wl1/c2": {rec2},
+		"ns2/wl2/c3": {rec3},
 	}
 	nodeMap := map[string]string{
 		"ns1/wl1/c1": "gpu-node-1",
@@ -114,8 +114,8 @@ func TestGroupByNodeAndModel(t *testing.T) {
 }
 
 func TestGroupByNodeAndModel_SkipsMissingNode(t *testing.T) {
-	gpuRecs := map[string]*engine.GPURec{
-		"ns1/wl1/c1": {GPUModelName: "T4"},
+	gpuRecs := map[string][]*engine.GPURec{
+		"ns1/wl1/c1": {{GPUModelName: "T4", Term: "medium"}},
 	}
 	nodeMap := map[string]string{}
 	lastSeen := map[string]time.Time{}

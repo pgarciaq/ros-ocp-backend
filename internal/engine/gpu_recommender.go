@@ -42,7 +42,7 @@ type GPUDigestRow struct {
 	SMActiveAvg         float32
 }
 
-// GPURec holds the GPU recommendation for a single container.
+// GPURec holds the GPU recommendation for a single container within a single term.
 type GPURec struct {
 	GPUModelName           string
 	CurrentGPUProfile      string            // current MIG profile or "" for full GPU
@@ -60,6 +60,7 @@ type GPURec struct {
 	HasProfilingData               bool
 	TimeSlicingNode                string // set by ComputeNodeTimeslicingRec for candidates
 	TimeSlicingReplicas            int    // set by ComputeNodeTimeslicingRec for candidates
+	Term                           string // short, medium, long
 }
 
 func gpuThreshold(envKey string, defaultVal float64) float64 {

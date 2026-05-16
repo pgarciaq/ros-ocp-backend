@@ -28,7 +28,13 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 
 	ctx := context.Background()
 	now := time.Now().UTC()
-	start := now.AddDate(0, 0, -30)
+
+	terms, err := engine.LoadTermConfig(ctx, pool, orgID)
+	if err != nil {
+		log.Warnf("enrichWithGPU: load term config failed: %v", err)
+		terms = engine.DefaultTerms()
+	}
+	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterMap := map[string][]int{}
 	for i, r := range results {
@@ -38,7 +44,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 	costProvider := getGPUCostProvider()
 
 	for clusterUUID, indices := range clusterMap {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms)
 		if err != nil {
 			log.Warnf("enrichWithGPU: failed for cluster %s: %v", clusterUUID, err)
 			continue
@@ -66,8 +72,10 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 			}
 		}
 
-		for _, gpuRec := range gpuRecs {
-			engine.ApplyGPUSavings(gpuRec, costData)
+		for _, recs := range gpuRecs {
+			for _, gpuRec := range recs {
+				engine.ApplyGPUSavings(gpuRec, costData)
+			}
 		}
 
 		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
@@ -78,11 +86,15 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 		for _, idx := range indices {
 			r := &results[idx]
 			key := fmt.Sprintf("%s/%s/%s", r.Project, r.Workload, r.Container)
-			gpuRec, ok := gpuRecs[key]
-			if !ok || gpuRec == nil {
+			recs, ok := gpuRecs[key]
+			if !ok || len(recs) == 0 {
 				continue
 			}
-			r.GPU = toGPURecommendation(gpuRec)
+			gpuMap := make(map[string]*model.GPURecommendation, len(recs))
+			for _, rec := range recs {
+				gpuMap[rec.Term] = toGPURecommendation(rec)
+			}
+			r.GPU = gpuMap
 		}
 	}
 }
@@ -105,31 +117,44 @@ func filterGPUResults(results []model.NativeContainerResult, hasGPU *bool, gpuMo
 
 	filtered := make([]model.NativeContainerResult, 0, len(results))
 	for _, r := range results {
+		hasGPUField := len(r.GPU) > 0
 		if hasGPU != nil {
-			hasGPUField := r.GPU != nil
 			if *hasGPU != hasGPUField {
 				continue
 			}
 		}
 		if len(gpuModels) > 0 {
-			if r.GPU == nil {
+			if !hasGPUField {
 				continue
 			}
-			if !matchesAny(r.GPU.CurrentGPUModel, gpuModels) {
+			if !anyGPUTermMatches(r.GPU, func(g *model.GPURecommendation) bool {
+				return matchesAny(g.CurrentGPUModel, gpuModels)
+			}) {
 				continue
 			}
 		}
 		if len(gpuClassifications) > 0 {
-			if r.GPU == nil {
+			if !hasGPUField {
 				continue
 			}
-			if !matchesAny(r.GPU.GPUClassification, gpuClassifications) {
+			if !anyGPUTermMatches(r.GPU, func(g *model.GPURecommendation) bool {
+				return matchesAny(g.GPUClassification, gpuClassifications)
+			}) {
 				continue
 			}
 		}
 		filtered = append(filtered, r)
 	}
 	return filtered, len(filtered)
+}
+
+func anyGPUTermMatches(gpuMap map[string]*model.GPURecommendation, predicate func(*model.GPURecommendation) bool) bool {
+	for _, g := range gpuMap {
+		if predicate(g) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesAny(value string, candidates []string) bool {

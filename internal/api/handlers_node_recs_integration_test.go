@@ -163,7 +163,8 @@ func TestQueryGPURecommendations_ReturnsNodeMap(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	recs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end)
+	terms := engine.DefaultTerms()
+	recs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms)
 	require.NoError(t, err)
 	require.NotNil(t, recs)
 	require.NotNil(t, nodeMap)
@@ -205,7 +206,8 @@ func TestQueryGPURecommendations_NodeLastSeenTracksMax(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, _, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end)
+	terms := engine.DefaultTerms()
+	_, _, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms)
 	require.NoError(t, err)
 
 	ls := nodeLastSeen["shared-node"]
@@ -294,7 +296,7 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 	assert.LessOrEqual(t, nodeRec.RecommendedReplicas, 8)
 	assert.Greater(t, nodeRec.Confidence, float32(0))
 	assert.NotEmpty(t, nodeRec.CandidateContainers)
-	assert.Contains(t, nodeRec.NotificationCodes, int16(29))
+	assert.Contains(t, nodeRec.NotificationCodes, engine.NotifGPUTimeSharingCandidate)
 }
 
 func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {

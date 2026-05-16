@@ -14,11 +14,12 @@ const (
 	maxReplicas                  = 8
 )
 
-// TimeslicingRec holds the time-slicing recommendation for a single node × GPU model.
+// TimeslicingRec holds the time-slicing recommendation for a single node × GPU model × term.
 type TimeslicingRec struct {
 	NodeName            string
 	ClusterUUID         string
 	GPUModel            string
+	Term                string
 	RecommendedReplicas int
 	SavingsPerGPU       *float32
 	TotalNodeSavings    *float32
@@ -38,11 +39,12 @@ type GPUContainerRef struct {
 }
 
 // NodeGPUGroup is the input to ComputeNodeTimeslicingRec: all GPU containers
-// on the same node with the same GPU model.
+// on the same node with the same GPU model within a single term.
 type NodeGPUGroup struct {
 	NodeName    string
 	ClusterUUID string
 	GPUModel    string
+	Term        string
 	LastSeen    time.Time
 	Containers  []NodeGPUContainer
 }
@@ -200,6 +202,7 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32) *Timeslicin
 		NodeName:            group.NodeName,
 		ClusterUUID:         group.ClusterUUID,
 		GPUModel:            group.GPUModel,
+		Term:                group.Term,
 		RecommendedReplicas: replicas,
 		SavingsPerGPU:       perGPU,
 		TotalNodeSavings:    totalSavings,

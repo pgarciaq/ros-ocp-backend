@@ -10,17 +10,23 @@ import (
 func makeTestResults() []model.NativeContainerResult {
 	return []model.NativeContainerResult{
 		{Container: "no-gpu", GPU: nil},
-		{Container: "a100-idle", GPU: &model.GPURecommendation{
-			CurrentGPUModel:   "NVIDIA A100-SXM4-80GB",
-			GPUClassification: "idle",
+		{Container: "a100-idle", GPU: map[string]*model.GPURecommendation{
+			"medium": {
+				CurrentGPUModel:   "NVIDIA A100-SXM4-80GB",
+				GPUClassification: "idle",
+			},
 		}},
-		{Container: "t4-underutil", GPU: &model.GPURecommendation{
-			CurrentGPUModel:   "Tesla T4",
-			GPUClassification: "underutilized",
+		{Container: "t4-underutil", GPU: map[string]*model.GPURecommendation{
+			"medium": {
+				CurrentGPUModel:   "Tesla T4",
+				GPUClassification: "underutilized",
+			},
 		}},
-		{Container: "h100-well", GPU: &model.GPURecommendation{
-			CurrentGPUModel:   "NVIDIA H100",
-			GPUClassification: "well_utilized",
+		{Container: "h100-well", GPU: map[string]*model.GPURecommendation{
+			"medium": {
+				CurrentGPUModel:   "NVIDIA H100",
+				GPUClassification: "well_utilized",
+			},
 		}},
 	}
 }
@@ -38,7 +44,7 @@ func TestFilterGPUResults_HasGPU_True(t *testing.T) {
 	out, count := filterGPUResults(results, &yes, nil, nil)
 	assert.Equal(t, 3, count)
 	for _, r := range out {
-		assert.NotNil(t, r.GPU)
+		assert.NotEmpty(t, r.GPU)
 	}
 }
 
