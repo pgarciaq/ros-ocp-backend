@@ -13,6 +13,13 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
+const maxPgxBatchQueue = 500
+
+// pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
+type pgxBatchSender interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+}
+
 type containerKey struct {
 	Namespace     string
 	Workload      string
@@ -147,54 +154,54 @@ func RecommendAllWorkloads(
 					memCfg.OOMMaxBump = 1.0
 				}
 
-			cpuRec := RecommendCPU(windowRows, cpuCfg)
-			memRec := RecommendMemory(windowRows, memCfg)
-			abandoned := DetectAbandoned(windowRows)
+				cpuRec := RecommendCPU(windowRows, cpuCfg)
+				memRec := RecommendMemory(windowRows, memCfg)
+				abandoned := DetectAbandoned(windowRows)
 
-			var recCPUReq, recCPULim, recMemReq, recMemLim int64
-			if profile == "performance" {
-				recCPUReq = cpuRec.PerfRequestMC
-				recCPULim = cpuRec.PerfLimitMC
-				recMemReq = memRec.PerfRequestKiB
-				recMemLim = memRec.PerfLimitKiB
-			} else {
-				recCPUReq = cpuRec.CostRequestMC
-				recCPULim = cpuRec.CostLimitMC
-				recMemReq = memRec.CostRequestKiB
-				recMemLim = memRec.CostLimitKiB
-			}
+				var recCPUReq, recCPULim, recMemReq, recMemLim int64
+				if profile == "performance" {
+					recCPUReq = cpuRec.PerfRequestMC
+					recCPULim = cpuRec.PerfLimitMC
+					recMemReq = memRec.PerfRequestKiB
+					recMemLim = memRec.PerfLimitKiB
+				} else {
+					recCPUReq = cpuRec.CostRequestMC
+					recCPULim = cpuRec.CostLimitMC
+					recMemReq = memRec.CostRequestKiB
+					recMemLim = memRec.CostLimitKiB
+				}
 
-			rec := ContainerRec{
-				OrgID:                orgID,
-				ClusterUUID:          clusterUUID,
-				Namespace:            key.Namespace,
-				Workload:             key.Workload,
-				WorkloadType:         key.WorkloadType,
-				ContainerName:        key.ContainerName,
-				Term:                 tc.Name,
-				Engine:               profile,
-				RecCPURequestMC:      recCPUReq,
-				RecCPULimitMC:        recCPULim,
-				RecMemRequestKiB:     recMemReq,
-				RecMemLimitKiB:       recMemLim,
-				CurrentCPURequestMC:  currentCPUReqMC,
-				CurrentCPULimitMC:    currentCPULimMC,
-				CurrentMemRequestKiB: currentMemReqKiB,
-				CurrentMemLimitKiB:   currentMemLimKiB,
-				ConfidenceLevel:      confidence,
-				CPUTrendSlope:        cpuRec.TrendSlope,
-				MemTrendSlope:        memRec.TrendSlope,
-				IsIdle:               cpuRec.IsIdle,
-				IsAbandoned:          abandoned,
-				OOMCountSum:          oomTotal,
-				DataDays:             dataDays,
-				Stale:                stale,
-				PodCountMin:          pcMin,
-				PodCountMax:          pcMax,
-				PodCountAvg:          pcAvg,
-				DesiredReplicas:      desiredReplicas,
-				AvailableReplicas:    availableReplicas,
-			}
+				rec := ContainerRec{
+					OrgID:                orgID,
+					ClusterUUID:          clusterUUID,
+					Namespace:            key.Namespace,
+					Workload:             key.Workload,
+					WorkloadType:         key.WorkloadType,
+					ContainerName:        key.ContainerName,
+					Term:                 tc.Name,
+					Engine:               profile,
+					RecCPURequestMC:      recCPUReq,
+					RecCPULimitMC:        recCPULim,
+					RecMemRequestKiB:     recMemReq,
+					RecMemLimitKiB:       recMemLim,
+					CurrentCPURequestMC:  currentCPUReqMC,
+					CurrentCPULimitMC:    currentCPULimMC,
+					CurrentMemRequestKiB: currentMemReqKiB,
+					CurrentMemLimitKiB:   currentMemLimKiB,
+					ConfidenceLevel:      confidence,
+					CPUTrendSlope:        cpuRec.TrendSlope,
+					MemTrendSlope:        memRec.TrendSlope,
+					IsIdle:               cpuRec.IsIdle,
+					IsAbandoned:          abandoned,
+					OOMCountSum:          oomTotal,
+					DataDays:             dataDays,
+					Stale:                stale,
+					PodCountMin:          pcMin,
+					PodCountMax:          pcMax,
+					PodCountAvg:          pcAvg,
+					DesiredReplicas:      desiredReplicas,
+					AvailableReplicas:    availableReplicas,
+				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
@@ -209,16 +216,38 @@ func RecommendAllWorkloads(
 	return results, nil
 }
 
+func flushRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, n int) error {
+	br := sender.SendBatch(ctx, batch)
+	defer br.Close()
+	for range n {
+		if _, err := br.Exec(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // WriteRecommendations batch-upserts ContainerRec results into recommendation_sets.
 func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
 	if len(recs) == 0 {
 		return nil
 	}
 
-	batch := &pgx.Batch{}
-	for _, r := range recs {
-		containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName)
-		batch.Queue(`
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for recommendations: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		batch := &pgx.Batch{}
+		for _, r := range recs[chunkStart:chunkEnd] {
+			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName)
+			batch.Queue(`
 			INSERT INTO recommendation_sets (
 				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				term, engine, container_id,
@@ -259,28 +288,26 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
-			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-			r.Term, r.Engine, containerID,
-			r.RecCPURequestMC, r.RecCPULimitMC,
-			r.RecMemRequestKiB, r.RecMemLimitKiB,
-			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
-			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationCPULimitPct,
-			r.VariationMemRequestPct, r.VariationMemLimitPct,
-			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
-			r.PodCountMin, r.PodCountMax, r.PodCountAvg,
-			r.DesiredReplicas, r.AvailableReplicas,
-			r.EstimatedSavingsUSD,
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range recs {
-		if _, err := br.Exec(); err != nil {
+				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+				r.Term, r.Engine, containerID,
+				r.RecCPURequestMC, r.RecCPULimitMC,
+				r.RecMemRequestKiB, r.RecMemLimitKiB,
+				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+				r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+				r.VariationCPURequestPct, r.VariationCPULimitPct,
+				r.VariationMemRequestPct, r.VariationMemLimitPct,
+				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
+				r.DesiredReplicas, r.AvailableReplicas,
+				r.EstimatedSavingsUSD,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("batch exec: %w", err)
 		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit recommendations tx: %w", err)
 	}
 	return nil
 }

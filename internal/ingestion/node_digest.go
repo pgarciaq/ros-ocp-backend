@@ -163,21 +163,42 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 
 	EnsureNodeDigestPartitions(ctx, pool, accumulators)
 
-	batch := &pgx.Batch{}
-	for key, acc := range accumulators {
-		cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+	type nodeDigestEntry struct {
+		key NodeDayKey
+		acc *NodeDayAccumulator
+	}
+	entries := make([]nodeDigestEntry, 0, len(accumulators))
+	for k, acc := range accumulators {
+		entries = append(entries, nodeDigestEntry{key: k, acc: acc})
+	}
 
-		var allocCPU, allocMem *int64
-		if acc.MaxCPUCapacityMC > 0 {
-			v := int64(float64(acc.MaxCPUCapacityMC) * allocatableFactor)
-			allocCPU = &v
-		}
-		if acc.MaxMemCapacityKiB > 0 {
-			v := int64(float64(acc.MaxMemCapacityKiB) * allocatableFactor)
-			allocMem = &v
-		}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for node digests: %w", err)
+	}
+	defer tx.Rollback(ctx)
 
-		batch.Queue(`
+	for chunkStart := 0; chunkStart < len(entries); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(entries) {
+			chunkEnd = len(entries)
+		}
+		batch := &pgx.Batch{}
+		for _, ent := range entries[chunkStart:chunkEnd] {
+			key, acc := ent.key, ent.acc
+			cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+
+			var allocCPU, allocMem *int64
+			if acc.MaxCPUCapacityMC > 0 {
+				v := int64(float64(acc.MaxCPUCapacityMC) * allocatableFactor)
+				allocCPU = &v
+			}
+			if acc.MaxMemCapacityKiB > 0 {
+				v := int64(float64(acc.MaxMemCapacityKiB) * allocatableFactor)
+				allocMem = &v
+			}
+
+			batch.Queue(`
 			INSERT INTO daily_node_digests (
 				bucket_date, org_id, cluster_uuid, node,
 				cpu_usage_p50_mc, cpu_usage_p95_mc,
@@ -198,20 +219,19 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 				max_mem_requests_kib = EXCLUDED.max_mem_requests_kib,
 				max_pod_count = EXCLUDED.max_pod_count,
 				sample_count = EXCLUDED.sample_count`,
-			key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
-			cpuP50, cpuP95, memP50, memP95,
-			allocCPU, allocMem,
-			maxCPUReq, maxMemReq, maxPods, sampleCount,
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range accumulators {
-		if _, err := br.Exec(); err != nil {
+				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
+				cpuP50, cpuP95, memP50, memP95,
+				allocCPU, allocMem,
+				maxCPUReq, maxMemReq, maxPods, sampleCount,
+			)
+		}
+		if err := flushQueuedBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert node digest: %w", err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit node digests tx: %w", err)
 	}
 
 	log.Infof("FlushNodeDigests: upserted %d node digests for org=%s cluster=%s",

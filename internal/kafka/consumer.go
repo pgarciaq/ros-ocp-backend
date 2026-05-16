@@ -22,12 +22,10 @@ func StartConsumer(kafka_topic string, handler func(msg *kafka.Message, consumer
 		log.Errorf("Unleash Error: %v", err)
 	}
 
-	// Fetch and validate auto_commit_option value
-	var auto_commit bool
-	if len(auto_commit_option) > 0 && !auto_commit_option[0] {
+	// enable.auto.commit: default from config; optional arg overrides (e.g. poller passes false).
+	auto_commit := cfg.KafkaAutoCommit
+	if len(auto_commit_option) > 0 {
 		auto_commit = auto_commit_option[0]
-	} else {
-		auto_commit = cfg.KafkaAutoCommit
 	}
 
 	sigchan := make(chan os.Signal, 1)
