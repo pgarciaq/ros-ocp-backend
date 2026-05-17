@@ -44,16 +44,126 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 	})
 	require.NoError(t, err)
 
+	// Minimal schemas matching production PRIMARY KEY columns used by cleanupClusterAnalytics
+	// (PK-batched DELETE references full composite keys — see sourcesCleaner.go).
 	ddls := []string{
-		`CREATE TABLE daily_container_digests (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE daily_namespace_digests (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE daily_pvc_digests (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE daily_node_digests (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE gpu_container_digests (cluster_uuid uuid)`,
-		`CREATE TABLE recommendation_sets (org_id text, cluster_uuid text)`,
-		`CREATE TABLE snapshot_inventory (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE snapshot_recommendation_sets (org_id text, cluster_uuid uuid)`,
-		`CREATE TABLE node_recommendations (org_id text, cluster_uuid uuid)`,
+		`CREATE TABLE daily_container_digests (
+			bucket_date DATE NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+		)`,
+		`CREATE TABLE daily_namespace_digests (
+			bucket_date DATE NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, bucket_date)
+		)`,
+		`CREATE TABLE daily_pvc_digests (
+			id BIGSERIAL,
+			bucket_date DATE NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			persistentvolumeclaim TEXT NOT NULL,
+			PRIMARY KEY (id, bucket_date)
+		)`,
+		`CREATE TABLE daily_node_digests (
+			bucket_date DATE NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			node TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, node, bucket_date)
+		)`,
+		`CREATE TABLE gpu_container_digests (
+			id BIGSERIAL,
+			interval_start TIMESTAMP NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			PRIMARY KEY (id, interval_start)
+		)`,
+		`CREATE TABLE container_usage_samples (
+			sample_time TIMESTAMPTZ NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, sample_time)
+		)`,
+		`CREATE TABLE namespace_usage_samples (
+			sample_time TIMESTAMPTZ NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, sample_time)
+		)`,
+		`CREATE TABLE recommendation_quality (
+			measured_at TIMESTAMPTZ NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, measured_at)
+		)`,
+		`CREATE TABLE recommendation_history (
+			recorded_at TIMESTAMPTZ NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			term TEXT NOT NULL,
+			engine TEXT NOT NULL,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, term, engine, recorded_at)
+		)`,
+		`CREATE TABLE pvc_recommendation_sets (
+			id BIGSERIAL PRIMARY KEY,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL DEFAULT 'ns',
+			persistentvolumeclaim TEXT NOT NULL DEFAULT 'pvc'
+		)`,
+		`CREATE TABLE recommendation_sets (
+			org_id TEXT NOT NULL,
+			cluster_uuid TEXT NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			term TEXT NOT NULL DEFAULT 'short',
+			engine TEXT NOT NULL DEFAULT 'cost',
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
+		)`,
+		`CREATE TABLE snapshot_inventory (
+			id BIGSERIAL PRIMARY KEY,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL DEFAULT 'ns',
+			snapshot_name TEXT NOT NULL DEFAULT 'snap',
+			creation_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE snapshot_recommendation_sets (
+			id BIGSERIAL PRIMARY KEY,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL DEFAULT 'ns',
+			snapshot_name TEXT NOT NULL DEFAULT 'snap',
+			creation_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE node_recommendations (
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			node TEXT NOT NULL,
+			term TEXT NOT NULL DEFAULT 'medium',
+			PRIMARY KEY (org_id, cluster_uuid, node, term)
+		)`,
 	}
 	for _, ddl := range ddls {
 		require.NoError(t, gdb.Exec(ddl).Error)
@@ -82,15 +192,21 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	exec := func(sql string, args ...any) {
 		require.NoError(t, gdb.Exec(sql, args...).Error)
 	}
-	exec(`INSERT INTO daily_container_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO daily_namespace_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO daily_pvc_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO daily_node_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO gpu_container_digests (cluster_uuid) VALUES (?::uuid)`, cluster)
-	exec(`INSERT INTO recommendation_sets (org_id, cluster_uuid) VALUES (?, ?)`, org, cluster)
+	const testDigestDay = "2026-01-01"
+	exec(`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay, org, cluster)
+	exec(`INSERT INTO daily_namespace_digests (bucket_date, org_id, cluster_uuid, namespace) VALUES (?::date, ?, ?::uuid, 'ns')`, testDigestDay, org, cluster)
+	exec(`INSERT INTO daily_pvc_digests (bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim) VALUES (?::date, ?, ?::uuid, 'ns', 'pvc')`, testDigestDay, org, cluster)
+	exec(`INSERT INTO daily_node_digests (bucket_date, org_id, cluster_uuid, node) VALUES (?::date, ?, ?::uuid, 'node1')`, testDigestDay, org, cluster)
+	exec(`INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", cluster)
+	exec(`INSERT INTO container_usage_samples (sample_time, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO namespace_usage_samples (sample_time, org_id, cluster_uuid, namespace) VALUES (?::timestamptz, ?, ?::uuid, 'ns')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
+	exec(`INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, container_name, term, engine) VALUES (?, ?, 'ns', 'wl', 'ctr', 'short', 'cost')`, org, cluster)
 	exec(`INSERT INTO snapshot_inventory (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
 	exec(`INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO node_recommendations (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
+	exec(`INSERT INTO node_recommendations (org_id, cluster_uuid, node, term) VALUES (?, ?::uuid, 'node1', 'medium')`, org, cluster)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
 
@@ -99,6 +215,11 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_pvc_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_node_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "cluster_uuid = ?::uuid", cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "container_usage_samples", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "namespace_usage_samples", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_quality", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_history", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "pvc_recommendation_sets", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_sets", "org_id = ? AND cluster_uuid = ?", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "snapshot_inventory", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "snapshot_recommendation_sets", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
@@ -113,8 +234,8 @@ func TestCleanupClusterAnalytics_BatchingDeletesLargeReplica(t *testing.T) {
 	cluster := uuid.New().String()
 
 	require.NoError(t, gdb.Exec(`
-		INSERT INTO gpu_container_digests (cluster_uuid)
-		SELECT ?::uuid FROM generate_series(1, ?)`, cluster, analyticsCleanupBatchSize*2+7).Error)
+		INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name)
+		SELECT NOW(), ?::uuid, 'ns', 'wl', 'ctr' FROM generate_series(1, ?)`, cluster, analyticsCleanupBatchSize*2+7).Error)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
 
@@ -131,9 +252,9 @@ func TestCleanupClusterAnalytics_ScopedToOrgAndCluster(t *testing.T) {
 	clusterDel := uuid.New().String()
 
 	require.NoError(t, gdb.Exec(
-		`INSERT INTO daily_container_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, orgKeep, clusterKeep).Error)
+		`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01'::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgKeep, clusterKeep).Error)
 	require.NoError(t, gdb.Exec(
-		`INSERT INTO daily_container_digests (org_id, cluster_uuid) VALUES (?, ?::uuid)`, orgDel, clusterDel).Error)
+		`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01'::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgDel, clusterDel).Error)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, orgDel, clusterDel))
 

@@ -517,10 +517,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusOK, detail)
 	}
 
-	return c.JSON(http.StatusNotFound, echo.Map{
-		"status":  "error",
-		"message": fmt.Sprintf("recommendation %s not found", idStr),
-	})
+	return serveLegacyDetail(c, OrgID, idStr, userPerms)
 }
 
 func serveNativeList(c echo.Context, results []model.NativeContainerResult, count int, opts listoptions.ListOptions) error {
@@ -855,9 +852,10 @@ func GetReadyz(c echo.Context) error {
 		})
 	}
 	if err := pool.Ping(ctx); err != nil {
+		log.Warnf("readyz: database ping failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status": "error",
-			"checks": echo.Map{"database": err.Error()},
+			"checks": echo.Map{"database": "unavailable"},
 		})
 	}
 	return c.JSON(http.StatusOK, echo.Map{

@@ -453,7 +453,7 @@ func sortNodeRecs(recs []model.NodeGPURecommendation, orderBy, orderHow string) 
 		switch orderBy {
 		case "cluster_uuid":
 			return recs[i].ClusterUUID < recs[j].ClusterUUID
-		case "gpu_model":
+		case "gpu_model", "gpu_model_name":
 			return recs[i].GPUModel < recs[j].GPUModel
 		case "recommended_replicas":
 			return recs[i].RecommendedReplicas < recs[j].RecommendedReplicas

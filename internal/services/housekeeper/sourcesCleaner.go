@@ -80,10 +80,15 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		{"daily_pvc_digests", "daily_pvc_digests", []string{"id", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_node_digests", "daily_node_digests", []string{"org_id", "cluster_uuid", "node", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"gpu_container_digests", "gpu_container_digests", []string{"id", "interval_start"}, `cluster_uuid = ?::uuid`, []any{clusterUUID}},
+		{"container_usage_samples", "container_usage_samples", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "sample_time"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"namespace_usage_samples", "namespace_usage_samples", []string{"org_id", "cluster_uuid", "namespace", "sample_time"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"recommendation_quality", "recommendation_quality", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "measured_at"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"recommendation_history", "recommendation_history", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "term", "engine", "recorded_at"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"pvc_recommendation_sets", "pvc_recommendation_sets", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"recommendation_sets", "recommendation_sets", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "term", "engine"}, `org_id = ? AND cluster_uuid = ?`, []any{orgID, clusterUUID}},
 		{"snapshot_inventory", "snapshot_inventory", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"snapshot_recommendation_sets", "snapshot_recommendation_sets", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
-		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node", "term"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 	}
 	for _, step := range steps {
 		if err := deleteMatchingInBatches(db, step.name, step.table, step.pkCols, step.where, step.args, orgID, clusterUUID); err != nil {
