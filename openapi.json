@@ -1253,6 +1253,26 @@
         }
       }
     },
+    "/recommendations/openshift/gpu": {
+      "get": {
+        "tags": ["GPU Recommendations"],
+        "summary": "GPU recommendations summary",
+        "description": "Lightweight counts for MIG vs time-slicing listings, distinct GPU triples ever analyzed, and clusters with GPU digest data.",
+        "operationId": "getGpuRecommendationsSummary",
+        "responses": {
+          "200": {
+            "description": "GPU strategy and inventory summary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GPUSummaryResponse" }
+              }
+            }
+          },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable" }
+        }
+      }
+    },
     "/recommendations/openshift/gpu/timeslicing": {
       "get": {
         "tags": ["GPU Recommendations"],
@@ -3601,6 +3621,28 @@
           "container": { "type": "string" },
           "sm_active_avg": { "type": "number", "format": "float" },
           "classification": { "type": "string" }
+        }
+      },
+      "GPUSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "mig": { "$ref": "#/components/schemas/GPUStrategySummary" },
+          "timeslicing": { "$ref": "#/components/schemas/GPUStrategySummary" },
+          "total_gpus_analyzed": {
+            "type": "integer",
+            "description": "Distinct (cluster, node, GPU model) triples in gpu_container_digests for visible clusters"
+          },
+          "clusters_with_gpu_data": {
+            "type": "integer",
+            "description": "Distinct clusters with at least one gpu_container_digests row"
+          }
+        }
+      },
+      "GPUStrategySummary": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "link": { "type": "string", "description": "Relative URL path to the strategy listing endpoint" }
         }
       },
       "GPUMIGListResponse": {

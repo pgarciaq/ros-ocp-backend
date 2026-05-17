@@ -136,3 +136,37 @@ func GPUOrderColumnSupportsTriplePagination(orderByColumn string) bool {
 		return false
 	}
 }
+
+// CountOrgGPUClusterStats returns how many distinct clusters have rows in gpu_container_digests
+// and how many distinct (cluster_uuid, node_name, gpu_model_name) triples exist (no freshness filter).
+func CountOrgGPUClusterStats(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) (distinctClusters int, distinctTriples int, err error) {
+	if len(clusterUUIDs) == 0 {
+		return 0, 0, nil
+	}
+	qClusters := `
+SELECT COUNT(DISTINCT g.cluster_uuid)::int
+FROM gpu_container_digests g
+INNER JOIN clusters c ON c.cluster_uuid::text = g.cluster_uuid::text
+INNER JOIN rh_accounts ra ON ra.id = c.tenant_id
+WHERE ra.org_id = $1
+  AND g.cluster_uuid::text = ANY($2::text[])`
+	var dc int
+	if err := pool.QueryRow(ctx, qClusters, orgID, clusterUUIDs).Scan(&dc); err != nil {
+		return 0, 0, fmt.Errorf("count org GPU clusters: %w", err)
+	}
+
+	qTriples := `
+SELECT COUNT(*)::int FROM (
+  SELECT DISTINCT g.cluster_uuid, g.node_name, g.gpu_model_name
+  FROM gpu_container_digests g
+  INNER JOIN clusters c ON c.cluster_uuid::text = g.cluster_uuid::text
+  INNER JOIN rh_accounts ra ON ra.id = c.tenant_id
+  WHERE ra.org_id = $1
+    AND g.cluster_uuid::text = ANY($2::text[])
+) sub`
+	var dt int
+	if err := pool.QueryRow(ctx, qTriples, orgID, clusterUUIDs).Scan(&dt); err != nil {
+		return 0, 0, fmt.Errorf("count org GPU triples: %w", err)
+	}
+	return dc, dt, nil
+}

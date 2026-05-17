@@ -138,27 +138,33 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	})
 }
 
-func filterGPUMIGEntriesByRBAC(entries []model.GPUMIGRecommendationEntry, userPerms map[string][]string) []model.GPUMIGRecommendationEntry {
+// gpuMIGEntryRBACVisible reports whether a row scoped to nodeName is visible under openshift.node permissions.
+func gpuMIGEntryRBACVisible(nodeName string, userPerms map[string][]string) bool {
 	if !config.GetConfig().RBACEnabled {
-		return entries
+		return true
 	}
 	if _, ok := userPerms["*"]; ok {
-		return entries
+		return true
 	}
 	nodePerms, hasNode := userPerms["openshift.node"]
 	if !hasNode {
-		return entries
+		return true
 	}
 	if utils.StringInSlice("*", nodePerms) {
-		return entries
+		return true
 	}
-	allowed := make(map[string]bool, len(nodePerms))
 	for _, n := range nodePerms {
-		allowed[n] = true
+		if n == nodeName {
+			return true
+		}
 	}
+	return false
+}
+
+func filterGPUMIGEntriesByRBAC(entries []model.GPUMIGRecommendationEntry, userPerms map[string][]string) []model.GPUMIGRecommendationEntry {
 	filtered := make([]model.GPUMIGRecommendationEntry, 0, len(entries))
 	for _, e := range entries {
-		if allowed[e.NodeName] {
+		if gpuMIGEntryRBACVisible(e.NodeName, userPerms) {
 			filtered = append(filtered, e)
 		}
 	}
