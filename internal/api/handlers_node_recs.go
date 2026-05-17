@@ -507,8 +507,12 @@ func buildNodeLinks(req *http.Request, count, limit, offset int) model.NodeRecom
 		lastOffset = ((count - 1) / limit) * limit
 	}
 	links.Last = makeLink(lastOffset)
-	if offset >= limit {
-		links.Previous = makeLink(offset - limit)
+	if offset > 0 {
+		prev := offset - limit
+		if prev < 0 {
+			prev = 0
+		}
+		links.Previous = makeLink(prev)
 	}
 	if offset+limit < count {
 		links.Next = makeLink(offset + limit)
