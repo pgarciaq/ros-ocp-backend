@@ -164,7 +164,7 @@ func TestQueryGPURecommendations_ReturnsNodeMap(t *testing.T) {
 
 	ctx := context.Background()
 	terms := engine.DefaultTerms()
-	recs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms)
+	recs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms, nil)
 	require.NoError(t, err)
 	require.NotNil(t, recs)
 	require.NotNil(t, nodeMap)
@@ -207,7 +207,7 @@ func TestQueryGPURecommendations_NodeLastSeenTracksMax(t *testing.T) {
 
 	ctx := context.Background()
 	terms := engine.DefaultTerms()
-	_, _, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms)
+	_, _, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, testutil.TestClusterUUID, start, end, terms, nil)
 	require.NoError(t, err)
 
 	ls := nodeLastSeen["shared-node"]
