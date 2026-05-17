@@ -34,19 +34,32 @@ func gpuTripleOrderExpr(orderByColumn string, desc bool) string {
 	return fmt.Sprintf("%s %s NULLS LAST, g.cluster_uuid::text ASC, g.gpu_model_name ASC", col, dir)
 }
 
-// CountNodeGPUTriples returns the number of distinct (cluster, node, gpu_model) groups visible to the org.
-func CountNodeGPUTriples(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end time.Time, nodeContains, gpuContains string) (int, error) {
+// CountNodeGPUTriples returns the number of distinct (cluster, node, gpu_model) groups visible to the org,
+// after excluding nodes whose latest digest row is older than the GPU freshness window (aligned with ComputeNodeTimeslicingRec).
+func CountNodeGPUTriples(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string) (int, error) {
 	if len(clusterUUIDs) == 0 {
 		return 0, nil
 	}
 	startD := start.Format("2006-01-02")
 	endD := end.Format("2006-01-02")
+	cutoff := now.Add(-time.Duration(NodeGPUFreshnessDays) * 24 * time.Hour)
 	q := `
 SELECT COUNT(*) FROM (
   SELECT g.cluster_uuid, g.node_name, g.gpu_model_name
   FROM gpu_container_digests g
   INNER JOIN clusters c ON c.cluster_uuid::text = g.cluster_uuid::text
   INNER JOIN rh_accounts ra ON ra.id = c.tenant_id
+  INNER JOIN (
+    SELECT g3.cluster_uuid, g3.node_name
+    FROM gpu_container_digests g3
+    INNER JOIN clusters c3 ON c3.cluster_uuid::text = g3.cluster_uuid::text
+    INNER JOIN rh_accounts ra3 ON ra3.id = c3.tenant_id
+    WHERE ra3.org_id = $1
+      AND g3.interval_start >= $2::date AND g3.interval_start <= $3::date
+      AND g3.cluster_uuid::text = ANY($4::text[])
+    GROUP BY g3.cluster_uuid, g3.node_name
+    HAVING MAX(g3.interval_start) >= $7::timestamptz
+  ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
   WHERE ra.org_id = $1
     AND g.interval_start >= $2::date AND g.interval_start <= $3::date
     AND g.cluster_uuid::text = ANY($4::text[])
@@ -55,26 +68,39 @@ SELECT COUNT(*) FROM (
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
 ) sub`
 	var n int
-	err := pool.QueryRow(ctx, q, orgID, startD, endD, clusterUUIDs, nodeContains, gpuContains).Scan(&n)
+	err := pool.QueryRow(ctx, q, orgID, startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count node GPU triples: %w", err)
 	}
 	return n, nil
 }
 
-// ListNodeGPUTriplesPage returns one page of distinct (cluster, node, gpu_model) keys.
-func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end time.Time, nodeContains, gpuContains string, orderByColumn string, orderDesc bool, limit, offset int) ([]NodeGPUTriple, error) {
+// ListNodeGPUTriplesPage returns one page of distinct (cluster, node, gpu_model) keys
+// after excluding nodes outside the GPU freshness window (see CountNodeGPUTriples).
+func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string, orderByColumn string, orderDesc bool, limit, offset int) ([]NodeGPUTriple, error) {
 	if len(clusterUUIDs) == 0 {
 		return nil, nil
 	}
 	orderSQL := gpuTripleOrderExpr(orderByColumn, orderDesc)
 	startD := start.Format("2006-01-02")
 	endD := end.Format("2006-01-02")
+	cutoff := now.Add(-time.Duration(NodeGPUFreshnessDays) * 24 * time.Hour)
 	q := `
 SELECT g.cluster_uuid::text, g.node_name, g.gpu_model_name
 FROM gpu_container_digests g
 INNER JOIN clusters c ON c.cluster_uuid::text = g.cluster_uuid::text
 INNER JOIN rh_accounts ra ON ra.id = c.tenant_id
+INNER JOIN (
+  SELECT g3.cluster_uuid, g3.node_name
+  FROM gpu_container_digests g3
+  INNER JOIN clusters c3 ON c3.cluster_uuid::text = g3.cluster_uuid::text
+  INNER JOIN rh_accounts ra3 ON ra3.id = c3.tenant_id
+  WHERE ra3.org_id = $1
+    AND g3.interval_start >= $2::date AND g3.interval_start <= $3::date
+    AND g3.cluster_uuid::text = ANY($4::text[])
+  GROUP BY g3.cluster_uuid, g3.node_name
+  HAVING MAX(g3.interval_start) >= $7::timestamptz
+) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
 WHERE ra.org_id = $1
   AND g.interval_start >= $2::date AND g.interval_start <= $3::date
   AND g.cluster_uuid::text = ANY($4::text[])
@@ -82,9 +108,9 @@ WHERE ra.org_id = $1
   AND ($6::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($6)) > 0)
 GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
 ORDER BY ` + orderSQL + `
-LIMIT $7 OFFSET $8`
+LIMIT $8 OFFSET $9`
 
-	rows, err := pool.Query(ctx, q, orgID, startD, endD, clusterUUIDs, nodeContains, gpuContains, limit, offset)
+	rows, err := pool.Query(ctx, q, orgID, startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list node GPU triples page: %w", err)
 	}

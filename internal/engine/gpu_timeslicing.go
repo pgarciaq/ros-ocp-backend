@@ -7,7 +7,9 @@ const (
 	// GPU time-slicing is recommended. Code 36 (code 29 is NotifPVCOversized).
 	NotifGPUTimeSharingCandidate int16 = 36
 
-	nodeFreshnessDays             = 7
+	// NodeGPUFreshnessDays is the maximum age of the latest node telemetry (from gpu_container_digests)
+	// for node-level time-slicing recommendations. Matches ComputeNodeTimeslicingRec stale-node exclusion.
+	NodeGPUFreshnessDays int = 7
 	timeslicingBasePenalty        = float32(0.7)
 	impactedContainerPenaltyWt   = float32(0.3)
 	minReplicas                  = 2
@@ -149,7 +151,7 @@ func avgCandidateUtilization(candidates []NodeGPUContainer, totalFBMiB float32) 
 
 // isNodeFresh returns true if the node was seen within the freshness window.
 func isNodeFresh(lastSeen, now time.Time) bool {
-	return now.Sub(lastSeen) <= time.Duration(nodeFreshnessDays)*24*time.Hour
+	return now.Sub(lastSeen) <= time.Duration(NodeGPUFreshnessDays)*24*time.Hour
 }
 
 // ComputeNodeTimeslicingRec produces a time-slicing recommendation for a single

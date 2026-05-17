@@ -1681,17 +1681,17 @@
         }
       }
     },
-    "/recommendations/openshift/nodes": {
+    "/recommendations/openshift/gpu/timeslicing": {
       "get": {
         "tags": ["GPU Recommendations"],
-        "summary": "Get node-level GPU time-slicing recommendations",
+        "summary": "Get GPU time-slicing recommendations (node level)",
         "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing.",
-        "operationId": "getNodeRecommendations",
+        "operationId": "getGpuTimeslicingRecommendations",
         "parameters": [
           {
             "name": "node_name",
             "in": "query",
-            "description": "Filter by node name (case-insensitive substring match)",
+            "description": "Filter by node name (case-insensitive exact match)",
             "required": false,
             "schema": { "type": "string" }
           },
@@ -1741,7 +1741,172 @@
             }
           },
           "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "503": { "description": "Service unavailable" }
+        }
+      }
+    },
+    "/recommendations/openshift/gpu/mig": {
+      "get": {
+        "tags": ["GPU Recommendations"],
+        "summary": "List MIG GPU profile recommendations",
+        "description": "Returns container-level rows where the recommended GPU profile is a MIG slice (not `full_gpu`). Useful for focusing on MIG right-sizing without filtering the full container recommendation list.",
+        "operationId": "getGpuMigRecommendations",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 1000 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sort field (applied in memory)",
+            "required": false,
+            "schema": { "type": "string", "default": "cluster_uuid", "enum": ["cluster_uuid", "namespace", "workload", "container", "term", "gpu_model", "confidence"] }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "desc", "enum": ["asc", "desc"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MIG-focused GPU recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GPUMIGListResponse" }
+              }
+            }
+          },
+          "400": { "description": "Bad request" },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable" }
+        }
+      }
+    },
+    "/recommendations/openshift/nodes": {
+      "get": {
+        "tags": ["Node Recommendations"],
+        "summary": "Get node CPU and memory utilization recommendations",
+        "description": "Returns Tier-1 node utilization recommendations: CPU/memory p50/p95, overcommit ratio, underutilized / overcommitted flags, stranded-resource hints, and trend slope.",
+        "operationId": "getNodeUtilizationRecommendations",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "is_underutilized",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["true", "false"] }
+          },
+          {
+            "name": "is_overcommitted",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["true", "false"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 10, "minimum": 1, "maximum": 1000 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node utilization recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NodeUtilizationListResponse" }
+              }
+            }
+          },
+          "400": { "description": "Bad request" },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable" }
+        }
+      }
+    },
+    "/recommendations/openshift/nodes/utilization": {
+      "get": {
+        "tags": ["Node Recommendations"],
+        "summary": "Get node utilization recommendations (deprecated)",
+        "deprecated": true,
+        "description": "Deprecated alias for `GET /recommendations/openshift/nodes`. Use the canonical `/nodes` path. Responses may include `Deprecation: true` and a warning in the JSON body.",
+        "operationId": "getNodeUtilizationRecommendationsDeprecated",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "is_underutilized",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["true", "false"] }
+          },
+          {
+            "name": "is_overcommitted",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["true", "false"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 10, "minimum": 1, "maximum": 1000 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node utilization recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NodeUtilizationListResponse" }
+              }
+            }
+          },
+          "400": { "description": "Bad request" },
+          "401": { "description": "User is not authorized" },
+          "503": { "description": "Service unavailable" }
         }
       }
     },
@@ -3949,6 +4114,91 @@
           "container": { "type": "string" },
           "sm_active_avg": { "type": "number", "format": "float" },
           "classification": { "type": "string" }
+        }
+      },
+      "GPUMIGListResponse": {
+        "type": "object",
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/GPUMIGListMeta" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GPUMIGRecommendationEntry" }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "GPUMIGListMeta": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" }
+        }
+      },
+      "GPUMIGRecommendationEntry": {
+        "type": "object",
+        "properties": {
+          "cluster_uuid": { "type": "string" },
+          "namespace": { "type": "string" },
+          "workload": { "type": "string" },
+          "container": { "type": "string" },
+          "term": { "type": "string" },
+          "gpu_model": { "type": "string" },
+          "node_name": { "type": "string" },
+          "recommended_gpu_profile": { "type": "string" },
+          "current_gpu_profile": { "type": "string" },
+          "gpu_classification": { "type": "string" },
+          "confidence": { "type": "number", "format": "float" }
+        }
+      },
+      "NodeUtilizationListResponse": {
+        "type": "object",
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/NodeUtilizationMeta" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NodeUtilizationRec" }
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "nullable": true }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "NodeUtilizationMeta": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" }
+        }
+      },
+      "NodeUtilizationRec": {
+        "type": "object",
+        "properties": {
+          "node": { "type": "string" },
+          "cluster_uuid": { "type": "string" },
+          "term": { "type": "string" },
+          "cpu_utilization_p50": { "type": "number", "format": "float" },
+          "cpu_utilization_p95": { "type": "number", "format": "float" },
+          "memory_utilization_p50": { "type": "number", "format": "float" },
+          "memory_utilization_p95": { "type": "number", "format": "float" },
+          "cpu_overcommit_ratio": { "type": "number", "format": "float" },
+          "is_underutilized": { "type": "boolean" },
+          "is_overcommitted": { "type": "boolean" },
+          "stranded_resource": { "type": "string", "nullable": true },
+          "pod_count": { "type": "integer", "format": "int64" },
+          "trend_slope": { "type": "number", "format": "float" },
+          "recommendation_type": { "type": "string", "example": "cpu_memory_utilization" },
+          "notifications": { "type": "object", "additionalProperties": true },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
       "FleetSummaryResponse": {

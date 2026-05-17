@@ -66,7 +66,7 @@ func setupNodeRecsEcho(pool *pgxpool.Pool) *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
-	v1.GET("/recommendations/openshift/nodes", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
 	return app
 }
 
@@ -232,7 +232,7 @@ func TestGetNodeRecommendations_Empty(t *testing.T) {
 	require.NoError(t, err)
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -251,7 +251,7 @@ func TestGetNodeRecommendations_Unauthorized(t *testing.T) {
 	defer func() { database.Pool = nil }()
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 
@@ -277,7 +277,7 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-t4-worker-1")
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -334,7 +334,7 @@ func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
 	app := setupNodeRecsEcho(pool)
 
 	t.Run("orgA sees its cluster data", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgA))
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
@@ -349,7 +349,7 @@ func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
 	})
 
 	t.Run("orgB sees nothing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgB))
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
@@ -395,7 +395,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 	app := setupNodeRecsEcho(pool)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?node_name=target-node", nil)
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?node_name=target-node", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -442,7 +442,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	app := setupNodeRecsEcho(pool)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?gpu_model=L4", nil)
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?gpu_model=L4", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -456,7 +456,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	}
 }
 
-// --- RBAC integration tests for /nodes endpoint ---
+// --- RBAC integration tests for GPU time-slicing (/gpu/timeslicing) endpoint ---
 
 // setupNodeRecsEchoWithRBAC creates an Echo app with the Identity middleware
 // and a custom middleware that injects the given RBAC permissions. RBAC is
@@ -477,7 +477,7 @@ func setupNodeRecsEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[strin
 			return next(c)
 		}
 	})
-	v1.GET("/recommendations/openshift/nodes", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
 	return app
 }
 
@@ -532,7 +532,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 		"openshift.node":    {"*"},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -583,7 +583,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByNode(t *testing.T) {
 		"openshift.node":    {"allowed-node"},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -611,7 +611,7 @@ func TestGetNodeRecommendations_RBAC_ClusterAndNodeCombined(t *testing.T) {
 		"openshift.node":    {"gpu-node-c1"},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -640,7 +640,7 @@ func TestGetNodeRecommendations_RBAC_GlobalWildcard(t *testing.T) {
 		"*": {},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -676,7 +676,7 @@ func TestGetNodeRecommendations_PaginationMeta(t *testing.T) {
 	seedGPUNodesForTimeslicing(t, pool, start, 7, "pag-node-1")
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?limit=5&offset=0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?limit=5&offset=0", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -723,7 +723,7 @@ func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
 	}
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?order_by=confidence&order_how=asc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=confidence&order_how=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -745,7 +745,7 @@ func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {
 	defer func() { database.Pool = nil }()
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?order_by=invalid_field", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=invalid_field", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -769,7 +769,7 @@ func TestGetNodeRecommendations_OffsetBeyondResults(t *testing.T) {
 	seedGPUNodesForTimeslicing(t, pool, start, 7, "off-node-1")
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?offset=1000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?offset=1000", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -779,4 +779,108 @@ func TestGetNodeRecommendations_OffsetBeyondResults(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Greater(t, resp.Meta.Count, 0, "count should reflect total, not paged data")
 	assert.Empty(t, resp.Data, "data should be empty when offset exceeds total")
+}
+
+func setupNativeRecommendationRoutesEcho() *echo.Echo {
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/mig", api.GetGPUMIGRecommendations)
+	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
+	v1.GET("/recommendations/openshift/nodes/utilization", api.GetNodeUtilizationRecsLegacyPath)
+	return app
+}
+
+func TestRecommendationRoutes_Unauthorized(t *testing.T) {
+	paths := []string{
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing",
+		"/api/cost-management/v1/recommendations/openshift/gpu/mig",
+		"/api/cost-management/v1/recommendations/openshift/nodes",
+		"/api/cost-management/v1/recommendations/openshift/nodes/utilization",
+	}
+	for _, p := range paths {
+		t.Run(p, func(t *testing.T) {
+			app := setupNativeRecommendationRoutesEcho()
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusUnauthorized, rec.Code)
+		})
+	}
+}
+
+func TestGetNodeUtilization_CanonicalPath_ReturnsCPURecommendationType(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	defer func() { database.Pool = nil }()
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'n-cluster', 'src-nu', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'worker-1', 'medium',
+			0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.Data)
+	assert.Equal(t, "cpu_memory_utilization", resp.Data[0].RecommendationType)
+	assert.Empty(t, rec.Header().Get("Deprecation"))
+}
+
+func TestGetNodeUtilization_DeprecatedAlias_WarningAndDeprecationHeader(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	defer func() { database.Pool = nil }()
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'n-cluster-d', 'src-nud', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'worker-dep', 'medium',
+			0.05, 0.1, 0.1, 0.15, 1.0, false, false, NULL, 2, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes/utilization", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "true", rec.Header().Get("Deprecation"))
+	assert.Contains(t, rec.Header().Get("Link"), "/recommendations/openshift/nodes")
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.Warnings)
+	assert.Contains(t, resp.Warnings[0], "deprecated")
+	require.NotEmpty(t, resp.Data)
+	assert.Equal(t, "cpu_memory_utilization", resp.Data[0].RecommendationType)
 }

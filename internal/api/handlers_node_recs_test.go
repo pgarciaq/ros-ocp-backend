@@ -219,7 +219,7 @@ func TestApplyNodePagination_NoLimit(t *testing.T) {
 }
 
 func TestBuildNodeLinks_FirstPage(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	links := buildNodeLinks(req, 25, 10, 0)
 	assert.NotEmpty(t, links.First)
 	assert.NotEmpty(t, links.Next)
@@ -227,7 +227,7 @@ func TestBuildNodeLinks_FirstPage(t *testing.T) {
 }
 
 func TestBuildNodeLinks_MiddlePage(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	links := buildNodeLinks(req, 50, 10, 20)
 	assert.NotEmpty(t, links.First)
 	assert.NotEmpty(t, links.Next)
@@ -235,14 +235,14 @@ func TestBuildNodeLinks_MiddlePage(t *testing.T) {
 }
 
 func TestBuildNodeLinks_LastPage(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	links := buildNodeLinks(req, 25, 10, 20)
 	assert.NotEmpty(t, links.First)
 	assert.Empty(t, links.Next)
 }
 
 func TestBuildNodeLinks_UnlimitedNoSpuriousLinks(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	links := buildNodeLinks(req, 50, -1, 0)
 	assert.NotEmpty(t, links.First)
 	assert.Empty(t, links.Previous, "unlimited should not have previous link")
