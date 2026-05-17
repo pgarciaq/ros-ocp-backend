@@ -2,6 +2,7 @@ package logging
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"             //nolint:staticcheck
@@ -13,8 +14,11 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
-var logger *logrus.Logger = nil
-var log *logrus.Entry = nil
+var (
+	initOnce    sync.Once
+	logger      *logrus.Logger
+	rootEntry   *logrus.Entry
+)
 
 func initLogger() {
 	logger = logrus.New()
@@ -49,20 +53,23 @@ func initLogger() {
 		}
 		logger.Hooks.Add(hook)
 	}
-	log = logger.WithField("service", cfg.ServiceName)
+	rootEntry = logger.WithField("service", cfg.ServiceName)
 }
 
 func GetLogger() *logrus.Entry {
-	if log == nil {
+	initOnce.Do(func() {
 		initLogger()
-		log.Info("Logging initialized")
-		return log
-	}
-	return log
+		rootEntry.Info("Logging initialized")
+	})
+	return rootEntry
 }
 
+// Set_request_details returns a request-scoped logger; it does not mutate any package-level logger.
+// Callers must assign the return value (for example, log = logging.Set_request_details(...)) so subsequent
+// logs include Kafka metadata. This is internal diagnostics only; HTTP response bodies and OpenAPI contracts
+// are unaffected.
 func Set_request_details(data types.KafkaMsg) *logrus.Entry {
-	log = log.WithFields(logrus.Fields{
+	return GetLogger().WithFields(logrus.Fields{
 		"request_id":    data.Request_id,
 		"account":       data.Metadata.Account,
 		"org_id":        data.Metadata.Org_id,
@@ -70,16 +77,16 @@ func Set_request_details(data types.KafkaMsg) *logrus.Entry {
 		"cluster_uuid":  data.Metadata.Cluster_uuid,
 		"cluster_alias": data.Metadata.Cluster_alias,
 	})
-	return log
 }
 
+// Set_request_details_recommendations returns a request-scoped logger for poller messages (same contract as
+// Set_request_details: capture the return value; no HTTP/API surface impact).
 func Set_request_details_recommendations(data types.RecommendationKafkaMsg) *logrus.Entry {
-	log = log.WithFields(logrus.Fields{
+	return GetLogger().WithFields(logrus.Fields{
 		"request_id":         data.Request_id,
 		"org_id":             data.Metadata.Org_id,
 		"workload_id":        data.Metadata.Workload_id,
 		"max_endtime_report": data.Metadata.Max_endtime_report,
 		"experiment_name":    data.Metadata.Experiment_name,
 	})
-	return log
 }
