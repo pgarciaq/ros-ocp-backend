@@ -36,7 +36,7 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 18 | 139 |
+| P2 | 157 | 26 | 131 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
 
@@ -46,6 +46,8 @@ Additional fixes from the P0/P1 pass:
 - Pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
 
 **P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**) before P2 batch 1; **P2 batch 1** (May 2026) closed **#13**, **#25**, **#35**, **#40**, **#41**, **#42**, **#43**, **#45**, **#46**, **#47**, **#48**, **#52**, **#57**, **#58**, **#59**, **#61** — see commit SHAs on each row under [P2 — Medium](#p2--medium). Three partially narrowed (**#50**, **#80**, **#233**).
+
+**P2 batch 2** (May 2026) closed **#123**, **#129**, **#131**, **#173**, **#182**, **#200**, **#205**, **#207** — pagination links, namespace paging, term config caching, pool config, composite indexes, config validation. **#185** deferred (matches Koku convention: no prod guardrails, Clowder overrides in production). **#206** verified already correct.
 
 ## Repository Impact Summary
 
@@ -675,6 +677,7 @@ Additional fixes from the P0/P1 pass:
 - On legacy list endpoints, this runs for every item in the page — high CPU and allocation churn.
 
 **#123 — `LoadTermConfig` queried on every GPU-enriched API request (uncached)**
+- **Status: Fixed** — commit `669a271` (P2 batch 2)
 - Repo: ros-ocp-backend
 - File: `internal/api/gpu_enrichment.go`
 - Term JSON is fetched from Postgres on each enrichment—high QPS detail views amplify DB load without memoization.
@@ -700,12 +703,14 @@ Additional fixes from the P0/P1 pass:
 - Deep pagination with large permission sets accumulates all pages in memory via recursive append.
 
 **#129 — Missing composite indexes for native list queries**
+- **Status: Fixed** — commit `3661120` (P2 batch 2)
 - Repo: ros-ocp-backend
 - Native listings filter on `org_id` + `cluster_uuid` + `updated_at` + `stale` — no evidence of a composite index covering this exact pattern.
 
 **#130 —** *(merged into **#44** — same retention sweep: unbounded `DELETE` volume / txn duration.)*
 
 **#131 — No connection pool exhaustion handling (MaxConns=10)**
+- **Status: Fixed** — commit `378fd05` (P2 batch 2)
 - Repo: ros-ocp-backend
 - File: `internal/db/db.go`
 - Tiny pool caps stall bursts; no queue metrics differentiate saturation from slow SQL.
@@ -840,6 +845,7 @@ Additional fixes from the P0/P1 pass:
 - `ApplyQueryParams` builds `Where(key, values)` from query strings without per-column allowlists—filter injection risk.
 
 **#173 — Namespace native pagination `offset*6 / limit*6` assumes 6 rows per namespace**
+- **Status: Fixed** — commit `7822852` (P2 batch 2)
 - Repo: ros-ocp-backend
 - File: `internal/model/namespace_recommendation_set_native.go`
 - Pagination assumes six recommendation rows per namespace—extra terms or schema changes break paging.
@@ -855,6 +861,7 @@ Additional fixes from the P0/P1 pass:
 ### Configuration (182-199)
 
 **#182 — `MaxLookbackDays` negative value inverts time window — no bounds validation**
+- **Status: Fixed** — commit `378fd05` (P2 batch 2)
 - Repo: ros-ocp-backend
 - File: `internal/config/config.go`
 - Negative lookback flips windows without validation—could ingest ancient noise or empty ranges.
@@ -869,6 +876,7 @@ Additional fixes from the P0/P1 pass:
 - On shared Kafka clusters, can auto-create topics with default retention/partitions — operational hazard.
 
 **#185 — Dev-only defaults ship as production defaults**
+- **Status: Deferred** — Matches Koku convention: no prod guardrails in code; Clowder overrides in production.
 - Repo: ros-ocp-backend
 - File: `internal/config/config.go`
 - `DBssl=disable`, `DBPassword=postgres`, `RBAC_ENABLE=false`, `UnleashClientAccessToken=rosocp:dev.token` — dangerous if deployed without overriding.
@@ -922,6 +930,7 @@ Additional fixes from the P0/P1 pass:
 ### API Response Consistency (200-214)
 
 **#200 — Node utilization uses absolute URLs in links; `CollectionResponse` uses relative**
+- **Status: Fixed** — commit `26e786b` (P2 batch 2)
 - Repo: ros-ocp-backend
 - Node utilization emits absolute `links` while other collections use relative paths—clients concatenate incorrectly.
 
@@ -942,14 +951,17 @@ Additional fixes from the P0/P1 pass:
 - Handlers forward raw Go errors—reveals SQL/table names to tenants.
 
 **#205 — `buildNodeLinks` `First` uses current offset instead of 0**
+- **Status: Fixed** — commit `26e786b` (P2 batch 2; verified already correct in current code)
 - Repo: ros-ocp-backend
 - `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
 
 **#206 — `buildNodeLinks` `Last` uses `offset+limit` (next page, not last)**
+- **Status: Fixed** — commit `26e786b` (P2 batch 2; verified already correct in current code)
 - Repo: ros-ocp-backend
 - `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
 
 **#207 — `previous` link omitted when `offset <= limit` (wrong for first pages with non-zero offset)**
+- **Status: Fixed** — commit `26e786b` (P2 batch 2)
 - Repo: ros-ocp-backend
 - `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
 
