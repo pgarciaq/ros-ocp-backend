@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	rosdb "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/sirupsen/logrus"
@@ -415,11 +417,36 @@ func StringInSlice(a string, list []string) bool {
 }
 
 func Start_prometheus_server() {
-	if cfg.PrometheusPort != "" {
-		log.Info("Starting prometheus http server")
-		http.Handle("/metrics", promhttp.Handler())
-		_ = http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), nil)
+	if cfg.PrometheusPort == "" {
+		return
 	}
+	log.Info("Starting prometheus http server")
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		pool := rosdb.GetPool()
+		if pool == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"error","checks":{"database":"pool_uninitialized"}}`))
+			return
+		}
+		if err := pool.Ping(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintf(w, `{"status":"error","checks":{"database":%q}}`, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","checks":{"database":"ok"}}`))
+	})
+	_ = http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux)
 }
 
 func NeedRecommOnFirstOfMonth(dbDate time.Time, maxEndTime time.Time) bool {

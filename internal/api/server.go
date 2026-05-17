@@ -57,6 +57,7 @@ func StartAPIServer() {
 	}))
 
 	app.GET("/status", GetAppStatus)
+	app.GET("/readyz", GetReadyz)
 	app.File("/api/cost-management/v1/recommendations/openshift/openapi.json", "openapi.json")
 
 	v1 := app.Group("/api/cost-management/v1")
