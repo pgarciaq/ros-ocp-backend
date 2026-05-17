@@ -46,6 +46,7 @@ All endpoints are under `/api/cost-management/v1/`:
 |----------|-------------|
 | `GET /recommendations/openshift` | List container recommendations |
 | `GET /recommendations/openshift/:id` | Container recommendation detail |
+| `GET /recommendations/openshift/gpu` | GPU summary (counts, links to timeslicing/MIG listings) |
 | `GET /recommendations/openshift/gpu/timeslicing` | Node-level GPU time-slicing recommendations |
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |
 | `GET /recommendations/openshift/nodes` | Node CPU/memory utilization recommendations |

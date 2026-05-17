@@ -891,7 +891,10 @@ All endpoints under `/api/cost-management/v1/`:
 | `recommendations/openshift/settings/terms` | GET, PUT, DELETE | Custom timeframe configuration | ✅ Done |
 | `recommendations/openshift/history` | GET | Recommendation history (paginated, CSV export) | ✅ Done |
 | `recommendations/openshift/quality` | GET | Quality metrics (paginated, CSV export) | ✅ Done |
-| `recommendations/openshift/nodes` | GET | Node-level GPU time-slicing recommendations (paginated, RBAC) | ✅ Done |
+| `recommendations/openshift/gpu` | GET | GPU summary counts and links to timeslicing/MIG listings | ✅ Done |
+| `recommendations/openshift/gpu/timeslicing` | GET | Node-level GPU time-slicing recommendations (paginated, RBAC) | ✅ Done |
+| `recommendations/openshift/gpu/mig` | GET | Container rows with non-`full_gpu` MIG recommendations | ✅ Done |
+| `recommendations/openshift/nodes` | GET | Node CPU/memory utilization recommendations (Tier 1; paginated) | ✅ Done |
 | `status` | GET | Health check | ✅ (pre-existing) |
 
 **Query parameters for list endpoint:**
@@ -1111,7 +1114,7 @@ now computes per-node GPU time-slicing recommendations for non-MIG GPUs (T4, L4,
 L40, L40S, A10) that are underutilized.
 
 **Implementation summary:**
-- New endpoint: `GET /recommendations/openshift/nodes` with full pagination
+- New endpoint: `GET /recommendations/openshift/gpu/timeslicing` with full pagination
   (`limit`, `offset`, `order_by`, `order_how`) and RBAC (cluster + node level)
 - Engine logic: `ComputeNodeTimeslicingRec` partitions containers into candidates
   vs impacted, requires >=50% majority, computes replicas (clamped [2,8]) from

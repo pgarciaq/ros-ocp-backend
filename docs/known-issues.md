@@ -571,6 +571,7 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 |----------|---------|--------|
 | `/recommendations/openshift` | GET | Implemented |
 | `/recommendations/openshift/:id` | GET | Implemented |
+| `/recommendations/openshift/gpu` | GET | Implemented — GPU strategy summary (counts + links) |
 | `/recommendations/openshift/gpu/timeslicing` | GET | Implemented — GPU time-slicing (node level) |
 | `/recommendations/openshift/gpu/mig` | GET | Implemented — MIG profile recommendations list |
 | `/recommendations/openshift/nodes` | GET | Implemented — node CPU/memory utilization |

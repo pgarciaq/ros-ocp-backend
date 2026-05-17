@@ -463,15 +463,17 @@ Additional fixes from the P0/P1 pass:
 - File: `openapi.json`
 - No `servers` entry; clients don't know the real prefix `/api/cost-management/v1/`.
 
-**#65 — Undocumented endpoints: `/namespaces`, `/namespaces/:id`, `/nodes/utilization`, `/status`**
+**#65 — Undocumented endpoints: `/recommendations/openshift/namespaces`, `/recommendations/openshift/namespaces/:id`, `/status`**
 - Repo: ros-ocp-backend
 - File: `internal/api/server.go` vs `openapi.json`
 - These routes exist in `server.go` but have no corresponding entry in `openapi.json`.
+- **Note:** `GET /recommendations/openshift/nodes/utilization` is **documented** in OpenAPI as a **deprecated** alias of canonical **`GET /recommendations/openshift/nodes`** (node CPU/memory utilization). GPU time-slicing is **`GET /recommendations/openshift/gpu/timeslicing`**, not `/nodes`.
 
-**#66 — Undocumented `term` query parameter on `GET /nodes`**
+**#66 — Undocumented `term` query parameter on `GET /recommendations/openshift/gpu/timeslicing`**
+- **Status: Fixed** — `term` is now documented in `openapi.json` for `/recommendations/openshift/gpu/timeslicing`.
 - Repo: ros-ocp-backend
-- File: `internal/api/handlers_node_recs.go`
-- The handler reads `c.QueryParam("term")` but the spec doesn't document this filter.
+- File: `internal/api/handlers_node_recs.go` (`GetNodeRecommendations`)
+- The handler reads `c.QueryParam("term")` for filtering recommendations by term window.
 
 **#67 — Feature-gated routes exist unconditionally in spec**
 - Repo: ros-ocp-backend

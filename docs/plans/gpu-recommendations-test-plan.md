@@ -845,13 +845,13 @@ All 84 tests (78 existing + 6 GPU-specific) must pass.
 - T4 recommendation has 2 candidates
 - L4 recommendation has 1 candidate (or skipped if < majority)
 
-### E-T14. API endpoint: GET /recommendations/openshift/nodes
+### E-T14. API endpoint: GET /recommendations/openshift/gpu/timeslicing
 
 **Type:** Integration test (Go, httptest + testcontainers)
 **File:** `internal/api/handlers_node_recs_test.go`
 **Steps:**
 1. Seed database with gpu_container_digests for 2 nodes (different GPU models)
-2. GET `/recommendations/openshift/nodes`
+2. GET `/recommendations/openshift/gpu/timeslicing`
 3. Assert response contains node-level recommendations
 4. Assert `meta.count` matches number of nodes with recommendations
 
@@ -859,14 +859,14 @@ All 84 tests (78 existing + 6 GPU-specific) must pass.
 
 **Type:** Integration test (Go)
 **Steps:**
-1. GET `/recommendations/openshift/nodes?node_name=gpu-t4-worker-1`
+1. GET `/recommendations/openshift/gpu/timeslicing?node_name=gpu-t4-worker-1`
 2. Assert only recommendations for that node are returned
 
 ### E-T16. API filter: gpu_model
 
 **Type:** Integration test (Go)
 **Steps:**
-1. GET `/recommendations/openshift/nodes?gpu_model=T4`
+1. GET `/recommendations/openshift/gpu/timeslicing?gpu_model=T4`
 2. Assert only T4 recommendations returned
 
 ### E-T17. Container-level cross-reference
