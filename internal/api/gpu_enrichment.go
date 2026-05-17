@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -12,6 +15,42 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
+
+const gpuTermConfigCacheTTL = 60 * time.Second
+
+type gpuTermConfigCacheEntry struct {
+	terms []engine.TermConfig
+	until time.Time
+}
+
+var (
+	gpuTermConfigMu    sync.RWMutex
+	gpuTermConfigByOrg = map[string]gpuTermConfigCacheEntry{}
+)
+
+// loadTermConfigCached returns term configuration for GPU enrichment with a
+// short TTL to avoid hitting org_recommendation_terms on every request.
+func loadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]engine.TermConfig, error) {
+	if pool == nil {
+		return engine.DefaultTerms(), nil
+	}
+	now := time.Now()
+	gpuTermConfigMu.RLock()
+	e, ok := gpuTermConfigByOrg[orgID]
+	gpuTermConfigMu.RUnlock()
+	if ok && now.Before(e.until) {
+		return e.terms, nil
+	}
+
+	terms, err := engine.LoadTermConfig(ctx, pool, orgID)
+	if err != nil {
+		return nil, err
+	}
+	gpuTermConfigMu.Lock()
+	gpuTermConfigByOrg[orgID] = gpuTermConfigCacheEntry{terms: terms, until: now.Add(gpuTermConfigCacheTTL)}
+	gpuTermConfigMu.Unlock()
+	return terms, nil
+}
 
 // enrichWithGPU queries gpu_container_digests and attaches GPU recommendations
 // to each NativeContainerResult that has GPU data. Also fetches GPU cost rates
@@ -26,10 +65,11 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := database.ContextWithAcquireTimeout(context.Background())
+	defer cancel()
 	now := time.Now().UTC()
 
-	terms, err := engine.LoadTermConfig(ctx, pool, orgID)
+	terms, err := loadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
 		log.Warnf("enrichWithGPU: load term config failed: %v", err)
 		terms = engine.DefaultTerms()
@@ -180,16 +220,16 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 	}
 
 	result := &model.GPURecommendation{
-		CurrentGPUModel:               rec.GPUModelName,
-		CurrentGPUProfile:             profile,
-		GPUClassification:             string(rec.Classification),
-		RecommendedGPUProfile:         recProfile,
-		MemoryBoundDetected:           rec.MemoryBoundDetected,
-		GPUConfidence:                 rec.Confidence,
-		TensorPipeActiveAvg:           rec.TensorPipeActiveAvg,
-		DRAMActiveAvg:                 rec.DRAMActiveAvg,
-		SMActiveAvg:                   rec.SMActiveAvg,
-		FBUsageMaxMiB:                 rec.FBUsageMaxMiB,
+		CurrentGPUModel:                       rec.GPUModelName,
+		CurrentGPUProfile:                     profile,
+		GPUClassification:                     string(rec.Classification),
+		RecommendedGPUProfile:                 recProfile,
+		MemoryBoundDetected:                   rec.MemoryBoundDetected,
+		GPUConfidence:                         rec.Confidence,
+		TensorPipeActiveAvg:                   rec.TensorPipeActiveAvg,
+		DRAMActiveAvg:                         rec.DRAMActiveAvg,
+		SMActiveAvg:                           rec.SMActiveAvg,
+		FBUsageMaxMiB:                         rec.FBUsageMaxMiB,
 		EstimatedMonthlyGPUSavingsUSD:         rec.EstimatedGPUSavingsUSD,
 		EstimatedMonthlyTimeslicingSavingsUSD: rec.EstimatedTimeslicingSavingsUSD,
 		Notifications:                         rec.NotificationCodes,
