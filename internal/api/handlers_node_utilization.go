@@ -214,38 +214,47 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 }
 
 func buildUtilLinks(r *http.Request, total, limit, offset int) map[string]*string {
-	baseURL := *r.URL
-	q := baseURL.Query()
+	q := r.URL.Query()
 
 	makeLink := func(o int) *string {
 		q.Set("offset", strconv.Itoa(o))
 		q.Set("limit", strconv.Itoa(limit))
-		baseURL.RawQuery = q.Encode()
-		s, _ := url.PathUnescape(baseURL.String())
+		params, _ := url.PathUnescape(q.Encode())
+		s := fmt.Sprintf("%s?%s", r.URL.Path, params)
 		return &s
 	}
 
-	links := map[string]*string{
-		"first": makeLink(0),
+	first := makeLink(0)
+	if limit <= 0 {
+		return map[string]*string{
+			"first":    first,
+			"previous": nil,
+			"next":     nil,
+			"last":     nil,
+		}
 	}
+
+	var next, previous *string
 	if offset+limit < total {
-		links["next"] = makeLink(offset + limit)
-	} else {
-		links["next"] = nil
+		next = makeLink(offset + limit)
 	}
 	if offset > 0 {
 		prev := offset - limit
 		if prev < 0 {
 			prev = 0
 		}
-		links["previous"] = makeLink(prev)
-	} else {
-		links["previous"] = nil
+		previous = makeLink(prev)
 	}
-	lastOffset := 0
-	if total > 0 && limit > 0 {
-		lastOffset = ((total - 1) / limit) * limit
+	lastOff := 0
+	if total > 0 {
+		lastOff = ((total - 1) / limit) * limit
 	}
-	links["last"] = makeLink(lastOffset)
-	return links
+	last := makeLink(lastOff)
+
+	return map[string]*string{
+		"first":    first,
+		"previous": previous,
+		"next":     next,
+		"last":     last,
+	}
 }
