@@ -976,7 +976,7 @@ Define `NodeGPURecommendation`, `NodeContainerRef`,
 
 ## Cycle TS-19: API handler + route
 
-**Goal:** `GET /recommendations/openshift/nodes` returns 200 with correct shape.
+**Goal:** `GET /recommendations/openshift/gpu/timeslicing` returns 200 with correct shape.
 
 ### RED
 
@@ -986,7 +986,7 @@ Define `NodeGPURecommendation`, `NodeContainerRef`,
 func TestGetNodeRecommendations_Empty(t *testing.T) {
     // ... testcontainers + httptest setup (follow existing handler test pattern) ...
     resp := httptest.NewRecorder()
-    req := httptest.NewRequest("GET", "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+    req := httptest.NewRequest("GET", "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
     req.Header.Set("x-rh-identity", testIdentity)
     router.ServeHTTP(resp, req)
 
@@ -1028,7 +1028,7 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
     // ... insert test data ...
     resp := httptest.NewRecorder()
     req := httptest.NewRequest("GET",
-        "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+        "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
     req.Header.Set("x-rh-identity", testIdentity)
     router.ServeHTTP(resp, req)
 
@@ -1148,7 +1148,7 @@ Additional post-TDD work:
 
 | Feature | Status |
 |---|---|
-| RBAC: cluster + node filtering for `/nodes` | **Done** |
+| RBAC: cluster + node filtering for `/gpu/timeslicing` | **Done** |
 | Pagination: limit, offset, order_by via listoptions | **Done** |
 | ResourceNode type in `rbac/query_builder.go` | **Done** |
 | 7-day node freshness check wired into `ComputeNodeTimeslicingRec` | **Done** |

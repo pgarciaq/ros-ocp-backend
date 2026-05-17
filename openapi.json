@@ -1295,6 +1295,13 @@
             "schema": { "type": "string" }
           },
           {
+            "name": "term",
+            "in": "query",
+            "description": "Filter by recommendation term window (e.g., `short_term`, `medium_term`, `long_term`). When omitted, the handler may use an optimized query path.",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Number of results per page. Use -1 to return all results.",

@@ -12,6 +12,8 @@ recommendations per container: if a GPU gets a MIG recommendation, it does not
 get a time-slicing recommendation.  MIG provides hardware isolation; time-slicing
 is temporal multiplexing with no memory isolation.
 
+**Routes (native engine):** GPU time-slicing is served at **`GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing`** (`GetNodeRecommendations`). Tier 1 node CPU/memory utilization recommendations use **`GET .../recommendations/openshift/nodes`** (`GetNodeUtilizationRecs`) — a different response type and handler.
+
 ### Decision Summary
 
 
@@ -19,7 +21,7 @@ is temporal multiplexing with no memory isolation.
 | ----------------- | ----------------------------------------------------------------------------------------------- |
 | Aggregation scope | Per-node (natural action boundary for device plugin config)                                     |
 | Storage           | New `node_recommendations` table (separate from `recommendation_sets`)                          |
-| API shape         | New endpoint `GET /api/cost-management/v1/recommendations/openshift/nodes`                      |
+| API shape         | Canonical endpoint `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing` (GPU time-slicing only; historically also exposed under `/nodes` before the split) |
 | Persistence       | Computed at API-read time (matching existing GPU rec pattern), persisted later if perf requires |
 
 
@@ -289,7 +291,7 @@ Query parameters:
 Add to the native engine route group:
 
 ```go
-nativeGroup.GET("/recommendations/openshift/nodes", s.GetNodeRecommendations)
+nativeGroup.GET("/recommendations/openshift/gpu/timeslicing", s.GetNodeRecommendations)
 ```
 
 ### Phase 3d: OpenAPI spec update
@@ -298,7 +300,8 @@ nativeGroup.GET("/recommendations/openshift/nodes", s.GetNodeRecommendations)
 
 Add:
 
-- `/recommendations/openshift/nodes` GET endpoint
+- `/recommendations/openshift/gpu/timeslicing` GET endpoint (GPU time-slicing)
+- `/recommendations/openshift/gpu` GET endpoint (optional summary of GPU listings)
 - `NodeGPURecommendation` schema
 - `NodeContainerRef` schema
 - `NodeRecommendationListResponse` schema
@@ -326,7 +329,7 @@ full 21-cycle TDD plan with exact test code and execution order.
 1. Generate nise data with GPU pods on named nodes (already done in example YAML)
 2. Postprocess with `postprocess_ros_csvs.py` to assign GPU scenarios
 3. Upload to Apollo
-4. Call `GET /recommendations/openshift/nodes?cluster_uuid=...`
+4. Call `GET /recommendations/openshift/gpu/timeslicing?cluster_uuid=...`
 5. Verify:
   - Node with underutilized T4s → `recommended_replicas` between 2-8
   - Node with well-utilized A100s → no time-slicing recommendation
@@ -339,7 +342,7 @@ full 21-cycle TDD plan with exact test code and execution order.
 
 ### Phase 5a: Pagination (limit, offset, order_by)
 
-The `/nodes` endpoint supports the same `listoptions` pattern as all other
+The `/gpu/timeslicing` endpoint supports the same `listoptions` pattern as all other
 list endpoints for consistency:
 
 - `limit` (default 10, -1 for unlimited)
@@ -361,7 +364,7 @@ shape as the standard `CollectionResponse`.
 - `internal/model/node_recommendation.go` — `NodeRecommendationMeta` gains
   `Limit`/`Offset` fields; `NodeRecommendationLinks` struct added
 
-### Phase 5b: RBAC for `/nodes` endpoint
+### Phase 5b: RBAC for `/gpu/timeslicing` endpoint
 
 Two-tiered RBAC filtering matching the existing `/recommendations` pattern:
 
@@ -453,8 +456,7 @@ Phase 5c: Documentation updates
 (hundreds of nodes), add a `node_recommendations` table and compute during the
 ingestion pipeline (after GPU digests are written).  The API then reads from
 the table.  This is a performance optimization, not a design change.
-- **Node-level detail endpoint:** `GET /recommendations/openshift/nodes/:node-name`
-with full history of time-slicing recommendations over time.
+- **Node-level detail endpoint:** `GET /recommendations/openshift/gpu/timeslicing` with filters (or a future `:node` sub-resource) for full history of time-slicing recommendations over time.
 - **Other node rec types:** Instance type recommendations and reserved instance
 recommendations follow the same `node_recommendations` table pattern with
 `recommendation_type = 'instance_type'` or `'reserved_instance'`.
