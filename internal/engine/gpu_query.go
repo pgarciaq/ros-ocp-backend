@@ -3,11 +3,18 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 )
+
+// GPUQueryFilters narrows gpu_container_digests rows (optional).
+type GPUQueryFilters struct {
+	NodeNameExact string
+	GPUModelExact string
+}
 
 type containerID struct {
 	ClusterUUID   string
@@ -22,8 +29,8 @@ type containerID struct {
 //   - recs: map keyed by "namespace/workload/container" → []*GPURec (one per term)
 //   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
 //   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
-func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time, terms []TermConfig) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
-	rows, err := pool.Query(ctx, `
+func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+	query := `
 		SELECT interval_start, namespace, workload, container_name,
 			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
 			COALESCE(node_name, ''),
@@ -33,9 +40,24 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0)
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
-		  AND interval_start >= $2 AND interval_start <= $3
-		ORDER BY namespace, workload, container_name, interval_start`,
-		clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+		  AND interval_start >= $2 AND interval_start <= $3`
+	args := []interface{}{clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02")}
+	argPos := 4
+	if digestFilters != nil {
+		if strings.TrimSpace(digestFilters.NodeNameExact) != "" {
+			query += fmt.Sprintf(" AND node_name = $%d", argPos)
+			args = append(args, digestFilters.NodeNameExact)
+			argPos++
+		}
+		if strings.TrimSpace(digestFilters.GPUModelExact) != "" {
+			query += fmt.Sprintf(" AND gpu_model_name = $%d", argPos)
+			args = append(args, digestFilters.GPUModelExact)
+			argPos++
+		}
+	}
+	query += `
+		ORDER BY namespace, workload, container_name, interval_start`
+	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("query gpu_container_digests: %w", err)
 	}

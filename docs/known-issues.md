@@ -568,6 +568,12 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 
 ### Current State
 
+**Interim note:** Hot-path fixes for heavy list handlers (for example node utilization / GPU aggregation,
+issues **#40** / **#41** in `490-issues.md`) use SQL-level `LIMIT`/`OFFSET` or smaller bounded scans rather
+than loading entire result sets in Go. That remains **offset-based pagination** at the database layer.
+**Keyset (cursor) pagination** described below is still the long-term approach for very large tenants and deep
+pages; see also §Implementation Path.
+
 Both **Koku** (Django REST Framework) and **ros-ocp-backend** (Go/Echo) use
 offset/limit pagination across all list endpoints:
 

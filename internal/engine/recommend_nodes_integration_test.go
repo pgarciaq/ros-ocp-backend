@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -151,6 +152,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string, start time.Time, days int) {
 	t.Helper()
 
+	ensureDailyNodeDigestPartitions(t, pool, start, days)
+
 	type nodeProfile struct {
 		node            string
 		cpuUsageP50     int64
@@ -219,5 +222,29 @@ func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string
 				t.Fatalf("seedNodeDigests: insert failed for %s day %d: %v", p.node, i, err)
 			}
 		}
+	}
+}
+
+// ensureDailyNodeDigestPartitions creates monthly RANGE partitions required for
+// inserts into daily_node_digests (parent table is PARTITION BY RANGE(bucket_date)).
+func ensureDailyNodeDigestPartitions(t *testing.T, pool *pgxpool.Pool, start time.Time, days int) {
+	t.Helper()
+	ctx := context.Background()
+	if days < 1 {
+		return
+	}
+	lastDate := start.AddDate(0, 0, days-1)
+	firstMonth := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
+	lastMonth := time.Date(lastDate.Year(), lastDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for m := firstMonth; !m.After(lastMonth); m = m.AddDate(0, 1, 0) {
+		monthEnd := m.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("daily_node_digests_%s", m.Format("200601"))
+		_, err := pool.Exec(ctx, fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
+			partName,
+			m.Format("2006-01-02"),
+			monthEnd.Format("2006-01-02"),
+		))
+		require.NoError(t, err, "create partition %s", partName)
 	}
 }
