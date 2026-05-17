@@ -1301,6 +1301,9 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 	}
 
 	for _, r := range results {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for _, termName := range []string{"short_term", "medium_term", "long_term"} {
 			term, ok := r.Recommendations[termName]
 			if !ok {
@@ -1362,6 +1365,9 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 	}
 
 	for _, r := range results {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for _, termName := range []string{"short_term", "medium_term", "long_term"} {
 			termAny, ok := r.Recommendations[termName]
 			if !ok {
@@ -1444,6 +1450,9 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	}
 
 	for i := range recommendationSets {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		CSVRows, generateRowErr := GenerateCSVRows(recommendationSets[i])
 		if generateRowErr != nil {
 			return fmt.Errorf("unable to generate rows: %w", generateRowErr)

@@ -351,8 +351,9 @@ func Start_prometheus_server() {
 			return
 		}
 		if err := pool.Ping(ctx); err != nil {
+			log.Warnf("readyz: database ping failed: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
-			fmt.Fprintf(w, `{"status":"error","checks":{"database":%q}}`, err.Error())
+			_, _ = w.Write([]byte(`{"status":"error","checks":{"database":"unavailable"}}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)

@@ -69,6 +69,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	log = logging.Set_request_details(kafkaMsg)
 
 	var kafkaTransientErr error
+	var reportProcessingFailed bool
 	recordKafkaTransient := func(err error) {
 		if err != nil && isTransientKafkaProcessingError(err) {
 			kafkaTransientErr = err
@@ -107,24 +108,28 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 		if cfg.UseNativeEngine && csvType == types.PayloadTypeContainer {
 			if err := processContainerCSVNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
 		if cfg.UseNativeEngine && csvType == types.PayloadTypeNamespace {
 			if err := processNamespaceCSVNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
 		if cfg.UseNativeEngine && csvType == types.PayloadTypeStorage {
 			if err := processStorageCSVNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
 		if cfg.UseNativeEngine && csvType == types.PayloadTypeSnapshot {
 			if err := processSnapshotCSVNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
@@ -132,6 +137,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
+			reportProcessingFailed = true
 			csvFetchError.Inc()
 			log.Errorf("unable to read CSV from URL: %s", fetchError.Error())
 			recordKafkaTransient(fetchError)
@@ -426,7 +432,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		} else {
 			metrics.KafkaMessagesProcessed.Inc()
 		}
-	} else if appCfg.KafkaAutoCommit && kafkaTransientErr == nil {
+	} else if appCfg.KafkaAutoCommit && kafkaTransientErr == nil && !reportProcessingFailed {
 		metrics.KafkaMessagesProcessed.Inc()
 	}
 }

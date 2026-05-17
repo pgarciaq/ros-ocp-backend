@@ -21,7 +21,7 @@ func gpuTripleOrderExpr(orderByColumn string, desc bool) string {
 	switch orderByColumn {
 	case "cluster_uuid":
 		col = "g.cluster_uuid::text"
-	case "gpu_model":
+	case "gpu_model", "gpu_model_name":
 		col = "g.gpu_model_name"
 	default:
 		col = "g.node_name"
@@ -104,7 +104,7 @@ LIMIT $7 OFFSET $8`
 // GPUOrderColumnSupportsTriplePagination reports whether ORDER BY can be pushed down to gpu_container_digests grouping.
 func GPUOrderColumnSupportsTriplePagination(orderByColumn string) bool {
 	switch strings.TrimSpace(orderByColumn) {
-	case "node_name", "cluster_uuid", "gpu_model":
+	case "node_name", "cluster_uuid", "gpu_model", "gpu_model_name":
 		return true
 	default:
 		return false

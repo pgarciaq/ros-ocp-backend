@@ -67,5 +67,5 @@ func TestGetReadyz_DBPingFails_Returns503(t *testing.T) {
 	err := GetReadyz(c)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-	assert.Contains(t, rec.Body.String(), "connection refused")
+	assert.Contains(t, rec.Body.String(), "unavailable")
 }
