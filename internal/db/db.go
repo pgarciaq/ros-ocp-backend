@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -16,6 +17,24 @@ import (
 
 var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
+
+// poolAcquireTimeout bounds how long Pool.Acquire may wait when using contexts
+// produced by ContextWithAcquireTimeout. Zero disables the helper timeout.
+var poolAcquireTimeout time.Duration
+
+// ContextWithAcquireTimeout returns a child context with a deadline for pool
+// acquisition when the parent has no deadline. The caller must invoke cancel
+// when finished with the returned context. pgxpool respects ctx when acquiring
+// connections from the pool.
+func ContextWithAcquireTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if poolAcquireTimeout <= 0 || ctx == nil {
+		return ctx, func() {}
+	}
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, poolAcquireTimeout)
+}
 
 // ReadyzDB is the subset of *pgxpool.Pool used by GET /readyz.
 type ReadyzDB interface {
@@ -82,7 +101,19 @@ func initPool() {
 	if err != nil {
 		log.Fatalf("failed to parse pgxpool config: %v", err)
 	}
-	poolCfg.MaxConns = 10
+
+	maxConns := int32(cfg.DBMaxConns)
+	if maxConns <= 0 {
+		maxConns = 10
+	}
+	poolCfg.MaxConns = maxConns
+	poolCfg.MaxConnIdleTime = 30 * time.Minute
+
+	timeoutSecs := cfg.DBAcquireTimeoutSecs
+	if timeoutSecs < 0 {
+		timeoutSecs = 0
+	}
+	poolAcquireTimeout = time.Duration(timeoutSecs) * time.Second
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
