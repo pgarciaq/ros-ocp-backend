@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 // maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
@@ -37,7 +38,7 @@ func flushQueuedBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Bat
 
 // EnsureSamplePartitions creates monthly partitions of container_usage_samples
 // for every month that appears in the ingested data. Idempotent via IF NOT EXISTS.
-func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow) {
+func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow) error {
 	months := map[time.Time]struct{}{}
 	for _, r := range rows {
 		monthStart := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -53,9 +54,10 @@ func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []Metr
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureSamplePartitions: %s: %v (non-fatal)", partName, err)
+			return fmt.Errorf("EnsureSamplePartitions %s: %w", partName, err)
 		}
 	}
+	return nil
 }
 
 // upsertUsageSamples batch-upserts raw CSV rows into container_usage_samples.
@@ -63,6 +65,9 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 	if len(rows) == 0 {
 		return nil
 	}
+
+	t0 := time.Now()
+	defer func() { metrics.ObserveDB("upsert_usage_samples", t0) }()
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -106,7 +111,7 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 // partitions for the current + next 2 months, so historical data (e.g. from
 // the prior month) will fail with "no partition" unless we create it first.
 // This is idempotent — IF NOT EXISTS prevents errors on re-runs.
-func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []DigestKey) {
+func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []DigestKey) error {
 	months := map[time.Time]struct{}{}
 	for _, k := range keys {
 		monthStart := time.Date(k.BucketDate.Year(), k.BucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -122,9 +127,10 @@ func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []Dige
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureDigestPartitions: %s: %v (non-fatal)", partName, err)
+			return fmt.Errorf("EnsureDigestPartitions %s: %w", partName, err)
 		}
 	}
+	return nil
 }
 
 // ProcessCSVToDigests is the full native engine ingestion pipeline:
@@ -140,7 +146,9 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	}
 
 	// Persist raw samples for boxplot computation at query time.
-	EnsureSamplePartitions(ctx, pool, rows)
+	if err := EnsureSamplePartitions(ctx, pool, rows); err != nil {
+		return fmt.Errorf("sample partitions: %w", err)
+	}
 	if err := upsertUsageSamples(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("upsert usage samples: %w", err)
 	}
@@ -153,7 +161,9 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	for k := range grouped {
 		digestKeys = append(digestKeys, k)
 	}
-	EnsureDigestPartitions(ctx, pool, digestKeys)
+	if err := EnsureDigestPartitions(ctx, pool, digestKeys); err != nil {
+		return fmt.Errorf("digest partitions: %w", err)
+	}
 
 	txDigests, err := pool.Begin(ctx)
 	if err != nil {

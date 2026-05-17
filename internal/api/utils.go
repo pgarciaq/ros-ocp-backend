@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -1271,7 +1272,7 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 }
 
 // GenerateNativeCSV writes native recommendation results as CSV.
-func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error {
+func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeContainerResult) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(NativeCSVHeader); err != nil {
 		return fmt.Errorf("unable to write header: %w", err)
@@ -1290,9 +1291,9 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 				{"cost", term.Cost},
 				{"performance", term.Performance},
 			} {
-			if eng.rec == nil {
-				continue
-			}
+				if eng.rec == nil {
+					continue
+				}
 				pcMin, pcMax, pcAvg := "", "", ""
 				if r.Replicas != nil {
 					pcMin = strconv.Itoa(r.Replicas.Min)
@@ -1332,7 +1333,7 @@ func GenerateNativeCSV(w io.Writer, results []model.NativeContainerResult) error
 }
 
 // GenerateNativeNamespaceCSV writes native namespace recommendation results as CSV.
-func GenerateNativeNamespaceCSV(w io.Writer, results []model.NativeNamespaceResult) error {
+func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []model.NativeNamespaceResult) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(NativeNSCSVHeader); err != nil {
 		return fmt.Errorf("unable to write header: %w", err)
@@ -1412,7 +1413,7 @@ func optionalInt32Str(v *int32) string {
 	return strconv.FormatInt(int64(*v), 10)
 }
 
-func GenerateAndStreamCSV(w io.Writer, recommendationSets []model.RecommendationSetResult) error {
+func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets []model.RecommendationSetResult) error {
 	writer := csv.NewWriter(w)
 	header := FlattenedCSVHeader
 

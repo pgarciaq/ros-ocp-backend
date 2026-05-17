@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -41,8 +40,11 @@ type SnapshotRecommendationListResponse struct {
 
 // GetSnapshotRecommendations handles GET /recommendations/openshift/snapshots.
 func GetSnapshotRecommendations(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	pool := db.GetPool()
 	if pool == nil {

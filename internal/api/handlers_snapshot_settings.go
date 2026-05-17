@@ -5,15 +5,17 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
 
 // GetSnapshotSettings handles GET /recommendations/openshift/settings/snapshot.
 func GetSnapshotSettings(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -37,8 +39,11 @@ func GetSnapshotSettings(c echo.Context) error {
 
 // PutSnapshotSettings handles PUT /recommendations/openshift/settings/snapshot.
 func PutSnapshotSettings(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	pool := db.GetPool()
 	if pool == nil {

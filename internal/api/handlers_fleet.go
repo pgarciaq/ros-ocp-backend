@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -39,8 +38,11 @@ func fleetSummaryNeedsClusterFilter(userPerms map[string][]string) bool {
 // GetFleetSummary returns aggregate recommendation statistics across all clusters
 // for the authenticated organization.
 func GetFleetSummary(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	pool := db.GetPool()
@@ -54,7 +56,6 @@ func GetFleetSummary(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	var summary FleetSummaryResponse
-	var err error
 
 	if fleetSummaryNeedsClusterFilter(userPerms) {
 		clusterUUIDs, qerr := getClustersForOrg(ctx, orgID)

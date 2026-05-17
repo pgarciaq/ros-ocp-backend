@@ -44,7 +44,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 	costProvider := getGPUCostProvider()
 
 	for clusterUUID, indices := range clusterMap {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
 		if err != nil {
 			log.Warnf("enrichWithGPU: failed for cluster %s: %v", clusterUUID, err)
 			continue
