@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -123,17 +124,40 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	if opts.Format == "csv" {
 		limit = config.GetConfig().RecordLimitCSV
 	}
-	// Remap legacy full-table-name columns to native query aliases.
-	primaryOrder := remapNativeNSOrderBy(opts.OrderBy) + " " + opts.OrderHow
-	// Each namespace has up to 6 rows (3 terms x 2 engines); secondary sort
-	// ensures correct grouping in assembleNativeNamespaceResults.
+
+	// Paginate by distinct (cluster_uuid, namespace): pick a representative sort key per
+	// namespace using PostgreSQL DISTINCT ON (same tie-break as legacy: term, engine).
+	sortExpr := remapNativeNSOrderBy(opts.OrderBy)
+	distinctOnOrder := fmt.Sprintf(
+		"ns.cluster_uuid, ns.namespace_name, %s %s, ns.term ASC, ns.engine ASC",
+		sortExpr, opts.OrderHow,
+	)
+
+	distinctNS := db.Table("namespace_recommendation_sets ns").
+		Select(fmt.Sprintf(
+			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, %s AS ros_ns_page_sort",
+			sortExpr,
+		)).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.stale = false")
+	distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
+	distinctNS = applyNSQueryParams(distinctNS, queryParams)
+	distinctNS = distinctNS.Order(distinctOnOrder)
+
+	pageSubquery := db.Table("(?) AS page", distinctNS).
+		Order(fmt.Sprintf("page.ros_ns_page_sort %s, page.cluster_uuid, page.namespace_name", opts.OrderHow)).
+		Offset(opts.Offset).
+		Limit(limit)
+
+	primaryOrder := sortExpr + " " + opts.OrderHow
 	orderClause := primaryOrder + ", ns.term, ns.engine"
-	// Pagination factor: 3 terms (short/medium/long) x 2 engines (cost/performance) = 6.
-	// This is correct as long as the system caps at 3 terms, which is enforced by
-	// termNames in term_config.go. If custom terms ever exceed 3, revisit this.
+
 	err := query.
+		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
 		Order(orderClause).
-		Offset(opts.Offset * 6).Limit(limit * 6).
 		Find(&rows).Error
 	if err != nil {
 		return nil, 0, err
