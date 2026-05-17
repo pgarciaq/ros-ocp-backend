@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"maps"
 	"net/http"
@@ -704,7 +705,7 @@ func TestGenerateNativeCSV(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := GenerateNativeCSV(&buf, results)
+	err := GenerateNativeCSV(context.Background(), &buf, results)
 	require.NoError(t, err)
 
 	reader := csv.NewReader(&buf)
@@ -734,7 +735,7 @@ func TestGenerateNativeCSV(t *testing.T) {
 
 func TestGenerateNativeCSV_Empty(t *testing.T) {
 	var buf bytes.Buffer
-	err := GenerateNativeCSV(&buf, nil)
+	err := GenerateNativeCSV(context.Background(), &buf, nil)
 	require.NoError(t, err)
 
 	reader := csv.NewReader(&buf)
