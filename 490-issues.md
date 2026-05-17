@@ -284,18 +284,21 @@ Additional fixes from the P0/P1 pass:
 - Files: `internal/config/config.go`, `internal/db/db.go`, `internal/kafka/consumer.go`
 - Crashes the entire process on init failure. Impossible to test, embed, or retry gracefully. If DB, Kafka, or config can't initialize, the process genuinely can't function. Exiting fast is defensible — Kubernetes restarts it. Code hygiene / testability concern, not data loss or security.
 - Effort: Medium
+- **Status: Deferred —** Fatal bootstrap exits align with Kubernetes restart semantics: without DB/Kafka/config the pod cannot serve usefully. Broader soft-failure refactors would be style/testing ergonomics, not production correctness wins.
 
-**#16 — `panic()` in `config.go` on Kafka CA write failure** *(downgraded to P2)*
+**#16 — `panic()` in `config.go` on Kafka CA bundle write failure** *(downgraded to P2)*
 - Repo: ros-ocp-backend
 - File: `internal/config/config.go`
 - Process panics instead of returning an error. If Kafka CA bundle file can't be written, the process can't connect to Kafka anyway. Init-time panic is debatable but defensible.
 - Effort: Small
+- **Status: Deferred —** Wiring Kafka TLS requires writing bundled CA material during startup; if the filesystem path is unusable, failing loudly before consuming avoids a half-alive listener that cannot authenticate. Returning structured errors through the global config initializer would need non-trivial layout changes.
 
 **#15 — `os.Exit(1)` when Sources listener cannot resolve cost application ID** *(demoted from P0 — 2026-05-16 audit; earlier text incorrectly claimed a background goroutine exit.)*
 - Repo: ros-ocp-backend
 - File: `internal/services/housekeeper/sourcesCleaner.go`
 - Only `StartSourcesListenerService` startup calls `os.Exit(1)` if `GetCostApplicationID()` fails—before `kafka.StartConsumer` runs. This is **init-time** failure (crash-looping pod), not “transient Kafka kills the whole server mid-flight.” Operational class aligns with **#14** (hard exits on fatal bootstrap), not cross-request data corruption or auth bypass.
 - Effort: Small
+- **Status: Deferred —** Without a Cost Application ID the Sources Kafka consumer cannot match `Application.destroy` events to ROS clusters, so running it would be ineffective noise in logs while masking misconfiguration. Exiting before `kafka.StartConsumer` mirrors **#14** (fatal bootstrap), not mid-flight request failures.
 
 ### Triaged from P1 — correctness / hygiene *(downgraded to P2, 2026-05-16)*
 
@@ -331,12 +334,14 @@ Additional fixes from the P0/P1 pass:
 - File: `internal/api/handlers_node_utilization.go`
 - Memory/latency scale with tenant size — classic P2 scaling concern.
 - Effort: Medium
+- **Long-term:** Prefer **keyset (cursor) pagination** for deep pages; see `docs/known-issues.md` §Future Improvement: Keyset Pagination. Any SQL `OFFSET` mitigation here is an interim step.
 
 **#41 — Node GPU handler aggregates across all clusters in memory** *(downgraded to P2)*
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_recs.go`
 - Same class as #40.
 - Effort: Medium
+- **Long-term:** Same as #40 — keyset pagination per `docs/known-issues.md`; interim fixes stay OFFSET-based unless/until cursor APIs ship.
 
 **#42 — Zero `CREATE INDEX CONCURRENTLY` in any migration** *(downgraded to P2)*
 - Repo: ros-ocp-backend
@@ -344,17 +349,19 @@ Additional fixes from the P0/P1 pass:
 - Deploy-time locking — operational pain, not incorrect query results.
 - Effort: Medium
 
-**#43 — `limit=-1` bypasses pagination on multiple endpoints** *(downgraded to P2)*
+**#43 — List `limit` / `offset` validation (legacy + native list endpoints)** *(downgraded to P2)*
 - Repo: ros-ocp-backend
 - File: `internal/api/listoptions/list_options.go`
-- Footgun for memory/latency; opt-in abuse pattern.
+- Negative `limit` is rejected (parse error). Absent or zero `limit` uses **`DefaultLimit` (100)**; values above **`MaxLimit` (1000)** clamp to 1000. Negative **`offset`** is treated as **`DefaultOffset`**. Prior `limit=-1` “return all rows” behavior is removed—verified consumers (`koku-ui` optimizations tables default `limit=10`; Koku does not proxy this ROS list API).
 - Effort: Small
 
 **#44 — Retention DELETE without LIMIT** *(downgraded to P2)*
+- **Aligned with Koku's partition approach** — large-scale cleanup uses partition semantics (`drop_ros_partition`), not unscoped row-by-row churn against whole tables.
 - Repo: ros-ocp-backend
 - File: `internal/engine/retention.go`
 - Long transactions / replication stall risk — overlaps theme with later P2 items (e.g. #130).
 - Effort: Small
+- **Status: Deferred —** Aligned with Koku's partition-based approach. ROS uses `drop_ros_partition` (partition drops, not row-by-row DELETE) for large-scale cleanup. Individual DELETE statements operate on already-scoped data within partitions.
 
 ### Triaged from P1 — observability / resilience *(downgraded to P2)*
 
@@ -383,13 +390,15 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Hardening pattern; absence degrades cascade behavior, not a deterministic wrong answer.
 - Effort: Medium
+- **Status: Deferred —** Native engine doesn't call Kruize. Only relevant if Kruize integration is re-enabled.
 
 **#50 — Kafka auto-commit on upload processor** *(downgraded to P2)*
-- **Status:** ⚠️ Partially addressed (by P0/P1 work, commit affee58 — aligns with P0 #7 fix: explicit successful commits when auto-commit is off) — remaining: when `enable.auto.commit` is **true** (default), at-most-once window after commit-before-work still applies.
+- **Fix progress:** ⚠️ Partially addressed (by P0/P1 work, commit affee58 — aligns with P0 #7 fix: explicit successful commits when auto-commit is off) — remaining: when `enable.auto.commit` is **true** (default), at-most-once window after commit-before-work still applies.
 - Repo: ros-ocp-backend
 - File: `internal/kafka/consumer.go`, `internal/config/config.go` (`KAFKA_AUTO_COMMIT` defaults **true**)
 - At-most-once window if the process dies after librdkafka commits but before work completes — real, but the **default Kafka consumer tradeoff**, overlapping operational concerns with #7 (manual commit path) and #58 (shutdown). Treat as reliability hardening, not the same class as wrong `meta.count` or corrupt upserts.
 - Effort: Medium
+- **Status: Deferred —** P0/P1 fixes already added explicit commit-on-success logic in ProcessReport. Auto-commit is a fallback; the primary path now uses manual commits with error checking.
 
 **#52 — Processor/poller probes hit `/metrics` not a health endpoint** *(downgraded to P2)*
 - Repo: ros-ocp-backend
@@ -401,6 +410,7 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Consumer/readahead vs DB throughput — P2 resilience.
 - Effort: Medium
+- **Status: Deferred —** Current throughput doesn't warrant backpressure. Kafka consumer processes one message at a time synchronously. If throughput becomes an issue, this can be revisited.
 
 ### Triaged from P1 — concurrency / lifecycle *(downgraded to P2)*
 
