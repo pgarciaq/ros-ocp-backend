@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
@@ -25,7 +26,9 @@ func commitKafkaMsg(msg *kafka.Message, consumer_object *kafka.Consumer) {
 	_, err := consumer_object.CommitMessage(msg)
 	if err != nil {
 		log.Error("unable to commit msg: ", err)
+		return
 	}
+	metrics.KafkaMessagesProcessed.Inc()
 }
 
 func fetchRecommendationFromKruize(

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -81,8 +81,11 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 
 // GetRecommendationHistory handles GET /recommendations/openshift/history.
 func GetRecommendationHistory(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	opts, err := listoptions.ListAPIOptions(c, defaultHistoryOrderBy, HistoryAllowedOrderBy)
@@ -112,6 +115,7 @@ func GetRecommendationHistory(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -124,7 +128,7 @@ func GetRecommendationHistory(c echo.Context) error {
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = generateHistoryCSV(pipeWriter, rows)
+			genErr = generateHistoryCSV(reqCtx, pipeWriter, rows)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -146,7 +150,7 @@ var historyCSVHeader = []string{
 	"confidence_level", "estimated_monthly_savings_usd",
 }
 
-func generateHistoryCSV(w io.Writer, rows []model.HistoryRow) error {
+func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRow) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(historyCSVHeader); err != nil {
 		return fmt.Errorf("unable to write header: %w", err)

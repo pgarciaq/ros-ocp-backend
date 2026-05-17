@@ -3,6 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -24,6 +27,8 @@ var processorCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp processor")
 		cfg := config.GetConfig()
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 		go utils.Start_prometheus_server()
 		if cfg.UseNativeEngine {
 			pool := db.GetPool()
@@ -33,7 +38,7 @@ var processorCmd = &cobra.Command{
 		} else {
 			utils.Setup_kruize_performance_profile()
 		}
-		kafka.StartConsumer(cfg.UploadTopic, services.ProcessReport)
+		kafka.StartConsumer(ctx, cfg.UploadTopic, services.ProcessReport)
 	},
 }
 
@@ -43,8 +48,10 @@ var recommendationPollerCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp recommendation-poller")
 		cfg := config.GetConfig()
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 		go utils.Start_prometheus_server()
-		kafka.StartConsumer(cfg.RecommendationTopic, services.PollForRecommendations, false)
+		kafka.StartConsumer(ctx, cfg.RecommendationTopic, services.PollForRecommendations, false)
 	},
 }
 

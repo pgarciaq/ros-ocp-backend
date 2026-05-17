@@ -1,35 +1,64 @@
 package kafka
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+	"context"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-func StartConsumer(kafka_topic string, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), auto_commit_option ...bool) {
+// ConsumerCloseGracePeriod is the maximum time to wait for consumer.Close() during shutdown.
+const ConsumerCloseGracePeriod = 30 * time.Second
+
+// kafkaReader matches *kafka.Consumer.ReadMessage for tests.
+type kafkaReader interface {
+	ReadMessage(timeout time.Duration) (*kafka.Message, error)
+}
+
+// consumeMessagesUntilCancelled polls until ctx is cancelled. reader is typically the same *kafka.Consumer
+// passed as consumer for handler callbacks.
+func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, consumer *kafka.Consumer, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), log *logrus.Entry) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("Kafka consumer shutting down: %v", ctx.Err())
+			return
+		default:
+		}
+
+		msg, err := reader.ReadMessage(time.Second)
+		if err == nil {
+			log.Infof("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
+			log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
+			handler(msg, consumer)
+			continue
+		}
+		if kerr, ok := err.(kafka.Error); ok && !kerr.IsTimeout() {
+			log.Errorf("Consumer error: %v (%v)", err, msg)
+		} else if !ok {
+			log.Errorf("Consumer unexpected error type: %T: %v", err, err)
+		}
+	}
+}
+
+// StartConsumer polls kafka_topic until ctx is cancelled, then closes the consumer with a deadline.
+func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), auto_commit_option ...bool) {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
 
-	// initialize unleash service
 	if err := featureflags.Init(); err != nil {
 		log.Errorf("Unleash Error: %v", err)
 	}
 
-	// enable.auto.commit: default from config; optional arg overrides (e.g. poller passes false).
 	auto_commit := cfg.KafkaAutoCommit
 	if len(auto_commit_option) > 0 {
 		auto_commit = auto_commit_option[0]
 	}
-
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
 	var configMap kafka.ConfigMap
 	if cfg.KafkaSASLMechanism != "" {
@@ -45,8 +74,6 @@ func StartConsumer(kafka_topic string, handler func(msg *kafka.Message, consumer
 			"allow.auto.create.topics": true,
 		}
 
-		// As per librdkafka doc - https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md?plain=1#L73
-		// Default ca location is set to ca-certificates package. i.e. /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
 		if cfg.KafkaCA != "" {
 			configMap["ssl.ca.location"] = cfg.KafkaCA
 		}
@@ -67,39 +94,29 @@ func StartConsumer(kafka_topic string, handler func(msg *kafka.Message, consumer
 	consumer, err := kafka.NewConsumer(&configMap)
 	if err != nil {
 		log.Errorf("Failed to create consumer: %s", err)
-		os.Exit(1)
+		return
 	}
 
-	err = consumer.Subscribe(kafka_topic, nil)
-	if err != nil {
+	if err := consumer.Subscribe(kafka_topic, nil); err != nil {
 		log.Errorf("Failed to subscribe to topic %s: %s", kafka_topic, err)
 		_ = consumer.Close()
-		os.Exit(1)
+		return
 	}
 
-	run := true
-	for run {
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), ConsumerCloseGracePeriod)
+		defer cancel()
+		closeDone := make(chan error, 1)
+		go func() { closeDone <- consumer.Close() }()
 		select {
-		case sig := <-sigchan:
-			log.Infof("Caught Signal %v: terminating", sig)
-			_ = consumer.Close()
-			os.Exit(1)
-		default:
-			msg, err := consumer.ReadMessage(time.Second)
-			if err == nil {
-				// Invoke report processor function in this block.
-				log.Infof("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
-				log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
-				handler(msg, consumer)
-			} else if kerr, ok := err.(kafka.Error); ok && !kerr.IsTimeout() {
-				// The client will automatically try to recover from all errors.
-				// Timeout is not considered an error because it is raised by
-				// ReadMessage in absence of messages.
-				log.Errorf("Consumer error: %v (%v)", err, msg)
-			} else if !ok {
-				log.Errorf("Consumer unexpected error type: %T: %v", err, err)
+		case err := <-closeDone:
+			if err != nil {
+				log.Errorf("consumer.Close: %v", err)
 			}
+		case <-closeCtx.Done():
+			log.Warnf("consumer.Close exceeded %v grace period", ConsumerCloseGracePeriod)
 		}
-	}
-	_ = consumer.Close()
+	}()
+
+	consumeMessagesUntilCancelled(ctx, consumer, consumer, handler, log)
 }
