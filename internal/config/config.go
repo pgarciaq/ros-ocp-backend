@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -55,6 +56,11 @@ type Config struct {
 	DBssl      string
 	DBCACert   string
 
+	// pgxpool tuning (REST / GPU paths). ROS_DB_MAX_CONNS defaults to 10;
+	// ROS_DB_ACQUIRE_TIMEOUT_SECS sets ContextWithAcquireTimeout (0 = no limit).
+	DBMaxConns           int `mapstructure:"ROS_DB_MAX_CONNS"`
+	DBAcquireTimeoutSecs int `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
+
 	// RBAC config
 	RBACHost     string
 	RBACPort     string
@@ -101,20 +107,20 @@ type Config struct {
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
 	// Node right-sizing (Tier 1) configuration
-	NodeUnderutilThreshold   float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
-	NodeOvercommitThreshold  float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
-	NodeAllocatableFactor    float64 `mapstructure:"ROS_NODE_ALLOCATABLE_FACTOR"`
+	NodeUnderutilThreshold         float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
+	NodeOvercommitThreshold        float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
+	NodeAllocatableFactor          float64 `mapstructure:"ROS_NODE_ALLOCATABLE_FACTOR"`
 	NodeStrandedImbalanceThreshold float64 `mapstructure:"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD"`
 	NodeEMAAlpha                   float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
-	SnapshotOrphanAgeDays        int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
-	SnapshotNeverRestoredDays    int     `mapstructure:"ROS_SNAPSHOT_NEVER_RESTORED_DAYS"`
-	SnapshotStaleDays            int     `mapstructure:"ROS_SNAPSHOT_STALE_DAYS"`
-	SnapshotRedundantThreshold   int     `mapstructure:"ROS_SNAPSHOT_REDUNDANT_THRESHOLD"`
-	SnapshotCostPerGiBMonth      float64 `mapstructure:"ROS_SNAPSHOT_COST_PER_GIB_MONTH"`
-	SnapshotInventoryRetentionH  int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS"`
+	SnapshotOrphanAgeDays       int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
+	SnapshotNeverRestoredDays   int     `mapstructure:"ROS_SNAPSHOT_NEVER_RESTORED_DAYS"`
+	SnapshotStaleDays           int     `mapstructure:"ROS_SNAPSHOT_STALE_DAYS"`
+	SnapshotRedundantThreshold  int     `mapstructure:"ROS_SNAPSHOT_REDUNDANT_THRESHOLD"`
+	SnapshotCostPerGiBMonth     float64 `mapstructure:"ROS_SNAPSHOT_COST_PER_GIB_MONTH"`
+	SnapshotInventoryRetentionH int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS"`
 	// SnapshotStaleGraceHours bounds how long we tolerate missing *fresh* inventory
 	// before treating the cluster as abandoned for snapshot_recommendation_sets cleanup.
 	SnapshotStaleGraceHours int `mapstructure:"ROS_SNAPSHOT_STALE_GRACE_HOURS"`
@@ -292,6 +298,8 @@ func initConfig() {
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
+	viper.SetDefault("ROS_DB_MAX_CONNS", 10)
+	viper.SetDefault("ROS_DB_ACQUIRE_TIMEOUT_SECS", 5)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
@@ -334,6 +342,25 @@ func initConfig() {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		fmt.Println("Can not unmarshal config. Exiting.. ", err)
 		os.Exit(1)
+	}
+	validateLoadedConfig(cfg)
+}
+
+func validateLoadedConfig(c *Config) {
+	if c == nil {
+		return
+	}
+	if c.MaxLookbackDays <= 0 {
+		log.Printf("config: ROS_MAX_LOOKBACK_DAYS (%d) is invalid; using 14", c.MaxLookbackDays)
+		c.MaxLookbackDays = 14
+	}
+	if c.DBMaxConns <= 0 {
+		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using 10", c.DBMaxConns)
+		c.DBMaxConns = 10
+	}
+	if c.DBAcquireTimeoutSecs < 0 {
+		log.Printf("config: ROS_DB_ACQUIRE_TIMEOUT_SECS (%d) is invalid; using 5", c.DBAcquireTimeoutSecs)
+		c.DBAcquireTimeoutSecs = 5
 	}
 }
 
