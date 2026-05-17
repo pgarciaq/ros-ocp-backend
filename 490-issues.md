@@ -36,7 +36,7 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 2 | 155 |
+| P2 | 157 | 18 | 139 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
 
@@ -45,7 +45,7 @@ Additional fixes from the P0/P1 pass:
 - NULL-scan bugs corrected in `term_config`, `handlers_pvc`, `handlers_node_utilization`, `quality.go`, and `cmd/compare`
 - Pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
 
-**P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**); three partially narrowed (**#50**, **#80**, **#233**) — see statuses under [P2 — Medium](#p2--medium).
+**P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**) before P2 batch 1; **P2 batch 1** (May 2026) closed **#13**, **#25**, **#35**, **#40**, **#41**, **#42**, **#43**, **#45**, **#46**, **#47**, **#48**, **#52**, **#57**, **#58**, **#59**, **#61** — see commit SHAs on each row under [P2 — Medium](#p2--medium). Three partially narrowed (**#50**, **#80**, **#233**).
 
 ## Repository Impact Summary
 
@@ -303,18 +303,21 @@ Additional fixes from the P0/P1 pass:
 ### Triaged from P1 — correctness / hygiene *(downgraded to P2, 2026-05-16)*
 
 **#13 — Type assertions without comma-ok in 20+ handler sites** *(downgraded to P2)*
+- **Status: Fixed** — commit `ec93bf8` (P2 batch 1)
 - Repo: ros-ocp-backend
 - Files: `internal/api/handlers*.go`
 - Pattern `c.Get("Identity").(identity.XRHID)` panics if middleware is misconfigured. **Not a silent failure** — panics are loud and typically crash the request or process; severity is misconfiguration / availability under bad deploys, not wrong numeric results.
 - Effort: Medium
 
 **#25 — Partition creation failures are warn-only** *(downgraded to P2)*
+- **Status: Fixed** — commit `ec93bf8` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/ingestion/pipeline.go`
 - Subsequent INSERTs fail with PostgreSQL “no partition” — failure becomes explicit shortly after; operational friction rather than long-lived silent wrong answers.
 - Effort: Small
 
 **#35 — `ORDER BY recommendation_sets.id` references dropped column** *(downgraded to P2)*
+- **Status: Fixed** — commit `ec93bf8` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/model/recommendation_set.go`
 - Works via `container_id AS id` alias — fragile ordering/pagination contract and migration coupling; **stale wrong recommendations** risk is secondary to maintainability.
@@ -330,6 +333,7 @@ Additional fixes from the P0/P1 pass:
 ### Triaged from P1 — performance / ops *(downgraded to P2)*
 
 **#40 — Node utilization handler loads ALL rows then paginates in Go** *(downgraded to P2)*
+- **Status: Fixed** — commit `d646e12` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_utilization.go`
 - Memory/latency scale with tenant size — classic P2 scaling concern.
@@ -337,6 +341,7 @@ Additional fixes from the P0/P1 pass:
 - **Long-term:** Prefer **keyset (cursor) pagination** for deep pages; see `docs/known-issues.md` §Future Improvement: Keyset Pagination. Any SQL `OFFSET` mitigation here is an interim step.
 
 **#41 — Node GPU handler aggregates across all clusters in memory** *(downgraded to P2)*
+- **Status: Fixed** — commit `d646e12` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_recs.go`
 - Same class as #40.
@@ -344,12 +349,14 @@ Additional fixes from the P0/P1 pass:
 - **Long-term:** Same as #40 — keyset pagination per `docs/known-issues.md`; interim fixes stay OFFSET-based unless/until cursor APIs ship.
 
 **#42 — Zero `CREATE INDEX CONCURRENTLY` in any migration** *(downgraded to P2)*
+- **Status: Fixed** — commit `b02d245` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `migrations/`
 - Deploy-time locking — operational pain, not incorrect query results.
 - Effort: Medium
 
 **#43 — List `limit` / `offset` validation (legacy + native list endpoints)** *(downgraded to P2)*
+- **Status: Fixed** — commit `ec93bf8` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/api/listoptions/list_options.go`
 - Negative `limit` is rejected (parse error). Absent or zero `limit` uses **`DefaultLimit` (100)**; values above **`MaxLimit` (1000)** clamp to 1000. Negative **`offset`** is treated as **`DefaultOffset`**. Prior `limit=-1` “return all rows” behavior is removed—verified consumers (`koku-ui` optimizations tables default `limit=10`; Koku does not proxy this ROS list API).
@@ -366,22 +373,26 @@ Additional fixes from the P0/P1 pass:
 ### Triaged from P1 — observability / resilience *(downgraded to P2)*
 
 **#45 — `/status` endpoint is static JSON — no dependency health checks** *(downgraded to P2)*
+- **Status: Fixed** — commit `768d4b2` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers.go`
 - Kubernetes sees “healthy” while dependencies are down — **operational blind spot**, but logs/alerts often exist elsewhere; not fake business metrics.
 - Effort: Medium
 
 **#46 — No DB query latency metrics** *(downgraded to P2)*
+- **Status: Fixed** — commit `768d4b2` (P2 batch 1)
 - Repo: ros-ocp-backend
 - Missing histograms — standard P2 observability gap.
 - Effort: Medium
 
 **#47 — No Kafka consumer lag metric** *(downgraded to P2)*
+- **Status: Fixed** — commit `768d4b2` (P2 batch 1)
 - Repo: ros-ocp-backend
 - Same — lag visible via Kafka tooling in many deployments.
 - Effort: Medium
 
 **#48 — No recommendation computation duration metric** *(downgraded to P2)*
+- **Status: Fixed** — commit `768d4b2` (P2 batch 1)
 - Repo: ros-ocp-backend
 - Timing gaps for tuning — P2.
 - Effort: Small
@@ -401,6 +412,7 @@ Additional fixes from the P0/P1 pass:
 - **Status: Deferred —** P0/P1 fixes already added explicit commit-on-success logic in ProcessReport. Auto-commit is a fallback; the primary path now uses manual commits with error checking.
 
 **#52 — Processor/poller probes hit `/metrics` not a health endpoint** *(downgraded to P2)*
+- **Status: Fixed** — commit `768d4b2` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `clowdapp.yaml`
 - Liveness vs readiness mismatch — P2 operations.
@@ -415,18 +427,21 @@ Additional fixes from the P0/P1 pass:
 ### Triaged from P1 — concurrency / lifecycle *(downgraded to P2)*
 
 **#57 — Global `log` reassignment in `Set_request_details`** *(downgraded to P2)*
+- **Status: Fixed** — commit `afbd9e4` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/logging/logging.go`
 - Possible crossed log context under extreme concurrency — diagnostic quality, not silent wrong ROS math.
 - Effort: Medium
 
 **#58 — Kafka consumer has no graceful shutdown** *(downgraded to P2)*
+- **Status: Fixed** — commit `afbd9e4` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/kafka/consumer.go`
 - Abrupt stop vs #7/#50 delivery semantics — **no demonstrated data-loss path beyond existing Kafka tradeoffs**.
 - Effort: Medium
 
 **#59 — CSV export goroutines have no request-context cancellation** *(downgraded to P2)*
+- **Status: Fixed** — commit `afbd9e4` (P2 batch 1)
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers.go`
 - Wasted CPU/DB after client disconnect — P2 resource hygiene.
@@ -435,6 +450,7 @@ Additional fixes from the P0/P1 pass:
 ### Triaged from P1 — data hygiene *(downgraded to P2)*
 
 **#61 — Cluster/org deletion doesn't cascade to analytics tables** *(downgraded to P2)*
+- **Status: Fixed** — commit `ccb319b` (P2 batch 1)
 - Repo: ros-ocp-backend
 - Files: `internal/services/housekeeper/sourcesCleaner.go`
 - Orphan rows — storage drift and confusing stale reads for deleted clusters; **not active corruption** of live reconciled recommendations for active tenants.
