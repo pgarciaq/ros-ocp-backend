@@ -100,7 +100,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Issue | Impact | Severity | REQs |
 |-------|--------|----------|------|
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback | REQ-1.13 |
-| Node recommendation cold start (3 days) | New clusters return empty results from `/recommendations/openshift/nodes/utilization` until 3 days of data accumulates | Low — by design for accuracy | REQ-8c.3 |
+| Node recommendation cold start (3 days) | New clusters return empty results from **`GET /recommendations/openshift/nodes`** (node utilization) until 3 days of data accumulates | Low — by design for accuracy | REQ-8c.3 |
 | Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain Kruize client code. Native engine runs alongside, not instead of. | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
@@ -317,8 +317,10 @@ when capacity data is unavailable.
 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed imbalance above this = stranded |
 | `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha (higher = less smoothing) |
 
-**API status:** `GET /recommendations/openshift/nodes/utilization` returns
+**API status:** Canonical **`GET /recommendations/openshift/nodes`** returns
 per-node utilization, overcommit ratios, stranded resource flags, and trend slopes.
+Deprecated alias: **`GET /recommendations/openshift/nodes/utilization`** (same payload;
+responses include a deprecation warning).
 
 **Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources).
 
@@ -353,7 +355,8 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   right-sizing = fractional savings based on slice ratio. Wired into
   `enrichWithGPU` and mapped to `estimated_monthly_gpu_savings_usd` in API.
 - Node-level time-slicing savings via `ComputeNodeTimeslicingRec` with
-  per-GPU and total-node dollar estimates on `GET /recommendations/openshift/nodes`.
+  per-GPU and total-node dollar estimates on **`GET /recommendations/openshift/gpu/timeslicing`**
+  (canonical path for GPU time-slicing; previously `/recommendations/openshift/nodes`).
 - Container-level time-slicing cross-reference (`time_slicing_node`,
   `time_slicing_replicas`) on container GPU blocks.
 - API query filters (`has_gpu`, `gpu_model`, `gpu_classification`) — parsed in
@@ -380,6 +383,24 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 
 See `docs/plans/gpu-recommendations.md` for detailed design and
 `docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
+
+## GPU: MIG + Time-Slicing Combined Recommendations Not Supported
+
+The current GPU recommendation engine treats MIG partitioning and time-slicing as
+mutually exclusive strategies. In `partitionContainers`, workloads with a MIG
+recommendation (non-`full_gpu` profile) are excluded from time-slicing candidates.
+
+In practice, NVIDIA GPUs support combining both: a physical GPU can be partitioned
+into MIG instances, and each MIG instance can then be time-sliced among multiple
+pods. This combined approach could further improve GPU utilization.
+
+**Current behavior:** If container A is recommended for a 3g.20gb MIG slice, it will
+NOT appear as a time-slicing candidate, even if multiple containers could share that
+MIG instance.
+
+**Future enhancement:** Model time-slicing within MIG partitions. This would require
+the engine to reason about MIG instance scheduling — which instances exist, their
+sizes, and which pods could share them. Tracked as a deferred enhancement.
 
 ### Replica Count Display
 
@@ -550,8 +571,10 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 |----------|---------|--------|
 | `/recommendations/openshift` | GET | Implemented |
 | `/recommendations/openshift/:id` | GET | Implemented |
-| `/recommendations/openshift/nodes` | GET | Implemented |
-| `/recommendations/openshift/nodes/utilization` | GET | Implemented |
+| `/recommendations/openshift/gpu/timeslicing` | GET | Implemented — GPU time-slicing (node level) |
+| `/recommendations/openshift/gpu/mig` | GET | Implemented — MIG profile recommendations list |
+| `/recommendations/openshift/nodes` | GET | Implemented — node CPU/memory utilization |
+| `/recommendations/openshift/nodes/utilization` | GET | Deprecated alias of `/nodes` (same behavior + warning) |
 | `/recommendations/openshift/fleet-summary` | GET | Implemented |
 | `/recommendations/openshift/pvcs` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
