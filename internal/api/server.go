@@ -70,6 +70,8 @@ func StartAPIServer() {
 	// Container
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if cfg.UseNativeEngine {
+		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
+		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
