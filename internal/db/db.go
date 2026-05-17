@@ -17,6 +17,15 @@ import (
 var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
 
+// ReadyzDB is the subset of *pgxpool.Pool used by GET /readyz.
+type ReadyzDB interface {
+	Ping(ctx context.Context) error
+}
+
+// ReadyzPoolProvider supplies the database handle for GET /readyz. When nil, GetPool() is used.
+// Tests may assign a mock implementation and reset to nil in cleanup.
+var ReadyzPoolProvider func() ReadyzDB
+
 func initDB() {
 	cfg := config.GetConfig()
 	log := logging.GetLogger()

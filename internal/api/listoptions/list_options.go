@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	DefaultLimit  = 10
+	DefaultLimit  = 100
+	MaxLimit      = 1000
 	DefaultOffset = 0
 
 	OrderAsc           = "asc"
@@ -101,20 +102,43 @@ var NsAllowedOrderBy = OrderByMap{
 	"memory_variation_long_performance":   "namespace_recommendation_sets.memory_variation_long_performance_pct",
 }
 
-func parseInt(val string, def int) int {
+func parseOffset(val string) int {
 	if val == "" {
-		return def
+		return DefaultOffset
 	}
-	if i, err := strconv.Atoi(val); err == nil {
+	if i, err := strconv.Atoi(val); err == nil && i >= 0 {
 		return i
 	}
-	return def
+	return DefaultOffset
+}
+
+func parseLimit(val string) (int, error) {
+	if val == "" {
+		return DefaultLimit, nil
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid limit: %q", val)
+	}
+	if i < 0 {
+		return 0, fmt.Errorf("limit cannot be negative")
+	}
+	if i == 0 {
+		return DefaultLimit, nil
+	}
+	if i > MaxLimit {
+		return MaxLimit, nil
+	}
+	return i, nil
 }
 
 func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy OrderByMap) (ListOptions, error) {
 
-	limit := parseInt(c.QueryParam("limit"), DefaultLimit)
-	offset := parseInt(c.QueryParam("offset"), DefaultOffset)
+	limit, err := parseLimit(c.QueryParam("limit"))
+	if err != nil {
+		return ListOptions{}, err
+	}
+	offset := parseOffset(c.QueryParam("offset"))
 	orderBy := c.QueryParam("order_by")
 	orderHow := strings.ToLower(c.QueryParam("order_how"))
 
@@ -129,10 +153,6 @@ func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy Order
 
 	if offset < 0 {
 		offset = DefaultOffset
-	}
-
-	if limit < -1 {
-		return ListOptions{}, fmt.Errorf("limit cannot be less than -1")
 	}
 
 	if orderHow == "" {

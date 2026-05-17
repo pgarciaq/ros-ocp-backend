@@ -1,9 +1,13 @@
 package listoptions
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQLOrderByFragment(t *testing.T) {
@@ -55,6 +59,44 @@ func TestSQLOrderByFragment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := SQLOrderByFragment(tt.column, tt.orderHow)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestListAPIOptions_LimitValidation(t *testing.T) {
+	e := echo.New()
+
+	tests := []struct {
+		name      string
+		rawQuery  string
+		wantLimit int
+		wantErr   bool
+	}{
+		{name: "negative limit rejected", rawQuery: "limit=-1", wantErr: true},
+		{name: "invalid limit string rejected", rawQuery: "limit=abc", wantErr: true},
+		{name: "zero limit uses default", rawQuery: "limit=0", wantLimit: DefaultLimit},
+		{name: "empty limit uses default", rawQuery: "", wantLimit: DefaultLimit},
+		{name: "limit above max clamped", rawQuery: "limit=500000", wantLimit: MaxLimit},
+		{name: "limit at max unchanged", rawQuery: "limit=1000", wantLimit: MaxLimit},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := "/"
+			if tt.rawQuery != "" {
+				target = "/?" + tt.rawQuery
+			}
+			req := httptest.NewRequest(http.MethodGet, target, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			opts, err := ListAPIOptions(c, DefaultContainerRecsDBColumn, ContainerAllowedOrderBy)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantLimit, opts.Limit)
 		})
 	}
 }

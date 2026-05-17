@@ -12,15 +12,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func GetRecommendationSetList(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "recommendationset-list"
 
@@ -77,6 +79,7 @@ func GetRecommendationSetList(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 
 		go func() {
 			var generationErr error
@@ -91,7 +94,7 @@ func GetRecommendationSetList(c echo.Context) error {
 					_ = pipeWriter.Close() // graceful closure
 				}
 			}()
-			generationErr = GenerateAndStreamCSV(pipeWriter, recommendationSets)
+			generationErr = GenerateAndStreamCSV(reqCtx, pipeWriter, recommendationSets)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	}
@@ -99,8 +102,11 @@ func GetRecommendationSetList(c echo.Context) error {
 }
 
 func GetRecommendationSet(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "recommendationset"
 
@@ -140,8 +146,11 @@ func GetRecommendationSet(c echo.Context) error {
 }
 
 func GetNamespaceRecommendationSetList(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "namespace-recommendationset-list"
 
@@ -199,8 +208,11 @@ func GetNamespaceRecommendationSetList(c echo.Context) error {
 }
 
 func GetNamespaceRecommendationSet(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "namespace-recommendationset"
 
@@ -336,8 +348,11 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 // GetNativeRecommendationSetList serves recommendations from the native Go engine
 // using relational columns instead of JSONB.
 func GetNativeRecommendationSetList(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
@@ -370,6 +385,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -382,7 +398,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = GenerateNativeCSV(pipeWriter, results)
+			genErr = GenerateNativeCSV(reqCtx, pipeWriter, results)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -398,8 +414,11 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 // GetNativeRecommendationSet returns a single container's native recommendations by deterministic UUID.
 // The response is wrapped in the Kruize-compatible shape including boxplots and monitoring_end_time.
 func GetNativeRecommendationSet(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	idStr := c.Param("recommendation-id")
@@ -428,8 +447,11 @@ func GetNativeRecommendationSet(c echo.Context) error {
 // enables zero-downtime migration: containers not yet reprocessed by the
 // native engine are still served from the old data.
 func GetRecommendationSetListWithFallback(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
@@ -470,8 +492,11 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 // random UUID — both are valid UUIDs from different namespaces so there is no
 // collision risk.
 func GetRecommendationSetWithFallback(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	idStr := c.Param("recommendation-id")
@@ -505,6 +530,7 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -517,7 +543,7 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = GenerateNativeCSV(pipeWriter, results)
+			genErr = GenerateNativeCSV(reqCtx, pipeWriter, results)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -569,6 +595,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -581,7 +608,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = GenerateAndStreamCSV(pipeWriter, recSets)
+			genErr = GenerateAndStreamCSV(reqCtx, pipeWriter, recSets)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -627,8 +654,11 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 // engine first. If it returns zero results, falls back to the legacy Kruize
 // JSONB path.
 func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultNsRecsDBColumn, listoptions.NsAllowedOrderBy)
@@ -670,6 +700,7 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
+		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -682,7 +713,7 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = GenerateNativeNamespaceCSV(pipeWriter, results)
+			genErr = GenerateNativeNamespaceCSV(reqCtx, pipeWriter, results)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -698,8 +729,11 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 // GetNamespaceRecommendationSetWithFallback tries the native namespace detail
 // lookup first. If not found, falls back to the legacy Kruize JSONB lookup.
 func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	OrgID := XRHID.Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	idStr := c.Param("recommendation-id")
@@ -802,4 +836,32 @@ func GetAppStatus(c echo.Context) error {
 		"api-server": "working",
 	}
 	return c.JSON(http.StatusOK, status)
+}
+
+// GetReadyz reports readiness by pinging the primary DB pool.
+func GetReadyz(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
+	defer cancel()
+	var pool db.ReadyzDB
+	if db.ReadyzPoolProvider != nil {
+		pool = db.ReadyzPoolProvider()
+	} else {
+		pool = db.GetPool()
+	}
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status": "error",
+			"checks": echo.Map{"database": "pool_uninitialized"},
+		})
+	}
+	if err := pool.Ping(ctx); err != nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status": "error",
+			"checks": echo.Map{"database": err.Error()},
+		})
+	}
+	return c.JSON(http.StatusOK, echo.Map{
+		"status": "ok",
+		"checks": echo.Map{"database": "ok"},
+	})
 }

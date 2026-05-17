@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
@@ -36,7 +35,11 @@ type termSettingsResponseItem struct {
 var termNameToOrd = map[string]int{"short": 1, "medium": 2, "long": 3}
 
 func GetTermSettings(c echo.Context) error {
-	orgID := c.Get("Identity").(identity.XRHID).Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	terms, err := engine.LoadTermConfig(context.Background(), db.GetPool(), orgID)
 	if err != nil {
@@ -65,7 +68,11 @@ func GetTermSettings(c echo.Context) error {
 }
 
 func PutTermSettings(c echo.Context) error {
-	orgID := c.Get("Identity").(identity.XRHID).Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	var req termSettingsRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -156,7 +163,11 @@ func PutTermSettings(c echo.Context) error {
 }
 
 func DeleteTermSettings(c echo.Context) error {
-	orgID := c.Get("Identity").(identity.XRHID).Identity.OrgID
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
 
 	ctx := context.Background()
 	pool := db.GetPool()
