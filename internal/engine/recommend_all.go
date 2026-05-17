@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -232,6 +233,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 	if len(recs) == 0 {
 		return nil
 	}
+
+	t0 := time.Now()
+	defer func() { metrics.ObserveDB("write_recommendations", t0) }()
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {

@@ -31,7 +31,7 @@ objects:
         livenessProbe:
           failureThreshold: 3
           httpGet:
-            path: /metrics
+            path: /status
             port: 9000
             scheme: HTTP
           initialDelaySeconds: 30
@@ -40,13 +40,22 @@ objects:
           timeoutSeconds: 3
         readinessProbe:
           httpGet:
-            path: /metrics
+            path: /readyz
             port: 9000
             scheme: HTTP
           initialDelaySeconds: 3
           periodSeconds: 10
           successThreshold: 1
           failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
           timeoutSeconds: 3
         env:
           - name: CLOWDER_ENABLED
@@ -81,7 +90,7 @@ objects:
         livenessProbe:
           failureThreshold: 3
           httpGet:
-            path: /metrics
+            path: /status
             port: 9000
             scheme: HTTP
           initialDelaySeconds: 30
@@ -90,13 +99,22 @@ objects:
           timeoutSeconds: 3
         readinessProbe:
           httpGet:
-            path: /metrics
+            path: /readyz
             port: 9000
             scheme: HTTP
           initialDelaySeconds: 3
           periodSeconds: 10
           successThreshold: 1
           failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
           timeoutSeconds: 3
         env:
           - name: CLOWDER_ENABLED
@@ -144,13 +162,22 @@ objects:
           timeoutSeconds: 3
         readinessProbe:
           httpGet:
-            path: /status
+            path: /readyz
             port: 8000
             scheme: HTTP
           initialDelaySeconds: 3
           periodSeconds: 10
           successThreshold: 1
           failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
           timeoutSeconds: 3
         env:
           - name: PATH_PREFIX

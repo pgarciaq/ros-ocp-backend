@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
@@ -422,7 +423,11 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 				msg.TopicPartition, kafkaTransientErr)
 		} else if _, err := consumer.CommitMessage(msg); err != nil {
 			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
+		} else {
+			metrics.KafkaMessagesProcessed.Inc()
 		}
+	} else if appCfg.KafkaAutoCommit && kafkaTransientErr == nil {
+		metrics.KafkaMessagesProcessed.Inc()
 	}
 }
 
@@ -463,7 +468,9 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		BaseBump: appCfg.OOMBaseBump,
 		MaxBump:  appCfg.OOMMaxBump,
 	}
+	tRec := time.Now()
 	results, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, now, oomCfg)
+	metrics.ObserveRecommendation("container", tRec)
 	if err != nil {
 		log.Errorf("native engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return fmt.Errorf("recommend workloads: %w", err)
@@ -535,6 +542,9 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
 // Tier 1 node utilization signals, and persists the results.
 func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config) error {
+	t0 := time.Now()
+	defer func() { metrics.ObserveRecommendation("node", t0) }()
+
 	log := logging.GetLogger()
 
 	digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end)
@@ -609,7 +619,9 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	now := time.Now().UTC()
 	nsCfg := config.GetConfig()
 	start := now.AddDate(0, 0, -nsCfg.MaxLookbackDays)
+	tNs := time.Now()
 	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, clusterUUID, start, now)
+	metrics.ObserveRecommendation("namespace", tNs)
 	if err != nil {
 		log.Errorf("native namespace engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return fmt.Errorf("recommend namespaces: %w", err)
@@ -662,7 +674,9 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 
+	tPVC := time.Now()
 	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID)
+	metrics.ObserveRecommendation("pvc", tPVC)
 	if err != nil {
 		log.Errorf("native storage engine: PVC recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return fmt.Errorf("recommend PVCs: %w", err)
@@ -714,7 +728,9 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return fmt.Errorf("snapshot settings: %w", err)
 	}
 
+	tSnap := time.Now()
 	recs, err := engine.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
+	metrics.ObserveRecommendation("snapshot", tSnap)
 	if err != nil {
 		log.Errorf("native snapshot engine: classification failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		return fmt.Errorf("classify snapshots: %w", err)
