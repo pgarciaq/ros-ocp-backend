@@ -11,14 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
@@ -27,8 +28,14 @@ import (
 // It computes GPU time-slicing recommendations by querying gpu_container_digests,
 // grouping by node × GPU model, and running the time-slicing engine.
 func GetNodeRecommendations(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgIDStr := XRHID.Identity.OrgID
+	tGPU := time.Now()
+	defer func() { metrics.ObserveRecommendation("gpu", tGPU) }()
+
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgIDStr := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
 
 	opts, err := listoptions.ListAPIOptions(c, listoptions.DefaultNodeRecsOrderBy, listoptions.NodeRecsAllowedOrderBy)
@@ -65,12 +72,25 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
+	nodeNameFilter := strings.TrimSpace(c.QueryParam("node_name"))
+	gpuModelFilter := strings.TrimSpace(c.QueryParam("gpu_model"))
+	termFilter := strings.TrimSpace(c.QueryParam("term"))
+
+	useTripleSQL := termFilter == "" &&
+		opts.Format != listoptions.ResponseFormatCSV &&
+		engine.GPUOrderColumnSupportsTriplePagination(opts.OrderBy) &&
+		len(clusterUUIDs) > 0
+
+	if useTripleSQL {
+		return respondNodeGPURecommendationsTripleSQL(c, ctx, pool, orgIDStr, userPerms, opts, terms, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter)
+	}
+
 	costProvider := getGPUCostProvider()
 
 	var allRecs []model.NodeGPURecommendation
 	var gpuClusterErrors []error
 	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
 		if err != nil {
 			log.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
@@ -123,9 +143,6 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	allRecs = filterNodeRecsByRBAC(allRecs, userPerms)
 
-	nodeNameFilter := c.QueryParam("node_name")
-	gpuModelFilter := c.QueryParam("gpu_model")
-	termFilter := c.QueryParam("term")
 	allRecs = filterNodeRecs(allRecs, nodeNameFilter, gpuModelFilter, termFilter)
 
 	if allRecs == nil {
@@ -157,6 +174,122 @@ func GetNodeRecommendations(c echo.Context) error {
 			TotalSavingsUSD: totalSavings,
 		},
 		Data:     paged,
+		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
+		Warnings: warnings,
+	})
+}
+
+func respondNodeGPURecommendationsTripleSQL(
+	c echo.Context,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgIDStr string,
+	userPerms map[string][]string,
+	opts listoptions.ListOptions,
+	terms []engine.TermConfig,
+	clusterUUIDs []string,
+	start, now time.Time,
+	nodeNameFilter, gpuModelFilter string,
+) error {
+	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter)
+	if err != nil {
+		log.Errorf("GetNodeRecommendations: triple count failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
+	}
+	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, opts.Limit, opts.Offset)
+	if err != nil {
+		log.Errorf("GetNodeRecommendations: triple page failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
+	}
+
+	costProvider := getGPUCostProvider()
+	clusterRates := make(map[string]*float32)
+	for _, t := range triples {
+		if _, ok := clusterRates[t.ClusterUUID]; ok {
+			continue
+		}
+		var gpuRate *float32
+		if costProvider != nil && orgIDStr != "" {
+			kokuOrgID := strings.TrimPrefix(orgIDStr, "org")
+			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, t.ClusterUUID, start, now)
+			if err != nil {
+				log.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", t.ClusterUUID, err)
+			} else if cd != nil {
+				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
+					r := float32(rate)
+					gpuRate = &r
+				}
+			}
+		}
+		clusterRates[t.ClusterUUID] = gpuRate
+	}
+
+	var allRecs []model.NodeGPURecommendation
+	var gpuClusterErrors []error
+	for _, tr := range triples {
+		f := &engine.GPUQueryFilters{NodeNameExact: tr.NodeName, GPUModelExact: tr.GPUModel}
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, tr.ClusterUUID, start, now, terms, f)
+		if err != nil {
+			log.Warnf("GetNodeRecommendations: failed for cluster %s: %v", tr.ClusterUUID, err)
+			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", tr.ClusterUUID, err))
+			continue
+		}
+		if gpuRecs == nil {
+			continue
+		}
+		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, tr.ClusterUUID)
+		gpuRate := clusterRates[tr.ClusterUUID]
+		for _, group := range groups {
+			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
+				continue
+			}
+			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate)
+			if tsRec == nil {
+				continue
+			}
+			allRecs = append(allRecs, toNodeGPURecommendation(tsRec))
+		}
+	}
+
+	var warnings []string
+	if len(gpuClusterErrors) > 0 {
+		log.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
+		switch len(gpuClusterErrors) {
+		case 1:
+			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))
+		default:
+			warnings = append(warnings, fmt.Sprintf("GPU data unavailable for %d clusters", len(gpuClusterErrors)))
+		}
+	}
+
+	allRecs = filterNodeRecsByRBAC(allRecs, userPerms)
+	if allRecs == nil {
+		allRecs = []model.NodeGPURecommendation{}
+	}
+
+	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
+
+	var totalSavings *float32
+	var sum float32
+	hasSavings := false
+	for _, r := range allRecs {
+		if r.TotalNodeSavingsUSD != nil {
+			sum += *r.TotalNodeSavingsUSD
+			hasSavings = true
+		}
+	}
+	if hasSavings {
+		totalSavings = &sum
+	}
+
+	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
+		Meta: model.NodeRecommendationMeta{
+			Count:           totalCount,
+			Limit:           opts.Limit,
+			Offset:          opts.Offset,
+			TotalSavingsUSD: totalSavings,
+		},
+		Data:     allRecs,
 		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
 		Warnings: warnings,
 	})
@@ -342,20 +475,18 @@ func derefFloat32(p *float32) float32 {
 }
 
 // applyNodePagination returns the slice corresponding to the given offset and limit.
-// A limit of -1 means "return all from offset".
 func applyNodePagination(recs []model.NodeGPURecommendation, offset, limit int) []model.NodeGPURecommendation {
 	if offset >= len(recs) {
 		return []model.NodeGPURecommendation{}
 	}
 	recs = recs[offset:]
-	if limit >= 0 && limit < len(recs) {
+	if limit > 0 && limit < len(recs) {
 		recs = recs[:limit]
 	}
 	return recs
 }
 
 // buildNodeLinks produces pagination links consistent with the standard Collection shape.
-// When limit is -1 (unlimited), only the first link is meaningful.
 func buildNodeLinks(req *http.Request, count, limit, offset int) model.NodeRecommendationLinks {
 	q := req.URL.Query()
 	makeLink := func(o int) string {
@@ -366,13 +497,17 @@ func buildNodeLinks(req *http.Request, count, limit, offset int) model.NodeRecom
 	}
 
 	links := model.NodeRecommendationLinks{
-		First: makeLink(offset),
+		First: makeLink(0),
 	}
 	if limit <= 0 {
 		return links
 	}
-	links.Last = makeLink(offset + limit)
-	if offset > limit {
+	lastOffset := 0
+	if count > 0 {
+		lastOffset = ((count - 1) / limit) * limit
+	}
+	links.Last = makeLink(lastOffset)
+	if offset >= limit {
 		links.Previous = makeLink(offset - limit)
 	}
 	if offset+limit < count {

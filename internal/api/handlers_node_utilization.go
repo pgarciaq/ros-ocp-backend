@@ -1,33 +1,56 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/redhatinsights/platform-go-middlewares/identity"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
+const defaultNodeUtilLimit = 10
+
 // GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes/utilization.
 func GetNodeUtilizationRecs(c echo.Context) error {
-	XRHID := c.Get("Identity").(identity.XRHID)
-	orgID := XRHID.Identity.OrgID
-
-	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	if limit <= 0 || limit > 1000 {
-		limit = 10
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
 	}
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
-	if offset < 0 {
-		offset = 0
+	orgID := xrhid.Identity.OrgID
+
+	limit := defaultNodeUtilLimit
+	if v := strings.TrimSpace(c.QueryParam("limit")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid limit"})
+		}
+		if n < 0 {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "limit cannot be negative"})
+		}
+		if n == 0 {
+			limit = defaultNodeUtilLimit
+		} else if n > listoptions.MaxLimit {
+			limit = listoptions.MaxLimit
+		} else {
+			limit = n
+		}
+	}
+
+	offset := 0
+	if v := strings.TrimSpace(c.QueryParam("offset")); v != "" {
+		o, err := strconv.Atoi(v)
+		if err != nil || o < 0 {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid offset"})
+		}
+		offset = o
 	}
 
 	pool := database.GetPool()
@@ -39,7 +62,7 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 		})
 	}
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 
 	clusterFilter := c.QueryParam("cluster_uuid")
 	nodeFilter := c.QueryParam("node")
@@ -47,15 +70,7 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 	underutilFilter := c.QueryParam("is_underutilized")
 	overcommitFilter := c.QueryParam("is_overcommitted")
 
-	query := `
-		SELECT nr.node, nr.cluster_uuid, COALESCE(nr.term, 'medium'),
-			COALESCE(nr.cpu_util_p50, 0), COALESCE(nr.cpu_util_p95, 0),
-			COALESCE(nr.mem_util_p50, 0), COALESCE(nr.mem_util_p95, 0),
-			COALESCE(nr.cpu_overcommit_ratio, 0),
-			COALESCE(nr.is_underutilized, false), COALESCE(nr.is_overcommitted, false),
-			nr.stranded_resource, COALESCE(nr.pod_count, 0),
-			COALESCE(nr.trend_slope, 0), COALESCE(nr.notification_codes, '{}'),
-			COALESCE(nr.updated_at, 'epoch'::timestamptz)
+	baseFrom := `
 		FROM node_recommendations nr
 		JOIN clusters c ON nr.cluster_uuid::text = c.cluster_uuid::text
 		JOIN rh_accounts a ON c.tenant_id = a.id
@@ -65,34 +80,55 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 	argIdx := 2
 
 	if clusterFilter != "" {
-		query += " AND nr.cluster_uuid = $" + strconv.Itoa(argIdx)
+		baseFrom += " AND nr.cluster_uuid = $" + strconv.Itoa(argIdx)
 		args = append(args, clusterFilter)
 		argIdx++
 	}
 	if nodeFilter != "" {
-		query += " AND nr.node = $" + strconv.Itoa(argIdx)
+		baseFrom += " AND nr.node = $" + strconv.Itoa(argIdx)
 		args = append(args, nodeFilter)
 		argIdx++
 	}
 	if termFilter != "" {
-		query += " AND nr.term = $" + strconv.Itoa(argIdx)
+		baseFrom += " AND nr.term = $" + strconv.Itoa(argIdx)
 		args = append(args, termFilter)
 		argIdx++
 	}
 	if underutilFilter == "true" {
-		query += " AND nr.is_underutilized = true"
+		baseFrom += " AND nr.is_underutilized = true"
 	} else if underutilFilter == "false" {
-		query += " AND nr.is_underutilized = false"
+		baseFrom += " AND nr.is_underutilized = false"
 	}
 	if overcommitFilter == "true" {
-		query += " AND nr.is_overcommitted = true"
+		baseFrom += " AND nr.is_overcommitted = true"
 	} else if overcommitFilter == "false" {
-		query += " AND nr.is_overcommitted = false"
+		baseFrom += " AND nr.is_overcommitted = false"
 	}
 
-	query += " ORDER BY nr.node, nr.term"
+	countSQL := "SELECT COUNT(*) " + baseFrom
+	var totalCount int
+	if err := pool.QueryRow(ctx, countSQL, args...).Scan(&totalCount); err != nil {
+		log.Warnf("GetNodeUtilizationRecs: count query failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to load node utilization recommendations",
+		})
+	}
 
-	rows, err := pool.Query(ctx, query, args...)
+	dataSQL := `
+		SELECT nr.node, nr.cluster_uuid, COALESCE(nr.term, 'medium'),
+			COALESCE(nr.cpu_util_p50, 0), COALESCE(nr.cpu_util_p95, 0),
+			COALESCE(nr.mem_util_p50, 0), COALESCE(nr.mem_util_p95, 0),
+			COALESCE(nr.cpu_overcommit_ratio, 0),
+			COALESCE(nr.is_underutilized, false), COALESCE(nr.is_overcommitted, false),
+			nr.stranded_resource, COALESCE(nr.pod_count, 0),
+			COALESCE(nr.trend_slope, 0), COALESCE(nr.notification_codes, '{}'),
+			COALESCE(nr.updated_at, 'epoch'::timestamptz)` + baseFrom + `
+		ORDER BY nr.node, nr.term
+		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := pool.Query(ctx, dataSQL, args...)
 	if err != nil {
 		log.Warnf("GetNodeUtilizationRecs: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -102,7 +138,7 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 	}
 	defer rows.Close()
 
-	var allRecs []model.NodeUtilizationRec
+	var pagedRecs []model.NodeUtilizationRec
 	var scanErrors int
 	for rows.Next() {
 		var rec model.NodeUtilizationRec
@@ -128,7 +164,7 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 		rec.RecommendationType = "cpu_memory_utilization"
 		rec.Notifications = notifications.MapToKruizeFormat(codes)
 		rec.UpdatedAt = updatedAt.Format(time.RFC3339)
-		allRecs = append(allRecs, rec)
+		pagedRecs = append(pagedRecs, rec)
 	}
 	if err := rows.Err(); err != nil {
 		log.Warnf("GetNodeUtilizationRecs: rows iteration failed: %v", err)
@@ -138,16 +174,13 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 		})
 	}
 
-	if allRecs == nil {
-		allRecs = []model.NodeUtilizationRec{}
+	if pagedRecs == nil {
+		pagedRecs = []model.NodeUtilizationRec{}
 	}
-
-	totalCount := len(allRecs)
-	paged := paginateNodeUtil(allRecs, offset, limit)
 
 	resp := model.NodeUtilizationListResponse{
 		Meta:  model.NodeUtilizationMeta{Count: totalCount, Limit: limit, Offset: offset},
-		Data:  paged,
+		Data:  pagedRecs,
 		Links: buildUtilLinks(c.Request(), totalCount, limit, offset),
 	}
 	if scanErrors > 0 {
@@ -159,17 +192,6 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
-}
-
-func paginateNodeUtil(recs []model.NodeUtilizationRec, offset, limit int) []model.NodeUtilizationRec {
-	if offset >= len(recs) {
-		return []model.NodeUtilizationRec{}
-	}
-	end := offset + limit
-	if end > len(recs) {
-		end = len(recs)
-	}
-	return recs[offset:end]
 }
 
 func buildUtilLinks(r *http.Request, total, limit, offset int) map[string]*string {
@@ -202,7 +224,7 @@ func buildUtilLinks(r *http.Request, total, limit, offset int) map[string]*strin
 		links["previous"] = nil
 	}
 	lastOffset := 0
-	if total > 0 {
+	if total > 0 && limit > 0 {
 		lastOffset = ((total - 1) / limit) * limit
 	}
 	links["last"] = makeLink(lastOffset)
