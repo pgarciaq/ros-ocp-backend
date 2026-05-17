@@ -24,7 +24,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
-// GetNodeRecommendations handles GET /recommendations/openshift/nodes.
+// GetNodeRecommendations handles GET /recommendations/openshift/gpu/timeslicing.
 // It computes GPU time-slicing recommendations by querying gpu_container_digests,
 // grouping by node × GPU model, and running the time-slicing engine.
 func GetNodeRecommendations(c echo.Context) error {
@@ -191,12 +191,12 @@ func respondNodeGPURecommendationsTripleSQL(
 	start, now time.Time,
 	nodeNameFilter, gpuModelFilter string,
 ) error {
-	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter)
+	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
 	if err != nil {
 		log.Errorf("GetNodeRecommendations: triple count failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
 	}
-	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, opts.Limit, opts.Offset)
+	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, opts.Limit, opts.Offset)
 	if err != nil {
 		log.Errorf("GetNodeRecommendations: triple page failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})

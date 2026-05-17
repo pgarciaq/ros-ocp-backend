@@ -93,10 +93,12 @@ func StartAPIServer() {
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
 	}
 
-	// Node-level GPU recommendations (native engine only).
+	// Node-level GPU time-slicing and MIG-focused listings (native engine only).
 	if cfg.UseNativeEngine {
-		v1.GET("/recommendations/openshift/nodes", GetNodeRecommendations)
-		v1.GET("/recommendations/openshift/nodes/utilization", GetNodeUtilizationRecs)
+		v1.GET("/recommendations/openshift/gpu/timeslicing", GetNodeRecommendations)
+		v1.GET("/recommendations/openshift/gpu/mig", GetGPUMIGRecommendations)
+		v1.GET("/recommendations/openshift/nodes", GetNodeUtilizationRecs)
+		v1.GET("/recommendations/openshift/nodes/utilization", GetNodeUtilizationRecsLegacyPath)
 	}
 
 	// Fleet-level summary (native engine only).

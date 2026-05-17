@@ -18,13 +18,29 @@ import (
 
 const defaultNodeUtilLimit = 10
 
-// GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes/utilization.
+const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cost-management/v1/recommendations/openshift/nodes for node CPU/memory utilization recommendations.`
+
+// GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes (node CPU/memory utilization).
 func GetNodeUtilizationRecs(c echo.Context) error {
+	return respondNodeUtilizationRecs(c, false)
+}
+
+// GetNodeUtilizationRecsLegacyPath handles GET /recommendations/openshift/nodes/utilization (deprecated alias).
+func GetNodeUtilizationRecsLegacyPath(c echo.Context) error {
+	return respondNodeUtilizationRecs(c, true)
+}
+
+func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+
+	if deprecated {
+		c.Response().Header().Set("Deprecation", "true")
+		c.Response().Header().Set("Link", `</api/cost-management/v1/recommendations/openshift/nodes>; rel="alternate"`)
+	}
 
 	limit := defaultNodeUtilLimit
 	if v := strings.TrimSpace(c.QueryParam("limit")); v != "" {
@@ -189,6 +205,9 @@ func GetNodeUtilizationRecs(c echo.Context) error {
 			rowWord = "row"
 		}
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf("%d %s could not be read", scanErrors, rowWord))
+	}
+	if deprecated {
+		resp.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Warnings...)
 	}
 
 	return c.JSON(http.StatusOK, resp)

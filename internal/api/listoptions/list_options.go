@@ -22,6 +22,7 @@ const (
 	DefaultContainerRecsDBColumn = "clusters.last_reported_at"
 	DefaultNsRecsDBColumn        = "clusters.last_reported_at"
 	DefaultNodeRecsOrderBy       = "node_name"
+	DefaultGpuMigOrderBy         = "cluster_uuid"
 )
 
 type ListOptions struct {
@@ -78,6 +79,17 @@ var NodeRecsAllowedOrderBy = OrderByMap{
 	"recommended_replicas": "recommended_replicas",
 	"confidence":           "confidence",
 	"total_node_savings":   "total_node_savings_usd",
+}
+
+// GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (applied in memory after query).
+var GpuMigAllowedOrderBy = OrderByMap{
+	"cluster_uuid": "cluster_uuid",
+	"namespace":    "namespace",
+	"workload":     "workload",
+	"container":    "container",
+	"term":         "term",
+	"gpu_model":    "gpu_model",
+	"confidence":   "confidence",
 }
 
 var NsAllowedOrderBy = OrderByMap{
