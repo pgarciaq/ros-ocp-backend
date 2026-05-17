@@ -36,7 +36,7 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 155 | 0 | 155 |
+| P2 | 157 | 2 | 155 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
 
@@ -44,6 +44,8 @@ Additional fixes from the P0/P1 pass:
 
 - NULL-scan bugs corrected in `term_config`, `handlers_pvc`, `handlers_node_utilization`, `quality.go`, and `cmd/compare`
 - Pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
+
+**P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**); three partially narrowed (**#50**, **#80**, **#233**) — see statuses under [P2 — Medium](#p2--medium).
 
 ## Repository Impact Summary
 
@@ -316,10 +318,11 @@ Additional fixes from the P0/P1 pass:
 - Effort: Small
 
 **#37 — `workload_type` never updated on digest conflict** *(downgraded to P2)*
+- **Status:** ✅ Fixed (by P0/P1 work, commit affee58)
 - Repo: ros-ocp-backend
 - File: `internal/ingestion/pipeline.go`
 - Wrong workload kind label until manual correction — UX/metadata inconsistency, not silent corruption of usage math.
-- Effort: Small
+- Effort: Small *(digest upsert now includes `workload_type = EXCLUDED.workload_type` on conflict.)*
 
 ### Triaged from P1 — performance / ops *(downgraded to P2)*
 
@@ -382,6 +385,7 @@ Additional fixes from the P0/P1 pass:
 - Effort: Medium
 
 **#50 — Kafka auto-commit on upload processor** *(downgraded to P2)*
+- **Status:** ⚠️ Partially addressed (by P0/P1 work, commit affee58 — aligns with P0 #7 fix: explicit successful commits when auto-commit is off) — remaining: when `enable.auto.commit` is **true** (default), at-most-once window after commit-before-work still applies.
 - Repo: ros-ocp-backend
 - File: `internal/kafka/consumer.go`, `internal/config/config.go` (`KAFKA_AUTO_COMMIT` defaults **true**)
 - At-most-once window if the process dies after librdkafka commits but before work completes — real, but the **default Kafka consumer tradeoff**, overlapping operational concerns with #7 (manual commit path) and #58 (shutdown). Treat as reliability hardening, not the same class as wrong `meta.count` or corrupt upserts.
@@ -496,6 +500,7 @@ Additional fixes from the P0/P1 pass:
 - Inconsistent with container/namespace lists that include pagination links.
 
 **#80 — Mixed 500 vs 503 for DB errors across endpoints**
+- **Status:** ⚠️ Partially addressed (337ba5b — PVC/Snapshot/utilization pool-nil and several DB paths) — remaining: `handlers_fleet.go` and multiple PVC/Snapshot branches still mix `500` vs `503` for query failures.
 - Repo: ros-ocp-backend
 - Fleet/PVC/Snapshot use 500; container lists use 503 — same error class, different codes.
 
@@ -955,6 +960,7 @@ Additional fixes from the P0/P1 pass:
 - Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
 
 **#217 — `migration_roundtrip_test.go` asserts `ver == 55` — already wrong (58 migrations exist)**
+- **Status:** ✅ Fixed (by P0/P1 work, commit 365463f — assertion now expects migration **60**)
 - Repo: ros-ocp-backend
 - Expected schema version is hard-coded—new migrations merge without failing CI, so drift hides until prod boot.
 
@@ -1019,6 +1025,7 @@ Additional fixes from the P0/P1 pass:
 - If RBAC service returns an unexpected `Next` value, it could redirect the internal request to an attacker-controlled host.
 
 **#233 — Housekeeper logs full Kafka message payloads on error**
+- **Status:** ⚠️ Partially addressed (365463f — caveat documented in `docs/known-issues.md`) — remaining: verbose Kafka payload logging on failure paths is unchanged in code.
 - Repo: ros-ocp-backend
 - Could expose sensitive data (identities, org structures) to log aggregation systems.
 
