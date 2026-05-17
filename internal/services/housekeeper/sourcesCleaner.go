@@ -1,10 +1,15 @@
 package housekeeper
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
 
 	k "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"gorm.io/gorm"
@@ -19,11 +24,82 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils/sources"
 )
 
+// analyticsCleanupBatchSize caps how many rows each DELETE removes per transaction when cleaning up a
+// cluster. Large tenants can accumulate millions of digest rows; batching avoids a single huge transaction
+// (WAL growth, long locks) on a shared PostgreSQL instance.
+const analyticsCleanupBatchSize = 5000
+
 var cost_app_id int
+
+// deleteMatchingInBatches deletes rows matching whereClause using repeated batched DELETEs. Table must be
+// a trusted identifier (literal from cleanupClusterAnalytics only).
+//
+// PK-based batching is used instead of ctid so deletes behave correctly on partitioned tables (partition
+// pruning-friendly, stable row identity) and remain portable across PostgreSQL versions.
+func deleteMatchingInBatches(db *gorm.DB, stepName, table string, pkColumns []string, whereClause string, args []any, orgID, clusterUUID string) error {
+	log := logging.GetLogger()
+	if len(pkColumns) == 0 {
+		return fmt.Errorf("%s: pkColumns required", stepName)
+	}
+	pkList := strings.Join(pkColumns, ", ")
+	var total int64
+	for {
+		sql := fmt.Sprintf(
+			`DELETE FROM %s WHERE (%s) IN (SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT ?)`,
+			table, pkList, pkList, table, whereClause, pkList,
+		)
+		qArgs := append(append([]any{}, args...), analyticsCleanupBatchSize)
+		res := db.Exec(sql, qArgs...)
+		if res.Error != nil {
+			return fmt.Errorf("%s: %w", stepName, res.Error)
+		}
+		if res.RowsAffected == 0 {
+			break
+		}
+		total += res.RowsAffected
+		if res.RowsAffected < int64(analyticsCleanupBatchSize) {
+			break
+		}
+	}
+	log.Infof("sources cleanup: %s deleted %d rows total (org=%s cluster=%s)", stepName, total, orgID, clusterUUID)
+	return nil
+}
+
+func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
+	// Each step commits independently (batched DELETEs per table). On failure mid-run, already-deleted
+	// batches stay deleted; callers may need to retry cleanup if the Sources destroy event is not replayed.
+	steps := []struct {
+		name   string
+		table  string
+		pkCols []string
+		where  string
+		args   []any
+	}{
+		{"daily_container_digests", "daily_container_digests", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"daily_namespace_digests", "daily_namespace_digests", []string{"org_id", "cluster_uuid", "namespace", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"daily_pvc_digests", "daily_pvc_digests", []string{"id", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"daily_node_digests", "daily_node_digests", []string{"org_id", "cluster_uuid", "node", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"gpu_container_digests", "gpu_container_digests", []string{"id", "interval_start"}, `cluster_uuid = ?::uuid`, []any{clusterUUID}},
+		{"recommendation_sets", "recommendation_sets", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "term", "engine"}, `org_id = ? AND cluster_uuid = ?`, []any{orgID, clusterUUID}},
+		{"snapshot_inventory", "snapshot_inventory", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"snapshot_recommendation_sets", "snapshot_recommendation_sets", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+	}
+	for _, step := range steps {
+		if err := deleteMatchingInBatches(db, step.name, step.table, step.pkCols, step.where, step.args, orgID, clusterUUID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func StartSourcesListenerService() {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	var err error
 	cost_app_id, err = sources.GetCostApplicationID()
 	if err != nil {
@@ -31,7 +107,7 @@ func StartSourcesListenerService() {
 		os.Exit(1)
 	}
 
-	kafka.StartConsumer(cfg.SourcesEventTopic, sourcesListener)
+	kafka.StartConsumer(ctx, cfg.SourcesEventTopic, sourcesListener)
 }
 
 func sourcesListener(msg *k.Message, _ *k.Consumer) {
@@ -57,6 +133,15 @@ func sourcesListener(msg *k.Message, _ *k.Consumer) {
 					} else {
 						log.Errorf("unable to look up cluster for source_id=%d: %v", data.Source_id, err)
 					}
+					return
+				}
+				var account model.RHAccount
+				if err := db.First(&account, cluster.TenantID).Error; err != nil {
+					log.Errorf("unable to resolve rh_accounts row for tenant_id=%d: %v", cluster.TenantID, err)
+					return
+				}
+				if err := cleanupClusterAnalytics(db, account.OrgId, cluster.ClusterUUID); err != nil {
+					log.Errorf("analytics cleanup failed for org=%s cluster=%s: %v", account.OrgId, cluster.ClusterUUID, err)
 					return
 				}
 				workloads, err := model.GetWorkloadsByClusterID(cluster.ID)
