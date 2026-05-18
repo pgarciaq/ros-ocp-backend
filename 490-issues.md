@@ -36,7 +36,7 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 26 | 131 |
+| P2 | 157 | 43 | 114 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
 
@@ -48,6 +48,8 @@ Additional fixes from the P0/P1 pass:
 **P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**) before P2 batch 1; **P2 batch 1** (May 2026) closed **#13**, **#25**, **#35**, **#40**, **#41**, **#42**, **#43**, **#45**, **#46**, **#47**, **#48**, **#52**, **#57**, **#58**, **#59**, **#61** — see commit SHAs on each row under [P2 — Medium](#p2--medium). Three partially narrowed (**#50**, **#80**, **#233**).
 
 **P2 batch 2** (May 2026) closed **#123**, **#129**, **#131**, **#173**, **#182**, **#200**, **#205**, **#207** — pagination links, namespace paging, term config caching, pool config, composite indexes, config validation. **#185** deferred (matches Koku convention: no prod guardrails, Clowder overrides in production). **#206** verified already correct.
+
+**P2 batch 3** (May 2026) closed **16** issues with commits — lifecycle correctness (**#134**, **#135**, **#136**, **#137**, **#143**, **#197** → `f56c2d2`); GORM/model allowlists + chain hygiene (**#172**, **#174**, **#175** → `53bf35d`); date/time normalization + injectable clock (**#159**, **#163**, **#164**, **#170** → `3485f0a`); API handler context + cache headers (**#139**, **#202** → `7fb6cdd`). **#204** verified — existing handlers already return generic messages for 5xx; no code change. Supplementary migration fix: **000061** via commit `99576b4` (no separate issue row). **Running total (P2 audit tally):** **43** fixed / **114** remaining — batches **1–3** plus earlier **#37** / **#217** closures counted in [Resolution Status](#resolution-status).
 
 ## Repository Impact Summary
 
@@ -721,20 +723,24 @@ Additional fixes from the P0/P1 pass:
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
 
 **#134 — `RunRetentionSweep` returns nothing — callers cannot detect failure**
+- **Status:** **Fixed** in `f56c2d2`
 - Repo: ros-ocp-backend
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
 
 **#135 — Metrics Echo server goroutine has no shutdown hook**
+- **Status:** **Fixed** in `f56c2d2`
 - Repo: ros-ocp-backend
 - File: `internal/api/server.go`
 - Auxiliary HTTP servers start without lifecycle hooks—goroutines leak or block clean shutdown.
 
 **#136 — `Start_prometheus_server` ignores `ListenAndServe` error**
+- **Status:** **Fixed** in `f56c2d2`
 - Repo: ros-ocp-backend
 - File: `internal/utils/utils.go`
 - `_ = http.ListenAndServe(...)` — port conflicts or binding failures are silent.
 
 **#137 — Retention ticker goroutine uses `context.Background()` — uncancellable**
+- **Status:** **Fixed** in `f56c2d2`
 - Repo: ros-ocp-backend
 - File: `cmd/start.go`
 - `StartRetentionTicker` in `cmd/start.go` receives a non-cancellable context, so it cannot be stopped during graceful shutdown.
@@ -742,6 +748,7 @@ Additional fixes from the P0/P1 pass:
 ### Error Handling Patterns (139-158)
 
 **#139 — `context.Background()` in 8+ HTTP handlers**
+- **Status:** **Fixed** in `7fb6cdd`
 - Repo: ros-ocp-backend
 - Files: `handlers_node_utilization.go`, `handlers_node_recs.go`, `handlers_terms.go`, `handlers.go`, `gpu_enrichment.go`
 - Disables request cancellation and deadline propagation.
@@ -757,6 +764,7 @@ Additional fixes from the P0/P1 pass:
 - `fmt.Sprintf` injects `tw.BucketSQL` directly into a query — if that value is ever influenced by stored config or user input, it's SQL injection.
 
 **#143 — 12+ `_ =` assignments ignoring meaningful errors**
+- **Status:** **Fixed** in `f56c2d2` *(selective fixes)*
 - Repo: ros-ocp-backend
 - Files: `config.go`, `pvc.go`, `handlers.go`, `consumer.go`, `utils.go`, `snapshot.go`, etc.
 - Config binding, timestamp parsing (`pvc.go:131`), pipe closes, body closes, URL unescaping errors all silently discarded.
@@ -788,6 +796,7 @@ Additional fixes from the P0/P1 pass:
 ### Date/Time Handling (159-171)
 
 **#159 — CSV parse layout `"2006-01-02 15:04:05 -0700 MST"` is brittle**
+- **Status:** **Fixed** in `3485f0a`
 - Repo: ros-ocp-backend
 - File: `internal/ingestion/csvparser.go`
 - Requires the literal zone abbreviation "MST" in input. CSVs with "UTC", "GMT", or other abbreviations may fail to parse even with correct offsets.
@@ -803,10 +812,12 @@ Additional fixes from the P0/P1 pass:
 - `GetEffectiveRates` builds `start_date`/`end_date` query params with `time.Format("2006-01-02")`, which uses each `time.Time`'s location—dates near midnight can shift versus strict UTC calendar intent.
 
 **#163 — Mix of `time.Now()` (local) and `time.Now().UTC()` across codebase**
+- **Status:** **Fixed** in `3485f0a`
 - Repo: ros-ocp-backend
 - Mixing local wall time and UTC creates ambiguous `TIMESTAMPTZ` comparisons across handlers.
 
 **#164 — `Truncate(24*time.Hour)` safe only if BucketDate is always UTC**
+- **Status:** **Fixed** in `3485f0a`
 - Repo: ros-ocp-backend
 - If any non-UTC time enters the pipeline, truncation aligns to the wrong calendar day.
 
@@ -833,6 +844,7 @@ Additional fixes from the P0/P1 pass:
 - Decay math uses raw hour deltas—not calendar days—so month/DST boundaries skew freshness scoring.
 
 **#170 — `gpu_timeslicing.go` calls `time.Now().UTC()` internally (not injectable)**
+- **Status:** **Fixed** in `3485f0a`
 - Repo: ros-ocp-backend
 - File: `internal/engine/gpu_timeslicing.go`
 - `ComputeNodeTimeslicingRec` uses `time.Now().UTC()` for freshness (`isNodeFresh`)—tests cannot freeze time without refactor; subtle drift if system clock wrong.
@@ -840,6 +852,7 @@ Additional fixes from the P0/P1 pass:
 ### GORM / Model Layer (172-181)
 
 **#172 — Dynamic `Where(key, values)` in `ApplyQueryParams` without per-key allowlist**
+- **Status:** **Fixed** in `53bf35d`
 - Repo: ros-ocp-backend
 - File: `internal/model/recommendation_set_native.go`
 - `ApplyQueryParams` builds `Where(key, values)` from query strings without per-column allowlists—filter injection risk.
@@ -851,10 +864,12 @@ Additional fixes from the P0/P1 pass:
 - Pagination assumes six recommendation rows per namespace—extra terms or schema changes break paging.
 
 **#174 — `applyNSQueryParams` same dynamic-key concern**
+- **Status:** **Fixed** in `53bf35d`
 - Repo: ros-ocp-backend
 - Namespace listings reuse unconstrained dynamic filters—unexpected columns or operators reach GORM.
 
 **#175 — Reusing `*gorm.DB` after `Count` then `Scan` on same chain**
+- **Status:** **Fixed** in `53bf35d`
 - Repo: ros-ocp-backend
 - Dynamic filters or count/`Scan` chaining can produce wrong SQL, overflow ints, or skipped errors for lists.
 
@@ -919,6 +934,7 @@ Additional fixes from the P0/P1 pass:
 - Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
 
 **#197 — `PutTermSettings` has no request body size limit**
+- **Status:** **Fixed** in `f56c2d2`
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_terms.go`
 - `json.NewDecoder` reads unbounded request bodies — memory DoS vector.
@@ -939,6 +955,7 @@ Additional fixes from the P0/P1 pass:
 - `handlers_history` rounds floats to 2dp vs 3dp on native export—same metric differs by CSV surface.
 
 **#202 — Only history/quality set `Cache-Control` headers**
+- **Status:** **Fixed** in `7fb6cdd`
 - Repo: ros-ocp-backend
 - Most GETs omit cache headers—browsers may cache volatile recommendation JSON.
 
@@ -947,6 +964,7 @@ Additional fixes from the P0/P1 pass:
 - Legacy serializer emits JSON `null`—strict OpenAPI clients expecting arrays explode.
 
 **#204 — Error responses leak internal Go error strings**
+- **Status:** **Verified — no change needed** *(handlers already return generic messages for 5xx)*
 - Repo: ros-ocp-backend
 - Handlers forward raw Go errors—reveals SQL/table names to tenants.
 
