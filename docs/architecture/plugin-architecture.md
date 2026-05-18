@@ -108,11 +108,20 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 }
 ```
 
-**GPU and node digest upserts chained inside container digest processing** (`internal/ingestion/pipeline.go`):
+**GPU and node digest upserts chained after container digest processing** (`internal/ingestion/pipeline.go`): **`ParseAndDigestCSV`** parses, validates, groups, and upserts container digests, returning **`[]MetricRow`**; **`ProcessCSVToDigests`** wraps it and invokes GPU/node upserts (soon **`IngestHook`** dispatch from **`report_processor.go`**):
 
-```267:276:internal/ingestion/pipeline.go
-	log.Infof("ProcessCSVToDigests: upserted %d digests for org=%s cluster=%s",
-		len(grouped), orgID, clusterUUID)
+```277:297:internal/ingestion/pipeline.go
+// ProcessCSVToDigests is the full native engine ingestion pipeline:
+// parse CSV -> validate -> group by container+day -> compute digests -> upsert to DB,
+// then GPU and node digest upserts (slated to move behind ingest-hook dispatch).
+func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+	rows, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return nil
+	}
 
 	if err := upsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("GPU digest upsert: %w", err)
@@ -121,6 +130,9 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := upsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("node digest upsert: %w", err)
 	}
+
+	return nil
+}
 ```
 
 **HTTP routes registered imperatively per domain** (`internal/api/server.go`):
@@ -193,7 +205,7 @@ Together, these fragments show the same pattern repeated: **dispatch by enum + i
 | **Runtime enable/disable without recompilation** | Operators choose active domains via env vars; compiled plugins not in the allowlist (or explicitly blocklisted) do not run **their** ingest hooks, routes, retention, or migrations **contributions**. The binary remains a single artefact with all plugins linked. |
 | **Incremental adoption** | Introduce registry and interfaces first; migrate one recommendation type at a time behind the same API. |
 | **Explicit cross-plugin relationships** | Secondary behavior (GPU/node piggybacking on container CSV; GPU enrichment of container HTTP responses) becomes **declarative** (`IngestHook`, `APIEnricher`) instead of buried ordering inside monolithic functions. |
-| **Testability** | Each plugin can be unit-tested with fake `PluginContext`; integration tests compose a subset of registered plugins. |
+| **Testability** | Each plugin can be unit-tested with fake pools and typed stubs; integration tests compose a subset of registered plugins. |
 
 Non-goals are listed in [§13](#13-what-this-design-does-not-do).
 
@@ -234,72 +246,70 @@ flowchart TB
     Enabled --> Migrate
 ```
 
-**Shared infrastructure** (PostgreSQL pool, service config, term-config resolver, Prometheus metrics, structured logging) is passed through a **`PluginContext`** constructed once at startup and injected into plugins that need it (either via setter called from `main`, or passed into `ProcessCSV` / `RunRetention` — exact wiring is an implementation detail left to Phase 1).
+**Shared infrastructure:** Trait methods take concrete dependencies in their signatures (for example `*pgxpool.Pool`, `context.Context`, Echo groups). **[`PluginContext`](../../internal/plugin/context.go)** exists for **initialization-time** dependency injection (pool, logger entry, optional typed config snapshot) when core wires plugins at startup.
 
-### 3.1 Configuration boundary (confirmed)
+Plugins may use the same globals as the rest of the codebase — for example **[`config.GetConfig()`](../../internal/config/config.go)** and **[`logging.GetLogger()`](../../internal/logging/logging.go)** — where that matches existing patterns. Prefer explicit parameters on trait methods when the dependency is always needed for that operation.
 
-- **Single load:** The root **`Config`** struct is populated **once at process startup** via Viper (existing pattern). This stays the single source of truth, consistent with Koku’s central `settings.py`, the metrics operator’s typed CRD spec, and today’s `ros-ocp-backend` wiring.
-- **No ambient reads in plugins:** Plugins **must not** call Viper or **`os.Getenv`** directly. Each plugin defines its own **typed config struct**; startup code maps fields from the root **`Config`** into **`PluginContext`** (or an embedded plugin-specific config snapshot) **once**, before serving traffic.
-- **Cleanup:** GPU-related toggles currently read via raw **`os.Getenv`** in **`gpu_recommender.go`** should move onto the central **`Config`** and flow through **`PluginContext`** like other domains—mirroring Django’s “central settings + app reads constants” and the operator’s typed spec.
+### 3.1 Configuration boundary
+
+- **Single load:** The root **`Config`** struct is populated **once at process startup** via Viper (existing pattern). This remains the central source of truth for service-wide settings.
+- **Plugins:** May read **`config.GetConfig()`** like other packages, or receive snapshots via **`PluginContext`** during wiring; avoid duplicating Viper reads for values already on **`Config`** when practical.
+- **Cleanup (directional):** Domain-specific toggles that still use raw **`os.Getenv`** should migrate onto the central **`Config`** over time for consistency.
 
 ---
 
 ## 4. Plugin interfaces (trait-based)
 
-Not every plugin implements every trait. Core code uses **type assertions** to detect capabilities—no “fat” interface forcing empty methods.
+Not every plugin implements every trait. Core code uses **type assertions** (see **[`plugin.ByTrait`](../../internal/plugin/registry.go)**) to detect capabilities—no “fat” interface forcing empty methods.
+
+The canonical definitions live in **[`internal/plugin/plugin.go`](../../internal/plugin/plugin.go)**. Signatures use concrete dependencies (`*pgxpool.Pool`, `echo.Group`, etc.) rather than threading **`PluginContext`** through every hot-path call.
 
 ```go
 package plugin
 
-// Plugin is the base identity every recommendation domain must implement.
+// Plugin is the base interface every plugin implements.
 type Plugin interface {
-	Name() string           // stable identifier: "container", "gpu", "pvc", ...
-	DefaultEnabled() bool   // when ROS_ENABLED_PLUGINS is unset, include if true
+	Name() string
+	// Enabled reports whether this plugin should participate in the registry.
+	Enabled() bool
 }
 
-// CSVIngestor handles CSV files arriving via Kafka (after URL fetch / typing).
+// CSVIngestor plugins own CSV parsing for one or more logical CSV report types.
 type CSVIngestor interface {
 	Plugin
-	PayloadTypes() []PayloadType // types.DetermineCSVType or successor maps files here
-	ProcessCSV(ctx context.Context, pctx *PluginContext, fileURL string, msg KafkaMsg) error
+	SupportedCSVTypes() []string
+	IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]ingestion.MetricRow, error)
 }
 
-// IngestHook runs after the primary CSV ingestor parses the file and performs its own persistence.
-// Confirmed contract (Option B): the container plugin passes parsed rows in-memory — no second DTO type.
-// Hook errors are non-fatal by default unless a future Critical() trait is introduced (§6.1.1).
+// IngestHook runs after a CSVIngestor has parsed matching CSV types.
 type IngestHook interface {
 	Plugin
-	HookAfter() string // plugin Name(), e.g. "container"
-	OnAfterCSVIngest(ctx context.Context, pctx *PluginContext, primary Plugin, rows []ingestion.MetricRow, orgID, clusterUUID string, msg KafkaMsg) error
+	HookAfterCSVTypes() []string
+	AfterIngest(ctx context.Context, pool *pgxpool.Pool, rows []ingestion.MetricRow, orgID, clusterUUID string) error
 }
 
-// APIProvider registers HTTP routes under the authenticated v1 group.
+// APIProvider registers HTTP routes on the authenticated API group.
 type APIProvider interface {
 	Plugin
-	RegisterRoutes(e *echo.Group, pctx *PluginContext)
+	RegisterRoutes(g *echo.Group)
 }
 
-// APIEnricher decorates responses owned by another plugin.
-// Example: GPU metadata on container list/detail payloads.
+// APIEnricher plugins decorate responses produced by other handlers/plugins.
 type APIEnricher interface {
 	Plugin
-	EnrichTarget() string // plugin Name(), e.g. "container"
-	EnrichList(ctx context.Context, pctx *PluginContext, orgID string, results *[]model.NativeContainerResult) error
-	EnrichDetail(ctx context.Context, pctx *PluginContext, orgID string, detail interface{}) error
+	EnrichResponse(ctx context.Context, resp interface{}) error
 }
 
-// RetentionProvider contributes partition drops / DELETE sweeps for domain-owned tables.
+// RetentionProvider contributes retention sweep logic for domain-owned tables.
 type RetentionProvider interface {
 	Plugin
-	RunRetention(ctx context.Context, pctx *PluginContext, retentionMonths int, historyRetentionDays int) error
+	RetentionTables() []string
+	SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error
 }
 
-// MigrationProvider documents plugin-owned DDL that lives in the central migrations/ directory (§6.4).
-// Per-plugin migration subtrees (embedded fs.FS, internal/plugins/*/migrations/) are not used.
+// MigrationProvider documents tables owned by plugin DDL in the central migrations tree.
 type MigrationProvider interface {
 	Plugin
-	// OwnedTables lists logical tables/partitions introduced by this plugin’s SQL files — useful for
-	// retention validation and docs; exact shape deferred to implementation.
 	OwnedTables() []string
 }
 ```
@@ -323,45 +333,24 @@ type MetricRow struct {
 
 **IngestHook data contract (confirmed — Option B):** After the container **`CSVIngestor`** parses the CSV, hooks receive **`[]MetricRow`** — the existing struct in [`internal/ingestion/models.go`](../../internal/ingestion/models.go). That type is already the de facto DTO for **`upsertGPUDigests`** and **`upsertNodeDigests`** in the ingestion pipeline. **Option C** (hooks re-query the DB after the container writer persists rows) was rejected: it adds I/O, couples hooks to table shapes, and complicates tests. Passing **`[]MetricRow`** avoids an extra DB round-trip; hooks are trivially unit-testable with in-memory slices; and **`MetricRow`** can grow additively as the CSV schema evolves—hooks that only read fields they need remain compatible.
 
-**Note:** `PayloadType`, `KafkaMsg`, Echo types, and **`MigrationProvider.OwnedTables()`** are illustrative; the implementation should import existing `internal/types`, `internal/ingestion`, and `internal/api` packages rather than duplicating models.
+**Note:** Kafka/message types and routing details stay in **`internal/types`** and **`internal/api`**; traits reference **`ingestion.MetricRow`** where needed rather than duplicating models.
 
 ---
 
 ## 5. Registry implementation
 
-- **`Register(p Plugin)`** — appends to a package-level slice; called from each plugin’s `init()`.
-- **`Enabled()`** — returns plugins filtered by env:
+Implementation: **[`internal/plugin/registry.go`](../../internal/plugin/registry.go)**.
 
-  - If **`ROS_ENABLED_PLUGINS`** is non-empty: treat as **allowlist** (comma-separated names). Only registered plugins whose `Name()` appears are enabled (regardless of `DefaultEnabled()`, unless we explicitly document hybrid behavior—recommended: allowlist wins).
-  - If **`ROS_ENABLED_PLUGINS`** is empty: enable all registered plugins such that **`DefaultEnabled() == true`**, then apply **`ROS_DISABLED_PLUGINS`** as a **blocklist** (comma-separated names).
+- **`Register(p Plugin)`** — appends to a package-level slice; called from each plugin’s **`init()`**. **`Register(nil)` panics** with a clear message — accidental nil registration is a programmer error.
+- **Convention:** Always register **pointer receivers** so embedding/`interface` satisfaction works as intended, e.g. **`plugin.Register(&MyPlugin{})`**.
+- **`Enabled()`** — returns plugins that pass **`p.Enabled()`** (implementations usually delegate to **`EnabledFor(Name())`** per plugin rules), then applies **kruize exclusivity**: if any plugin named **`kruize`** is enabled, only kruize plugins are returned and others are skipped (with a one-time warning).
 
-- **Ordering** — registry preserves registration order (import order in `main`). For deterministic hooks, core may **sort** hooks by `(HookAfter(), Name())` or document that hook order follows registration order after filtering.
+Env semantics (**[`EnabledFor`](../../internal/plugin/registry.go)**):
 
-Illustrative logic (**central registry** reads **`ROS_*`** env vars; plugin implementations must not call **`os.Getenv`** themselves — §3.1):
+- If **`ROS_ENABLED_PLUGINS`** is non-empty: **allowlist** only (comma-separated names matching **`Plugin.Name()`**).
+- If empty: every plugin is eligible except **`kruize`** (off unless allowlisted), then **`ROS_DISABLED_PLUGINS`** applies as a blocklist.
 
-```go
-func Enabled() []Plugin {
-	allow := parsePluginSet(os.Getenv("ROS_ENABLED_PLUGINS"))
-	deny := parsePluginSet(os.Getenv("ROS_DISABLED_PLUGINS"))
-	var out []Plugin
-	for _, p := range registry {
-		name := p.Name()
-		if len(allow) > 0 {
-			if allow[name] {
-				out = append(out, p)
-			}
-			continue
-		}
-		if deny[name] {
-			continue
-		}
-		if p.DefaultEnabled() {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-```
+- **Ordering** — registry preserves registration order (import order in **`main`**). For deterministic hooks, core may **sort** hooks or document that hook order follows registration order after filtering.
 
 **Blank imports** in `cmd/*/main.go` (or a single `internal/plugins/import_plugins.go`) pull in plugins:
 
@@ -380,13 +369,17 @@ import (
 
 ### 6.1 Ingestion (`report_processor.go`)
 
+**Hook orchestration rule:** Ingest-hook dispatch (which hooks run after which CSV ingestor, ordering, non-fatal errors) is orchestrated from **`internal/services/report_processor.go`**, not from **`internal/ingestion/`**. That avoids import cycles (**`ingestion`** imports **`plugin`** for **`CSVIngestor`** / **`[]MetricRow`** plumbing).
+
+**Container CSV seam:** [`ParseAndDigestCSV`](../../internal/ingestion/pipeline.go) parses and validates (via [`ParseCSVRows`](../../internal/ingestion/csvparser.go)), groups, upserts container samples/digests, and returns **`[]MetricRow`**. [`ProcessCSVToDigests`](../../internal/ingestion/pipeline.go) wraps it and today still calls GPU/node digest upserts inline; PR2 moves those behind **`IngestHook`** dispatch from **`report_processor.go`**.
+
 Replace the fixed sequence of `if csvType == …` with:
 
-1. Compute `csvType` (eventually **`CSVIngestor.PayloadTypes()`** may supersede central string matching, or `DetermineCSVType` becomes a fallback delegating to plugins).
-2. For each enabled plugin implementing **`CSVIngestor`**, if `csvType` ∈ `PayloadTypes()`, call `ProcessCSV`.
-3. For each enabled **`IngestHook`** where `HookAfter()` equals the **primary** plugin `Name()` that just ran, call **`OnAfterCSVIngest`** with the parsed **`[]MetricRow`** (plus org/cluster identifiers from context)—confirmed Option B in §4.
+1. Compute `csvType` (eventually **`CSVIngestor.SupportedCSVTypes()`** may supersede central string matching, or **`DetermineCSVType`** becomes a fallback delegating to plugins).
+2. For each enabled plugin implementing **`CSVIngestor`**, if the file matches a supported type, call **`IngestCSV`** (or equivalent wiring).
+3. For each enabled **`IngestHook`** whose **`HookAfterCSVTypes()`** overlaps the ingestor’s CSV type keys, call **`AfterIngest`** with the parsed **`[]MetricRow`** and identifiers — same in-memory contract as §4 (Option B).
 
-This preserves semantics while allowing GPU/node code to move out of `internal/ingestion/pipeline.go`’s unconditional tail calls.
+This preserves semantics while allowing GPU/node code to move out of unconditional tail calls inside **`ProcessCSVToDigests`**.
 
 ### 6.1.1 Hook failure semantics (confirmed)
 
@@ -403,14 +396,14 @@ After constructing Echo groups and middleware:
 ```go
 for _, p := range plugin.Enabled() {
 	if api, ok := p.(plugin.APIProvider); ok {
-		api.RegisterRoutes(v1, pctx)
+		api.RegisterRoutes(v1)
 	}
 }
 ```
 
 **Route ordering (confirmed):** No **`Priority() int`** on **`APIProvider`** is required. Echo’s router matches **`static > param > any`**, so concrete paths such as **`/recommendations/openshift/gpu`** or **`/recommendations/openshift/namespaces`** naturally win over **`/:recommendation-id`** without explicit priorities. **Rule for core:** register catch-all or parameterized routes (**`/:recommendation-id`** and similar) **after** the generic plugin registrar loop so every plugin has registered its static segments first. Plugins expose **full path strings** in their **`RegisterRoutes`** implementations (as today in [`internal/api/server.go`](../../internal/api/server.go)); contributors must not rely on manual ordering beyond “catch-all last.”
 
-Container list/detail handlers resolve **`APIEnricher`** targets named `"container"` instead of calling `enrichWithGPU` directly.
+Container list/detail handlers resolve **`APIEnricher`** plugins from the registry instead of calling **`enrichWithGPU`** directly (trait shape: **`EnrichResponse`** in §4).
 
 ### 6.3 Retention (`internal/engine/retention.go`)
 
@@ -419,12 +412,12 @@ Split today’s monolithic `retainedTables` slice:
 - **Framework-owned** tables stay in core (for example org/cluster/account bookkeeping if applicable).
 - Each **`RetentionProvider`** appends domain-specific partition parents or runs targeted `DELETE`s.
 
-Core orchestrates:
+Core orchestrates (trait shape today uses a cutoff timestamp — see **`RetentionProvider`** in §4):
 
 ```go
 for _, p := range plugin.Enabled() {
 	if rp, ok := p.(plugin.RetentionProvider); ok {
-		if err := rp.RunRetention(ctx, pctx, months, historyDays); err != nil {
+		if err := rp.SweepRetention(ctx, pool, olderThan); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -460,9 +453,9 @@ Today’s **dual execution paths** (**`WithFallback`** handlers and **`ROS_USE_N
 
 | Coupling | Today | Resolution |
 |----------|--------|------------|
-| **Container CSV fan-out** | `ProcessCSVToDigests` always upserts GPU + node digests; `processContainerCSVNative` always runs node recommendations. | **Container** plugin owns digest + container engine only. **GPU** / **node** implement **`IngestHook`** on **`"container"`**. Hooks receive **`[]MetricRow`** after parse (Option B — §4): same struct used today by **`upsertGPUDigests`** / **`upsertNodeDigests`** in [`internal/ingestion/pipeline.go`](../../internal/ingestion/pipeline.go). Node recommendation batch remains **`node`** plugin responsibility after container ingest completes. |
-| **GPU API enrichment** | `handlers.go` calls `enrichWithGPU` unconditionally on native lists. | **GPU** plugin implements **`APIEnricher`** with `EnrichTarget() == "container"`. Container handlers query enrichers from registry. |
-| **Shared infrastructure** | Packages import `db.GetPool()` and `config.GetConfig()` freely. | **`PluginContext`** carries pool, **typed config subsets** derived once from the root Viper-loaded **`Config`** (§3.1), metrics, and collaborators (cost provider, RBAC hooks). Reduces init-time globals for tests. |
+| **Shared infrastructure** | Packages import `db.GetPool()` and **`config.GetConfig()`** freely. | Trait methods receive **`pool`** (and similar) explicitly; **`PluginContext`** is optional for startup wiring (§3). Plugins may use **`logging.GetLogger()`** like the rest of the codebase. |
+| **Container CSV fan-out** | **`ProcessCSVToDigests`** wraps **`ParseAndDigestCSV`** then always upserts GPU + node digests; **`processContainerCSVNative`** runs node recommendations. | **Container** path exposes **`[]MetricRow`** after **`ParseAndDigestCSV`**. **GPU** / **node** become **`IngestHook`** implementations (same structs **`MetricRow`** already feeds today). Node recommendation batch remains **`node`** plugin responsibility after container ingest completes. |
+| **GPU API enrichment** | `handlers.go` calls `enrichWithGPU` unconditionally on native lists. | **GPU** plugin implements **`APIEnricher`** so container handlers delegate enrichment via the registry instead of hard-coded calls. |
 | **Retention table lists** | Single `retainedTables` array mixes domains. | Partition parents move under **`RetentionProvider`** per plugin; core retains only cross-cutting tables. |
 
 ---
@@ -471,8 +464,8 @@ Today’s **dual execution paths** (**`WithFallback`** handlers and **`ROS_USE_N
 
 ```
 internal/plugins/
-  registry.go            # Register, Enabled, PluginContext
-  traits.go              # interface definitions (+ PayloadType aliases)
+  registry.go            # init-time wiring helpers (optional PluginContext)
+  traits.go              # re-export or thin wrappers if needed
 
   _example/
     README.md            # trait contract for plugin authors (see §8.1)
@@ -560,7 +553,7 @@ No edits to `server.go`’s route list should be required beyond the generic reg
 |----------|-----------|
 | **`ROS_ENABLED_PLUGINS`** | Comma-separated allowlist. When set, **only** these plugins run (names match `Plugin.Name()`). |
 | **`ROS_DISABLED_PLUGINS`** | Comma-separated blocklist applied when **allowlist is unset**: defaults minus blocked names. |
-| **Both unset** | All plugins with `DefaultEnabled() == true`. |
+| **Both unset** | Plugins use **`Plugin.Enabled()`** (typically **`EnabledFor(Name())`**); **`kruize`** stays off unless allowlisted; **`ROS_DISABLED_PLUGINS`** subtracts from that default set (see §5). |
 
 Examples:
 
@@ -584,7 +577,7 @@ ROS_DISABLED_PLUGINS=gpu,snapshot
 
 | Phase | Deliverable |
 |-------|-------------|
-| **Phase 1 — Skeleton** | Add `internal/plugins` registry, `PluginContext`, env parsing, unit tests. Refactor `report_processor.go`, `server.go`, and `retention.go` to loop plugins while existing logic lives in **adapter structs** calling today's functions. |
+| **Phase 1 — Skeleton** | Add **`internal/plugin`** registry, env parsing, unit tests, optional **`PluginContext`**. Refactor **`report_processor.go`**, **`server.go`**, and **`retention.go`** to loop plugins while existing logic lives in **adapter structs** calling today's functions. |
 | **Phase 2 — Simple domains** | Migrate **PVC** and/or **snapshot** end-to-end into plugin packages (low cross-talk). |
 | **Phase 3 — Coupled domains** | Break **`ProcessCSVToDigests`** GPU/node tail into **`IngestHook`** implementations; move **`runNodeRecommendations`** invocation to **node** plugin; replace **`enrichWithGPU`** with **`APIEnricher`**. |
 | **Phase 4 — New domains** | Add **VM** (then JVM/Go) using only plugin-local code + blank import—prove the framework. |
@@ -637,7 +630,7 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 
 | Phase | Testing focus |
 |-------|----------------|
-| **Phase 1 — Framework** | Add new tests for the **registry**, **`PluginContext`**, and **ingestion/API dispatch loops**. The **`_example`** plugin gets dedicated tests proving **every trait is callable** through the normal registration path. **Existing tests unchanged**—they provide the regression safety net. |
+| **Phase 1 — Framework** | Add tests for the **registry**, trait dispatch loops, and optional **`PluginContext`** wiring. The **`_example`** plugin proves traits stay callable through registration. **Existing tests unchanged**—they provide the regression safety net. |
 | **Phase 2 — Container plugin extraction** | Keep **`recommend_cpu_test.go`**, **`recommend_memory_test.go`**, **`digest_test.go`**, and related container tests **in place** and passing. Add a **small integration test** asserting the container plugin **registers** and the dispatch loop **invokes** it for container CSVs. |
 | **Phase 3+ — GPU, node, namespace plugins** | Same pattern: **domain-specific tests remain** where they live today; add **wiring tests** that enabled plugins are registered and hooks/routes/retention hooks fire as expected. |
 | **Post-extraction (optional)** | **Cosmetic** re-home tests under each plugin’s directory—organizational only; **no functional requirement**. |
@@ -648,4 +641,4 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 
 ## 17. Summary
 
-A **trait-based, compile-time plugin model** with **`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`** gives operators control over recommendation domains **without forking the binary**, while eliminating the worst of today’s scattered `if` chains documented in §1.2. Confirmed mechanics: **`IngestHook`** receives **`[]MetricRow`** (§4), hook failures are **non-fatal by default** (§6.1.1), migrations remain **one central numbered directory** with **`-- plugin:`** headers (§6.4), Echo **static-before-param** routing avoids a **`Priority()`** API when core registers catch-alls **last** (§6.2), **Kruize stays an optional legacy path** until native-only is mandatory (§6.5), **config flows once from Viper into typed plugin subsets** via **`PluginContext`** (§3.1), an **`_example`** plugin documents traits at compile time (§8.1), and testing stays anchored on existing coverage plus phased wiring tests ([§16](#16-test-strategy)). The phased migration limits risk: first introduce indirection, then move code, then untangle GPU/node/container coupling, then add VM/JVM/Golang plugins as first-class citizens.
+A **trait-based, compile-time plugin model** with **`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`** gives operators control over recommendation domains **without forking the binary**, while eliminating the worst of today’s scattered `if` chains documented in §1.2. Confirmed mechanics: **`IngestHook`** receives **`[]MetricRow`** (§4), hook failures are **non-fatal by default** (§6.1.1), migrations remain **one central numbered directory** with **`-- plugin:`** headers (§6.4), Echo **static-before-param** routing avoids a **`Priority()`** API when core registers catch-alls **last** (§6.2), **Kruize stays an optional legacy path** until native-only is mandatory (§6.5), **trait methods take concrete deps** (pool, Echo groups) while **`PluginContext`** remains available for optional startup wiring (§3), plugins may use **`config.GetConfig()`** / **`logging.GetLogger()`** like other packages (§3.1), an **`_example`** plugin documents traits at compile time (§8.1), and testing stays anchored on existing coverage plus phased wiring tests ([§16](#16-test-strategy)). The phased migration limits risk: first introduce indirection, then move code, then untangle GPU/node/container coupling, then add VM/JVM/Golang plugins as first-class citizens.
