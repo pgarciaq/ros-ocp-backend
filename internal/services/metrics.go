@@ -35,3 +35,9 @@ var (
 		Help: "The total number of errors encountered while fetching CSV from URL",
 	})
 )
+
+// PluginHookErrors counts non-fatal failures from plugin ingest hooks (processing continues).
+var PluginHookErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "ros_ocp_plugin_hook_errors_total",
+	Help: "Plugin ingest hook failures (non-fatal; CSV processing continued)",
+}, []string{"plugin", "hook_type"})

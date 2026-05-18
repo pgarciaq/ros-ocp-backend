@@ -378,7 +378,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(c.Request().Context(), results, OrgID)
+	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
 	results, count = filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
@@ -479,7 +479,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(c.Request().Context(), results, OrgID)
+	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
 	results, filteredCount := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
@@ -797,7 +797,7 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	}
 
 	singleSlice := []model.NativeContainerResult{*result}
-	enrichWithGPU(ctx, singleSlice, orgID)
+	EnrichNativeContainerResults(ctx, &NativeContainerEnrichmentInput{OrgID: orgID, Results: singleSlice})
 	*result = singleSlice[0]
 
 	return model.BuildDetailResponse(result, plots, met)

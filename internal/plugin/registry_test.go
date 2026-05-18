@@ -167,8 +167,26 @@ func TestApplyLegacyUseNativeEngineEnv_noopWhenNative(t *testing.T) {
 	assert.Equal(t, "", os.Getenv(envEnabledPlugins))
 }
 
-func TestApplyLegacyUseNativeEngineEnv_respectsExistingAllowlist(t *testing.T) {
-	t.Setenv(envEnabledPlugins, "container")
+func TestApplyLegacyUseNativeEngineEnv_forceKruizeOverwritesAllowlist(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "container,gpu")
 	ApplyLegacyUseNativeEngineEnv(false)
+	assert.Equal(t, KruizePluginName, os.Getenv(envEnabledPlugins))
+}
+
+func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeFromAllowlist(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "kruize,container")
+	ApplyLegacyUseNativeEngineEnv(true)
 	assert.Equal(t, "container", os.Getenv(envEnabledPlugins))
+}
+
+func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeOnlyClearsAllowlist(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "kruize")
+	ApplyLegacyUseNativeEngineEnv(true)
+	assert.Equal(t, "", os.Getenv(envEnabledPlugins))
+}
+
+func TestApplyLegacyUseNativeEngineEnv_nativeNoopWhenAllowlistDoesNotIncludeKruize(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "container,namespace")
+	ApplyLegacyUseNativeEngineEnv(true)
+	assert.Equal(t, "container,namespace", os.Getenv(envEnabledPlugins))
 }

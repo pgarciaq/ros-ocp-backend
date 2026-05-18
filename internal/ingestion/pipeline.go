@@ -274,9 +274,9 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 	return rows, nil
 }
 
-// ProcessCSVToDigests is the full native engine ingestion pipeline:
-// parse CSV -> validate -> group by container+day -> compute digests -> upsert to DB,
-// then GPU and node digest upserts (slated to move behind ingest-hook dispatch).
+// ProcessCSVToDigests parses container CSV and upserts container digests, then always runs GPU and node
+// digest upserts. Used by CLI/tools and tests; the Kafka native path uses services.processContainerDigestFallback
+// instead so ROS_ENABLED_PLUGINS can disable GPU/node upserts when the container ingestor falls back.
 func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
 	rows, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
 	if err != nil {

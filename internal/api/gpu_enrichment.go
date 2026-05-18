@@ -18,6 +18,11 @@ import (
 
 const gpuTermConfigCacheTTL = 60 * time.Second
 
+// EnrichNativeContainerResultsWithGPU attaches GPU utilization and savings data (APIEnricher delegate).
+func EnrichNativeContainerResultsWithGPU(ctx context.Context, orgID string, results []model.NativeContainerResult) {
+	enrichWithGPU(ctx, results, orgID)
+}
+
 type gpuTermConfigCacheEntry struct {
 	terms []engine.TermConfig
 	until time.Time

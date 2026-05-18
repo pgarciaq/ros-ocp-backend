@@ -26,7 +26,7 @@ The package is **non-functional**: it registers in `init()` but [`ExamplePlugin.
 | [`RetentionProvider`](../../internal/plugin/plugin.go) | Declare [`RetentionTables`](../../internal/plugin/plugin.go) and implement [`SweepRetention`](../../internal/plugin/plugin.go). |
 | [`MigrationProvider`](../../internal/plugin/plugin.go) | Document [`OwnedTables`](../../internal/plugin/plugin.go) for DDL owned by this domain. |
 
-Shared dependencies are passed through [`plugin.PluginContext`](../../internal/plugin/context.go) when core wires plugins in later phases.
+Shared dependencies today come from [`config.GetConfig()`](../../internal/config/config.go) and [`logging.GetLogger()`](../../internal/logging/logging.go) like other packages. [`plugin.PluginContext`](../../internal/plugin/context.go) is reserved for future lifecycle wiring (typed config injection) but **is not** passed by the dispatch layer yet.
 
 ## Environment variables
 

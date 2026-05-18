@@ -15,6 +15,7 @@ func TestGPUPlugin_traitAssertions(t *testing.T) {
 		_ plugin.Plugin            = (*GPUPlugin)(nil)
 		_ plugin.IngestHook        = (*GPUPlugin)(nil)
 		_ plugin.APIProvider       = (*GPUPlugin)(nil)
+		_ plugin.APIEnricher       = (*GPUPlugin)(nil)
 		_ plugin.RetentionProvider = (*GPUPlugin)(nil)
 	)
 }

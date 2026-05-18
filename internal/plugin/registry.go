@@ -141,23 +141,57 @@ func EnabledFor(name string) bool {
 	return true
 }
 
-// ApplyLegacyUseNativeEngineEnv maps ROS_USE_NATIVE_ENGINE=false to ROS_ENABLED_PLUGINS=kruize when
-// the allowlist is unset so legacy deployments keep working. Prefer setting ROS_ENABLED_PLUGINS=kruize
-// explicitly. Call once from main before subsystem code reads EnabledFor / Enabled.
+// ApplyLegacyUseNativeEngineEnv reconciles legacy ROS_USE_NATIVE_ENGINE with ROS_ENABLED_PLUGINS.
+// Call once from main before subsystem code reads EnabledFor / Enabled.
+//
+// When useNativeEngine is false: forces ROS_ENABLED_PLUGINS=kruize (overwrites any user value) and logs deprecation.
+// When useNativeEngine is true: strips "kruize" from a non-empty ROS_ENABLED_PLUGINS allowlist if present
+// (kruize cannot run alongside native plugins); logs a warning when stripping.
 func ApplyLegacyUseNativeEngineEnv(useNativeEngine bool) {
-	if useNativeEngine {
+	log := logging.GetLogger()
+	if !useNativeEngine {
+		if err := os.Setenv(envEnabledPlugins, KruizePluginName); err != nil {
+			log.Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
+			return
+		}
+		log.Warn("ROS_USE_NATIVE_ENGINE=false is deprecated; forcing ROS_ENABLED_PLUGINS=kruize")
 		return
 	}
-	if strings.TrimSpace(os.Getenv(envEnabledPlugins)) != "" {
+
+	raw := strings.TrimSpace(os.Getenv(envEnabledPlugins))
+	if raw == "" {
 		return
 	}
-	if err := os.Setenv(envEnabledPlugins, KruizePluginName); err != nil {
-		logging.GetLogger().Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
+	newVal, removed := stripPluginNameFromAllowlist(raw, KruizePluginName)
+	if !removed {
 		return
 	}
-	logging.GetLogger().Warn(
-		"ROS_USE_NATIVE_ENGINE=false is deprecated; use ROS_ENABLED_PLUGINS=kruize instead",
-	)
+	log.Warn("ROS_ENABLED_PLUGINS listed kruize while the native engine is enabled; removing kruize from the allowlist (mutually exclusive)")
+	if newVal == "" {
+		if err := os.Unsetenv(envEnabledPlugins); err != nil {
+			log.Warnf("plugin registry: could not unset %s: %v", envEnabledPlugins, err)
+		}
+		return
+	}
+	if err := os.Setenv(envEnabledPlugins, newVal); err != nil {
+		log.Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
+	}
+}
+
+func stripPluginNameFromAllowlist(raw, name string) (newList string, removed bool) {
+	var kept []string
+	for _, part := range strings.Split(raw, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if p == name {
+			removed = true
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return strings.Join(kept, ","), removed
 }
 
 func parsePluginSet(raw string) map[string]bool {
