@@ -128,7 +128,10 @@ func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
 		}
 	}
 	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
-		row.IntervalEnd, _ = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
+		row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
+		if err != nil {
+			return row, fmt.Errorf("parse interval_end: %w", err)
+		}
 	}
 	if idx.namespace >= 0 && idx.namespace < len(record) {
 		row.Namespace = strings.TrimSpace(record[idx.namespace])
@@ -228,7 +231,7 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 	groups := make(map[pvcDigestKey]*accumulator)
 
 	for _, r := range rows {
-		date := r.IntervalStart.Truncate(24 * time.Hour)
+		date := r.IntervalStart.UTC().Truncate(24 * time.Hour)
 		key := pvcDigestKey{Date: date, Namespace: r.Namespace, PVC: r.PersistentVolumeClaim}
 
 		intervalSeconds := r.IntervalEnd.Sub(r.IntervalStart).Seconds()

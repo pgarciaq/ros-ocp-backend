@@ -249,7 +249,7 @@ func TestComputeNodeTimeslicingRec_HappyPath(t *testing.T) {
 		},
 	}
 
-	rec := ComputeNodeTimeslicingRec(input, &gpuRate)
+	rec := ComputeNodeTimeslicingRec(input, &gpuRate, time.Now().UTC())
 	require.NotNil(t, rec)
 	assert.Equal(t, "gpu-t4-worker-1", rec.NodeName)
 	assert.Equal(t, "T4", rec.GPUModel)
@@ -276,7 +276,7 @@ func TestComputeNodeTimeslicingRec_SkipBelowMajority(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassWellUtilized, SMActiveAvg: 0.72, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.Nil(t, rec)
 }
 
@@ -290,7 +290,7 @@ func TestComputeNodeTimeslicingRec_SkipAllIdle(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassIdle, SMActiveAvg: 0.005, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.Nil(t, rec)
 }
 
@@ -306,7 +306,7 @@ func TestComputeNodeTimeslicingRec_SkipAllMIG(t *testing.T) {
 				RecommendedGPUProfile: "1g.10gb", Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.Nil(t, rec)
 }
 
@@ -321,7 +321,7 @@ func TestComputeNodeTimeslicingRec_AllUnderutilized(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.20, DRAMActiveAvg: 0.10, FBUsageMaxMiB: 3000, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, &rate)
+	rec := ComputeNodeTimeslicingRec(input, &rate, time.Now().UTC())
 	require.NotNil(t, rec)
 	assert.Empty(t, rec.ImpactedContainers)
 	assert.InDelta(t, 0.8*0.7, rec.Confidence, 0.01)
@@ -345,7 +345,7 @@ func TestComputeNodeTimeslicingRecs_MultipleGPUModels(t *testing.T) {
 
 	var results []*TimeslicingRec
 	for _, g := range groups {
-		if r := ComputeNodeTimeslicingRec(g, &rate); r != nil {
+		if r := ComputeNodeTimeslicingRec(g, &rate, time.Now().UTC()); r != nil {
 			results = append(results, r)
 		}
 	}
@@ -368,7 +368,7 @@ func TestComputeNodeTimeslicingRec_SetsNotifOnCandidates(t *testing.T) {
 			{Namespace: "ns", Workload: "wl", Container: "c3", Rec: impactedRec},
 		},
 	}
-	result := ComputeNodeTimeslicingRec(input, nil)
+	result := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	require.NotNil(t, result)
 
 	assert.Contains(t, rec1.NotificationCodes, NotifGPUTimeSharingCandidate)
@@ -391,7 +391,7 @@ func TestComputeNodeTimeslicingRec_SetsContainerCrossRef(t *testing.T) {
 			{Namespace: "ns", Workload: "wl", Container: "c3", Rec: impactedRec},
 		},
 	}
-	result := ComputeNodeTimeslicingRec(input, nil)
+	result := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	require.NotNil(t, result)
 
 	assert.Equal(t, "gpu-worker-7", rec1.TimeSlicingNode, "candidate should have node name")
@@ -412,7 +412,7 @@ func TestComputeNodeTimeslicingRec_NoCandidatesNoCrossRef(t *testing.T) {
 			{Namespace: "ns", Workload: "wl", Container: "c1", Rec: rec},
 		},
 	}
-	result := ComputeNodeTimeslicingRec(input, nil)
+	result := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.Nil(t, result)
 	assert.Equal(t, "", rec.TimeSlicingNode, "no recommendation means no cross-ref")
 	assert.Equal(t, 0, rec.TimeSlicingReplicas)
@@ -431,7 +431,7 @@ func TestComputeNodeTimeslicingRec_NilRateStillAnnotatesCandidates(t *testing.T)
 			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
 		},
 	}
-	ComputeNodeTimeslicingRec(group, nil)
+	ComputeNodeTimeslicingRec(group, nil, time.Now().UTC())
 
 	assert.Equal(t, "node-ann", rec1.TimeSlicingNode)
 	assert.Greater(t, rec1.TimeSlicingReplicas, 0)
@@ -466,7 +466,7 @@ func TestGPURec_HasMIGRecommendation(t *testing.T) {
 // --- Edge cases ---
 
 func TestComputeNodeTimeslicingRec_EmptyGroup(t *testing.T) {
-	rec := ComputeNodeTimeslicingRec(NodeGPUGroup{}, nil)
+	rec := ComputeNodeTimeslicingRec(NodeGPUGroup{}, nil, time.Now().UTC())
 	assert.Nil(t, rec)
 }
 
@@ -480,7 +480,7 @@ func TestComputeNodeTimeslicingRec_StaleNode(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.15, DRAMActiveAvg: 0.06, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.Nil(t, rec, "stale node (>7 days) should produce no recommendation")
 }
 
@@ -494,7 +494,7 @@ func TestComputeNodeTimeslicingRec_FreshNode(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.15, DRAMActiveAvg: 0.06, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.NotNil(t, rec, "fresh node (3 days ago) should produce a recommendation")
 }
 
@@ -506,7 +506,7 @@ func TestComputeNodeTimeslicingRec_ZeroLastSeen(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.15, DRAMActiveAvg: 0.06, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	assert.NotNil(t, rec, "zero LastSeen should be treated as fresh (backward compat)")
 }
 
@@ -526,7 +526,7 @@ func TestComputeNodeTimeslicingRec_SetsTimeslicingSavingsOnCandidates(t *testing
 			{Namespace: "ns", Workload: "wl", Container: "c3", Rec: impactedRec},
 		},
 	}
-	result := ComputeNodeTimeslicingRec(input, &gpuRate)
+	result := ComputeNodeTimeslicingRec(input, &gpuRate, time.Now().UTC())
 	require.NotNil(t, result)
 	require.NotNil(t, result.SavingsPerGPU)
 
@@ -550,7 +550,7 @@ func TestComputeNodeTimeslicingRec_NoRateNoTimeslicingSavings(t *testing.T) {
 			{Namespace: "ns", Workload: "wl", Container: "c2", Rec: rec2},
 		},
 	}
-	result := ComputeNodeTimeslicingRec(input, nil)
+	result := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	require.NotNil(t, result)
 
 	assert.Nil(t, rec1.EstimatedTimeslicingSavingsUSD, "no rate means no time-slicing savings")
@@ -565,7 +565,7 @@ func TestComputeNodeTimeslicingRec_NoRate(t *testing.T) {
 			{Rec: &GPURec{Classification: GPUClassUnderutilized, SMActiveAvg: 0.15, DRAMActiveAvg: 0.06, Confidence: 0.8}},
 		},
 	}
-	rec := ComputeNodeTimeslicingRec(input, nil)
+	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.SavingsPerGPU)
 	assert.Nil(t, rec.TotalNodeSavings)

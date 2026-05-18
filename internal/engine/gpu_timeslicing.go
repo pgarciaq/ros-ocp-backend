@@ -1,6 +1,8 @@
 package engine
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	// NotifGPUTimeSharingCandidate is emitted on containers and nodes where
@@ -156,12 +158,12 @@ func isNodeFresh(lastSeen, now time.Time) bool {
 
 // ComputeNodeTimeslicingRec produces a time-slicing recommendation for a single
 // node × GPU model group. Returns nil if the node is not a good candidate.
-func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32) *TimeslicingRec {
+func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Time) *TimeslicingRec {
 	if len(group.Containers) == 0 {
 		return nil
 	}
 
-	if !group.LastSeen.IsZero() && !isNodeFresh(group.LastSeen, time.Now().UTC()) {
+	if !group.LastSeen.IsZero() && !isNodeFresh(group.LastSeen, now) {
 		return nil
 	}
 
