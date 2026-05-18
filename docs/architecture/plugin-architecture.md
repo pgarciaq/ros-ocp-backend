@@ -22,95 +22,11 @@ This document proposes **compile-time, in-process plugins** behind small Go inte
 
 **Kafka report dispatch — explicit outer branches per CSV type; inner ingest via plugins** (`internal/services/report_processor.go`):
 
-The outer `for _, file` loop still keys off `utils.DetermineCSVType` and dispatches to `process*CSVNative` helpers. **Inside** `processContainerCSVNative`, matching **`CSVIngestor`** plugins receive the CSV (`nativeCSVIngestViaPlugins`); **`IngestHook`** implementations run on returned **`[]MetricRow`** for coupled domains (GPU/node digest upserts). **Fallback:** when no **`CSVIngestor`** handles `"container"`, **`processContainerDigestFallback`** runs **`ParseAndDigestCSV`** and conditionally **`UpsertGPUDigests`** / **`UpsertNodeDigests`** only when **`plugin.EnabledFor("gpu")`** / **`plugin.EnabledFor("node")`** — preserving disable semantics that unconditional **`ProcessCSVToDigests`** would violate.
-
-Historical reference — outer loop shape:
-
-```150:184:internal/services/report_processor.go
-	var csvType types.PayloadType
-
-	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
-
-	for _, file := range kafkaMsg.Files {
-		csvType = utils.DetermineCSVType(file)
-
-		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
-			if err := processContainerCSVNative(file, kafkaMsg); err != nil {
-				reportProcessingFailed = true
-				recordKafkaTransient(err)
-			}
-			continue
-		}
-		if useNativeCSVIngest && csvType == types.PayloadTypeNamespace {
-			if err := processNamespaceCSVNative(file, kafkaMsg); err != nil {
-				reportProcessingFailed = true
-				recordKafkaTransient(err)
-			}
-			continue
-		}
-		if useNativeCSVIngest && csvType == types.PayloadTypeStorage {
-			if err := processStorageCSVNative(file, kafkaMsg); err != nil {
-				reportProcessingFailed = true
-				recordKafkaTransient(err)
-			}
-			continue
-		}
-		if useNativeCSVIngest && csvType == types.PayloadTypeSnapshot {
-			if err := processSnapshotCSVNative(file, kafkaMsg); err != nil {
-				reportProcessingFailed = true
-				recordKafkaTransient(err)
-			}
-			continue
-		}
-```
-
-**CSV type discrimination by filename substring** (`internal/utils/utils.go`):
-
-```384:395:internal/utils/utils.go
-func DetermineCSVType(fileName string) types.PayloadType {
-	if strings.Contains(fileName, "namespace") {
-		return types.PayloadTypeNamespace
-	}
-	if strings.Contains(fileName, "snapshot") {
-		return types.PayloadTypeSnapshot
-	}
-	if strings.Contains(fileName, "storage") {
-		return types.PayloadTypeStorage
-	}
-	return types.PayloadTypeContainer
-}
-```
-
-**Payload type constants** (shared contract; every new file pattern requires updates here and in dispatch) (`internal/types/kafkaMsg.go`):
-
-```5:12:internal/types/kafkaMsg.go
-type PayloadType string
-
-const (
-	PayloadTypeContainer PayloadType = "container"
-	PayloadTypeNamespace PayloadType = "namespace"
-	PayloadTypeStorage   PayloadType = "storage"
-	PayloadTypeSnapshot  PayloadType = "snapshot"
-)
-```
+The outer `for _, file` loop in [`ProcessReport`](../../internal/services/report_processor.go) keys off [`DetermineCSVType`](../../internal/utils/utils.go) and [`PayloadType`](../../internal/types/kafkaMsg.go) constants, dispatching to `processContainerCSVNative`, `processNamespaceCSVNative`, `processStorageCSVNative`, or `processSnapshotCSVNative` when native CSV ingest is active (`useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)`). **Inside** `processContainerCSVNative`, matching **`CSVIngestor`** plugins receive the CSV via [`nativeCSVIngestViaPlugins`](../../internal/services/report_processor.go); **`IngestHook`** implementations run via [`runIngestHooksForCSV`](../../internal/services/report_processor.go) on returned **`[]MetricRow`** for coupled domains (GPU/node digest upserts). **Fallback:** when no **`CSVIngestor`** handles `"container"`, **`processContainerDigestFallback`** runs **`ParseAndDigestCSV`** and conditionally **`UpsertGPUDigests`** / **`UpsertNodeDigests`** only when **`plugin.EnabledFor("gpu")`** / **`plugin.EnabledFor("node")`** — preserving disable semantics that unconditional **`ProcessCSVToDigests`** would violate.
 
 **Container CSV native path** (`internal/services/report_processor.go`): **`processContainerCSVNative`** fetches the CSV, runs **`nativeCSVIngestViaPlugins`** (or **`processContainerDigestFallback`** when no ingestor claims `"container"`), then recommendations/history/quality and **`runNodeRecommendations`**.
 
-**GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins): **`ParseAndDigestCSV`** returns **`[]MetricRow`**. On the **plugin path**, **`IngestHook`** (`gpu`, `node`) runs **`UpsertGPUDigests`** / **`UpsertNodeDigests`**. On the **fallback path**, those upserts run only when **`plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`**. **`ingestion.ProcessCSVToDigests`** remains for **CLI/tools/tests** and **always** chains GPU + node upserts after **`ParseAndDigestCSV`** (no registry):
-
-```277:297:internal/ingestion/pipeline.go
-func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
-	// ...
-	if err := UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("GPU digest upsert: %w", err)
-	}
-	if err := UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("node digest upsert: %w", err)
-	}
-	return nil
-}
-```
+**GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins): **`ParseAndDigestCSV`** returns **`[]MetricRow`**. On the **plugin path**, **`IngestHook`** (`gpu`, `node`) runs **`UpsertGPUDigests`** / **`UpsertNodeDigests`**. On the **fallback path**, those upserts run only when **`plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`**. **`ingestion.ProcessCSVToDigests`** ([`pipeline.go`](../../internal/ingestion/pipeline.go)) remains for **CLI/tools/tests** and **always** chains GPU + node upserts after **`ParseAndDigestCSV`** (no registry awareness).
 
 Non-fatal **`IngestHook`** failures increment Prometheus **`ros_ocp_plugin_hook_errors_total`** (`plugin`, `hook_type`).
 
@@ -120,18 +36,7 @@ Under Echo, **`static > param > any`** matching means concrete paths such as **`
 
 **GPU enrichment:** **`APIEnricher`** — **`gpu`** implements **`EnrichResponse`** for **`NativeContainerEnrichmentInput`**; **`handlers.go`** calls **`EnrichNativeContainerResults`** instead of **`enrichWithGPU`** directly.
 
-**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. The legacy **`retainedTables`** slice is only used as a fallback when no **`RetentionProvider`** plugins are found (for example tests that omit **`internal/plugins`** imports, or **Kruize-only** deployments).
-
-```23:31:internal/engine/retention.go
-// Tables retained by the general ROS_RETENTION_MONTHS setting.
-var retainedTables = []string{
-	"container_usage_samples",
-	"daily_container_digests",
-	"daily_namespace_digests",
-	"gpu_container_digests",
-	"namespace_usage_samples",
-}
-```
+**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. If **no** retention plugins are registered, core falls back to the **`retainedTables`** slice ([`retention.go`](../../internal/engine/retention.go)), which covers **core/shared digest and sample tables only** — not plugin-owned tables such as **`daily_node_digests`**, **`node_recommendations`**, or **`daily_pvc_digests`** (those partitions are swept only when the corresponding **`RetentionProvider`** plugins are loaded).
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -247,28 +152,12 @@ type RetentionProvider interface {
 	SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error
 }
 
-// MigrationProvider documents tables owned by plugin DDL in the central migrations tree.
+// MigrationProvider is reserved for future use when plugins can declare DDL ownership in docs and tooling.
+// Nothing in the dispatch pipeline consumes this trait yet.
 type MigrationProvider interface {
 	Plugin
 	OwnedTables() []string
 }
-```
-
-```5:22:internal/ingestion/models.go
-// MetricRow represents a single parsed row from an OCP metrics CSV file,
-// with all numeric values already converted to integer types (millicores, KiB).
-type MetricRow struct {
-	IntervalStart time.Time
-	IntervalEnd   time.Time
-	Namespace     string
-	WorkloadName  string
-	WorkloadType  string
-	ContainerName string
-	Pod           string
-	Node          string
-
-	CPURequestMC     int64
-	CPULimitMC       int64
 ```
 
 **IngestHook data contract (confirmed — Option B):** After the container **`CSVIngestor`** parses the CSV, hooks receive **`[]MetricRow`** — the existing struct in [`internal/ingestion/models.go`](../../internal/ingestion/models.go). That type is already the de facto DTO for **`upsertGPUDigests`** and **`upsertNodeDigests`** in the ingestion pipeline. **Option C** (hooks re-query the DB after the container writer persists rows) was rejected: it adds I/O, couples hooks to table shapes, and complicates tests. Passing **`[]MetricRow`** avoids an extra DB round-trip; hooks are trivially unit-testable with in-memory slices; and **`MetricRow`** can grow additively as the CSV schema evolves—hooks that only read fields they need remain compatible.
@@ -333,7 +222,7 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 
 ### 6.3 Retention (`internal/engine/retention.go`)
 
-**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered; otherwise core falls back to the shared **`retainedTables`** list (see the retention overview earlier in §1).
+**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered. When **no** retention plugins are registered, core falls back to **`retainedTables`** — **core tables only**; node/GPU/PVC-owned partitions require their plugins’ **`SweepRetention`** (see §1).
 
 Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](../../internal/engine/retention.go)**:
 

@@ -88,7 +88,8 @@ All endpoints are under `/api/cost-management/v1/`:
 | Endpoint | Description |
 |----------|-------------|
 | `GET /recommendations/openshift` | List container recommendations |
-| `GET /recommendations/openshift/:id` | Container recommendation detail |
+| `GET /recommendations/openshift/:recommendation-id` | Container recommendation detail |
+| `GET /recommendations/openshift/fleet-summary` | Organization-wide aggregates: total/active/idle/abandoned container counts, summed monthly savings (USD), distinct cluster count (RBAC cluster filter when enabled) |
 | `GET /recommendations/openshift/gpu` | GPU summary (counts, links to timeslicing/MIG listings) |
 | `GET /recommendations/openshift/gpu/timeslicing` | Node-level GPU time-slicing recommendations |
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |
@@ -99,7 +100,7 @@ All endpoints are under `/api/cost-management/v1/`:
 | `GET /recommendations/openshift/settings/snapshot` | Snapshot recommendation settings |
 | `PUT /recommendations/openshift/settings/snapshot` | Update snapshot recommendation settings |
 | `GET /openshift/namespace/recommendations` | Namespace recommendations |
-| `GET /recommendations/openshift/namespace/:id` | Namespace recommendation detail |
+| `GET /recommendations/openshift/namespace/:recommendation-id` | Namespace recommendation detail |
 | `GET /recommendations/openshift/settings/terms` | Get term configuration |
 | `PUT /recommendations/openshift/settings/terms` | Set custom term windows |
 | `DELETE /recommendations/openshift/settings/terms` | Reset to defaults |
