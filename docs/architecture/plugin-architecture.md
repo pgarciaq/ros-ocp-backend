@@ -22,34 +22,36 @@ This document proposes **compile-time, in-process plugins** behind small Go inte
 
 **Kafka report dispatch — sequential `if` branches per CSV type** (`internal/services/report_processor.go`):
 
-```104:136:internal/services/report_processor.go
+```150:184:internal/services/report_processor.go
 	var csvType types.PayloadType
+
+	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
 
 	for _, file := range kafkaMsg.Files {
 		csvType = utils.DetermineCSVType(file)
 
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeContainer {
+		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
 			if err := processContainerCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeNamespace {
+		if useNativeCSVIngest && csvType == types.PayloadTypeNamespace {
 			if err := processNamespaceCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeStorage {
+		if useNativeCSVIngest && csvType == types.PayloadTypeStorage {
 			if err := processStorageCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeSnapshot {
+		if useNativeCSVIngest && csvType == types.PayloadTypeSnapshot {
 			if err := processSnapshotCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
@@ -137,9 +139,11 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 
 **HTTP routes registered imperatively per domain** (`internal/api/server.go`):
 
-```61:127:internal/api/server.go
+```62:140:internal/api/server.go
+	nativeRecommendationRoutes := !plugin.EnabledFor(plugin.KruizePluginName)
+
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
 		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
@@ -149,13 +153,13 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 	}
 
 	// Project/Namespace — ...
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetListWithFallback)
 		// ...
 	}
 	// ...
 	// Node-level GPU time-slicing and MIG-focused listings (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/gpu/timeslicing", GetNodeRecommendations)
 		v1.GET("/recommendations/openshift/gpu/mig", GetGPUMIGRecommendations)
 		v1.GET("/recommendations/openshift/nodes", GetNodeUtilizationRecs)
@@ -434,16 +438,16 @@ The golang-migrate driver loads **one** sequential chain (core + plugin contribu
 
 ### 6.5 Legacy Kruize engine (optional plugin — confirmed stance)
 
-Today’s **dual execution paths** (**`WithFallback`** handlers and **`ROS_USE_NATIVE_ENGINE`** / legacy ingestion) keep a large **Kruize-facing** surface alive alongside the native Go engine: roughly **2.5k+ lines** across the HTTP client ([`internal/utils/kruize/`](../../internal/utils/kruize/)), payload types ([`internal/types/kruizePayload/`](../../internal/types/kruizePayload/)), the recommendation poller (**`recommendation_poller.go`**), legacy ingestion plumbing, and handler fallback branches.
+The **`WithFallback`** handlers and **legacy dataframe CSV ingestion** paths keep a large **Kruize-facing** surface alive alongside the native Go engine: roughly **2.5k+ lines** across the HTTP client ([`internal/utils/kruize/`](../../internal/utils/kruize/)), payload types ([`internal/types/kruizePayload/`](../../internal/types/kruizePayload/)), the recommendation poller (**`recommendation_poller.go`**), legacy ingestion plumbing, and handler fallback branches.
 
 **External dependencies** include HTTP calls to the Kruize server, consumption/production on the Kafka recommendation topic, and **`KRUIZE_*`** configuration variables.
 
-**Decision:** Treat Kruize integration as an **optional legacy plugin** (or adapter behind the same trait interfaces) for as long as **`WithFallback`** and **`ROS_USE_NATIVE_ENGINE`** coexist. **Remove it only** when product commits to **native-only** operation **and** all tenants are migrated off Kruize-backed flows—avoid stranding operators mid-cutover.
+**Decision:** Treat Kruize integration as an **optional legacy plugin** behind the same registry as native domains. **`ROS_USE_NATIVE_ENGINE`** on **`Config`** is **deprecated** (see §11.1); **`plugin.EnabledFor(plugin.KruizePluginName)`** is the unified runtime signal for whether CSV dispatch and HTTP routing use native vs legacy branches. **Remove Kruize-only codepaths only** when product commits to **native-only** operation **and** all tenants are migrated off Kruize-backed flows—avoid stranding operators mid-cutover.
 
 **Mutual exclusivity with native plugins (confirmed):**
 
-- The **Kruize legacy path is disabled by default** — deployments run the native Go engine unless operators explicitly opt into legacy (`ROS_USE_NATIVE_ENGINE=false` / equivalent).
-- **Enabling the Kruize plugin — or selecting Kruize via `ROS_ENABLED_PLUGINS=kruize` once the registry exists — automatically disables all other plugins** (the native engine’s domain plugins). The two engines are **mutually exclusive**: operators run **either** native plugins **or** the Kruize legacy plugin, **never both at once**.
+- The **Kruize legacy path is disabled by default** — deployments run native plugins unless **`ROS_ENABLED_PLUGINS`** lists **`kruize`** (or the deprecated compat bridge applies — §11.1).
+- **Enabling `kruize` automatically disables all other plugins** (the native engine’s domain plugins). The two engines are **mutually exclusive**: operators run **either** native plugins **or** the Kruize legacy plugin, **never both at once**.
 - **Startup enforcement:** When the plugin registry determines that Kruize is active, it **logs a warning** and **skips registration of every other plugin** so native hooks/routes/retention do not double-process the same workloads.
 - **Rationale:** Running Kruize alongside native plugins would emit **conflicting or duplicate recommendations** for the same workloads and risks **double-counting** savings or churn in APIs/UI. Mutual exclusivity keeps persisted state and API responses consistent with a single active engine.
 
@@ -554,6 +558,17 @@ No edits to `server.go`’s route list should be required beyond the generic reg
 | **`ROS_ENABLED_PLUGINS`** | Comma-separated allowlist. When set, **only** these plugins run (names match `Plugin.Name()`). |
 | **`ROS_DISABLED_PLUGINS`** | Comma-separated blocklist applied when **allowlist is unset**: defaults minus blocked names. |
 | **Both unset** | Plugins use **`Plugin.Enabled()`** (typically **`EnabledFor(Name())`**); **`kruize`** stays off unless allowlisted; **`ROS_DISABLED_PLUGINS`** subtracts from that default set (see §5). |
+
+### 11.1 Native vs. legacy Kruize (unified switch)
+
+Legacy vs native dispatch no longer depends on a separate **`cfg.UseNativeEngine`** branch in parallel with the registry:
+
+- **Runtime signal:** [`report_processor.go`](../../internal/services/report_processor.go) and [`server.go`](../../internal/api/server.go) use **`!plugin.EnabledFor(plugin.KruizePluginName)`** (native CSV ingest paths and native HTTP routes when the **`kruize`** plugin is off).
+- **Preferred configuration:** `ROS_ENABLED_PLUGINS=kruize` to run legacy Kruize only (native plugins excluded by registry exclusivity).
+- **Deprecated:** `ROS_USE_NATIVE_ENGINE` on [`Config`](../../internal/config/config.go) is retained for backward compatibility only.
+- **Compatibility bridge:** [`ApplyLegacyUseNativeEngineEnv`](../../internal/plugin/registry.go) runs from [`main`](../../rosocp.go) **before** [`cmd.Execute()`](../../cmd/root.go). When **`UseNativeEngine`** is **`false`** (typically **`ROS_USE_NATIVE_ENGINE=false`**) and **`ROS_ENABLED_PLUGINS`** is unset/whitespace-only, the bridge sets **`ROS_ENABLED_PLUGINS=kruize`** and emits a **deprecation warning** directing operators to migrate to the explicit allowlist.
+
+If **`ROS_ENABLED_PLUGINS`** is already set, the bridge does **not** override it (allowlist wins).
 
 Examples:
 

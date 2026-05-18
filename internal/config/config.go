@@ -83,7 +83,7 @@ type Config struct {
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`
 	SourceApiPrefix  string `mapstructure:"SOURCES_API_PREFIX"`
 
-	// Native recommendation engine (replaces Kruize pipeline)
+	// Deprecated: use ROS_ENABLED_PLUGINS=kruize instead. Kept for backward compatibility.
 	UseNativeEngine bool    `mapstructure:"ROS_USE_NATIVE_ENGINE"`
 	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
 	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`

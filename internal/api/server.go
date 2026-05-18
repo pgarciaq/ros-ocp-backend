@@ -76,8 +76,10 @@ func StartAPIServer(ctx context.Context) {
 
 	registerRecommendationRoutes(v1)
 	// Container
+	nativeRecommendationRoutes := !plugin.EnabledFor(plugin.KruizePluginName)
+
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
 		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
@@ -92,7 +94,7 @@ func StartAPIServer(ctx context.Context) {
 	// Legacy paths (preserved for backward compatibility with IQE, OpenAPI spec):
 	//   GET /openshift/namespace/recommendations
 	//   GET /recommendations/openshift/namespace/:recommendation-id
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetListWithFallback)
 		v1.GET("/recommendations/openshift/namespaces/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
 		v1.GET("/openshift/namespace/recommendations", GetNamespaceRecommendationSetListWithFallback)
@@ -105,20 +107,20 @@ func StartAPIServer(ctx context.Context) {
 	}
 
 	// Custom recommendation term settings (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/settings/terms", GetTermSettings)
 		v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
 		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
 	}
 
 	// Historical tracking and quality metrics (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
 	}
 
 	// Node-level GPU time-slicing and MIG-focused listings (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/gpu/timeslicing", GetNodeRecommendations)
 		v1.GET("/recommendations/openshift/gpu/mig", GetGPUMIGRecommendations)
 		v1.GET("/recommendations/openshift/nodes", GetNodeUtilizationRecs)
@@ -126,17 +128,17 @@ func StartAPIServer(ctx context.Context) {
 	}
 
 	// Fleet-level summary (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
 	}
 
 	// PVC right-sizing recommendations (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/pvcs", GetPVCRecommendations)
 	}
 
 	// Snapshot staleness recommendations (native engine only).
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/snapshots", GetSnapshotRecommendations)
 		v1.GET("/recommendations/openshift/settings/snapshot", GetSnapshotSettings)
 		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
@@ -148,7 +150,7 @@ func StartAPIServer(ctx context.Context) {
 	}
 
 	// Parameterized container recommendation detail — after static paths and plugin routes.
-	if cfg.UseNativeEngine {
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
