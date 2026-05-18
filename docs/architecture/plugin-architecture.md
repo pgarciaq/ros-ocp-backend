@@ -120,9 +120,9 @@ Under Echo, **`static > param > any`** matching means concrete paths such as **`
 
 **GPU enrichment:** **`APIEnricher`** — **`gpu`** implements **`EnrichResponse`** for **`NativeContainerEnrichmentInput`**; **`handlers.go`** calls **`EnrichNativeContainerResults`** instead of **`enrichWithGPU`** directly.
 
-**Retention sweeps use a fixed table list** (`internal/engine/retention.go`):
+**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. The legacy **`retainedTables`** slice is only used as a fallback when no **`RetentionProvider`** plugins are found (for example tests that omit **`internal/plugins`** imports, or **Kruize-only** deployments).
 
-```23:30:internal/engine/retention.go
+```23:31:internal/engine/retention.go
 // Tables retained by the general ROS_RETENTION_MONTHS setting.
 var retainedTables = []string{
 	"container_usage_samples",
@@ -333,21 +333,17 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 
 ### 6.3 Retention (`internal/engine/retention.go`)
 
-Split today’s monolithic `retainedTables` slice:
+**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered; otherwise core falls back to the shared **`retainedTables`** list (see the retention overview earlier in §1).
 
-- **Framework-owned** tables stay in core (for example org/cluster/account bookkeeping if applicable).
-- Each **`RetentionProvider`** appends domain-specific partition parents or runs targeted `DELETE`s.
-
-Core orchestrates (trait shape today uses a cutoff timestamp — see **`RetentionProvider`** in §4):
+Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](../../internal/engine/retention.go)**:
 
 ```go
-for _, p := range plugin.Enabled() {
-	if rp, ok := p.(plugin.RetentionProvider); ok {
-		if err := rp.SweepRetention(ctx, pool, olderThan); err != nil {
-			errs = append(errs, err)
-		}
+for _, rp := range plugin.ByTrait[plugin.RetentionProvider]() {
+	if err := rp.SweepRetention(ctx, pool, cutoff); err != nil {
+		errs = append(errs, err)
 	}
 }
+// If len(retProviders)==0: SweepPartitionedTables(..., retainedTables, cutoffYM)
 ```
 
 ### 6.4 Migrations

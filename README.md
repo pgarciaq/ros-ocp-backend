@@ -94,6 +94,10 @@ All endpoints are under `/api/cost-management/v1/`:
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |
 | `GET /recommendations/openshift/nodes` | Node CPU/memory utilization recommendations |
 | `GET /recommendations/openshift/nodes/utilization` | Deprecated alias of `/nodes` (same response + warning) |
+| `GET /recommendations/openshift/pvcs` | PVC/storage recommendations |
+| `GET /recommendations/openshift/snapshots` | Volume snapshot staleness recommendations |
+| `GET /recommendations/openshift/settings/snapshot` | Snapshot recommendation settings |
+| `PUT /recommendations/openshift/settings/snapshot` | Update snapshot recommendation settings |
 | `GET /openshift/namespace/recommendations` | Namespace recommendations |
 | `GET /recommendations/openshift/namespace/:id` | Namespace recommendation detail |
 | `GET /recommendations/openshift/settings/terms` | Get term configuration |
