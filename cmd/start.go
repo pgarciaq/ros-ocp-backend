@@ -25,6 +25,8 @@ import (
 
 var startCmdLog = logging.GetLogger()
 
+// logEnabledPlugins emits the enabled-plugin allowlist after registry filtering.
+// Tested indirectly via E2E; startup log verified on SNO cluster.
 func logEnabledPlugins() {
 	plugin.Init()
 	enabled := plugin.Enabled()
