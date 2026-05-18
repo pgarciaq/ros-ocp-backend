@@ -306,12 +306,13 @@ func initConfig() {
 
 	// Hack till viper issue get fix - https://github.com/spf13/viper/issues/761
 	envKeysMap := &map[string]interface{}{}
-	if err := mapstructure.Decode(cfg, &envKeysMap); err != nil {
-		fmt.Println(err)
+	var probeCfg Config
+	if err := mapstructure.Decode(&probeCfg, envKeysMap); err != nil {
+		log.Printf("config: mapstructure decode for env key probe: %v", err)
 	}
 	for k := range *envKeysMap {
 		if bindErr := viper.BindEnv(k); bindErr != nil {
-			fmt.Println(bindErr)
+			log.Printf("config: viper.BindEnv(%s): %v", k, bindErr)
 		}
 	}
 

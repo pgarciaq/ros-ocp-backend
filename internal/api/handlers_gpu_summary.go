@@ -34,7 +34,7 @@ func GetGPUSummary(c echo.Context) error {
 		})
 	}
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 	now := time.Now().UTC()
 
 	terms, err := engine.LoadTermConfig(ctx, pool, orgIDStr)
@@ -86,6 +86,7 @@ func GetGPUSummary(c echo.Context) error {
 		TotalGPUsAnalyzed:   totalTriples,
 		ClustersWithGPUData: clustersWithGPU,
 	}
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, resp)
 }
 

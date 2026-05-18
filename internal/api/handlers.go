@@ -73,6 +73,7 @@ func GetRecommendationSetList(c echo.Context) error {
 			interfaceSlice[i] = v
 		}
 		results := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, results)
 	case listoptions.ResponseFormatCSV:
 		filename := "recommendations-" + time.Now().Format("20060102")
@@ -139,6 +140,7 @@ func GetRecommendationSet(c echo.Context) error {
 			recommendationSet.Recommendations,
 			&recommendationSet.StoredVariationPcts,
 		)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, recommendationSet)
 	} else {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
@@ -197,6 +199,7 @@ func GetNamespaceRecommendationSetList(c echo.Context) error {
 			interfaceSlice[i] = v
 		}
 		results := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, results)
 	case listoptions.ResponseFormatCSV:
 		// TODO: Add CSV support when export feature is enabled
@@ -249,6 +252,7 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 			&nsRecommendationSet.StoredVariationPcts,
 		)
 	}
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, nsRecommendationSet)
 }
 
@@ -374,7 +378,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(results, OrgID)
+	enrichWithGPU(c.Request().Context(), results, OrgID)
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
 	results, count = filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
@@ -407,6 +411,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
 }
@@ -438,7 +443,8 @@ func GetNativeRecommendationSet(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
 
-	detail := enrichNativeDetail(OrgID, result)
+	detail := enrichNativeDetail(c.Request().Context(), OrgID, result)
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, detail)
 }
 
@@ -473,7 +479,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
-	enrichWithGPU(results, OrgID)
+	enrichWithGPU(c.Request().Context(), results, OrgID)
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
 	results, filteredCount := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
@@ -513,7 +519,8 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		detail := enrichNativeDetail(OrgID, result)
+		detail := enrichNativeDetail(c.Request().Context(), OrgID, result)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, detail)
 	}
 
@@ -549,6 +556,7 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
 }
@@ -614,6 +622,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 			interfaceSlice[i] = v
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
 }
@@ -644,6 +653,7 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 		recSet.Recommendations,
 		&recSet.StoredVariationPcts,
 	)
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, recSet)
 }
 
@@ -719,6 +729,7 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 			interfaceSlice[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
 }
@@ -747,7 +758,8 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		enriched := enrichNativeNamespaceDetail(OrgID, result)
+		enriched := enrichNativeNamespaceDetail(c.Request().Context(), OrgID, result)
+		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, enriched)
 	}
 
@@ -757,8 +769,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 
 // enrichNativeDetail fetches boxplots and monitoring_end_time for a native
 // recommendation and wraps it in the Kruize-compatible DetailResponse shape.
-func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *model.DetailResponse {
-	ctx := context.Background()
+func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeContainerResult) *model.DetailResponse {
 	pool := db.GetPool()
 
 	key := model.ContainerKey{
@@ -786,7 +797,7 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 	}
 
 	singleSlice := []model.NativeContainerResult{*result}
-	enrichWithGPU(singleSlice, orgID)
+	enrichWithGPU(ctx, singleSlice, orgID)
 	*result = singleSlice[0]
 
 	return model.BuildDetailResponse(result, plots, met)
@@ -795,8 +806,7 @@ func enrichNativeDetail(orgID string, result *model.NativeContainerResult) *mode
 // enrichNativeNamespaceDetail fetches boxplots and monitoring_end_time for a
 // native namespace recommendation and returns it in the Kruize-compatible
 // NamespaceDetailResponse shape.
-func enrichNativeNamespaceDetail(orgID string, result *model.NativeNamespaceResult) *model.NamespaceDetailResponse {
-	ctx := context.Background()
+func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *model.NativeNamespaceResult) *model.NamespaceDetailResponse {
 	pool := db.GetPool()
 
 	plots := map[string]*model.NativePlot{}
