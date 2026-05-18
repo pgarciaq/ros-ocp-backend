@@ -1,5 +1,7 @@
 # Native Engine: Notification Compatibility Gap
 
+> **Scope:** The **native Go engine is now the default** (`ROS_USE_NATIVE_ENGINE=true`). This document describes how legacy **Kruize-shaped** notification objects in API responses are **derived from native engine state** so existing UI (`koku-ui-ros`) continues to work without the Kruize runtime on the primary path.
+
 ## Background
 
 The Kruize recommendation engine produces detailed notification objects in its

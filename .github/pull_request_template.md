@@ -11,7 +11,7 @@ Feel free to remove this section from PR description once done.
 
 ## Why do we need this change? :thought_balloon:
 
-Please include the __context of this change__ here. If the change depends on Kruize add details about that as well!
+Please include the __context of this change__ here. If the change depends on **Kruize** (legacy engine only — see `ROS_USE_NATIVE_ENGINE`), add details about that as well.
 
 ## Documentation update? :memo:
 
@@ -24,7 +24,7 @@ Upon raising this PR please go through [RedHatInsights/secure-coding-checklist](
 
 ## :guardsman: Checklist :dart:
 
-- [ ] Does this change depend on specific version of Kruize
+- [ ] Does this change depend on a specific version of Kruize **(legacy engine only — `ROS_USE_NATIVE_ENGINE=false`)**
   - If yes what is the version no:
   - [ ] Is that image available in production or needs deployment?
 - [ ] Bugfix

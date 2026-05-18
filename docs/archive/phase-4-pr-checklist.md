@@ -1,3 +1,5 @@
+> **Historical — Completed.** This plan has been fully implemented. Kept for reference.
+
 # Phase 4: Pull Request Checklist
 
 This document describes the PRs required to land Phase 4 (OOM Feedback and

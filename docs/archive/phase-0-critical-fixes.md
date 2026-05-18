@@ -1,3 +1,5 @@
+> **Historical — Completed.** This plan has been fully implemented. Kept for reference.
+
 # Phase 0: Critical Fixes for ros-ocp-backend
 
 ## Current State

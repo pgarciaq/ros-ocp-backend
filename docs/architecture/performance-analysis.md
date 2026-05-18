@@ -7,6 +7,8 @@
 > **Architecture (v4.0):** Recommendation computation is **native Go** in ros-ocp-backend (`recommendCPU()`, `recommendMemory()`, `recommendAllWorkloads()`, `detectIdle()`, `recommendPVC()`, `recommendVM()`, `recommendNodes()`, etc.) using a **read once, compute N terms** pattern. **PostgreSQL 16+** (plain PostgreSQL, not TimescaleDB) stores interval data, **daily digest** partitioned tables, and recommendation results; SQL is for **migrations and storage/retrieval only** — **no PL/pgSQL** recommendation functions. Percentiles are **exact** via `slices.Sort()` in Go (**t-digest is not used**). Batch persistence uses **`COPY FROM`** where applicable.
 > **Related:** COST-5691 (Custom Timeframes), koku-metrics-operator, ros-ocp-backend, Kruize (autotune)
 
+**Execution path note:** The **native Go engine is the default** in current deployments. Sections below that analyze **Kruize** describe the **legacy path** and apply when `ROS_USE_NATIVE_ENGINE=false` (or equivalent legacy configuration). For how legacy Kruize fits alongside a future plugin registry, see [`plugin-architecture.md`](plugin-architecture.md).
+
 ---
 
 ## Table of Contents 
@@ -14,7 +16,7 @@
 - [1. Executive Summary](#1-executive-summary)
 - [2. Current Architecture](#2-current-architecture)
 - [3. Alternative A: CSV → Thanos](#3-alternative-a-csv--thanos)
-- [4. Alternative B: Kruize on Cluster](#4-alternative-b-kruize-on-cluster)
+- [4. Alternative B: Kruize on Cluster (Legacy)](#4-alternative-b-kruize-on-cluster-legacy)
 - [5. Performance Comparison](#5-performance-comparison)
 - [6. Scalability at 20M Containers/Day](#6-scalability-at-20m-containersday)
 - [7. Storage Comparison](#7-storage-comparison)
@@ -23,18 +25,18 @@
 - [10. Optimization: Approximate Percentiles](#10-optimization-approximate-percentiles)
 - [11. Combined Scenario: Thanos + Integer Types + Approximate Percentiles](#11-combined-scenario-thanos--integer-types--approximate-percentiles)
 - [12. Optimization: CPU Recommendation Algorithm](#12-optimization-cpu-recommendation-algorithm)
-- [13. Optimization: Kruize Code-Level Improvements](#13-optimization-kruize-code-level-improvements)
-- [14. Optimization: Kruize Database and API Layer](#14-optimization-kruize-database-and-api-layer)
+- [13. Optimization: Kruize Code-Level Improvements (Legacy)](#13-optimization-kruize-code-level-improvements-legacy)
+- [14. Optimization: Kruize Database and API Layer (Legacy)](#14-optimization-kruize-database-and-api-layer-legacy)
 - [15. Optimization: ros-ocp-backend](#15-optimization-ros-ocp-backend)
 - [16. Optimization: Memory Recommendation Algorithm](#16-optimization-memory-recommendation-algorithm)
 - [17. Analysis: GPU Recommendation Algorithm](#17-analysis-gpu-recommendation-algorithm)
 - [18. Analysis: JVM/Quarkus Recommendation Algorithm](#18-analysis-jvmquarkus-recommendation-algorithm)
-- [19. Additional Kruize Optimizations (Deep Audit)](#19-additional-kruize-optimizations-deep-audit)
+- [19. Additional Kruize Optimizations (Deep Audit) (Legacy)](#19-additional-kruize-optimizations-deep-audit-legacy)
 - [20. Additional ros-ocp-backend Optimizations (Deep Audit)](#20-additional-ros-ocp-backend-optimizations-deep-audit)
 - [21. Rejected Alternative: TSDB Block Shipping](#21-rejected-alternative-tsdb-block-shipping)
 - [22. Findings and Trade-offs](#22-findings-and-trade-offs)
 - [23. Additional Recommendation Types (Industry Gap Analysis)](#23-additional-recommendation-types-industry-gap-analysis)
-- [24. Strategic Recommendation: Drop Kruize from the Remote Path](#24-strategic-recommendation-drop-kruize-from-the-remote-path)
+- [24. Strategic Recommendation: Drop Kruize from the Remote Path (Legacy analysis)](#24-strategic-recommendation-drop-kruize-from-the-remote-path-legacy-analysis)
 - [25. Performance Model: Current vs "ros-ocp-backend with Superpowers"](#25-performance-model-current-vs-ros-ocp-backend-with-superpowers)
 - [26. Replica Count for Total Impact Calculation](#26-replica-count-for-total-impact-calculation)
 - [27. JSONB Analysis: Why It Exists, Why It Hurts, and Alternatives](#27-jsonb-analysis-why-it-exists-why-it-hurts-and-alternatives)
@@ -42,7 +44,7 @@
 - [29. Historical: In-database PL/pgSQL hybrid proposal (superseded by v4.0 Go engine)](#29-historical-in-database-recommendation-computation-plpgsql-hybrid-proposal)
 - [30. OpenShift Virtualization VM Recommendations](#30-openshift-virtualization-vm-recommendations)
 - [Appendix A: Operator ROS Query Inventory](#appendix-a-operator-ros-query-inventory)
-- [Appendix B: Kruize Recommendation Logic Details](#appendix-b-kruize-recommendation-logic-details)
+- [Appendix B: Kruize Recommendation Logic Details (Legacy)](#appendix-b-kruize-recommendation-logic-details-legacy)
 - [Appendix C: Kubernetes VPA Default Configuration](#appendix-c-kubernetes-vpa-default-configuration)
 - [Appendix D: Confidence Levels](#appendix-d-confidence-levels)
 - [Appendix E: Implementation Reference Guide](#appendix-e-implementation-reference-guide)
@@ -225,7 +227,7 @@ No `rate()` or counter reconstruction is needed — these are simple gauge write
 - Kruize PostgreSQL for metrics storage (Kruize reads from Thanos on demand)
 - Duplicate metrics storage (ros-ocp PG + Kruize PG → Thanos only)
 
-### Kruize Modification Required
+### Kruize Modification Required (Legacy)
 
 Kruize `remote_monitoring` currently receives data via push (`/updateResults`). This alternative requires Kruize to **pull** data from Thanos. The implementation involves:
 
@@ -238,7 +240,7 @@ The scope is well-defined: an HTTP client + PromQL query builder + data deserial
 
 ---
 
-## 4. Alternative B: Kruize on Cluster
+## 4. Alternative B: Kruize on Cluster (Legacy)
 
 ### Architecture
 
@@ -983,7 +985,7 @@ When recommendation needed (e.g., 91-day term, 24h half-life):
 
 ---
 
-## 13. Optimization: Kruize Code-Level Improvements
+## 13. Optimization: Kruize Code-Level Improvements (Legacy)
 
 Independent of the architectural changes above, the Kruize codebase has several code-level performance issues that affect throughput in **legacy** `local_monitoring` / remaining Kruize deployments and would persist even after a Thanos migration (unless Kruize is replaced entirely by moving computation to the cluster). They do **not** apply to **v4.0** remote recommendations, which no longer run inside Kruize.
 
@@ -1160,7 +1162,7 @@ The code has a TODO acknowledging this: `//todo load only experimentStatus=inpro
 
 ---
 
-## 14. Optimization: Kruize Database and API Layer
+## 14. Optimization: Kruize Database and API Layer (Legacy)
 
 Additional Kruize issues beyond the code-level items in §13, focused on database schema, query patterns, and API-level inefficiencies.
 
@@ -1737,7 +1739,7 @@ The JVM/Quarkus system has **the best architecture** of all four recommendation 
 
 ---
 
-## 19. Additional Kruize Optimizations (Deep Audit)
+## 19. Additional Kruize Optimizations (Deep Audit) (Legacy)
 
 **Applicability:** Mixed — indicated per finding. These findings complement §13 (code-level) and §14 (DB/API) from the initial audit and were discovered during a second-pass deep dive.
 
@@ -2648,7 +2650,7 @@ The koku-metrics-operator currently executes 53 `ros:` queries plus ~20 `cost:` 
 
 ---
 
-## 24. Strategic Recommendation: Drop Kruize from the Remote Path
+## 24. Strategic Recommendation: Drop Kruize from the Remote Path (Legacy analysis)
 
 ### The Three Options
 
@@ -4309,7 +4311,7 @@ The operator executes ROS collection in 4 × 15-minute windows per hour. Each wi
 
 ---
 
-## Appendix B: Kruize Recommendation Logic Details
+## Appendix B: Kruize Recommendation Logic Details (Legacy)
 
 ### Why Percentile Can't Be a Single PromQL Query
 
