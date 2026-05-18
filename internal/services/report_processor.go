@@ -149,31 +149,33 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	var csvType types.PayloadType
 
+	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
+
 	for _, file := range kafkaMsg.Files {
 		csvType = utils.DetermineCSVType(file)
 
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeContainer {
+		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
 			if err := processContainerCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeNamespace {
+		if useNativeCSVIngest && csvType == types.PayloadTypeNamespace {
 			if err := processNamespaceCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeStorage {
+		if useNativeCSVIngest && csvType == types.PayloadTypeStorage {
 			if err := processStorageCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)
 			}
 			continue
 		}
-		if cfg.UseNativeEngine && csvType == types.PayloadTypeSnapshot {
+		if useNativeCSVIngest && csvType == types.PayloadTypeSnapshot {
 			if err := processSnapshotCSVNative(file, kafkaMsg); err != nil {
 				reportProcessingFailed = true
 				recordKafkaTransient(err)

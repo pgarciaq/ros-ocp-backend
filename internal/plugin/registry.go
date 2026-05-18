@@ -9,10 +9,11 @@ import (
 )
 
 const (
+	// KruizePluginName is the registry name for the legacy Kruize engine plugin.
+	KruizePluginName = "kruize"
+
 	envEnabledPlugins  = "ROS_ENABLED_PLUGINS"
 	envDisabledPlugins = "ROS_DISABLED_PLUGINS"
-
-	pluginNameKruize = "kruize"
 )
 
 var (
@@ -63,7 +64,7 @@ func Enabled() []Plugin {
 	var kruizePlugins []Plugin
 	var others []Plugin
 	for _, p := range candidates {
-		if p.Name() == pluginNameKruize {
+		if p.Name() == KruizePluginName {
 			kruizePlugins = append(kruizePlugins, p)
 		} else {
 			others = append(others, p)
@@ -112,10 +113,29 @@ func EnabledFor(name string) bool {
 	if deny[name] {
 		return false
 	}
-	if name == pluginNameKruize {
+	if name == KruizePluginName {
 		return false
 	}
 	return true
+}
+
+// ApplyLegacyUseNativeEngineEnv maps ROS_USE_NATIVE_ENGINE=false to ROS_ENABLED_PLUGINS=kruize when
+// the allowlist is unset so legacy deployments keep working. Prefer setting ROS_ENABLED_PLUGINS=kruize
+// explicitly. Call once from main before subsystem code reads EnabledFor / Enabled.
+func ApplyLegacyUseNativeEngineEnv(useNativeEngine bool) {
+	if useNativeEngine {
+		return
+	}
+	if strings.TrimSpace(os.Getenv(envEnabledPlugins)) != "" {
+		return
+	}
+	if err := os.Setenv(envEnabledPlugins, KruizePluginName); err != nil {
+		logging.GetLogger().Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
+		return
+	}
+	logging.GetLogger().Warn(
+		"ROS_USE_NATIVE_ENGINE=false is deprecated; use ROS_ENABLED_PLUGINS=kruize instead",
+	)
 }
 
 func parsePluginSet(raw string) map[string]bool {

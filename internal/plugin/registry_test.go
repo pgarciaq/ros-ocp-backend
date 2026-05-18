@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -152,4 +153,22 @@ func TestByTrait_CSVIngestor(t *testing.T) {
 	found := ByTrait[CSVIngestor]()
 	require.Len(t, found, 1)
 	assert.Equal(t, "ingest-one", found[0].Name())
+}
+
+func TestApplyLegacyUseNativeEngineEnv_setsKruizeWhenUnset(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "")
+	ApplyLegacyUseNativeEngineEnv(false)
+	assert.Equal(t, KruizePluginName, os.Getenv(envEnabledPlugins))
+}
+
+func TestApplyLegacyUseNativeEngineEnv_noopWhenNative(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "")
+	ApplyLegacyUseNativeEngineEnv(true)
+	assert.Equal(t, "", os.Getenv(envEnabledPlugins))
+}
+
+func TestApplyLegacyUseNativeEngineEnv_respectsExistingAllowlist(t *testing.T) {
+	t.Setenv(envEnabledPlugins, "container")
+	ApplyLegacyUseNativeEngineEnv(false)
+	assert.Equal(t, "container", os.Getenv(envEnabledPlugins))
 }

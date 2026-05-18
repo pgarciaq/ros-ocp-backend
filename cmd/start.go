@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services/housekeeper"
@@ -38,7 +39,7 @@ var processorCmd = &cobra.Command{
 				startCmdLog.Errorf("prometheus metrics server: %v", err)
 			}
 		}()
-		if cfg.UseNativeEngine {
+		if !plugin.EnabledFor(plugin.KruizePluginName) {
 			pool := db.GetPool()
 			if pool != nil {
 				go engine.StartRetentionTicker(ctx, pool, cfg.RetentionMonths)
