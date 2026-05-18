@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services/housekeeper"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"

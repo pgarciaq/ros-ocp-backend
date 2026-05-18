@@ -286,20 +286,20 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 		return nil
 	}
 
-	if err := upsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+	if err := UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("GPU digest upsert: %w", err)
 	}
 
-	if err := upsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+	if err := UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("node digest upsert: %w", err)
 	}
 
 	return nil
 }
 
-// upsertNodeDigests aggregates container rows by node and day, then writes
+// UpsertNodeDigests aggregates container rows by node and day, then writes
 // daily_node_digests. Rows without a node field are silently skipped.
-func upsertNodeDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
+func UpsertNodeDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
 	accumulators := AggregateNodeDigests(rows)
 	if len(accumulators) == 0 {
 		return nil
@@ -325,10 +325,10 @@ func EnsureGPUDigestPartitions(ctx context.Context, pool *pgxpool.Pool, months m
 	}
 }
 
-// upsertGPUDigests extracts GPU rows from parsed CSV and writes daily aggregates
+// UpsertGPUDigests extracts GPU rows from parsed CSV and writes daily aggregates
 // to the gpu_container_digests table. Rows without GPU data (HasGPU()==false)
 // are silently skipped.
-func upsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
+func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
 	type gpuKey struct {
 		date      time.Time
 		namespace string
