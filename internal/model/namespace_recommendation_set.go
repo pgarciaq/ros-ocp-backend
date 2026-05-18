@@ -91,17 +91,20 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSets(orgID string
 		}
 	}
 
-	if err := query.Count(&count).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&count).Error; err != nil {
 		return recommendationSets, 0, err
 	}
 	// OrderBy/OrderHow come from ListAPIOptions (allowlisted); secondary sort for stable ordering.
-	query = query.Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).Order("namespace_recommendation_sets.id ASC")
-
 	limit := opts.Limit
 	if opts.Format == "csv" {
 		limit = config.GetConfig().RecordLimitCSV
 	}
-	err := query.Offset(opts.Offset).Limit(limit).Scan(&recommendationSets).Error
+	err := query.Session(&gorm.Session{}).
+		Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).
+		Order("namespace_recommendation_sets.id ASC").
+		Offset(opts.Offset).
+		Limit(limit).
+		Scan(&recommendationSets).Error
 
 	return recommendationSets, int(count), err
 
