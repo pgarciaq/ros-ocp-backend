@@ -58,14 +58,14 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Phase 8b (VM) | 9 | 0 | 0 | 9 | 0 |
 | Phase 8c (Node) | 11 | 7 | 2 | 2 | 0 |
 | Phase 9 (JVM) | 5 | 0 | 0 | 5 | 0 |
-| Phase 10 (Kruize removal) | 8 | 3 | 2 | 3 | 0 |
+| Phase 10 (Legacy Kruize path) | 8 | 3 | 2 | 3 | 0 |
 | **TOTAL** | **96** | **62** | **6** | **27** | **1** |
 
 ### What's Next (Not Yet Implemented)
 
 | Feature | REQs | Description | Complexity | Priority |
 |---------|------|-------------|------------|----------|
-| Full Kruize removal | REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5 | Remove legacy Kruize code path (native is default, legacy is fallback) | Low | **High** — blocks deployment simplification |
+| Retire legacy Kruize stack (native-only mandate) | REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5 | Remove optional legacy Kruize code path once product commits to native-only and tenants are migrated | Low | **High** — simplifies deployment after cutover |
 | MachineSet right-sizing (Tier 2) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | Instance type + replica count recommendations via cloud catalog | High | Medium |
 | VM recommendations | REQ-8b.1 – REQ-8b.9 | Virtual machine right-sizing for OpenShift Virtualization | Medium | Medium |
 | On-demand real-time recs | REQ-3.4 | API-time recommendation for custom timeframe requests | Low | Low |
