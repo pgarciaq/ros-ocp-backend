@@ -13,16 +13,18 @@ func TestPVCPlugin_traitAssertions(t *testing.T) {
 	t.Parallel()
 
 	var (
-		_ plugin.Plugin      = (*PVCPlugin)(nil)
-		_ plugin.CSVIngestor = (*PVCPlugin)(nil)
+		_ plugin.Plugin            = (*PVCPlugin)(nil)
+		_ plugin.CSVIngestor       = (*PVCPlugin)(nil)
+		_ plugin.APIProvider       = (*PVCPlugin)(nil)
+		_ plugin.RetentionProvider = (*PVCPlugin)(nil)
 	)
 }
 
-func TestPVCPlugin_nameEnabledAndTypes(t *testing.T) {
+func TestPVCPlugin_nameTypesRetentionTables(t *testing.T) {
 	t.Parallel()
 
 	p := &PVCPlugin{}
 	assert.Equal(t, "pvc", p.Name())
-	assert.True(t, p.Enabled())
 	assert.Equal(t, []string{string(types.PayloadTypeStorage)}, p.SupportedCSVTypes())
+	assert.Equal(t, []string{"daily_pvc_digests"}, p.RetentionTables())
 }

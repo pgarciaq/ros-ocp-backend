@@ -94,18 +94,6 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
 	}
 
-	// PVC right-sizing recommendations (native engine only).
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/pvcs", GetPVCRecommendations)
-	}
-
-	// Snapshot staleness recommendations (native engine only).
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/snapshots", GetSnapshotRecommendations)
-		v1.GET("/recommendations/openshift/settings/snapshot", GetSnapshotSettings)
-		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
-	}
-
 	// Plugin-provided routes ([plugin.APIProviders] returns individually enabled plugins,
 	// without Kruize mutual exclusivity, so namespace endpoints stay available in Kruize mode).
 	for _, ap := range plugin.APIProviders() {

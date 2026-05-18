@@ -36,7 +36,6 @@ var cfg *config.Config = config.GetConfig()
 // then matching IngestHooks when ingest produced rows. Returns handled=false when
 // no ingestor claimed csvType (caller should use the legacy fallback path).
 func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID, csvType string) (handled bool, err error) {
-	log := logging.GetLogger()
 	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
 	var matched plugin.CSVIngestor
 	for _, ing := range ingestors {
@@ -60,20 +59,48 @@ func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Rea
 	}
 
 	if len(rows) > 0 {
-		hooks := plugin.ByTrait[plugin.IngestHook]()
-		for _, hook := range hooks {
-			for _, ht := range hook.HookAfterCSVTypes() {
-				if ht == csvType {
-					if hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); hookErr != nil {
-						log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), hookErr)
-					}
-					break
-				}
-			}
-		}
+		runIngestHooksForCSV(ctx, pool, csvType, rows, orgID, clusterUUID, plugin.ByTrait[plugin.IngestHook]())
 	}
 
 	return true, nil
+}
+
+func runIngestHooksForCSV(ctx context.Context, pool *pgxpool.Pool, csvType string, rows []ingestion.MetricRow, orgID, clusterUUID string, hooks []plugin.IngestHook) {
+	log := logging.GetLogger()
+	for _, hook := range hooks {
+		for _, ht := range hook.HookAfterCSVTypes() {
+			if ht == csvType {
+				if hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); hookErr != nil {
+					log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), hookErr)
+					PluginHookErrors.WithLabelValues(hook.Name(), "after_ingest").Inc()
+				}
+				break
+			}
+		}
+	}
+}
+
+// processContainerDigestFallback mirrors container CSV ingestion when no CSVIngestor handles "container":
+// parse digests, then upsert GPU/node digest tables only for plugins enabled in ROS_ENABLED_PLUGINS / defaults.
+func processContainerDigestFallback(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+	rows, err := ingestion.ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	if plugin.EnabledFor("gpu") {
+		if err := ingestion.UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+			return fmt.Errorf("GPU digest upsert: %w", err)
+		}
+	}
+	if plugin.EnabledFor("node") {
+		if err := ingestion.UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+			return fmt.Errorf("node digest upsert: %w", err)
+		}
+	}
+	return nil
 }
 
 func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
@@ -516,7 +543,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 	if !handled {
-		if err := ingestion.ProcessCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+		if err := processContainerDigestFallback(ctx, pool, body, orgID, clusterUUID); err != nil {
 			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 			if isTransientKafkaProcessingError(err) {
 				return fmt.Errorf("digest processing: %w", err)

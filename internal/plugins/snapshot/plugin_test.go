@@ -15,6 +15,7 @@ func TestSnapshotPlugin_traitAssertions(t *testing.T) {
 	var (
 		_ plugin.Plugin      = (*SnapshotPlugin)(nil)
 		_ plugin.CSVIngestor = (*SnapshotPlugin)(nil)
+		_ plugin.APIProvider = (*SnapshotPlugin)(nil)
 	)
 }
 

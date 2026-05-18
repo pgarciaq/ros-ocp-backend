@@ -31,6 +31,15 @@ func (p *GPUPlugin) AfterIngest(ctx context.Context, pool *pgxpool.Pool, rows []
 	return ingestion.UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID)
 }
 
+func (p *GPUPlugin) EnrichResponse(ctx context.Context, resp interface{}) error {
+	in, ok := resp.(*rosapi.NativeContainerEnrichmentInput)
+	if !ok || in == nil || !plugin.EnabledFor(p.Name()) {
+		return nil
+	}
+	rosapi.EnrichNativeContainerResultsWithGPU(ctx, in.OrgID, in.Results)
+	return nil
+}
+
 func (p *GPUPlugin) RegisterRoutes(g *echo.Group) {
 	if plugin.EnabledFor(plugin.KruizePluginName) {
 		return

@@ -62,6 +62,10 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	// When native retention plugins are registered (production binaries import internal/plugins),
 	// each plugin sweeps its partitioned digest/sample tables. Tests that omit plugin imports
 	// fall back to retainedTables for identical behavior.
+	//
+	// Kruize-only deployments never populate native digest tables (daily_node_digests, gpu_container_digests,
+	// daily_pvc_digests, etc.): the legacy path writes workload_metrics / recommendation_sets instead.
+	// Omitting those tables from Kruize retention is therefore harmless.
 	retProviders := plugin.ByTrait[plugin.RetentionProvider]()
 	if len(retProviders) > 0 {
 		for _, rp := range retProviders {

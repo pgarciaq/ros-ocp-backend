@@ -18,7 +18,11 @@ ROS_ENABLED_PLUGINS=kruize
 
 That turns off all native plugins automatically.
 
-**Deprecated (backward compatible):** `ROS_USE_NATIVE_ENGINE=false` still selects the legacy engine when `ROS_ENABLED_PLUGINS` is unset: [`ApplyLegacyUseNativeEngineEnv`](../../plugin/registry.go) maps it to `ROS_ENABLED_PLUGINS=kruize` at startup and logs a deprecation warning. Prefer migrating deploy manifests to `ROS_ENABLED_PLUGINS=kruize`.
+**Deprecated (backward compatible):** `ROS_USE_NATIVE_ENGINE=false` forces `ROS_ENABLED_PLUGINS=kruize` at startup (overwriting any prior allowlist) and logs a deprecation warning — see [`ApplyLegacyUseNativeEngineEnv`](../../plugin/registry.go).
+
+When the **native** engine is on (`ROS_USE_NATIVE_ENGINE` unset/true), **`ROS_ENABLED_PLUGINS` cannot include `kruize`** alongside native domains: if listed, `kruize` is stripped and a warning is logged.
+
+Prefer migrating deploy manifests to `ROS_ENABLED_PLUGINS=kruize` for legacy-only installs.
 
 No dual configuration is required once operators adopt `ROS_ENABLED_PLUGINS`; keep only **either** an explicit plugin allowlist **or** the deprecated flag until migrations finish.
 

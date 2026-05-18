@@ -17,8 +17,7 @@ The service supports two modes:
 
 - **Kruize (legacy)** — delegates recommendation computation to the
   [Kruize Autotune](https://github.com/kruize/autotune) service via HTTP.
-  Enable with **`ROS_ENABLED_PLUGINS=kruize`**. The deprecated env combination
-  **`ROS_USE_NATIVE_ENGINE=false`** (with no explicit plugin allowlist) still selects this mode via a startup compatibility bridge.
+  Enable with **`ROS_ENABLED_PLUGINS=kruize`**. The deprecated **`ROS_USE_NATIVE_ENGINE=false`** flag forces **`ROS_ENABLED_PLUGINS=kruize`** at startup (overriding any previous allowlist) via [`ApplyLegacyUseNativeEngineEnv`](internal/plugin/registry.go); prefer setting **`ROS_ENABLED_PLUGINS=kruize`** explicitly.
 
 ## Plugins
 
@@ -29,11 +28,11 @@ ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins a
 | Plugin | Type | Default | Description |
 |--------|------|---------|-------------|
 | `container` | CSVIngestor + RetentionProvider | Enabled | Container CPU/memory recommendations |
-| `gpu` | IngestHook + APIProvider + RetentionProvider | Enabled | GPU time-slicing and MIG recommendations |
+| `gpu` | IngestHook + APIProvider + RetentionProvider + APIEnricher | Enabled | GPU time-slicing and MIG recommendations |
 | `node` | IngestHook + APIProvider + RetentionProvider | Enabled | Node capacity/utilization recommendations |
 | `namespace` | CSVIngestor + APIProvider + RetentionProvider | Enabled | Namespace-level recommendations |
-| `pvc` | CSVIngestor | Enabled | PVC/storage recommendations |
-| `snapshot` | CSVIngestor | Enabled | Snapshot/staleness processing |
+| `pvc` | CSVIngestor + APIProvider + RetentionProvider | Enabled | PVC/storage recommendations |
+| `snapshot` | CSVIngestor + APIProvider | Enabled | Snapshot/staleness processing |
 | `kruize` | Legacy engine | **Disabled** | Legacy Kruize-based recommendations (mutually exclusive) |
 
 **Configuration:**
@@ -51,7 +50,7 @@ ROS_DISABLED_PLUGINS=gpu
 # Switch to legacy Kruize engine (disables all native plugins):
 ROS_ENABLED_PLUGINS=kruize
 
-# Deprecated (still works, equivalent to ROS_ENABLED_PLUGINS=kruize when allowlist unset):
+# Deprecated (forces ROS_ENABLED_PLUGINS=kruize — ignores prior allowlist):
 ROS_USE_NATIVE_ENGINE=false
 ```
 
@@ -80,8 +79,7 @@ ROS_USE_NATIVE_ENGINE=false
   with boxplot visualizations
 - **Recommendation history and quality tracking** — historical snapshots,
   stability metrics, OOM event correlation
-- **Configurable thresholds** — GPU classification thresholds via environment
-  variables (`ROS_GPU_IDLE_THRESHOLD`, etc.)
+- **Configurable thresholds** — GPU classification thresholds are loaded from environment variables (`ROS_GPU_IDLE_THRESHOLD`, etc.) into the application configuration at startup (alongside defaults and optional config files).
 
 ## API Endpoints
 

@@ -55,7 +55,8 @@ type RetentionProvider interface {
 	SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error
 }
 
-// MigrationProvider documents tables owned by plugin DDL in the central migrations tree.
+// MigrationProvider is reserved for future use when plugins can declare DDL ownership in docs and tooling.
+// Nothing in the dispatch pipeline consumes this trait yet.
 type MigrationProvider interface {
 	Plugin
 	OwnedTables() []string

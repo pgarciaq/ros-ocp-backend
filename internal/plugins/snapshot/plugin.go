@@ -5,7 +5,9 @@ import (
 	"io"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
+	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -31,4 +33,13 @@ func (p *SnapshotPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (p *SnapshotPlugin) RegisterRoutes(g *echo.Group) {
+	if plugin.EnabledFor(plugin.KruizePluginName) {
+		return
+	}
+	g.GET("/recommendations/openshift/snapshots", rosapi.GetSnapshotRecommendations)
+	g.GET("/recommendations/openshift/settings/snapshot", rosapi.GetSnapshotSettings)
+	g.PUT("/recommendations/openshift/settings/snapshot", rosapi.PutSnapshotSettings)
 }
