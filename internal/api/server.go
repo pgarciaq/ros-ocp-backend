@@ -15,6 +15,7 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
 var log *logrus.Entry = logging.GetLogger()
@@ -80,10 +81,8 @@ func StartAPIServer(ctx context.Context) {
 		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
 		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
-		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
 		v1.GET("/recommendations/openshift", GetRecommendationSetList)
-		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 	}
 
 	// Project/Namespace — native engine with Kruize fallback, or legacy-only.
@@ -141,6 +140,18 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/snapshots", GetSnapshotRecommendations)
 		v1.GET("/recommendations/openshift/settings/snapshot", GetSnapshotSettings)
 		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
+	}
+
+	// Plugin-provided routes ([plugin.ByTrait] returns enabled plugins only).
+	for _, ap := range plugin.ByTrait[plugin.APIProvider]() {
+		ap.RegisterRoutes(v1)
+	}
+
+	// Parameterized container recommendation detail — after static paths and plugin routes.
+	if cfg.UseNativeEngine {
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
+	} else {
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 	}
 
 	srv := &http.Server{
