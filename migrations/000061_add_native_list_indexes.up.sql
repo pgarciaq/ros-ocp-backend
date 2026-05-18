@@ -1,7 +1,7 @@
--- golang-migrate wraps each file in a transaction, so we use plain
--- CREATE INDEX (not CONCURRENTLY).  The tables are small in practice;
--- for very large deployments, apply these indexes manually with
--- CONCURRENTLY outside the migration runner.
+-- golang-migrate wraps each file in a transaction, so this migration uses plain
+-- CREATE INDEX IF NOT EXISTS (not CONCURRENTLY). For large production databases,
+-- run the equivalent CREATE INDEX CONCURRENTLY statements from migrations/README.md
+-- first; IF NOT EXISTS makes this migration a no-op when indexes already exist.
 
 CREATE INDEX IF NOT EXISTS idx_ros_rs_org_cluster_stale_updated_at
     ON recommendation_sets (org_id, cluster_uuid, stale, updated_at DESC);
