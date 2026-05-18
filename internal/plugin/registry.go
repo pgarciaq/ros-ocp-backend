@@ -23,9 +23,14 @@ var (
 )
 
 // Register appends a plugin to the process-wide registry. Call from plugin init().
+//
+// Convention: always register pointer receivers so traits are detected correctly,
+// e.g. plugin.Register(&MyPlugin{}).
+//
+// Register panics if p is nil.
 func Register(p Plugin) {
 	if p == nil {
-		return
+		panic("plugin.Register: cannot register nil plugin")
 	}
 	regMu.Lock()
 	defer regMu.Unlock()

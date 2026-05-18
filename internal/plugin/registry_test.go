@@ -52,6 +52,14 @@ func resetRegistry(t *testing.T) {
 	regMu.Unlock()
 }
 
+func TestRegister_nilPanics(t *testing.T) {
+	resetRegistry(t)
+
+	assert.PanicsWithValue(t, "plugin.Register: cannot register nil plugin", func() {
+		Register(nil)
+	})
+}
+
 func TestRegisterAndAll(t *testing.T) {
 	resetRegistry(t)
 

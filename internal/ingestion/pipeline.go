@@ -133,24 +133,28 @@ func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []Dige
 	return nil
 }
 
-// ProcessCSVToDigests is the full native engine ingestion pipeline:
-// parse CSV -> validate -> group by container+day -> compute digests -> upsert to DB.
-func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+// ParseAndDigestCSV parses container CSV rows with [ParseCSVRows] (which validates each row),
+// groups by container and day, upserts usage samples and daily_container_digests,
+// and returns the parsed rows for downstream ingest hooks.
+//
+// It does not run GPU or node digest upserts; callers that need the full legacy
+// pipeline should use [ProcessCSVToDigests], which wraps this function.
+func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]MetricRow, error) {
 	rows, err := ParseCSVRows(r)
 	if err != nil {
-		return fmt.Errorf("parse CSV: %w", err)
+		return nil, fmt.Errorf("parse CSV: %w", err)
 	}
 	if len(rows) == 0 {
 		log.Infof("ProcessCSVToDigests: no rows parsed for org=%s cluster=%s", orgID, clusterUUID)
-		return nil
+		return nil, nil
 	}
 
 	// Persist raw samples for boxplot computation at query time.
 	if err := EnsureSamplePartitions(ctx, pool, rows); err != nil {
-		return fmt.Errorf("sample partitions: %w", err)
+		return nil, fmt.Errorf("sample partitions: %w", err)
 	}
 	if err := upsertUsageSamples(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("upsert usage samples: %w", err)
+		return nil, fmt.Errorf("upsert usage samples: %w", err)
 	}
 
 	grouped := GroupCSVRows(rows, orgID, clusterUUID)
@@ -162,12 +166,12 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 		digestKeys = append(digestKeys, k)
 	}
 	if err := EnsureDigestPartitions(ctx, pool, digestKeys); err != nil {
-		return fmt.Errorf("digest partitions: %w", err)
+		return nil, fmt.Errorf("digest partitions: %w", err)
 	}
 
 	txDigests, err := pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin tx for container digests: %w", err)
+		return nil, fmt.Errorf("begin tx for container digests: %w", err)
 	}
 	defer txDigests.Rollback(ctx)
 
@@ -257,15 +261,30 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 			)
 		}
 		if err := flushQueuedBatch(ctx, txDigests, batch, chunkEnd-chunkStart); err != nil {
-			return fmt.Errorf("upsert digest: %w", err)
+			return nil, fmt.Errorf("upsert digest: %w", err)
 		}
 	}
 	if err := txDigests.Commit(ctx); err != nil {
-		return fmt.Errorf("commit container digests tx: %w", err)
+		return nil, fmt.Errorf("commit container digests tx: %w", err)
 	}
 
 	log.Infof("ProcessCSVToDigests: upserted %d digests for org=%s cluster=%s",
 		len(grouped), orgID, clusterUUID)
+
+	return rows, nil
+}
+
+// ProcessCSVToDigests is the full native engine ingestion pipeline:
+// parse CSV -> validate -> group by container+day -> compute digests -> upsert to DB,
+// then GPU and node digest upserts (slated to move behind ingest-hook dispatch).
+func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+	rows, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return nil
+	}
 
 	if err := upsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("GPU digest upsert: %w", err)
