@@ -6,7 +6,7 @@
 
 ros-ocp-backend implements multiple recommendation domains—container CPU/memory, namespace aggregates, GPU (MIG and time-slicing), node utilization, PVC storage, and VolumeSnapshot staleness—with more domains planned. **Plugin traits** (`CSVIngestor`, `IngestHook`, `APIProvider`, `APIEnricher`, `RetentionProvider`, reserved `MigrationProvider`) now own much of this surface area, though **Kafka file dispatch** at the outer loop remains explicit per payload type (see §1.2).
 
-This document proposes **compile-time, in-process plugins** behind small Go interfaces, toggled at runtime via environment variables (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`). Plugins ship in the same binary (blank imports + `init()` registration)—no dynamic `.so` loading, no gRPC, no Wasm—preserving **zero interface dispatch overhead** on the hot path beyond ordinary Go polymorphism.
+This document describes **compile-time, in-process plugins** behind small Go interfaces, toggled at runtime via environment variables (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`). Plugins ship in the same binary (blank imports + `init()` registration)—no dynamic `.so` loading, no gRPC, no Wasm—preserving **zero interface dispatch overhead** on the hot path beyond ordinary Go polymorphism.
 
 **Implementation note:** The Kafka consumer still uses an explicit top-level `switch`/branch per known CSV/payload type (`container`, `namespace`, `storage`, `snapshot`). Within each native branch, CSV handling routes through **`CSVIngestor`** plugins (`nativeCSVIngestViaPlugins`) where applicable; hooks and fallbacks preserve disable semantics for coupled domains (GPU/node digests).
 
@@ -36,7 +36,7 @@ Under Echo, **`static > param > any`** matching means concrete paths such as **`
 
 **GPU enrichment:** **`APIEnricher`** — **`gpu`** implements **`EnrichResponse`** for **`NativeContainerEnrichmentInput`**; **`handlers.go`** calls **`EnrichNativeContainerResults`** instead of **`enrichWithGPU`** directly.
 
-**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. If **no** retention plugins are registered, core falls back to the **`retainedTables`** slice ([`retention.go`](../../internal/engine/retention.go)), which covers **core/shared digest and sample tables only** — not plugin-owned tables such as **`daily_node_digests`**, **`node_recommendations`**, or **`daily_pvc_digests`** (those partitions are swept only when the corresponding **`RetentionProvider`** plugins are loaded).
+**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. If **no** retention plugins are registered (for example minimal tests that omit plugin imports), core falls back to the **`retainedTables`** slice ([`retention.go`](../../internal/engine/retention.go)). That fallback list matches the **original pre-plugin monthly-partitioned digest/sample set**: container samples/digests plus **`daily_namespace_digests`**, **`namespace_usage_samples`**, and **`gpu_container_digests`**. **`RetentionProvider`** plugins still declare ownership of those namespace/GPU tables when loaded; the fallback exists so environments without the registry wiring still drop old partitions for that legacy set. **Node and PVC partitions are not on that list** — **`daily_node_digests`**, **`node_recommendations`**, and **`daily_pvc_digests`** are swept **only** when the **`node`** and **`pvc`** plugins register **`SweepRetention`**.
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -58,7 +58,7 @@ Non-goals are listed in [§13](#13-what-this-design-does-not-do).
 
 ## 3. Architecture overview
 
-Plugins are **compiled in** and **self-register** via `init()`. A central **registry** filters registrations according to env-configured enabled sets. Core subsystems (**ingestion dispatcher**, **HTTP registrar**, **retention runner**, **migration contributor list**) iterate **only enabled** plugins and invoke optional capabilities via type assertions (trait pattern).
+Plugins are **compiled in** and **self-register** via `init()`. A central **registry** filters registrations according to env-configured enabled sets. Core subsystems (**ingestion dispatcher**, **HTTP registrar**, and **retention runner**) iterate **only enabled** plugins and invoke optional capabilities via type assertions (trait pattern). DDL ownership remains **documentation convention** on numbered SQL files under **`migrations/`** — **`MigrationProvider`** is reserved and **not** invoked by core dispatch (§6.4).
 
 ```mermaid
 flowchart TB
@@ -81,14 +81,12 @@ flowchart TB
         Ingest[Ingestion dispatcher]
         APIReg[Route registrar]
         Retain[Retention sweeper]
-        Migrate[Migration contributors]
     end
 
     plugins -->|"init()"| Register
     Enabled --> Ingest
     Enabled --> APIReg
     Enabled --> Retain
-    Enabled --> Migrate
 ```
 
 **Shared infrastructure:** Trait methods take concrete dependencies in their signatures (for example `*pgxpool.Pool`, `context.Context`, Echo groups). **[`PluginContext`](../../internal/plugin/context.go)** exists for **initialization-time** dependency injection (pool, logger entry, optional typed config snapshot) when core wires plugins at startup.
@@ -222,7 +220,7 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 
 ### 6.3 Retention (`internal/engine/retention.go`)
 
-**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered. When **no** retention plugins are registered, core falls back to **`retainedTables`** — **core tables only**; node/GPU/PVC-owned partitions require their plugins’ **`SweepRetention`** (see §1).
+**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered. When **no** retention plugins are registered, core falls back to **`retainedTables`** — the **legacy monthly-partition sweep list** (container + namespace digest/samples + **`gpu_container_digests`**) from before plugin retention existed; **node** and **PVC** partitions are **not** included and require their plugins’ **`SweepRetention`** (see §1).
 
 Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](../../internal/engine/retention.go)**:
 
@@ -267,17 +265,19 @@ The **`WithFallback`** handlers and **legacy dataframe CSV ingestion** paths kee
 | **Shared infrastructure** | Packages import `db.GetPool()` and **`config.GetConfig()`** freely. | Trait methods receive **`pool`** (and similar) explicitly; **`PluginContext`** is optional for startup wiring (§3). Plugins may use **`logging.GetLogger()`** like the rest of the codebase. |
 | **Container CSV fan-out** | Prior unconditional GPU/node tails on **`ProcessCSVToDigests`** for Kafka paths. | **`CSVIngestor`** + **`IngestHook`** + **`processContainerDigestFallback`** respect **`EnabledFor("gpu"|"node")`**; **`ProcessCSVToDigests`** remains for tools/tests only (always chains GPU+node). |
 | **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). |
-| **Retention table lists** | Single `retainedTables` array mixes domains. | Partition parents move under **`RetentionProvider`** per plugin; core retains only cross-cutting tables. |
+| **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; **node/PVC** partitions are plugin-only. |
 
 ---
 
-## 8. Plugin directory structure (proposed)
+## 8. Plugin directory structure
 
 ```
-internal/plugins/
-  registry.go            # init-time wiring helpers (optional PluginContext)
-  traits.go              # re-export or thin wrappers if needed
+internal/plugin/
+  plugin.go              # Plugin + trait interfaces (CSVIngestor, APIProvider, ...)
+  registry.go            # Register, Enabled, ByTrait, env parsing helpers
+  context.go             # PluginContext (startup DI)
 
+internal/plugins/
   example/
     README.md            # trait contract for plugin authors (see §8.1)
     plugin.go            # stub implementations of every trait (compile-time interface check)
@@ -447,9 +447,9 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 
 ## 16. Test strategy
 
-**Current state (baseline):** **74** test files totaling roughly **16.7k** lines; tests are **colocated** with production code. Approximately **53** files are **pure unit tests**; approximately **21** require **PostgreSQL** via **testcontainers**.
+**Current state:** Tests are **colocated** with production code (`*_test.go` beside packages). A subset are **pure unit tests**; others integrate against **PostgreSQL** (often via **testcontainers**). Exact file and line counts drift as the suite grows—treat **`go test ./...`** as the source of truth.
 
-**Principle:** Existing tests **stay where they are** today—they are the **acceptance criteria** for the refactor. If all **74** files still pass after each extraction phase, that phase is considered behavior-preserving.
+**Principle:** Existing tests **stay where they are** today—they are the **acceptance criteria** for the refactor. If the full package test suite still passes after each extraction phase, that phase is considered behavior-preserving.
 
 **Phased approach:**
 

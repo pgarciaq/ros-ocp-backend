@@ -95,12 +95,14 @@ All endpoints are under `/api/cost-management/v1/`:
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |
 | `GET /recommendations/openshift/nodes` | Node CPU/memory utilization recommendations |
 | `GET /recommendations/openshift/nodes/utilization` | Deprecated alias of `/nodes` (same response + warning) |
+| `GET /recommendations/openshift/namespaces` | Namespace recommendations list |
+| `GET /recommendations/openshift/namespaces/:recommendation-id` | Namespace recommendation detail |
 | `GET /recommendations/openshift/pvcs` | PVC/storage recommendations |
 | `GET /recommendations/openshift/snapshots` | Volume snapshot staleness recommendations |
 | `GET /recommendations/openshift/settings/snapshot` | Snapshot recommendation settings |
 | `PUT /recommendations/openshift/settings/snapshot` | Update snapshot recommendation settings |
-| `GET /openshift/namespace/recommendations` | Namespace recommendations |
-| `GET /recommendations/openshift/namespace/:recommendation-id` | Namespace recommendation detail |
+| `GET /openshift/namespace/recommendations` | Legacy alias for namespace list (same handler as `/namespaces`) |
+| `GET /recommendations/openshift/namespace/:recommendation-id` | Legacy alias for namespace detail (same handler as `/namespaces/:recommendation-id`) |
 | `GET /recommendations/openshift/settings/terms` | Get term configuration |
 | `PUT /recommendations/openshift/settings/terms` | Set custom term windows |
 | `DELETE /recommendations/openshift/settings/terms` | Reset to defaults |
