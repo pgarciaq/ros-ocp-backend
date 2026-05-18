@@ -96,6 +96,28 @@ func ByTrait[T any]() []T {
 	return out
 }
 
+// APIProviders returns plugins implementing APIProvider from the full registry where each plugin's
+// Enabled() is true, without applying Kruize mutual exclusivity. Ingestion traits still use [Enabled]
+// (exclusive), but HTTP routes such as namespace listings must remain available when Kruize owns
+// container processing.
+func APIProviders() []APIProvider {
+	regMu.RLock()
+	regCopy := make([]Plugin, len(registry))
+	copy(regCopy, registry)
+	regMu.RUnlock()
+
+	var out []APIProvider
+	for _, p := range regCopy {
+		if !p.Enabled() {
+			continue
+		}
+		if ap, ok := p.(APIProvider); ok {
+			out = append(out, ap)
+		}
+	}
+	return out
+}
+
 // EnabledFor reports whether a plugin name is enabled from ROS_ENABLED_PLUGINS /
 // ROS_DISABLED_PLUGINS before kruize exclusivity is applied.
 //

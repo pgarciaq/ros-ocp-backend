@@ -80,31 +80,12 @@ func StartAPIServer(ctx context.Context) {
 
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if nativeRecommendationRoutes {
-		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
-		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
 	} else {
 		v1.GET("/recommendations/openshift", GetRecommendationSetList)
 	}
 
-	// Project/Namespace — native engine with Kruize fallback, or legacy-only.
-	// Canonical paths (consistent with nodes, pvcs, snapshots pattern):
-	//   GET /recommendations/openshift/namespaces
-	//   GET /recommendations/openshift/namespaces/:recommendation-id
-	// Legacy paths (preserved for backward compatibility with IQE, OpenAPI spec):
-	//   GET /openshift/namespace/recommendations
-	//   GET /recommendations/openshift/namespace/:recommendation-id
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetListWithFallback)
-		v1.GET("/recommendations/openshift/namespaces/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
-		v1.GET("/openshift/namespace/recommendations", GetNamespaceRecommendationSetListWithFallback)
-		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSetWithFallback)
-	} else {
-		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetList)
-		v1.GET("/recommendations/openshift/namespaces/:recommendation-id", GetNamespaceRecommendationSet)
-		v1.GET("/openshift/namespace/recommendations", GetNamespaceRecommendationSetList)
-		v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
-	}
+	// Namespace routes are registered by namespace.APIProvider (see plugin.APIProviders).
 
 	// Custom recommendation term settings (native engine only).
 	if nativeRecommendationRoutes {
@@ -119,13 +100,7 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
 	}
 
-	// Node-level GPU time-slicing and MIG-focused listings (native engine only).
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/gpu/timeslicing", GetNodeRecommendations)
-		v1.GET("/recommendations/openshift/gpu/mig", GetGPUMIGRecommendations)
-		v1.GET("/recommendations/openshift/nodes", GetNodeUtilizationRecs)
-		v1.GET("/recommendations/openshift/nodes/utilization", GetNodeUtilizationRecsLegacyPath)
-	}
+	// GPU / node utilization routes are registered by gpu/node APIProvider plugins.
 
 	// Fleet-level summary (native engine only).
 	if nativeRecommendationRoutes {
@@ -144,8 +119,9 @@ func StartAPIServer(ctx context.Context) {
 		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
 	}
 
-	// Plugin-provided routes ([plugin.ByTrait] returns enabled plugins only).
-	for _, ap := range plugin.ByTrait[plugin.APIProvider]() {
+	// Plugin-provided routes ([plugin.APIProviders] returns individually enabled plugins,
+	// without Kruize mutual exclusivity, so namespace endpoints stay available in Kruize mode).
+	for _, ap := range plugin.APIProviders() {
 		ap.RegisterRoutes(v1)
 	}
 
