@@ -14,10 +14,13 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services/housekeeper"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
+
+var startCmdLog = logging.GetLogger()
 
 var startCmd = &cobra.Command{Use: "start", Short: "Use to start ros-ocp-backend services"}
 
@@ -32,10 +35,15 @@ var processorCmd = &cobra.Command{
 		go utils.Start_prometheus_server()
 		utils.SetupKruizePerformanceProfile()
 		if !cfg.UseNativeEngine {
+		go func() {
+			if err := utils.Start_prometheus_server(); err != nil {
+				startCmdLog.Errorf("prometheus metrics server: %v", err)
+			}
+		}()
 		if cfg.UseNativeEngine {
 			pool := db.GetPool()
 			if pool != nil {
-				go engine.StartRetentionTicker(context.Background(), pool, cfg.RetentionMonths)
+				go engine.StartRetentionTicker(ctx, pool, cfg.RetentionMonths)
 			}
 		} else {
 			utils.Setup_kruize_performance_profile()
@@ -52,7 +60,11 @@ var recommendationPollerCmd = &cobra.Command{
 		cfg := config.GetConfig()
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		go utils.Start_prometheus_server()
+		go func() {
+			if err := utils.Start_prometheus_server(); err != nil {
+				startCmdLog.Errorf("prometheus metrics server: %v", err)
+			}
+		}()
 		kafka.StartConsumer(ctx, cfg.RecommendationTopic, services.PollForRecommendations, false)
 	},
 }
@@ -62,7 +74,9 @@ var apiCmd = &cobra.Command{
 	Short: "starts ros-ocp api server",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting ros-ocp API server")
-		api.StartAPIServer()
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		api.StartAPIServer(ctx)
 	},
 }
 

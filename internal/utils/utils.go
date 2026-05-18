@@ -416,9 +416,9 @@ func StringInSlice(a string, list []string) bool {
 	return false
 }
 
-func Start_prometheus_server() {
+func Start_prometheus_server() error {
 	if cfg.PrometheusPort == "" {
-		return
+		return nil
 	}
 	log.Info("Starting prometheus http server")
 	mux := http.NewServeMux()
@@ -447,7 +447,10 @@ func Start_prometheus_server() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok","checks":{"database":"ok"}}`))
 	})
-	_ = http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux)
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("ListenAndServe prometheus: %w", err)
+	}
+	return nil
 }
 
 func NeedRecommOnFirstOfMonth(dbDate time.Time, maxEndTime time.Time) bool {

@@ -93,7 +93,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		SourceId:       kafkaMsg.Metadata.Source_id,
 		ClusterUUID:    kafkaMsg.Metadata.Cluster_uuid,
 		ClusterAlias:   kafkaMsg.Metadata.Cluster_alias,
-		LastReportedAt: time.Now(),
+		LastReportedAt: time.Now().UTC(),
 	}
 	if err := cluster.CreateCluster(); err != nil {
 		log.Errorf("unable to get or add record to clusters table: %v. Error: %v", cluster, err)
