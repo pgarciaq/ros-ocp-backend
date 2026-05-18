@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,7 +20,9 @@ import (
 var log *logrus.Entry = logging.GetLogger()
 var cfg *config.Config = config.GetConfig()
 
-func StartAPIServer() {
+// StartAPIServer runs the REST API and Prometheus metrics listener until ctx is cancelled,
+// then shuts both down gracefully.
+func StartAPIServer(ctx context.Context) {
 	app := echo.New()
 	app.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
 		Subsystem: "rosocp",
@@ -30,13 +33,15 @@ func StartAPIServer() {
 		},
 	}))
 
+	metricsEcho := echo.New()
+	metricsEcho.GET("/metrics", echoprometheus.NewHandler())
 	go func() {
-		metrics := echo.New()
-		metrics.GET("/metrics", echoprometheus.NewHandler())
-		if err := metrics.Start(fmt.Sprintf(":%s", cfg.PrometheusPort)); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
+		addr := fmt.Sprintf(":%s", cfg.PrometheusPort)
+		if err := metricsEcho.Start(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Errorf("metrics server: %v", err)
 		}
 	}()
+
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},
@@ -120,12 +125,26 @@ func StartAPIServer() {
 		v1.PUT("/recommendations/openshift/settings/snapshot", PutSnapshotSettings)
 	}
 
-	s := http.Server{
-		Addr:              ":" + cfg.API_PORT, // local dev server
+	srv := &http.Server{
+		Addr:              ":" + cfg.API_PORT,
 		Handler:           app,
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeout) * time.Second,
 	}
-	if err := s.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatal(err)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Errorf("api server: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := metricsEcho.Shutdown(shutdownCtx); err != nil {
+		log.Warnf("metrics server shutdown: %v", err)
+	}
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Warnf("api server shutdown: %v", err)
 	}
 }

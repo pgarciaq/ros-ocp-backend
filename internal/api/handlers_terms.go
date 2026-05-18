@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -41,7 +40,8 @@ func GetTermSettings(c echo.Context) error {
 	}
 	orgID := xrhid.Identity.OrgID
 
-	terms, err := engine.LoadTermConfig(context.Background(), db.GetPool(), orgID)
+	ctx := c.Request().Context()
+	terms, err := engine.LoadTermConfig(ctx, db.GetPool(), orgID)
 	if err != nil {
 		log.Errorf("failed to load term config for org %s: %v", orgID, err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
@@ -75,7 +75,8 @@ func PutTermSettings(c echo.Context) error {
 	orgID := xrhid.Identity.OrgID
 
 	var req termSettingsRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	body := http.MaxBytesReader(c.Response(), c.Request().Body, 1<<20)
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "error",
 			"message": "invalid JSON body",
@@ -110,7 +111,7 @@ func PutTermSettings(c echo.Context) error {
 		}
 	}
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 	pool := db.GetPool()
 
 	tx, err := pool.Begin(ctx)
@@ -169,7 +170,7 @@ func DeleteTermSettings(c echo.Context) error {
 	}
 	orgID := xrhid.Identity.OrgID
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 	pool := db.GetPool()
 
 	if _, err := pool.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {

@@ -40,7 +40,7 @@ func TestRunRetentionSweep_DropsOldNamespaceSamplePartitions(t *testing.T) {
 	require.True(t, found, "old partition should exist before sweep")
 
 	// Run retention with 6-month window
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	// Verify partition was dropped
 	partitions, err = listPartitions(ctx, pool, "namespace_usage_samples")
@@ -66,7 +66,7 @@ func TestRunRetentionSweep_KeepsRecentNamespaceSamplePartitions(t *testing.T) {
 	_, err := pool.Exec(ctx, sql)
 	require.NoError(t, err)
 
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	// Verify partition was NOT dropped
 	partitions, err := listPartitions(ctx, pool, "namespace_usage_samples")
@@ -98,7 +98,7 @@ func TestRunRetentionSweep_DropsOldHistoryPartitions(t *testing.T) {
 	_, err := pool.Exec(ctx, sql)
 	require.NoError(t, err)
 
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	partitions, err := listPartitions(ctx, pool, "recommendation_history")
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestRunRetentionSweep_DropsOldGPUDigestPartitions(t *testing.T) {
 	}
 	require.True(t, found, "old GPU digest partition should exist before sweep")
 
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	partitions, err = listPartitions(ctx, pool, "gpu_container_digests")
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestRunRetentionSweep_DropsOldDailyContainerDigestPartitions(t *testing.T) 
 	}
 	require.True(t, found, "old daily container digest partition should exist before sweep")
 
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	partitions, err = listPartitions(ctx, pool, "daily_container_digests")
 	require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestRunRetentionSweep_PurgesStaleRecommendations(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	RunRetentionSweep(ctx, pool, 6)
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
 
 	// Old stale recommendation should be deleted
 	var countOld int
