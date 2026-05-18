@@ -90,6 +90,21 @@ func TestEnabled_allowlist(t *testing.T) {
 	assert.ElementsMatch(t, []string{"a", "c"}, names)
 }
 
+func TestEnabled_allowlistOverridesBlocklistConflict(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "container,gpu")
+	t.Setenv(envDisabledPlugins, "gpu")
+
+	Register(&stubPlugin{name: "container"})
+	Register(&stubPlugin{name: "gpu"})
+	Register(&stubPlugin{name: "node"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 2)
+	names := []string{enabled[0].Name(), enabled[1].Name()}
+	assert.ElementsMatch(t, []string{"container", "gpu"}, names)
+}
+
 func TestEnabled_blocklist(t *testing.T) {
 	resetRegistry(t)
 	t.Setenv(envEnabledPlugins, "")
