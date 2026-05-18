@@ -266,6 +266,7 @@ type CSVIngestor interface {
 
 // IngestHook runs after the primary CSV ingestor parses the file and performs its own persistence.
 // Confirmed contract (Option B): the container plugin passes parsed rows in-memory — no second DTO type.
+// Hook errors are non-fatal by default unless a future Critical() trait is introduced (§6.1.1).
 type IngestHook interface {
 	Plugin
 	HookAfter() string // plugin Name(), e.g. "container"
@@ -387,6 +388,14 @@ Replace the fixed sequence of `if csvType == …` with:
 
 This preserves semantics while allowing GPU/node code to move out of `internal/ingestion/pipeline.go`’s unconditional tail calls.
 
+### 6.1.1 Hook failure semantics (confirmed)
+
+**`IngestHook`** invocations are **non-fatal by default**. If a hook (for example GPU digest upsert) returns an error, core **logs** it, **increments an error metric**, and **continues** processing the remainder of the pipeline (including other hooks and downstream steps that do not depend on the failed hook’s side effects). **Container recommendations are the primary product**: an auxiliary plugin bug must **not** prevent container CSV data and container-native recommendations from landing.
+
+This behavior is a core benefit of the plugin architecture: **isolation** between domains limits blast radius compared to today’s inlined chains where a GPU digest failure can fail the whole container ingest path (see [`internal/ingestion/pipeline.go`](../../internal/ingestion/pipeline.go) GPU/node upserts returning errors from `ProcessCSVToDigests`).
+
+**Future extension:** A **`Critical() bool`** trait (or equivalent) on hooks could mark must-succeed contributors that should abort the batch—**not** part of the initial design.
+
 ### 6.2 API (`server.go` / handlers)
 
 After constructing Echo groups and middleware:
@@ -458,6 +467,10 @@ internal/plugins/
   registry.go            # Register, Enabled, PluginContext
   traits.go              # interface definitions (+ PayloadType aliases)
 
+  _example/
+    README.md            # trait contract for plugin authors (see §8.1)
+    plugin.go            # stub implementations of every trait (compile-time interface check)
+
   container/
     plugin.go            # init() + composite struct
     ingest.go            # CSVIngestor
@@ -490,6 +503,15 @@ internal/plugins/
 ```
 
 Engine math under `internal/engine/` can remain shared libraries imported by plugins until a later refactor moves code physically.
+
+### 8.1 Sample plugin (`_example`) — confirmed
+
+The repository includes an **`_example`** plugin under **`internal/plugins/_example/`** that implements **all** trait interfaces with **stub/logging bodies** (no production behavior). It serves dual purposes:
+
+- **Authoring template** — copy/adapt when adding a new plugin; shows required method shapes and naming conventions.
+- **Compile-time check** — proves the trait set is **coherent and usable** in one package (if `_example` builds, the interfaces remain satisfiable together).
+
+The directory includes its own **`README.md`** explaining the trait contract, registration expectations, and how `_example` differs from enabled domains.
 
 ---
 
@@ -560,6 +582,8 @@ ROS_DISABLED_PLUGINS=gpu,snapshot
 | **Phase 3 — Coupled domains** | Break **`ProcessCSVToDigests`** GPU/node tail into **`IngestHook`** implementations; move **`runNodeRecommendations`** invocation to **node** plugin; replace **`enrichWithGPU`** with **`APIEnricher`**. |
 | **Phase 4 — New domains** | Add **VM** (then JVM/Go) using only plugin-local code + blank import—prove the framework. |
 
+Detailed testing expectations per phase are in [§16](#16-test-strategy).
+
 ---
 
 ## 13. What this design does not do
@@ -596,6 +620,25 @@ ROS_DISABLED_PLUGINS=gpu,snapshot
 
 ---
 
-## 16. Summary
+## 16. Test strategy
 
-A **trait-based, compile-time plugin model** with **`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`** gives operators control over recommendation domains **without forking the binary**, while eliminating the worst of today’s scattered `if` chains documented in §1.2. Confirmed mechanics: **`IngestHook`** receives **`[]MetricRow`** (§4), migrations remain **one central numbered directory** with **`-- plugin:`** headers (§6.4), Echo **static-before-param** routing avoids a **`Priority()`** API when core registers catch-alls **last** (§6.2), **Kruize stays an optional legacy path** until native-only is mandatory (§6.5), and **config flows once from Viper into typed plugin subsets** via **`PluginContext`** (§3.1). The phased migration limits risk: first introduce indirection, then move code, then untangle GPU/node/container coupling, then add VM/JVM/Golang plugins as first-class citizens.
+**Current state (baseline):** **74** test files totaling roughly **16.7k** lines; tests are **colocated** with production code. Approximately **53** files are **pure unit tests**; approximately **21** require **PostgreSQL** via **testcontainers**.
+
+**Principle:** Existing tests **stay where they are** today—they are the **acceptance criteria** for the refactor. If all **74** files still pass after each extraction phase, that phase is considered behavior-preserving.
+
+**Phased approach:**
+
+| Phase | Testing focus |
+|-------|----------------|
+| **Phase 1 — Framework** | Add new tests for the **registry**, **`PluginContext`**, and **ingestion/API dispatch loops**. The **`_example`** plugin gets dedicated tests proving **every trait is callable** through the normal registration path. **Existing tests unchanged**—they provide the regression safety net. |
+| **Phase 2 — Container plugin extraction** | Keep **`recommend_cpu_test.go`**, **`recommend_memory_test.go`**, **`digest_test.go`**, and related container tests **in place** and passing. Add a **small integration test** asserting the container plugin **registers** and the dispatch loop **invokes** it for container CSVs. |
+| **Phase 3+ — GPU, node, namespace plugins** | Same pattern: **domain-specific tests remain** where they live today; add **wiring tests** that enabled plugins are registered and hooks/routes/retention hooks fire as expected. |
+| **Post-extraction (optional)** | **Cosmetic** re-home tests under each plugin’s directory—organizational only; **no functional requirement**. |
+
+**Known refactor prerequisite:** **`handlers_node_recs_integration_test.go`** (~886 lines) mixes **GPU time-slicing** scenarios with **node utilization** scenarios. It should be **split** when those concerns become separate plugins (aligned with §12 Phase 3 / coupled domains).
+
+---
+
+## 17. Summary
+
+A **trait-based, compile-time plugin model** with **`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`** gives operators control over recommendation domains **without forking the binary**, while eliminating the worst of today’s scattered `if` chains documented in §1.2. Confirmed mechanics: **`IngestHook`** receives **`[]MetricRow`** (§4), hook failures are **non-fatal by default** (§6.1.1), migrations remain **one central numbered directory** with **`-- plugin:`** headers (§6.4), Echo **static-before-param** routing avoids a **`Priority()`** API when core registers catch-alls **last** (§6.2), **Kruize stays an optional legacy path** until native-only is mandatory (§6.5), **config flows once from Viper into typed plugin subsets** via **`PluginContext`** (§3.1), an **`_example`** plugin documents traits at compile time (§8.1), and testing stays anchored on existing coverage plus phased wiring tests ([§16](#16-test-strategy)). The phased migration limits risk: first introduce indirection, then move code, then untangle GPU/node/container coupling, then add VM/JVM/Golang plugins as first-class citizens.
