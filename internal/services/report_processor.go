@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -30,6 +31,50 @@ import (
 )
 
 var cfg *config.Config = config.GetConfig()
+
+// nativeCSVIngestViaPlugins runs the enabled CSVIngestor (if any) for csvType,
+// then matching IngestHooks when ingest produced rows. Returns handled=false when
+// no ingestor claimed csvType (caller should use the legacy fallback path).
+func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID, csvType string) (handled bool, err error) {
+	log := logging.GetLogger()
+	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
+	var matched plugin.CSVIngestor
+	for _, ing := range ingestors {
+		for _, t := range ing.SupportedCSVTypes() {
+			if t == csvType {
+				matched = ing
+				break
+			}
+		}
+		if matched != nil {
+			break
+		}
+	}
+	if matched == nil {
+		return false, nil
+	}
+
+	rows, err := matched.IngestCSV(ctx, pool, r, orgID, clusterUUID)
+	if err != nil {
+		return true, err
+	}
+
+	if len(rows) > 0 {
+		hooks := plugin.ByTrait[plugin.IngestHook]()
+		for _, hook := range hooks {
+			for _, ht := range hook.HookAfterCSVTypes() {
+				if ht == csvType {
+					if hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); hookErr != nil {
+						log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), hookErr)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return true, nil
+}
 
 func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	log := logging.GetLogger()
@@ -460,44 +505,15 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
-	var containerIngestor plugin.CSVIngestor
-	for _, ing := range ingestors {
-		for _, t := range ing.SupportedCSVTypes() {
-			if t == "container" {
-				containerIngestor = ing
-				break
-			}
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "container")
+	if err != nil {
+		log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("digest processing: %w", err)
 		}
-		if containerIngestor != nil {
-			break
-		}
+		return nil
 	}
-
-	if containerIngestor != nil {
-		rows, err := containerIngestor.IngestCSV(ctx, pool, body, orgID, clusterUUID)
-		if err != nil {
-			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-			if isTransientKafkaProcessingError(err) {
-				return fmt.Errorf("digest processing: %w", err)
-			}
-			return nil
-		}
-
-		if len(rows) > 0 {
-			hooks := plugin.ByTrait[plugin.IngestHook]()
-			for _, hook := range hooks {
-				for _, csvType := range hook.HookAfterCSVTypes() {
-					if csvType == "container" {
-						if err := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); err != nil {
-							log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), err)
-						}
-						break
-					}
-				}
-			}
-		}
-	} else {
+	if !handled {
 		if err := ingestion.ProcessCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
 			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 			if isTransientKafkaProcessingError(err) {
@@ -654,12 +670,22 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	if err := ingestion.ProcessNamespaceCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "namespace")
+	if err != nil {
 		log.Errorf("native namespace engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("namespace digest processing: %w", err)
 		}
 		return nil
+	}
+	if !handled {
+		if err := ingestion.ProcessNamespaceCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native namespace engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("namespace digest processing: %w", err)
+			}
+			return nil
+		}
 	}
 
 	now := time.Now().UTC()
