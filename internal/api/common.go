@@ -1,6 +1,10 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/labstack/echo/v4"
+)
 
 const timeLayout = "2006-01-02"
 
@@ -183,4 +187,9 @@ var NativeNSCSVHeader = []string{
 	"variation_memory_request_pct",
 	"variation_memory_limit_pct",
 	"confidence_level",
+}
+
+// setRecommendationNoStore marks recommendation JSON as non-cacheable (volatile).
+func setRecommendationNoStore(c echo.Context) {
+	c.Response().Header().Set("Cache-Control", "no-store")
 }

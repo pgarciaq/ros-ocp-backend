@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -170,14 +171,14 @@ func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {
 
 func TestEnrichWithGPU_EmptyResults(t *testing.T) {
 	var results []model.NativeContainerResult
-	enrichWithGPU(results, "org1234567")
+	enrichWithGPU(context.Background(), results, "org1234567")
 }
 
 func TestEnrichWithGPU_NilPool(t *testing.T) {
 	results := []model.NativeContainerResult{
 		{ClusterUUID: "cluster-1", Project: "ns", Workload: "wl", Container: "c1"},
 	}
-	enrichWithGPU(results, "org1234567")
+	enrichWithGPU(context.Background(), results, "org1234567")
 	assert.Nil(t, results[0].GPU, "no DB pool means no GPU enrichment")
 }
 

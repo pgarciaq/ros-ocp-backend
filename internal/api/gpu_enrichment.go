@@ -34,7 +34,7 @@ func loadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string)
 	if pool == nil {
 		return engine.DefaultTerms(), nil
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	gpuTermConfigMu.RLock()
 	e, ok := gpuTermConfigByOrg[orgID]
 	gpuTermConfigMu.RUnlock()
@@ -55,7 +55,7 @@ func loadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string)
 // enrichWithGPU queries gpu_container_digests and attaches GPU recommendations
 // to each NativeContainerResult that has GPU data. Also fetches GPU cost rates
 // from Koku to compute savings estimates. Modifies results in-place.
-func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
+func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, orgID string) {
 	if len(results) == 0 {
 		return
 	}
@@ -65,7 +65,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 		return
 	}
 
-	ctx, cancel := database.ContextWithAcquireTimeout(context.Background())
+	ctx, cancel := database.ContextWithAcquireTimeout(ctx)
 	defer cancel()
 	now := time.Now().UTC()
 
@@ -120,7 +120,7 @@ func enrichWithGPU(results []model.NativeContainerResult, orgID string) {
 
 		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
 		for _, group := range groups {
-			engine.ComputeNodeTimeslicingRec(group, gpuRate)
+			engine.ComputeNodeTimeslicingRec(group, gpuRate, now)
 		}
 
 		for _, idx := range indices {

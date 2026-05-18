@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,7 +44,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		})
 	}
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 	now := time.Now().UTC()
 
 	terms, err := engine.LoadTermConfig(ctx, pool, orgIDStr)
@@ -127,6 +126,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	totalCount := len(entries)
 	paged := applyGPUMIGPagination(entries, opts.Offset, opts.Limit)
 
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, model.GPUMIGListResponse{
 		Meta: model.GPUMIGListMeta{
 			Count:  totalCount,

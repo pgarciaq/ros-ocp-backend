@@ -51,7 +51,7 @@ func GetNodeRecommendations(c echo.Context) error {
 		})
 	}
 
-	ctx := context.Background()
+	ctx := c.Request().Context()
 	now := time.Now().UTC()
 
 	terms, err := engine.LoadTermConfig(ctx, pool, orgIDStr)
@@ -122,7 +122,7 @@ func GetNodeRecommendations(c echo.Context) error {
 		}
 
 		for _, group := range groups {
-			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate)
+			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate, now)
 			if tsRec == nil {
 				continue
 			}
@@ -166,6 +166,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
 	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
 
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
 			Count:           totalCount,
@@ -243,7 +244,7 @@ func respondNodeGPURecommendationsTripleSQL(
 			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
 				continue
 			}
-			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate)
+			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate, now)
 			if tsRec == nil {
 				continue
 			}
@@ -282,6 +283,7 @@ func respondNodeGPURecommendationsTripleSQL(
 		totalSavings = &sum
 	}
 
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
 			Count:           totalCount,

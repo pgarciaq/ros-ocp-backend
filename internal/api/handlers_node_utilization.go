@@ -210,6 +210,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		resp.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Warnings...)
 	}
 
+	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, resp)
 }
 
