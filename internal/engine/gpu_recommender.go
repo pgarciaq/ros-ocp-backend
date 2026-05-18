@@ -2,11 +2,10 @@ package engine
 
 import (
 	"math"
-	"os"
 	"sort"
-	"strconv"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 )
 
@@ -44,16 +43,16 @@ type GPUDigestRow struct {
 
 // GPURec holds the GPU recommendation for a single container within a single term.
 type GPURec struct {
-	GPUModelName           string
-	CurrentGPUProfile      string            // current MIG profile or "" for full GPU
-	Classification         GPUClassification // empty if no profiling data (Tier 2)
-	RecommendedGPUProfile  string            // recommended MIG profile, "full_gpu", or ""
-	MemoryBoundDetected    bool
-	Confidence             float32
-	TensorPipeActiveAvg    float32
-	DRAMActiveAvg          float32
-	SMActiveAvg            float32
-	FBUsageMaxMiB          float32
+	GPUModelName                   string
+	CurrentGPUProfile              string            // current MIG profile or "" for full GPU
+	Classification                 GPUClassification // empty if no profiling data (Tier 2)
+	RecommendedGPUProfile          string            // recommended MIG profile, "full_gpu", or ""
+	MemoryBoundDetected            bool
+	Confidence                     float32
+	TensorPipeActiveAvg            float32
+	DRAMActiveAvg                  float32
+	SMActiveAvg                    float32
+	FBUsageMaxMiB                  float32
 	EstimatedGPUSavingsUSD         *float32 // nil if no cost data (idle/MIG savings)
 	EstimatedTimeslicingSavingsUSD *float32 // nil if no cost data (per-candidate share of node time-slicing savings)
 	NotificationCodes              []int16
@@ -63,23 +62,30 @@ type GPURec struct {
 	Term                           string // short, medium, long
 }
 
-func gpuThreshold(envKey string, defaultVal float64) float64 {
-	if v := os.Getenv(envKey); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	return defaultVal
-}
-
+// Package-level GPU thresholds match viper defaults in internal/config until
+// InitGPUEngine applies values from the loaded Config (typically at process startup).
 var (
-	gpuIdleThreshold       = gpuThreshold("ROS_GPU_IDLE_THRESHOLD", 0.02)
-	gpuUnderutilizedSM     = gpuThreshold("ROS_GPU_UNDERUTILIZED_SM_THRESHOLD", 0.25)
-	gpuUnderutilizedTensor = gpuThreshold("ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD", 0.15)
-	gpuMemBoundDRAM        = gpuThreshold("ROS_GPU_MEMBOUND_DRAM_THRESHOLD", 0.60)
-	gpuMemBoundTensor      = gpuThreshold("ROS_GPU_MEMBOUND_TENSOR_THRESHOLD", 0.15)
-	gpuFBHeadroomFactor    = gpuThreshold("ROS_GPU_FB_HEADROOM_FACTOR", 1.20)
+	gpuIdleThreshold       = 0.02
+	gpuUnderutilizedSM     = 0.25
+	gpuUnderutilizedTensor = 0.15
+	gpuMemBoundDRAM        = 0.60
+	gpuMemBoundTensor      = 0.15
+	gpuFBHeadroomFactor    = 1.20
 )
+
+// InitGPUEngine copies GPU recommendation thresholds from the central config.
+// Call once after config load (e.g. from cmd/start.go or StartAPIServer).
+func InitGPUEngine(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	gpuIdleThreshold = cfg.GPUIdleThreshold
+	gpuUnderutilizedSM = cfg.GPUUnderutilizedSMThreshold
+	gpuUnderutilizedTensor = cfg.GPUUnderutilizedTensorThreshold
+	gpuMemBoundDRAM = cfg.GPUMemBoundDRAMThreshold
+	gpuMemBoundTensor = cfg.GPUMemBoundTensorThreshold
+	gpuFBHeadroomFactor = cfg.GPUFBHeadroomFactor
+}
 
 // ClassifyGPUWorkload determines the GPU utilization classification from daily digests.
 // Returns empty classification and false HasProfilingData if all PROF_ metrics are zero/absent.

@@ -113,6 +113,14 @@ type Config struct {
 	NodeStrandedImbalanceThreshold float64 `mapstructure:"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD"`
 	NodeEMAAlpha                   float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
 
+	// GPU recommendation engine thresholds (Classification / MIG sizing).
+	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`
+	GPUUnderutilizedSMThreshold     float64 `mapstructure:"ROS_GPU_UNDERUTILIZED_SM_THRESHOLD"`
+	GPUUnderutilizedTensorThreshold float64 `mapstructure:"ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD"`
+	GPUMemBoundDRAMThreshold        float64 `mapstructure:"ROS_GPU_MEMBOUND_DRAM_THRESHOLD"`
+	GPUMemBoundTensorThreshold      float64 `mapstructure:"ROS_GPU_MEMBOUND_TENSOR_THRESHOLD"`
+	GPUFBHeadroomFactor             float64 `mapstructure:"ROS_GPU_FB_HEADROOM_FACTOR"`
+
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
 	SnapshotOrphanAgeDays       int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
@@ -306,6 +314,12 @@ func initConfig() {
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)
 	viper.SetDefault("ROS_NODE_STRANDED_IMBALANCE_THRESHOLD", 0.6)
 	viper.SetDefault("ROS_NODE_EMA_ALPHA", 0.3)
+	viper.SetDefault("ROS_GPU_IDLE_THRESHOLD", 0.02)
+	viper.SetDefault("ROS_GPU_UNDERUTILIZED_SM_THRESHOLD", 0.25)
+	viper.SetDefault("ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD", 0.15)
+	viper.SetDefault("ROS_GPU_MEMBOUND_DRAM_THRESHOLD", 0.60)
+	viper.SetDefault("ROS_GPU_MEMBOUND_TENSOR_THRESHOLD", 0.15)
+	viper.SetDefault("ROS_GPU_FB_HEADROOM_FACTOR", 1.20)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

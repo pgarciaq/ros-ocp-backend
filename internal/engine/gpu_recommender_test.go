@@ -1,10 +1,10 @@
 package engine
 
 import (
-	"os"
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -173,29 +173,33 @@ func TestRecommendGPU_Tier2_V100(t *testing.T) {
 	assert.Equal(t, "", rec.RecommendedGPUProfile) // V100 is not MIG-capable in catalog
 }
 
-// --- B-T15: Threshold configuration via environment variables ---
+// --- B-T15: Threshold configuration via Config / InitGPUEngine ---
 
-func TestGpuThreshold_Default(t *testing.T) {
-	val := gpuThreshold("ROS_GPU_TEST_NONEXISTENT_KEY", 0.42)
-	assert.InDelta(t, 0.42, val, 1e-9)
+func TestInitGPUEngine_CustomThresholds(t *testing.T) {
+	origIdle := gpuIdleThreshold
+	origSM := gpuUnderutilizedSM
+	t.Cleanup(func() {
+		gpuIdleThreshold = origIdle
+		gpuUnderutilizedSM = origSM
+	})
+
+	cfg := &config.Config{
+		GPUIdleThreshold:                0.05,
+		GPUUnderutilizedSMThreshold:     0.99,
+		GPUUnderutilizedTensorThreshold: gpuUnderutilizedTensor,
+		GPUMemBoundDRAMThreshold:        gpuMemBoundDRAM,
+		GPUMemBoundTensorThreshold:      gpuMemBoundTensor,
+		GPUFBHeadroomFactor:             gpuFBHeadroomFactor,
+	}
+	InitGPUEngine(cfg)
+	assert.InDelta(t, 0.05, gpuIdleThreshold, 1e-9)
+	assert.InDelta(t, 0.99, gpuUnderutilizedSM, 1e-9)
 }
 
-func TestGpuThreshold_EnvOverride(t *testing.T) {
-	t.Setenv("ROS_GPU_TEST_THRESHOLD", "0.07")
-	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.02)
-	assert.InDelta(t, 0.07, val, 1e-9)
-}
-
-func TestGpuThreshold_InvalidEnvFallsBack(t *testing.T) {
-	t.Setenv("ROS_GPU_TEST_THRESHOLD", "not_a_number")
-	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.02)
-	assert.InDelta(t, 0.02, val, 1e-9)
-}
-
-func TestGpuThreshold_EmptyEnvFallsBack(t *testing.T) {
-	os.Unsetenv("ROS_GPU_TEST_THRESHOLD")
-	val := gpuThreshold("ROS_GPU_TEST_THRESHOLD", 0.25)
-	assert.InDelta(t, 0.25, val, 1e-9)
+func TestInitGPUEngine_NilNoOp(t *testing.T) {
+	before := gpuIdleThreshold
+	InitGPUEngine(nil)
+	assert.InDelta(t, before, gpuIdleThreshold, 1e-9)
 }
 
 func TestClassifyGPUWorkload_IdleThresholdOverride(t *testing.T) {
