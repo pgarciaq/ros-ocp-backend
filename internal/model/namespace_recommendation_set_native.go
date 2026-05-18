@@ -113,7 +113,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	countQuery = applyNativeNamespaceRBAC(countQuery, userPerms)
 	countQuery = applyNSQueryParams(countQuery, queryParams)
 
-	t0 := time.Now()
+	t0 := time.Now().UTC()
 	if err := countQuery.Scan(&totalNamespaces).Error; err != nil {
 		return nil, 0, err
 	}
@@ -370,6 +370,10 @@ func applyNativeNamespaceRBAC(query *gorm.DB, userPerms map[string][]string) *go
 // applyNSQueryParams adds dynamic WHERE clauses from parsed namespace query parameters.
 func applyNSQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
 	for key, values := range queryParams {
+		if !isAllowedNativeNamespaceQueryKey(key) {
+			log.Warnf("applyNSQueryParams: skipping unknown query key %q", key)
+			continue
+		}
 		query = query.Where(key, values)
 	}
 	return query

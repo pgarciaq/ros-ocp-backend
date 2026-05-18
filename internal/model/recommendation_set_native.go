@@ -194,7 +194,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		Where("ra.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms)
 	countQuery = ApplyQueryParams(countQuery, queryParams)
-	t0 := time.Now()
+	t0 := time.Now().UTC()
 	if err := countQuery.Scan(&totalContainers).Error; err != nil {
 		return nil, 0, err
 	}
@@ -278,6 +278,10 @@ func ApplyNativeRBAC(query *gorm.DB, userPerms map[string][]string, nsColumn ...
 // so it expands into IN ($1, $2, ...) rather than a single scalar.
 func ApplyQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
 	for key, values := range queryParams {
+		if !isAllowedNativeRecommendationQueryKey(key) {
+			log.Warnf("ApplyQueryParams: skipping unknown query key %q", key)
+			continue
+		}
 		query = query.Where(key, values)
 	}
 	return query
