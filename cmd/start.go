@@ -32,6 +32,7 @@ var processorCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp processor")
 		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		go func() {
@@ -57,6 +58,7 @@ var recommendationPollerCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp recommendation-poller")
 		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		go func() {
@@ -73,6 +75,8 @@ var apiCmd = &cobra.Command{
 	Short: "starts ros-ocp api server",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting ros-ocp API server")
+		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		api.StartAPIServer(ctx)
