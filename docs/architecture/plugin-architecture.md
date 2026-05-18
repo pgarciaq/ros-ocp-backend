@@ -177,16 +177,20 @@ Env semantics (**[`EnabledFor`](../../internal/plugin/registry.go)**):
 - If **`ROS_ENABLED_PLUGINS`** is non-empty: **allowlist** only (comma-separated names matching **`Plugin.Name()`**).
 - If empty: every plugin is eligible except **`kruize`** (off unless allowlisted), then **`ROS_DISABLED_PLUGINS`** applies as a blocklist.
 
-- **Ordering** — registry preserves registration order (import order in **`main`**). For deterministic hooks, core may **sort** hooks or document that hook order follows registration order after filtering.
+- **Ordering** — registry preserves registration order (side-effect import order in **[`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)**). For deterministic hooks, core may **sort** hooks or document that hook order follows registration order after filtering.
 
-**Blank imports** in `cmd/*/main.go` (or a single `internal/plugins/import_plugins.go`) pull in plugins:
+**Blank imports:** [`cmd/start.go`](../../cmd/start.go) imports **`_ ".../internal/plugins"`**, which loads **[`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)** — that file aggregates **`init()`** registration via blank imports of each plugin package:
 
 ```go
 import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
-	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/example"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
-	// ...
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/node"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
 )
 ```
 
@@ -347,7 +351,7 @@ See **`internal/plugins/example/README.md`** for trait contracts and registratio
 5. **Blank-import** `_ ".../internal/plugins/vm"` from the main binary.
 6. **Update operator / ingest documentation** so the correct files arrive on Kafka when the plugin is enabled.
 
-No edits to `server.go`’s route list should be required beyond the generic registrar loop once Phase 1 lands.
+No edits to `server.go`’s route list should be required beyond the generic registrar loop for **`APIProvider`** surfaces.
 
 ---
 
