@@ -35,10 +35,11 @@ func StartAPIServer(ctx context.Context) {
 
 	metricsEcho := echo.New()
 	metricsEcho.GET("/metrics", echoprometheus.NewHandler())
+	metricsErrCh := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%s", cfg.PrometheusPort)
 		if err := metricsEcho.Start(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Errorf("metrics server: %v", err)
+			metricsErrCh <- err
 		}
 	}()
 
@@ -131,13 +132,20 @@ func StartAPIServer(ctx context.Context) {
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeout) * time.Second,
 	}
 
+	apiErrCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Errorf("api server: %v", err)
+			apiErrCh <- err
 		}
 	}()
 
-	<-ctx.Done()
+	select {
+	case err := <-apiErrCh:
+		log.Fatalf("api server failed to start: %v", err)
+	case err := <-metricsErrCh:
+		log.Fatalf("metrics server failed to start: %v", err)
+	case <-ctx.Done():
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
