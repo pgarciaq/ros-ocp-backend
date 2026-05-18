@@ -1,10 +1,12 @@
+> **Status: Implemented.** See [`docs/phase5-implementation-notes.md`](../phase5-implementation-notes.md) for as-built details.
+
 # Phase 5: Recommendation History, Boxplots, and Retention
 
 ## Status
 
-- **Phase**: Planning complete, implementation not started.
-- **Branch**: `pgarciaq-rosocp-superpowers-phase5` (ros-ocp-backend, iqe-ros-ocp-plugin)
-- **Depends on**: Phase 4 (OOM feedback, recommendation quality, CSV alignment).
+- **Phase**: Implemented (history, boxplots, retention).
+- **Branch**: Landed on main development branches (see implementation notes).
+- **Depends on**: Phase 4 (OOM feedback, recommendation quality, CSV alignment) — satisfied.
 
 ## Scope
 

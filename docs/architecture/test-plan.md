@@ -24,7 +24,7 @@
 - [11. Phase 7: Replica Count and Total Impact](#11-phase-7-replica-count-and-total-impact)
 - [12. Phase 8: HPA, VM, Node/MachineSet](#12-phase-8-hpa-vm-nodemachineset)
 - [13. Phase 9: JVM/Quarkus](#13-phase-9-jvmquarkus)
-- [14. Phase 10: Remove Kruize](#14-phase-10-remove-kruize)
+- [14. Phase 10: Legacy Kruize engine (optional path)](#14-phase-10-legacy-kruize-engine-optional-path)
 - [15. Non-Functional Requirements](#15-non-functional-requirements)
 - [16. Shadow Mode Validation](#16-shadow-mode-validation)
 - [17. API Contract Tests](#17-api-contract-tests)
@@ -905,23 +905,33 @@ Go recommendation function tests use a **golden-file approach**: expected output
 
 ---
 
-## 14. Phase 10: Remove Kruize
+## 14. Phase 10: Legacy Kruize engine (optional path)
 
-#### T-10.1: No Kruize API calls (REQ-10.1)
+The **native Go engine is the default** recommendation path. **Kruize is not removed** in this model: it remains an **optional legacy integration** (typically disabled by default via `ROS_USE_NATIVE_ENGINE=true`), with product direction to treat it as an explicit legacy plugin per [`plugin-architecture.md`](./plugin-architecture.md) — see §6.5. Phase 10 tests emphasize **isolation and configurability**: native deployments must compute and serve recommendations without calling Kruize; operators who opt into the legacy engine exercise the historical HTTP/Kafka surfaces until a native-only mandate exists.
 
-| Step | Detail |
-|---|---|
-| **RED** | `TestIngestionPipeline_NeverCallsKruize`: Run full ingestion with HTTP request recorder. Assert zero requests to Kruize URL patterns (`/createExperiment`, `/updateResults`, `/generateRecommendations`). |
-| **GREEN** | Remove Kruize client code. |
-| **REFACTOR** | Delete Kruize client package. |
-
-#### T-10.3: Simplified pipeline (REQ-10.3)
+#### T-10.1: Native mode avoids Kruize experiment lifecycle calls (REQ-10.1 revised)
 
 | Step | Detail |
 |---|---|
-| **RED** | `TestIngestionPipeline_DirectPath_NoKafkaRecommendationTopic`: Run ingestion. Assert no messages produced to internal recommendation topic. |
-| **GREEN** | Remove recommendation Kafka producer. |
-| **REFACTOR** | Simplify message handler to single-path. |
+| **RED** | `TestIngestionPipeline_NativeMode_NoKruizeExperimentLifecycle`: With default/native configuration (`ROS_USE_NATIVE_ENGINE=true`), run ingestion behind an HTTP recorder. Assert **zero** requests to Kruize endpoints used for experiment lifecycle (`/createExperiment`, `/updateResults`, `/generateRecommendations`) except when an integration test explicitly enables dual-path/shadow diagnostics. |
+| **GREEN** | Guard all Kruize client usage behind legacy configuration; native path uses Go engine + PostgreSQL only. |
+| **REFACTOR** | Centralize "legacy vs native" branching so new handlers cannot accidentally call Kruize in native mode. |
+
+#### T-10.1b: Legacy engine configuration remains available (REQ-10.1b)
+
+| Step | Detail |
+|---|---|
+| **RED** | `TestConfig_LegacyEngine_WiresKruizeComponents`: With `ROS_USE_NATIVE_ENGINE=false`, assert recommendation poller / Kruize client wiring is active per deployment manifests (legacy smoke path). |
+| **GREEN** | Preserve legacy stack behind configuration flags — **do not delete** until product commits to native-only and tenants are migrated. |
+| **REFACTOR** | Align startup/registry behavior with [`plugin-architecture.md`](./plugin-architecture.md) (mutual exclusivity between native plugins and the Kruize legacy plugin when that registry lands). |
+
+#### T-10.3: Pipeline simplification for native default (REQ-10.3 revised)
+
+| Step | Detail |
+|---|---|
+| **RED** | `TestIngestionPipeline_NativeMode_MinimalLegacyKafkaFanout`: Under native default, assert Kafka producers/consumers for recommendation batching match the documented deployment model (no redundant legacy-only topics unless legacy engine is enabled). |
+| **GREEN** | Single primary ingestion→recommendation path for native deployments; legacy extras gated off. |
+| **REFACTOR** | Document topic semantics for `ROS_USE_NATIVE_ENGINE=false` deployments beside native defaults. |
 
 #### T-10.6: Quality metrics (REQ-10.6)
 

@@ -1272,8 +1272,8 @@ These rules were learned through painful debugging. Violating any of them will c
 
 | Document | Path | Content |
 |---|---|---|
-| Phase 0 plan | `docs/plans/phase-0-critical-fixes.md` | 12 bug fixes, TDD approach |
-| Phase 1-2-3 plan | `docs/plans/phase-1-2-3-go-engine.md` | Core engine architecture, algorithm details, Kruize comparison |
+| Phase 0 plan | `docs/archive/phase-0-critical-fixes.md` | 12 bug fixes, TDD approach |
+| Phase 1-2-3 plan | `docs/archive/phase-1-2-3-go-engine.md` | Core engine architecture, algorithm details, Kruize comparison |
 | Phase 4 plan | `docs/plans/phase-4-oom-feedback.md` | OOM bump formula, quality tracking, cross-repo merge order |
 | Phase 5 plan | `docs/plans/phase-5-history-and-boxplots.md` | History snapshots, raw samples, boxplot assembly, retention |
 | Replica count + savings | `docs/plans/replica-count-and-cost-impact.md` | Operator PromQL, cost calculation formula, rate selection |
@@ -1283,7 +1283,7 @@ These rules were learned through painful debugging. Violating any of them will c
 | Performance analysis | `docs/native-engine-performance.md` | Benchmarks, scale concerns |
 | Kruize comparison | `docs/kruize-vs-native-comparison.md` | Quantitative memory recommendation differences |
 | Namespace boxplots | `docs/phase6-namespace-boxplots-implementation.md` | Implementation notes |
-| Phase 4 PR checklist | `docs/plans/phase-4-pr-checklist.md` | Cross-repo merge order and dependencies |
+| Phase 4 PR checklist | `docs/archive/phase-4-pr-checklist.md` | Cross-repo merge order and dependencies |
 
 ---
 

@@ -13,11 +13,13 @@ snapshots are still useful and which are stale, orphaned, or redundant.
 Detecting unused snapshots and surfacing them as recommendations enables
 teams to reclaim storage costs without manual auditing.
 
-## Data Source: New Operator CSV
+## Data Source: Operator CSV
 
-The koku-metrics-operator would need a new collector that queries the
-Kubernetes API for `VolumeSnapshot` objects and cross-references
-`PersistentVolumeClaim.spec.dataSource` to determine restore activity.
+The koku-metrics-operator **ships** a collector that queries the Kubernetes API for `VolumeSnapshot` objects and cross-references `PersistentVolumeClaim.spec.dataSource` to determine restore activity (when the VolumeSnapshot CRDs are installed).
+
+**Optional future enhancements** documented below (for example per-StorageClass cost in settings v2) are not required for the initial shipped implementation.
+
+---
 
 ### New file: `cm-openshift-snapshot-inventory-YYYYMM.csv`
 

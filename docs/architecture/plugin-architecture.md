@@ -447,6 +447,13 @@ Today’s **dual execution paths** (**`WithFallback`** handlers and **`ROS_USE_N
 
 **Decision:** Treat Kruize integration as an **optional legacy plugin** (or adapter behind the same trait interfaces) for as long as **`WithFallback`** and **`ROS_USE_NATIVE_ENGINE`** coexist. **Remove it only** when product commits to **native-only** operation **and** all tenants are migrated off Kruize-backed flows—avoid stranding operators mid-cutover.
 
+**Mutual exclusivity with native plugins (confirmed):**
+
+- The **Kruize legacy path is disabled by default** — deployments run the native Go engine unless operators explicitly opt into legacy (`ROS_USE_NATIVE_ENGINE=false` / equivalent).
+- **Enabling the Kruize plugin — or selecting Kruize via `ROS_ENABLED_PLUGINS=kruize` once the registry exists — automatically disables all other plugins** (the native engine’s domain plugins). The two engines are **mutually exclusive**: operators run **either** native plugins **or** the Kruize legacy plugin, **never both at once**.
+- **Startup enforcement:** When the plugin registry determines that Kruize is active, it **logs a warning** and **skips registration of every other plugin** so native hooks/routes/retention do not double-process the same workloads.
+- **Rationale:** Running Kruize alongside native plugins would emit **conflicting or duplicate recommendations** for the same workloads and risks **double-counting** savings or churn in APIs/UI. Mutual exclusivity keeps persisted state and API responses consistent with a single active engine.
+
 ---
 
 ## 7. Hard coupling points and resolutions

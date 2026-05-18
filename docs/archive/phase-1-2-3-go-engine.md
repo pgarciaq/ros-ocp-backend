@@ -1,3 +1,5 @@
+> **Historical — Completed.** This plan has been fully implemented. Kept for reference.
+
 # Phase 1+2+3: Go Recommendation Engine + Metrics Pipeline + Decay/Custom Timeframes
 
 ## Scope

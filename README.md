@@ -63,7 +63,7 @@ All endpoints are under `/api/cost-management/v1/`:
 
 ### In-repo docs (`docs/`)
 
-- [Known issues and feature status](docs/known-issues.md)
+- [Recommendation plugin architecture](docs/architecture/plugin-architecture.md)
 - [GPU time-slicing plan](docs/gpu-time-slicing-plan.md)
 - [GPU recommendations design](docs/plans/gpu-recommendations.md)
 - [Native engine performance benchmarks](docs/native-engine-performance.md)
