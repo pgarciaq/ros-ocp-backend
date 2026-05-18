@@ -20,3 +20,17 @@ func TestRegistry_KruizeMutualExclusivity_withContainerPlugin(t *testing.T) {
 	require.Len(t, enabled, 1)
 	assert.Equal(t, "kruize", enabled[0].Name())
 }
+
+func TestAPIProviders_keepsNamespaceRoutesEligibleUnderKruizeAllowlist(t *testing.T) {
+	t.Setenv("ROS_ENABLED_PLUGINS", "kruize")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+
+	var seenNamespace bool
+	for _, ap := range plugin.APIProviders() {
+		if ap.Name() == "namespace" {
+			seenNamespace = true
+			break
+		}
+	}
+	assert.True(t, seenNamespace, "namespace APIProvider should register while Kruize is allowlisted")
+}

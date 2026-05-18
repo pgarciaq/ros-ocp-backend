@@ -8,4 +8,6 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/node"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
 )

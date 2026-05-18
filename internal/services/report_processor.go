@@ -740,12 +740,22 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	if err := ingestion.ProcessStorageCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeStorage))
+	if err != nil {
 		log.Errorf("native storage engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("storage digest processing: %w", err)
 		}
 		return nil
+	}
+	if !handled {
+		if err := ingestion.ProcessStorageCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native storage engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("storage digest processing: %w", err)
+			}
+			return nil
+		}
 	}
 
 	tPVC := time.Now()
@@ -788,12 +798,22 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	if err := ingestion.ProcessSnapshotCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeSnapshot))
+	if err != nil {
 		log.Errorf("native snapshot engine: ingestion failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("snapshot ingestion: %w", err)
 		}
 		return nil
+	}
+	if !handled {
+		if err := ingestion.ProcessSnapshotCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native snapshot engine: ingestion failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("snapshot ingestion: %w", err)
+			}
+			return nil
+		}
 	}
 
 	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID)

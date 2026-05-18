@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
+	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -58,9 +59,22 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	cutoff := time.Now().UTC().AddDate(0, -retentionMonths, 0)
 	cutoffYM := cutoff.Format("200601")
 
-	if err := sweepPartitionedTables(ctx, pool, retainedTables, cutoffYM); err != nil {
-		log.Warnf("retention: partitioned sweep (main): %v", err)
-		errs = append(errs, err)
+	// When native retention plugins are registered (production binaries import internal/plugins),
+	// each plugin sweeps its partitioned digest/sample tables. Tests that omit plugin imports
+	// fall back to retainedTables for identical behavior.
+	retProviders := plugin.ByTrait[plugin.RetentionProvider]()
+	if len(retProviders) > 0 {
+		for _, rp := range retProviders {
+			if err := rp.SweepRetention(ctx, pool, cutoff); err != nil {
+				log.Warnf("retention: RetentionProvider %s sweep failed: %v", rp.Name(), err)
+				errs = append(errs, fmt.Errorf("retention plugin %s: %w", rp.Name(), err))
+			}
+		}
+	} else {
+		if err := SweepPartitionedTables(ctx, pool, retainedTables, cutoffYM); err != nil {
+			log.Warnf("retention: partitioned sweep (main): %v", err)
+			errs = append(errs, err)
+		}
 	}
 
 	cfg := config.GetConfig()
@@ -70,7 +84,7 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 	historyCutoff := time.Now().UTC().AddDate(0, 0, -historyDays)
 	historyCutoffYM := historyCutoff.Format("200601")
-	if err := sweepPartitionedTables(ctx, pool, historyRetainedTables, historyCutoffYM); err != nil {
+	if err := SweepPartitionedTables(ctx, pool, historyRetainedTables, historyCutoffYM); err != nil {
 		log.Warnf("retention: partitioned sweep (history): %v", err)
 		errs = append(errs, err)
 	}
@@ -122,7 +136,8 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	return errors.Join(errs...)
 }
 
-func sweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []string, cutoffYM string) error {
+// SweepPartitionedTables drops monthly partitions older than cutoffYM (YYYYMM) for each parent table.
+func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []string, cutoffYM string) error {
 	var errs []error
 	for _, table := range tables {
 		partitions, err := listPartitions(ctx, pool, table)

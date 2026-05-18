@@ -12,8 +12,9 @@ func TestContainerPlugin_traitAssertions(t *testing.T) {
 	t.Parallel()
 
 	var (
-		_ plugin.Plugin      = (*ContainerPlugin)(nil)
-		_ plugin.CSVIngestor = (*ContainerPlugin)(nil)
+		_ plugin.Plugin            = (*ContainerPlugin)(nil)
+		_ plugin.CSVIngestor       = (*ContainerPlugin)(nil)
+		_ plugin.RetentionProvider = (*ContainerPlugin)(nil)
 	)
 }
 
@@ -24,4 +25,5 @@ func TestContainerPlugin_nameEnabledAndTypes(t *testing.T) {
 	assert.Equal(t, "container", p.Name())
 	assert.True(t, p.Enabled())
 	assert.Equal(t, []string{"container"}, p.SupportedCSVTypes())
+	assert.Equal(t, []string{"daily_container_digests", "container_usage_samples"}, p.RetentionTables())
 }
