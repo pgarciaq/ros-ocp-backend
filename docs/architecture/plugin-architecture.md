@@ -144,28 +144,22 @@ func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, o
 
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if nativeRecommendationRoutes {
-		// Static /gpu path must register before /:recommendation-id so "gpu" is not captured as an ID.
 		v1.GET("/recommendations/openshift/gpu", GetGPUSummary)
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
+	} else {
+		v1.GET("/recommendations/openshift", GetRecommendationSetList)
+	}
+	// Namespace, settings, history, GPU subroutes, fleet-summary, PVCs, snapshots ...
+	if nativeRecommendationRoutes {
+		// ...
+	}
+	// Plugin routes ([plugin.ByTrait[APIProvider]]) ...
+	// Parameterized detail route registered last (Fallback vs legacy handler).
+	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
-		// ...
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)
 	}
-
-	// Project/Namespace — ...
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/namespaces", GetNamespaceRecommendationSetListWithFallback)
-		// ...
-	}
-	// ...
-	// Node-level GPU time-slicing and MIG-focused listings (native engine only).
-	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/gpu/timeslicing", GetNodeRecommendations)
-		v1.GET("/recommendations/openshift/gpu/mig", GetGPUMIGRecommendations)
-		v1.GET("/recommendations/openshift/nodes", GetNodeUtilizationRecs)
-		v1.GET("/recommendations/openshift/nodes/utilization", GetNodeUtilizationRecsLegacyPath)
-	}
-	// PVC ... Snapshot ...
 ```
 
 Under Echo, **`static > param > any`** matching means concrete paths such as **`/gpu`** are not consumed by **`/:recommendation-id`** when ordering follows the framework rule in §6.2 (plugin routes first; core catch-alls last). The inline comment reflects the same invariant.
