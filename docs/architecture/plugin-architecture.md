@@ -281,36 +281,28 @@ internal/plugins/
   example/
     README.md            # trait contract for plugin authors (see §8.1)
     plugin.go            # stub implementations of every trait (compile-time interface check)
+    plugin_test.go
 
   container/
-    plugin.go            # init() + composite struct
-    ingest.go            # CSVIngestor
-    hooks_export.go      # registers nothing — hooks live in gpu/node
-    api.go               # APIProvider
-    retention.go         # RetentionProvider (samples + daily_container_digests + ...)
-    migrations.go        # optional MigrationProvider / OwnedTables metadata — SQL files live only in repo migrations/
+    plugin.go            # CSVIngestor + RetentionProvider (+ plugin_test.go)
 
   namespace/
-    ...
+    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
 
   gpu/
-    plugin.go
-    ingest_hook.go       # IngestHook(container)
-    api.go               # routes + APIEnricher(container)
-    retention.go
+    plugin.go            # IngestHook + APIProvider + APIEnricher + RetentionProvider (+ tests)
 
   node/
-    plugin.go
-    ingest_hook.go
-    recommend_hook.go    # post-container recommendation pass (or fold into ingest hook)
-    api.go
-    retention.go
+    plugin.go            # IngestHook + APIProvider + RetentionProvider (+ tests)
 
   pvc/
-    ...
+    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
 
   snapshot/
-    ...
+    plugin.go            # CSVIngestor + APIProvider (+ tests)
+
+  kruize/
+    plugin.go            # legacy engine registration (+ tests)
 ```
 
 Engine math under `internal/engine/` can remain shared libraries imported by plugins until a later refactor moves code physically.
