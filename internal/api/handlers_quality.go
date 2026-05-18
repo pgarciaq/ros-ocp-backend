@@ -29,6 +29,7 @@ var QualityAllowedOrderBy = listoptions.OrderByMap{
 const defaultQualityOrderBy = "q.measured_at"
 
 // MapQualityQueryParameters parses query params for the quality endpoint.
+// Keys added below must stay in sync with internal/model/native_query_allowlist.go (nativeRecFixedQueryKeys / ApplyQueryParams).
 func MapQualityQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
 

@@ -9,6 +9,9 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.updated_at < ?":  {},
 	"rs.stale = ?":       {},
 
+	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
+	"c.cluster_alias IN ?": {},
+
 	// recommendation_quality (handlers_quality.go)
 	"q.measured_at >= ?":    {},
 	"q.measured_at < ?":     {},

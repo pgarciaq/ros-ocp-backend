@@ -29,6 +29,7 @@ const defaultHistoryOrderBy = "h.recorded_at"
 // MapHistoryQueryParameters parses query params for the history endpoint.
 // Uses the same date/filter pattern as MapNativeQueryParameters but with
 // recommendation_history column aliases.
+// Keys added below must stay in sync with internal/model/native_query_allowlist.go (nativeRecFixedQueryKeys / ApplyQueryParams).
 func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
 
