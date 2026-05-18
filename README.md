@@ -28,11 +28,13 @@ ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins a
 
 | Plugin | Type | Default | Description |
 |--------|------|---------|-------------|
-| `container` | CSVIngestor | Enabled | Container CPU/memory recommendations |
-| `gpu` | IngestHook | Enabled | GPU time-slicing and MIG recommendations |
-| `node` | IngestHook | Enabled | Node capacity/utilization recommendations |
-| `namespace` | CSVIngestor | Enabled | Namespace-level recommendations |
-| `kruize` | Legacy engine | **Disabled** | Legacy Kruize-based recommendations (mutually exclusive with native plugins) |
+| `container` | CSVIngestor + RetentionProvider | Enabled | Container CPU/memory recommendations |
+| `gpu` | IngestHook + APIProvider + RetentionProvider | Enabled | GPU time-slicing and MIG recommendations |
+| `node` | IngestHook + APIProvider + RetentionProvider | Enabled | Node capacity/utilization recommendations |
+| `namespace` | CSVIngestor + APIProvider + RetentionProvider | Enabled | Namespace-level recommendations |
+| `pvc` | CSVIngestor | Enabled | PVC/storage recommendations |
+| `snapshot` | CSVIngestor | Enabled | Snapshot/staleness processing |
+| `kruize` | Legacy engine | **Disabled** | Legacy Kruize-based recommendations (mutually exclusive) |
 
 **Configuration:**
 
