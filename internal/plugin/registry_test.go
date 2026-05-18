@@ -1,0 +1,147 @@
+package plugin
+
+import (
+	"context"
+	"io"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
+)
+
+type stubPlugin struct {
+	name    string
+	enabled func() bool
+}
+
+func (s *stubPlugin) Name() string {
+	return s.name
+}
+
+func (s *stubPlugin) Enabled() bool {
+	if s.enabled != nil {
+		return s.enabled()
+	}
+	return EnabledFor(s.name)
+}
+
+type csvIngestorStub struct {
+	stubPlugin
+}
+
+func (c *csvIngestorStub) SupportedCSVTypes() []string {
+	return []string{"container"}
+}
+
+func (c *csvIngestorStub) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]ingestion.MetricRow, error) {
+	return nil, nil
+}
+
+func resetRegistry(t *testing.T) {
+	t.Helper()
+	regMu.Lock()
+	t.Cleanup(func() {
+		regMu.Lock()
+		registry = nil
+		regMu.Unlock()
+	})
+	registry = nil
+	regMu.Unlock()
+}
+
+func TestRegisterAndAll(t *testing.T) {
+	resetRegistry(t)
+
+	a := &stubPlugin{name: "alpha"}
+	b := &stubPlugin{name: "beta"}
+	Register(a)
+	Register(b)
+
+	all := All()
+	require.Len(t, all, 2)
+	assert.Equal(t, "alpha", all[0].Name())
+	assert.Equal(t, "beta", all[1].Name())
+}
+
+func TestEnabled_allowlist(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "a,c")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "a"})
+	Register(&stubPlugin{name: "b"})
+	Register(&stubPlugin{name: "c"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 2)
+	names := []string{enabled[0].Name(), enabled[1].Name()}
+	assert.ElementsMatch(t, []string{"a", "c"}, names)
+}
+
+func TestEnabled_blocklist(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "")
+	t.Setenv(envDisabledPlugins, "b")
+
+	Register(&stubPlugin{name: "a"})
+	Register(&stubPlugin{name: "b"})
+	Register(&stubPlugin{name: "kruize"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 1)
+	assert.Equal(t, "a", enabled[0].Name())
+}
+
+func TestEnabled_kruizeDefaultOff(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+	Register(&stubPlugin{name: "container"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 1)
+	assert.Equal(t, "container", enabled[0].Name())
+}
+
+func TestEnabled_kruizeExclusivity(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "kruize,container")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+	Register(&stubPlugin{name: "container"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 1)
+	assert.Equal(t, "kruize", enabled[0].Name())
+}
+
+func TestEnabled_kruizeAllowlistOnly(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "kruize")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 1)
+	assert.Equal(t, "kruize", enabled[0].Name())
+}
+
+func TestByTrait_CSVIngestor(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "ingest-one,other")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&csvIngestorStub{stubPlugin: stubPlugin{name: "ingest-one"}})
+	Register(&stubPlugin{name: "other"})
+
+	found := ByTrait[CSVIngestor]()
+	require.Len(t, found, 1)
+	assert.Equal(t, "ingest-one", found[0].Name())
+}
