@@ -61,6 +61,10 @@ func StartAPIServer(ctx context.Context) {
 
 	nativeRecommendationRoutes := !plugin.EnabledFor(plugin.KruizePluginName)
 
+	// Container recommendations (list + detail) stay in this package rather than a plugin APIProvider:
+	// they pair native handlers with Kruize-specific fallbacks, and Echo requires registering this
+	// parameterized `/.../:recommendation-id` route after static paths and plugin routes (see below).
+
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
@@ -108,7 +112,7 @@ func StartAPIServer(ctx context.Context) {
 		ap.RegisterRoutes(v1)
 	}
 
-	// Parameterized container recommendation detail — after static paths and plugin routes.
+	// Parameterized container recommendation detail — after static paths and plugin routes (ordering; see note above).
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
 	} else {
