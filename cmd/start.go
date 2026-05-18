@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,16 @@ import (
 
 var startCmdLog = logging.GetLogger()
 
+func logEnabledPlugins() {
+	plugin.Init()
+	enabled := plugin.Enabled()
+	names := make([]string, 0, len(enabled))
+	for _, p := range enabled {
+		names = append(names, p.Name())
+	}
+	startCmdLog.Infof("Plugin registry: enabled plugins: [%s]", strings.Join(names, ", "))
+}
+
 var startCmd = &cobra.Command{Use: "start", Short: "Use to start ros-ocp-backend services"}
 
 var processorCmd = &cobra.Command{
@@ -31,6 +42,7 @@ var processorCmd = &cobra.Command{
 	Short: "starts ros-ocp processor",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp processor")
+		logEnabledPlugins()
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -60,6 +72,7 @@ var recommendationPollerCmd = &cobra.Command{
 	Short: "starts ros-ocp recommendation-poller",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp recommendation-poller")
+		logEnabledPlugins()
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -78,6 +91,7 @@ var apiCmd = &cobra.Command{
 	Short: "starts ros-ocp api server",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting ros-ocp API server")
+		logEnabledPlugins()
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

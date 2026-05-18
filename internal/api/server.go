@@ -36,6 +36,46 @@ func registerRecommendationRoutes(v1 *echo.Group) {
 }
 
 func StartAPIServer() {
+// pluginRecommendationRoutesActive reports whether gpu/node/pvc/snapshot HTTP routes are registered:
+// those plugins omit routes entirely when Kruize owns recommendations or when the plugin is disabled.
+func pluginRecommendationRoutesActive(pluginName string) bool {
+	if plugin.EnabledFor(plugin.KruizePluginName) {
+		return false
+	}
+	return plugin.EnabledFor(pluginName)
+}
+
+func disabledPluginRoute404(pluginName string) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": fmt.Sprintf("plugin '%s' is not enabled", pluginName),
+		})
+	}
+}
+
+// registerDisabledPluginRouteGuards installs 404 handlers for plugin URL prefixes when the plugin
+// does not register real routes, so requests do not fall through to /recommendations/openshift/:recommendation-id
+// (which treats e.g. "gpu" as a UUID and returns 400).
+func registerDisabledPluginRouteGuards(v1 *echo.Group) {
+	if !pluginRecommendationRoutesActive("gpu") {
+		v1.GET("/recommendations/openshift/gpu", disabledPluginRoute404("gpu"))
+		v1.GET("/recommendations/openshift/gpu/*", disabledPluginRoute404("gpu"))
+	}
+	if !pluginRecommendationRoutesActive("node") {
+		v1.GET("/recommendations/openshift/nodes", disabledPluginRoute404("node"))
+		v1.GET("/recommendations/openshift/nodes/*", disabledPluginRoute404("node"))
+	}
+	if !pluginRecommendationRoutesActive("pvc") {
+		v1.GET("/recommendations/openshift/pvcs", disabledPluginRoute404("pvc"))
+	}
+	if !pluginRecommendationRoutesActive("snapshot") {
+		v1.GET("/recommendations/openshift/snapshots", disabledPluginRoute404("snapshot"))
+		v1.GET("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
+		v1.PUT("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
+	}
+}
+
 // StartAPIServer runs the REST API and Prometheus metrics listener until ctx is cancelled,
 // then shuts both down gracefully.
 func StartAPIServer(ctx context.Context) {
@@ -116,6 +156,8 @@ func StartAPIServer(ctx context.Context) {
 	for _, ap := range plugin.APIProviders() {
 		ap.RegisterRoutes(v1)
 	}
+
+	registerDisabledPluginRouteGuards(v1)
 
 	// Parameterized container recommendation detail — after static paths and plugin routes (ordering; see note above).
 	if nativeRecommendationRoutes {
