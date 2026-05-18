@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -210,11 +211,11 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 	var row NamespaceMetricRow
 	var err error
 
-	row.IntervalStart, err = time.Parse(dateFormat, record[idx.intervalStart])
+	row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
 	if err != nil {
 		return row, fmt.Errorf("interval_start: %w", err)
 	}
-	row.IntervalEnd, err = time.Parse(dateFormat, record[idx.intervalEnd])
+	row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
 	if err != nil {
 		return row, fmt.Errorf("interval_end: %w", err)
 	}

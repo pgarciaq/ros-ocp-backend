@@ -7,12 +7,9 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
-
-const dateFormat = "2006-01-02 15:04:05 -0700 MST"
 
 // CoreToMillicores converts a floating-point core count string (e.g., "0.250")
 // to integer millicores (250). Returns an error for NaN, Inf, negative, or
@@ -318,11 +315,11 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	var row MetricRow
 	var err error
 
-	row.IntervalStart, err = time.Parse(dateFormat, record[idx.intervalStart])
+	row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
 	if err != nil {
 		return row, fmt.Errorf("interval_start: %w", err)
 	}
-	row.IntervalEnd, err = time.Parse(dateFormat, record[idx.intervalEnd])
+	row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
 	if err != nil {
 		return row, fmt.Errorf("interval_end: %w", err)
 	}

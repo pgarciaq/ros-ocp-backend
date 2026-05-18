@@ -287,7 +287,7 @@ func requestAndSaveRecommendation(kafkaMsg types.RecommendationKafkaMsg, recomme
 						MonitoringStartTime:                 v.RecommendationTerms.Short_term.MonitoringStartTime,
 						MonitoringEndTime:                   v.MonitoringEndTime,
 						Recommendations:                     marshalData,
-						UpdatedAt:                           time.Now(),
+						UpdatedAt:                           time.Now().UTC(),
 					}
 					namespaceRecommendationSetList = append(namespaceRecommendationSetList, recommendationSet)
 
