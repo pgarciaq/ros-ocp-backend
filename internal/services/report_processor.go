@@ -20,6 +20,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
 	namespacePayload "github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload/namespace"
@@ -459,12 +460,51 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	if err := ingestion.ProcessCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
-		log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		if isTransientKafkaProcessingError(err) {
-			return fmt.Errorf("digest processing: %w", err)
+	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
+	var containerIngestor plugin.CSVIngestor
+	for _, ing := range ingestors {
+		for _, t := range ing.SupportedCSVTypes() {
+			if t == "container" {
+				containerIngestor = ing
+				break
+			}
 		}
-		return nil
+		if containerIngestor != nil {
+			break
+		}
+	}
+
+	if containerIngestor != nil {
+		rows, err := containerIngestor.IngestCSV(ctx, pool, body, orgID, clusterUUID)
+		if err != nil {
+			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("digest processing: %w", err)
+			}
+			return nil
+		}
+
+		if len(rows) > 0 {
+			hooks := plugin.ByTrait[plugin.IngestHook]()
+			for _, hook := range hooks {
+				for _, csvType := range hook.HookAfterCSVTypes() {
+					if csvType == "container" {
+						if err := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); err != nil {
+							log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), err)
+						}
+						break
+					}
+				}
+			}
+		}
+	} else {
+		if err := ingestion.ProcessCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("digest processing: %w", err)
+			}
+			return nil
+		}
 	}
 
 	now := time.Now().UTC()

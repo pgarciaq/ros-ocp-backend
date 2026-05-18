@@ -15,6 +15,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
