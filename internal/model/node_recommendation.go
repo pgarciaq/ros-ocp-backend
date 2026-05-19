@@ -31,7 +31,7 @@ type NodeContainerRef struct {
 type NodeRecommendationListResponse struct {
 	Meta     NodeRecommendationMeta  `json:"meta"`
 	Data     []NodeGPURecommendation `json:"data"`
-	Links    NodeRecommendationLinks `json:"links"`
+	Links    PaginationLinks         `json:"links"`
 	Warnings []string                `json:"warnings,omitempty"`
 }
 
@@ -43,10 +43,5 @@ type NodeRecommendationMeta struct {
 	TotalSavingsUSD *float32 `json:"total_savings_usd,omitempty"`
 }
 
-// NodeRecommendationLinks holds pagination links.
-type NodeRecommendationLinks struct {
-	First    string `json:"first"`
-	Previous string `json:"previous,omitempty"`
-	Next     string `json:"next,omitempty"`
-	Last     string `json:"last"`
-}
+// NodeRecommendationLinks is an alias for backward compatibility.
+type NodeRecommendationLinks = PaginationLinks

@@ -214,48 +214,44 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func buildUtilLinks(r *http.Request, total, limit, offset int) map[string]*string {
+func buildUtilLinks(r *http.Request, total, limit, offset int) model.PaginationLinks {
+	return model.PaginationLinks{
+		First:    buildLinkURL(r, 0, limit),
+		Previous: buildPrevLink(r, offset, limit),
+		Next:     buildNextLink(r, offset, limit, total),
+		Last:     buildLinkURL(r, lastPageOffset(total, limit), limit),
+	}
+}
+
+func buildLinkURL(r *http.Request, offset, limit int) string {
 	q := r.URL.Query()
+	q.Set("offset", strconv.Itoa(offset))
+	q.Set("limit", strconv.Itoa(limit))
+	params, _ := url.PathUnescape(q.Encode())
+	return fmt.Sprintf("%s?%s", r.URL.Path, params)
+}
 
-	makeLink := func(o int) *string {
-		q.Set("offset", strconv.Itoa(o))
-		q.Set("limit", strconv.Itoa(limit))
-		params, _ := url.PathUnescape(q.Encode())
-		s := fmt.Sprintf("%s?%s", r.URL.Path, params)
-		return &s
+func buildPrevLink(r *http.Request, offset, limit int) string {
+	if offset <= 0 || limit <= 0 {
+		return ""
 	}
+	prev := offset - limit
+	if prev < 0 {
+		prev = 0
+	}
+	return buildLinkURL(r, prev, limit)
+}
 
-	first := makeLink(0)
-	if limit <= 0 {
-		return map[string]*string{
-			"first":    first,
-			"previous": nil,
-			"next":     nil,
-			"last":     nil,
-		}
+func buildNextLink(r *http.Request, offset, limit, total int) string {
+	if limit <= 0 || offset+limit >= total {
+		return ""
 	}
+	return buildLinkURL(r, offset+limit, limit)
+}
 
-	var next, previous *string
-	if offset+limit < total {
-		next = makeLink(offset + limit)
+func lastPageOffset(total, limit int) int {
+	if total <= 0 || limit <= 0 {
+		return 0
 	}
-	if offset > 0 {
-		prev := offset - limit
-		if prev < 0 {
-			prev = 0
-		}
-		previous = makeLink(prev)
-	}
-	lastOff := 0
-	if total > 0 {
-		lastOff = ((total - 1) / limit) * limit
-	}
-	last := makeLink(lastOff)
-
-	return map[string]*string{
-		"first":    first,
-		"previous": previous,
-		"next":     next,
-		"last":     last,
-	}
+	return ((total - 1) / limit) * limit
 }

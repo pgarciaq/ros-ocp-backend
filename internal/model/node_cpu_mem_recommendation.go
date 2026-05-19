@@ -22,11 +22,19 @@ type NodeUtilizationRec struct {
 	UpdatedAt          string                                     `json:"updated_at"`
 }
 
+// PaginationLinks holds pagination link URLs for list responses.
+type PaginationLinks struct {
+	First    string `json:"first"`
+	Previous string `json:"previous,omitempty"`
+	Next     string `json:"next,omitempty"`
+	Last     string `json:"last"`
+}
+
 // NodeUtilizationListResponse is the paginated list response for node utilization recs.
 type NodeUtilizationListResponse struct {
 	Meta     NodeUtilizationMeta  `json:"meta"`
 	Data     []NodeUtilizationRec `json:"data"`
-	Links    map[string]*string   `json:"links"`
+	Links    PaginationLinks      `json:"links"`
 	Warnings []string             `json:"warnings,omitempty"`
 }
 

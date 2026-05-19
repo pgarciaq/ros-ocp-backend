@@ -35,7 +35,8 @@ type SnapshotRecommendationListResponse struct {
 		Limit  int `json:"limit"`
 		Offset int `json:"offset"`
 	} `json:"meta"`
-	Data []SnapshotRecommendationResponse `json:"data"`
+	Links Links                           `json:"links"`
+	Data  []SnapshotRecommendationResponse `json:"data"`
 }
 
 // GetSnapshotRecommendations handles GET /recommendations/openshift/snapshots.
@@ -99,7 +100,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		log.Errorf("snapshot recommendation count failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to count snapshot recommendations",
 		})
@@ -120,7 +121,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
 		log.Errorf("snapshot recommendation query failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch snapshot recommendations",
 		})
@@ -140,7 +141,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 			&codes,
 		); err != nil {
 			log.Errorf("scanning snapshot recommendation row: %v", err)
-			return c.JSON(http.StatusInternalServerError, echo.Map{
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to read snapshot recommendation rows",
 			})
@@ -153,7 +154,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	}
 	if err := rows.Err(); err != nil {
 		log.Errorf("snapshot recommendation row iteration failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch snapshot recommendations",
 		})
@@ -163,6 +164,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []SnapshotRecommendationResponse{}

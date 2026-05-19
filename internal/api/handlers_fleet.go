@@ -61,7 +61,7 @@ func GetFleetSummary(c echo.Context) error {
 		clusterUUIDs, qerr := getClustersForOrg(ctx, orgID)
 		if qerr != nil {
 			log.Errorf("fleet summary: get clusters failed for org=%s: %v", orgID, qerr)
-			return c.JSON(http.StatusInternalServerError, echo.Map{
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to fetch fleet summary",
 			})
@@ -113,7 +113,7 @@ func GetFleetSummary(c echo.Context) error {
 	}
 	if err != nil {
 		log.Errorf("fleet summary query failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch fleet summary",
 		})

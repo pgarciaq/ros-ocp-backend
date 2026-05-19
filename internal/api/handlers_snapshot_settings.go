@@ -28,7 +28,7 @@ func GetSnapshotSettings(c echo.Context) error {
 	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		log.Errorf("get snapshot settings failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to read snapshot settings",
 		})
@@ -69,7 +69,7 @@ func PutSnapshotSettings(c echo.Context) error {
 			})
 		}
 		log.Errorf("put snapshot settings failed for org=%s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to update snapshot settings",
 		})
@@ -78,7 +78,7 @@ func PutSnapshotSettings(c echo.Context) error {
 	// Return the updated settings
 	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "settings saved but unable to read back",
 		})

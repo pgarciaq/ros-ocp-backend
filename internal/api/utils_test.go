@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 
@@ -10,6 +12,119 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"gorm.io/datatypes"
 )
+
+func TestBuildLinks(t *testing.T) {
+	makeReq := func(path, query string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, path+"?"+query, nil)
+		return r
+	}
+
+	t.Run("first page of multiple", func(t *testing.T) {
+		req := makeReq("/recommendations/openshift", "limit=10&offset=0")
+		links := buildLinks(req, 35, 10, 0)
+
+		assertContains(t, links.First, "offset=0")
+		assertContains(t, links.First, "limit=10")
+		assertContains(t, links.Last, "offset=30")
+		if links.Previous != "" {
+			t.Errorf("expected empty previous, got %q", links.Previous)
+		}
+		assertContains(t, links.Next, "offset=10")
+	})
+
+	t.Run("middle page", func(t *testing.T) {
+		req := makeReq("/recommendations/openshift", "limit=10&offset=10")
+		links := buildLinks(req, 35, 10, 10)
+
+		assertContains(t, links.First, "offset=0")
+		assertContains(t, links.Last, "offset=30")
+		assertContains(t, links.Previous, "offset=0")
+		assertContains(t, links.Next, "offset=20")
+	})
+
+	t.Run("last page", func(t *testing.T) {
+		req := makeReq("/recommendations/openshift", "limit=10&offset=30")
+		links := buildLinks(req, 35, 10, 30)
+
+		assertContains(t, links.First, "offset=0")
+		assertContains(t, links.Last, "offset=30")
+		assertContains(t, links.Previous, "offset=20")
+		if links.Next != "" {
+			t.Errorf("expected empty next on last page, got %q", links.Next)
+		}
+	})
+
+	t.Run("single page (count <= limit)", func(t *testing.T) {
+		req := makeReq("/recommendations/openshift", "limit=100&offset=0")
+		links := buildLinks(req, 5, 100, 0)
+
+		assertContains(t, links.First, "offset=0")
+		assertContains(t, links.Last, "offset=0")
+		if links.Previous != "" {
+			t.Errorf("expected empty previous, got %q", links.Previous)
+		}
+		if links.Next != "" {
+			t.Errorf("expected empty next, got %q", links.Next)
+		}
+	})
+
+	t.Run("empty result set", func(t *testing.T) {
+		req := makeReq("/recommendations/openshift", "limit=10&offset=0")
+		links := buildLinks(req, 0, 10, 0)
+
+		assertContains(t, links.First, "offset=0")
+		assertContains(t, links.Last, "offset=0")
+		if links.Previous != "" {
+			t.Errorf("expected empty previous, got %q", links.Previous)
+		}
+		if links.Next != "" {
+			t.Errorf("expected empty next, got %q", links.Next)
+		}
+	})
+
+	t.Run("page 2 has previous pointing to page 1", func(t *testing.T) {
+		req := makeReq("/pvcs", "limit=20&offset=20")
+		links := buildLinks(req, 100, 20, 20)
+
+		assertContains(t, links.Previous, "offset=0")
+	})
+}
+
+func TestCollectionResponse_Links(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/recommendations/openshift?limit=10&offset=10", nil)
+	coll := CollectionResponse([]interface{}{"a", "b"}, req, 25, 10, 10)
+
+	if coll.Links.First == "" {
+		t.Fatal("expected first link to be populated")
+	}
+	assertContains(t, coll.Links.First, "offset=0")
+	assertContains(t, coll.Links.Last, "offset=20")
+	assertContains(t, coll.Links.Previous, "offset=0")
+	assertContains(t, coll.Links.Next, "offset=20")
+}
+
+func assertContains(t *testing.T, s, substr string) {
+	t.Helper()
+	if s == "" {
+		t.Fatalf("expected non-empty string containing %q", substr)
+	}
+	if !contains(s, substr) {
+		t.Errorf("expected %q to contain %q", s, substr)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && stringContains(s, substr))
+}
+
+func stringContains(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
 
 func float64Ptr(v float64) *float64 { return &v }
 
