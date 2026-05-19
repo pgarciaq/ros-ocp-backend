@@ -37,10 +37,10 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 45 | 112 |
+| P2 | 157 | 66 | 91 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
-| **New (plugin rearch)** | 5 | 0 | 5 |
+| **New (plugin rearch)** | 5 | 3 | 2 |
 
 Additional fixes from the P0/P1 pass:
 
@@ -53,7 +53,9 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 3** (May 2026) closed **16** issues with commits — lifecycle correctness (**#134**, **#135**, **#136**, **#137**, **#143**, **#197** → `f56c2d2`); GORM/model allowlists + chain hygiene (**#172**, **#174**, **#175** → `53bf35d`); date/time normalization + injectable clock (**#159**, **#163**, **#164**, **#170** → `3485f0a`); API handler context + cache headers (**#139**, **#202** → `7fb6cdd`). **#204** verified — existing handlers already return generic messages for 5xx; no code change. Supplementary migration fix: **000061** via commit `99576b4` (no separate issue row). **Running total (P2 audit tally):** **43** fixed / **114** remaining — batches **1–3** plus earlier **#37** / **#217** closures counted in [Resolution Status](#resolution-status).
 
-**Plugin rearchitecture audit** (May 2026): Post-plugin rearchitecture review closed **#183** (GPU thresholds via `os.Getenv` → moved into `Config` struct, commit `ac44a41`) and **superseded #187** (`DISABLE_NAMESPACE_RECOMMENDATION` env var replaced by plugin system: `ROS_DISABLED_PLUGINS=namespace`). **#190** partially superseded — `ROS_ENABLED_PLUGINS` replaces `USE_NATIVE_ENGINE` (commit `5188053`), but stale data from prior engine remains uncleared on toggle. **#67** improved — disabled plugin routes now return 404 (commit `11337ae`). **5 new issues** identified — see [New Issues from Plugin Rearchitecture](#new-issues-from-plugin-rearchitecture). **Running total:** **45** fixed / **112** remaining P2.
+**Plugin rearchitecture audit** (May 2026): Post-plugin rearchitecture review closed **#183** (GPU thresholds via `os.Getenv` → moved into `Config` struct, commit `ac44a41`) and **superseded #187** (`DISABLE_NAMESPACE_RECOMMENDATION` env var replaced by plugin system: `ROS_DISABLED_PLUGINS=namespace`). **#190** partially superseded — `ROS_ENABLED_PLUGINS` replaces `USE_NATIVE_ENGINE` (commit `5188053`), but stale data from prior engine remains uncleared on toggle. **#67** improved — disabled plugin routes now return 404 (commit `11337ae`). **5 new issues** identified — see [New Issues from Plugin Rearchitecture](#new-issues-from-plugin-rearchitecture).
+
+**P2 batch 4 — OpenAPI spec alignment** (May 2026): Closed **21** issues (**#64**–**#83** cluster + **#70** full schema + plugin rearch **#142**, **#494**, **#495**). Commits `40e598c` (spec vs impl mismatches, pagination fixes, 503 normalization, unit tests) and `68e0654` (full `DetailResponse` schema documentation — removed 10 stale Kruize-era schemas, added 12 properly factored schemas). **Running total:** **66** fixed / **91** remaining P2; **3** of **5** plugin-rearch issues fixed.
 
 ## Repository Impact Summary
 
@@ -496,7 +498,7 @@ Additional fixes from the P0/P1 pass:
 - File: `internal/api/listoptions/list_options.go`
 
 **#70 — Native container list returns `DetailResponse` items; spec documents `Recommendations`**
-- **Status:** ⚠️ Partial — `GPURecommendation` `$ref` added to `Recommendations` schema. Full native `DetailResponse` schema documentation is a larger effort deferred.
+- **Status:** ✅ Fixed — Full `DetailResponse` schema documented in OpenAPI spec (commit `68e0654`). Added `DetailRecommendations`, `ResourceConfig`, `ResourcePair`, `ResourceValue`, `ReplicaInfo`, `NotificationEntry`, `NativePlot`, `PlotsBucket`, `BoxPlotDetails`, `EngineRecommendation`, `TermRecommendation`, `NamespaceDetailResponse`. Removed 10 stale Kruize-era schemas. Fixed format values (`cores`/`MiB`/`percentage`). Wired `$ref` to detail and namespace endpoints.
 - Repo: ros-ocp-backend
 
 **#71 — `GPURecommendation` schema never `$ref`'d**
