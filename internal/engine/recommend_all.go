@@ -140,6 +140,8 @@ func RecommendAllWorkloads(
 			oomTotal := sumOOMCounts(windowRows)
 			pcMin, pcMax, pcAvg := aggregatePodCounts(windowRows)
 			desiredReplicas, availableReplicas := latestReplicaCounts(windowRows)
+			monStart := windowRows[0].BucketDate
+			monEnd := windowRows[len(windowRows)-1].BucketDate
 
 			for _, profile := range []string{"cost", "performance"} {
 				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
@@ -202,6 +204,8 @@ func RecommendAllWorkloads(
 					PodCountAvg:          pcAvg,
 					DesiredReplicas:      desiredReplicas,
 					AvailableReplicas:    availableReplicas,
+					MonitoringStartTime: monStart,
+					MonitoringEndTime:   monEnd,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
@@ -265,8 +269,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				pod_count_min, pod_count_max, pod_count_avg,
 				desired_replicas, available_replicas,
 				estimated_monthly_savings_usd,
+				monitoring_start_time, monitoring_end_time,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -290,6 +295,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				desired_replicas = EXCLUDED.desired_replicas,
 				available_replicas = EXCLUDED.available_replicas,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
+				monitoring_start_time = EXCLUDED.monitoring_start_time,
+				monitoring_end_time = EXCLUDED.monitoring_end_time,
 				container_id = EXCLUDED.container_id,
 				updated_at = now()`,
 				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
@@ -304,6 +311,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 				r.DesiredReplicas, r.AvailableReplicas,
 				r.EstimatedSavingsUSD,
+				r.MonitoringStartTime, r.MonitoringEndTime,
 			)
 		}
 		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {

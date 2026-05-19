@@ -104,6 +104,9 @@ type ContainerRec struct {
 	PodCountAvg            int64
 	DesiredReplicas        int64
 	AvailableReplicas      int64
+
+	MonitoringStartTime time.Time
+	MonitoringEndTime   time.Time
 }
 
 // TermConfig defines a recommendation term's parameters.
