@@ -106,7 +106,7 @@ func StartAPIServer(ctx context.Context) {
 
 	app.GET("/status", GetAppStatus)
 	app.GET("/readyz", GetReadyz)
-	app.File("/api/cost-management/v1/recommendations/openshift/openapi.json", "openapi.json")
+	app.GET("/api/cost-management/v1/recommendations/openshift/openapi.json", ServeFilteredOpenAPI)
 
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
