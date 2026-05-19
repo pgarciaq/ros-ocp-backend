@@ -762,10 +762,11 @@ Additional fixes from the P0/P1 pass:
 - Files: `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go`
 - `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go` all use `strings.Contains(err.Error(), "...")` — breaks with error wrapping or locale changes.
 
-**#142 — Injectable SQL via `BucketSQL` in `boxplot.go`**
+**#142 — Injectable SQL via `BucketSQL` in `boxplot.go`** ✅ Fixed
 - Repo: ros-ocp-backend
 - File: `internal/model/boxplot.go`
 - `fmt.Sprintf` injects `tw.BucketSQL` directly into a query — if that value is ever influenced by stored config or user input, it's SQL injection.
+- **Fix:** Replaced free-form `BucketSQL string` with typed `BucketGranularity` enum (`BucketGranularity6Hour`, `BucketGranularityDaily`) and a `sql()` method. The type system now prevents arbitrary SQL from being assigned.
 
 **#143 — 12+ `_ =` assignments ignoring meaningful errors**
 - **Status:** **Fixed** in `f56c2d2` *(selective fixes)*
@@ -2560,16 +2561,18 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 - The Kruize plugin is a marker (satisfies `Plugin` interface) but doesn't implement `CSVIngestor`, `APIProvider`, or `RetentionProvider`. Enabling it only disables native plugins via mutual exclusivity; it doesn't route to old Kruize code paths. If someone enables Kruize expecting the legacy behavior, **no data will be processed** and no errors will surface.
 - Effort: Medium (document prominently, or wire legacy dispatch)
 
-**#494 — No integration test for full plugin-dispatched CSV-to-DB lifecycle**
+**#494 — No integration test for full plugin-dispatched CSV-to-DB lifecycle** ✅ Fixed
 - Severity: P2
 - Repo: ros-ocp-backend
 - Files: `internal/plugins/`, `internal/services/report_processor.go`
 - Unit tests cover registration and trait dispatch. No integration test processes a CSV through the plugin-dispatched path and verifies end-to-end DB results match pre-plugin behavior. Regression risk on refactors.
 - Effort: Medium
+- **Fix:** Added `internal/plugins/plugin_lifecycle_integration_test.go` with 4 integration tests covering container CSV → digests, GPU IngestHook → gpu_container_digests, namespace CSV → digests + samples, and full dispatch E2E lifecycle.
 
-**#495 — Disabled plugin routes return 404 but OpenAPI still documents them**
+**#495 — Disabled plugin routes return 404 but OpenAPI still documents them** ✅ Fixed
 - Severity: P2
 - Repo: ros-ocp-backend
 - Files: `internal/api/server.go`, `openapi.json`
 - Commit `11337ae` added 404 guards for disabled plugins. OpenAPI spec still shows all routes as available regardless of plugin state. SDK-generated clients will call dead endpoints and get unexpected 404s with no schema-level indication.
 - Effort: Small (add OpenAPI note or conditional generation)
+- **Fix:** Added `x-plugin-required` extension and 404 response documentation to all plugin-backed endpoints in `openapi.json`. Updated the top-level `info.description` to explain the plugin system and how routes become unavailable when plugins are disabled.
