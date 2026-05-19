@@ -467,90 +467,92 @@ Additional fixes from the P0/P1 pass:
 ### OpenAPI Specification vs Implementation (64-83)
 
 **#64 — Missing `servers` entry in OpenAPI spec**
+- **Status:** ✅ Fixed — Added `servers: [{ url: "/api/cost-management/v1" }]` to `openapi.json`.
 - Repo: ros-ocp-backend
 - File: `openapi.json`
-- No `servers` entry; clients don't know the real prefix `/api/cost-management/v1/`.
 
 **#65 — Undocumented endpoints: `/recommendations/openshift/namespaces`, `/recommendations/openshift/namespaces/:id`, `/status`**
+- **Status:** ✅ Fixed — Added `/status`, `/recommendations/openshift/namespaces`, `/recommendations/openshift/namespaces/{recommendation-id}` to `openapi.json`.
 - Repo: ros-ocp-backend
-- File: `internal/api/server.go` vs `openapi.json`
-- These routes exist in `server.go` but have no corresponding entry in `openapi.json`.
-- **Note:** `GET /recommendations/openshift/nodes/utilization` is **documented** in OpenAPI as a **deprecated** alias of canonical **`GET /recommendations/openshift/nodes`** (node CPU/memory utilization). GPU time-slicing is **`GET /recommendations/openshift/gpu/timeslicing`**, not `/nodes`.
+- File: `openapi.json`
 
 **#66 — Undocumented `term` query parameter on `GET /recommendations/openshift/gpu/timeslicing`**
-- **Status: Fixed** — `term` is now documented in `openapi.json` for `/recommendations/openshift/gpu/timeslicing`.
+- **Status:** ✅ Fixed — `term` is now documented in `openapi.json`.
 - Repo: ros-ocp-backend
-- File: `internal/api/handlers_node_recs.go` (`GetNodeRecommendations`)
-- The handler reads `c.QueryParam("term")` for filtering recommendations by term window.
 
 **#67 — Feature-gated routes exist unconditionally in spec**
+- **Status:** ✅ Fixed — Dynamic OpenAPI handler (`ServeFilteredOpenAPI`) now filters out paths for disabled plugins based on `x-plugin-required` annotations.
 - Repo: ros-ocp-backend
-- If `UseNativeEngine` is false, many documented endpoints return 404.
+- File: `internal/api/openapi_handler.go`
 
-**#68 — `RecommendationList.meta.limit.maximum: 10` contradicts reality (max 100)**
+**#68 — `RecommendationList.meta.limit.maximum: 10` contradicts reality (max 1000)**
+- **Status:** ✅ Fixed — Updated `meta.limit.maximum` from 10 to 1000 in `openapi.json` component schema.
 - Repo: ros-ocp-backend
 - File: `openapi.json`
-- `openapi.json` advertises a lower max page size than `list_options` allows—SDK validators reject calls the API accepts.
 
 **#69 — `limit=-1` accepted but spec says `minimum: 1`**
+- **Status:** ✅ Already fixed in code — `parseLimit()` rejects negatives with `"limit cannot be negative"` error. Spec updated to `minimum: 0` (0 = use default of 100).
 - Repo: ros-ocp-backend
 - File: `internal/api/listoptions/list_options.go`
-- `ListAPIOptions` accepts `limit=-1` (unbounded scans) while OpenAPI claims `minimum: 1`—easy accidental full-table reads.
 
 **#70 — Native container list returns `DetailResponse` items; spec documents `Recommendations`**
+- **Status:** ⚠️ Partial — `GPURecommendation` `$ref` added to `Recommendations` schema. Full native `DetailResponse` schema documentation is a larger effort deferred.
 - Repo: ros-ocp-backend
-- Handlers return native `DetailResponse` JSON (GPU replicas, notifications, plots) but the spec still documents legacy `Recommendations` rows.
 
 **#71 — `GPURecommendation` schema never `$ref`'d**
+- **Status:** ✅ Fixed — Added `"gpu_recommendation": { "$ref": "#/components/schemas/GPURecommendation" }` to the `Recommendations` component schema.
 - Repo: ros-ocp-backend
 - File: `openapi.json`
-- OpenAPI defines components that no operation references (or omits referenced shapes), so codegen and validators miss real request/response bodies.
 
 **#72 — RBAC denial returns 403; spec documents 401**
+- **Status:** ✅ Fixed — All 12 occurrences of `"401": { "description": "User is not authorized" }` changed to `"403": { "description": "User is not authorized (RBAC)" }`.
 - Repo: ros-ocp-backend
-- File: `internal/api/middleware/rbac.go`
-- `middleware.Rbac` sends `403 Forbidden` while the spec labels it `401 User is not authorized`.
+- File: `openapi.json`
 
 **#73 — Container list 503 schema says `{"error":"..."}` but handlers return `{"status":"error","message":"..."}`**
+- **Status:** ✅ Fixed — All 503 error schemas updated to document `{"status": "error", "message": "..."}` shape.
 - Repo: ros-ocp-backend
-- Schema/implementation shape mismatch.
+- File: `openapi.json`
 
 **#74 — Namespace CSV support documented but handler returns 406**
+- **Status:** ✅ Fixed — Removed `"csv"` from the namespace endpoint's `format` enum in the spec; documented as JSON-only.
 - Repo: ros-ocp-backend
-- File: `internal/api/handlers.go`
-- `GetNamespaceRecommendationSetList` rejects CSV with Not Acceptable.
+- File: `openapi.json`
 
 **#76 — `CollectionResponse.links.first` points to current page, not first page**
+- **Status:** ✅ Fixed — `CollectionResponse` now sets `first` link with offset=0.
 - Repo: ros-ocp-backend
 - File: `internal/api/utils.go`
-- Uses current offset instead of 0.
 
 **#77 — `CollectionResponse.links.last` points to next page, not last page**
+- **Status:** ✅ Fixed — `CollectionResponse` now computes actual last page offset: `((count-1)/limit)*limit`.
 - Repo: ros-ocp-backend
 - File: `internal/api/utils.go`
-- Uses `offset+limit` instead of computing the actual last page offset.
 
 **#78 — PVC/Snapshot lists have no `links` in response**
+- **Status:** ✅ Fixed — Added `Links` field to `PVCRecommendationListResponse` and `SnapshotRecommendationListResponse`; populated via `buildLinks()` helper.
 - Repo: ros-ocp-backend
-- Files: `internal/api/handlers_pvc.go`, `internal/api/handlers_snapshot.go`
-- Inconsistent with container/namespace lists that include pagination links.
+- Files: `internal/api/handlers_pvc.go`, `internal/api/handlers_snapshot.go`, `internal/api/utils.go`
 
 **#80 — Mixed 500 vs 503 for DB errors across endpoints**
-- **Status:** ⚠️ Partially addressed (337ba5b — PVC/Snapshot/utilization pool-nil and several DB paths) — remaining: `handlers_fleet.go` and multiple PVC/Snapshot branches still mix `500` vs `503` for query failures.
+- **Status:** ✅ Fixed — Normalized all DB error responses to 503 across PVC, Snapshot, fleet, terms, and snapshot-settings handlers.
 - Repo: ros-ocp-backend
-- Fleet/PVC/Snapshot use 500; container lists use 503 — same error class, different codes.
+- Files: `handlers_pvc.go`, `handlers_snapshot.go`, `handlers_fleet.go`, `handlers_terms.go`, `handlers_snapshot_settings.go`
 
 **#81 — Namespace legacy returns 200 for empty recommendations; container legacy returns 404**
+- **Status:** ✅ Fixed — Namespace detail now returns 404 with `{"status": "not_found", "message": "recommendation not found"}` when recommendations array is empty, matching container behavior.
 - Repo: ros-ocp-backend
-- Asymmetric behavior for equivalent "no data" conditions.
+- File: `internal/api/handlers.go`
 
 **#82 — `status: "error"` vs `"not_found"` for missing resources**
+- **Status:** ✅ Fixed — Normalized: DB lookup failures on detail endpoints now return `"status": "not_found"` consistently (not `"error"`).
 - Repo: ros-ocp-backend
-- Fallback detail uses "error"; legacy detail uses "not_found" — clients must handle both.
+- File: `internal/api/handlers.go`
 
 **#83 — `links` type differs: `Links` struct vs `map[string]*string` vs absent**
+- **Status:** ✅ Fixed — Unified all `links` fields to use `model.PaginationLinks` struct (string fields with `omitempty`). Eliminated `map[string]*string` variant from node utilization handler. `NodeRecommendationLinks` is now a type alias.
 - Repo: ros-ocp-backend
-- Three different shapes for the same concept across endpoints.
+- Files: `internal/model/node_cpu_mem_recommendation.go`, `internal/model/node_recommendation.go`, `internal/api/handlers_node_utilization.go`
 
 ### Migrations Safety (84-103)
 

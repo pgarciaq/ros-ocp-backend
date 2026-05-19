@@ -31,25 +31,25 @@ func CollectionResponse(collection []interface{}, req *http.Request, count, limi
 	var first, previous, next, last string
 	q := req.URL.Query()
 
-	// set the "first" link with same limit+offset (what they requested)
 	q.Set("limit", strconv.Itoa(limit))
-	q.Set("offset", strconv.Itoa(offset))
+	q.Set("offset", strconv.Itoa(0))
 	params, _ := url.PathUnescape(q.Encode())
 	first = fmt.Sprintf("%v?%v", req.URL.Path, params)
 
-	// set the "last" link with limit+offset set for the next page
-	q.Set("offset", strconv.Itoa(offset+limit))
+	lastOffset := 0
+	if count > 0 && limit > 0 {
+		lastOffset = ((count - 1) / limit) * limit
+	}
+	q.Set("offset", strconv.Itoa(lastOffset))
 	params, _ = url.PathUnescape(q.Encode())
 	last = fmt.Sprintf("%v?%v", req.URL.Path, params)
 
-	// set the "previous" link with limit-offset set for the previous page
-	if offset > limit {
+	if offset-limit >= 0 {
 		q.Set("offset", strconv.Itoa(offset-limit))
 		params, _ = url.PathUnescape(q.Encode())
 		previous = fmt.Sprintf("%v?%v", req.URL.Path, params)
 	}
 
-	// set the "next" link with limit+offset set for the next page
 	if offset+limit < count {
 		q.Set("offset", strconv.Itoa(offset+limit))
 		params, _ = url.PathUnescape(q.Encode())
@@ -72,6 +72,42 @@ func CollectionResponse(collection []interface{}, req *http.Request, count, limi
 			Offset: offset,
 		},
 		Links: links,
+	}
+}
+
+func buildLinks(req *http.Request, count, limit, offset int) Links {
+	q := req.URL.Query()
+	q.Set("limit", strconv.Itoa(limit))
+
+	q.Set("offset", strconv.Itoa(0))
+	params, _ := url.PathUnescape(q.Encode())
+	first := fmt.Sprintf("%v?%v", req.URL.Path, params)
+
+	lastOffset := 0
+	if count > 0 && limit > 0 {
+		lastOffset = ((count - 1) / limit) * limit
+	}
+	q.Set("offset", strconv.Itoa(lastOffset))
+	params, _ = url.PathUnescape(q.Encode())
+	last := fmt.Sprintf("%v?%v", req.URL.Path, params)
+
+	var previous, next string
+	if offset-limit >= 0 {
+		q.Set("offset", strconv.Itoa(offset-limit))
+		params, _ = url.PathUnescape(q.Encode())
+		previous = fmt.Sprintf("%v?%v", req.URL.Path, params)
+	}
+	if offset+limit < count {
+		q.Set("offset", strconv.Itoa(offset+limit))
+		params, _ = url.PathUnescape(q.Encode())
+		next = fmt.Sprintf("%v?%v", req.URL.Path, params)
+	}
+
+	return Links{
+		First:    first,
+		Previous: previous,
+		Next:     next,
+		Last:     last,
 	}
 }
 

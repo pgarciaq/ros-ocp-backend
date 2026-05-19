@@ -44,7 +44,7 @@ func GetTermSettings(c echo.Context) error {
 	terms, err := engine.LoadTermConfig(ctx, db.GetPool(), orgID)
 	if err != nil {
 		log.Errorf("failed to load term config for org %s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "failed to load term configuration",
 		})
@@ -117,7 +117,7 @@ func PutTermSettings(c echo.Context) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		log.Errorf("failed to begin tx for term settings: %v", err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
 		})
@@ -126,7 +126,7 @@ func PutTermSettings(c echo.Context) error {
 
 	if _, err := tx.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
 		log.Errorf("failed to delete old term settings for org %s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
 		})
@@ -145,7 +145,7 @@ func PutTermSettings(c echo.Context) error {
 			orgID, ord, t.WindowDays, decayHL,
 		); err != nil {
 			log.Errorf("failed to upsert term settings for org %s: %v", orgID, err)
-			return c.JSON(http.StatusInternalServerError, echo.Map{
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "database error",
 			})
@@ -154,7 +154,7 @@ func PutTermSettings(c echo.Context) error {
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Errorf("failed to commit term settings for org %s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
 		})
@@ -175,7 +175,7 @@ func DeleteTermSettings(c echo.Context) error {
 
 	if _, err := pool.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
 		log.Errorf("failed to delete term settings for org %s: %v", orgID, err)
-		return c.JSON(http.StatusInternalServerError, echo.Map{
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
 		})

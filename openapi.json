@@ -9,6 +9,12 @@
       "url": "https://www.gnu.org/licenses/gpl-3.0.en.html"
     }
   },
+  "servers": [
+    {
+      "url": "/api/cost-management/v1",
+      "description": "Default API prefix"
+    }
+  ],
   "paths": {
     "/recommendations/openshift": {
       "get": {
@@ -212,12 +218,13 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Pagination limit",
+            "description": "Number of results per page (1-1000, default 100). 0 is treated as default.",
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 100
             }
           },
           {
@@ -381,7 +388,11 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
                       "type": "string",
                       "example": "unable to fetch records from database"
                     }
@@ -551,11 +562,11 @@
           {
             "name": "format",
             "in": "query",
-            "description": "Response format. CSV export is supported for namespace recommendations. Maximum number of records is 1000 for CSV downloads. The 'offset' parameter can be used for pagination with both formats.",
+            "description": "Response format. Only JSON is currently supported for namespace recommendations.",
             "required": false,
             "schema": {
                 "type": "string",
-                "enum": ["json", "csv"],
+                "enum": ["json"],
                 "default": "json"
             }
           },
@@ -655,12 +666,13 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Pagination limit",
+            "description": "Number of results per page (1-1000, default 100). 0 is treated as default.",
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 100
             }
           },
           {
@@ -1144,7 +1156,7 @@
             }
           },
           "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "503": { "description": "Service unavailable due to a database error" }
         }
       }
@@ -1249,7 +1261,7 @@
             }
           },
           "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "503": { "description": "Service unavailable due to a database error" }
         }
       }
@@ -1270,7 +1282,7 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
@@ -1343,7 +1355,7 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
@@ -1393,7 +1405,7 @@
             }
           },
           "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
@@ -1453,7 +1465,7 @@
             }
           },
           "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "404": { "description": "Plugin disabled — enable the `node` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
@@ -1514,7 +1526,7 @@
             }
           },
           "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "503": { "description": "Service unavailable" }
         }
       }
@@ -1535,8 +1547,8 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "403": { "description": "User is not authorized (RBAC)" },
+          "503": { "description": "Service unavailable due to a database error" }
         }
       }
     },
@@ -1590,8 +1602,8 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "403": { "description": "User is not authorized (RBAC)" },
+          "503": { "description": "Service unavailable due to a database error" }
         }
       }
     },
@@ -1680,8 +1692,8 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "403": { "description": "User is not authorized (RBAC)" },
+          "503": { "description": "Service unavailable due to a database error" }
         }
       }
     },
@@ -1710,8 +1722,8 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "403": { "description": "User is not authorized (RBAC)" },
+          "503": { "description": "Service unavailable due to a database error" }
         }
       },
       "put": {
@@ -1756,9 +1768,72 @@
             }
           },
           "400": { "description": "Invalid request body" },
-          "401": { "description": "User is not authorized" },
+          "403": { "description": "User is not authorized (RBAC)" },
           "403": { "description": "Field is locked by environment variable" },
-          "500": { "description": "Internal server error" }
+          "503": { "description": "Service unavailable due to a database error" }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Service health check",
+        "description": "Returns the service status. Not prefixed with `/api/cost-management/v1`.",
+        "operationId": "getStatus",
+        "servers": [{ "url": "/" }],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/namespaces": {
+      "get": {
+        "tags": ["Namespace Recommendations"],
+        "summary": "List namespace recommendations (canonical path)",
+        "description": "Canonical plural path for namespace recommendations. Identical behavior to `/openshift/namespace/recommendations`.",
+        "operationId": "getNamespaceRecommendationListCanonical",
+        "x-plugin-required": "namespace",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 1000 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0, "minimum": 0 } },
+          { "name": "order_by", "in": "query", "schema": { "type": "string" } },
+          { "name": "order_how", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"] } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated list of namespace recommendations" },
+          "403": { "description": "User is not authorized (RBAC)" },
+          "404": { "description": "Plugin disabled — enable the `namespace` plugin via ROS_ENABLED_PLUGINS" },
+          "503": { "description": "Service unavailable due to a database error" }
+        }
+      }
+    },
+    "/recommendations/openshift/namespaces/{recommendation-id}": {
+      "get": {
+        "tags": ["Namespace Recommendations"],
+        "summary": "Get namespace recommendation detail (canonical path)",
+        "description": "Canonical plural path for a single namespace recommendation. Identical to `/recommendations/openshift/namespace/{recommendation-id}`.",
+        "operationId": "getNamespaceRecommendationDetailCanonical",
+        "x-plugin-required": "namespace",
+        "parameters": [
+          { "name": "recommendation-id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Namespace recommendation detail" },
+          "403": { "description": "User is not authorized (RBAC)" },
+          "404": { "description": "Recommendation not found or plugin disabled" },
+          "503": { "description": "Service unavailable due to a database error" }
         }
       }
     }
@@ -1876,7 +1951,7 @@
               "limit": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 10
+                "maximum": 1000
               },
               "offset": {
                 "type": "integer",
@@ -2034,6 +2109,9 @@
           "workload_type": {
             "type": "string",
             "example": "deploymentconfig"
+          },
+          "gpu_recommendation": {
+            "$ref": "#/components/schemas/GPURecommendation"
           }
         }
       },

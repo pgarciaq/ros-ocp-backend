@@ -127,7 +127,7 @@ func GetRecommendationSet(c echo.Context) error {
 
 	if error != nil {
 		log.Errorf("unable to fetch recommendation %s; error %v", RecommendationIDStr, error)
-		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
 
 	if len(recommendationSet.Recommendations) != 0 {
@@ -241,17 +241,18 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 		return apiErrResponse(c, getNSRecordErr, http.StatusNotFound, "unable to fetch project recommendation")
 	}
 
-	if len(nsRecommendationSet.Recommendations) != 0 {
-		nsRecommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
-			handlerName,
-			nsRecommendationSet.ID,
-			nsRecommendationSet.ClusterUUID,
-			unitChoices,
-			setk8sUnits,
-			nsRecommendationSet.Recommendations,
-			&nsRecommendationSet.StoredVariationPcts,
-		)
+	if len(nsRecommendationSet.Recommendations) == 0 {
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
+	nsRecommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
+		handlerName,
+		nsRecommendationSet.ID,
+		nsRecommendationSet.ClusterUUID,
+		unitChoices,
+		setk8sUnits,
+		nsRecommendationSet.Recommendations,
+		&nsRecommendationSet.StoredVariationPcts,
+	)
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, nsRecommendationSet)
 }
@@ -637,7 +638,7 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 	recSet, err := recSetVar.GetRecommendationSetByID(orgID, idStr, userPerms)
 	if err != nil {
 		log.Errorf("legacy fallback: unable to fetch recommendation %s; %v", idStr, err)
-		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
 
 	if len(recSet.Recommendations) == 0 {
