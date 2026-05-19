@@ -425,7 +425,7 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 | **Double CSV fetch** | Eliminated for hooks on the container path by passing **`[]MetricRow`** from the primary ingestor (§4). Hooks must not re-download the same URL unless a future use case explicitly requires it. |
 | **Migration skew when toggling plugins** | Document: enabling a plugin on an old DB requires migrations; CI runs full migration suite with all plugins registered. |
 | **Shared table ownership** | **Core** owns org/cluster/account globals; plugins own domain digest and recommendation tables. |
-| **RBAC / OpenAPI drift** | Gate **APIProvider** registration behind existing RBAC middleware; OpenAPI generation must include enabled routes only or document full surface as “implementation toggled.” |
+| **RBAC / OpenAPI drift** | **APIProvider** registration is gated behind existing RBAC middleware. The dynamic `/openapi.json` endpoint (`ServeFilteredOpenAPI` in `openapi_handler.go`) filters out disabled plugin paths at runtime via the `x-plugin-required` annotation on each operation. |
 
 ---
 
