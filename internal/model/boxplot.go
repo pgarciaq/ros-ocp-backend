@@ -51,8 +51,10 @@ func (bg BucketGranularity) sql() string {
 	switch bg {
 	case BucketGranularity6Hour:
 		return "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'"
-	default:
+	case BucketGranularityDaily:
 		return "date_trunc('day', sample_time AT TIME ZONE 'UTC')"
+	default:
+		panic(fmt.Sprintf("unhandled BucketGranularity: %d", bg))
 	}
 }
 

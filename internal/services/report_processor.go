@@ -32,52 +32,21 @@ import (
 
 var cfg *config.Config = config.GetConfig()
 
-// nativeCSVIngestViaPlugins runs the enabled CSVIngestor (if any) for csvType,
-// then matching IngestHooks when ingest produced rows. Returns handled=false when
-// no ingestor claimed csvType (caller should use the legacy fallback path).
+// nativeCSVIngestViaPlugins delegates to [plugin.DispatchCSV] which finds the
+// enabled CSVIngestor for csvType, runs IngestCSV, then fires matching IngestHooks.
+// Returns handled=false when no ingestor claimed csvType (caller should use the
+// legacy fallback path).
 func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID, csvType string) (handled bool, err error) {
-	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
-	var matched plugin.CSVIngestor
-	for _, ing := range ingestors {
-		for _, t := range ing.SupportedCSVTypes() {
-			if t == csvType {
-				matched = ing
-				break
-			}
-		}
-		if matched != nil {
-			break
-		}
-	}
-	if matched == nil {
-		return false, nil
-	}
-
-	rows, err := matched.IngestCSV(ctx, pool, r, orgID, clusterUUID)
+	handled, _, hookErrs, err := plugin.DispatchCSV(ctx, pool, r, orgID, clusterUUID, csvType)
 	if err != nil {
-		return true, err
+		return handled, err
 	}
-
-	if len(rows) > 0 {
-		runIngestHooksForCSV(ctx, pool, csvType, rows, orgID, clusterUUID, plugin.ByTrait[plugin.IngestHook]())
-	}
-
-	return true, nil
-}
-
-func runIngestHooksForCSV(ctx context.Context, pool *pgxpool.Pool, csvType string, rows []ingestion.MetricRow, orgID, clusterUUID string, hooks []plugin.IngestHook) {
 	log := logging.GetLogger()
-	for _, hook := range hooks {
-		for _, ht := range hook.HookAfterCSVTypes() {
-			if ht == csvType {
-				if hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID); hookErr != nil {
-					log.Warnf("IngestHook %s failed (non-fatal): %v", hook.Name(), hookErr)
-					PluginHookErrors.WithLabelValues(hook.Name(), "after_ingest").Inc()
-				}
-				break
-			}
-		}
+	for _, he := range hookErrs {
+		log.Warnf("IngestHook %s failed (non-fatal): %v", he.HookName, he.Err)
+		PluginHookErrors.WithLabelValues(he.HookName, "after_ingest").Inc()
 	}
+	return handled, nil
 }
 
 // processContainerDigestFallback mirrors container CSV ingestion when no CSVIngestor handles "container":
