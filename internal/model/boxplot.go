@@ -39,11 +39,28 @@ type ContainerKey struct {
 	ContainerName string
 }
 
+// BucketGranularity constrains the SQL bucketing to known-safe expressions.
+type BucketGranularity int
+
+const (
+	BucketGranularity6Hour BucketGranularity = iota
+	BucketGranularityDaily
+)
+
+func (bg BucketGranularity) sql() string {
+	switch bg {
+	case BucketGranularity6Hour:
+		return "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'"
+	default:
+		return "date_trunc('day', sample_time AT TIME ZONE 'UTC')"
+	}
+}
+
 // TermWindow defines the time window and bucketing for a recommendation term.
 type TermWindow struct {
 	Name        string
 	WindowHours int
-	BucketSQL   string // SQL expression for bucketing
+	Bucket      BucketGranularity
 	BucketKey   string // Go time format for the bucket key in plots_data
 }
 
@@ -52,19 +69,19 @@ var defaultTermWindows = map[string]TermWindow{
 	"short_term": {
 		Name:        "short_term",
 		WindowHours: 24,
-		BucketSQL:   "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'",
+		Bucket:      BucketGranularity6Hour,
 		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"medium_term": {
 		Name:        "medium_term",
 		WindowHours: 7 * 24,
-		BucketSQL:   "date_trunc('day', sample_time AT TIME ZONE 'UTC')",
+		Bucket:      BucketGranularityDaily,
 		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"long_term": {
 		Name:        "long_term",
 		WindowHours: 15 * 24,
-		BucketSQL:   "date_trunc('day', sample_time AT TIME ZONE 'UTC')",
+		Bucket:      BucketGranularityDaily,
 		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 }
@@ -115,17 +132,16 @@ func loadTermWindows(ctx context.Context, pool *pgxpool.Pool, orgID string) (map
 	for _, c := range customs {
 		name := termKeyNames[c.Ord-1] + "_term"
 		windowHours := c.WindowDays * 24
-		tw := TermWindow{
+		bucket := BucketGranularityDaily
+		if c.WindowDays <= 1 {
+			bucket = BucketGranularity6Hour
+		}
+		result[name] = TermWindow{
 			Name:        name,
 			WindowHours: windowHours,
+			Bucket:      bucket,
 			BucketKey:   "2006-01-02T15:04:05.000Z",
 		}
-		if c.WindowDays <= 1 {
-			tw.BucketSQL = "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'"
-		} else {
-			tw.BucketSQL = "date_trunc('day', sample_time AT TIME ZONE 'UTC')"
-		}
-		result[name] = tw
 	}
 	return result, nil
 }
@@ -165,7 +181,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 		  AND sample_time >= $6 AND sample_time < $7
 		GROUP BY bucket
 		ORDER BY bucket`,
-		tw.BucketSQL)
+		tw.Bucket.sql())
 
 	rows, err := pool.Query(ctx, query,
 		key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.ContainerName,
@@ -255,7 +271,7 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		  AND sample_time >= $4 AND sample_time < $5
 		GROUP BY bucket
 		ORDER BY bucket`,
-		tw.BucketSQL)
+		tw.Bucket.sql())
 
 	rows, err := pool.Query(ctx, query,
 		key.OrgID, key.ClusterUUID, key.Namespace,

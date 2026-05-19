@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ROS OCP Backend API",
-    "description": "GO Echo API for Resource Optimization OCP Backend Service",
+    "description": "GO Echo API for Resource Optimization OCP Backend Service.\n\n**Plugin system:** Endpoints are served by plugins that can be individually enabled or disabled via `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` environment variables. Disabled plugin routes return `404 Not Found`. Available plugins: `container`, `namespace`, `gpu`, `node`, `pvc`, `snapshot`, `kruize`. Default: all native plugins enabled, kruize disabled. See docs/architecture/plugin-architecture.md for details.",
     "version": "v1",
     "license": {
       "name": "GPLv3",
@@ -16,6 +16,7 @@
           "Optimizations"
         ],
         "summary": "Get all recommendations",
+        "x-plugin-required": "container",
         "description": "This feature is in limited preview for select customers. Refer to [this link](https://github.com/RedHatInsights/ros-ocp-backend/blob/main/openapi.json) if you want checkout the OpenAPI spec file.",
         "externalDocs": {
           "description": "Please refer to this blog post if you want to be included in the preview",
@@ -1687,6 +1688,7 @@
         "summary": "GPU recommendations summary",
         "description": "Lightweight counts for MIG vs time-slicing listings, distinct GPU triples ever analyzed, and clusters with GPU digest data.",
         "operationId": "getGpuRecommendationsSummary",
+        "x-plugin-required": "gpu",
         "responses": {
           "200": {
             "description": "GPU strategy and inventory summary",
@@ -1697,6 +1699,7 @@
             }
           },
           "401": { "description": "User is not authorized" },
+          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
       }
@@ -1707,6 +1710,7 @@
         "summary": "Get GPU time-slicing recommendations (node level)",
         "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing.",
         "operationId": "getGpuTimeslicingRecommendations",
+        "x-plugin-required": "gpu",
         "parameters": [
           {
             "name": "node_name",
@@ -1768,6 +1772,7 @@
             }
           },
           "401": { "description": "User is not authorized" },
+          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
       }
@@ -1778,6 +1783,7 @@
         "summary": "List MIG GPU profile recommendations",
         "description": "Returns container-level rows where the recommended GPU profile is a MIG slice (not `full_gpu`). Useful for focusing on MIG right-sizing without filtering the full container recommendation list.",
         "operationId": "getGpuMigRecommendations",
+        "x-plugin-required": "gpu",
         "parameters": [
           {
             "name": "limit",
@@ -1816,6 +1822,7 @@
           },
           "400": { "description": "Bad request" },
           "401": { "description": "User is not authorized" },
+          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
       }
@@ -1826,6 +1833,7 @@
         "summary": "Get node CPU and memory utilization recommendations",
         "description": "Returns Tier-1 node utilization recommendations: CPU/memory p50/p95, overcommit ratio, underutilized / overcommitted flags, stranded-resource hints, and trend slope.",
         "operationId": "getNodeUtilizationRecommendations",
+        "x-plugin-required": "node",
         "parameters": [
           {
             "name": "cluster_uuid",
@@ -1874,6 +1882,7 @@
           },
           "400": { "description": "Bad request" },
           "401": { "description": "User is not authorized" },
+          "404": { "description": "Plugin disabled — enable the `node` plugin via ROS_ENABLED_PLUGINS" },
           "503": { "description": "Service unavailable" }
         }
       }
@@ -1883,6 +1892,7 @@
         "tags": ["Node Recommendations"],
         "summary": "Get node utilization recommendations (deprecated)",
         "deprecated": true,
+        "x-plugin-required": "node",
         "description": "Deprecated alias for `GET /recommendations/openshift/nodes`. Use the canonical `/nodes` path. Responses may include `Deprecation: true` and a warning in the JSON body.",
         "operationId": "getNodeUtilizationRecommendationsDeprecated",
         "parameters": [
