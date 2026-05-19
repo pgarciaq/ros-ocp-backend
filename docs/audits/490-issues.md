@@ -16,6 +16,7 @@
 - [P2 Medium Issues (14-233, includes demoted #15)](#p2--medium)
 - [P3 Low Issues (234-490)](#p3--low)
 - [No-op Because Kruize (moved from P0–P3)](#no-op-because-kruize)
+- [New Issues from Plugin Rearchitecture](#new-issues-from-plugin-rearchitecture)
 - [Remediation Plan](#remediation-plan)
 
 ---
@@ -36,9 +37,10 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 43 | 114 |
+| P2 | 157 | 45 | 112 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
+| **New (plugin rearch)** | 5 | 0 | 5 |
 
 Additional fixes from the P0/P1 pass:
 
@@ -50,6 +52,8 @@ Additional fixes from the P0/P1 pass:
 **P2 batch 2** (May 2026) closed **#123**, **#129**, **#131**, **#173**, **#182**, **#200**, **#205**, **#207** — pagination links, namespace paging, term config caching, pool config, composite indexes, config validation. **#185** deferred (matches Koku convention: no prod guardrails, Clowder overrides in production). **#206** verified already correct.
 
 **P2 batch 3** (May 2026) closed **16** issues with commits — lifecycle correctness (**#134**, **#135**, **#136**, **#137**, **#143**, **#197** → `f56c2d2`); GORM/model allowlists + chain hygiene (**#172**, **#174**, **#175** → `53bf35d`); date/time normalization + injectable clock (**#159**, **#163**, **#164**, **#170** → `3485f0a`); API handler context + cache headers (**#139**, **#202** → `7fb6cdd`). **#204** verified — existing handlers already return generic messages for 5xx; no code change. Supplementary migration fix: **000061** via commit `99576b4` (no separate issue row). **Running total (P2 audit tally):** **43** fixed / **114** remaining — batches **1–3** plus earlier **#37** / **#217** closures counted in [Resolution Status](#resolution-status).
+
+**Plugin rearchitecture audit** (May 2026): Post-plugin rearchitecture review closed **#183** (GPU thresholds via `os.Getenv` → moved into `Config` struct, commit `ac44a41`) and **superseded #187** (`DISABLE_NAMESPACE_RECOMMENDATION` env var replaced by plugin system: `ROS_DISABLED_PLUGINS=namespace`). **#190** partially superseded — `ROS_ENABLED_PLUGINS` replaces `USE_NATIVE_ENGINE` (commit `5188053`), but stale data from prior engine remains uncleared on toggle. **#67** improved — disabled plugin routes now return 404 (commit `11337ae`). **5 new issues** identified — see [New Issues from Plugin Rearchitecture](#new-issues-from-plugin-rearchitecture). **Running total:** **45** fixed / **112** remaining P2.
 
 ## Repository Impact Summary
 
@@ -882,9 +886,11 @@ Additional fixes from the P0/P1 pass:
 - Negative lookback flips windows without validation—could ingest ancient noise or empty ranges.
 
 **#183 — GPU thresholds bypass central config via `os.Getenv`**
+- **Status:** ✅ Fixed (commit `ac44a41` — plugin rearchitecture)
 - Repo: ros-ocp-backend
 - File: `internal/engine/gpu_recommender.go`
 - GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- **Resolution:** GPU thresholds moved from `os.Getenv` into the central `Config` struct; `InitGPUEngine(cfg)` applies values at startup.
 
 **#184 — `allow.auto.create.topics: true` on consumer and producer**
 - Repo: ros-ocp-backend
@@ -901,8 +907,10 @@ Additional fixes from the P0/P1 pass:
 - `mapstructure.Decode` into partially-filled structs makes unset env vars silently zero-valued—production misconfiguration.
 
 **#187 — `DISABLE_NAMESPACE_RECOMMENDATION` documented but never implemented**
+- **Status:** ✅ Superseded (plugin rearchitecture — `ROS_DISABLED_PLUGINS=namespace` disables the namespace plugin entirely)
 - Repo: ros-ocp-backend
 - An env var or toggle is documented or defaulted but no code reads it, so operators believe they disabled behavior that still runs.
+- **Resolution:** The plugin system (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) replaces ad-hoc feature toggles. Each recommendation type is a plugin that can be individually disabled.
 
 **#188 — `ROS_STALENESS_THRESHOLD_HOURS` has no `viper.SetDefault`**
 - Repo: ros-ocp-backend
@@ -2524,3 +2532,44 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 - **#172 / #174 (dynamic GORM column keys)** — If Echo query parsing ever maps user-controlled strings to column names, classification rises toward **P1** security; as written it is defensive depth (**P2**) pending proof of untrusted keys reaching `Where`.
 
 - **#232 vs #305:** Same mitigation theme (validate RBAC pagination URLs); consider merging in a future editorial pass—left distinct because one emphasizes recursion (**#232**) and the other same-host validation (**#305**).
+
+---
+
+## New Issues from Plugin Rearchitecture
+
+*Identified: 2026-05-20, post-plugin-rearchitecture audit.*
+
+**#491 — Plugin `init()` registration order is non-deterministic**
+- Severity: P3
+- Repo: ros-ocp-backend
+- Files: `internal/plugins/*/plugin.go`
+- Go's `init()` execution order across packages is undefined by the spec. If two plugins register the same route prefix, the winner depends on link order. Currently mitigated by `APIProvider.RoutePrefix()` uniqueness check in `registry.go` (panics on collision), but no test exercises collision detection at registration time.
+- Effort: Small (add test)
+
+**#492 — `PluginContext` defined but unused in production**
+- Severity: P3
+- Repo: ros-ocp-backend
+- File: `internal/plugin/context.go`
+- The struct exists for future dependency injection but no production code passes a `PluginContext` to plugins. It's dead infrastructure until plugins need shared dependencies (DB pool, config, logger).
+- Effort: None (informational — wire when needed)
+
+**#493 — Kruize plugin has no functional implementation**
+- Severity: P2
+- Repo: ros-ocp-backend
+- File: `internal/plugins/kruize/plugin.go`
+- The Kruize plugin is a marker (satisfies `Plugin` interface) but doesn't implement `CSVIngestor`, `APIProvider`, or `RetentionProvider`. Enabling it only disables native plugins via mutual exclusivity; it doesn't route to old Kruize code paths. If someone enables Kruize expecting the legacy behavior, **no data will be processed** and no errors will surface.
+- Effort: Medium (document prominently, or wire legacy dispatch)
+
+**#494 — No integration test for full plugin-dispatched CSV-to-DB lifecycle**
+- Severity: P2
+- Repo: ros-ocp-backend
+- Files: `internal/plugins/`, `internal/services/report_processor.go`
+- Unit tests cover registration and trait dispatch. No integration test processes a CSV through the plugin-dispatched path and verifies end-to-end DB results match pre-plugin behavior. Regression risk on refactors.
+- Effort: Medium
+
+**#495 — Disabled plugin routes return 404 but OpenAPI still documents them**
+- Severity: P2
+- Repo: ros-ocp-backend
+- Files: `internal/api/server.go`, `openapi.json`
+- Commit `11337ae` added 404 guards for disabled plugins. OpenAPI spec still shows all routes as available regardless of plugin state. SDK-generated clients will call dead endpoints and get unexpected 404s with no schema-level indication.
+- Effort: Small (add OpenAPI note or conditional generation)
