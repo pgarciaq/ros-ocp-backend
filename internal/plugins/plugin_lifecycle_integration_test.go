@@ -12,7 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 
-	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins" // registers all plugins
 )
 
 const containerCSVWithGPU = "" +
@@ -179,9 +179,8 @@ func TestPluginLifecycle_NamespaceCSVToDigests(t *testing.T) {
 	assert.Greater(t, nsSamples, 0, "namespace plugin should persist namespace_usage_samples")
 }
 
-// TestPluginLifecycle_EndToEnd_FullDispatch tests the exact nativeCSVIngestViaPlugins
-// pattern as production: find matching ingestor, call IngestCSV, then dispatch hooks.
-// This validates the full lifecycle without importing the services package.
+// TestPluginLifecycle_EndToEnd_FullDispatch uses plugin.DispatchCSV — the same
+// function production calls — to validate the full CSV→DB lifecycle in one shot.
 func TestPluginLifecycle_EndToEnd_FullDispatch(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
@@ -191,38 +190,11 @@ func TestPluginLifecycle_EndToEnd_FullDispatch(t *testing.T) {
 	orgID := "org-plugin-lifecycle-e2e"
 	clusterUUID := "e2e2e2e2-1111-2222-3333-444444444444"
 
-	csvType := "container"
-	r := strings.NewReader(containerCSVWithGPU)
-
-	ingestors := plugin.ByTrait[plugin.CSVIngestor]()
-	var matched plugin.CSVIngestor
-	for _, ing := range ingestors {
-		for _, ct := range ing.SupportedCSVTypes() {
-			if ct == csvType {
-				matched = ing
-				break
-			}
-		}
-		if matched != nil {
-			break
-		}
-	}
-	require.NotNil(t, matched, "should find container CSVIngestor")
-
-	rows, err := matched.IngestCSV(ctx, pool, r, orgID, clusterUUID)
+	handled, rows, hookErrs, err := plugin.DispatchCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID, "container")
 	require.NoError(t, err)
+	assert.True(t, handled, "container CSVIngestor should claim the type")
+	assert.Empty(t, hookErrs, "no hook errors expected for valid GPU data")
 	require.Greater(t, len(rows), 0)
-
-	hooks := plugin.ByTrait[plugin.IngestHook]()
-	for _, hook := range hooks {
-		for _, ht := range hook.HookAfterCSVTypes() {
-			if ht == csvType {
-				hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID)
-				require.NoError(t, hookErr)
-				break
-			}
-		}
-	}
 
 	var containerCount int
 	err = pool.QueryRow(ctx,
