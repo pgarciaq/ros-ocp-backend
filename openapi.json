@@ -467,11 +467,11 @@
         "summary": "Get recommendation for container",
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Container recommendation detail with plots data",
             "content": {
-              "application/json; charset=UTF-8": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecommendationBoxPlots"
+                  "$ref": "#/components/schemas/Recommendations"
                 }
               }
             }
@@ -1830,7 +1830,16 @@
           { "name": "recommendation-id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "200": { "description": "Namespace recommendation detail" },
+          "200": {
+            "description": "Namespace recommendation detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceDetailResponse"
+                }
+              }
+            }
+          },
           "403": { "description": "User is not authorized (RBAC)" },
           "404": { "description": "Recommendation not found or plugin disabled" },
           "503": { "description": "Service unavailable due to a database error" }
@@ -1840,98 +1849,6 @@
   },
   "components": {
     "schemas": {
-      "CPURequestOptimisedNotification": {
-        "type": "object",
-        "properties": {
-          "323004": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "integer",
-                "example": 323004
-              },
-              "message": {
-                "type": "string",
-                "example": "Workload is optimised wrt CPU REQUESTS, no changes needed"
-              },
-              "type": {
-                "type": "string",
-                "example": "notice"
-              }
-            }
-          }
-        }
-      },
-      "CPULimitOptimisedNotification": {
-        "type": "object",
-        "properties": {
-          "323005": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "integer",
-                "example": 323005
-              },
-              "message": {
-                "type": "string",
-                "example": "Workload is optimised wrt CPU LIMITS, no changes needed"
-              },
-              "type": {
-                "type": "string",
-                "example": "notice"
-              }
-            }
-          }
-        }
-      },
-      "MemoryRequestOptimisedNotification": {
-        "type": "object",
-        "properties": {
-          "324003": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "integer",
-                "example": 324003
-              },
-              "message": {
-                "type": "string",
-                "example": "Workload is optimised wrt MEMORY REQUESTS, no changes needed"
-              },
-              "type": {
-                "type": "string",
-                "example": "notice"
-              }
-            }
-          }
-        }
-      },
-      "MemoryLimitOptimisedNotification": {
-        "type": "object",
-        "properties": {
-          "324004": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "integer",
-                "example": 324004
-              },
-              "message": {
-                "type": "string",
-                "example": "Workload is optimised wrt MEMORY LIMITS, no changes needed"
-              },
-              "type": {
-                "type": "string",
-                "example": "notice"
-              }
-            }
-          }
-        }
-      },
-      "NilNotification": {
-        "type": "object",
-        "additionalProperties": false
-      },
       "RecommendationList": {
         "type": "object",
         "properties": {
@@ -1980,10 +1897,16 @@
       },
       "Recommendations": {
         "type": "object",
+        "description": "Container recommendation detail (DetailResponse). Used in both list and detail endpoints.",
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Deterministic UUID v5 derived from cluster_uuid/project/workload/container",
+            "example": "721eb376-13a9-43ab-868e-755aa1ce7f2a"
+          },
           "cluster_alias": {
             "type": "string",
-            "example": "test_cost_ocp_ros_3c462dbe"
+            "example": "my-ocp-cluster"
           },
           "cluster_uuid": {
             "type": "string",
@@ -1991,868 +1914,349 @@
           },
           "container": {
             "type": "string",
-            "example": "pod-ros-A11"
-          },
-          "id": {
-            "type": "string",
-            "example": "721eb376-13a9-43ab-868e-755aa1ce7f2a"
-          },
-          "last_reported": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-04-18T15:48:54.000Z"
+            "example": "nginx"
           },
           "project": {
             "type": "string",
-            "example": "project-ros-A1"
+            "example": "cost-management"
           },
-          "recommendations": {
-            "type": "object",
-            "properties": {
-              "current": {
-                "type": "object",
-                "properties": {
-                  "limits": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": null,
-                            "nullable": true
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 30.715
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "requests": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": null,
-                            "nullable": true
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 20.391
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "monitoring_end_time": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "recommendation_terms": {
-                "type": "object",
-                "properties": {
-                  "long_term": {
-                    "$ref": "#/components/schemas/LongTermRecommendation"
-                  },
-                  "medium_term": {
-                    "$ref": "#/components/schemas/MediumTermRecommendation"
-                  },
-                  "short_term": {
-                    "$ref": "#/components/schemas/ShortTermRecommendation"
-                  }
-                }
-              }
-            }
+          "workload": {
+            "type": "string",
+            "example": "nginx-deployment"
+          },
+          "workload_type": {
+            "type": "string",
+            "example": "deployment"
           },
           "source_id": {
             "type": "string",
             "example": "0920ff0d-f1d6-4fe2-8bf3-18e6074bd27b"
           },
-          "workload": {
-            "type": "string",
-            "example": "pod-ros-A11"
-          },
-          "workload_type": {
-            "type": "string",
-            "example": "deploymentconfig"
-          },
-          "gpu_recommendation": {
-            "$ref": "#/components/schemas/GPURecommendation"
-          }
-        }
-      },
-      "LongTermRecommendation": {
-        "type": "object",
-        "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 360.2
-          },
-          "monitoring_start_time": {
+          "last_reported": {
             "type": "string",
             "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
+            "example": "2026-01-18T15:48:54.000Z"
           },
-          "recommendation_engines": {
+          "recommendations": {
+            "$ref": "#/components/schemas/DetailRecommendations"
+          },
+          "gpu": {
             "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
+            "description": "GPU recommendations keyed by GPU model name. Present only for containers with attached GPU resources.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GPURecommendation"
+            },
+            "example": {
+              "NVIDIA A100-SXM4-80GB": {
+                "current_gpu_model": "NVIDIA A100-SXM4-80GB",
+                "gpu_classification": "underutilized",
+                "gpu_confidence": 0.85
               }
             }
           }
         }
       },
-      "MediumTermRecommendation": {
+      "NamespaceDetailResponse": {
         "type": "object",
+        "description": "Namespace recommendation detail. Mirrors Recommendations (container) but without container, workload, workload_type, and gpu fields.",
         "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 168.1
-          },
-          "monitoring_start_time": {
+          "id": {
             "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
+            "description": "Deterministic UUID v5 derived from cluster_uuid/project",
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
           },
-          "recommendation_engines": {
-            "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
-            }
-          }
-        }
-      },
-      "ShortTermRecommendation": {
-        "type": "object",
-        "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 24.7
-          },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
-          },
-          "recommendation_engines": {
-            "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
-            }
-          }
-        }
-      },
-      "CostRecommendation": {
-        "type": "object",
-        "properties": {
-          "config": {
-            "type": "object",
-            "properties": {
-              "limits": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 5
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": null,
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 6700
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "Mi"
-                      }
-                    }
-                  }
-                }
-              },
-              "requests": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 3
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": null,
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 700
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "Mi"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "notifications": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CPURequestOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/CPULimitOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/MemoryRequestOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/MemoryLimitOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/NilNotification"
-              }
-            ]
-          },
-          "variation": {
-            "type": "object",
-            "properties": {
-              "limits": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 94.12,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 40,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  }
-                }
-              },
-              "requests": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 22,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 45,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "PerformanceRecommendation": {
-        "type": "object",
-        "properties": {
-          "config": {
-            "type": "object",
-            "properties": {
-              "limits": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 622
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "m",
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 500
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "Mi"
-                      }
-                    }
-                  }
-                }
-              },
-              "requests": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 3.92
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": null,
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 6000
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "Mi"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "notifications": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CPURequestOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/CPULimitOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/MemoryRequestOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/MemoryLimitOptimisedNotification"
-              },
-              {
-                "$ref": "#/components/schemas/NilNotification"
-              }
-            ]
-          },
-          "variation": {
-            "type": "object",
-            "properties": {
-              "limits": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": -94,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 60,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  }
-                }
-              },
-              "requests": {
-                "type": "object",
-                "properties": {
-                  "cpu": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 20,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  },
-                  "memory": {
-                    "type": "object",
-                    "properties": {
-                      "amount": {
-                        "type": "number",
-                        "example": 40,
-                        "format": "float"
-                      },
-                      "format": {
-                        "type": "string",
-                        "example": "percent"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "RecommendationBoxPlots": {
-        "type": "object",
-        "properties": {
           "cluster_alias": {
             "type": "string",
-            "example": "test_cost_ocp_ros_3c462dbe"
+            "example": "my-ocp-cluster"
           },
           "cluster_uuid": {
             "type": "string",
             "example": "d29c4b8b-f1a8-471c-ab95-b64e36bb51a9"
           },
-          "container": {
-            "type": "string",
-            "example": "pod-ros-A11"
-          },
-          "id": {
-            "type": "string",
-            "example": "721eb376-13a9-43ab-868e-755aa1ce7f2a"
-          },
-          "last_reported": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-04-18T15:48:54.000Z"
-          },
           "project": {
             "type": "string",
-            "example": "project-ros-A1"
-          },
-          "recommendations": {
-            "type": "object",
-            "properties": {
-              "current": {
-                "type": "object",
-                "properties": {
-                  "limits": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": null,
-                            "nullable": true
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 30.715
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "requests": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": null,
-                            "nullable": true
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 20.391
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "monitoring_end_time": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "recommendation_terms": {
-                "type": "object",
-                "properties": {
-                  "long_term": {
-                    "$ref": "#/components/schemas/LongTermRecommendationBoxPlots"
-                  },
-                  "medium_term": {
-                    "$ref": "#/components/schemas/MediumTermRecommendationBoxPlots"
-                  },
-                  "short_term": {
-                    "$ref": "#/components/schemas/ShortTermRecommendationBoxPlots"
-                  }
-                }
-              }
-            }
+            "example": "cost-management"
           },
           "source_id": {
             "type": "string",
             "example": "0920ff0d-f1d6-4fe2-8bf3-18e6074bd27b"
           },
-          "workload": {
+          "last_reported": {
             "type": "string",
-            "example": "pod-ros-A11"
+            "format": "date-time",
+            "example": "2026-01-18T15:48:54.000Z"
           },
-          "workload_type": {
-            "type": "string",
-            "example": "deploymentconfig"
+          "recommendations": {
+            "$ref": "#/components/schemas/DetailRecommendations"
           }
         }
       },
-      "LongTermRecommendationBoxPlots": {
+      "DetailRecommendations": {
         "type": "object",
+        "description": "Wraps term-level recommendations with monitoring_end_time, current resource config, replicas, savings estimate, and notifications.",
         "properties": {
-          "duration_in_hours": {
+          "current": {
+            "$ref": "#/components/schemas/ResourceConfig"
+          },
+          "replicas": {
+            "$ref": "#/components/schemas/ReplicaInfo"
+          },
+          "estimated_monthly_savings_usd": {
             "type": "number",
             "format": "float",
-            "example": 360.2
+            "nullable": true,
+            "description": "Estimated total monthly savings across all resource types (CPU, memory) in USD"
           },
-          "monitoring_start_time": {
+          "monitoring_end_time": {
             "type": "string",
             "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
+            "description": "End of the monitoring window used for this recommendation",
+            "example": "2026-01-18T00:00:00Z"
           },
-          "plots": {
-            "$ref": "#/components/schemas/PlotsData"
+          "notifications": {
+            "type": "object",
+            "description": "Top-level notifications aggregated from all terms and engines. Keys are string notification codes.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NotificationEntry"
+            }
           },
-          "recommendation_engines": {
+          "recommendation_terms": {
             "type": "object",
             "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
+              "short_term": {
+                "$ref": "#/components/schemas/TermRecommendation"
               },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
+              "medium_term": {
+                "$ref": "#/components/schemas/TermRecommendation"
+              },
+              "long_term": {
+                "$ref": "#/components/schemas/TermRecommendation"
               }
             }
           }
         }
       },
-      "MediumTermRecommendationBoxPlots": {
+      "ResourceConfig": {
         "type": "object",
+        "description": "CPU and memory resource configuration (used for current config, recommended config, and variation).",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/ResourcePair"
+          },
+          "requests": {
+            "$ref": "#/components/schemas/ResourcePair"
+          }
+        }
+      },
+      "ResourcePair": {
+        "type": "object",
+        "description": "CPU and memory resource values.",
+        "properties": {
+          "cpu": {
+            "$ref": "#/components/schemas/ResourceValue"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ResourceValue"
+          }
+        }
+      },
+      "ResourceValue": {
+        "type": "object",
+        "description": "A single resource value with amount and format.",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Resource amount. For config: cores (CPU) or MiB (memory). For variation: percentage change.",
+            "example": 1.5
+          },
+          "format": {
+            "type": "string",
+            "description": "Unit format: 'cores' for CPU config, 'MiB' for memory config, 'percentage' for variation.",
+            "example": "cores"
+          }
+        }
+      },
+      "ReplicaInfo": {
+        "type": "object",
+        "description": "Pod replica counts for the workload backing this container.",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "description": "Minimum observed replica count",
+            "example": 2
+          },
+          "max": {
+            "type": "integer",
+            "description": "Maximum observed replica count",
+            "example": 5
+          },
+          "avg": {
+            "type": "integer",
+            "description": "Average replica count over the observation window",
+            "example": 3
+          },
+          "desired": {
+            "type": "integer",
+            "description": "Current desired replica count (from Deployment spec). Omitted if unavailable."
+          },
+          "available": {
+            "type": "integer",
+            "description": "Current available replica count. Omitted if unavailable."
+          },
+          "source": {
+            "type": "string",
+            "description": "Source of replica data (e.g. 'kube_state_metrics'). Omitted if unavailable."
+          }
+        }
+      },
+      "NotificationEntry": {
+        "type": "object",
+        "description": "A notification associated with a recommendation.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["INFO", "WARNING", "CRITICAL"],
+            "description": "Severity level",
+            "example": "WARNING"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable notification message",
+            "example": "Less than 4 days of data available for this workload"
+          },
+          "code": {
+            "type": "integer",
+            "description": "Numeric notification code (see notification_code_definitions table)",
+            "example": 1
+          }
+        }
+      },
+      "TermRecommendation": {
+        "type": "object",
+        "description": "Recommendation data for a single term (short_term=24h, medium_term=168h, long_term=360h).",
         "properties": {
           "duration_in_hours": {
             "type": "number",
             "format": "float",
-            "example": 168.1
+            "description": "Duration of the analysis window in hours",
+            "example": 24.0
           },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
+          "notifications": {
+            "type": "object",
+            "description": "Term-level notifications aggregated from cost and performance engines.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NotificationEntry"
+            }
           },
           "plots": {
-            "$ref": "#/components/schemas/PlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           },
           "recommendation_engines": {
             "type": "object",
+            "description": "Cost-optimized and performance-optimized recommendations for this term.",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
+                "$ref": "#/components/schemas/EngineRecommendation"
               },
               "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
+                "$ref": "#/components/schemas/EngineRecommendation"
               }
             }
           }
         }
       },
-      "ShortTermRecommendationBoxPlots": {
+      "EngineRecommendation": {
         "type": "object",
+        "description": "A single engine's (cost or performance) recommendation in the Kruize-compatible nested shape.",
         "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 24.7
+          "config": {
+            "$ref": "#/components/schemas/ResourceConfig",
+            "description": "Recommended resource configuration (requests and limits)"
           },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
+          "variation": {
+            "$ref": "#/components/schemas/ResourceConfig",
+            "description": "Percentage change from current to recommended. Format is 'percentage' for both CPU and memory."
           },
-          "plots": {
-            "$ref": "#/components/schemas/PlotsData"
-          },
-          "recommendation_engines": {
+          "notifications": {
             "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
+            "description": "Engine-level notifications. Keys are string notification codes.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NotificationEntry"
             }
           }
         }
       },
-      "PlotsData": {
+      "NativePlot": {
         "type": "object",
+        "description": "Boxplot data for a term's analysis window. Only present in the detail endpoint response.",
         "properties": {
           "datapoints": {
             "type": "integer",
+            "description": "Number of time buckets in the plots_data map",
             "example": 4
           },
           "plots_data": {
-            "$ref": "#/components/schemas/PlotDetails"
+            "type": "object",
+            "description": "Map of ISO 8601 timestamp → boxplot data for that time bucket.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PlotsBucket"
+            },
+            "example": {
+              "2026-01-15T00:00:00Z": {
+                "cpuUsage": { "min": 0.01, "q1": 0.02, "median": 0.03, "q3": 0.05, "max": 0.08, "format": "cores" },
+                "memoryUsage": { "min": 128, "q1": 256, "median": 384, "q3": 450, "max": 512, "format": "MiB" }
+              }
+            }
           }
         }
       },
-      "PlotDetails": {
+      "PlotsBucket": {
         "type": "object",
+        "description": "CPU and memory boxplot data for a single time bucket.",
         "properties": {
-          "2023-04-01T06:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
+          "cpuUsage": {
+            "$ref": "#/components/schemas/BoxPlotDetails"
           },
-          "2023-04-01T12:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
-          },
-          "2023-04-01T18:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
-          },
-          "2023-04-02T00:00:00Z": {
-            "type": "object",
-            "additionalProperties": false
+          "memoryUsage": {
+            "$ref": "#/components/schemas/BoxPlotDetails"
           }
         }
       },
-      "cpuUsage": {
+      "BoxPlotDetails": {
         "type": "object",
+        "description": "Five-number summary (boxplot) for a resource metric in a time bucket.",
         "properties": {
+          "min": {
+            "type": "number",
+            "format": "float",
+            "description": "Minimum value in the bucket"
+          },
+          "q1": {
+            "type": "number",
+            "format": "float",
+            "description": "First quartile (25th percentile)"
+          },
+          "median": {
+            "type": "number",
+            "format": "float",
+            "description": "Median (50th percentile)"
+          },
+          "q3": {
+            "type": "number",
+            "format": "float",
+            "description": "Third quartile (75th percentile)"
+          },
+          "max": {
+            "type": "number",
+            "format": "float",
+            "description": "Maximum value in the bucket"
+          },
           "format": {
             "type": "string",
+            "description": "Unit: 'cores' for CPU, 'MiB' for memory",
             "example": "cores"
-          },
-          "max": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "median": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "min": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "q1": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "q3": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
           }
         }
-      },
-      "memoryUsage": {
-        "type": "object",
-        "properties": {
-          "format": {
-            "type": "string",
-            "example": "MiB"
-          },
-          "max": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "median": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "min": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "q1": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "q3": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          }
-        }
-      },
-      "cpuUsageFloatComponent": {
-        "type": "number",
-        "example": 0.05,
-        "format": "float"
-      },
-      "memoryUsageFloatComponent": {
-        "type": "number",
-        "example": 238.2,
-        "format": "float"
       },
       "NamespaceRecommendationList": {
         "type": "object",
