@@ -114,6 +114,8 @@ type NativeRecommendationRow struct {
 
 	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
 
+	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
+
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
@@ -138,6 +140,7 @@ type NativeContainerResult struct {
 	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
+	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
@@ -225,6 +228,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.notification_codes, rs.confidence_level, rs.stale,
 			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
 			rs.estimated_monthly_savings_usd,
+			rs.monitoring_end_time,
 			rs.updated_at,
 			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
@@ -299,6 +303,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
 	rs.estimated_monthly_savings_usd,
+	rs.monitoring_end_time,
 	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
@@ -442,6 +447,13 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			}
 		}
 
+		var maxMonEnd time.Time
+		for _, r := range rowGroup {
+			if r.MonitoringEndTime != nil && r.MonitoringEndTime.After(maxMonEnd) {
+				maxMonEnd = *r.MonitoringEndTime
+			}
+		}
+
 		result := NativeContainerResult{
 			ID:                      NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
 			ClusterAlias:            first.ClusterAlias,
@@ -454,6 +466,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			LastReported:            first.LastReported.Format(time.RFC3339),
 			Replicas:                replicas,
 			EstimatedMonthlySavings: first.EstimatedSavingsUSD,
+			MonitoringEndTime:       maxMonEnd,
 			Recommendations:         make(map[string]TermRecommendation),
 		}
 
