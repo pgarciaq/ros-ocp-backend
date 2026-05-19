@@ -553,7 +553,7 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 	default:
 		interfaceSlice := make([]any, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
+			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, results[i].MonitoringEndTime)
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
 		setRecommendationNoStore(c)
