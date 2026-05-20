@@ -680,3 +680,35 @@ within offset/limit performance. Prioritize when:
 - A customer reports slow pagination on deep pages
 - The history table exceeds 100k rows per org
 - The UI moves to infinite-scroll (no page numbers)
+
+---
+
+## GPU Summary `timeslicing.count` Divergence
+
+**Severity:** Cosmetic (no UI consumers)
+
+The `/recommendations/openshift/gpu` summary endpoint returns
+`timeslicing.count` based on `CountNodeGPUTriples` (node×GPU-model pairs with
+fresh telemetry data). The `/recommendations/openshift/gpu/timeslicing` detail
+endpoint additionally runs `ComputeNodeTimeslicingRec`, which may reject groups
+where utilization is too high for sharing (replicas < 2), where no containers
+classify as underutilized, or where MIG takes precedence.
+
+This means `timeslicing.count` can be > 0 while the detail endpoint returns
+empty `data`. The count represents "GPU node groups with recent telemetry"
+rather than "actionable time-slicing recommendations."
+
+### Impact
+
+None currently — no UI or external service consumes this endpoint.
+
+### Resolution Options
+
+1. **Rename field** to `gpu_node_groups` and document as "monitored groups"
+2. **Run the engine** on all triples during summary (adds query cost)
+3. **Accept the divergence** and document in OpenAPI (current choice)
+
+### When to Fix
+
+When a UI component or external consumer starts using this endpoint and the
+mismatch causes user confusion.
