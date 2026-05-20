@@ -27,6 +27,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 	orgIDStr := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgIDStr)
 
 	opts, err := listoptions.ListAPIOptions(c, listoptions.DefaultGpuMigOrderBy, listoptions.GpuMigAllowedOrderBy)
 	if err != nil {
@@ -49,14 +50,14 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr)
 	if err != nil {
-		log.Warnf("GetGPUMIGRecommendations: load term config failed: %v", err)
+		hlog.Warnf("GetGPUMIGRecommendations: load term config failed: %v", err)
 		terms = engine.DefaultTerms()
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
-		log.Errorf("GetGPUMIGRecommendations: failed to get clusters: %v", err)
+		hlog.Errorf("GetGPUMIGRecommendations: failed to get clusters: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
@@ -71,7 +72,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	for _, clusterUUID := range clusterUUIDs {
 		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
 		if err != nil {
-			log.Warnf("GetGPUMIGRecommendations: failed for cluster %s: %v", clusterUUID, err)
+			hlog.Warnf("GetGPUMIGRecommendations: failed for cluster %s: %v", clusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
 			continue
 		}
@@ -107,7 +108,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	if len(gpuClusterErrors) > 0 {
-		log.Warnf("GetGPUMIGRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
+		hlog.Warnf("GetGPUMIGRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
 		switch len(gpuClusterErrors) {
 		case 1:
 			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))

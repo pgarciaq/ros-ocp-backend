@@ -100,6 +100,7 @@ func StartAPIServer(ctx context.Context) {
 	}()
 
 	app.Pre(middleware.RemoveTrailingSlash())
+	app.Use(middleware.RequestID())
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},

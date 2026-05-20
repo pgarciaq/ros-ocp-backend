@@ -82,6 +82,7 @@ func GetRecommendationQuality(c echo.Context) error {
 	}
 	orgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgID)
 
 	opts, err := listoptions.ListAPIOptions(c, defaultQualityOrderBy, QualityAllowedOrderBy)
 	if err != nil {
@@ -95,7 +96,7 @@ func GetRecommendationQuality(c echo.Context) error {
 
 	rows, count, queryErr := model.GetRecommendationQuality(orgID, opts, queryParams, userPerms)
 	if queryErr != nil {
-		log.Errorf("unable to fetch recommendation quality; %v", queryErr)
+		hlog.Errorf("unable to fetch recommendation quality: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",

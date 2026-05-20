@@ -47,6 +47,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -100,7 +101,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	countQuery := `SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		log.Errorf("PVC recommendation count failed for org=%s: %v", orgID, err)
+		hlog.Errorf("PVC recommendation count failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to count PVC recommendations",
@@ -120,7 +121,7 @@ func GetPVCRecommendations(c echo.Context) error {
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
-		log.Errorf("PVC recommendation query failed for org=%s: %v", orgID, err)
+		hlog.Errorf("PVC recommendation query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch PVC recommendations",
@@ -139,7 +140,7 @@ func GetPVCRecommendations(c echo.Context) error {
 			&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
 			&growth, &codes, &r.DataDays,
 		); err != nil {
-			log.Errorf("scanning PVC recommendation row: %v", err)
+			hlog.Errorf("scanning PVC recommendation row: %v", err)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to read PVC recommendation rows",
@@ -159,7 +160,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		data = append(data, r)
 	}
 	if err := rows.Err(); err != nil {
-		log.Errorf("PVC recommendation row iteration failed for org=%s: %v", orgID, err)
+		hlog.Errorf("PVC recommendation row iteration failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch PVC recommendations",

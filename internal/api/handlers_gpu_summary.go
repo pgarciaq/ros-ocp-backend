@@ -25,6 +25,7 @@ func GetGPUSummary(c echo.Context) error {
 	}
 	orgIDStr := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgIDStr)
 
 	pool := database.GetPool()
 	if pool == nil {
@@ -39,14 +40,14 @@ func GetGPUSummary(c echo.Context) error {
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr)
 	if err != nil {
-		log.Warnf("GetGPUSummary: load term config failed: %v", err)
+		hlog.Warnf("GetGPUSummary: load term config failed: %v", err)
 		terms = engine.DefaultTerms()
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
-		log.Errorf("GetGPUSummary: failed to get clusters: %v", err)
+		hlog.Errorf("GetGPUSummary: failed to get clusters: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
@@ -56,7 +57,7 @@ func GetGPUSummary(c echo.Context) error {
 
 	tsCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, "", "")
 	if err != nil {
-		log.Errorf("GetGPUSummary: timeslicing triple count failed: %v", err)
+		hlog.Errorf("GetGPUSummary: timeslicing triple count failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to load GPU summary",
@@ -65,7 +66,7 @@ func GetGPUSummary(c echo.Context) error {
 
 	clustersWithGPU, totalTriples, err := engine.CountOrgGPUClusterStats(ctx, pool, orgIDStr, clusterUUIDs)
 	if err != nil {
-		log.Errorf("GetGPUSummary: cluster GPU stats failed: %v", err)
+		hlog.Errorf("GetGPUSummary: cluster GPU stats failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to load GPU summary",

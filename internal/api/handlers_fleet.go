@@ -44,6 +44,7 @@ func GetFleetSummary(c echo.Context) error {
 	}
 	orgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgID)
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -60,7 +61,7 @@ func GetFleetSummary(c echo.Context) error {
 	if fleetSummaryNeedsClusterFilter(userPerms) {
 		clusterUUIDs, qerr := getClustersForOrg(ctx, orgID)
 		if qerr != nil {
-			log.Errorf("fleet summary: get clusters failed for org=%s: %v", orgID, qerr)
+			hlog.Errorf("fleet summary: get clusters failed: %v", qerr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to fetch fleet summary",
@@ -112,7 +113,7 @@ func GetFleetSummary(c echo.Context) error {
 		)
 	}
 	if err != nil {
-		log.Errorf("fleet summary query failed for org=%s: %v", orgID, err)
+		hlog.Errorf("fleet summary query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch fleet summary",

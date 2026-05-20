@@ -39,11 +39,12 @@ func GetTermSettings(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	ctx := c.Request().Context()
 	terms, err := engine.LoadTermConfigCached(ctx, db.GetPool(), orgID)
 	if err != nil {
-		log.Errorf("failed to load term config for org %s: %v", orgID, err)
+		hlog.Errorf("failed to load term config: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "failed to load term configuration",
@@ -81,6 +82,7 @@ func PutTermSettings(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	var req termSettingsRequest
 	body := http.MaxBytesReader(c.Response(), c.Request().Body, 1<<20)
@@ -130,7 +132,7 @@ func PutTermSettings(c echo.Context) error {
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		log.Errorf("failed to begin tx for term settings: %v", err)
+		hlog.Errorf("failed to begin tx for term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
@@ -139,7 +141,7 @@ func PutTermSettings(c echo.Context) error {
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	if _, err := tx.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
-		log.Errorf("failed to delete old term settings for org %s: %v", orgID, err)
+		hlog.Errorf("failed to delete old term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
@@ -158,7 +160,7 @@ func PutTermSettings(c echo.Context) error {
 			 ON CONFLICT (org_id, term_ord) DO UPDATE SET window_days = $3, decay_halflife_hours = $4`,
 			orgID, ord, t.WindowDays, decayHL,
 		); err != nil {
-			log.Errorf("failed to upsert term settings for org %s: %v", orgID, err)
+			hlog.Errorf("failed to upsert term settings: %v", err)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "database error",
@@ -167,7 +169,7 @@ func PutTermSettings(c echo.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		log.Errorf("failed to commit term settings for org %s: %v", orgID, err)
+		hlog.Errorf("failed to commit term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
@@ -183,13 +185,14 @@ func DeleteTermSettings(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	ctx := c.Request().Context()
 	pool := db.GetPool()
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		log.Errorf("failed to begin transaction for deleting term settings org %s: %v", orgID, err)
+		hlog.Errorf("failed to begin transaction for deleting term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
@@ -198,7 +201,7 @@ func DeleteTermSettings(c echo.Context) error {
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	if _, err := tx.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
-		log.Errorf("failed to delete term settings for org %s: %v", orgID, err)
+		hlog.Errorf("failed to delete term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
@@ -206,7 +209,7 @@ func DeleteTermSettings(c echo.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		log.Errorf("failed to commit delete term settings for org %s: %v", orgID, err)
+		hlog.Errorf("failed to commit delete term settings: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
