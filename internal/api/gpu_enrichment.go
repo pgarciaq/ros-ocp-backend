@@ -154,10 +154,12 @@ func getGPUCostProvider() costdata.CostDataProvider {
 }
 
 // filterGPUResults applies GPU-specific filters (has_gpu, gpu_model, gpu_classification)
-// to the result set. Returns a filtered copy; count is adjusted accordingly.
-func filterGPUResults(results []model.NativeContainerResult, hasGPU *bool, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
+// to the result set. When no GPU filters are active, totalCount is preserved as-is
+// (it represents the DB-level total, not just the current page). When GPU filters
+// ARE active, count is reduced to len(filtered) because GPU filtering is post-query.
+func filterGPUResults(results []model.NativeContainerResult, totalCount int, hasGPU *bool, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
 	if hasGPU == nil && len(gpuModels) == 0 && len(gpuClassifications) == 0 {
-		return results, len(results)
+		return results, totalCount
 	}
 
 	filtered := make([]model.NativeContainerResult, 0, len(results))
