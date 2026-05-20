@@ -114,23 +114,23 @@ func getGPUCostProvider() costdata.CostDataProvider {
 	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
 }
 
-// filterGPUResults applies GPU-specific filters (has_gpu, gpu_model, gpu_classification)
-// to the result set. When no GPU filters are active, totalCount is preserved as-is
-// (it represents the DB-level total, not just the current page). When GPU filters
-// ARE active, count is reduced to len(filtered) because GPU filtering is post-query.
-func filterGPUResults(results []model.NativeContainerResult, totalCount int, hasGPU *bool, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
-	if hasGPU == nil && len(gpuModels) == 0 && len(gpuClassifications) == 0 {
+// filterGPUResults applies gpu_model and gpu_classification post-query filters.
+// The has_gpu filter is now handled at SQL level (via MapNativeQueryParameters)
+// for correct pagination. These remaining filters operate on enriched GPU data
+// that is not available in the recommendation_sets table.
+//
+// KNOWN LIMITATION: When gpu_model or gpu_classification filters are active,
+// pagination counts may be slightly off because filtering happens after the DB
+// query. This only affects the small subset of users who filter by specific GPU
+// model or workload classification (not the common has_gpu filter).
+func filterGPUResults(results []model.NativeContainerResult, totalCount int, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
+	if len(gpuModels) == 0 && len(gpuClassifications) == 0 {
 		return results, totalCount
 	}
 
 	filtered := make([]model.NativeContainerResult, 0, len(results))
 	for _, r := range results {
 		hasGPUField := len(r.GPU) > 0
-		if hasGPU != nil {
-			if *hasGPU != hasGPUField {
-				continue
-			}
-		}
 		if len(gpuModels) > 0 {
 			if !hasGPUField {
 				continue

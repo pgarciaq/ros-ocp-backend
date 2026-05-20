@@ -8,6 +8,7 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.updated_at >= ?": {},
 	"rs.updated_at < ?":  {},
 	"rs.stale = ?":       {},
+	"rs.has_gpu = ?":     {},
 
 	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
 	"c.cluster_alias IN ?": {},

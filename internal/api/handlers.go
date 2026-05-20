@@ -257,13 +257,10 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 	return c.JSON(http.StatusOK, nsRecommendationSet)
 }
 
-// parseGPUFilters extracts GPU-specific query parameters. These are applied
-// post-enrichment since GPU data lives in a separate table.
-func parseGPUFilters(c echo.Context) (hasGPU *bool, gpuModels, gpuClassifications []string) {
-	if v := c.QueryParam("has_gpu"); v != "" {
-		b := v == "true" || v == "1"
-		hasGPU = &b
-	}
+// parseGPUFilters extracts GPU-specific query parameters that require post-query
+// filtering. Note: has_gpu is now pushed to SQL via MapNativeQueryParameters for
+// correct pagination; only gpu_model and gpu_classification remain as post-filters.
+func parseGPUFilters(c echo.Context) (gpuModels, gpuClassifications []string) {
 	if models := c.QueryParams()["gpu_model"]; len(models) > 0 {
 		gpuModels = models
 	}
@@ -347,6 +344,11 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		queryParams["rs.stale = ?"] = false
 	}
 
+	// GPU presence filter: pushed to SQL for correct pagination.
+	if v := c.QueryParam("has_gpu"); v != "" {
+		queryParams["rs.has_gpu = ?"] = (v == "true" || v == "1")
+	}
+
 	return queryParams, nil
 }
 
@@ -381,8 +383,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
-	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count = filterGPUResults(results, count, hasGPU, gpuModels, gpuClassifications)
+	gpuModels, gpuClassifications := parseGPUFilters(c)
+	results, count = filterGPUResults(results, count, gpuModels, gpuClassifications)
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -482,8 +484,8 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
-	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count := filterGPUResults(results, totalCount, hasGPU, gpuModels, gpuClassifications)
+	gpuModels, gpuClassifications := parseGPUFilters(c)
+	results, count := filterGPUResults(results, totalCount, gpuModels, gpuClassifications)
 
 	return serveNativeList(c, results, count, apiListOptions)
 }
