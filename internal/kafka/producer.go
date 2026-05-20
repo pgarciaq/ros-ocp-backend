@@ -26,7 +26,7 @@ func startProducer() {
 			"ssl.ca.location":          cfg.KafkaCA,
 			"sasl.username":            cfg.KafkaUsername,
 			"sasl.password":            cfg.KafkaPassword,
-			"allow.auto.create.topics": true,
+			"allow.auto.create.topics": false,
 		}
 
 	} else {
@@ -34,7 +34,7 @@ func startProducer() {
 			"bootstrap.servers":        cfg.KafkaBootstrapServers,
 			"go.delivery.reports":      true,
 			"go.logs.channel.enable":   true,
-			"allow.auto.create.topics": true,
+			"allow.auto.create.topics": false,
 		}
 	}
 
