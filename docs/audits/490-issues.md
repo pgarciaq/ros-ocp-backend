@@ -38,7 +38,7 @@
 | P0 | 7 | 7 | 0 | 0 |
 | P1 | 22 | 22 | 0 | 0 |
 | P2 | 157 | 101 | 0 | 56 |
-| P3 | 263 | 4 | 0 | 259 |
+| P3 | 263 | 5 | 0 | 258 |
 | Kruize no-op | 43 | — | — | — |
 | **New (plugin rearch)** | 5 | 5 | 0 | 0 |
 
@@ -1318,10 +1318,11 @@ Additional fixes from the P0/P1 pass:
 - Retention helper omits node digest tables—GPU/node guidance rows never prune.
 - **Fix:** Added `daily_node_digests` and `node_recommendations` to the fallback `retainedTables` slice so they are swept even when plugin imports are absent.
 
-**#235 — GPU metadata `matchGPUModelKey` collision: A10 vs A10G**
+**#235 — GPU metadata `matchGPUModelKey` collision: A10 vs A10G** ✅ Fixed
 - Repo: ros-ocp-backend
 - File: `internal/engine/gpu_metadata.go`
 - Heuristic key normalization conflates distinct NVIDIA SKUs—VRAM/spec lookups attach to the wrong `GPUModelSpec`.
+- **Fix:** Added `A10G` case before `A10` in `matchGPUModelKey` (checks `contains("a10g")` first). Added `A10G` entry to `gpuModels` map with correct 80 SMs (vs A10's 72 SMs). Test coverage added.
 
 **#236 — `gpu_timeslicing.go` `nodeFreshnessDays = 7` is hardcoded**
 - Repo: ros-ocp-backend
@@ -1793,9 +1794,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
 
-**#346 — `container_usage_samples` PK does not include `workload_type`**
+**#346 — `container_usage_samples` PK does not include `workload_type`** ⚠️ Deferred (migration risk)
 - Repo: ros-ocp-backend
 - Primary key omits workload_type—distinct deployments collapse into one row.
+- **Investigation:** PK is `(org_id, cluster_uuid, namespace, workload, container_name, sample_time)`. Also affects `daily_container_digests` with ON CONFLICT `(org_id, cluster_uuid, namespace, workload, container_name, bucket_date)`. A Deployment and StatefulSet with the same name in one namespace would silently overwrite each other's samples. Low probability (K8s allows it but it's unusual) but silent data loss when triggered. Fix requires `ACCESS EXCLUSIVE` on a partitioned table — needs advisory lock pattern + coordinated migration window. Deferred pending workload collision telemetry.
 
 **#347 — Same-key concurrent upserts: last writer wins (non-deterministic)**
 - Repo: ros-ocp-backend
@@ -1805,9 +1807,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Savings snapshots freeze when Koku rates move—UI shows stale dollars.
 
-**#349 — `recommendation_sets` PK doesn't include `workload_type` — collisions possible**
+**#349 — `recommendation_sets` PK doesn't include `workload_type` — collisions possible** ⚠️ Deferred (migration risk)
 - Repo: ros-ocp-backend
 - Composite PK ignores workload_type—rolling restart workloads collide.
+- **Investigation:** PK is `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`. Same collision scenario as #346. If triggered, one workload's recommendations silently overwrite the other's — users see incorrect sizing for both. Fix requires PK rebuild with advisory lock + updating `ON CONFLICT` in `WriteRecommendations`. Deferred alongside #346 pending telemetry to gauge real-world collision frequency.
 
 **#350 — Stale detection: delayed uploads can mark fresh data as stale**
 - Repo: ros-ocp-backend
@@ -2324,14 +2327,22 @@ Additional fixes from the P0/P1 pass:
 
 ### P3 batch 1 — High-value P3 fixes (2026-05-20)
 
-Promoted and fixed 4 P3 issues with data-integrity, security, or correctness impact:
+Promoted and fixed 5 P3 issues with data-integrity, security, or correctness impact:
 
 | # | Issue | Resolution |
 |---|-------|------------|
 | 234 | `node_recommendations`/`daily_node_digests` missing from retention | Added to fallback `retainedTables` |
+| 235 | GPU metadata A10 vs A10G key collision | Added A10G case + gpuModels entry (80 SMs) |
 | 243 | `DeleteTermSettings` lacks transaction | Wrapped in `pool.Begin()`/`tx.Commit()` |
 | 296 | Node utilization endpoint missing RBAC cluster filtering | Added `filterClustersByRBAC` + `getClustersForOrg` |
 | 300 | `time.Now()` without `.UTC()` in report_processor | Already fixed in earlier batch |
+
+Investigated but deferred (migration complexity):
+
+| # | Issue | Decision |
+|---|-------|----------|
+| 346 | `container_usage_samples` PK omits `workload_type` | Deferred — ACCESS EXCLUSIVE on partitioned table; need telemetry |
+| 349 | `recommendation_sets` PK omits `workload_type` | Deferred — same collision class; needs coordinated PK rebuild |
 
 ---
 

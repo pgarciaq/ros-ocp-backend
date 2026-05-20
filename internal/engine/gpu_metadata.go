@@ -34,6 +34,10 @@ var gpuModels = map[string]GPUModelSpec{
 		Name: "A10", TotalFBMiB: 24576, SMCount: 72,
 		MIGSupported: false, ProfilingSupported: true,
 	},
+	"A10G": {
+		Name: "A10G", TotalFBMiB: 24576, SMCount: 80,
+		MIGSupported: false, ProfilingSupported: true,
+	},
 	"A30": {
 		Name: "A30", TotalFBMiB: 24576, SMCount: 56,
 		MIGSupported: true, ProfilingSupported: true,
@@ -169,6 +173,8 @@ func matchGPUModelKey(lower string) string {
 
 	case strings.Contains(lower, "a30") && !strings.Contains(lower, "a300"):
 		return "A30"
+	case strings.Contains(lower, "a10g"):
+		return "A10G"
 	case strings.Contains(lower, "a10") && !strings.Contains(lower, "a100"):
 		return "A10"
 
