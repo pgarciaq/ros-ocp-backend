@@ -62,7 +62,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConf
 		grouped[d.Node] = append(grouped[d.Node], d)
 	}
 
-	var results []NodeRec
+	results := make([]NodeRec, 0, len(grouped)*2)
 	for node, allDays := range grouped {
 		latest := latestNodeDigest(allDays)
 
@@ -81,14 +81,29 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConf
 
 // filterNodeByWindow returns node digest rows within the last windowDays
 // from endDate (inclusive), mirroring filterByWindow for container digests.
+// Rows are assumed sorted by BucketDate (ascending) from the DB query.
 func filterNodeByWindow(rows []NodeDigestRow, endDate time.Time, windowDays int) []NodeDigestRow {
-	cutoff := endDate.AddDate(0, 0, -(windowDays - 1))
-	var result []NodeDigestRow
-	for _, r := range rows {
-		d := r.BucketDate.Truncate(24 * time.Hour)
-		if !d.Before(cutoff.Truncate(24*time.Hour)) && !d.After(endDate.Truncate(24*time.Hour)) {
-			result = append(result, r)
+	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
+	endDay := endDate.Truncate(24 * time.Hour)
+
+	lo := 0
+	hi := len(rows)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if rows[mid].BucketDate.Truncate(24 * time.Hour).Before(cutoffDay) {
+			lo = mid + 1
+		} else {
+			hi = mid
 		}
+	}
+
+	result := make([]NodeDigestRow, 0, len(rows)-lo)
+	for i := lo; i < len(rows); i++ {
+		d := rows[i].BucketDate.Truncate(24 * time.Hour)
+		if d.After(endDay) {
+			break
+		}
+		result = append(result, rows[i])
 	}
 	return result
 }

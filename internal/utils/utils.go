@@ -237,21 +237,6 @@ func unique[T uniqueTypes](x []T) []T {
 	return list
 }
 
-func Convert2DarrayToMap(arr [][]string) []map[string]interface{} {
-	data := []map[string]interface{}{}
-	for i := 1; i < len(arr); i++ {
-		m := make(map[string]interface{})
-		for j := 0; j < len(arr[0]); j++ {
-			if metric, err := strconv.ParseFloat(arr[i][j], 64); err == nil {
-				m[arr[0][j]] = metric
-			} else {
-				m[arr[0][j]] = arr[i][j]
-			}
-		}
-		data = append(data, m)
-	}
-	return data
-}
 
 func ConvertDateToISO8601(date string) (string, error) {
 	const date_format = "2006-01-02 15:04:05 -0700 MST"

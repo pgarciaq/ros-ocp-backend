@@ -340,18 +340,19 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		modelName    string
 		profileName  string
 		nodeName     string // last-seen node for this container-day
-		fbMinVals    []float64
-		fbMaxVals    []float64
-		fbAvgVals    []float64
-		tensorMin    []float64
-		tensorMax    []float64
-		tensorAvg    []float64
-		dramMin      []float64
-		dramMax      []float64
-		dramAvg      []float64
-		smMin        []float64
-		smMax        []float64
-		smAvg        []float64
+		count        int
+		fbMinVal     float64
+		fbMaxVal     float64
+		fbAvgSum     float64
+		tensorMinVal float64
+		tensorMaxVal float64
+		tensorAvgSum float64
+		dramMinVal   float64
+		dramMaxVal   float64
+		dramAvgSum   float64
+		smMinVal     float64
+		smMaxVal     float64
+		smAvgSum     float64
 	}
 
 	groups := map[gpuKey]*gpuAgg{}
@@ -367,24 +368,50 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				workloadType: r.WorkloadType,
 				modelName:    r.AcceleratorModelName,
 				profileName:  r.AcceleratorProfileName,
+				fbMinVal:     r.AcceleratorFBUsageMin,
+				fbMaxVal:     r.AcceleratorFBUsageMax,
+				tensorMinVal: r.TensorPipeActiveMin,
+				tensorMaxVal: r.TensorPipeActiveMax,
+				dramMinVal:   r.DRAMActiveMin,
+				dramMaxVal:   r.DRAMActiveMax,
+				smMinVal:     r.SMActiveMin,
+				smMaxVal:     r.SMActiveMax,
 			}
 			groups[k] = g
+		} else {
+			if r.AcceleratorFBUsageMin < g.fbMinVal {
+				g.fbMinVal = r.AcceleratorFBUsageMin
+			}
+			if r.AcceleratorFBUsageMax > g.fbMaxVal {
+				g.fbMaxVal = r.AcceleratorFBUsageMax
+			}
+			if r.TensorPipeActiveMin < g.tensorMinVal {
+				g.tensorMinVal = r.TensorPipeActiveMin
+			}
+			if r.TensorPipeActiveMax > g.tensorMaxVal {
+				g.tensorMaxVal = r.TensorPipeActiveMax
+			}
+			if r.DRAMActiveMin < g.dramMinVal {
+				g.dramMinVal = r.DRAMActiveMin
+			}
+			if r.DRAMActiveMax > g.dramMaxVal {
+				g.dramMaxVal = r.DRAMActiveMax
+			}
+			if r.SMActiveMin < g.smMinVal {
+				g.smMinVal = r.SMActiveMin
+			}
+			if r.SMActiveMax > g.smMaxVal {
+				g.smMaxVal = r.SMActiveMax
+			}
 		}
 		if r.Node != "" {
 			g.nodeName = r.Node
 		}
-		g.fbMinVals = append(g.fbMinVals, r.AcceleratorFBUsageMin)
-		g.fbMaxVals = append(g.fbMaxVals, r.AcceleratorFBUsageMax)
-		g.fbAvgVals = append(g.fbAvgVals, r.AcceleratorFBUsageAvg)
-		g.tensorMin = append(g.tensorMin, r.TensorPipeActiveMin)
-		g.tensorMax = append(g.tensorMax, r.TensorPipeActiveMax)
-		g.tensorAvg = append(g.tensorAvg, r.TensorPipeActiveAvg)
-		g.dramMin = append(g.dramMin, r.DRAMActiveMin)
-		g.dramMax = append(g.dramMax, r.DRAMActiveMax)
-		g.dramAvg = append(g.dramAvg, r.DRAMActiveAvg)
-		g.smMin = append(g.smMin, r.SMActiveMin)
-		g.smMax = append(g.smMax, r.SMActiveMax)
-		g.smAvg = append(g.smAvg, r.SMActiveAvg)
+		g.count++
+		g.fbAvgSum += r.AcceleratorFBUsageAvg
+		g.tensorAvgSum += r.TensorPipeActiveAvg
+		g.dramAvgSum += r.DRAMActiveAvg
+		g.smAvgSum += r.SMActiveAvg
 	}
 
 	if len(groups) == 0 {
@@ -447,10 +474,10 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				sm_active_avg = EXCLUDED.sm_active_avg`,
 				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
 				g.modelName, g.profileName, g.nodeName,
-				minFloat(g.fbMinVals), maxFloat(g.fbMaxVals), meanFloat(g.fbAvgVals),
-				minFloat(g.tensorMin), maxFloat(g.tensorMax), meanFloat(g.tensorAvg),
-				minFloat(g.dramMin), maxFloat(g.dramMax), meanFloat(g.dramAvg),
-				minFloat(g.smMin), maxFloat(g.smMax), meanFloat(g.smAvg),
+				g.fbMinVal, g.fbMaxVal, safeMean(g.fbAvgSum, g.count),
+				g.tensorMinVal, g.tensorMaxVal, safeMean(g.tensorAvgSum, g.count),
+				g.dramMinVal, g.dramMaxVal, safeMean(g.dramAvgSum, g.count),
+				g.smMinVal, g.smMaxVal, safeMean(g.smAvgSum, g.count),
 			)
 		}
 		if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
@@ -501,4 +528,11 @@ func meanFloat(vals []float64) float64 {
 		sum += v
 	}
 	return sum / float64(len(vals))
+}
+
+func safeMean(sum float64, count int) float64 {
+	if count <= 0 {
+		return 0
+	}
+	return sum / float64(count)
 }
