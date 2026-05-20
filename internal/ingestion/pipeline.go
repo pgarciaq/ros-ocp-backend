@@ -493,42 +493,6 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 	return nil
 }
 
-func minFloat(vals []float64) float64 {
-	if len(vals) == 0 {
-		return 0
-	}
-	m := vals[0]
-	for _, v := range vals[1:] {
-		if v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func maxFloat(vals []float64) float64 {
-	if len(vals) == 0 {
-		return 0
-	}
-	m := vals[0]
-	for _, v := range vals[1:] {
-		if v > m {
-			m = v
-		}
-	}
-	return m
-}
-
-func meanFloat(vals []float64) float64 {
-	if len(vals) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, v := range vals {
-		sum += v
-	}
-	return sum / float64(len(vals))
-}
 
 func safeMean(sum float64, count int) float64 {
 	if count <= 0 {
