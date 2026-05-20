@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
@@ -166,7 +165,7 @@ func initConfig() {
 		if broker.Cacert != nil {
 			caPath, err := c.KafkaCa(broker)
 			if err != nil {
-				panic("Kafka CA failed to write")
+				log.Fatalf("config: Kafka CA failed to write: %v", err)
 			}
 			viper.Set("KafkaCA", caPath)
 		}
@@ -357,8 +356,7 @@ func initConfig() {
 	}
 
 	if err := viper.Unmarshal(&cfg); err != nil {
-		fmt.Println("Can not unmarshal config. Exiting.. ", err)
-		os.Exit(1)
+		log.Fatalf("config: cannot unmarshal configuration: %v", err)
 	}
 	validateLoadedConfig(cfg)
 }

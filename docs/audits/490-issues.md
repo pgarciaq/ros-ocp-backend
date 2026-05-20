@@ -37,10 +37,12 @@
 |----------|-------|-------|-----------|
 | P0 | 7 | 7 | 0 |
 | P1 | 22 | 22 | 0 |
-| P2 | 157 | 66 | 91 |
+| P2 | 157 | 91 | 66 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
 | **New (plugin rearch)** | 5 | 3 | 2 |
+
+> **Reconciliation (2026-05-20):** P2 tally — pre-batch (2) + B1 (16) + B2 (8) + B3 (16) + plugin rearch (2) + B4 (21) + B5 (8) + B6 (1) + B7 (6) + B8 (5) + B9 (5) + verified-already-fixed (1: #204) = **91 fixed**. Remaining: 157 − 91 = **66**.
 
 Additional fixes from the P0/P1 pass:
 
@@ -65,7 +67,7 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 8 — RBAC safety + Kafka hygiene + idle detection** (May 2026): Fixed **4** issues (**#247**, **#184**, **#253**, **#186** mitigated). Converted RBAC pagination from unbounded recursion to iterative loop (max 50 pages), set `allow.auto.create.topics=false` on producer and consumer, exported idle-detection thresholds as function parameters. Verified **#246** correct by-design (matches Koku RBAC convention). Also closes **#127** (duplicate of #247).
 
-**P2 batch 9 — Input validation + process safety** (May 2026): Fixed **7** issues (**#232**, **#233**, **#213**, **#14**, **#15**, **#127**). Added RBAC pagination URL prefix validation, redacted Kafka payloads from error logs, replaced raw Go error in 403 response with generic message, converted `os.Exit` to `log.Fatalf` in startup code. Verified **#230** and **#231** already fixed (native param cap + workload_type enum validation present).
+**P2 batch 9 — Input validation + process safety** (May 2026): Fixed **7** issues (**#232**, **#233**, **#213**, **#14**, **#15**, **#127**). Added RBAC pagination URL prefix validation, redacted Kafka payloads from error logs, replaced raw Go error in 403 response with generic message + `locked_fields` array, converted `os.Exit`/`panic` to `log.Fatalf` across `kafka/consumer.go`, `housekeeper/sourcesCleaner.go`, `config/config.go`, `db/db.go`, `utils/utils.go`, `cmd/aggregator.go`. Verified **#230** and **#231** already fixed (native param cap + workload_type enum validation present). Added unit test for RBAC prefix-validation stop behavior.
 
 ## Repository Impact Summary
 
