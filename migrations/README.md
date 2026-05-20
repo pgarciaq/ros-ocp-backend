@@ -10,6 +10,21 @@ PostgreSQL does not allow `CONCURRENTLY` inside a transaction block. `golang-mig
 
 Existing migrations that already ran cannot be rewritten retroactively.
 
+### Migration 000045 (gpu_container_digests unique index)
+
+Migration 000045 drops and recreates the `gpu_container_digests_natural_key` unique index to include `gpu_model_name`. On populated tables this blocks writes during the index build. For **large** deployments, apply this **before** running the migration:
+
+```sql
+-- Drop old index (non-blocking; it's just metadata removal)
+DROP INDEX IF EXISTS gpu_container_digests_natural_key;
+
+-- Build new index without blocking writes
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS gpu_container_digests_natural_key
+    ON gpu_container_digests (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start);
+```
+
+Then run `./rosocp db migrate up`; migration 000045's `IF NOT EXISTS` makes it a no-op.
+
 Migrations **000058–000060** alter tables/functions and do not add secondary indexes; no `CONCURRENTLY` changes were applied there.
 
 ### Migration 000061 (native list indexes)
