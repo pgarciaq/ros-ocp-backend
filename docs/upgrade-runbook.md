@@ -200,3 +200,86 @@ For fresh installations (empty database), all migrations run safely:
 
 Simply deploy the Helm chart or ClowdApp and migrations will complete
 in under 5 seconds.
+
+---
+
+## Future: Kruize-era Table Removal
+
+The following tables are **dead weight** once all Kruize-era data has been
+cleaned up (via source deletion or natural aging):
+
+| Table | Purpose | Native engine uses it? |
+|-------|---------|------------------------|
+| `workloads` | Kruize experiment ↔ cluster mapping | No (native engine uses `recommendation_sets` directly) |
+| `workload_metrics` | Raw Kruize metrics snapshots | No |
+| `historical_recommendation_sets` | Kruize recommendation history | No (replaced by `recommendation_history`) |
+
+**When to remove:**
+
+1. All clusters have been re-ingested with the native engine (no `workload_id`
+   references remain in `recommendation_sets`)
+2. No rows exist in `workload_metrics` or `historical_recommendation_sets`
+
+**Verification query:**
+
+```sql
+SELECT count(*) FROM workloads;
+SELECT count(*) FROM workload_metrics;
+SELECT count(*) FROM historical_recommendation_sets;
+SELECT count(*) FROM recommendation_sets WHERE workload_id IS NOT NULL;
+```
+
+If all return 0, it's safe to create a migration that:
+1. `ALTER TABLE recommendation_sets DROP COLUMN workload_id;`
+2. `DROP TABLE historical_recommendation_sets;`
+3. `DROP TABLE workload_metrics;`
+4. `DROP TABLE workloads;`
+
+**Note:** The `cleanupClusterAnalytics` function in `sourcesCleaner.go` has
+steps for these tables. Remove those steps in the same PR that drops the tables.
+
+---
+
+## Known Limitation: At-Most-Once Cleanup Delivery
+
+**Context:** When a Kafka `Application.destroy` event arrives, the sources
+listener deletes all cluster data in batched steps. However, the Kafka consumer
+commits offsets before processing completes (at-most-once delivery). If the
+process crashes mid-cleanup, the event will NOT be replayed.
+
+**Current risk level:** Low. Source deletions are rare (manual operator action,
+< 1/month in typical deployments). Partial cleanup leaves orphaned digest/sample
+rows that waste storage but don't affect correctness — the cluster is already
+gone from the `clusters` table, so no API queries will return stale data.
+
+**Detection:** Orphaned rows can be found with:
+
+```sql
+-- Digests referencing clusters that no longer exist
+SELECT DISTINCT cluster_uuid FROM daily_container_digests d
+WHERE NOT EXISTS (SELECT 1 FROM clusters c WHERE c.cluster_uuid = d.cluster_uuid);
+```
+
+**Future hardening (if needed at scale):**
+
+1. Add a `pending_cleanups` table:
+   ```sql
+   CREATE TABLE pending_cleanups (
+       id BIGSERIAL PRIMARY KEY,
+       cluster_uuid UUID NOT NULL,
+       org_id TEXT NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       completed_at TIMESTAMPTZ
+   );
+   ```
+
+2. On `Application.destroy`: INSERT a pending row, THEN start cleanup.
+   On success: SET `completed_at = NOW()`.
+
+3. Add a periodic sweep (e.g., in the existing housekeeper CronJob or a
+   dedicated goroutine) that retries rows with
+   `completed_at IS NULL AND created_at < NOW() - INTERVAL '1 hour'`.
+
+This gives at-least-once semantics without changing the Kafka consumer mode.
+Defer implementation until scale demands it (> 1000 clusters per tenant or
+frequent source churn).
