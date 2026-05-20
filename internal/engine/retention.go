@@ -36,12 +36,16 @@ var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 })
 
 // Tables retained by the general ROS_RETENTION_MONTHS setting.
+// This fallback list is used when no RetentionProvider plugins are registered.
+// When plugins ARE registered, each plugin sweeps its own tables via SweepRetention.
 var retainedTables = []string{
 	"container_usage_samples",
 	"daily_container_digests",
 	"daily_namespace_digests",
+	"daily_node_digests",
 	"gpu_container_digests",
 	"namespace_usage_samples",
+	"node_recommendations",
 }
 
 // Tables retained by the separate ROS_HISTORY_RETENTION_DAYS setting
@@ -79,16 +83,13 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 
 	// When RetentionProvider plugins are registered (production binaries import internal/plugins),
 	// each plugin sweeps its own partitioned tables via SweepRetention.
-	// Tests or tools that omit plugin imports fall back to retainedTables: that slice is the
-	// original pre-plugin monthly-partition set — container samples/digests, daily_namespace_digests,
-	// namespace_usage_samples, and gpu_container_digests. Plugins still declare those tables when
-	// loaded; the fallback exists for environments without registry wiring.
-	// Node and PVC partitions (daily_node_digests, node_recommendations, daily_pvc_digests) are
-	// not on retainedTables — they are swept only by their respective RetentionProvider plugins.
+	// Tests or tools that omit plugin imports fall back to retainedTables: that slice covers all
+	// known partitioned tables (container, namespace, node, GPU) so no table is missed.
+	// Plugins still declare those tables when loaded; the overlap is harmless (DROP IF EXISTS).
 	//
 	// Kruize-only deployments never populate native digest tables (daily_node_digests, gpu_container_digests,
 	// daily_pvc_digests, etc.): the legacy path writes workload_metrics / recommendation_sets instead.
-	// Omitting those tables from Kruize retention is therefore harmless.
+	// Sweeping empty tables is a no-op.
 	retProviders := plugin.ByTrait[plugin.RetentionProvider]()
 	if len(retProviders) > 0 {
 		for _, rp := range retProviders {

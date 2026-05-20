@@ -38,7 +38,7 @@
 | P0 | 7 | 7 | 0 | 0 |
 | P1 | 22 | 22 | 0 | 0 |
 | P2 | 157 | 101 | 0 | 56 |
-| P3 | 263 | 0 | 0 | 263 |
+| P3 | 263 | 4 | 0 | 259 |
 | Kruize no-op | 43 | — | — | — |
 | **New (plugin rearch)** | 5 | 5 | 0 | 0 |
 
@@ -1312,10 +1312,11 @@ Additional fixes from the P0/P1 pass:
 
 ### Retention / Data Cleanup (234-243)
 
-**#234 — `node_recommendations` and `daily_node_digests` missing from `retainedTables`**
+**#234 — `node_recommendations` and `daily_node_digests` missing from `retainedTables`** ✅ Fixed
 - Repo: ros-ocp-backend
 - File: `internal/engine/retention.go`
 - Retention helper omits node digest tables—GPU/node guidance rows never prune.
+- **Fix:** Added `daily_node_digests` and `node_recommendations` to the fallback `retainedTables` slice so they are swept even when plugin imports are absent.
 
 **#235 — GPU metadata `matchGPUModelKey` collision: A10 vs A10G**
 - Repo: ros-ocp-backend
@@ -1348,10 +1349,11 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
 
-**#243 — `DeleteTermSettings` lacks a transaction**
+**#243 — `DeleteTermSettings` lacks a transaction** ✅ Fixed
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_terms.go`
 - Deletes + inserts term rows without a transaction—partial state if interrupted.
+- **Fix:** Wrapped the DELETE in `pool.Begin()`/`tx.Commit()` with proper error handling and deferred rollback.
 
 ### Engine / Math (244-263)
 
@@ -1586,10 +1588,11 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - JSON uses camel blob key `persistentvolumeclaim` unlike snake_case neighbors—client quirks.
 
-**#296 — Node utilization no RBAC check for clusters**
+**#296 — Node utilization no RBAC check for clusters** ✅ Fixed
 - Repo: ros-ocp-backend
 - File: `internal/api/handlers_node_utilization.go`
 - RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+- **Fix:** Added `get_user_permissions()` + `filterClustersByRBAC()` + `getClustersForOrg()` calls to `respondNodeUtilizationRecs`, restricting results to RBAC-allowed clusters via `ANY($2)` in the SQL WHERE clause.
 
 **#297 — `api_test.go` oversized container/project passes without error (weak validation)**
 - Repo: ros-ocp-backend
@@ -1603,9 +1606,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - `time.Location` on digest buckets can disagree across handlers—month boundaries shift near TZ boundaries.
 
-**#300 — `report_processor.go` `LastReportedAt: time.Now()` without UTC**
+**#300 — `report_processor.go` `LastReportedAt: time.Now()` without UTC** ✅ Fixed (previously)
 - Repo: ros-ocp-backend
 - `time.Now()` without UTC mixes zones—cross-region comparisons of freshness drift.
+- **Fix:** Already corrected to `time.Now().UTC()` in an earlier batch.
 
 **#301 — Unbounded queries when `limit` handling defaults to large values**
 - Repo: ros-ocp-backend
@@ -2317,6 +2321,17 @@ Additional fixes from the P0/P1 pass:
 - Ignored working-directory errors mis-locate assets in CLI tools.
 
 **#490 —** *(merged into **#136** — ignored `ListenAndServe` error on Prometheus sidecar.)*
+
+### P3 batch 1 — High-value P3 fixes (2026-05-20)
+
+Promoted and fixed 4 P3 issues with data-integrity, security, or correctness impact:
+
+| # | Issue | Resolution |
+|---|-------|------------|
+| 234 | `node_recommendations`/`daily_node_digests` missing from retention | Added to fallback `retainedTables` |
+| 243 | `DeleteTermSettings` lacks transaction | Wrapped in `pool.Begin()`/`tx.Commit()` |
+| 296 | Node utilization endpoint missing RBAC cluster filtering | Added `filterClustersByRBAC` + `getClustersForOrg` |
+| 300 | `time.Now()` without `.UTC()` in report_processor | Already fixed in earlier batch |
 
 ---
 
