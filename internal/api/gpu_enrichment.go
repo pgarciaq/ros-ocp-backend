@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -16,45 +13,9 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-const gpuTermConfigCacheTTL = 60 * time.Second
-
 // EnrichNativeContainerResultsWithGPU attaches GPU utilization and savings data (APIEnricher delegate).
 func EnrichNativeContainerResultsWithGPU(ctx context.Context, orgID string, results []model.NativeContainerResult) {
 	enrichWithGPU(ctx, results, orgID)
-}
-
-type gpuTermConfigCacheEntry struct {
-	terms []engine.TermConfig
-	until time.Time
-}
-
-var (
-	gpuTermConfigMu    sync.RWMutex
-	gpuTermConfigByOrg = map[string]gpuTermConfigCacheEntry{}
-)
-
-// loadTermConfigCached returns term configuration for GPU enrichment with a
-// short TTL to avoid hitting org_recommendation_terms on every request.
-func loadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]engine.TermConfig, error) {
-	if pool == nil {
-		return engine.DefaultTerms(), nil
-	}
-	now := time.Now().UTC()
-	gpuTermConfigMu.RLock()
-	e, ok := gpuTermConfigByOrg[orgID]
-	gpuTermConfigMu.RUnlock()
-	if ok && now.Before(e.until) {
-		return e.terms, nil
-	}
-
-	terms, err := engine.LoadTermConfig(ctx, pool, orgID)
-	if err != nil {
-		return nil, err
-	}
-	gpuTermConfigMu.Lock()
-	gpuTermConfigByOrg[orgID] = gpuTermConfigCacheEntry{terms: terms, until: now.Add(gpuTermConfigCacheTTL)}
-	gpuTermConfigMu.Unlock()
-	return terms, nil
 }
 
 // enrichWithGPU queries gpu_container_digests and attaches GPU recommendations
@@ -74,7 +35,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 	defer cancel()
 	now := time.Now().UTC()
 
-	terms, err := loadTermConfigCached(ctx, pool, orgID)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
 		log.Warnf("enrichWithGPU: load term config failed: %v", err)
 		terms = engine.DefaultTerms()

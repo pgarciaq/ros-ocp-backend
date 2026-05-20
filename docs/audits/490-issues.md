@@ -57,6 +57,10 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 4 — OpenAPI spec alignment** (May 2026): Closed **21** issues (**#64**–**#83** cluster + **#70** full schema + plugin rearch **#142**, **#494**, **#495**). Commits `40e598c` (spec vs impl mismatches, pagination fixes, 503 normalization, unit tests) and `68e0654` (full `DetailResponse` schema documentation — removed 10 stale Kruize-era schemas, added 12 properly factored schemas). **Running total:** **66** fixed / **91** remaining P2; **3** of **5** plugin-rearch issues fixed.
 
+**P2 batch 5 — Error Handling + API Response** (May 2026): Closed **8** issues (**#140**, **#144**, **#145**, **#203**, **#209**, **#211**, **#212**, **#214**). Commit `ce0acc8` — sentinel errors (`ErrFieldsLocked`, `ErrPartitionMissing`), compile-time SQL identifier validation in retention, nil-safe `NilCostDataProvider`, empty-map instead of nil from `UpdateRecommendationJSON`, `notification_codes` in history CSV, consistent `apiErrResponse` shape, RFC3339 date formatting in legacy CSV. **Running total:** **74** fixed / **83** remaining P2.
+
+**P2 batch 6 — GORM/Model correctness + performance** (May 2026): Verified **6** issues already fixed in prior batches (**#129**, **#131**, **#163**, **#172**, **#173**, **#175**). Fixed **#168** (snapshot UTC timestamp). Extended **#123** (term config caching now shared across all API handlers via `engine.LoadTermConfigCached`). **Running total:** **75** fixed / **82** remaining P2.
+
 ## Repository Impact Summary
 
 | Repository | P0 | P1 | P2 | P3 | Total |
@@ -687,10 +691,11 @@ Additional fixes from the P0/P1 pass:
 - On legacy list endpoints, this runs for every item in the page — high CPU and allocation churn.
 
 **#123 — `LoadTermConfig` queried on every GPU-enriched API request (uncached)**
-- **Status: Fixed** — commit `669a271` (P2 batch 2)
+- **Status: Fixed** — commit `669a271` (P2 batch 2), extended in P2 batch 6
 - Repo: ros-ocp-backend
-- File: `internal/api/gpu_enrichment.go`
+- File: `internal/engine/term_config.go` (shared cache), all API handlers
 - Term JSON is fetched from Postgres on each enrichment—high QPS detail views amplify DB load without memoization.
+- **Fix (batch 2):** Added per-org 60s TTL cache in `gpu_enrichment.go`. **Fix (batch 6):** Moved caching into `engine.LoadTermConfigCached()` and updated all API handlers (node recs, GPU MIG, GPU summary, terms) to use the shared cache.
 
 **#124 — `filterByWindow` re-scans digest rows for each term**
 - Repo: ros-ocp-backend
@@ -848,8 +853,10 @@ Additional fixes from the P0/P1 pass:
 - Django `timezone.now()` depends on `TIME_ZONE` setting — the `effective_rates` view defaults to `dh.this_month_start` and `dh.today` which may not be UTC midnight.
 
 **#168 — `handlers_snapshot.go` forces `Z` suffix without converting to UTC**
+- **Status: ✅ FIXED** (P2 batch 6)
 - Repo: ros-ocp-backend
 - If input were non-UTC, labeling output as `Z` without conversion produces incorrect timestamps.
+- **Fix:** Changed from `Format("2006-01-02T15:04:05Z")` to `ts.UTC().Format(time.RFC3339)` — now explicitly converts to UTC before formatting.
 
 **#169 — Decay/freshness use `Sub().Hours()` instead of calendar days**
 - Repo: ros-ocp-backend

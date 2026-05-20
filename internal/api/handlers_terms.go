@@ -41,7 +41,7 @@ func GetTermSettings(c echo.Context) error {
 	orgID := xrhid.Identity.OrgID
 
 	ctx := c.Request().Context()
-	terms, err := engine.LoadTermConfig(ctx, db.GetPool(), orgID)
+	terms, err := engine.LoadTermConfigCached(ctx, db.GetPool(), orgID)
 	if err != nil {
 		log.Errorf("failed to load term config for org %s: %v", orgID, err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
