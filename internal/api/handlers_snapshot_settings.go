@@ -1,8 +1,8 @@
 package api
 
 import (
+	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -62,7 +62,7 @@ func PutSnapshotSettings(c echo.Context) error {
 	}
 
 	if err := engine.UpdateSnapshotSettings(c.Request().Context(), pool, orgID, update); err != nil {
-		if strings.Contains(err.Error(), "locked by environment variable") {
+		if errors.Is(err, engine.ErrFieldsLocked) {
 			return c.JSON(http.StatusForbidden, echo.Map{
 				"status":  "error",
 				"message": err.Error(),

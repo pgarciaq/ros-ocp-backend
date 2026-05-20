@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -149,6 +150,7 @@ var historyCSVHeader = []string{
 	"rec_cpu_request_millicores", "rec_cpu_limit_millicores",
 	"rec_memory_request_kib", "rec_memory_limit_kib",
 	"confidence_level", "estimated_monthly_savings_usd",
+	"notification_codes",
 }
 
 func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRow) error {
@@ -172,6 +174,7 @@ func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRo
 			optInt64Str(r.RecMemLimitKiB),
 			optFloat32Str(r.ConfidenceLevel),
 			optFloat32Str(r.EstimatedSavingsUSD),
+			smallintArrayStr(r.NotificationCodes),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("unable to write row: %w", err)
@@ -193,4 +196,15 @@ func optFloat32Str(v *float32) string {
 		return ""
 	}
 	return strconv.FormatFloat(float64(*v), 'f', 2, 32)
+}
+
+func smallintArrayStr(codes model.SmallintArray) string {
+	if len(codes) == 0 {
+		return ""
+	}
+	parts := make([]string, len(codes))
+	for i, c := range codes {
+		parts[i] = strconv.FormatInt(int64(c), 10)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }

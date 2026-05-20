@@ -79,7 +79,7 @@ func TestGetNamespaceRecommendationSetList_DBError_Returns503(t *testing.T) {
 		t.Fatalf("handler returned Go error: %v", err)
 	}
 
-	if rec.Code != http.StatusServiceUnavailable && EnableUserAPIErr {
+	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("expected status 503, got %d", rec.Code)
 	}
 
@@ -87,7 +87,7 @@ func TestGetNamespaceRecommendationSetList_DBError_Returns503(t *testing.T) {
 	if jsonErr := json.Unmarshal(rec.Body.Bytes(), &body); jsonErr != nil {
 		t.Fatalf("failed to parse response body: %v", jsonErr)
 	}
-	if body["status"] != "error" && EnableUserAPIErr {
+	if body["status"] != "error" {
 		t.Errorf("expected status=error, got %q", body["status"])
 	}
 }

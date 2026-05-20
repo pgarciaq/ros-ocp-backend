@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,19 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	log "github.com/sirupsen/logrus"
 )
+
+var validSQLIdentifier = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
+
+func init() {
+	for _, dt := range dateRetainedTables {
+		if !validSQLIdentifier.MatchString(dt.Table) {
+			panic(fmt.Sprintf("retention: invalid table name %q", dt.Table))
+		}
+		if !validSQLIdentifier.MatchString(dt.DateColumn) {
+			panic(fmt.Sprintf("retention: invalid column name %q in table %s", dt.DateColumn, dt.Table))
+		}
+	}
+}
 
 var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "rosocp_retention_partitions_dropped_total",
@@ -37,11 +51,15 @@ var historyRetainedTables = []string{
 	"recommendation_quality",
 }
 
-// Non-partitioned tables that need date-based DELETE retention.
-var dateRetainedTables = []struct {
+// RetentionTable is a compile-time-only struct for non-partitioned tables that need
+// date-based DELETE retention. Both Table and DateColumn are hard-coded identifiers
+// (never from user input) — the fmt.Sprintf interpolation is safe by construction.
+type RetentionTable struct {
 	Table      string
 	DateColumn string
-}{
+}
+
+var dateRetainedTables = []RetentionTable{
 	{"historical_namespace_recommendation_sets", "created_at"},
 }
 
