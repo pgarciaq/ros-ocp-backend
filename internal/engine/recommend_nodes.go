@@ -11,6 +11,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// nodeRecsAdvisoryLock is the pg_advisory_xact_lock key shared between
+// PersistNodeRecommendations and migration 000058 (PK rebuild) to prevent
+// deadlocks without requiring manual worker shutdown during migrations.
+const nodeRecsAdvisoryLock = 7358001
+
 // NodeDigestRow represents a single daily digest for a node, loaded from the database.
 type NodeDigestRow struct {
 	BucketDate       time.Time
@@ -369,6 +374,12 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	// Advisory lock serializes with migration 000058 (PK rebuild).
+	// If the migration is running, this blocks until it completes rather than deadlocking.
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", nodeRecsAdvisoryLock)); err != nil {
+		return fmt.Errorf("advisory lock: %w", err)
+	}
 
 	for _, r := range recs {
 		_, err := tx.Exec(ctx, `
