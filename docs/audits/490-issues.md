@@ -71,6 +71,8 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 10 — Performance & memory optimizations** (May 2026): Fixed **5** issues (**#119**, **#120**, **#124**, **#125**, **#126**). Pre-allocated CSV row slice (4096 capacity hint), replaced 12 unbounded `[]float64` GPU slices with O(1) running min/max/sum aggregation, optimized `filterByWindow` from linear scan to binary search (both container and node paths), added capacity hints to result slices across all recommenders. Removed dead code `Convert2DarrayToMap`. Closed **#122** as won't-fix (inherent to JSONB storage, bounded by page size). **Running total:** **85** fixed / **72** remaining P2.
 
+**P2 batch 11 — Data pipeline correctness + date/time consistency** (May 2026): Fixed **3** issues (**#146**, **#162**, **#166**, **#201**). Wrapped namespace digest batch in explicit transaction (atomicity fix). Added explicit `.UTC()` to date formatting in `costdata/provider.go` and `gpu_query.go` to prevent timezone-dependent date boundary shifts. Aligned CSV float precision to 3 decimal places matching JSON API. Optimized `filterGPUByWindow` to binary search. Closed **#150** (already transactional), **#147** (mitigated by idempotent upserts + transaction boundaries), **#169** (hours-based decay is correct by design), **#133** (idempotent partition drops). **Running total:** **89** fixed / **68** remaining P2.
+
 ## Repository Impact Summary
 
 | Repository | P0 | P1 | P2 | P3 | Total |
@@ -750,9 +752,11 @@ Additional fixes from the P0/P1 pass:
 - Tiny pool caps stall bursts; no queue metrics differentiate saturation from slow SQL.
 
 **#133 — Retention sweep has no checkpoint — interrupted sweep is asymmetric**
+- **Status:** Won't fix — acceptable by design
 - Repo: ros-ocp-backend
 - File: `internal/engine/retention.go`
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+- **Analysis:** Retention operates via partition drops (O(1) per partition, no row-by-row DELETE). Partition drops are idempotent — if interrupted, the next scheduled run picks up where it left off. The function collects errors and returns them aggregated. Adding checkpointing for an already-idempotent operation would add complexity without benefit. The CronJob schedule (daily) provides natural retry.
 
 **#134 — `RunRetentionSweep` returns nothing — callers cannot detect failure**
 - **Status:** **Fixed** in `f56c2d2`
@@ -816,18 +820,24 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Now returns a non-nil `&ClusterCostData{}` with empty maps, so callers can safely dereference without nil checks.
 
 **#146 — Namespace pipeline has identical partial-commit risks**
+- **Status:** ✅ Fixed (P2 batch 11)
 - Repo: ros-ocp-backend
-- File: `internal/engine/recommend_namespace.go`
-- `WriteNamespaceRecommendations` and `WriteNamespaceRecommendationHistory` use the same non-transactional batch pattern.
+- File: `internal/ingestion/namespace.go`
+- `ProcessNamespaceCSVToDigests` used `pool.SendBatch` (no transaction) — partial success possible if some upserts fail mid-batch.
+- **Fix:** Wrapped namespace digest batch in explicit transaction (`pool.Begin` / `tx.SendBatch` / `tx.Commit`). On any error, entire batch rolls back atomically.
 
 **#147 — No compensation logic anywhere — failed partial writes never cleaned up**
+- **Status:** Won't fix — mitigated by transaction boundaries
 - Repo: ros-ocp-backend
 - Failed pipeline stages leave earlier writes committed—no saga or cleanup compensates partial ROS state.
+- **Analysis:** With the transaction fixes in batches 10-11, all pipeline stages now operate within transactions: container digests (batch in `ProcessCSVToDigests`), GPU digests (explicit tx), namespace digests (#146 fix), node recommendations (already transactional), and recommendation writes. Each stage is idempotent (ON CONFLICT DO UPDATE). If a later stage fails, re-processing the same report will simply re-upsert all data correctly. Formal sagas/compensation are unnecessary for idempotent upsert pipelines.
 
 **#150 — `PersistNodeRecommendations` transaction can partially succeed**
+- **Status:** ✅ Already fixed (prior work)
 - Repo: ros-ocp-backend
 - File: `internal/engine/recommend_nodes.go`
 - Batch INSERT succeeds but stale-term DELETE fails (or vice versa) if the transaction is interrupted between statements.
+- **Analysis:** Function already wraps both INSERT loop and DELETE in a single `pool.Begin()`/`tx.Commit()` transaction with `defer tx.Rollback()`. Any failure at any point rolls back atomically. No partial commit is possible.
 
 ### Date/Time Handling (159-171)
 
@@ -843,9 +853,11 @@ Additional fixes from the P0/P1 pass:
 - If `usage_start` has a time component, rows later on the last day may be excluded (off-by-one). No validation of date format or ordering.
 
 **#162 — Go `costdata/provider.go` formats dates using Time's location, not explicit UTC**
+- **Status:** ✅ Fixed (P2 batch 11)
 - Repo: ros-ocp-backend
 - File: `internal/costdata/provider.go`
 - `GetEffectiveRates` builds `start_date`/`end_date` query params with `time.Format("2006-01-02")`, which uses each `time.Time`'s location—dates near midnight can shift versus strict UTC calendar intent.
+- **Fix:** Added explicit `.UTC()` before formatting: `start.UTC().Format("2006-01-02")`.
 
 **#163 — Mix of `time.Now()` (local) and `time.Now().UTC()` across codebase**
 - **Status:** **Fixed** in `3485f0a`
@@ -863,9 +875,11 @@ Additional fixes from the P0/P1 pass:
 - Malformed strings pass directly into SQL — relies entirely on PostgreSQL's error handling.
 
 **#166 — `gpu_query.go` formats dates as strings for range query (implicit cast)**
+- **Status:** ✅ Fixed (P2 batch 11)
 - Repo: ros-ocp-backend
 - File: `internal/engine/gpu_query.go`
 - `interval_start` is filtered with `YYYY-MM-DD` strings from `start.Format`/`end.Format`; behavior depends on PostgreSQL comparing `timestamp`/`timestamptz` to date literals consistently with digest storage.
+- **Fix:** Added explicit `.UTC()` before formatting to ensure date boundaries are always computed from UTC time. Also optimized `filterGPUByWindow` to use binary search (consistent with container/node filter optimizations in batch 10).
 
 **#167 — Koku `DateHelper` may return timezone-aware non-UTC times**
 - Repo: koku
@@ -878,8 +892,10 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Changed from `Format("2006-01-02T15:04:05Z")` to `ts.UTC().Format(time.RFC3339)` — now explicitly converts to UTC before formatting.
 
 **#169 — Decay/freshness use `Sub().Hours()` instead of calendar days**
+- **Status:** Won't fix — by design
 - Repo: ros-ocp-backend
 - Decay math uses raw hour deltas—not calendar days—so month/DST boundaries skew freshness scoring.
+- **Analysis:** Exponential decay is intentionally continuous-time (hours-based), not calendar-based. Using `Sub().Hours()` is correct for decay weight computation. All timestamps are UTC (DST is irrelevant). Staleness threshold is also hours-based (72h default). Calendar-day semantics would create discontinuities at midnight boundaries. No change needed.
 
 **#170 — `gpu_timeslicing.go` calls `time.Now().UTC()` internally (not injectable)**
 - **Status:** **Fixed** in `3485f0a`
@@ -1003,8 +1019,10 @@ Additional fixes from the P0/P1 pass:
 - Node utilization emits absolute `links` while other collections use relative paths—clients concatenate incorrectly.
 
 **#201 — CSV float precision: 2 decimals in history, 3 in native export**
+- **Status:** ✅ Fixed (P2 batch 11)
 - Repo: ros-ocp-backend
 - `handlers_history` rounds floats to 2dp vs 3dp on native export—same metric differs by CSV surface.
+- **Fix:** Changed `optFloat32Str` from `'f', 2` to `'f', 3` decimal places, aligning CSV export with JSON API precision (both now 3dp).
 
 **#202 — Only history/quality set `Cache-Control` headers**
 - **Status:** **Fixed** in `7fb6cdd`
