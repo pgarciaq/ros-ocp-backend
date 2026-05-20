@@ -840,8 +840,10 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 		})
 	}
 
-	// Mark containers with GPU data for SQL-level filtering
+	// Mark containers with GPU data and compute classifications for SQL-level filtering
 	err = engine.MarkContainersWithGPU(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	err = engine.StoreGPUClassifications(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, engine.DefaultTerms())
 	require.NoError(t, err)
 
 	app := echo.New()

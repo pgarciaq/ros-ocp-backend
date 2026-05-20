@@ -114,55 +114,11 @@ func getGPUCostProvider() costdata.CostDataProvider {
 	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
 }
 
-// filterGPUResults applies gpu_model and gpu_classification post-query filters.
-// The has_gpu filter is now handled at SQL level (via MapNativeQueryParameters)
-// for correct pagination. These remaining filters operate on enriched GPU data
-// that is not available in the recommendation_sets table.
-//
-// KNOWN LIMITATION: When gpu_model or gpu_classification filters are active,
-// pagination counts may be slightly off because filtering happens after the DB
-// query. This only affects the small subset of users who filter by specific GPU
-// model or workload classification (not the common has_gpu filter).
-func filterGPUResults(results []model.NativeContainerResult, totalCount int, gpuModels, gpuClassifications []string) ([]model.NativeContainerResult, int) {
-	if len(gpuModels) == 0 && len(gpuClassifications) == 0 {
-		return results, totalCount
-	}
-
-	filtered := make([]model.NativeContainerResult, 0, len(results))
-	for _, r := range results {
-		hasGPUField := len(r.GPU) > 0
-		if len(gpuModels) > 0 {
-			if !hasGPUField {
-				continue
-			}
-			if !anyGPUTermMatches(r.GPU, func(g *model.GPURecommendation) bool {
-				return matchesAny(g.CurrentGPUModel, gpuModels)
-			}) {
-				continue
-			}
-		}
-		if len(gpuClassifications) > 0 {
-			if !hasGPUField {
-				continue
-			}
-			if !anyGPUTermMatches(r.GPU, func(g *model.GPURecommendation) bool {
-				return matchesAny(g.GPUClassification, gpuClassifications)
-			}) {
-				continue
-			}
-		}
-		filtered = append(filtered, r)
-	}
-	return filtered, len(filtered)
-}
-
-func anyGPUTermMatches(gpuMap map[string]*model.GPURecommendation, predicate func(*model.GPURecommendation) bool) bool {
-	for _, g := range gpuMap {
-		if predicate(g) {
-			return true
-		}
-	}
-	return false
+// filterGPUResults is a no-op: all GPU filters (has_gpu, gpu_model,
+// gpu_classification) are now pushed to SQL via MapNativeQueryParameters
+// for correct pagination and total counts.
+func filterGPUResults(results []model.NativeContainerResult, totalCount int, _, _ []string) ([]model.NativeContainerResult, int) {
+	return results, totalCount
 }
 
 func matchesAny(value string, candidates []string) bool {

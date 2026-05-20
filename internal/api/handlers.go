@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -260,14 +261,11 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 // parseGPUFilters extracts GPU-specific query parameters that require post-query
 // filtering. Note: has_gpu is now pushed to SQL via MapNativeQueryParameters for
 // correct pagination; only gpu_model and gpu_classification remain as post-filters.
-func parseGPUFilters(c echo.Context) (gpuModels, gpuClassifications []string) {
-	if models := c.QueryParams()["gpu_model"]; len(models) > 0 {
-		gpuModels = models
-	}
-	if classes := c.QueryParams()["gpu_classification"]; len(classes) > 0 {
-		gpuClassifications = classes
-	}
-	return
+// parseGPUFilters is retained for backward compatibility but all GPU filters
+// (has_gpu, gpu_model, gpu_classification) are now pushed to SQL in
+// MapNativeQueryParameters. This function is a no-op.
+func parseGPUFilters(_ echo.Context) (gpuModels, gpuClassifications []string) {
+	return nil, nil
 }
 
 // MapNativeQueryParameters parses query params using the native schema's column names.
@@ -347,6 +345,35 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	// GPU presence filter: pushed to SQL for correct pagination.
 	if v := c.QueryParam("has_gpu"); v != "" {
 		queryParams["rs.has_gpu = ?"] = (v == "true" || v == "1")
+	}
+
+	// GPU model filter: substring match pushed to SQL via ILIKE.
+	if models := c.QueryParams()["gpu_model"]; len(models) > 0 {
+		clauses := make([]string, 0, len(models))
+		vals := make([]string, 0, len(models))
+		for _, m := range models {
+			if m != "" {
+				clauses = append(clauses, "rs.gpu_model_name ILIKE ?")
+				vals = append(vals, "%"+m+"%")
+			}
+		}
+		if len(clauses) > 0 {
+			key := strings.Join(clauses, " OR ")
+			queryParams[key] = vals
+		}
+	}
+
+	// GPU classification filter: exact match pushed to SQL.
+	if classes := c.QueryParams()["gpu_classification"]; len(classes) > 0 {
+		var vals []string
+		for _, cl := range classes {
+			if cl != "" {
+				vals = append(vals, cl)
+			}
+		}
+		if len(vals) > 0 {
+			queryParams["rs.gpu_classification IN ?"] = vals
+		}
 	}
 
 	return queryParams, nil
