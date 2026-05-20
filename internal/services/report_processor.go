@@ -569,6 +569,12 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
 
+	if plugin.EnabledFor("gpu") {
+		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
+			log.Warnf("native engine: marking GPU containers failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		}
+	}
+
 	pipelineDegraded := false
 	engine.EnsureHistoryPartitions(ctx, pool)
 	if err := engine.WriteRecommendationHistory(ctx, pool, results, ""); err != nil {
@@ -617,7 +623,7 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		return nil
 	}
 
-	terms, err := engine.LoadTermConfig(ctx, pool, orgID)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
 		log.Errorf("node recs: load term config failed for org=%s: %v — using defaults", orgID, err)
 		terms = engine.DefaultTerms()

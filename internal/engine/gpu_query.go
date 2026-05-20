@@ -63,9 +63,9 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 	}
 	defer rows.Close()
 
-	grouped := map[string][]GPUDigestRow{}
-	lastNode := map[string]string{}
-	nodeLastSeen := map[string]time.Time{}
+	grouped := make(map[string][]GPUDigestRow, 32)
+	lastNode := make(map[string]string, 32)
+	nodeLastSeen := make(map[string]time.Time, 8)
 	for rows.Next() {
 		var d GPUDigestRow
 		var ns, wl, cn string
@@ -169,4 +169,45 @@ func countGPURecs(m map[string][]*GPURec) int {
 		n += len(recs)
 	}
 	return n
+}
+
+// MarkContainersWithGPU sets has_gpu = TRUE on recommendation_sets rows whose
+// containers have data in gpu_container_digests. This enables SQL-level filtering
+// on the has_gpu column for correct pagination (rather than post-query filtering).
+func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
+	_, err := pool.Exec(ctx, `
+		UPDATE recommendation_sets rs
+		SET has_gpu = TRUE
+		WHERE rs.org_id = $1
+		  AND rs.cluster_uuid = $2
+		  AND rs.has_gpu = FALSE
+		  AND EXISTS (
+			SELECT 1 FROM gpu_container_digests g
+			WHERE g.cluster_uuid = rs.cluster_uuid
+			  AND g.namespace = rs.namespace
+			  AND g.workload = rs.workload
+			  AND g.container_name = rs.container_name
+		  )`, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("mark containers with GPU: %w", err)
+	}
+
+	// Also reset has_gpu for containers that no longer have GPU data
+	_, err = pool.Exec(ctx, `
+		UPDATE recommendation_sets rs
+		SET has_gpu = FALSE
+		WHERE rs.org_id = $1
+		  AND rs.cluster_uuid = $2
+		  AND rs.has_gpu = TRUE
+		  AND NOT EXISTS (
+			SELECT 1 FROM gpu_container_digests g
+			WHERE g.cluster_uuid = rs.cluster_uuid
+			  AND g.namespace = rs.namespace
+			  AND g.workload = rs.workload
+			  AND g.container_name = rs.container_name
+		  )`, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("unmark containers without GPU: %w", err)
+	}
+	return nil
 }

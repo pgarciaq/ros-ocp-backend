@@ -1358,13 +1358,13 @@ Additional fixes from the P0/P1 pass:
 
 ### Engine / Math (244-263)
 
-**#244 — `evaluateNode` uses `lastDay := days[len(days)-1]` for overcommit — could be an outlier day**
+**#244 — `evaluateNode` uses `lastDay := days[len(days)-1]` for overcommit — could be an outlier day** ✅ Correct by-design
 - Repo: ros-ocp-backend
-- Overcommit logic keys off the final digest day only—spiky outliers distort node sizing.
+- `lastDay` is used for allocatable capacity (current node size), while `maxRequests` already takes the MAX across all days. This correctly answers "is this node currently overcommitted?" since allocatable may change after node resize events.
 
-**#245 — `stranded_resource` detection requires `len(imbalances) >= 2` (hardcoded threshold)**
+**#245 — `stranded_resource` detection requires `len(imbalances) >= 2` (hardcoded threshold)** ✅ Correct by-design
 - Repo: ros-ocp-backend
-- Detector demands two imbalances—single dimensional skew never flags stranded capacity.
+- Requiring ≥2 days prevents flagging transient single-day spikes as stranded resources. One day of imbalance is insufficient to establish a pattern.
 
 **#246 — `filterClustersByRBAC` returns full list if `openshift.cluster` permission absent**
 - **Status:** Verified correct by-design (P2 batch 8) — matches Koku RBAC convention: absence of cluster-level restriction means unrestricted access. When `openshift.cluster` is not present in permissions, the user has no cluster restrictions.
@@ -1385,18 +1385,18 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Replace-all pattern lacks txn—callers can observe empty term windows mid-update.
 
-**#250 — `ComputeNodeTimeslicingRec` called live on each API request (not persisted)**
+**#250 — `ComputeNodeTimeslicingRec` called live on each API request (not persisted)** ✅ Accepted (by-design)
 - Repo: ros-ocp-backend
 - File: `internal/engine/gpu_timeslicing.go`, GPU node handlers
-- Time-slicing recommendations are recomputed when serving API responses rather than read from a persisted table—expensive and non-stable across identical calls if inputs drift.
+- Pure function over pre-persisted GPU digest data. Negligible latency; persisting would add cache-invalidation complexity for no measurable benefit.
 
-**#251 — `computeMinDataDays` returns `windowDays/2` rounded down — short windows may require only 1 day**
+**#251 — `computeMinDataDays` returns `windowDays/2` rounded down — short windows may require only 1 day** ✅ Correct by-design
 - Repo: ros-ocp-backend
-- Half-window thresholds let sparse clusters qualify with a single day of telemetry.
+- For a 2-day window, 1 day minimum is the only sensible threshold. Cannot require more data than the window size allows.
 
-**#252 — Decay calculation for short term with 0 `DecayHalfLifeHours` — division concerns**
+**#252 — Decay calculation for short term with 0 `DecayHalfLifeHours` — division concerns** ✅ Already guarded
 - Repo: ros-ocp-backend
-- Zero half-life branches risk divide-by-zero or flat weights for short terms.
+- `DecayWeight` returns 1.0 (equal weight) when halfLifeHours ≤ 0. No division occurs. Short-term's 0 halflife means "no decay, all data weighted equally" which is correct for a 1-day window.
 
 **#253 — `DetectIdle` / `DetectAbandoned` thresholds are hardcoded**
 - **Status:** ✅ Fixed (P2 batch 8) — `DetectIdle` now accepts both CPU and memory thresholds as parameters; exported `DefaultIdleThresholdMC` (10mc) and `DefaultIdleThresholdMemKiB` (10 MiB) constants. `DetectAbandoned` threshold is correctly zero by definition.
@@ -1410,38 +1410,39 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - With only one or two digest samples, fitted slope is dominated by noise—UI may still surface a “trend” with misleading confidence.
 
-**#256 — EMA decay weighting unvalidated for extreme halflife values**
+**#256 — EMA decay weighting unvalidated for extreme halflife values** ✅ Fixed
 - Repo: ros-ocp-backend
-- Extreme half-life env values aren’t validated—weights collapse to 0 or 1.
+- **Fix:** Added upper-bound validation (max 8760 hours = 1 year) in `PutTermSettings` API handler. Combined with existing `< 0` check, halflife is now bounded to [0, 8760]. Runtime `DecayWeight` already handles 0 correctly (returns 1.0 = equal weight).
 
-**#257 — `FindAdoptedContainers` logic may false-positive on coincidental matches**
+**#257 — `FindAdoptedContainers` logic may false-positive on coincidental matches** ✅ Accepted risk
 - Repo: ros-ocp-backend
 - File: `internal/engine/adoption.go`
-- Adoption marks workloads whose current requests fall within tolerance of *any* prior recommendation snapshot—unrelated workloads that happen to share numeric requests could be flagged adopted (unlikely but possible).
+- Adoption requires BOTH CPU and memory requests to independently match prior recommendations within 5% tolerance. Coincidental false-positives need two unrelated integers to match simultaneously — negligible probability.
 
-**#258 — `ReadOldRecommendations` fetches short/cost recommendations only**
+**#258 — `ReadOldRecommendations` fetches short/cost recommendations only** ✅ Correct by-design
 - Repo: ros-ocp-backend
-- Poller ignores non-short/non-cost terms—GPU/long recommendations never hydrate history.
+- Quality metrics (stability, adoption) are calculated against the primary short-term cost-optimized recommendation. Other terms/engines have different windows — comparing them would be apples-to-oranges.
 
-**#259 — `ApplyGPUSavings` modifies recs in-place (caller may not expect mutation)**
+**#259 — `ApplyGPUSavings` modifies recs in-place (caller may not expect mutation)** ✅ Correct by-design
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- Takes `*GPURec` (explicit pointer) — in-place mutation is idiomatic Go. All callers pass pointers intentionally.
 
-**#260 — `ApplySavingsEstimates` with nil costData silently sets $0 savings**
+**#260 — `ApplySavingsEstimates` with nil costData silently sets $0 savings** ✅ Already guarded
 - Repo: ros-ocp-backend
-- Nil cost provider yields `$0` savings without surfacing missing-rate errors.
+- Appends `NotifNoCostData` notification code when costData is nil — explicitly communicates the missing-rates condition. Not silent.
 
-**#261 — Snapshot classification `managedToolPrefixes` is a global mutable slice**
+**#261 — Snapshot classification `managedToolPrefixes` is a global mutable slice** ✅ Accepted (no mutation)
 - Repo: ros-ocp-backend
-- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+- Package-level `var` map that is only ever read from (no runtime writes). Go maps with no concurrent writers are safe. Unexported, initialized once at package load.
 
-**#262 — `computeSavings` / `computeIdleSavings` edge cases (negative costs)**
+**#262 — `computeSavings` / `computeIdleSavings` edge cases (negative costs)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Negative cost inputs aren't clamped—downstream JSON may show nonsense savings.
+- **Fix:** Added `math.Max(0, ...)` guards on computed per-unit rates and total infrastructure costs. Prevents corrupted upstream Koku cost data from producing nonsensical negative savings.
 
-**#263 — `GPUConfidence` score algorithm not documented or validated**
+**#263 — `GPUConfidence` score algorithm not documented or validated** ✅ Fixed (documented)
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- **Fix:** Added detailed docstring explaining the two scoring factors: data volume base score (0.3/0.6/0.8/1.0 by day count) and utilization stability penalty (30% reduction when max SM > 5x average SM).
+
 
 ### Ingestion Pipeline (264-280)
 
@@ -1794,10 +1795,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
 
-**#346 — `container_usage_samples` PK does not include `workload_type`** ⚠️ Deferred (migration risk)
+**#346 — `container_usage_samples` PK does not include `workload_type`** ✅ Fixed
 - Repo: ros-ocp-backend
 - Primary key omits workload_type—distinct deployments collapse into one row.
-- **Investigation:** PK is `(org_id, cluster_uuid, namespace, workload, container_name, sample_time)`. Also affects `daily_container_digests` with ON CONFLICT `(org_id, cluster_uuid, namespace, workload, container_name, bucket_date)`. A Deployment and StatefulSet with the same name in one namespace would silently overwrite each other's samples. Low probability (K8s allows it but it's unusual) but silent data loss when triggered. Fix requires `ACCESS EXCLUSIVE` on a partitioned table — needs advisory lock pattern + coordinated migration window. Deferred pending workload collision telemetry.
+- **Fix:** Added `workload_type` to the PKs of all five affected tables (`container_usage_samples`, `daily_container_digests`, `recommendation_sets`, `recommendation_quality`, `recommendation_history`). Also added `workload_type` column to `recommendation_quality` and `recommendation_history` which previously lacked it. Updated all Go `ON CONFLICT` clauses in `pipeline.go`, `recommend_all.go`, `quality.go`, `history.go`, `fixtures.go`, and `bench/main.go`. Since the native engine is always fresh-installed (never migrated in-place), the PK changes were applied directly to the original CREATE TABLE migrations.
 
 **#347 — Same-key concurrent upserts: last writer wins (non-deterministic)**
 - Repo: ros-ocp-backend
@@ -1807,10 +1808,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Savings snapshots freeze when Koku rates move—UI shows stale dollars.
 
-**#349 — `recommendation_sets` PK doesn't include `workload_type` — collisions possible** ⚠️ Deferred (migration risk)
+**#349 — `recommendation_sets` PK doesn't include `workload_type` — collisions possible** ✅ Fixed
 - Repo: ros-ocp-backend
 - Composite PK ignores workload_type—rolling restart workloads collide.
-- **Investigation:** PK is `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`. Same collision scenario as #346. If triggered, one workload's recommendations silently overwrite the other's — users see incorrect sizing for both. Fix requires PK rebuild with advisory lock + updating `ON CONFLICT` in `WriteRecommendations`. Deferred alongside #346 pending telemetry to gauge real-world collision frequency.
+- **Fix:** Resolved together with #346. The `recommendation_sets` PK is now `(org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)`. ON CONFLICT clause in `recommend_all.go` updated accordingly.
 
 **#350 — Stale detection: delayed uploads can mark fresh data as stale**
 - Repo: ros-ocp-backend
@@ -1998,79 +1999,81 @@ Additional fixes from the P0/P1 pass:
 
 ### Minor Performance (401-420)
 
-**#401 — Maps without size hints in hot paths (recommend_all, pipeline, digest)**
+**#401 — Maps without size hints in hot paths (recommend_all, pipeline, digest)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Hot-path maps grow via realloc—extra GC during ingestion spikes.
+- **Fix:** Added capacity hints to maps in `recommend_all.go` (`make(..., 128)`), `gpu_query.go` (`make(..., 32)`/`make(..., 8)`). Reduces GC pressure from rehashing during ingestion.
 
-**#402 — String concatenation for SQL in `handlers_node_utilization.go`**
+**#402 — String concatenation for SQL in `handlers_node_utilization.go`** ✅ Already mitigated
 - Repo: ros-ocp-backend
-- `query += " AND ..."` repeated per filter — minor but suboptimal vs a builder.
+- No `query +=` pattern exists in the current code — SQL is constructed with proper builder patterns.
 
-**#403 — `ParseCSVRows` no capacity hint on `[]MetricRow` append**
+**#403 — `ParseCSVRows` no capacity hint on `[]MetricRow` append** ✅ Already fixed
 - Repo: ros-ocp-backend
-- `ParseCSVRows` appends into zero-cap slices—large ROS uploads realloc repeatedly.
+- Already uses `make([]MetricRow, 0, 4096)` capacity hint.
 
-**#404 — `GroupCSVRows` map no capacity hint**
+**#404 — `GroupCSVRows` map no capacity hint** ✅ Fixed
 - Repo: ros-ocp-backend
-- `GroupCSVRows` builds maps without preallocation—extra hashing churn grouping CSV rows.
+- **Fix:** Changed to `make(map[DigestKey][]MetricRow, len(rows)/24+1)` — estimates ~24 intervals per container-day.
 
-**#405 — `filterGPUResults` + `matchesAny` is O(rows x gpu_terms x filters)**
+**#405 — `filterGPUResults` + `matchesAny` is O(rows x gpu_terms x filters)** ✅ Accepted (performance); correctness bug escalated to **#496**
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- Actual complexity: O(page_size × 3_terms × filter_count). Page size is bounded by API `limit` param (default 10–100, max ~1000). Filter values come from user query params (1–3 strings). Worst case: 1000 × 3 × 5 = 15k short-string comparisons — sub-microsecond. Hash index would only help if filter list exceeded hundreds of values, which is structurally impossible.
+- **Escalation:** Investigation of this issue revealed a *correctness* bug: GPU filters were applied post-pagination, causing incomplete pages and wrong total counts. Fixed as **#496** (P2) by adding `has_gpu` column to `recommendation_sets` and pushing the filter to SQL.
 
-**#406 — `filterByWindow` allocates new slice per call (per container x per term)**
+**#406 — `filterByWindow` allocates new slice per call (per container x per term)** ✅ Already optimized
 - Repo: ros-ocp-backend
-- Allocates fresh slices per term iteration—multi-term clusters pay quadratic copies.
+- Current implementation uses binary search + `make([]DigestRow, 0, len(rows)-lo)` with exact capacity.
 
-**#407 — GPU digest `append` slices per sample without pre-allocation**
+**#407 — GPU digest `append` slices per sample without pre-allocation** ✅ Fixed
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- **Fix:** Pre-allocated outer maps with capacity hints (`make(map[string][]GPUDigestRow, 32)`).
 
-**#409 — `io.ReadAll` on RBAC/Kruize/Sources bodies — moderate memory per response**
+**#409 — `io.ReadAll` on RBAC/Kruize/Sources bodies — moderate memory per response** ✅ Accepted (deferred)
 - Repo: ros-ocp-backend
-- RBAC/Sources responses read entirely into RAM via `io.ReadAll`—large IT inventories spike RSS.
+- RBAC responses are typically <100KB. Streaming JSON decode adds complexity for negligible benefit.
 
-**#410 — Benchmark tool uses same unbounded patterns as production**
+**#410 — Benchmark tool uses same unbounded patterns as production** ✅ Accepted
 - Repo: ros-ocp-backend
-- Profiling binaries reuse production unbounded batches—benchmarks mislead capacity planning.
+- Benchmark binary is a load-generation tool, not production. Its patterns are intentionally representative.
 
-**#411 — `unique()` utility builds list with zero-cap slice + append**
+**#411 — `unique()` utility builds list with zero-cap slice + append** ✅ Fixed
 - Repo: ros-ocp-backend
-- `unique()` builds slices from zero capacity—micro allocations in tight loops.
+- **Fix:** Changed to `make(map[T]bool, len(x))` and `make([]T, 0, len(x))`.
 
-**#412 —** *(merged into **#126** — duplicate `Convert2DarrayToMap` allocation churn.)*
+**#412 —** *(merged into **#126**)*
 
-**#413 — `MetricRow` and digest structs passed by value in several helpers**
+**#413 — `MetricRow` and digest structs passed by value in several helpers** ✅ Accepted
 - Repo: ros-ocp-backend
-- Large structs copied per helper—CPU churn digesting wide CSV rows.
+- Pass-by-value in `WeightedPercentile` callbacks. Changing to pointer requires refactoring ~30+ sites. Not worth the churn.
 
-**#414 — `UpdateRecommendationJSON` runs json.Unmarshal for every list item on legacy path**
+**#414 — `UpdateRecommendationJSON` runs json.Unmarshal for every list item on legacy path** ✅ Accepted
 - Repo: ros-ocp-backend
-- JSON encode/decode skips tags or errors—fields silently drop or structs drift from Kruize payloads.
+- Legacy Kruize path is deprecated. Native engine uses direct struct writes.
 
-**#415 — No streaming for CSV export — builds entire output before streaming**
+**#415 — No streaming for CSV export** ✅ Accepted (deferred)
 - Repo: ros-ocp-backend
-- CSV endpoints buffer entire outputs or mismatch decimal columns versus JSON—OOM risk and analyst confusion.
+- Architectural change (HTTP chunked-encoding). Current approach works within memory limits.
 
-**#416 — No query result caching for term config per org**
+**#416 — No query result caching for term config per org** ✅ Already mitigated
 - Repo: ros-ocp-backend
-- Term settings hit Postgres per request—could memoize per org.
+- `LoadTermConfigCached` exists with 60s TTL per-org cache. API handlers already use it.
 
-**#417 — `LoadTermConfig` called twice in same ingestion cycle (once for containers, once for nodes)**
+**#417 — `LoadTermConfig` called twice in same ingestion cycle** ✅ Fixed
 - Repo: ros-ocp-backend
-- Same ingestion pass loads term JSON twice—duplicate IO.
+- **Fix:** Changed `RecommendAllWorkloads`, `RecommendNamespaces`, and node-recs in `report_processor.go` to use `LoadTermConfigCached`. One DB query per org per minute.
 
-**#418 — `StalenessThreshold()` calls `GetConfig()` on every invocation — no cache**
+**#418 — `StalenessThreshold()` calls `GetConfig()` on every invocation** ✅ Already mitigated
 - Repo: ros-ocp-backend
-- Each check walks viper—could memoize after config reload.
+- `GetConfig()` is a singleton (nil check + return pointer). Cost: one nil check per call. Negligible.
 
-**#419 — Recommendations computed per-container then batch-written — could stream writes**
+**#419 — Recommendations computed per-container then batch-written** ✅ Accepted (deferred)
 - Repo: ros-ocp-backend
-- All recommendations materialized before flush—spikes RSS on huge clusters.
+- Batch approach enables transaction atomicity. RSS bounded by cluster size (~10k containers max).
 
-**#420 — `RecommendAllWorkloads` builds full results slice before any writes**
+**#420 — `RecommendAllWorkloads` builds full results slice before any writes** ✅ Accepted (deferred)
 - Repo: ros-ocp-backend
-- All recommendations materialized before flush—spikes RSS on huge clusters.
+- Batch enables `FindAdoptedContainers` comparison (needs both old and new recs simultaneously).
+
 
 ### Test Anti-Patterns (421-445)
 
@@ -2726,3 +2729,19 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 - Commit `11337ae` added 404 guards for disabled plugins. OpenAPI spec still shows all routes as available regardless of plugin state. SDK-generated clients will call dead endpoints and get unexpected 404s with no schema-level indication.
 - Effort: Small (add OpenAPI note or conditional generation)
 - **Fix:** Added `x-plugin-required` extension and 404 response documentation to all plugin-backed endpoints in `openapi.json`. Updated the top-level `info.description` to explain the plugin system and how routes become unavailable when plugins are disabled.
+
+**#496 — GPU filter pagination correctness bug (has_gpu applied post-pagination)** ✅ Fixed
+- Severity: P2 (functional correctness)
+- Repo: ros-ocp-backend
+- Files: `internal/api/handlers.go`, `internal/api/gpu_enrichment.go`, `internal/model/recommendation_set_native.go`, `internal/engine/gpu_query.go`, `internal/services/report_processor.go`
+- GPU data lives in `gpu_container_digests`, separate from `recommendation_sets`. The API handler applied `has_gpu`, `gpu_model`, and `gpu_classification` filters AFTER database-level `LIMIT`/`OFFSET` pagination. This meant:
+  - Pages could contain fewer items than requested (e.g., request 10, get 3)
+  - Total count was incorrect (DB reports 200, but only 50 have GPUs)
+  - Clients paginating through results would miss items or see duplicates
+- Impact: Any customer using `?has_gpu=true` with >1 page of results gets wrong data
+- **Fix:**
+  1. Added `has_gpu BOOLEAN NOT NULL DEFAULT FALSE` column to `recommendation_sets` (migration 000062)
+  2. Added `MarkContainersWithGPU()` function in the ingestion pipeline that sets `has_gpu = TRUE` for containers present in `gpu_container_digests`
+  3. Pushed the `has_gpu` filter to SQL level via `MapNativeQueryParameters` — pagination is now correct for this filter
+  4. `gpu_model` and `gpu_classification` filters remain post-query (documented limitation) since those values are computed live from digest statistics
+  5. Added partial index `idx_recommendation_sets_has_gpu` for efficient filtering

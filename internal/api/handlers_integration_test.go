@@ -23,6 +23,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -279,7 +280,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	})
 
 	t.Run("missing identity returns 401", func(t *testing.T) {
-		containerID := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestContainer)
+		containerID := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestWorkloadType, testutil.TestContainer)
 		req := httptest.NewRequest(http.MethodGet,
 			"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
 		rec := httptest.NewRecorder()
@@ -733,7 +734,7 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	v1.Use(ros_middleware.Identity)
 	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
 
-	containerID := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestContainer)
+	containerID := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestWorkloadType, testutil.TestContainer)
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -838,6 +839,10 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 			SMActiveAvg:         0.005,
 		})
 	}
+
+	// Mark containers with GPU data for SQL-level filtering
+	err = engine.MarkContainersWithGPU(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
