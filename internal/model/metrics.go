@@ -11,7 +11,7 @@ var (
 		Help: "The total number of DB error",
 	})
 	partitionMissing = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "rosocp_partition__missing_error_total",
+		Name: "rosocp_partition_missing_error_total",
 		Help: "The total number of DB error due to table partition does not exist",
 	},
 		[]string{"resource_name"},

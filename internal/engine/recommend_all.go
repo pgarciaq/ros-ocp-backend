@@ -36,19 +36,24 @@ type OOMConfig struct {
 	MaxBump  float64
 }
 
-// RecommendAllWorkloads reads all digests for an org+cluster within [start, end],
-// groups them by container, computes recommendations for all terms x 2 engines,
-// and returns the results. It does NOT write to the DB.
-func RecommendAllWorkloads(
+// streamBatchSize is the number of containers accumulated before emitting a batch.
+const streamBatchSize = 500
+
+// RecommendWorkloadsStreaming reads digests row-by-row from the database, groups
+// them by container exploiting the ORDER BY guarantee, and calls emit for every
+// batch of ~streamBatchSize containers' worth of recommendations.
+// Peak memory is O(streamBatchSize × terms × engines) instead of O(all_containers).
+func RecommendWorkloadsStreaming(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	start, end time.Time,
 	oomCfg OOMConfig,
-) ([]ContainerRec, error) {
+	emit func([]ContainerRec) error,
+) error {
 	terms, err := LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("load term config: %w", err)
+		return fmt.Errorf("load term config: %w", err)
 	}
 
 	rows, err := pool.Query(ctx, `
@@ -73,65 +78,43 @@ func RecommendAllWorkloads(
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
-		ORDER BY namespace, workload, container_name, bucket_date`,
+		ORDER BY namespace, workload, workload_type, container_name, bucket_date`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
-	// N.B. filterByWindow uses binary search and relies on bucket_date sort order above.
 	if err != nil {
-		return nil, fmt.Errorf("query digests: %w", err)
+		return fmt.Errorf("query digests: %w", err)
 	}
 	defer rows.Close()
 
-	grouped := make(map[containerKey][]DigestRow, 128)
-
-	for rows.Next() {
-		var d DigestRow
-		var ns, wl, wlType, cn string
-
-		err := rows.Scan(
-			&d.BucketDate,
-			&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
-			&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
-			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
-			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
-			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
-			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
-			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
-			&d.MemUsageMaxKiB,
-			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
-			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
-			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
-			&d.DesiredReplicas, &d.AvailableReplicas,
-			&ns, &wl, &wlType, &cn,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan digest row: %w", err)
-		}
-
-		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
-		grouped[key] = append(grouped[key], d)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate digest rows: %w", err)
-	}
-
 	now := time.Now().UTC()
-	results := make([]ContainerRec, 0, len(grouped)*2)
+	stalenessThreshold := StalenessThreshold()
 
-	for key, digestRows := range grouped {
-		// Current values: use the most recent digest's P50 as the "current" resource config.
-		// In a stable deployment, request/limit values are constant across all samples in a day,
-		// so P50 == actual current value.
-		latest := latestDigest(digestRows)
+	var currentKey containerKey
+	var currentDigests []DigestRow
+	batch := make([]ContainerRec, 0, streamBatchSize*6)
+	containerCount := 0
+	firstRow := true
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := emit(batch); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
+	processContainer := func(key containerKey, digests []DigestRow) {
+		latest := latestDigest(digests)
 		currentCPUReqMC := latest.CPURequestP50MC
-		currentCPULimMC := latest.CPURequestP95MC // P95 as proxy for limit (which is typically constant or absent)
+		currentCPULimMC := latest.CPURequestP95MC
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
-
-		// Stale detection: if the most recent digest is older than the configured threshold, mark as stale.
-		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
+		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > stalenessThreshold
 
 		for _, tc := range terms {
-			windowRows := filterByWindow(digestRows, latest.BucketDate, tc.WindowDays)
+			windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
 			if len(windowRows) < tc.MinDataDays {
 				continue
 			}
@@ -214,12 +197,77 @@ func RecommendAllWorkloads(
 				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
 				rec.NotificationCodes = EvaluateNotifications(rec, tc.MinDataDays)
 
-				results = append(results, rec)
+				batch = append(batch, rec)
 			}
 		}
 	}
 
-	return results, nil
+	for rows.Next() {
+		var d DigestRow
+		var ns, wl, wlType, cn string
+
+		if err := rows.Scan(
+			&d.BucketDate,
+			&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
+			&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
+			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
+			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
+			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
+			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
+			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
+			&d.MemUsageMaxKiB,
+			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
+			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
+			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
+			&d.DesiredReplicas, &d.AvailableReplicas,
+			&ns, &wl, &wlType, &cn,
+		); err != nil {
+			return fmt.Errorf("scan digest row: %w", err)
+		}
+
+		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
+
+		if !firstRow && key != currentKey {
+			processContainer(currentKey, currentDigests)
+			containerCount++
+			currentDigests = currentDigests[:0]
+
+			if containerCount%streamBatchSize == 0 {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+		}
+
+		firstRow = false
+		currentKey = key
+		currentDigests = append(currentDigests, d)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate digest rows: %w", err)
+	}
+
+	if len(currentDigests) > 0 {
+		processContainer(currentKey, currentDigests)
+	}
+	return flush()
+}
+
+// RecommendAllWorkloads is a convenience wrapper that collects all streaming results
+// into a single slice. Prefer RecommendWorkloadsStreaming in production for bounded memory.
+func RecommendAllWorkloads(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+	start, end time.Time,
+	oomCfg OOMConfig,
+) ([]ContainerRec, error) {
+	var results []ContainerRec
+	err := RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, end, oomCfg, func(batch []ContainerRec) error {
+		results = append(results, batch...)
+		return nil
+	})
+	return results, err
 }
 
 func flushRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, n int) error {
