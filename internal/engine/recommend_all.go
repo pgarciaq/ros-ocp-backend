@@ -75,6 +75,7 @@ func RecommendAllWorkloads(
 		  AND bucket_date >= $3 AND bucket_date <= $4
 		ORDER BY namespace, workload, container_name, bucket_date`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	// N.B. filterByWindow uses binary search and relies on bucket_date sort order above.
 	if err != nil {
 		return nil, fmt.Errorf("query digests: %w", err)
 	}
