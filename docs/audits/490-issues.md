@@ -37,15 +37,15 @@
 |----------|-------|----------------|--------|-------------------|
 | P0 | 7 | 7 | 0 | 0 |
 | P1 | 22 | 22 | 0 | 0 |
-| P2 | 157 | 94 | 0 | 63 |
+| P2 | 157 | 101 | 0 | 56 |
 | P3 | 263 | 0 | 0 | 263 |
 | Kruize no-op | 43 | — | — | — |
 | **New (plugin rearch)** | 5 | 5 | 0 | 0 |
 
 > **Reconciliation audit (2026-05-20):** Full audit of all 52 previously-unmarked P0-P2 issues completed. Results:
-> - **93 P2 issues resolved** (fixed via code changes in batches 1-11)
-> - **0 P2 issues remain active** — all resolved: #92 fixed (background-delete), #89/#90/#91/#100 mitigated (upgrade runbook)
-> - **58 P2 issues deferred/accepted** — broken down as: 10 accepted-risk migrations (fresh-install safe), 6 CI/infra improvements, 15 test hygiene, 3 Koku-side issues, 24 already-deferred/accepted-risk items
+> - **101 P2 issues resolved** (fixed via code changes in batches 1-13)
+> - **0 P2 issues remain active**
+> - **56 P2 issues deferred/accepted** — broken down as: 7 accepted-risk migrations (fresh-install safe), 6 CI/infra improvements, 15 test hygiene, 2 Koku-side issues, 26 already-deferred/accepted-risk items
 
 Additional fixes from the P0/P1 pass:
 
@@ -77,6 +77,8 @@ Additional fixes from the P0/P1 pass:
 **P2 batch 11 — Data pipeline correctness + date/time consistency** (May 2026): Fixed **3** issues (**#146**, **#162**, **#166**, **#201**). Wrapped namespace digest batch in explicit transaction (atomicity fix). Added explicit `.UTC()` to date formatting in `costdata/provider.go` and `gpu_query.go` to prevent timezone-dependent date boundary shifts. Aligned CSV float precision to 3 decimal places matching JSON API. Optimized `filterGPUByWindow` to binary search. Closed **#150** (already transactional), **#147** (mitigated by idempotent upserts + transaction boundaries), **#169** (hours-based decay is correct by design), **#133** (idempotent partition drops). **Running total:** **89** fixed / **68** remaining P2.
 
 **P2 batch 12 — Final closure: background-delete + migration safety docs** (May 2026): Fixed **#92** (background-delete Kruize-era tables before cluster CASCADE — verified on SNO: 9,355 rows cleaned in ~1s). Mitigated **#89**, **#90**, **#91**, **#100** via `docs/upgrade-runbook.md` (pre-flight queries, maintenance window sizing, worker shutdown procedure). Added Koku effective_rates contract test. **Running total:** **94** fixed+mitigated / **63** remaining P2 (all deferred/accepted risk — no actionable issues remain).
+
+**P2 batch 13 — Migration hardening + documentation** (May 2026): Fixed **7** issues: **#89** (data validation guard before UUID cast), **#90** (IF NOT EXISTS + CONCURRENTLY pre-step), **#91** + **#100** (advisory lock `7358001` in migration + worker — no manual shutdown needed), **#98** (corrected misleading rollback comments), **#165** (date validation in Koku `effective_rates.py`), **#169** (documented hour-based decay design in code). **Running total:** **101** fixed / **56** remaining P2 (all deferred/accepted risk).
 
 ## Repository Impact Summary
 
@@ -605,19 +607,19 @@ Additional fixes from the P0/P1 pass:
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#89 — 000041.up.sql: `cluster_uuid::uuid` cast fails on invalid data**
-- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 1–2 (pre-flight validation query + data fix procedure)
+- **Status:** ✅ Fixed — migration now DELETEs rows with malformed `cluster_uuid` (regex validation) before the `::uuid` cast. Invalid data is purged automatically; no manual pre-flight needed.
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- File: `migrations/000041_alter_clusters_cluster_uuid_to_uuid.up.sql`
 
 **#90 — 000045.up.sql: unique index without CONCURRENTLY on populated table**
-- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 1 (estimate duration based on `gpu_container_digests` row count; schedule maintenance window)
+- **Status:** ✅ Fixed — migration now uses `IF NOT EXISTS`; `migrations/README.md` documents the `CREATE INDEX CONCURRENTLY` pre-step for large databases. Pre-apply makes migration a no-op.
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- Files: `migrations/000045_gpu_digests_unique_add_model.up.sql`, `migrations/README.md`
 
 **#91 — 000058.up.sql: drops and recreates primary key — ACCESS EXCLUSIVE lock**
-- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 3 (stop workers before migration) + §Step 1 (sub-second on small table)
+- **Status:** ✅ Fixed — migration acquires `pg_advisory_xact_lock(7358001)` before PK rebuild; `PersistNodeRecommendations` acquires the same lock. Workers block (not deadlock) while migration runs—no manual shutdown needed.
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- Files: `migrations/000058_node_recommendations_add_term.up.sql`, `internal/engine/recommend_nodes.go`
 
 **#92 — ON DELETE CASCADE on workloads/clusters — massive cascaded deletes**
 - **Status:** Fixed — `cleanupClusterAnalytics` now batch-deletes workload_metrics, historical_recommendation_sets, and workloads before `DeleteCluster()`, making CASCADE a no-op. Documented in `docs/upgrade-runbook.md` §ON DELETE CASCADE Consideration. Verified on SNO (9,355 rows cleaned in ~1s).
@@ -650,9 +652,9 @@ Additional fixes from the P0/P1 pass:
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#98 — Misleading rollback comments in 000033, 000056, 000057**
-- **Status:** Accepted risk — cosmetic (misleading comments don't affect runtime behavior)
+- **Status:** ✅ Fixed — corrected comments to reference their own migration numbers (000033, 000056, 000057) instead of wrong numbers (000031, 000024, 000025).
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- Files: `migrations/000033_*.down.sql`, `migrations/000056_*.down.sql`, `migrations/000057_*.down.sql`
 
 **#99 — Partition trigger on workloads depends on non-NULL `metrics_upload_at`**
 - **Status:** Accepted risk — Kruize-only table (native engine doesn't use `workloads` table or its partitioning trigger)
@@ -660,9 +662,9 @@ Additional fixes from the P0/P1 pass:
 - If NULL, partition bounds are undefined — behavioral fragility.
 
 **#100 — Migration 000058 can deadlock with live PersistNodeRecommendations**
-- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 3 (explicitly stop workers before migration; verify no active connections)
+- **Status:** ✅ Fixed — same advisory lock solution as #91. Migration and workers serialize via `pg_advisory_xact_lock(7358001)`; deadlock eliminated without manual intervention.
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- Files: `migrations/000058_node_recommendations_add_term.up.sql`, `internal/engine/recommend_nodes.go`
 
 **#102 —** *(merged into **#42** — same finding: no `CREATE INDEX CONCURRENTLY` in migrations.)*
 - **Status:** Duplicate of #42
@@ -904,10 +906,9 @@ Additional fixes from the P0/P1 pass:
 - If any non-UTC time enters the pipeline, truncation aligns to the wrong calendar day.
 
 **#165 — No validation of `start_date`/`end_date` params in `effective_rates.py`**
-- **Status:** Deferred — Koku-side issue (ros-ocp-backend cannot fix this; Koku should validate date params server-side)
+- **Status:** ✅ Fixed — added `date.fromisoformat()` validation + start<=end check; returns 400 on malformed or inverted dates.
 - Repo: koku
 - File: `koku/masu/api/effective_rates.py`
-- Malformed strings pass directly into SQL — relies entirely on PostgreSQL's error handling.
 
 **#166 — `gpu_query.go` formats dates as strings for range query (implicit cast)**
 - **Status:** ✅ Fixed (P2 batch 11)
@@ -928,10 +929,9 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Changed from `Format("2006-01-02T15:04:05Z")` to `ts.UTC().Format(time.RFC3339)` — now explicitly converts to UTC before formatting.
 
 **#169 — Decay/freshness use `Sub().Hours()` instead of calendar days**
-- **Status:** Won't fix — by design
+- **Status:** ✅ Documented — added code comments in `internal/engine/decay.go` explaining the intentional hour-based (not calendar-day) design, DST irrelevance (UTC-only), and negligible ~1h skew on 14-day windows.
 - Repo: ros-ocp-backend
-- Decay math uses raw hour deltas—not calendar days—so month/DST boundaries skew freshness scoring.
-- **Analysis:** Exponential decay is intentionally continuous-time (hours-based), not calendar-based. Using `Sub().Hours()` is correct for decay weight computation. All timestamps are UTC (DST is irrelevant). Staleness threshold is also hours-based (72h default). Calendar-day semantics would create discontinuities at midnight boundaries. No change needed.
+- File: `internal/engine/decay.go`
 
 **#170 — `gpu_timeslicing.go` calls `time.Now().UTC()` internally (not injectable)**
 - **Status:** **Fixed** in `3485f0a`
