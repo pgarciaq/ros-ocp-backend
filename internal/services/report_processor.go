@@ -573,6 +573,14 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
 			log.Warnf("native engine: marking GPU containers failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
 		}
+		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID)
+		if termErr != nil {
+			log.Warnf("native engine: load term config for GPU classification failed for org=%s cluster=%s: %v", orgID, clusterUUID, termErr)
+			gpuTerms = engine.DefaultTerms()
+		}
+		if err := engine.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
+			log.Warnf("native engine: storing GPU classifications failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		}
 	}
 
 	pipelineDegraded := false

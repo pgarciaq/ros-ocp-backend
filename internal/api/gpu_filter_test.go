@@ -31,54 +31,20 @@ func makeTestResults() []model.NativeContainerResult {
 	}
 }
 
-func TestFilterGPUResults_NoFilters(t *testing.T) {
+func TestFilterGPUResults_IsPassthrough(t *testing.T) {
 	results := makeTestResults()
+
 	out, count := filterGPUResults(results, 100, nil, nil)
-	assert.Equal(t, 100, count, "no-filter case preserves original totalCount")
+	assert.Equal(t, 100, count, "passthrough preserves original totalCount")
 	assert.Len(t, out, 4)
-}
 
-func TestFilterGPUResults_GPUModel(t *testing.T) {
-	results := makeTestResults()
-	out, count := filterGPUResults(results, 100, []string{"A100"}, nil)
-	assert.Equal(t, 1, count)
-	assert.Equal(t, "a100-idle", out[0].Container)
-}
+	out, count = filterGPUResults(results, 100, []string{"A100"}, nil)
+	assert.Equal(t, 100, count, "gpu_model filter is now handled at SQL level; filterGPUResults is a passthrough")
+	assert.Len(t, out, 4)
 
-func TestFilterGPUResults_GPUModel_CaseInsensitive(t *testing.T) {
-	results := makeTestResults()
-	out, _ := filterGPUResults(results, 100, []string{"t4"}, nil)
-	assert.Len(t, out, 1)
-	assert.Equal(t, "t4-underutil", out[0].Container)
-}
-
-func TestFilterGPUResults_GPUClassification(t *testing.T) {
-	results := makeTestResults()
-	out, count := filterGPUResults(results, 100, nil, []string{"idle"})
-	assert.Equal(t, 1, count)
-	assert.Equal(t, "a100-idle", out[0].Container)
-}
-
-func TestFilterGPUResults_MultipleClassifications(t *testing.T) {
-	results := makeTestResults()
-	_, count := filterGPUResults(results, 100, nil, []string{"idle", "underutilized"})
-	assert.Equal(t, 2, count)
-}
-
-func TestFilterGPUResults_CombinedModelAndClassification(t *testing.T) {
-	results := makeTestResults()
-	out, count := filterGPUResults(results, 100, []string{"H100"}, []string{"well_utilized"})
-	assert.Equal(t, 1, count)
-	assert.Equal(t, "h100-well", out[0].Container)
-}
-
-func TestFilterGPUResults_NoGPUContainersExcludedByModel(t *testing.T) {
-	results := makeTestResults()
-	out, count := filterGPUResults(results, 100, []string{"A100"}, nil)
-	assert.Equal(t, 1, count)
-	for _, r := range out {
-		assert.NotEmpty(t, r.GPU, "model filter should exclude non-GPU containers")
-	}
+	out, count = filterGPUResults(results, 100, nil, []string{"idle"})
+	assert.Equal(t, 100, count, "gpu_classification filter is now handled at SQL level; filterGPUResults is a passthrough")
+	assert.Len(t, out, 4)
 }
 
 func TestMatchesAny(t *testing.T) {

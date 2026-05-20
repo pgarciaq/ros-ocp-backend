@@ -2015,10 +2015,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - **Fix:** Changed to `make(map[DigestKey][]MetricRow, len(rows)/24+1)` — estimates ~24 intervals per container-day.
 
-**#405 — `filterGPUResults` + `matchesAny` is O(rows x gpu_terms x filters)** ✅ Accepted (performance); correctness bug escalated to **#496**
+**#405 — `filterGPUResults` + `matchesAny` is O(rows x gpu_terms x filters)** ✅ Fixed (eliminated via #496)
 - Repo: ros-ocp-backend
-- Actual complexity: O(page_size × 3_terms × filter_count). Page size is bounded by API `limit` param (default 10–100, max ~1000). Filter values come from user query params (1–3 strings). Worst case: 1000 × 3 × 5 = 15k short-string comparisons — sub-microsecond. Hash index would only help if filter list exceeded hundreds of values, which is structurally impossible.
-- **Escalation:** Investigation of this issue revealed a *correctness* bug: GPU filters were applied post-pagination, causing incomplete pages and wrong total counts. Fixed as **#496** (P2) by adding `has_gpu` column to `recommendation_sets` and pushing the filter to SQL.
+- Original concern: O(page_size × 3_terms × filter_count) post-query filtering. Performance was negligible (sub-microsecond), but the architecture was *functionally incorrect* — filters applied after pagination produce incomplete pages and wrong totals.
+- **Resolution:** All GPU filters (`has_gpu`, `gpu_model`, `gpu_classification`) are now pushed to SQL via denormalized columns in `recommendation_sets`. `filterGPUResults()` is a no-op. See **#496** for full implementation details.
 
 **#406 — `filterByWindow` allocates new slice per call (per container x per term)** ✅ Already optimized
 - Repo: ros-ocp-backend
@@ -2739,9 +2739,11 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
   - Total count was incorrect (DB reports 200, but only 50 have GPUs)
   - Clients paginating through results would miss items or see duplicates
 - Impact: Any customer using `?has_gpu=true` with >1 page of results gets wrong data
-- **Fix:**
+- **Fix (complete — all GPU filters now at SQL level):**
   1. Added `has_gpu BOOLEAN NOT NULL DEFAULT FALSE` column to `recommendation_sets` (migration 000062)
-  2. Added `MarkContainersWithGPU()` function in the ingestion pipeline that sets `has_gpu = TRUE` for containers present in `gpu_container_digests`
-  3. Pushed the `has_gpu` filter to SQL level via `MapNativeQueryParameters` — pagination is now correct for this filter
-  4. `gpu_model` and `gpu_classification` filters remain post-query (documented limitation) since those values are computed live from digest statistics
-  5. Added partial index `idx_recommendation_sets_has_gpu` for efficient filtering
+  2. Added `gpu_model_name TEXT` and `gpu_classification TEXT` columns (migration 000063)
+  3. `MarkContainersWithGPU()` sets `has_gpu = TRUE` and `gpu_model_name` from latest `gpu_container_digests` row
+  4. `StoreGPUClassifications()` computes per-term GPU classification during ingestion and stores in `gpu_classification`
+  5. All three GPU filters pushed to SQL via `MapNativeQueryParameters`: `has_gpu`, `gpu_model` (ILIKE), `gpu_classification` (IN)
+  6. Partial indexes on `gpu_model_name` and `gpu_classification` for efficient filtering
+  7. `filterGPUResults()` is now a no-op passthrough — no post-query filtering remains

@@ -126,6 +126,24 @@ func TestNativeQueryAllowlist_MapHistoryQueryParameters(t *testing.T) {
 	assertAllNativeRecKeysAllowed(t, params)
 }
 
+func TestNativeQueryAllowlist_GPUFilters(t *testing.T) {
+	query := url.Values{
+		"start_date":         {"2025-01-15"},
+		"gpu_model":          {"A100", "H100"},
+		"gpu_classification": {"idle", "underutilized"},
+		"has_gpu":            {"true"},
+	}
+	c := echoCtxGET(query)
+	params, err := api.MapNativeQueryParameters(c)
+	require.NoError(t, err)
+	assertAllNativeRecKeysAllowed(t, params)
+
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ?"))
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ? OR rs.gpu_model_name ILIKE ?"))
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_classification IN ?"))
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.has_gpu = ?"))
+}
+
 func TestNativeQueryAllowlist_RejectsUnknownKey(t *testing.T) {
 	require.False(t, model.IsAllowedNativeRecommendationQueryKey("rs.evil = ?"))
 	require.False(t, model.IsAllowedNativeNamespaceQueryKey("ns.evil = ?"))

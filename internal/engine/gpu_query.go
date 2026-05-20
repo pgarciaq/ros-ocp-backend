@@ -171,31 +171,35 @@ func countGPURecs(m map[string][]*GPURec) int {
 	return n
 }
 
-// MarkContainersWithGPU sets has_gpu = TRUE on recommendation_sets rows whose
-// containers have data in gpu_container_digests. This enables SQL-level filtering
-// on the has_gpu column for correct pagination (rather than post-query filtering).
+// MarkContainersWithGPU sets has_gpu = TRUE and gpu_model_name on recommendation_sets
+// rows whose containers have data in gpu_container_digests. This enables SQL-level
+// filtering on has_gpu and gpu_model_name for correct pagination.
 func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE recommendation_sets rs
-		SET has_gpu = TRUE
+		SET has_gpu = TRUE,
+		    gpu_model_name = COALESCE(g_latest.gpu_model_name, '')
+		FROM (
+			SELECT DISTINCT ON (namespace, workload, container_name)
+				namespace, workload, container_name, gpu_model_name
+			FROM gpu_container_digests
+			WHERE cluster_uuid = $2
+			ORDER BY namespace, workload, container_name, interval_start DESC
+		) g_latest
 		WHERE rs.org_id = $1
 		  AND rs.cluster_uuid = $2
-		  AND rs.has_gpu = FALSE
-		  AND EXISTS (
-			SELECT 1 FROM gpu_container_digests g
-			WHERE g.cluster_uuid = rs.cluster_uuid
-			  AND g.namespace = rs.namespace
-			  AND g.workload = rs.workload
-			  AND g.container_name = rs.container_name
-		  )`, orgID, clusterUUID)
+		  AND g_latest.namespace = rs.namespace
+		  AND g_latest.workload = rs.workload
+		  AND g_latest.container_name = rs.container_name
+		  AND (rs.has_gpu = FALSE OR rs.gpu_model_name != COALESCE(g_latest.gpu_model_name, ''))`,
+		orgID, clusterUUID)
 	if err != nil {
 		return fmt.Errorf("mark containers with GPU: %w", err)
 	}
 
-	// Also reset has_gpu for containers that no longer have GPU data
 	_, err = pool.Exec(ctx, `
 		UPDATE recommendation_sets rs
-		SET has_gpu = FALSE
+		SET has_gpu = FALSE, gpu_model_name = '', gpu_classification = ''
 		WHERE rs.org_id = $1
 		  AND rs.cluster_uuid = $2
 		  AND rs.has_gpu = TRUE
@@ -210,4 +214,57 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		return fmt.Errorf("unmark containers without GPU: %w", err)
 	}
 	return nil
+}
+
+// StoreGPUClassifications computes GPU classifications for all GPU containers
+// in a cluster and stores them in recommendation_sets.gpu_classification.
+// This runs after MarkContainersWithGPU so has_gpu and gpu_model_name are set.
+func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) error {
+	now := time.Now().UTC()
+	start := now.AddDate(0, 0, -MaxWindowDays(terms, 30))
+
+	gpuRecs, _, _, err := QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
+	if err != nil {
+		return fmt.Errorf("query GPU recommendations for classification: %w", err)
+	}
+	if len(gpuRecs) == 0 {
+		return nil
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for GPU classifications: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for key, recs := range gpuRecs {
+		parts := strings.SplitN(key, "/", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		ns, wl, cn := parts[0], parts[1], parts[2]
+
+		for _, rec := range recs {
+			classification := string(rec.Classification)
+			if classification == "" {
+				classification = string(GPUClassNoProfiling)
+			}
+			_, err := tx.Exec(ctx, `
+				UPDATE recommendation_sets
+				SET gpu_classification = $6
+				WHERE org_id = $1
+				  AND cluster_uuid = $2
+				  AND namespace = $3
+				  AND workload = $4
+				  AND container_name = $5
+				  AND term = $7
+				  AND gpu_classification != $6`,
+				orgID, clusterUUID, ns, wl, cn, classification, rec.Term)
+			if err != nil {
+				return fmt.Errorf("store GPU classification for %s term=%s: %w", key, rec.Term, err)
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
 }
