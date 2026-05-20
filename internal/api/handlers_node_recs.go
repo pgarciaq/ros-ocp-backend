@@ -54,7 +54,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	ctx := c.Request().Context()
 	now := time.Now().UTC()
 
-	terms, err := engine.LoadTermConfig(ctx, pool, orgIDStr)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr)
 	if err != nil {
 		log.Warnf("GetNodeRecommendations: load term config failed: %v", err)
 		terms = engine.DefaultTerms()

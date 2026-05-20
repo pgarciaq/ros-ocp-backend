@@ -3,9 +3,47 @@ package engine
 import (
 	"context"
 	"database/sql"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+const termConfigCacheTTL = 60 * time.Second
+
+type termConfigCacheEntry struct {
+	terms []TermConfig
+	until time.Time
+}
+
+var (
+	termConfigMu    sync.RWMutex
+	termConfigByOrg = map[string]termConfigCacheEntry{}
+)
+
+// LoadTermConfigCached returns term configurations for an org, caching the
+// result for termConfigCacheTTL (60s) to avoid repeated DB queries on hot paths.
+func LoadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]TermConfig, error) {
+	if pool == nil {
+		return DefaultTerms(), nil
+	}
+	now := time.Now().UTC()
+	termConfigMu.RLock()
+	e, ok := termConfigByOrg[orgID]
+	termConfigMu.RUnlock()
+	if ok && now.Before(e.until) {
+		return e.terms, nil
+	}
+
+	terms, err := LoadTermConfig(ctx, pool, orgID)
+	if err != nil {
+		return nil, err
+	}
+	termConfigMu.Lock()
+	termConfigByOrg[orgID] = termConfigCacheEntry{terms: terms, until: now.Add(termConfigCacheTTL)}
+	termConfigMu.Unlock()
+	return terms, nil
+}
 
 var termNames = [3]string{"short", "medium", "long"}
 

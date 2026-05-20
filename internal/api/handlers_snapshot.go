@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -146,8 +147,8 @@ func GetSnapshotRecommendations(c echo.Context) error {
 				"message": "unable to read snapshot recommendation rows",
 			})
 		}
-		if ts, ok := creationTS.(interface{ Format(string) string }); ok {
-			r.CreationTimestamp = ts.Format("2006-01-02T15:04:05Z")
+		if ts, ok := creationTS.(time.Time); ok {
+			r.CreationTimestamp = ts.UTC().Format(time.RFC3339)
 		}
 		r.Notifications = notifications.MapToKruizeFormat(codes)
 		data = append(data, r)
