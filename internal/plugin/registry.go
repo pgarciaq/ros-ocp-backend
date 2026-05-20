@@ -25,6 +25,10 @@ var (
 
 // Register appends a plugin to the process-wide registry. Call from plugin init().
 //
+// Registration order across packages is non-deterministic (Go spec does not
+// guarantee init() ordering). This is intentional: plugins are independent,
+// route matching is path-based, and CSV claim sets don't overlap between plugins.
+//
 // Convention: always register pointer receivers so traits are detected correctly,
 // e.g. plugin.Register(&MyPlugin{}).
 //
