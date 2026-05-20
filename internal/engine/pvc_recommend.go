@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 const (
@@ -267,7 +267,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 			rec.NotificationCodes, rec.DataDays,
 		)
 		if err != nil {
-			log.Warnf("WritePVCRecommendations: upsert failed for %s/%s: %v", rec.Namespace, rec.PVC, err)
+			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s: %v", rec.Namespace, rec.PVC, err)
 			errs = append(errs, fmt.Errorf("%s/%s: %w", rec.Namespace, rec.PVC, err))
 		}
 	}

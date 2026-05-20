@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // PVCRow represents a single parsed row from the storage CSV.
@@ -106,7 +106,7 @@ func ParsePVCRows(r io.Reader) ([]PVCRow, error) {
 
 		row, parseErr := parsePVCRecord(record, idx)
 		if parseErr != nil {
-			log.Debugf("skipping PVC row: %v", parseErr)
+			logging.GetLogger().Debugf("skipping PVC row: %v", parseErr)
 			continue
 		}
 		if row.PersistentVolumeClaim == "" {
@@ -324,7 +324,7 @@ func EnsurePVCDigestPartitions(ctx context.Context, pool *pgxpool.Pool, digests 
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsurePVCDigestPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsurePVCDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
@@ -375,7 +375,7 @@ func ProcessStorageCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 		return fmt.Errorf("parsing storage CSV: %w", err)
 	}
 	if len(rows) == 0 {
-		log.Infof("ProcessStorageCSV: no PVC rows found for cluster %s", clusterUUID)
+		logging.GetLogger().WithField("cluster_uuid", clusterUUID).Info("ProcessStorageCSV: no PVC rows found")
 		return nil
 	}
 
@@ -385,6 +385,6 @@ func ProcessStorageCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 		return fmt.Errorf("upserting PVC digests: %w", err)
 	}
 
-	log.Infof("ProcessStorageCSV: upserted %d PVC digests for cluster %s", len(digests), clusterUUID)
+	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof("ProcessStorageCSV: upserted %d PVC digests", len(digests))
 	return nil
 }

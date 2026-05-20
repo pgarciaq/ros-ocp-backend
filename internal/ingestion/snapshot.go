@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // SnapshotRow represents a single parsed row from the snapshot inventory CSV.
@@ -123,7 +123,7 @@ func ParseSnapshotRows(r io.Reader) ([]SnapshotRow, error) {
 
 		row, parseErr := parseSnapshotRecord(record, idx)
 		if parseErr != nil {
-			log.Debugf("skipping snapshot row: %v", parseErr)
+			logging.GetLogger().Debugf("skipping snapshot row: %v", parseErr)
 			continue
 		}
 		if row.SnapshotName == "" {
@@ -260,7 +260,7 @@ func ProcessSnapshotCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, or
 		return fmt.Errorf("parsing snapshot CSV: %w", err)
 	}
 	if len(rows) == 0 {
-		log.Infof("ProcessSnapshotCSV: no snapshot rows found for cluster %s", clusterUUID)
+		logging.GetLogger().WithField("cluster_uuid", clusterUUID).Info("ProcessSnapshotCSV: no snapshot rows found")
 		return nil
 	}
 
@@ -268,7 +268,7 @@ func ProcessSnapshotCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, or
 		return fmt.Errorf("inserting snapshot inventory: %w", err)
 	}
 
-	log.Infof("ProcessSnapshotCSV: inserted %d snapshot inventory rows for cluster %s", len(rows), clusterUUID)
+	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof("ProcessSnapshotCSV: inserted %d snapshot inventory rows", len(rows))
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // GPUQueryFilters narrows gpu_container_digests rows (optional).
@@ -114,8 +114,9 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 		}
 	}
 
-	log.Infof("QueryGPURecommendations: cluster=%s, %d containers with GPU data, %d container-term recommendations",
-		clusterUUID, len(grouped), countGPURecs(result))
+	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof(
+		"QueryGPURecommendations: %d containers with GPU data, %d container-term recommendations",
+		len(grouped), countGPURecs(result))
 	return result, lastNode, nodeLastSeen, nil
 }
 

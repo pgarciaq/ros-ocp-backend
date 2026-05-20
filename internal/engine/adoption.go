@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // adoptionToleranceFraction uses the same 5% tolerance as quality.go's DetectAdoption.
@@ -70,10 +70,10 @@ func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID str
 			now, orgID, clusterUUID, key.Namespace, int16(NotifRecApplied), key.Workload, key.ContainerName,
 		)
 		if err != nil {
-			log.Warnf("adoption: marking %s/%s/%s: %v", key.Namespace, key.Workload, key.ContainerName, err)
+			logging.ForOrg(orgID, clusterUUID).Warnf("adoption: marking %s/%s/%s: %v", key.Namespace, key.Workload, key.ContainerName, err)
 			errs = append(errs, fmt.Errorf("%s/%s/%s: %w", key.Namespace, key.Workload, key.ContainerName, err))
 		} else if tag.RowsAffected() > 0 {
-			log.Infof("adoption: detected for %s/%s/%s in cluster %s", key.Namespace, key.Workload, key.ContainerName, clusterUUID)
+			logging.ForOrg(orgID, clusterUUID).Infof("adoption: detected for %s/%s/%s", key.Namespace, key.Workload, key.ContainerName)
 		}
 	}
 	return errors.Join(errs...)

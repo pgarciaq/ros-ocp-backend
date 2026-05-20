@@ -14,7 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 var validSQLIdentifier = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -94,13 +94,13 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	if len(retProviders) > 0 {
 		for _, rp := range retProviders {
 			if err := rp.SweepRetention(ctx, pool, cutoff); err != nil {
-				log.Warnf("retention: RetentionProvider %s sweep failed: %v", rp.Name(), err)
+				logging.GetLogger().Warnf("retention: RetentionProvider %s sweep failed: %v", rp.Name(), err)
 				errs = append(errs, fmt.Errorf("retention plugin %s: %w", rp.Name(), err))
 			}
 		}
 	} else {
 		if err := SweepPartitionedTables(ctx, pool, retainedTables, cutoffYM); err != nil {
-			log.Warnf("retention: partitioned sweep (main): %v", err)
+			logging.GetLogger().Warnf("retention: partitioned sweep (main): %v", err)
 			errs = append(errs, err)
 		}
 	}
@@ -113,7 +113,7 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	historyCutoff := time.Now().UTC().AddDate(0, 0, -historyDays)
 	historyCutoffYM := historyCutoff.Format("200601")
 	if err := SweepPartitionedTables(ctx, pool, historyRetainedTables, historyCutoffYM); err != nil {
-		log.Warnf("retention: partitioned sweep (history): %v", err)
+		logging.GetLogger().Warnf("retention: partitioned sweep (history): %v", err)
 		errs = append(errs, err)
 	}
 
@@ -121,11 +121,11 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
 		tag, err := pool.Exec(ctx, sql, cutoff)
 		if err != nil {
-			log.Warnf("retention: purging %s: %v", dt.Table, err)
+			logging.GetLogger().Warnf("retention: purging %s: %v", dt.Table, err)
 			errs = append(errs, fmt.Errorf("purge %s: %w", dt.Table, err))
 		} else if tag.RowsAffected() > 0 {
 			retentionDropped.Add(float64(tag.RowsAffected()))
-			log.Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
+			logging.GetLogger().Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
 		}
 	}
 
@@ -141,11 +141,11 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		staleCutoff,
 	)
 	if err != nil {
-		log.Warnf("retention: purging stale recommendations: %v", err)
+		logging.GetLogger().Warnf("retention: purging stale recommendations: %v", err)
 		errs = append(errs, fmt.Errorf("purge stale recommendations: %w", err))
 	} else if tag.RowsAffected() > 0 {
 		retentionDropped.Add(float64(tag.RowsAffected()))
-		log.Infof("retention: purged %d stale recommendations (older than %s)", tag.RowsAffected(), staleCutoff.Format("2006-01-02"))
+		logging.GetLogger().Infof("retention: purged %d stale recommendations (older than %s)", tag.RowsAffected(), staleCutoff.Format("2006-01-02"))
 	}
 
 	// Snapshot inventory retention: purge raw rows older than configured hours (default 48h).
@@ -155,11 +155,11 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 	purged, err := ingestion.PurgeSnapshotInventory(ctx, pool, snapRetentionH)
 	if err != nil {
-		log.Warnf("retention: %v", err)
+		logging.GetLogger().Warnf("retention: %v", err)
 		errs = append(errs, fmt.Errorf("purge snapshot inventory: %w", err))
 	} else if purged > 0 {
 		retentionDropped.Add(float64(purged))
-		log.Infof("retention: purged %d snapshot_inventory rows (older than %dh)", purged, snapRetentionH)
+		logging.GetLogger().Infof("retention: purged %d snapshot_inventory rows (older than %dh)", purged, snapRetentionH)
 	}
 	return errors.Join(errs...)
 }
@@ -170,7 +170,7 @@ func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []st
 	for _, table := range tables {
 		partitions, err := listPartitions(ctx, pool, table)
 		if err != nil {
-			log.Warnf("retention: listing partitions for %s: %v", table, err)
+			logging.GetLogger().Warnf("retention: listing partitions for %s: %v", table, err)
 			errs = append(errs, fmt.Errorf("list partitions %s: %w", table, err))
 			continue
 		}
@@ -181,11 +181,11 @@ func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []st
 			}
 			sql := fmt.Sprintf("DROP TABLE IF EXISTS %s", part)
 			if _, err := pool.Exec(ctx, sql); err != nil {
-				log.Warnf("retention: dropping %s: %v", part, err)
+				logging.GetLogger().Warnf("retention: dropping %s: %v", part, err)
 				errs = append(errs, fmt.Errorf("drop partition %s: %w", part, err))
 			} else {
 				retentionDropped.Inc()
-				log.Infof("retention: dropped partition %s (older than %s)", part, cutoffYM)
+				logging.GetLogger().Infof("retention: dropped partition %s (older than %s)", part, cutoffYM)
 			}
 		}
 	}
@@ -235,7 +235,7 @@ func extractYearMonth(partName, parentTable string) string {
 // hours. The goroutine exits when ctx is cancelled.
 func StartRetentionTicker(ctx context.Context, pool *pgxpool.Pool, retentionMonths int) {
 	if err := RunRetentionSweep(ctx, pool, retentionMonths); err != nil {
-		log.Warnf("retention: sweep finished with errors: %v", err)
+		logging.GetLogger().Warnf("retention: sweep finished with errors: %v", err)
 	}
 
 	ticker := time.NewTicker(24 * time.Hour)
@@ -247,7 +247,7 @@ func StartRetentionTicker(ctx context.Context, pool *pgxpool.Pool, retentionMont
 			return
 		case <-ticker.C:
 			if err := RunRetentionSweep(ctx, pool, retentionMonths); err != nil {
-				log.Warnf("retention: sweep finished with errors: %v", err)
+				logging.GetLogger().Warnf("retention: sweep finished with errors: %v", err)
 			}
 		}
 	}
