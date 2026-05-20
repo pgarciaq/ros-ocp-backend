@@ -1,153 +1,75 @@
 package engine
 
-import "strings"
+import (
+	_ "embed"
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
+)
 
 // GPUModelSpec describes the hardware capabilities of a GPU model.
 type GPUModelSpec struct {
-	Name               string       // canonical short name, e.g. "A100_80GB"
-	TotalFBMiB         int          // total frame buffer in MiB
-	SMCount            int          // number of streaming multiprocessors
-	MIGSupported       bool         // whether MIG partitioning is available
-	ProfilingSupported bool         // whether DCGM PROF_ metrics work (Turing+ datacenter)
-	Profiles           []MIGProfile // available MIG profiles (empty if !MIGSupported)
+	Name               string       `yaml:"name"`
+	TotalFBMiB         int          `yaml:"total_fb_mib"`
+	SMCount            int          `yaml:"sm_count"`
+	MIGSupported       bool         `yaml:"mig_supported"`
+	ProfilingSupported bool         `yaml:"profiling_supported"`
+	Profiles           []MIGProfile `yaml:"profiles"`
 }
 
 // MIGProfile describes a single MIG partition configuration.
 type MIGProfile struct {
-	Name        string  // e.g. "1g.5gb", "3g.40gb"
-	Slices      int     // number of GPU slices (1, 2, 3, 4, 7)
-	FBSizeMiB   int     // frame buffer for this partition in MiB
-	ComputeFrac float64 // fraction of full GPU compute capacity (Slices/7)
+	Name        string  `yaml:"name"`        // e.g. "1g.5gb", "3g.40gb"
+	Slices      int     `yaml:"slices"`      // number of GPU slices (1, 2, 3, 4, 7)
+	FBSizeMiB   int     `yaml:"fb_size_mib"` // frame buffer for this partition in MiB
+	ComputeFrac float64 `yaml:"-"`           // fraction of full GPU compute capacity (Slices/7), computed at load
 }
 
-func migFrac(slices int) float64 {
-	return float64(slices) / 7.0
+//go:embed gpu_catalog.yaml
+var gpuCatalogYAML []byte
+
+type gpuCatalogFile struct {
+	Models map[string]GPUModelSpec `yaml:"models"`
 }
 
-// gpuModels maps canonical GPU keys to hardware specifications.
-var gpuModels = map[string]GPUModelSpec{
-	"T4": {
-		Name: "T4", TotalFBMiB: 16384, SMCount: 40,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"A10": {
-		Name: "A10", TotalFBMiB: 24576, SMCount: 72,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"A10G": {
-		Name: "A10G", TotalFBMiB: 24576, SMCount: 80,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"A30": {
-		Name: "A30", TotalFBMiB: 24576, SMCount: 56,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.6gb", 1, 6144, migFrac(1)},
-			{"2g.12gb", 2, 12288, migFrac(2)},
-			{"4g.24gb", 4, 24576, migFrac(4)},
-		},
-	},
-	"A100_40GB": {
-		Name: "A100_40GB", TotalFBMiB: 40960, SMCount: 108,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.5gb", 1, 5120, migFrac(1)},
-			{"1g.10gb", 1, 10240, migFrac(1)},
-			{"2g.10gb", 2, 10240, migFrac(2)},
-			{"3g.20gb", 3, 20480, migFrac(3)},
-			{"4g.20gb", 4, 20480, migFrac(4)},
-			{"7g.40gb", 7, 40960, migFrac(7)},
-		},
-	},
-	"A100_80GB": {
-		Name: "A100_80GB", TotalFBMiB: 81920, SMCount: 108,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.10gb", 1, 10240, migFrac(1)},
-			{"1g.20gb", 1, 20480, migFrac(1)},
-			{"2g.20gb", 2, 20480, migFrac(2)},
-			{"3g.40gb", 3, 40960, migFrac(3)},
-			{"4g.40gb", 4, 40960, migFrac(4)},
-			{"7g.80gb", 7, 81920, migFrac(7)},
-		},
-	},
-	"L4": {
-		Name: "L4", TotalFBMiB: 24576, SMCount: 60,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"L40": {
-		Name: "L40", TotalFBMiB: 49152, SMCount: 142,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"L40S": {
-		Name: "L40S", TotalFBMiB: 49152, SMCount: 142,
-		MIGSupported: false, ProfilingSupported: true,
-	},
-	"H100_80GB": {
-		Name: "H100_80GB", TotalFBMiB: 81920, SMCount: 132,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.10gb", 1, 10240, migFrac(1)},
-			{"1g.20gb", 1, 20480, migFrac(1)},
-			{"2g.20gb", 2, 20480, migFrac(2)},
-			{"3g.40gb", 3, 40960, migFrac(3)},
-			{"4g.40gb", 4, 40960, migFrac(4)},
-			{"7g.80gb", 7, 81920, migFrac(7)},
-		},
-	},
-	"H100_94GB": {
-		Name: "H100_94GB", TotalFBMiB: 96256, SMCount: 132,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.12gb", 1, 12288, migFrac(1)},
-			{"1g.24gb", 1, 24576, migFrac(1)},
-			{"2g.24gb", 2, 24576, migFrac(2)},
-			{"3g.48gb", 3, 49152, migFrac(3)},
-			{"4g.48gb", 4, 49152, migFrac(4)},
-			{"7g.94gb", 7, 96256, migFrac(7)},
-		},
-	},
-	"H200_141GB": {
-		Name: "H200_141GB", TotalFBMiB: 144384, SMCount: 132,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.18gb", 1, 18432, migFrac(1)},
-			{"1g.35gb", 1, 35840, migFrac(1)},
-			{"2g.35gb", 2, 35840, migFrac(2)},
-			{"3g.71gb", 3, 72704, migFrac(3)},
-			{"4g.71gb", 4, 72704, migFrac(4)},
-			{"7g.141gb", 7, 144384, migFrac(7)},
-		},
-	},
-	"B200_192GB": {
-		Name: "B200_192GB", TotalFBMiB: 196608, SMCount: 160,
-		MIGSupported: true, ProfilingSupported: true,
-		Profiles: []MIGProfile{
-			{"1g.24gb", 1, 24576, migFrac(1)},
-			{"1g.48gb", 1, 49152, migFrac(1)},
-			{"2g.48gb", 2, 49152, migFrac(2)},
-			{"3g.96gb", 3, 98304, migFrac(3)},
-			{"4g.96gb", 4, 98304, migFrac(4)},
-			{"7g.192gb", 7, 196608, migFrac(7)},
-		},
-	},
-	"V100_16GB": {
-		Name: "V100_16GB", TotalFBMiB: 16384, SMCount: 80,
-		MIGSupported: false, ProfilingSupported: false,
-	},
-	"V100_32GB": {
-		Name: "V100_32GB", TotalFBMiB: 32768, SMCount: 80,
-		MIGSupported: false, ProfilingSupported: false,
-	},
-	"P100": {
-		Name: "P100", TotalFBMiB: 16384, SMCount: 56,
-		MIGSupported: false, ProfilingSupported: false,
-	},
-	"P40": {
-		Name: "P40", TotalFBMiB: 24576, SMCount: 30,
-		MIGSupported: false, ProfilingSupported: false,
-	},
+// gpuModels is the loaded GPU catalog. Populated by init().
+var gpuModels map[string]GPUModelSpec
+
+func init() {
+	var catalog gpuCatalogFile
+	if err := yaml.Unmarshal(gpuCatalogYAML, &catalog); err != nil {
+		panic(fmt.Sprintf("gpu_catalog.yaml: parse error: %v", err))
+	}
+	gpuModels = make(map[string]GPUModelSpec, len(catalog.Models))
+	for key, spec := range catalog.Models {
+		// Compute MIG profile fractions from slice counts.
+		if spec.MIGSupported {
+			for i := range spec.Profiles {
+				spec.Profiles[i].ComputeFrac = migFrac(spec.Profiles[i].Slices)
+			}
+		}
+		gpuModels[key] = spec
+	}
 }
+
+func migFrac(profileSMs int) float64 {
+	return float64(profileSMs) / 7.0
+}
+
+var (
+	gpuModelUnrecognized = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rosocp_gpu_model_unrecognized_total",
+		Help: "Number of times a DCGM-reported GPU model string was not recognized by the catalog",
+	}, []string{"model_name"})
+
+	// Deduplicate log warnings per model string to avoid log spam.
+	unrecognizedLogOnce sync.Map
+)
 
 // matchGPUModelKey resolves a lowercase model string to gpuModels lookup keys.
 func matchGPUModelKey(lower string) string {
@@ -203,14 +125,33 @@ func matchGPUModelKey(lower string) string {
 }
 
 // MatchGPUModel resolves a DCGM-reported model name string to a GPUModelSpec.
-// Returns nil if the GPU model is not recognized.
+// Returns nil if the GPU model is not recognized. When nil is returned for a
+// non-empty input, a Prometheus counter is incremented and a one-time warning
+// is logged to help operators identify gaps in the catalog.
 func MatchGPUModel(modelName string) *GPUModelSpec {
 	s := strings.ToLower(strings.TrimSpace(modelName))
 	key := matchGPUModelKey(s)
 	if key == "" {
+		if modelName != "" {
+			// Truncate label value to prevent cardinality explosion from garbage input.
+			label := modelName
+			if len(label) > 64 {
+				label = label[:64]
+			}
+			gpuModelUnrecognized.WithLabelValues(label).Inc()
+			if _, loaded := unrecognizedLogOnce.LoadOrStore(s, struct{}{}); !loaded {
+				log.Warnf("gpu_metadata: unrecognized GPU model %q — add to gpu_catalog.yaml and matchGPUModelKey", modelName)
+			}
+		}
 		return nil
 	}
 	spec := gpuModels[key]
 	specCopy := spec
 	return &specCopy
+}
+
+// GPUModelCount returns the number of GPU models in the catalog.
+// Useful for health checks and tests.
+func GPUModelCount() int {
+	return len(gpuModels)
 }

@@ -1,0 +1,256 @@
+# GPU Model Catalog
+#
+# This file defines the hardware specifications for all recognized NVIDIA GPU
+# models. It is embedded at compile time via go:embed and parsed on startup.
+#
+# To add a new GPU:
+#   1. Add an entry below with correct specs from NVIDIA's datasheet
+#   2. Add a matching case in matchGPUModelKey() in gpu_metadata.go
+#   3. Add a test case in gpu_metadata_test.go
+#
+# Sources: NVIDIA product datasheets, CUDA toolkit documentation
+# Last updated: 2026-05-20
+
+models:
+  T4:
+    name: T4
+    total_fb_mib: 16384
+    sm_count: 40
+    mig_supported: false
+    profiling_supported: true
+
+  A10:
+    name: A10
+    total_fb_mib: 24576
+    sm_count: 72
+    mig_supported: false
+    profiling_supported: true
+
+  A10G:
+    name: A10G
+    total_fb_mib: 24576  # Same VRAM as A10, but 80 SMs (AWS G5 instances)
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: true
+
+  A30:
+    name: A30
+    total_fb_mib: 24576
+    sm_count: 56
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.6gb"
+        slices: 1
+        fb_size_mib: 6144
+      - name: "2g.12gb"
+        slices: 2
+        fb_size_mib: 12288
+      - name: "4g.24gb"
+        slices: 4
+        fb_size_mib: 24576
+
+  A100_40GB:
+    name: A100_40GB
+    total_fb_mib: 40960
+    sm_count: 108
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.5gb"
+        slices: 1
+        fb_size_mib: 5120
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "2g.10gb"
+        slices: 2
+        fb_size_mib: 10240
+      - name: "3g.20gb"
+        slices: 3
+        fb_size_mib: 20480
+      - name: "4g.20gb"
+        slices: 4
+        fb_size_mib: 20480
+      - name: "7g.40gb"
+        slices: 7
+        fb_size_mib: 40960
+
+  A100_80GB:
+    name: A100_80GB
+    total_fb_mib: 81920
+    sm_count: 108
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "1g.20gb"
+        slices: 1
+        fb_size_mib: 20480
+      - name: "2g.20gb"
+        slices: 2
+        fb_size_mib: 20480
+      - name: "3g.40gb"
+        slices: 3
+        fb_size_mib: 40960
+      - name: "4g.40gb"
+        slices: 4
+        fb_size_mib: 40960
+      - name: "7g.80gb"
+        slices: 7
+        fb_size_mib: 81920
+
+  L4:
+    name: L4
+    total_fb_mib: 24576
+    sm_count: 60
+    mig_supported: false
+    profiling_supported: true
+
+  L40:
+    name: L40
+    total_fb_mib: 49152
+    sm_count: 142
+    mig_supported: false
+    profiling_supported: true
+
+  L40S:
+    name: L40S
+    total_fb_mib: 49152
+    sm_count: 142
+    mig_supported: false
+    profiling_supported: true
+
+  H100_80GB:
+    name: H100_80GB
+    total_fb_mib: 81920
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "1g.20gb"
+        slices: 1
+        fb_size_mib: 20480
+      - name: "2g.20gb"
+        slices: 2
+        fb_size_mib: 20480
+      - name: "3g.40gb"
+        slices: 3
+        fb_size_mib: 40960
+      - name: "4g.40gb"
+        slices: 4
+        fb_size_mib: 40960
+      - name: "7g.80gb"
+        slices: 7
+        fb_size_mib: 81920
+
+  H100_94GB:
+    name: H100_94GB
+    total_fb_mib: 96256
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.12gb"
+        slices: 1
+        fb_size_mib: 12288
+      - name: "1g.24gb"
+        slices: 1
+        fb_size_mib: 24576
+      - name: "2g.24gb"
+        slices: 2
+        fb_size_mib: 24576
+      - name: "3g.48gb"
+        slices: 3
+        fb_size_mib: 49152
+      - name: "4g.48gb"
+        slices: 4
+        fb_size_mib: 49152
+      - name: "7g.94gb"
+        slices: 7
+        fb_size_mib: 96256
+
+  H200_141GB:
+    name: H200_141GB
+    total_fb_mib: 144384
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.18gb"
+        slices: 1
+        fb_size_mib: 18432
+      - name: "1g.35gb"
+        slices: 1
+        fb_size_mib: 35840
+      - name: "2g.35gb"
+        slices: 2
+        fb_size_mib: 35840
+      - name: "3g.71gb"
+        slices: 3
+        fb_size_mib: 72704
+      - name: "4g.71gb"
+        slices: 4
+        fb_size_mib: 72704
+      - name: "7g.141gb"
+        slices: 7
+        fb_size_mib: 144384
+
+  B200_192GB:
+    name: B200_192GB
+    total_fb_mib: 196608
+    sm_count: 160
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.24gb"
+        slices: 1
+        fb_size_mib: 24576
+      - name: "1g.48gb"
+        slices: 1
+        fb_size_mib: 49152
+      - name: "2g.48gb"
+        slices: 2
+        fb_size_mib: 49152
+      - name: "3g.96gb"
+        slices: 3
+        fb_size_mib: 98304
+      - name: "4g.96gb"
+        slices: 4
+        fb_size_mib: 98304
+      - name: "7g.192gb"
+        slices: 7
+        fb_size_mib: 196608
+
+  V100_16GB:
+    name: V100_16GB
+    total_fb_mib: 16384
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: false
+
+  V100_32GB:
+    name: V100_32GB
+    total_fb_mib: 32768
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: false
+
+  P100:
+    name: P100
+    total_fb_mib: 16384
+    sm_count: 56
+    mig_supported: false
+    profiling_supported: false
+
+  P40:
+    name: P40
+    total_fb_mib: 24576
+    sm_count: 30
+    mig_supported: false
+    profiling_supported: false

@@ -47,6 +47,13 @@ func TestMatchGPUModel(t *testing.T) {
 	}
 }
 
+func TestGPUModelCount(t *testing.T) {
+	count := GPUModelCount()
+	if count < 16 {
+		t.Errorf("GPUModelCount() = %d, want at least 16 (catalog may be missing entries)", count)
+	}
+}
+
 func TestGPUModelMIGProfiles(t *testing.T) {
 	// Verify MIG-capable models have profiles
 	migModels := []string{"A30", "A100_40GB", "A100_80GB", "H100_80GB", "H100_94GB", "H200_141GB", "B200_192GB"}
