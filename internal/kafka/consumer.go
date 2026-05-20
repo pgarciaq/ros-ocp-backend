@@ -2,7 +2,7 @@ package kafka
 
 import (
 	"context"
-	"os"
+
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -89,14 +89,12 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 
 	consumer, err := kafka.NewConsumer(&configMap)
 	if err != nil {
-		log.Errorf("Failed to create consumer: %s", err)
-		os.Exit(1)
+		log.Fatalf("Failed to create consumer: %s", err)
 	}
 
 	if err := consumer.Subscribe(kafka_topic, nil); err != nil {
-		log.Errorf("Failed to subscribe to topic %s: %s", kafka_topic, err)
 		_ = consumer.Close()
-		os.Exit(1)
+		log.Fatalf("Failed to subscribe to topic %s: %s", kafka_topic, err)
 	}
 
 	defer func() {
