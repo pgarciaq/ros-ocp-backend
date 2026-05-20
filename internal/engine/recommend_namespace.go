@@ -120,7 +120,7 @@ func RecommendAllNamespaces(
 	}
 
 	now := time.Now().UTC()
-	var results []NamespaceRec
+	results := make([]NamespaceRec, 0, len(grouped)*2)
 
 	for key, digestRows := range grouped {
 		latest := latestDigest(digestRows)

@@ -255,7 +255,7 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 		return nil, err
 	}
 
-	var rows []MetricRow
+	rows := make([]MetricRow, 0, 4096)
 	lineNum := 1
 	for {
 		record, err := reader.Read()

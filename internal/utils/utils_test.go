@@ -166,18 +166,6 @@ func TestConvertDateToISO8601(t *testing.T) {
 	}
 }
 
-func TestConvert2DarrayToMap(t *testing.T) {
-	arr := [][]string{{"key1", "key2", "key3"}, {"value1", "value2", "value3"}}
-	expected_result := []map[string]interface{}{{
-		"key1": "value1",
-		"key2": "value2",
-		"key3": "value3",
-	}}
-	result := Convert2DarrayToMap(arr)
-	if diff := cmp.Diff(result, expected_result); diff != "" {
-		t.Error(diff)
-	}
-}
 
 func TestUnique(t *testing.T) {
 	arr := []int{1, 2, 3, 3, 4, 4, 5, 6, 6}

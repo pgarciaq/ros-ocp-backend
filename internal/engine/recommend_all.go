@@ -114,7 +114,7 @@ func RecommendAllWorkloads(
 	}
 
 	now := time.Now().UTC()
-	var results []ContainerRec
+	results := make([]ContainerRec, 0, len(grouped)*2)
 
 	for key, digestRows := range grouped {
 		// Current values: use the most recent digest's P50 as the "current" resource config.
@@ -325,14 +325,31 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 }
 
 // filterByWindow returns rows within the last windowDays from endDate (inclusive).
+// Rows are assumed sorted by BucketDate (ascending) from the DB query.
 func filterByWindow(rows []DigestRow, endDate time.Time, windowDays int) []DigestRow {
-	cutoff := endDate.AddDate(0, 0, -(windowDays - 1))
-	var result []DigestRow
-	for _, r := range rows {
-		d := r.BucketDate.Truncate(24 * time.Hour)
-		if !d.Before(cutoff.Truncate(24*time.Hour)) && !d.After(endDate.Truncate(24*time.Hour)) {
-			result = append(result, r)
+	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
+	endDay := endDate.Truncate(24 * time.Hour)
+
+	// Binary search for the first row >= cutoff (rows are sorted by bucket_date).
+	lo := 0
+	hi := len(rows)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if rows[mid].BucketDate.Truncate(24 * time.Hour).Before(cutoffDay) {
+			lo = mid + 1
+		} else {
+			hi = mid
 		}
+	}
+
+	// Collect from lo to the end of the window.
+	result := make([]DigestRow, 0, len(rows)-lo)
+	for i := lo; i < len(rows); i++ {
+		d := rows[i].BucketDate.Truncate(24 * time.Hour)
+		if d.After(endDay) {
+			break
+		}
+		result = append(result, rows[i])
 	}
 	return result
 }
