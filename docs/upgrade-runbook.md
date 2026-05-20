@@ -1,0 +1,202 @@
+# Upgrade Runbook: Kruize-era → Native Engine
+
+This document describes how to safely upgrade a running ros-ocp-backend
+instance from a Kruize-era database schema to the native engine schema.
+
+**Audience:** Operators performing the upgrade on a live deployment.
+
+**Scope:** Covers migration safety concerns documented in 490-issues.md
+(#84, #89, #90, #91, #92, #100). Fresh installations do NOT need this
+runbook — all migrations run safely on an empty database.
+
+---
+
+## Prerequisites
+
+- Access to the PostgreSQL database (direct or via port-forward)
+- `kubectl`/`oc` access to the deployment namespace
+- Familiarity with the Helm chart or ClowdApp deployment
+
+## Overview of Risky Migrations
+
+| Migration | Risk | Duration on populated DB |
+|-----------|------|--------------------------|
+| 000028 | Heavy DDL+DML: backfills denormalized columns, rebuilds PK | Minutes (proportional to `recommendation_sets` row count) |
+| 000041 | `cluster_uuid::uuid` cast — fails if invalid UUID strings exist | Instant if data is clean; fails otherwise |
+| 000045 | Creates unique index without CONCURRENTLY — blocks writes | Seconds to minutes (proportional to `gpu_container_digests` size) |
+| 000058 | Drops and recreates PK on `node_recommendations` — ACCESS EXCLUSIVE lock | Sub-second (table is small: one row per node per term) |
+
+---
+
+## Step 1: Schedule Maintenance Window
+
+Estimate duration based on data volume:
+
+```sql
+-- Check recommendation_sets row count (affects migration 000028)
+SELECT count(*) FROM recommendation_sets;
+
+-- Check gpu_container_digests row count (affects migration 000045)
+SELECT count(*) FROM gpu_container_digests;
+
+-- Check for invalid cluster_uuid values (affects migration 000041)
+SELECT cluster_uuid FROM clusters
+WHERE cluster_uuid !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+SELECT cluster_uuid FROM recommendation_sets
+WHERE cluster_uuid !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+```
+
+**Rules of thumb:**
+- < 100K rows in `recommendation_sets`: ~30 seconds total
+- 100K–1M rows: 1–5 minutes
+- > 1M rows: 5–15 minutes (consider off-peak window)
+
+## Step 2: Fix Invalid Data (if any)
+
+If the cluster_uuid validation query in Step 1 returns rows:
+
+```sql
+-- Option A: Delete rows with invalid cluster_uuid (recommended if orphaned)
+DELETE FROM recommendation_sets
+WHERE cluster_uuid !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+DELETE FROM clusters
+WHERE cluster_uuid !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+-- Option B: Fix known bad values (if the correct UUID is known)
+UPDATE clusters SET cluster_uuid = '<correct-uuid>' WHERE cluster_uuid = '<bad-value>';
+```
+
+## Step 3: Stop Workers
+
+**Critical:** Workers must be stopped BEFORE running migrations to prevent
+deadlocks between migration 000058 (PK rebuild) and `PersistNodeRecommendations`
+(which INSERTs into `node_recommendations`).
+
+```bash
+# Helm deployment
+kubectl scale deployment cost-onprem-ros-processor --replicas=0 -n <namespace>
+
+# Or for ClowdApp
+oc scale deployment ros-ocp-processor --replicas=0 -n <namespace>
+
+# Verify no active connections from workers
+kubectl exec -it <db-pod> -n <namespace> -- psql -U postgres -c \
+  "SELECT pid, application_name, state, query FROM pg_stat_activity WHERE application_name LIKE '%ros%';"
+```
+
+Wait until all worker connections are gone.
+
+## Step 4: Run Migrations
+
+```bash
+# If using the migrate binary directly:
+migrate -path migrations/ -database "postgres://..." up
+
+# If using the init container (default Helm chart behavior):
+# Simply restart the API pod — the init container runs migrations on startup
+kubectl rollout restart deployment cost-onprem-ros-api -n <namespace>
+
+# Monitor migration progress
+kubectl logs -f deployment/cost-onprem-ros-api -c migrate -n <namespace>
+```
+
+**Expected output:**
+```
+000028/u alter_recommendation_sets (migrations completed successfully)
+...
+000041/u alter_clusters_cluster_uuid_to_uuid
+000045/u gpu_container_digests_unique_index
+...
+000058/u node_recommendations_add_term
+```
+
+If migration 000041 fails with `invalid input syntax for type uuid`:
+- Go back to Step 2, fix the data, then retry.
+
+## Step 5: Verify Migration Success
+
+```sql
+-- Check current schema version
+SELECT version, dirty FROM schema_migrations;
+-- Expected: version=61, dirty=false
+
+-- Verify PK on node_recommendations
+SELECT conname, contype FROM pg_constraint
+WHERE conrelname = 'node_recommendations' AND contype = 'p';
+-- Expected: node_recommendations_pkey (includes term column)
+
+-- Verify cluster_uuid is UUID type
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_name = 'clusters' AND column_name = 'cluster_uuid';
+-- Expected: data_type = 'uuid'
+```
+
+## Step 6: Restart Workers
+
+```bash
+kubectl scale deployment cost-onprem-ros-processor --replicas=1 -n <namespace>
+
+# Verify worker is healthy
+kubectl logs -f deployment/cost-onprem-ros-processor -n <namespace> --tail=20
+```
+
+## Step 7: Verify End-to-End
+
+```bash
+# Check API responds
+curl -s http://<ros-api-url>/api/cost-management/v1/recommendations/openshift/status
+
+# Check recommendations are being generated (after next ingestion cycle)
+curl -s -H "x-rh-identity: <token>" \
+  http://<ros-api-url>/api/cost-management/v1/recommendations/openshift/ | python3 -m json.tool
+```
+
+---
+
+## ON DELETE CASCADE Consideration (#92)
+
+The `workloads` and `clusters` tables have `ON DELETE CASCADE` foreign keys.
+Deleting a cluster (via Sources Kafka `destroy` event) will cascade-delete
+all associated recommendations, digests, and history.
+
+**Mitigation:**
+- Cluster deletions are rare (manual operator action)
+- On large tenants (>100K recommendations per cluster), the cascade could
+  take 10-30 seconds and generate WAL pressure
+- If this becomes a concern, consider:
+  1. Soft-delete pattern (add `deleted_at` column, filter in queries)
+  2. Background batch deletion (mark for deletion, sweep in CronJob)
+
+**For now:** This is acceptable for the expected scale (< 50 clusters per
+tenant, < 10K recommendations per cluster).
+
+---
+
+## Rollback Procedure
+
+**Warning:** Rollback from native engine to Kruize-era is destructive.
+Down migrations (#86, #87) will delete native-engine data.
+
+```bash
+# Only if absolutely necessary:
+kubectl scale deployment cost-onprem-ros-processor --replicas=0 -n <namespace>
+migrate -path migrations/ -database "postgres://..." down <N>
+kubectl scale deployment cost-onprem-ros-processor --replicas=1 -n <namespace>
+```
+
+After rollback, native engine recommendations are lost and must be
+regenerated from scratch on the next ingestion cycle.
+
+---
+
+## Fresh Installation (No Runbook Needed)
+
+For fresh installations (empty database), all migrations run safely:
+- Empty tables → no data to cast, no rows to lock, no cascades
+- PK rebuilds are instantaneous on empty tables
+- Index creation is instantaneous on empty tables
+
+Simply deploy the Helm chart or ClowdApp and migrations will complete
+in under 5 seconds.
