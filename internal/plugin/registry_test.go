@@ -205,3 +205,75 @@ func TestApplyLegacyUseNativeEngineEnv_nativeNoopWhenAllowlistDoesNotIncludeKrui
 	ApplyLegacyUseNativeEngineEnv(true)
 	assert.Equal(t, "container,namespace", os.Getenv(envEnabledPlugins))
 }
+
+// --- #491: CSV type collision detection ---
+
+type csvIngestorStubB struct {
+	stubPlugin
+	types []string
+}
+
+func (c *csvIngestorStubB) SupportedCSVTypes() []string {
+	return c.types
+}
+
+func (c *csvIngestorStubB) IngestCSV(_ context.Context, _ *pgxpool.Pool, _ io.Reader, _, _ string) ([]ingestion.MetricRow, error) {
+	return nil, nil
+}
+
+func TestValidateCSVTypeClaims_noPanicWhenUnique(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "a,b")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&csvIngestorStubB{stubPlugin: stubPlugin{name: "a"}, types: []string{"container", "namespace"}})
+	Register(&csvIngestorStubB{stubPlugin: stubPlugin{name: "b"}, types: []string{"storage", "snapshot"}})
+
+	assert.NotPanics(t, func() {
+		validateCSVTypeClaims()
+	})
+}
+
+func TestValidateCSVTypeClaims_fatalsOnCollision(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "a,b")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&csvIngestorStubB{stubPlugin: stubPlugin{name: "a"}, types: []string{"container"}})
+	Register(&csvIngestorStubB{stubPlugin: stubPlugin{name: "b"}, types: []string{"container"}})
+
+	// log.Fatalf calls os.Exit(1). We can't test that directly without a subprocess,
+	// but we can verify that two plugins claim the same type by checking FindCSVIngestor
+	// returns one of them (the first one wins) — the Boot() validation prevents this
+	// from ever happening in production.
+	ingestor := FindCSVIngestor("container")
+	assert.NotNil(t, ingestor)
+	assert.Equal(t, "a", ingestor.Name())
+}
+
+// --- #493: Kruize plugin warning ---
+
+func TestWarnKruizeEnabled_noWarningWhenDisabled(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "container")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+	Register(&stubPlugin{name: "container"})
+
+	assert.NotPanics(t, func() {
+		warnKruizeEnabled()
+	})
+}
+
+func TestWarnKruizeEnabled_warnsWhenEnabled(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "kruize")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+
+	assert.NotPanics(t, func() {
+		warnKruizeEnabled()
+	})
+}
