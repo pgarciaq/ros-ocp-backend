@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 var qualityPartitionMissing = promauto.NewCounter(prometheus.CounterOpts{
@@ -32,6 +32,38 @@ type OldRecommendation struct {
 // given containers (term='short', engine='cost' only), returning a map keyed
 // by container. This must be called BEFORE WriteRecommendations to capture
 // values for stability_pct and adoption_detected.
+// ReadClusterOldRecommendations loads all existing short-term/cost recommendations
+// for a cluster in a single query. Used by the streaming pipeline to avoid
+// building O(containers) tuple lists.
+func ReadClusterOldRecommendations(
+	ctx context.Context, pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+) (map[containerKey]OldRecommendation, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT namespace, workload, COALESCE(workload_type, ''), container_name,
+			COALESCE(rec_cpu_request_millicores, 0), COALESCE(rec_memory_request_kib, 0), updated_at
+		FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, fmt.Errorf("ReadClusterOldRecommendations: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[containerKey]OldRecommendation, 256)
+	for rows.Next() {
+		var ns, wl, wlType, cn string
+		var old OldRecommendation
+		if err := rows.Scan(&ns, &wl, &wlType, &cn, &old.RecCPURequestMC, &old.RecMemRequestKiB, &old.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("ReadClusterOldRecommendations scan: %w", err)
+		}
+		result[containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}] = old
+	}
+	return result, rows.Err()
+}
+
+// ReadOldRecommendations loads old recommendations for a specific set of container keys.
+// Retained for backward compatibility with tests.
 func ReadOldRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
@@ -42,9 +74,6 @@ func ReadOldRecommendations(
 		return result, nil
 	}
 
-	// Build a tuple-wise VALUES list for exact (namespace, workload, container_name) matching.
-	// Using separate ANY() arrays would match the cross-product of all values,
-	// potentially returning phantom rows when values overlap across keys.
 	var sb strings.Builder
 	args := []any{orgID, clusterUUID}
 	sb.WriteString(`
@@ -196,7 +225,7 @@ func WriteRecommendationQuality(
 		if _, err := br.Exec(); err != nil {
 			if isPartitionMissing(err) {
 				qualityPartitionMissing.Inc()
-				log.Errorf("WriteRecommendationQuality: missing partition for recommendation_quality: %v", err)
+				logging.GetLogger().Errorf("WriteRecommendationQuality: missing partition for recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for recommendation_quality: %w", err)
 			}
 			return fmt.Errorf("WriteRecommendationQuality batch exec: %w", err)
@@ -229,7 +258,7 @@ func EnsureQualityPartitions(ctx context.Context, pool *pgxpool.Pool) {
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureQualityPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureQualityPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }

@@ -195,6 +195,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		df, parseError := utils.Aggregate_data(csvType, df)
 		if parseError != nil {
 			log.Errorf("unable to process %s; error: %s ", file, parseError.Error())
+			ingestionErrors.WithLabelValues("csv_parse").Inc()
 			switch csvType {
 			case types.PayloadTypeNamespace:
 				invalidNamespaceCSV.Inc()
@@ -485,9 +486,9 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 // recommendation engine instead of the Kruize pipeline. It downloads the CSV,
 // computes daily digests, upserts them, and runs the recommendation engine.
 func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	log := logging.GetLogger()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
 
 	body, err := utils.ReadCSVBodyFromUrl(fileURL)
 	if err != nil {
@@ -503,9 +504,11 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
+	tDigest := time.Now()
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "container")
 	if err != nil {
-		log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native engine: digest processing failed: %v", err)
+		ingestionErrors.WithLabelValues("digest").Inc()
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("digest processing: %w", err)
 		}
@@ -513,13 +516,15 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	if !handled {
 		if err := processContainerDigestFallback(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			log.Errorf("native engine: digest processing failed: %v", err)
+			ingestionErrors.WithLabelValues("digest").Inc()
 			if isTransientKafkaProcessingError(err) {
 				return fmt.Errorf("digest processing: %w", err)
 			}
 			return nil
 		}
 	}
+	metrics.ObservePipelinePhase("digest", tDigest)
 
 	now := time.Now().UTC()
 	appCfg := config.GetConfig()
@@ -528,86 +533,100 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		BaseBump: appCfg.OOMBaseBump,
 		MaxBump:  appCfg.OOMMaxBump,
 	}
-	tRec := time.Now()
-	results, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, now, oomCfg)
-	metrics.ObserveRecommendation("container", tRec)
-	if err != nil {
-		log.Errorf("native engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		return fmt.Errorf("recommend workloads: %w", err)
-	}
-
-	if len(results) == 0 {
-		log.Infof("native engine: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
-		return nil
-	}
 
 	costProvider := getCostDataProvider(appCfg)
 	costData, costErr := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
 	if costErr != nil {
-		log.Warnf("native engine: cost data fetch failed for org=%s cluster=%s: %v (NotifNoCostData applied via ApplySavingsEstimates)", orgID, clusterUUID, costErr)
+		log.Warnf("native engine: cost data fetch failed (NotifNoCostData applied via ApplySavingsEstimates): %v", costErr)
 		costData = nil
 	}
-	engine.ApplySavingsEstimates(results, costData)
 
-	containerKeys := engine.ContainerKeys(results)
-	oldRecs, err := engine.ReadOldRecommendations(ctx, pool, orgID, clusterUUID, containerKeys)
+	oldRecs, err := engine.ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID)
 	if err != nil {
-		log.Errorf("native engine: reading old recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native engine: reading old recommendations failed: %v", err)
 		oldRecs = nil
 	}
 
-	if oldRecs != nil {
-		adoptedKeys := engine.FindAdoptedContainers(results, oldRecs)
-		if err := engine.MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); err != nil {
-			log.Warnf("native engine: adoption marking incomplete for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		}
-	}
-
-	if err := engine.WriteRecommendations(ctx, pool, results); err != nil {
-		log.Errorf("native engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		return fmt.Errorf("write recommendations: %w", err)
-	}
-	log.Infof("native engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
-
-	if plugin.EnabledFor("gpu") {
-		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
-			log.Warnf("native engine: marking GPU containers failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		}
-		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID)
-		if termErr != nil {
-			log.Warnf("native engine: load term config for GPU classification failed for org=%s cluster=%s: %v", orgID, clusterUUID, termErr)
-			gpuTerms = engine.DefaultTerms()
-		}
-		if err := engine.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
-			log.Warnf("native engine: storing GPU classifications failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		}
-	}
+	engine.EnsureHistoryPartitions(ctx, pool)
+	engine.EnsureQualityPartitions(ctx, pool)
 
 	pipelineDegraded := false
-	engine.EnsureHistoryPartitions(ctx, pool)
-	if err := engine.WriteRecommendationHistory(ctx, pool, results, ""); err != nil {
-		log.Errorf("native engine: writing recommendation history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
-		pipelineDegraded = true
-	}
+	totalWritten := 0
+	tRec := time.Now()
 
-	if oldRecs == nil {
-		log.Warnf("native engine: skipping quality metrics (old recs unavailable) for org=%s cluster=%s", orgID, clusterUUID)
-		pipelineDegraded = true
-	} else {
-		engine.EnsureQualityPartitions(ctx, pool)
-		oomCounts := engine.OOMCountsByContainer(results)
-		if err := engine.WriteRecommendationQuality(ctx, pool, results, oldRecs, oomCounts); err != nil {
-			log.Errorf("native engine: writing quality metrics failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+	err = engine.RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []engine.ContainerRec) error {
+		engine.ApplySavingsEstimates(batch, costData)
+
+		if oldRecs != nil {
+			adoptedKeys := engine.FindAdoptedContainers(batch, oldRecs)
+			if markErr := engine.MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
+				log.Warnf("native engine: adoption marking incomplete: %v", markErr)
+			}
+		}
+
+		if writeErr := engine.WriteRecommendations(ctx, pool, batch); writeErr != nil {
+			ingestionErrors.WithLabelValues("write").Inc()
+			return writeErr
+		}
+		totalWritten += len(batch)
+
+		if histErr := engine.WriteRecommendationHistory(ctx, pool, batch, ""); histErr != nil {
+			log.Errorf("native engine: writing recommendation history failed: %v", histErr)
 			pipelineDegraded = true
 		}
+
+		if oldRecs != nil {
+			oomCounts := engine.OOMCountsByContainer(batch)
+			if qualErr := engine.WriteRecommendationQuality(ctx, pool, batch, oldRecs, oomCounts); qualErr != nil {
+				log.Errorf("native engine: writing quality metrics failed: %v", qualErr)
+				pipelineDegraded = true
+			}
+		}
+
+		return nil
+	})
+	metrics.ObserveRecommendation("container", tRec)
+
+	if err != nil {
+		log.Errorf("native engine: recommendation failed: %v", err)
+		ingestionErrors.WithLabelValues("recommend").Inc()
+		return fmt.Errorf("recommend workloads: %w", err)
+	}
+
+	if totalWritten == 0 {
+		log.Info("native engine: no recommendations produced")
+		return nil
+	}
+	metrics.IncRecommendationsWritten("container", totalWritten)
+	log.Infof("native engine: wrote %d recommendations", totalWritten)
+
+	if oldRecs == nil {
+		log.Warn("native engine: skipping quality metrics (old recs unavailable)")
+		pipelineDegraded = true
 	}
 
 	if pipelineDegraded {
-		log.Warnf("native engine: analytics pipeline incomplete (history and/or quality) for org=%s cluster=%s — container recommendations were written", orgID, clusterUUID)
+		log.Warn("native engine: analytics pipeline incomplete (history and/or quality) — container recommendations were written")
+	}
+
+	if plugin.EnabledFor("gpu") {
+		tGPU := time.Now()
+		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
+			log.Warnf("native engine: marking GPU containers failed: %v", err)
+		}
+		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID)
+		if termErr != nil {
+			log.Warnf("native engine: load term config for GPU classification failed: %v", termErr)
+			gpuTerms = engine.DefaultTerms()
+		}
+		if err := engine.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
+			log.Warnf("native engine: storing GPU classifications failed: %v", err)
+		}
+		metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
 	}
 
 	if err := runNodeRecommendations(ctx, pool, orgID, clusterUUID, start, now, appCfg); err != nil {
-		log.Warnf("native engine: node recommendations incomplete for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Warnf("native engine: node recommendations incomplete: %v", err)
 		return fmt.Errorf("node recommendations: %w", err)
 	}
 	return nil
@@ -619,21 +638,21 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	t0 := time.Now()
 	defer func() { metrics.ObserveRecommendation("node", t0) }()
 
-	log := logging.GetLogger()
+	log := logging.ForOrg(orgID, clusterUUID)
 
 	digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end)
 	if err != nil {
-		log.Warnf("node recs: query digests failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Warnf("node recs: query digests failed: %v", err)
 		return fmt.Errorf("query node digests: %w", err)
 	}
 	if len(digests) == 0 {
-		log.Infof("node recs: no node digests for org=%s cluster=%s", orgID, clusterUUID)
+		log.Info("node recs: no node digests")
 		return nil
 	}
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
-		log.Errorf("node recs: load term config failed for org=%s: %v — using defaults", orgID, err)
+		log.Errorf("node recs: load term config failed, using defaults: %v", err)
 		terms = engine.DefaultTerms()
 	}
 
@@ -646,7 +665,7 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	}
 	recs := engine.RecommendNodes(digests, cfg, terms)
 	if len(recs) == 0 {
-		log.Infof("node recs: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
+		log.Info("node recs: no recommendations produced")
 		return nil
 	}
 
@@ -655,18 +674,19 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		validTerms[i] = tc.Name
 	}
 	if err := engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms); err != nil {
-		log.Errorf("node recs: persist failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("node recs: persist failed: %v", err)
 		return fmt.Errorf("persist node recommendations: %w", err)
 	}
+	metrics.IncRecommendationsWritten("node", len(recs))
 	return nil
 }
 
 // processNamespaceCSVNative handles namespace CSV files through the native Go
 // recommendation engine instead of the Kruize pipeline.
 func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	log := logging.GetLogger()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
 
 	body, err := utils.ReadCSVBodyFromUrl(fileURL)
 	if err != nil {
@@ -684,7 +704,7 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "namespace")
 	if err != nil {
-		log.Errorf("native namespace engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native namespace engine: digest processing failed: %v", err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("namespace digest processing: %w", err)
 		}
@@ -692,7 +712,7 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	if !handled {
 		if err := ingestion.ProcessNamespaceCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native namespace engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			log.Errorf("native namespace engine: digest processing failed: %v", err)
 			if isTransientKafkaProcessingError(err) {
 				return fmt.Errorf("namespace digest processing: %w", err)
 			}
@@ -707,23 +727,24 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, clusterUUID, start, now)
 	metrics.ObserveRecommendation("namespace", tNs)
 	if err != nil {
-		log.Errorf("native namespace engine: recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native namespace engine: recommendation failed: %v", err)
 		return fmt.Errorf("recommend namespaces: %w", err)
 	}
 
 	if len(results) == 0 {
-		log.Infof("native namespace engine: no recommendations produced for org=%s cluster=%s", orgID, clusterUUID)
+		log.Info("native namespace engine: no recommendations produced")
 		return nil
 	}
 
 	if err := engine.WriteNamespaceRecommendations(ctx, pool, results); err != nil {
-		log.Errorf("native namespace engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native namespace engine: writing recommendations failed: %v", err)
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
-	log.Infof("native namespace engine: wrote %d recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
+	metrics.IncRecommendationsWritten("namespace", len(results))
+	log.Infof("native namespace engine: wrote %d recommendations", len(results))
 
 	if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
-		log.Errorf("native namespace engine: writing history failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native namespace engine: writing history failed: %v", err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("write namespace history: %w", err)
 		}
@@ -732,9 +753,9 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 }
 
 func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	log := logging.GetLogger()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
 
 	body, err := utils.ReadCSVBodyFromUrl(fileURL)
 	if err != nil {
@@ -752,7 +773,7 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeStorage))
 	if err != nil {
-		log.Errorf("native storage engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native storage engine: digest processing failed: %v", err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("storage digest processing: %w", err)
 		}
@@ -760,7 +781,7 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	if !handled {
 		if err := ingestion.ProcessStorageCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native storage engine: digest processing failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			log.Errorf("native storage engine: digest processing failed: %v", err)
 			if isTransientKafkaProcessingError(err) {
 				return fmt.Errorf("storage digest processing: %w", err)
 			}
@@ -772,27 +793,28 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID)
 	metrics.ObserveRecommendation("pvc", tPVC)
 	if err != nil {
-		log.Errorf("native storage engine: PVC recommendation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native storage engine: PVC recommendation failed: %v", err)
 		return fmt.Errorf("recommend PVCs: %w", err)
 	}
 
 	if len(results) == 0 {
-		log.Infof("native storage engine: no PVC recommendations for org=%s cluster=%s", orgID, clusterUUID)
+		log.Info("native storage engine: no PVC recommendations")
 		return nil
 	}
 
 	if err := engine.WritePVCRecommendations(ctx, pool, results); err != nil {
-		log.Errorf("native storage engine: writing PVC recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native storage engine: writing PVC recommendations failed: %v", err)
 		return fmt.Errorf("write PVC recommendations: %w", err)
 	}
-	log.Infof("native storage engine: wrote %d PVC recommendations for org=%s cluster=%s", len(results), orgID, clusterUUID)
+	metrics.IncRecommendationsWritten("pvc", len(results))
+	log.Infof("native storage engine: wrote %d PVC recommendations", len(results))
 	return nil
 }
 
 func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	log := logging.GetLogger()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
 
 	body, err := utils.ReadCSVBodyFromUrl(fileURL)
 	if err != nil {
@@ -810,7 +832,7 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeSnapshot))
 	if err != nil {
-		log.Errorf("native snapshot engine: ingestion failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native snapshot engine: ingestion failed: %v", err)
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("snapshot ingestion: %w", err)
 		}
@@ -818,7 +840,7 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	if !handled {
 		if err := ingestion.ProcessSnapshotCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native snapshot engine: ingestion failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			log.Errorf("native snapshot engine: ingestion failed: %v", err)
 			if isTransientKafkaProcessingError(err) {
 				return fmt.Errorf("snapshot ingestion: %w", err)
 			}
@@ -828,7 +850,7 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 
 	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID)
 	if err != nil {
-		log.Errorf("native snapshot engine: settings resolution failed for org=%s: %v", orgID, err)
+		log.Errorf("native snapshot engine: settings resolution failed: %v", err)
 		return fmt.Errorf("snapshot settings: %w", err)
 	}
 
@@ -836,26 +858,26 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	recs, err := engine.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
 	metrics.ObserveRecommendation("snapshot", tSnap)
 	if err != nil {
-		log.Errorf("native snapshot engine: classification failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native snapshot engine: classification failed: %v", err)
 		return fmt.Errorf("classify snapshots: %w", err)
 	}
 
 	if len(recs) > 0 {
 		if err := engine.WriteSnapshotRecommendations(ctx, pool, recs); err != nil {
-			log.Errorf("native snapshot engine: writing recommendations failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+			log.Errorf("native snapshot engine: writing recommendations failed: %v", err)
 			return fmt.Errorf("write snapshot recommendations: %w", err)
 		}
-		log.Infof("native snapshot engine: wrote %d snapshot recommendations for org=%s cluster=%s", len(recs), orgID, clusterUUID)
+		log.Infof("native snapshot engine: wrote %d snapshot recommendations", len(recs))
 	}
 
 	appCfg := config.GetConfig()
 	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, appCfg.SnapshotStaleGraceHours)
 	if err != nil {
-		log.Errorf("native snapshot engine: reconciliation failed for org=%s cluster=%s: %v", orgID, clusterUUID, err)
+		log.Errorf("native snapshot engine: reconciliation failed: %v", err)
 		return fmt.Errorf("reconcile snapshots: %w", err)
 	}
 	if removed > 0 {
-		log.Infof("native snapshot engine: reconciled (removed) %d stale recommendations for org=%s cluster=%s", removed, orgID, clusterUUID)
+		log.Infof("native snapshot engine: reconciled (removed) %d stale recommendations", removed)
 	}
 	return nil
 }

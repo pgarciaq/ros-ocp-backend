@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
-	log "github.com/sirupsen/logrus"
 )
 
 // nodeRecsAdvisoryLock is the pg_advisory_xact_lock key shared between
@@ -430,7 +430,6 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		return fmt.Errorf("commit node recs: %w", err)
 	}
 
-	log.Infof("PersistNodeRecommendations: upserted %d recs for org=%s cluster=%s",
-		len(recs), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("PersistNodeRecommendations: upserted %d recs", len(recs))
 	return nil
 }

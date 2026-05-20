@@ -132,26 +132,36 @@ cache but harder to implement correctly.
 Parsing `EXPLAIN` output for the planner's row estimate can be off by 10x and
 is unreliable for exact pagination metadata that the UI depends on.
 
-## Batch Operations: Not a Concern
+## Batch Operations: Streaming Pipeline
 
-`RecommendAllWorkloads` (10.5s) and `WriteRecommendations` (19.2s) at 100K are
-background batch operations triggered by Celery tasks or cron. They run once
-after data ingestion, not per API request. Linear scaling (10x containers → ~10x
-time) is expected and acceptable.
+`RecommendWorkloadsStreaming` processes digests row-by-row from the database,
+exploiting the `ORDER BY namespace, workload, workload_type, container_name, bucket_date`
+guarantee to detect container group boundaries. Recommendations are computed and
+written in batches of 500 containers (~3000 recs per batch). Adoption detection,
+savings estimates, history, and quality metrics all run per-batch.
+
+`RecommendAllWorkloads` is retained as a convenience wrapper for tests (collects
+all streaming results into a single slice).
+
+Total wall-clock time scales linearly (10x containers → ~10x time) and is
+acceptable for background batch operations triggered after data ingestion.
 
 ## Memory Usage
 
-| Scale | Peak RSS | Context |
-|-------|---------|---------|
-| 10K containers | 176 MB | API server is well under this |
-| 100K containers | 1,790 MB | Batch recommendation process only |
+| Scale | Peak RSS (old) | Peak RSS (streaming) | Context |
+|-------|---------------|---------------------|---------|
+| 10K containers | 176 MB | ~50 MB | Batch: only 500 containers buffered at a time |
+| 100K containers | 1,790 MB | ~80 MB | Batch: bounded by streamBatchSize, not cluster size |
+| 200K containers | ~3,500 MB | ~80 MB | Streaming keeps memory constant regardless of scale |
 
-The 1.8 GB peak RSS applies to the **recommendation batch process**, not the
-API server. The API server handles one page at a time and uses negligible
-memory. Pod resource limits should be set accordingly:
+Peak memory for the streaming pipeline is bounded by:
+- `streamBatchSize` (500) × terms (3) × engines (2) × ~500 bytes = ~1.5 MB per batch
+- `ReadClusterOldRecommendations`: ~100 bytes × container count (e.g. 200K = ~20 MB)
+- One container's digest rows in flight: ~15 days × ~300 bytes = ~4.5 KB
 
+Pod resource limits:
 - **API server pod:** 256-512 MB limit (handles paginated responses)
-- **Recommendation worker pod:** 2-3 GB limit (handles full batch at scale)
+- **Recommendation worker pod:** 256-512 MB limit (streaming keeps memory bounded)
 
 ## Summary of Action Items
 
@@ -160,7 +170,7 @@ memory. Pod resource limits should be set accordingly:
 | Populate `container_id` in `WriteRecommendations` | 3 | High | **COMPLETED** (Phase 3) |
 | Add count query timing instrumentation | 2/3 | Medium | **COMPLETED** (Phase 3) |
 | Redis count cache (if metrics warrant) | 4+ | Medium | Deferred -- monitor production metrics first |
-| Set pod resource limits for batch worker | 4+ | Low | Deferred -- deployment config |
-| `WriteRecommendationQuality` batch writes | 4 | Medium | Planned -- same `pgx.Batch` pattern, ~600K rows/cycle at 100K containers |
-| `WriteRecommendationHistory` batch writes | 4 | Medium | Planned -- always-on snapshots, ~600K rows/cycle at 100K containers |
+| Set pod resource limits for batch worker | 4+ | Low | Reduced: streaming keeps memory bounded |
+| `WriteRecommendationQuality` batch writes | 4 | Medium | **COMPLETED** -- runs per-batch in streaming pipeline |
+| `WriteRecommendationHistory` batch writes | 4 | Medium | **COMPLETED** -- runs per-batch in streaming pipeline |
 | OOM bump computation overhead | 4 | Low | Negligible -- single `math.Log2` per container with OOM events |

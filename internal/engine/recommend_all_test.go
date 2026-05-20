@@ -611,6 +611,50 @@ func TestOOMMaxBumpClamp(t *testing.T) {
 	}
 }
 
+func TestRecommendWorkloadsStreaming_EmitsBatches(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	testutil.SeedDigestSeries(t, pool, 7, 200, 10, 524288, 1024)
+
+	// Seed a second container
+	for i := 0; i < 7; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:            testutil.TestOrgID,
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        testutil.TestNamespace,
+			Workload:         testutil.TestWorkload,
+			WorkloadType:     testutil.TestWorkloadType,
+			ContainerName:    "sidecar",
+			CPURequestP50MC:  50, CPURequestP95MC: 60,
+			CPUUsageP50MC: 40, CPUUsageP95MC: 55,
+			CPUUsageP98MC: 58, CPUUsageP99MC: 59, CPUUsageMaxMC: 65,
+			CPUThrottleP95MC: 2, CPUThrottleMaxMC: 5,
+			MemRequestP50KiB: 102400, MemRequestP95KiB: 112640,
+			MemUsageP50KiB: 100000, MemUsageP95KiB: 110000,
+			MemUsageMaxKiB: 115000, MemRSSP95KiB: 108000, MemRSSMaxKiB: 113000,
+			OOMCountSum: 0, CPUUsageMeanMC: 45, MemUsageMeanKiB: 105000,
+			SampleCount: 96,
+		})
+	}
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	var batchCount int
+	var totalRecs int
+	err := RecommendWorkloadsStreaming(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{}, func(batch []ContainerRec) error {
+		batchCount++
+		totalRecs += len(batch)
+		assert.NotEmpty(t, batch, "batch should not be empty")
+		return nil
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, batchCount, "2 containers < streamBatchSize, so one batch expected")
+	assert.Equal(t, 12, totalRecs, "2 containers × 3 terms × 2 engines = 12")
+}
+
 func TestRecommendAllWorkloads_ShortTermWithFutureEnd(t *testing.T) {
 	// Simulates the real-world scenario: data was ingested yesterday but the
 	// engine runs today (end = now > latest digest). Before the fix, short-term

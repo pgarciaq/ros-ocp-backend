@@ -34,6 +34,10 @@ var (
 		Name: "rosocp_csv_fetch_error_total",
 		Help: "The total number of errors encountered while fetching CSV from URL",
 	})
+	ingestionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "rosocp_ingestion_errors_total",
+		Help: "Ingestion pipeline failures by stage (csv_parse, digest, recommend, write)",
+	}, []string{"stage"})
 )
 
 // PluginHookErrors counts non-fatal failures from plugin ingest hooks (processing continues).

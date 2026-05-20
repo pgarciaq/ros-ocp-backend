@@ -1669,13 +1669,15 @@ Additional fixes from the P0/P1 pass:
 
 **#317 —** *(merged into **#53** — duplicate DB backpressure / consumer readahead concern.)*
 
-**#318 — Inconsistent structured fields — `log.Errorf` vs `WithFields`**
+**#318 — Inconsistent structured fields — `log.Errorf` vs `WithFields`** — **Fixed**
 - Repo: ros-ocp-backend
 - Mix of formatted strings vs structured logging—Loki queries can't rely on consistent labels.
+- **Resolution:** Added `logging.ForOrg(orgID, clusterUUID)` and `logging.ForOrgOnly(orgID)` helpers. Refactored all ~30 native engine paths (report_processor, ingestion, engine, API handlers, housekeeper) from printf-style `log.Errorf("...for org=%s: %v", orgID, err)` to structured `logging.ForOrg(orgID, clusterUUID).Errorf("...: %v", err)`. All log lines now emit `org_id` and `cluster_uuid` as discrete JSON fields, enabling precise Loki queries like `{app="ros-ocp-backend"} | json | org_id="1234567"`.
 
-**#319 — Many errors lack `request_id`/`org_id` context**
+**#319 — Many errors lack `request_id`/`org_id` context** — **Fixed**
 - Repo: ros-ocp-backend
 - Errors omit tracing/org identifiers—multi-tenant incidents are harder to bisect.
+- **Fix:** Added `org=%s` context to all error/warning log calls in API handlers (`handlers.go`, `handlers_node_recs.go`, `handlers_gpu_summary.go`, `handlers_gpu_mig.go`, `handlers_quality.go`, `handlers_history.go`) and ingestion pipeline (`report_processor.go`).
 
 **#320 — `featureflags.Init()` failure non-fatal — logged and continued**
 - Repo: ros-ocp-backend
@@ -1705,31 +1707,34 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Tracing deps ship unused—707 investigations lack span continuity.
 
-**#327 — No runbooks maintained in-repo**
+**#327 — No runbooks maintained in-repo** — **Fixed**
 - Repo: ros-ocp-backend
 - Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Fix:** Created `docs/operations/runbooks.md` with metrics reference table, alert conditions, and resolution procedures for common failure modes (ingestion errors, recommendation spikes, partition issues, GPU catalog misses, Kafka lag, DB exhaustion, cost data failures).
 
 **#328 — Echo HTTP metrics only on API server, not processor/poller**
 - Repo: ros-ocp-backend
 - HTTP instrumentation covers API pods only—workers lack RED metrics parity.
 
-**#329 — `rosocp_quality_partition_missing_total` metric name inconsistent (double underscore)**
+**#329 — `rosocp_quality_partition_missing_total` metric name inconsistent (double underscore)** — **Fixed**
 - Repo: ros-ocp-backend
 - Prometheus names violate conventions—Grafana dashboards referencing wrong series.
+- **Fix:** Renamed `rosocp_partition__missing_error_total` to `rosocp_partition_missing_error_total` in `internal/model/metrics.go`.
 
-**#330 — No metric for successful vs failed ingestion messages**
+**#330 — No metric for successful vs failed ingestion messages** — **Fixed**
 - Repo: ros-ocp-backend
 - No counter distinguishing poison vs happy paths—alerts can't trigger on error rates.
+- **Fix:** Added `rosocp_ingestion_errors_total` counter with `stage` label (`csv_parse`, `digest`, `recommend`, `write`) in `internal/services/metrics.go`, instrumented at all failure points in `report_processor.go`.
 
-**#277 — Metrics skewed toward legacy paths — few native-engine-specific series**
+**#277 — Metrics skewed toward legacy paths — few native-engine-specific series** — **Fixed**
 - Repo: ros-ocp-backend
 - Existing Prometheus instrumentation emphasizes legacy/Kruize-era names (`rosocp_kruize_*` and related). Deployments running **only** `UseNativeEngine` lack comparable phase counters (digest vs recommend vs persist vs node/GPU/PVC/snapshot stages)—SLOs and dashboards under-report native behavior.
-- Effort: Medium
+- **Fix:** Added `rosocp_pipeline_phase_duration_seconds` histogram (labels: `digest`, `gpu_enrichment`) and `rosocp_recommendations_written_total` counter (labels: `container`, `namespace`, `node`, `pvc`, `snapshot`) in `internal/metrics/metrics.go`. Instrumented all pipeline phases in `report_processor.go`.
 
-**#467 — Prometheus coverage gaps when native engine replaces Kruize**
+**#467 — Prometheus coverage gaps when native engine replaces Kruize** — **Fixed**
 - Repo: ros-ocp-backend
 - Histograms/counters wrap legacy pipeline operations; native write paths can appear artificially quiet in `/metrics` despite heavy work. Complements **#277**; fixing both likely shares one instrumentation pass.
-- Effort: Medium
+- **Fix:** Resolved together with #277. Native pipeline now emits per-phase histograms and per-type written counters. See `internal/metrics/metrics.go` and `docs/operations/runbooks.md` for the full metrics reference.
 
 ### Concurrency (331-340)
 
@@ -2050,9 +2055,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Legacy Kruize path is deprecated. Native engine uses direct struct writes.
 
-**#415 — No streaming for CSV export** ✅ Accepted (deferred)
+**#415 — No streaming for CSV export** ✅ Already fixed
 - Repo: ros-ocp-backend
-- Architectural change (HTTP chunked-encoding). Current approach works within memory limits.
+- The native CSV export handler uses `io.Pipe()` + goroutine + `c.Stream()`, which implements HTTP chunked transfer encoding. Rows are written one at a time to the pipe writer; the HTTP response streams them without buffering the full CSV in memory.
 
 **#416 — No query result caching for term config per org** ✅ Already mitigated
 - Repo: ros-ocp-backend
@@ -2066,13 +2071,13 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - `GetConfig()` is a singleton (nil check + return pointer). Cost: one nil check per call. Negligible.
 
-**#419 — Recommendations computed per-container then batch-written** ✅ Accepted (deferred)
+**#419 — Recommendations computed per-container then batch-written** ✅ Fixed
 - Repo: ros-ocp-backend
-- Batch approach enables transaction atomicity. RSS bounded by cluster size (~10k containers max).
+- Refactored to `RecommendWorkloadsStreaming`: digests are read row-by-row exploiting ORDER BY contiguity, processed in batches of 500 containers, and written per-batch. Peak memory reduced from O(all_containers × terms × engines) to O(500 × terms × engines) ≈ 3000 recs per batch. Adoption detection, savings, history, and quality metrics all run per-batch.
 
-**#420 — `RecommendAllWorkloads` builds full results slice before any writes** ✅ Accepted (deferred)
+**#420 — `RecommendAllWorkloads` builds full results slice before any writes** ✅ Fixed
 - Repo: ros-ocp-backend
-- Batch enables `FindAdoptedContainers` comparison (needs both old and new recs simultaneously).
+- Same fix as #419: `RecommendWorkloadsStreaming` writes per-batch. Old recs for adoption detection are pre-loaded via `ReadClusterOldRecommendations` (one query for the entire cluster, lightweight — just CPU req + mem req + updatedAt per container). `RecommendAllWorkloads` retained as a convenience wrapper for tests.
 
 
 ### Test Anti-Patterns (421-445)
