@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -986,4 +987,146 @@ func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {
 	assert.Equal(t, 0, response.Meta.Count)
 
 	database.DB = nil
+}
+
+func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	defer func() { database.DB = nil }()
+
+	orgID := "orgPAGINATION"
+	clusterUUID := "cccc3333-cccc-cccc-cccc-cccccccccccc"
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (300, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (300, $1, 'pagination-cluster', 'src-pag', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	containers := []string{"container-a", "container-b", "container-c", "container-d", "container-e"}
+	for _, cname := range containers {
+		for i := 0; i < 7; i++ {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate: start.AddDate(0, 0, i),
+				OrgID:      orgID, ClusterUUID: clusterUUID,
+				Namespace: "ns-pag", Workload: "deploy-pag", WorkloadType: "deployment",
+				ContainerName:    cname,
+				CPURequestP50MC:  100, CPURequestP95MC: 120,
+				CPUUsageP50MC:    90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC:    118, CPUUsageMaxMC: 125,
+				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+				MemRequestP50KiB: 524288, MemRequestP60KiB: 524500, MemRequestP95KiB: 524800,
+				MemRequestP98KiB: 525000, MemRequestP99KiB: 525100,
+				MemUsageP50KiB:   524000, MemUsageP60KiB: 524100, MemUsageP95KiB: 524288,
+				MemUsageP98KiB:   524500, MemUsageP99KiB: 524700,
+				MemUsageMaxKiB:   525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+				SampleCount: 96,
+			})
+		}
+	}
+
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	doRequest := func(limit, offset int) *httptest.ResponseRecorder {
+		url := fmt.Sprintf("/api/cost-management/v1/recommendations/openshift?limit=%d&offset=%d", limit, offset)
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		return rec
+	}
+
+	type linksResponse struct {
+		Data  []interface{} `json:"data"`
+		Meta  struct {
+			Count  int `json:"count"`
+			Limit  int `json:"limit"`
+			Offset int `json:"offset"`
+		} `json:"meta"`
+		Links struct {
+			First    string `json:"first"`
+			Previous string `json:"previous"`
+			Next     string `json:"next"`
+			Last     string `json:"last"`
+		} `json:"links"`
+	}
+
+	t.Run("first page has no previous, has next", func(t *testing.T) {
+		rec := doRequest(2, 0)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp linksResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, 5, resp.Meta.Count)
+		assert.Len(t, resp.Data, 2)
+
+		assert.Contains(t, resp.Links.First, "offset=0")
+		assert.Contains(t, resp.Links.First, "limit=2")
+		assert.Empty(t, resp.Links.Previous, "first page should have no previous link")
+		assert.Contains(t, resp.Links.Next, "offset=2")
+		assert.Contains(t, resp.Links.Last, "offset=4")
+	})
+
+	t.Run("middle page has both previous and next", func(t *testing.T) {
+		rec := doRequest(2, 2)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp linksResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, 5, resp.Meta.Count)
+		assert.Len(t, resp.Data, 2)
+
+		assert.Contains(t, resp.Links.First, "offset=0")
+		assert.Contains(t, resp.Links.Previous, "offset=0")
+		assert.Contains(t, resp.Links.Next, "offset=4")
+		assert.Contains(t, resp.Links.Last, "offset=4")
+	})
+
+	t.Run("last page has previous, no next", func(t *testing.T) {
+		rec := doRequest(2, 4)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp linksResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, 5, resp.Meta.Count)
+		assert.Len(t, resp.Data, 1, "last page should have 1 remaining item")
+
+		assert.Contains(t, resp.Links.First, "offset=0")
+		assert.Contains(t, resp.Links.Previous, "offset=2")
+		assert.Empty(t, resp.Links.Next, "last page should have no next link")
+		assert.Contains(t, resp.Links.Last, "offset=4")
+	})
+
+	t.Run("single page (limit >= count) has no previous or next", func(t *testing.T) {
+		rec := doRequest(100, 0)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp linksResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, 5, resp.Meta.Count)
+		assert.Len(t, resp.Data, 5)
+
+		assert.Contains(t, resp.Links.First, "offset=0")
+		assert.Empty(t, resp.Links.Previous)
+		assert.Empty(t, resp.Links.Next)
+		assert.Contains(t, resp.Links.Last, "offset=0")
+	})
 }

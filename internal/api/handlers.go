@@ -382,7 +382,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count = filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
+	results, count = filterGPUResults(results, count, hasGPU, gpuModels, gpuClassifications)
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -483,12 +483,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	hasGPU, gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, filteredCount := filterGPUResults(results, hasGPU, gpuModels, gpuClassifications)
-
-	count := totalCount
-	if hasGPU != nil || len(gpuModels) > 0 || len(gpuClassifications) > 0 {
-		count = filteredCount
-	}
+	results, count := filterGPUResults(results, totalCount, hasGPU, gpuModels, gpuClassifications)
 
 	return serveNativeList(c, results, count, apiListOptions)
 }

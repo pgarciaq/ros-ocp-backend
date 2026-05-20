@@ -33,15 +33,15 @@ func makeTestResults() []model.NativeContainerResult {
 
 func TestFilterGPUResults_NoFilters(t *testing.T) {
 	results := makeTestResults()
-	out, count := filterGPUResults(results, nil, nil, nil)
-	assert.Equal(t, 4, count)
+	out, count := filterGPUResults(results, 100, nil, nil, nil)
+	assert.Equal(t, 100, count, "no-filter case preserves original totalCount")
 	assert.Len(t, out, 4)
 }
 
 func TestFilterGPUResults_HasGPU_True(t *testing.T) {
 	results := makeTestResults()
 	yes := true
-	out, count := filterGPUResults(results, &yes, nil, nil)
+	out, count := filterGPUResults(results, 100, &yes, nil, nil)
 	assert.Equal(t, 3, count)
 	for _, r := range out {
 		assert.NotEmpty(t, r.GPU)
@@ -51,42 +51,42 @@ func TestFilterGPUResults_HasGPU_True(t *testing.T) {
 func TestFilterGPUResults_HasGPU_False(t *testing.T) {
 	results := makeTestResults()
 	no := false
-	out, count := filterGPUResults(results, &no, nil, nil)
+	out, count := filterGPUResults(results, 100, &no, nil, nil)
 	assert.Equal(t, 1, count)
 	assert.Equal(t, "no-gpu", out[0].Container)
 }
 
 func TestFilterGPUResults_GPUModel(t *testing.T) {
 	results := makeTestResults()
-	out, count := filterGPUResults(results, nil, []string{"A100"}, nil)
+	out, count := filterGPUResults(results, 100, nil, []string{"A100"}, nil)
 	assert.Equal(t, 1, count)
 	assert.Equal(t, "a100-idle", out[0].Container)
 }
 
 func TestFilterGPUResults_GPUModel_CaseInsensitive(t *testing.T) {
 	results := makeTestResults()
-	out, _ := filterGPUResults(results, nil, []string{"t4"}, nil)
+	out, _ := filterGPUResults(results, 100, nil, []string{"t4"}, nil)
 	assert.Len(t, out, 1)
 	assert.Equal(t, "t4-underutil", out[0].Container)
 }
 
 func TestFilterGPUResults_GPUClassification(t *testing.T) {
 	results := makeTestResults()
-	out, count := filterGPUResults(results, nil, nil, []string{"idle"})
+	out, count := filterGPUResults(results, 100, nil, nil, []string{"idle"})
 	assert.Equal(t, 1, count)
 	assert.Equal(t, "a100-idle", out[0].Container)
 }
 
 func TestFilterGPUResults_MultipleClassifications(t *testing.T) {
 	results := makeTestResults()
-	_, count := filterGPUResults(results, nil, nil, []string{"idle", "underutilized"})
+	_, count := filterGPUResults(results, 100, nil, nil, []string{"idle", "underutilized"})
 	assert.Equal(t, 2, count)
 }
 
 func TestFilterGPUResults_CombinedFilters(t *testing.T) {
 	results := makeTestResults()
 	yes := true
-	out, count := filterGPUResults(results, &yes, nil, []string{"well_utilized"})
+	out, count := filterGPUResults(results, 100, &yes, nil, []string{"well_utilized"})
 	assert.Equal(t, 1, count)
 	assert.Equal(t, "h100-well", out[0].Container)
 }
