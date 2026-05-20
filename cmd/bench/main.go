@@ -366,7 +366,7 @@ func buildBulkInsertSQL() func(nContainers int) string {
 			}
 			b.WriteString(")")
 		}
-		b.WriteString(` ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+		b.WriteString(` ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO NOTHING`)
 		return b.String()
 	}
@@ -411,7 +411,7 @@ func benchmarkDetail(nContainers int, recs []engine.ContainerRec) float64 {
 
 	// Pick a rec from the middle of the list.
 	r := recs[len(recs)/2]
-	id := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName)
+	id := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName)
 
 	iterations := 50
 	if nContainers >= 50000 {

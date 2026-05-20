@@ -27,16 +27,24 @@ func TestNativeNamespaceID_DifferentInputsDifferentIDs(t *testing.T) {
 }
 
 func TestNativeContainerID_Deterministic(t *testing.T) {
-	id1 := NativeContainerID("cluster-1", "ns", "deploy", "container")
-	id2 := NativeContainerID("cluster-1", "ns", "deploy", "container")
+	id1 := NativeContainerID("cluster-1", "ns", "deploy", "Deployment", "container")
+	id2 := NativeContainerID("cluster-1", "ns", "deploy", "Deployment", "container")
 	if id1 != id2 {
 		t.Errorf("NativeContainerID should be deterministic: %s != %s", id1, id2)
 	}
 }
 
+func TestNativeContainerID_DiffersAcrossWorkloadTypes(t *testing.T) {
+	id1 := NativeContainerID("cluster-1", "ns", "api", "Deployment", "main")
+	id2 := NativeContainerID("cluster-1", "ns", "api", "StatefulSet", "main")
+	if id1 == id2 {
+		t.Error("same workload name with different types should produce different IDs")
+	}
+}
+
 func TestNativeNamespaceID_DiffersFromContainerID(t *testing.T) {
 	nsID := NativeNamespaceID("cluster-1", "default")
-	containerID := NativeContainerID("cluster-1", "default", "", "")
+	containerID := NativeContainerID("cluster-1", "default", "", "", "")
 	if nsID == containerID {
 		t.Error("namespace and container IDs should differ even for same cluster+namespace")
 	}

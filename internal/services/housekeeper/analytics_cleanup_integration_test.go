@@ -53,8 +53,9 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid UUID NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
 			container_name TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 		)`,
 		`CREATE TABLE daily_namespace_digests (
 			bucket_date DATE NOT NULL,
@@ -94,8 +95,9 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid UUID NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
 			container_name TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, sample_time)
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, sample_time)
 		)`,
 		`CREATE TABLE namespace_usage_samples (
 			sample_time TIMESTAMPTZ NOT NULL,
@@ -110,8 +112,9 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid UUID NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
 			container_name TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, measured_at)
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, measured_at)
 		)`,
 		`CREATE TABLE recommendation_history (
 			recorded_at TIMESTAMPTZ NOT NULL,
@@ -119,10 +122,11 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid UUID NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
 			container_name TEXT NOT NULL,
 			term TEXT NOT NULL,
 			engine TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, term, engine, recorded_at)
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at)
 		)`,
 		`CREATE TABLE pvc_recommendation_sets (
 			id BIGSERIAL PRIMARY KEY,
@@ -136,10 +140,11 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid TEXT NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
 			container_name TEXT NOT NULL,
 			term TEXT NOT NULL DEFAULT 'short',
 			engine TEXT NOT NULL DEFAULT 'cost',
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 		)`,
 		`CREATE TABLE snapshot_inventory (
 			id BIGSERIAL PRIMARY KEY,
@@ -219,17 +224,17 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 		require.NoError(t, gdb.Exec(sql, args...).Error)
 	}
 	const testDigestDay = "2026-01-01"
-	exec(`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay, org, cluster)
+	exec(`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::date, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_namespace_digests (bucket_date, org_id, cluster_uuid, namespace) VALUES (?::date, ?, ?::uuid, 'ns')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_pvc_digests (bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim) VALUES (?::date, ?, ?::uuid, 'ns', 'pvc')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_node_digests (bucket_date, org_id, cluster_uuid, node) VALUES (?::date, ?, ?::uuid, 'node1')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", cluster)
-	exec(`INSERT INTO container_usage_samples (sample_time, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO container_usage_samples (sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO namespace_usage_samples (sample_time, org_id, cluster_uuid, namespace) VALUES (?::timestamptz, ?, ?::uuid, 'ns')`, testDigestDay+" 00:00:00Z", org, cluster)
-	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
-	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
+	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
-	exec(`INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, container_name, term, engine) VALUES (?, ?, 'ns', 'wl', 'ctr', 'short', 'cost')`, org, cluster)
+	exec(`INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) VALUES (?, ?, 'ns', 'wl', 'Deployment', 'ctr', 'short', 'cost')`, org, cluster)
 	exec(`INSERT INTO snapshot_inventory (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
 	exec(`INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
 	exec(`INSERT INTO node_recommendations (org_id, cluster_uuid, node, term) VALUES (?, ?::uuid, 'node1', 'medium')`, org, cluster)

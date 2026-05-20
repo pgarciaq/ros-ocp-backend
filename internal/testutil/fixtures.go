@@ -97,7 +97,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			$28, $29,
 			$30, $31, $32, $33
 		)
-		ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 		DO UPDATE SET
 			cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
 			cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,

@@ -171,16 +171,16 @@ func WriteRecommendationQuality(
 
 		batch.Queue(`
 			INSERT INTO recommendation_quality (
-				measured_at, org_id, cluster_uuid, namespace, workload, container_name,
+				measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				oom_events_after_rec, stability_pct, adoption_detected, recommendation_age_hours
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, measured_at)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, measured_at)
 			DO UPDATE SET
 				oom_events_after_rec = EXCLUDED.oom_events_after_rec,
 				stability_pct = EXCLUDED.stability_pct,
 				adoption_detected = EXCLUDED.adoption_detected,
 				recommendation_age_hours = EXCLUDED.recommendation_age_hours`,
-			measuredAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName,
+			measuredAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
 			oomEventsAfter, stabilityPct, adopted, ageHours,
 		)
 	}

@@ -87,7 +87,7 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 				sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				cpu_usage_mc, mem_usage_kib
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, sample_time)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, sample_time)
 			DO UPDATE SET
 				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
 				mem_usage_kib = EXCLUDED.mem_usage_kib`,
@@ -208,7 +208,7 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 				$38, $39, $40,
 				$41, $42
 			)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET
 				cpu_request_p50_mc = EXCLUDED.cpu_request_p50_mc,
 				cpu_request_p60_mc = EXCLUDED.cpu_request_p60_mc,
