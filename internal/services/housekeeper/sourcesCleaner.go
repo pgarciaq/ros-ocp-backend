@@ -108,8 +108,7 @@ func StartSourcesListenerService() {
 	var err error
 	cost_app_id, err = sources.GetCostApplicationID()
 	if err != nil {
-		log.Error("Unable to get cost application id", err)
-		os.Exit(1)
+		log.Fatalf("Unable to get cost application id: %v", err)
 	}
 
 	kafka.StartConsumer(ctx, cfg.SourcesEventTopic, sourcesListener)
@@ -123,11 +122,11 @@ func sourcesListener(msg *k.Message, _ *k.Consumer) {
 		if v.Key == "event_type" && string(v.Value) == "Application.destroy" {
 			var data types.SourcesEvent
 			if !json.Valid([]byte(msg.Value)) {
-				log.Errorf("Received message on kafka topic is not vaild JSON: %s", msg.Value)
+				log.Errorf("Received message on kafka topic is not valid JSON (len=%d)", len(msg.Value))
 				return
 			}
 			if err := json.Unmarshal(msg.Value, &data); err != nil {
-				log.Errorf("Unable to decode kafka message: %s", msg.Value)
+				log.Errorf("Unable to decode kafka message (len=%d): %v", len(msg.Value), err)
 				return
 			}
 			if data.Application_type_id == cost_app_id {

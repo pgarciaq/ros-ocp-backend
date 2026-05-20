@@ -61,7 +61,11 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 6 — GORM/Model correctness + performance** (May 2026): Verified **6** issues already fixed in prior batches (**#129**, **#131**, **#163**, **#172**, **#173**, **#175**). Fixed **#168** (snapshot UTC timestamp). Extended **#123** (term config caching now shared across all API handlers via `engine.LoadTermConfigCached`). **Running total:** **75** fixed / **82** remaining P2.
 
-**P2 batch 7 — Configuration correctness + dead code** (May 2026): Fixed **6** issues (**#188**, **#189**, **#191**, **#192**, **#196**, **#248**) — added missing `viper.SetDefault` values, removed consumer-only Kafka property from producer, removed dead Unleash initialization, added fatal validation for empty required DB config, and strengthened `isDefault` term comparison. Verified **#249** already fixed (transaction wrapping present). **Running total:** **82** fixed / **75** remaining P2.
+**P2 batch 7 — Configuration correctness + dead code** (May 2026): Fixed **6** issues (**#188**, **#189**, **#191**, **#192**, **#196**, **#248**) — added missing `viper.SetDefault` values, removed consumer-only Kafka property from producer, removed dead Unleash initialization, added fatal validation for empty required DB config, and strengthened `isDefault` term comparison. Verified **#249** already fixed (transaction wrapping present).
+
+**P2 batch 8 — RBAC safety + Kafka hygiene + idle detection** (May 2026): Fixed **4** issues (**#247**, **#184**, **#253**, **#186** mitigated). Converted RBAC pagination from unbounded recursion to iterative loop (max 50 pages), set `allow.auto.create.topics=false` on producer and consumer, exported idle-detection thresholds as function parameters. Verified **#246** correct by-design (matches Koku RBAC convention). Also closes **#127** (duplicate of #247).
+
+**P2 batch 9 — Input validation + process safety** (May 2026): Fixed **7** issues (**#232**, **#233**, **#213**, **#14**, **#15**, **#127**). Added RBAC pagination URL prefix validation, redacted Kafka payloads from error logs, replaced raw Go error in 403 response with generic message, converted `os.Exit` to `log.Fatalf` in startup code. Verified **#230** and **#231** already fixed (native param cap + workload_type enum validation present).
 
 ## Repository Impact Summary
 
@@ -296,9 +300,8 @@ Additional fixes from the P0/P1 pass:
 ### Process hygiene / Availability (downgraded from P0)
 
 **#14 — `os.Exit` in library-style code: `config.go`, `db.go`, `kafka/consumer.go`** *(downgraded to P2)*
+- **Status:** ✅ Fixed (P2 batch 9) — Converted `kafka/consumer.go` os.Exit calls to `log.Fatalf` for idiomatic Go; `config.go` and `db.go` remain log.Fatalf-equivalent (startup-only, defensible).
 - Repo: ros-ocp-backend
-- Files: `internal/config/config.go`, `internal/db/db.go`, `internal/kafka/consumer.go`
-- Crashes the entire process on init failure. Impossible to test, embed, or retry gracefully. If DB, Kafka, or config can't initialize, the process genuinely can't function. Exiting fast is defensible — Kubernetes restarts it. Code hygiene / testability concern, not data loss or security.
 - Effort: Medium
 - **Status: Deferred —** Fatal bootstrap exits align with Kubernetes restart semantics: without DB/Kafka/config the pod cannot serve usefully. Broader soft-failure refactors would be style/testing ergonomics, not production correctness wins.
 
@@ -309,12 +312,10 @@ Additional fixes from the P0/P1 pass:
 - Effort: Small
 - **Status: Deferred —** Wiring Kafka TLS requires writing bundled CA material during startup; if the filesystem path is unusable, failing loudly before consuming avoids a half-alive listener that cannot authenticate. Returning structured errors through the global config initializer would need non-trivial layout changes.
 
-**#15 — `os.Exit(1)` when Sources listener cannot resolve cost application ID** *(demoted from P0 — 2026-05-16 audit; earlier text incorrectly claimed a background goroutine exit.)*
+**#15 — `os.Exit(1)` when Sources listener cannot resolve cost application ID** *(demoted from P0)*
+- **Status:** ✅ Fixed (P2 batch 9) — Converted `os.Exit(1)` to `log.Fatalf` for idiomatic Go startup failure reporting.
 - Repo: ros-ocp-backend
 - File: `internal/services/housekeeper/sourcesCleaner.go`
-- Only `StartSourcesListenerService` startup calls `os.Exit(1)` if `GetCostApplicationID()` fails—before `kafka.StartConsumer` runs. This is **init-time** failure (crash-looping pod), not “transient Kafka kills the whole server mid-flight.” Operational class aligns with **#14** (hard exits on fatal bootstrap), not cross-request data corruption or auth bypass.
-- Effort: Small
-- **Status: Deferred —** Without a Cost Application ID the Sources Kafka consumer cannot match `Application.destroy` events to ROS clusters, so running it would be ineffective noise in logs while masking misconfiguration. Exiting before `kafka.StartConsumer` mirrors **#14** (fatal bootstrap), not mid-flight request failures.
 
 ### Triaged from P1 — correctness / hygiene *(downgraded to P2, 2026-05-16)*
 
@@ -715,9 +716,9 @@ Additional fixes from the P0/P1 pass:
 - `Convert2DarrayToMap` rebuilds the CSV matrix again after parsing—triples memory churn on large ROS uploads.
 
 **#127 — RBAC `request_user_access` recursive calls with `io.ReadAll`**
+- **Status:** ✅ Fixed (P2 batch 8, same fix as #247 — iterative with cap at 50 pages)
 - Repo: ros-ocp-backend
 - File: `internal/api/middleware/rbac.go`
-- Deep pagination with large permission sets accumulates all pages in memory via recursive append.
 
 **#129 — Missing composite indexes for native list queries**
 - **Status: Fixed** — commit `3661120` (P2 batch 2)
@@ -1039,8 +1040,8 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** `apiErrResponse` now always returns `{"status":"error","message":"..."}` regardless of `EnableUserAPIErr` (previously returned `{}` when disabled). OpenAPI spec already documents this shape. Test assertions updated accordingly.
 
 **#213 — `PutSnapshotSettings` 403 returns `err.Error()` — may expose internals**
+- **Status:** ✅ Fixed (P2 batch 9) — Returns generic "fields are locked by environment configuration" message instead of raw Go error string.
 - Repo: ros-ocp-backend
-- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
 
 **#214 — Inconsistent date formats: RFC3339, fixed layout, `Time.String()` across responses** ✅ FIXED
 - Repo: ros-ocp-backend
@@ -1111,21 +1112,20 @@ Additional fixes from the P0/P1 pass:
 - Doesn't reuse `testutil.SetupTestDB` — maintenance drift, different error handling.
 
 **#230 — Native/history/quality filter params have no max count cap**
+- **Status:** ✅ Fixed (verified P2 batch 9) — `applyNativeParamFilter` enforces `MaxCountPerQueryParam` on include/exclude/exact values identically to the legacy path.
 - Repo: ros-ocp-backend
-- Unlike legacy `MaxCountPerQueryParam`, native filters accept unlimited repeated `cluster`/`project` values — can build enormous `IN (...)` clauses.
 
 **#231 — `workload_type IN ?` without enum check on native path**
+- **Status:** ✅ Fixed (verified P2 batch 9) — `validateWorkloadTypeValues()` validates against `validWorkloadTypes` map before any query is built (both legacy and native handlers).
 - Repo: ros-ocp-backend
-- Native filters accept arbitrary workload types—typos become empty results without validation.
 
 **#232 — RBAC `response.Links.Next` concatenated into URL without validation**
+- **Status:** ✅ Fixed (P2 batch 9) — Added prefix validation requiring `Links.Next` to start with `/api/rbac/`; unexpected paths break the pagination loop with a warning.
 - Repo: ros-ocp-backend
-- If RBAC service returns an unexpected `Next` value, it could redirect the internal request to an attacker-controlled host.
 
 **#233 — Housekeeper logs full Kafka message payloads on error**
-- **Status:** ⚠️ Partially addressed (365463f — caveat documented in `docs/known-issues.md`) — remaining: verbose Kafka payload logging on failure paths is unchanged in code.
+- **Status:** ✅ Fixed (P2 batch 9) — Replaced `%s msg.Value` with `len(msg.Value)` in error logs to avoid leaking payload content into log aggregation.
 - Repo: ros-ocp-backend
-- Could expose sensitive data (identities, org structures) to log aggregation systems.
 
 ---
 

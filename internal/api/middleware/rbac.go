@@ -125,6 +125,10 @@ func request_user_access(url, encodedIdentity string) []types.RbacData {
 		if response.Links.Next == "" {
 			break
 		}
+		if !strings.HasPrefix(response.Links.Next, "/api/rbac/") {
+			log.Warnf("RBAC pagination link has unexpected prefix: %q; stopping", response.Links.Next)
+			break
+		}
 		currentURL = fmt.Sprintf("%s://%s:%s%s", cfg.RBACProtocol, cfg.RBACHost, cfg.RBACPort, response.Links.Next)
 	}
 	return access
