@@ -67,7 +67,7 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 			"sasl.password":            cfg.KafkaPassword,
 			"enable.auto.commit":       auto_commit,
 			"go.logs.channel.enable":   true,
-			"allow.auto.create.topics": true,
+			"allow.auto.create.topics": false,
 		}
 
 		if cfg.KafkaCA != "" {
@@ -80,7 +80,7 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 			"group.id":                 cfg.KafkaConsumerGroupId,
 			"enable.auto.commit":       auto_commit,
 			"go.logs.channel.enable":   true,
-			"allow.auto.create.topics": true,
+			"allow.auto.create.topics": false,
 		}
 	}
 

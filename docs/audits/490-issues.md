@@ -910,8 +910,8 @@ Additional fixes from the P0/P1 pass:
 - **Resolution:** GPU thresholds moved from `os.Getenv` into the central `Config` struct; `InitGPUEngine(cfg)` applies values at startup.
 
 **#184 — `allow.auto.create.topics: true` on consumer and producer**
+- **Status:** ✅ Fixed (P2 batch 8) — set to `false` on both producer and consumer. Topics must be pre-provisioned.
 - Repo: ros-ocp-backend
-- On shared Kafka clusters, can auto-create topics with default retention/partitions — operational hazard.
 
 **#185 — Dev-only defaults ship as production defaults**
 - **Status: Deferred** — Matches Koku convention: no prod guardrails in code; Clowder overrides in production.
@@ -920,8 +920,8 @@ Additional fixes from the P0/P1 pass:
 - `DBssl=disable`, `DBPassword=postgres`, `RBAC_ENABLE=false`, `UnleashClientAccessToken=rosocp:dev.token` — dangerous if deployed without overriding.
 
 **#186 — `mapstructure.Decode(nil cfg)` during `initConfig` — fragile env binding**
+- **Status:** Mitigated (P2 batch 7+8) — `validateLoadedConfig` now validates and corrects zero-valued critical fields (DB params fatal, staleness/archive/retention get defaults). The `mapstructure.Decode` is a Viper workaround for env key binding, not a direct config assignment.
 - Repo: ros-ocp-backend
-- `mapstructure.Decode` into partially-filled structs makes unset env vars silently zero-valued—production misconfiguration.
 
 **#187 — `DISABLE_NAMESPACE_RECOMMENDATION` documented but never implemented**
 - **Status:** ✅ Superseded (plugin rearchitecture — `ROS_DISABLED_PLUGINS=namespace` disables the namespace plugin entirely)
@@ -1276,12 +1276,12 @@ Additional fixes from the P0/P1 pass:
 - Detector demands two imbalances—single dimensional skew never flags stranded capacity.
 
 **#246 — `filterClustersByRBAC` returns full list if `openshift.cluster` permission absent**
+- **Status:** Verified correct by-design (P2 batch 8) — matches Koku RBAC convention: absence of cluster-level restriction means unrestricted access. When `openshift.cluster` is not present in permissions, the user has no cluster restrictions.
 - Repo: ros-ocp-backend
-- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
 
 **#247 — RBAC `request_user_access` recursive pagination — stack depth unbounded**
+- **Status:** ✅ Fixed (P2 batch 8) — converted from recursive to iterative with `maxRBACPages=50` cap.
 - Repo: ros-ocp-backend
-- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
 
 **#248 — `GetTermSettings` `isDefault` check is fragile (length + first element only)**
 - **Status: ✅ FIXED** (P2 batch 7)
@@ -1308,8 +1308,8 @@ Additional fixes from the P0/P1 pass:
 - Zero half-life branches risk divide-by-zero or flat weights for short terms.
 
 **#253 — `DetectIdle` / `DetectAbandoned` thresholds are hardcoded**
+- **Status:** ✅ Fixed (P2 batch 8) — `DetectIdle` now accepts both CPU and memory thresholds as parameters; exported `DefaultIdleThresholdMC` (10mc) and `DefaultIdleThresholdMemKiB` (10 MiB) constants. `DetectAbandoned` threshold is correctly zero by definition.
 - Repo: ros-ocp-backend
-- Idle/abandon thresholds live as literals—can't tune per org/cluster.
 
 **#254 — `ComputeAdaptiveMargin` behavior on edge cases (0 data points, single point)**
 - Repo: ros-ocp-backend

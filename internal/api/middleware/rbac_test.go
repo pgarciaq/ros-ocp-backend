@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -153,5 +155,64 @@ func TestRequestUserAccess_GarbageJSON(t *testing.T) {
 	acls := request_user_access(srv.URL, "dummyIdentity")
 	if len(acls) != 0 {
 		t.Errorf("expected empty acls on garbage JSON, got %d", len(acls))
+	}
+}
+
+func TestRequestUserAccess_Pagination(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		var resp types.RbacResponse
+		resp.Data = []types.RbacData{
+			{Permission: "cost-management:openshift.cluster:read"},
+		}
+		if callCount < 3 {
+			resp.Links.Next = "/api/rbac/v1/access/?offset=100"
+		}
+		body, _ := json.Marshal(resp)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	cfg.RBACProtocol = "http"
+	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
+	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
+
+	acls := request_user_access(srv.URL, "dummyIdentity")
+	if len(acls) != 3 {
+		t.Errorf("expected 3 acls from paginated response, got %d", len(acls))
+	}
+	if callCount != 3 {
+		t.Errorf("expected 3 HTTP calls, got %d", callCount)
+	}
+}
+
+func TestRequestUserAccess_PaginationCapsAt50(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		resp := types.RbacResponse{
+			Data: []types.RbacData{
+				{Permission: "cost-management:openshift.cluster:read"},
+			},
+		}
+		resp.Links.Next = "/api/rbac/v1/access/?offset=100"
+		body, _ := json.Marshal(resp)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	cfg.RBACProtocol = "http"
+	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
+	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
+
+	acls := request_user_access(srv.URL, "dummyIdentity")
+	if callCount != maxRBACPages {
+		t.Errorf("expected pagination capped at %d pages, got %d", maxRBACPages, callCount)
+	}
+	if len(acls) != maxRBACPages {
+		t.Errorf("expected %d acls, got %d", maxRBACPages, len(acls))
 	}
 }

@@ -88,42 +88,44 @@ func get_user_permissions_from_rbac(encodedIdentity string) map[string][]string 
 	return nil
 }
 
+const maxRBACPages = 50
+
 func request_user_access(url, encodedIdentity string) []types.RbacData {
 	access := []types.RbacData{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		log.Errorf("unable to create RBAC request: %v", err)
-		return access
-	}
-	req.Header.Set("x-rh-identity", encodedIdentity)
-	res, err := utils.HTTPClient.Do(req)
-	if err != nil {
-		log.Errorf("error calling RBAC API: %v", err)
-		return access
-	}
-	if res.Body != nil {
-		defer func() {
-			_ = res.Body.Close()
-		}()
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		log.Errorf("RBAC API returned non-2xx status: %d", res.StatusCode)
-		return access
-	}
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Errorf("unable to read RBAC API response body: %v", err)
-		return access
-	}
-	response := types.RbacResponse{}
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Errorf("unable to unmarshal response of RBAC API %v", err)
-		return access
-	}
-	access = append(access, response.Data...)
-	if response.Links.Next != "" {
-		next_url := fmt.Sprintf("%s://%s:%s%s", cfg.RBACProtocol, cfg.RBACHost, cfg.RBACPort, response.Links.Next)
-		access = append(access, request_user_access(next_url, encodedIdentity)...)
+	currentURL := url
+
+	for page := 0; page < maxRBACPages; page++ {
+		req, err := http.NewRequest("GET", currentURL, nil)
+		if err != nil {
+			log.Errorf("unable to create RBAC request: %v", err)
+			return access
+		}
+		req.Header.Set("x-rh-identity", encodedIdentity)
+		res, err := utils.HTTPClient.Do(req)
+		if err != nil {
+			log.Errorf("error calling RBAC API: %v", err)
+			return access
+		}
+		body, err := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if err != nil {
+			log.Errorf("unable to read RBAC API response body: %v", err)
+			return access
+		}
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			log.Errorf("RBAC API returned non-2xx status: %d", res.StatusCode)
+			return access
+		}
+		response := types.RbacResponse{}
+		if err := json.Unmarshal(body, &response); err != nil {
+			log.Errorf("unable to unmarshal response of RBAC API %v", err)
+			return access
+		}
+		access = append(access, response.Data...)
+		if response.Links.Next == "" {
+			break
+		}
+		currentURL = fmt.Sprintf("%s://%s:%s%s", cfg.RBACProtocol, cfg.RBACHost, cfg.RBACPort, response.Links.Next)
 	}
 	return access
 }

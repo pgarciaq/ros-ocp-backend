@@ -1,17 +1,18 @@
 package engine
 
-const defaultIdleThresholdMemKiB int64 = 10240 // 10 MiB
+const DefaultIdleThresholdMC int64 = 10       // 10 millicores
+const DefaultIdleThresholdMemKiB int64 = 10240 // 10 MiB
 
 // DetectIdle returns true if the maximum CPU usage AND memory usage across all
 // digest rows are both strictly below their respective thresholds.
-// CPU threshold is in millicores; memory threshold is 10 MiB (10240 KiB).
+// thresholdMC is in millicores; thresholdMemKiB is in KiB.
 // Returns false for empty input.
-func DetectIdle(rows []DigestRow, thresholdMC int64) bool {
+func DetectIdle(rows []DigestRow, thresholdMC, thresholdMemKiB int64) bool {
 	if len(rows) == 0 {
 		return false
 	}
 	for _, row := range rows {
-		if row.CPUUsageMaxMC >= thresholdMC || row.MemUsageMaxKiB >= defaultIdleThresholdMemKiB {
+		if row.CPUUsageMaxMC >= thresholdMC || row.MemUsageMaxKiB >= thresholdMemKiB {
 			return false
 		}
 	}

@@ -2,7 +2,6 @@ package engine
 
 import "math"
 
-const defaultIdleThresholdMC int64 = 10
 
 // RecommendCPU computes both cost and performance CPU recommendations
 // from a set of daily digest rows. Single-path algorithm (no 1-core
@@ -35,7 +34,7 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 	perfLimit := int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
 
 	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.CPUUsageP98MC })
-	isIdle := DetectIdle(rows, defaultIdleThresholdMC)
+	isIdle := DetectIdle(rows, DefaultIdleThresholdMC, DefaultIdleThresholdMemKiB)
 
 	return CPURec{
 		CostRequestMC: costRequest,
