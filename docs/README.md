@@ -47,6 +47,14 @@
 | [phase5-implementation-notes.md](phase5-implementation-notes.md) | Phase 5 implementation notes |
 | [phase6-namespace-boxplots-implementation.md](phase6-namespace-boxplots-implementation.md) | Phase 6 namespace box plots implementation |
 
+## Operations & Maintenance
+
+| Document | Scope |
+|----------|-------|
+| [GPU Catalog Maintenance](operations/gpu-catalog.md) | How to add new GPU models, where to find specs, monitoring for gaps |
+| [Upgrade Runbook](upgrade-runbook.md) | Database migration procedures and advisory lock patterns |
+| [migrations/README.md](../migrations/README.md) | Migration best practices (CONCURRENTLY indexes, pre-steps) |
+
 ## API Reference
 
 The authoritative API specification is [`openapi.json`](../openapi.json) at the repository root.
