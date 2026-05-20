@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // NamespaceMetricRow represents a single parsed row from a namespace CSV file.
@@ -195,11 +195,11 @@ func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
 
 		row, parseErr := parseNSRecord(record, idx)
 		if parseErr != nil {
-			log.Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, parseErr)
+			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, parseErr)
 			continue
 		}
 		if valErr := ValidateNamespaceMetricRow(row); valErr != nil {
-			log.Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, valErr)
+			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, valErr)
 			continue
 		}
 		rows = append(rows, row)
@@ -432,7 +432,7 @@ func EnsureNamespaceSamplePartitions(ctx context.Context, pool *pgxpool.Pool, ro
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureNamespaceSamplePartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureNamespaceSamplePartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
@@ -488,7 +488,7 @@ func EnsureNamespaceDigestPartitions(ctx context.Context, pool *pgxpool.Pool, ke
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureNamespaceDigestPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureNamespaceDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
@@ -501,7 +501,7 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		return fmt.Errorf("parse namespace CSV: %w", err)
 	}
 	if len(rows) == 0 {
-		log.Infof("ProcessNamespaceCSVToDigests: no rows parsed for org=%s cluster=%s", orgID, clusterUUID)
+		logging.ForOrg(orgID, clusterUUID).Info("ProcessNamespaceCSVToDigests: no rows parsed")
 		return nil
 	}
 
@@ -512,8 +512,8 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 	}
 
 	grouped := GroupNamespaceCSVRows(rows, orgID, clusterUUID)
-	log.Infof("ProcessNamespaceCSVToDigests: %d rows -> %d groups for org=%s cluster=%s",
-		len(rows), len(grouped), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: %d rows -> %d groups",
+		len(rows), len(grouped))
 
 	digestKeys := make([]NamespaceDigestKey, 0, len(grouped))
 	for k := range grouped {
@@ -596,7 +596,7 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		return fmt.Errorf("commit namespace digests: %w", err)
 	}
 
-	log.Infof("ProcessNamespaceCSVToDigests: upserted %d digests for org=%s cluster=%s",
-		len(grouped), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: upserted %d digests",
+		len(grouped))
 	return nil
 }
