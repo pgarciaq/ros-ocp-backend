@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/go-gota/gota/dataframe"
@@ -21,13 +22,12 @@ var (
 		Run: func(cmd *cobra.Command, args []string) {
 			input_file := args[0]
 			if _, err := os.Stat(input_file); os.IsNotExist(err) {
-				fmt.Printf("CSV file: %s does not exist\n", input_file)
-				os.Exit(1)
+				log.Fatalf("CSV file: %s does not exist", input_file)
 			}
 			if outputDir != "" {
 				if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 					if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-						panic(err.Error())
+						log.Fatalf("cannot create output directory: %v", err)
 					}
 				}
 			} else {
@@ -36,7 +36,7 @@ var (
 			outputFile := outputDir + "/output.csv"
 			f, err := os.Open(input_file)
 			if err != nil {
-				panic(err.Error())
+				log.Fatalf("cannot open input file: %v", err)
 			}
 			defer func() {
 				_ = f.Close()
@@ -45,25 +45,23 @@ var (
 			csv := csv.NewReader(f)
 			records, err := csv.ReadAll()
 			if err != nil {
-				panic(err.Error())
+				log.Fatalf("cannot read CSV: %v", err)
 			}
 			csvType := utils.DetermineCSVType(input_file)
 			columnHeaders := types.GetColumnMapping(csvType)
 			df := dataframe.LoadRecords(records, dataframe.WithTypes(columnHeaders))
 			df, err = utils.Aggregate_data(csvType, df)
 			if err != nil {
-				panic(err.Error())
+				log.Fatalf("aggregation failed: %v", err)
 			}
 			fileio, err := os.Create(outputFile)
 			if err != nil {
-				panic(err.Error())
+				log.Fatalf("cannot create output file: %v", err)
 			}
-			error := df.WriteCSV(fileio)
-			if error != nil {
-				panic(err.Error())
-			} else {
-				fmt.Printf("Aggregated CSV created at: %s \n", outputFile)
+			if err := df.WriteCSV(fileio); err != nil {
+				log.Fatalf("cannot write CSV: %v", err)
 			}
+			fmt.Printf("Aggregated CSV created at: %s \n", outputFile)
 		},
 	}
 )

@@ -216,3 +216,34 @@ func TestRequestUserAccess_PaginationCapsAt50(t *testing.T) {
 		t.Errorf("expected %d acls, got %d", maxRBACPages, len(acls))
 	}
 }
+
+func TestRequestUserAccess_PaginationStopsOnBadPrefix(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		resp := types.RbacResponse{
+			Data: []types.RbacData{
+				{Permission: "cost-management:openshift.cluster:read"},
+			},
+		}
+		if callCount == 1 {
+			resp.Links.Next = "/evil/redirect?target=http://attacker.com"
+		}
+		body, _ := json.Marshal(resp)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	cfg.RBACProtocol = "http"
+	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
+	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
+
+	acls := request_user_access(srv.URL, "dummyIdentity")
+	if callCount != 1 {
+		t.Errorf("expected pagination to stop after 1 page due to bad prefix, got %d calls", callCount)
+	}
+	if len(acls) != 1 {
+		t.Errorf("expected 1 acl from first page only, got %d", len(acls))
+	}
+}

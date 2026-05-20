@@ -63,9 +63,11 @@ func PutSnapshotSettings(c echo.Context) error {
 
 	if err := engine.UpdateSnapshotSettings(c.Request().Context(), pool, orgID, update); err != nil {
 		if errors.Is(err, engine.ErrFieldsLocked) {
+			lockedFields := engine.LockedFieldsFromError(err)
 			return c.JSON(http.StatusForbidden, echo.Map{
-				"status":  "error",
-				"message": "one or more fields are locked by environment configuration and cannot be modified via the API",
+				"status":        "error",
+				"message":       "one or more fields are locked by environment configuration and cannot be modified via the API",
+				"locked_fields": lockedFields,
 			})
 		}
 		log.Errorf("put snapshot settings failed for org=%s: %v", orgID, err)

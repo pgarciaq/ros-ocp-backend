@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -135,13 +136,11 @@ func GetPool() *pgxpool.Pool {
 func CreateCACertFile(certString string) string {
 	f, err := os.CreateTemp("", "RdsCa.pem")
 	if err != nil {
-		fmt.Printf("Unable to create RdsCa.pem: %s", err)
-		os.Exit(1)
+		log.Fatalf("db: unable to create RdsCa.pem: %v", err)
 	}
 	_, err = f.Write([]byte(certString))
 	if err != nil {
-		fmt.Printf("Unable to write to RdsCa.pem: %s", err)
-		os.Exit(1)
+		log.Fatalf("db: unable to write to RdsCa.pem: %v", err)
 	}
 	return f.Name()
 }

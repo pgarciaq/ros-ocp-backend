@@ -150,8 +150,7 @@ func Setup_kruize_performance_profile() {
 			create_performance_profile_url := cfg.KruizeUrl + "/createPerformanceProfile"
 			postBody, err := os.ReadFile("./resource_optimization_openshift.json")
 			if err != nil {
-				log.Errorf("File reading error: %v \n", err)
-				os.Exit(1)
+				log.Fatalf("Kruize performance profile file reading error: %v", err)
 			}
 			res, e := HTTPClient.Post(create_performance_profile_url, "application/json", bytes.NewBuffer(postBody))
 			if e != nil {
@@ -171,8 +170,7 @@ func Setup_kruize_performance_profile() {
 			bodyBytes, _ := io.ReadAll(res.Body)
 			data := map[string]interface{}{}
 			if err := json.Unmarshal(bodyBytes, &data); err != nil {
-				log.Errorf("can not unmarshal response data: %v", err)
-				os.Exit(1)
+				log.Fatalf("Kruize: cannot unmarshal performance profile response: %v", err)
 			}
 		}
 		log.Infof("sleeping for 10 Seconds")
