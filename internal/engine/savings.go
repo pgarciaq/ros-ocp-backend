@@ -67,14 +67,15 @@ func computeSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType str
 		podCountAvg = 1.0
 	}
 
-	// Cost model savings: derive effective per-unit rate from summary aggregates
-	modelCPURate := safeDiv(ns.CostModelCPUCost, ns.CPURequestHours)
-	modelMemRate := safeDiv(ns.CostModelMemCost, ns.MemRequestHours)
+	// Cost model savings: derive effective per-unit rate from summary aggregates.
+	// Rates are clamped to non-negative to guard against corrupted upstream cost data.
+	modelCPURate := math.Max(0, safeDiv(ns.CostModelCPUCost, ns.CPURequestHours))
+	modelMemRate := math.Max(0, safeDiv(ns.CostModelMemCost, ns.MemRequestHours))
 
 	modelSavings := (cpuDeltaCores*modelCPURate + memDeltaGiB*modelMemRate) * hoursPerMonth * podCountAvg
 
 	// Infrastructure + distributed overhead savings: apportion by distribution type
-	totalInfra := ns.InfraCost + ns.DistributedCost
+	totalInfra := math.Max(0, ns.InfraCost+ns.DistributedCost)
 	var infraSavings float64
 	if distType == "memory" {
 		infraRate := safeDiv(totalInfra, ns.MemRequestHours)
@@ -101,11 +102,11 @@ func computeIdleSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType
 		podCountAvg = 1.0
 	}
 
-	modelCPURate := safeDiv(ns.CostModelCPUCost, ns.CPURequestHours)
-	modelMemRate := safeDiv(ns.CostModelMemCost, ns.MemRequestHours)
+	modelCPURate := math.Max(0, safeDiv(ns.CostModelCPUCost, ns.CPURequestHours))
+	modelMemRate := math.Max(0, safeDiv(ns.CostModelMemCost, ns.MemRequestHours))
 	modelCost := (cpuCores*modelCPURate + memGiB*modelMemRate) * hoursPerMonth * podCountAvg
 
-	totalInfra := ns.InfraCost + ns.DistributedCost
+	totalInfra := math.Max(0, ns.InfraCost+ns.DistributedCost)
 	var infraCost float64
 	if distType == "memory" {
 		infraRate := safeDiv(totalInfra, ns.MemRequestHours)

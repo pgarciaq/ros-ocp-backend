@@ -117,6 +117,12 @@ func PutTermSettings(c echo.Context) error {
 				"message": "decay_halflife_hours must be non-negative",
 			})
 		}
+		if t.DecayHalfLifeHours != nil && *t.DecayHalfLifeHours > 8760 {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": "decay_halflife_hours must not exceed 8760 (1 year)",
+			})
+		}
 	}
 
 	ctx := c.Request().Context()

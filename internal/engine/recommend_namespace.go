@@ -56,7 +56,7 @@ func RecommendAllNamespaces(
 	orgID, clusterUUID string,
 	start, end time.Time,
 ) ([]NamespaceRec, error) {
-	terms, err := LoadTermConfig(ctx, pool, orgID)
+	terms, err := LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("load term config: %w", err)
 	}

@@ -46,7 +46,7 @@ func RecommendAllWorkloads(
 	start, end time.Time,
 	oomCfg OOMConfig,
 ) ([]ContainerRec, error) {
-	terms, err := LoadTermConfig(ctx, pool, orgID)
+	terms, err := LoadTermConfigCached(ctx, pool, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("load term config: %w", err)
 	}
@@ -81,7 +81,7 @@ func RecommendAllWorkloads(
 	}
 	defer rows.Close()
 
-	grouped := map[containerKey][]DigestRow{}
+	grouped := make(map[containerKey][]DigestRow, 128)
 
 	for rows.Next() {
 		var d DigestRow
@@ -255,7 +255,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 		}
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
-			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName)
+			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName)
 			batch.Queue(`
 			INSERT INTO recommendation_sets (
 				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
@@ -273,7 +273,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				monitoring_start_time, monitoring_end_time,
 				updated_at
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,now())
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term, engine)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
 				rec_cpu_limit_millicores = EXCLUDED.rec_cpu_limit_millicores,

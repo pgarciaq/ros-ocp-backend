@@ -56,7 +56,7 @@ func percentileFromSorted(sorted []int64, pct float64) int64 {
 // computation. The orgID and clusterUUID are provided by the caller
 // (from the Kafka message metadata).
 func GroupCSVRows(rows []MetricRow, orgID, clusterUUID string) map[DigestKey][]MetricRow {
-	groups := make(map[DigestKey][]MetricRow)
+	groups := make(map[DigestKey][]MetricRow, len(rows)/24+1)
 	for _, row := range rows {
 		bucketDate := time.Date(
 			row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(),

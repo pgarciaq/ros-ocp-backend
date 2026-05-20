@@ -165,6 +165,11 @@ func percentile98FB(digests []GPUDigestRow) float64 {
 }
 
 // GPUConfidence computes a 0.0-1.0 confidence score for a GPU recommendation.
+// Scoring factors:
+//  1. Data volume (base score): <3 days → 0.3, <7 days → 0.6, <14 days → 0.8, ≥14 → 1.0
+//  2. Utilization stability penalty: if max SM activity exceeds 5× average SM activity
+//     (indicating extreme bursty/spiky usage), base score is reduced by 30% (×0.7)
+//     because bursty workloads are harder to classify reliably.
 func GPUConfidence(digests []GPUDigestRow) float32 {
 	days := len(digests)
 	var base float32

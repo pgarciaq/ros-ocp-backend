@@ -162,6 +162,7 @@ func TestPutTermSettings_ValidationErrors(t *testing.T) {
 		{"window_days too high", `{"terms":[{"name":"short","window_days":91}]}`},
 		{"invalid name", `{"terms":[{"name":"daily","window_days":1}]}`},
 		{"negative decay", `{"terms":[{"name":"short","window_days":1,"decay_halflife_hours":-1}]}`},
+		{"decay exceeds max", `{"terms":[{"name":"medium","window_days":14,"decay_halflife_hours":9000}]}`},
 		{"too many terms", `{"terms":[{"name":"short","window_days":1},{"name":"medium","window_days":7},{"name":"long","window_days":15},{"name":"short","window_days":2}]}`},
 	}
 

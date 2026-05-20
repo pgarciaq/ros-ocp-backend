@@ -314,8 +314,8 @@ type uniqueTypes interface {
 }
 
 func unique[T uniqueTypes](x []T) []T {
-	keys := make(map[T]bool)
-	list := []T{}
+	keys := make(map[T]bool, len(x))
+	list := make([]T, 0, len(x))
 	for _, entry := range x {
 		if _, value := keys[entry]; !value {
 			keys[entry] = true

@@ -344,6 +344,35 @@ func TestApplySavingsEstimates_UsesDesiredReplicas(t *testing.T) {
 	assert.InDelta(t, 1095.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
 }
 
+func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "cpu",
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: -500.0, // corrupted negative
+				CostModelMemCost: -200.0,
+				InfraCost:        -100.0,
+				DistributedCost:  -50.0,
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:           "ns1",
+			CurrentCPURequestMC: 1000,
+			RecCPURequestMC:     500,
+			PodCountAvg:         1,
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	// Negative rates are clamped to 0, so savings should be $0
+	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+}
+
 func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		DistributionType: "cpu",
