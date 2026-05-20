@@ -22,6 +22,7 @@ func TestMatchGPUModel(t *testing.T) {
 		{"L40 not L40S", "NVIDIA L40", "L40"},
 		{"L40S", "NVIDIA L40S", "L40S"},
 		{"A10 not A100", "NVIDIA A10", "A10"},
+		{"A10G distinct from A10", "NVIDIA A10G", "A10G"},
 		{"A30", "NVIDIA A30", "A30"},
 		{"P40", "NVIDIA Tesla P40", "P40"},
 		{"unknown", "AMD Instinct MI300X", ""},
@@ -59,7 +60,7 @@ func TestGPUModelMIGProfiles(t *testing.T) {
 		}
 	}
 	// Verify non-MIG models have no profiles
-	nonMIG := []string{"T4", "A10", "L4", "L40", "L40S", "V100_16GB", "V100_32GB", "P100", "P40"}
+	nonMIG := []string{"T4", "A10", "A10G", "L4", "L40", "L40S", "V100_16GB", "V100_32GB", "P100", "P40"}
 	for _, name := range nonMIG {
 		spec := gpuModels[name]
 		if spec.MIGSupported {
