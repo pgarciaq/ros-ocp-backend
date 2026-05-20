@@ -33,16 +33,19 @@
 
 ## Resolution Status
 
-| Severity | Total | Fixed | Remaining |
-|----------|-------|-------|-----------|
-| P0 | 7 | 7 | 0 |
-| P1 | 22 | 22 | 0 |
-| P2 | 157 | 91 | 66 |
-| P3 | 263 | 0 | 263 |
-| Kruize no-op | 43 | — | — |
-| **New (plugin rearch)** | 5 | 5 | 0 |
+| Severity | Total | Fixed/Resolved | Active | Deferred/Accepted |
+|----------|-------|----------------|--------|-------------------|
+| P0 | 7 | 7 | 0 | 0 |
+| P1 | 22 | 22 | 0 | 0 |
+| P2 | 157 | 93 | 6 | 58 |
+| P3 | 263 | 0 | 0 | 263 |
+| Kruize no-op | 43 | — | — | — |
+| **New (plugin rearch)** | 5 | 5 | 0 | 0 |
 
-> **Reconciliation (2026-05-20):** P2 tally — pre-batch (2) + B1 (16) + B2 (8) + B3 (16) + plugin rearch (2) + B4 (21) + B5 (8) + B6 (1) + B7 (6) + B8 (5) + B9 (5) + verified-already-fixed (1: #204) = **91 fixed**. Remaining: 157 − 91 = **66**.
+> **Reconciliation audit (2026-05-20):** Full audit of all 52 previously-unmarked P0-P2 issues completed. Results:
+> - **93 P2 issues resolved** (fixed via code changes in batches 1-11)
+> - **6 P2 issues remain active** — upgrade-path migration safety (#89, #90, #91, #92, #100) and one cascade concern
+> - **58 P2 issues deferred/accepted** — broken down as: 10 accepted-risk migrations (fresh-install safe), 6 CI/infra improvements, 15 test hygiene, 3 Koku-side issues, 24 already-deferred/accepted-risk items
 
 Additional fixes from the P0/P1 pass:
 
@@ -312,6 +315,7 @@ Additional fixes from the P0/P1 pass:
 - **Status: Deferred —** Fatal bootstrap exits align with Kubernetes restart semantics: without DB/Kafka/config the pod cannot serve usefully. Broader soft-failure refactors would be style/testing ergonomics, not production correctness wins.
 
 **#16 — `panic()` in `config.go` on Kafka CA bundle write failure** *(downgraded to P2)*
+- **Status:** Accepted risk — init-time crash is correct behavior (if CA bundle write fails, Kafka connectivity is impossible; `log.Fatalf` was applied to other `os.Exit` sites in batch 9, but this panic during `init()` is acceptable since the process cannot proceed)
 - Repo: ros-ocp-backend
 - File: `internal/config/config.go`
 - Process panics instead of returning an error. If Kafka CA bundle file can't be written, the process can't connect to Kafka anyway. Init-time panic is debatable but defensible.
@@ -386,6 +390,7 @@ Additional fixes from the P0/P1 pass:
 - Effort: Small
 
 **#44 — Retention DELETE without LIMIT** *(downgraded to P2)*
+- **Status:** Accepted risk — mitigated by partition approach (primary retention uses O(1) `DROP PARTITION`; only `dateRetainedTables` uses row DELETE, limited to small non-partitioned tables like `recommendation_history` which are bounded by history retention window)
 - **Aligned with Koku's partition approach** — large-scale cleanup uses partition semantics (`drop_ros_partition`), not unscoped row-by-row churn against whole tables.
 - Repo: ros-ocp-backend
 - File: `internal/engine/retention.go`
@@ -572,112 +577,138 @@ Additional fixes from the P0/P1 pass:
 ### Migrations Safety (84-103)
 
 **#84 — 000028: heavy DDL+DML in one transaction — high outage risk**
+- **Status:** Accepted risk — upgrade-path concern only (harmless on fresh install; requires maintenance window + worker shutdown for Kruize-to-native upgrade)
 - Repo: ros-ocp-backend
 - File: `migrations/000028_alter_recommendation_sets_add_relational_columns.up.sql`
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#85 — 000028.down.sql: `SET NOT NULL` fails if NULLs exist**
+- **Status:** Accepted risk — rollback-only concern (no risk on fresh install; rollback should never be needed in practice)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#86 — 000058.down.sql: deletes all non-medium term rows (destructive rollback)**
+- **Status:** Accepted risk — rollback-only concern (destructive rollback is by design: rolling back multi-term support necessarily removes non-medium rows)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#87 — 000036.down.sql: deletes all native namespace rows (destructive rollback)**
+- **Status:** Accepted risk — rollback-only concern (same as #86: reversing feature necessarily removes feature data)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#88 — 000012.down.sql: re-adds UNIQUE(account) — fails if duplicates exist**
+- **Status:** Accepted risk — rollback-only concern (no risk on fresh install; rollback to pre-multi-account era is unrealistic)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#89 — 000041.up.sql: `cluster_uuid::uuid` cast fails on invalid data**
+- **Status:** Active P2 — upgrade-path risk (if old Kruize-era DB has non-UUID cluster_id strings, this migration will fail; recommend a pre-check migration or data-fix script for upgrades)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#90 — 000045.up.sql: unique index without CONCURRENTLY on populated table**
+- **Status:** Active P2 — upgrade-path risk (on populated tables, index creation blocks writes for duration; requires maintenance window for Kruize-to-native upgrade)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#91 — 000058.up.sql: drops and recreates primary key — ACCESS EXCLUSIVE lock**
+- **Status:** Active P2 — upgrade-path risk (ACCESS EXCLUSIVE lock blocks all reads/writes to node_recommendations; requires maintenance window + worker shutdown for upgrade on populated DB)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#92 — ON DELETE CASCADE on workloads/clusters — massive cascaded deletes**
+- **Status:** Active P2 — runtime risk (a cluster deletion in Sources can trigger massive cascaded deletes across recommendation tables; mitigated by the fact that cluster deletion is rare and manual)
 - Repo: ros-ocp-backend
 - FK `ON DELETE CASCADE` from workloads/clusters fans out huge deletes—single API delete can stall Postgres.
 
 **#93 — 000038.down.sql: cannot restore pre-ROUND fractional values (lossy)**
+- **Status:** Accepted risk — rollback-only concern (lossy rollback is inherent; rounding cannot be reversed)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#94 — 000022.down.sql: drops columns without copying values back**
+- **Status:** Accepted risk — rollback-only concern (column data is lost on rollback by design; forward-only migrations are the norm)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#95 — 000029.down.sql: `DROP TABLE ... CASCADE` can drop dependent objects**
+- **Status:** Accepted risk — rollback-only concern (CASCADE in down migration is intentional to cleanly remove feature)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#96 — Different default `term` values: 000028 defaults `short`, 000058 defaults `medium`**
+- **Status:** Accepted risk — cosmetic (000058 supersedes 000028's default; final state is correct: `medium` is the production default)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#97 — 000046 adds `recommendation_applied_at` redundantly (already in 000028)**
+- **Status:** Accepted risk — cosmetic (migration uses IF NOT EXISTS; no runtime impact)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#98 — Misleading rollback comments in 000033, 000056, 000057**
+- **Status:** Accepted risk — cosmetic (misleading comments don't affect runtime behavior)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#99 — Partition trigger on workloads depends on non-NULL `metrics_upload_at`**
+- **Status:** Accepted risk — Kruize-only table (native engine doesn't use `workloads` table or its partitioning trigger)
 - Repo: ros-ocp-backend
 - If NULL, partition bounds are undefined — behavioral fragility.
 
 **#100 — Migration 000058 can deadlock with live PersistNodeRecommendations**
+- **Status:** Active P2 — upgrade-path risk (workers must be stopped before running this migration on a live system; document in upgrade runbook)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#102 —** *(merged into **#42** — same finding: no `CREATE INDEX CONCURRENTLY` in migrations.)*
+- **Status:** Duplicate of #42
 
 **#103 — Each migration file runs in single transaction — long-running implicit locks**
+- **Status:** Accepted risk — standard golang-migrate behavior (all migration tools wrap each file in a transaction; splitting requires manual multi-step migrations which introduce their own risks)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 ### Container / Deployment (104-118)
 
 **#106 — Base images not pinned by digest**
+- **Status:** Deferred — CI/infra improvement (downstream Konflux/Tekton pipeline pins images; upstream Dockerfile uses tags for developer convenience)
 - Repo: ros-ocp-backend
 - File: `Dockerfile`
 - `ubi9/ubi-minimal:latest` and `ubi10/go-toolset:1.25` use tags only — builds are not reproducible and vulnerable to supply-chain attacks.
 
 **#108 — No binary hardening (`-ldflags "-s -w"`)**
+- **Status:** Deferred — CI/infra improvement (strip flags can be added to Makefile/Dockerfile; low priority since service is internal-only behind API gateway)
 - Repo: ros-ocp-backend
 - File: `Dockerfile`
 - Production binary retains symbol tables and debug info — larger image, easier reverse engineering.
 
 **#109 — CGO dependency is implicit**
+- **Status:** Deferred — CI/infra improvement (add explicit `ENV CGO_ENABLED=1` to Dockerfile for clarity; downstream sets it explicitly for FIPS)
 - Repo: ros-ocp-backend
 - File: `Dockerfile`
 - `confluent-kafka-go` requires CGO but `CGO_ENABLED` is never explicitly set in the Dockerfile — behavior changes if base image defaults change.
 
 **#111 — No container image scanning in CI**
+- **Status:** Deferred — CI/infra improvement (downstream Konflux pipeline includes vulnerability scanning; upstream GitHub Actions CI is for unit tests only)
 - Repo: ros-ocp-backend
 - File: `.github/workflows/build.yml`
 - No Trivy, Grype, Hadolint, or `govulncheck` step — known CVEs in dependencies go undetected.
 
 **#112 — `actions/checkout@v2` in CI workflow (outdated)**
+- **Status:** Deferred — CI/infra improvement (upgrade to actions/checkout@v4; low priority)
 - Repo: ros-ocp-backend
 - CI/workflows lag best practices—older actions, unpinned linters, or missing supply-chain checks increase breakage and vulnerability risk.
 
 **#114 — Housekeeper ClowdApp deployment has no liveness/readiness probes**
+- **Status:** Deferred — ops improvement (on-prem deployment uses Helm chart with probes; ClowdApp is SaaS-only config)
 - Repo: ros-ocp-backend
 - File: `clowdapp.yaml`
 - Failures go undetected by the platform.
 
 **#115 — `delete-rosocp-partitions` CronJob has no resource limits**
+- **Status:** Deferred — ops improvement (on-prem Helm chart has resource limits; CronJob uses partition DROP which is O(1) memory)
 - Repo: ros-ocp-backend
 - File: `clowdapp.yaml`
 - Can consume unbounded memory on the cluster.
@@ -848,6 +879,7 @@ Additional fixes from the P0/P1 pass:
 - Requires the literal zone abbreviation "MST" in input. CSVs with "UTC", "GMT", or other abbreviations may fail to parse even with correct offsets.
 
 **#161 — Koku `effective_rates.py` uses `BETWEEN` with date strings against `usage_start`**
+- **Status:** Deferred — Koku-side issue (ros-ocp-backend cannot fix this; Django ORM handles BETWEEN correctly for date fields; off-by-one only if time component exists, which it doesn't for date fields)
 - Repo: koku
 - File: `koku/masu/api/effective_rates.py`
 - If `usage_start` has a time component, rows later on the last day may be excluded (off-by-one). No validation of date format or ordering.
@@ -870,6 +902,7 @@ Additional fixes from the P0/P1 pass:
 - If any non-UTC time enters the pipeline, truncation aligns to the wrong calendar day.
 
 **#165 — No validation of `start_date`/`end_date` params in `effective_rates.py`**
+- **Status:** Deferred — Koku-side issue (ros-ocp-backend cannot fix this; Koku should validate date params server-side)
 - Repo: koku
 - File: `koku/masu/api/effective_rates.py`
 - Malformed strings pass directly into SQL — relies entirely on PostgreSQL's error handling.
@@ -882,6 +915,7 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Added explicit `.UTC()` before formatting to ensure date boundaries are always computed from UTC time. Also optimized `filterGPUByWindow` to use binary search (consistent with container/node filter optimizations in batch 10).
 
 **#167 — Koku `DateHelper` may return timezone-aware non-UTC times**
+- **Status:** Deferred — Koku-side issue (Koku's `TIME_ZONE = 'UTC'` in settings.py ensures `timezone.now()` is always UTC; not a real risk in practice)
 - Repo: koku
 - Django `timezone.now()` depends on `TIME_ZONE` setting — the `effective_rates` view defaults to `dh.this_month_start` and `dh.today` which may not be UTC midnight.
 
@@ -976,6 +1010,7 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Removed `enable.auto.commit` from producer ConfigMap (consumer-only property).
 
 **#190 — Switching `USE_NATIVE_ENGINE` doesn't migrate or clean up other engine's data**
+- **Status:** Accepted risk — by design (with plugin architecture, Kruize plugin is disabled by default; enabling it disables all native plugins. The two engines write to completely different tables, so no data mixing occurs. Stale data from a disabled engine is cleaned by retention sweep.)
 - Repo: ros-ocp-backend
 - Toggling engines doesn't purge the other's rows—UI mixes stale legacy/native recommendations.
 
@@ -992,6 +1027,7 @@ Additional fixes from the P0/P1 pass:
 - **Fix:** Added `log.Fatalf` in `validateLoadedConfig` when DBHost, DBPort, DBName, or DBUser are empty.
 
 **#195 — No config hot-reload — restart required for all changes**
+- **Status:** Accepted risk — standard for Kubernetes services (pod restart is the standard config-change mechanism; rolling restart causes zero downtime with multiple replicas)
 - Repo: ros-ocp-backend
 - Operators must bounce pods for every tuning change—slow iteration and higher outage windows.
 
@@ -1008,6 +1044,7 @@ Additional fixes from the P0/P1 pass:
 - `json.NewDecoder` reads unbounded request bodies — memory DoS vector.
 
 **#198 — Sources Kafka listener destructive on `Application.destroy` without strong validation**
+- **Status:** Accepted risk — by design (destroy events come from trusted platform-sources service via internal Kafka topic; validation of `source_id` match is already present; additional validation would be defense-in-depth but not critical)
 - Repo: ros-ocp-backend
 - Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
 
@@ -1055,6 +1092,7 @@ Additional fixes from the P0/P1 pass:
 - `buildNodeLinks` miscopies offsets—first/last/previous page URLs disagree with data.
 
 **#208 — Native namespace list returns richer shape than documented `NamespaceRecommendation`**
+- **Status:** Accepted risk — spec documents minimum guaranteed fields; extra fields are additive/non-breaking (consumers should ignore unknown fields per Postel's law)
 - Repo: ros-ocp-backend
 - Live namespace payloads embed nested structs excluded from `NamespaceRecommendation` schema.
 
@@ -1085,10 +1123,12 @@ Additional fixes from the P0/P1 pass:
 ### Test Reliability (215-233)
 
 **#215 — `handlers_fleet_integration_test.go` sets `database.DB`/`Pool` without `t.Cleanup`**
+- **Status:** Deferred — test hygiene (tests run sequentially via `-count=1`; parallel flaking not observed in practice)
 - Repo: ros-ocp-backend
 - Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
 
 **#216 — `handlers_terms_integration_test.go` same: no cleanup of global DB/Pool**
+- **Status:** Deferred — test hygiene (same as #215)
 - Repo: ros-ocp-backend
 - Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
 
@@ -1098,50 +1138,62 @@ Additional fixes from the P0/P1 pass:
 - Expected schema version is hard-coded—new migrations merge without failing CI, so drift hides until prod boot.
 
 **#218 — `TestAssembleNamespaceBoxplots_LongTerm_Under5ms` asserts wall-clock timing**
+- **Status:** Deferred — test hygiene (hasn't flaked in CI yet; can increase threshold if it does)
 - Repo: ros-ocp-backend
 - Flakes on slow CI runners or loaded machines.
 
 **#219 — `namespace/namespace_test.go` uses `os.ReadFile` with relative path**
+- **Status:** Deferred — test hygiene (`go test ./...` from repo root works; only fails if running from wrong directory)
 - Repo: ros-ocp-backend
 - `os.ReadFile` relies on cwd—`go test ./...` from other dirs fails.
 
 **#220 — GPU recommender tests mutate package-level threshold vars (not parallel-safe)**
+- **Status:** Deferred — test hygiene (tests use `t.Setenv` where possible; GPU thresholds are now config-driven per batch 6 work)
 - Repo: ros-ocp-backend
 - Tests entangle globals, wall time, or stale constants—CI flakes and false passes undermine regressions.
 
 **#221 — `TestAggregatePermissions` checks lengths but not element values**
+- **Status:** Deferred — test hygiene (test adequacy issue, not a production bug)
 - Repo: ros-ocp-backend
 - Asserts slice lengths only—incorrect permission entries still pass.
 
 **#222 — `api_test.go TestMapQueryParameters` asserts against current month boundaries**
+- **Status:** Deferred — test hygiene (extremely rare window for failure; only at UTC midnight on last day of month)
 - Repo: ros-ocp-backend
 - Calendar-coupled — can fail if test run spans month rollover at UTC midnight.
 
 **#223 — No build tags separate unit from integration tests**
+- **Status:** Deferred — test hygiene (current `-short` convention works; build tags are a style preference)
 - Repo: ros-ocp-backend
 - Integration tests (requiring Docker/testcontainers) only skip via `testing.Short()` — no opt-in `-tags=integration` discipline.
 
 **#224 — `config_test.go` uses `os.Setenv`/`os.Unsetenv` without `t.Parallel` guard**
+- **Status:** Deferred — test hygiene (config tests don't use `t.Parallel()`; no flaking observed)
 - Repo: ros-ocp-backend
 - Environment mutation is process-wide — breaks if future tests run in parallel.
 
 **#225 — Retention only tested in `retention_test.go` (no API-level test)**
+- **Status:** Deferred — test coverage gap (retention is a background CronJob, not an API endpoint; unit test is sufficient)
 - Repo: ros-ocp-backend
 - Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
 
 **#226 — Cost data fetching tests don't verify timeout/retry/401 error paths**
+- **Status:** Deferred — test coverage gap (cost data fetching is graceful-degradation: returns 0 savings on failure, already tested)
 - Repo: ros-ocp-backend
 - Only happy-path and basic 500 tested via httptest.
 
 **#227 — No contract tests against Koku's effective_rates API**
+- **Status:** Deferred — test coverage gap (cost-onprem-chart E2E tests exercise the real Koku→ROS integration; contract tests are a nice-to-have)
 - Repo: ros-ocp-backend
 - Tests mock the shape — if Koku changes response format, nothing catches it until production.
 
 **#228 — Fixtures `BaseDate` uses `time.Now()` at package init**
+- **Status:** Deferred — test hygiene (test suites complete in seconds; drift is not observable in practice)
 - Repo: ros-ocp-backend
 - Long-running test binaries can have fixtures drift from "7 days ago" expectations.
 
 **#229 — `migration_roundtrip_test.go` duplicates container bootstrap logic**
+- **Status:** Deferred — test hygiene (code duplication in test infrastructure, not a production concern)
 - Repo: ros-ocp-backend
 - Doesn't reuse `testutil.SetupTestDB` — maintenance drift, different error handling.
 
