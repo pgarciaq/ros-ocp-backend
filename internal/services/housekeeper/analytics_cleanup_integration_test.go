@@ -164,6 +164,32 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			term TEXT NOT NULL DEFAULT 'medium',
 			PRIMARY KEY (org_id, cluster_uuid, node, term)
 		)`,
+		// Kruize-era tables referenced by the background-delete steps.
+		`CREATE TABLE clusters (
+			id BIGSERIAL PRIMARY KEY,
+			cluster_uuid UUID NOT NULL UNIQUE,
+			cluster_alias TEXT,
+			source_id TEXT,
+			tenant_id BIGINT
+		)`,
+		`CREATE TABLE workloads (
+			id BIGSERIAL PRIMARY KEY,
+			cluster_id BIGINT REFERENCES clusters(id) ON DELETE CASCADE,
+			namespace TEXT,
+			workload_name TEXT,
+			workload_type TEXT,
+			experiment_name TEXT
+		)`,
+		`CREATE TABLE workload_metrics (
+			id BIGSERIAL PRIMARY KEY,
+			workload_id BIGINT REFERENCES workloads(id) ON DELETE CASCADE,
+			metric_name TEXT
+		)`,
+		`CREATE TABLE historical_recommendation_sets (
+			id BIGSERIAL PRIMARY KEY,
+			workload_id BIGINT REFERENCES workloads(id) ON DELETE CASCADE,
+			recommendation TEXT
+		)`,
 	}
 	for _, ddl := range ddls {
 		require.NoError(t, gdb.Exec(ddl).Error)
@@ -207,6 +233,11 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	exec(`INSERT INTO snapshot_inventory (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
 	exec(`INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
 	exec(`INSERT INTO node_recommendations (org_id, cluster_uuid, node, term) VALUES (?, ?::uuid, 'node1', 'medium')`, org, cluster)
+	// Kruize-era tables
+	exec(`INSERT INTO clusters (cluster_uuid, cluster_alias, source_id, tenant_id) VALUES (?::uuid, 'test', 'src-1', 1)`, cluster)
+	exec(`INSERT INTO workloads (cluster_id, namespace, workload_name, workload_type, experiment_name) VALUES ((SELECT id FROM clusters WHERE cluster_uuid = ?::uuid), 'ns', 'wl', 'deployment', 'exp-1')`, cluster)
+	exec(`INSERT INTO workload_metrics (workload_id, metric_name) VALUES ((SELECT id FROM workloads WHERE cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid) LIMIT 1), 'cpuUsage')`, cluster)
+	exec(`INSERT INTO historical_recommendation_sets (workload_id, recommendation) VALUES ((SELECT id FROM workloads WHERE cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid) LIMIT 1), '{}')`, cluster)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
 
@@ -224,6 +255,9 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	assert.Equal(t, int64(0), countRows(t, gdb, "snapshot_inventory", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "snapshot_recommendation_sets", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "node_recommendations", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "workload_metrics", "1=1"))
+	assert.Equal(t, int64(0), countRows(t, gdb, "historical_recommendation_sets", "1=1"))
+	assert.Equal(t, int64(0), countRows(t, gdb, "workloads", "cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid)", cluster))
 }
 
 func TestCleanupClusterAnalytics_BatchingDeletesLargeReplica(t *testing.T) {

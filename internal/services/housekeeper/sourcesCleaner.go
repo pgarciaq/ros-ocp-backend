@@ -89,6 +89,12 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		{"snapshot_inventory", "snapshot_inventory", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"snapshot_recommendation_sets", "snapshot_recommendation_sets", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node", "term"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		// Kruize-era tables: delete children before workloads to avoid CASCADE fan-out.
+		// workload_metrics and historical_recommendation_sets reference workloads(id).
+		{"workload_metrics", "workload_metrics", []string{"id"}, `workload_id IN (SELECT id FROM workloads WHERE cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid LIMIT 1))`, []any{clusterUUID}},
+		{"historical_recommendation_sets", "historical_recommendation_sets", []string{"id"}, `workload_id IN (SELECT id FROM workloads WHERE cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid LIMIT 1))`, []any{clusterUUID}},
+		// Finally delete workloads themselves so clusters CASCADE is a no-op.
+		{"workloads", "workloads", []string{"id"}, `cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid LIMIT 1)`, []any{clusterUUID}},
 	}
 	for _, step := range steps {
 		if err := deleteMatchingInBatches(db, step.name, step.table, step.pkCols, step.where, step.args, orgID, clusterUUID); err != nil {
