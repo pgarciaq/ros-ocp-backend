@@ -37,6 +37,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	}
 	orgIDStr := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgIDStr)
 
 	opts, err := listoptions.ListAPIOptions(c, listoptions.DefaultNodeRecsOrderBy, listoptions.NodeRecsAllowedOrderBy)
 	if err != nil {
@@ -56,14 +57,14 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr)
 	if err != nil {
-		log.Warnf("GetNodeRecommendations: load term config failed: %v", err)
+		hlog.Warnf("GetNodeRecommendations: load term config failed: %v", err)
 		terms = engine.DefaultTerms()
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
-		log.Errorf("GetNodeRecommendations: failed to get clusters: %v", err)
+		hlog.Errorf("GetNodeRecommendations: failed to get clusters: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
@@ -92,7 +93,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	for _, clusterUUID := range clusterUUIDs {
 		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
 		if err != nil {
-			log.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
+			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
 			continue
 		}
@@ -105,7 +106,7 @@ func GetNodeRecommendations(c echo.Context) error {
 			kokuOrgID := strings.TrimPrefix(orgIDStr, "org")
 			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, clusterUUID, start, now)
 			if err != nil {
-				log.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", clusterUUID, err)
+				hlog.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", clusterUUID, err)
 			} else {
 				costData = cd
 			}
@@ -132,7 +133,7 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	var warnings []string
 	if len(gpuClusterErrors) > 0 {
-		log.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
+		hlog.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
 		switch len(gpuClusterErrors) {
 		case 1:
 			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))
@@ -192,14 +193,15 @@ func respondNodeGPURecommendationsTripleSQL(
 	start, now time.Time,
 	nodeNameFilter, gpuModelFilter string,
 ) error {
+	hlog := requestLogger(c, orgIDStr)
 	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
 	if err != nil {
-		log.Errorf("GetNodeRecommendations: triple count failed: %v", err)
+		hlog.Errorf("GetNodeRecommendations: triple count failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
 	}
 	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, opts.Limit, opts.Offset)
 	if err != nil {
-		log.Errorf("GetNodeRecommendations: triple page failed: %v", err)
+		hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
 	}
 
@@ -214,7 +216,7 @@ func respondNodeGPURecommendationsTripleSQL(
 			kokuOrgID := strings.TrimPrefix(orgIDStr, "org")
 			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, t.ClusterUUID, start, now)
 			if err != nil {
-				log.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", t.ClusterUUID, err)
+				hlog.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", t.ClusterUUID, err)
 			} else if cd != nil {
 				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
 					r := float32(rate)
@@ -231,7 +233,7 @@ func respondNodeGPURecommendationsTripleSQL(
 		f := &engine.GPUQueryFilters{NodeNameExact: tr.NodeName, GPUModelExact: tr.GPUModel}
 		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, tr.ClusterUUID, start, now, terms, f)
 		if err != nil {
-			log.Warnf("GetNodeRecommendations: failed for cluster %s: %v", tr.ClusterUUID, err)
+			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", tr.ClusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", tr.ClusterUUID, err))
 			continue
 		}
@@ -254,7 +256,7 @@ func respondNodeGPURecommendationsTripleSQL(
 
 	var warnings []string
 	if len(gpuClusterErrors) > 0 {
-		log.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
+		hlog.Warnf("GetNodeRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
 		switch len(gpuClusterErrors) {
 		case 1:
 			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))

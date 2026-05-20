@@ -47,6 +47,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -100,7 +101,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	countQuery := `SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		log.Errorf("snapshot recommendation count failed for org=%s: %v", orgID, err)
+		hlog.Errorf("snapshot recommendation count failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to count snapshot recommendations",
@@ -121,7 +122,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
-		log.Errorf("snapshot recommendation query failed for org=%s: %v", orgID, err)
+		hlog.Errorf("snapshot recommendation query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch snapshot recommendations",
@@ -141,7 +142,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 			&r.ManagedBy, &r.RecommendationType, &r.EstimatedMonthlyCost,
 			&codes,
 		); err != nil {
-			log.Errorf("scanning snapshot recommendation row: %v", err)
+			hlog.Errorf("scanning snapshot recommendation row: %v", err)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to read snapshot recommendation rows",
@@ -154,7 +155,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		data = append(data, r)
 	}
 	if err := rows.Err(); err != nil {
-		log.Errorf("snapshot recommendation row iteration failed for org=%s: %v", orgID, err)
+		hlog.Errorf("snapshot recommendation row iteration failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch snapshot recommendations",

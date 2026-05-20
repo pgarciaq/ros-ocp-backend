@@ -16,6 +16,7 @@ func GetSnapshotSettings(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -27,7 +28,7 @@ func GetSnapshotSettings(c echo.Context) error {
 
 	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
-		log.Errorf("get snapshot settings failed for org=%s: %v", orgID, err)
+		hlog.Errorf("get snapshot settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to read snapshot settings",
@@ -44,6 +45,7 @@ func PutSnapshotSettings(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -70,7 +72,7 @@ func PutSnapshotSettings(c echo.Context) error {
 				"locked_fields": lockedFields,
 			})
 		}
-		log.Errorf("put snapshot settings failed for org=%s: %v", orgID, err)
+		hlog.Errorf("put snapshot settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to update snapshot settings",

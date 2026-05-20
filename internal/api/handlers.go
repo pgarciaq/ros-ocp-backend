@@ -26,6 +26,7 @@ func GetRecommendationSetList(c echo.Context) error {
 	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "recommendationset-list"
+	hlog := requestLogger(c, OrgID)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
 	if err != nil {
@@ -48,7 +49,7 @@ func GetRecommendationSetList(c echo.Context) error {
 	recommendationSet := model.RecommendationSet{}
 	recommendationSets, count, queryErr := recommendationSet.GetRecommendationSets(OrgID, apiListOptions, queryParams, user_permissions)
 	if queryErr != nil {
-		log.Errorf("unable to fetch records from database; %v", queryErr)
+		hlog.Errorf("unable to fetch records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",
@@ -89,10 +90,10 @@ func GetRecommendationSetList(c echo.Context) error {
 				if r := recover(); r != nil {
 					generationErr = fmt.Errorf("panic in CSV generation goroutine: %v", r)
 				}
-				if generationErr != nil {
-					_ = pipeWriter.CloseWithError(generationErr)
-					log.Errorf("error during CSV generation (recovered or returned): %v", generationErr)
-				} else {
+			if generationErr != nil {
+				_ = pipeWriter.CloseWithError(generationErr)
+				hlog.Errorf("error during CSV generation: %v", generationErr)
+			} else {
 					_ = pipeWriter.Close() // graceful closure
 				}
 			}()
@@ -111,6 +112,7 @@ func GetRecommendationSet(c echo.Context) error {
 	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "recommendationset"
+	hlog := requestLogger(c, OrgID)
 
 	RecommendationIDStr := c.Param("recommendation-id")
 	RecommendationUUID, err := uuid.Parse(RecommendationIDStr)
@@ -127,7 +129,7 @@ func GetRecommendationSet(c echo.Context) error {
 	recommendationSet, error := recommendationSetVar.GetRecommendationSetByID(OrgID, RecommendationUUID.String(), user_permissions)
 
 	if error != nil {
-		log.Errorf("unable to fetch recommendation %s; error %v", RecommendationIDStr, error)
+		hlog.WithField("recommendation_id", RecommendationIDStr).Errorf("unable to fetch recommendation: %v", error)
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
 
@@ -388,6 +390,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
 	if err != nil {
@@ -401,7 +404,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 
 	results, count, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
-		log.Errorf("unable to fetch native recommendations; %v", queryErr)
+		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",
@@ -455,6 +458,7 @@ func GetNativeRecommendationSet(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	idStr := c.Param("recommendation-id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -463,7 +467,7 @@ func GetNativeRecommendationSet(c echo.Context) error {
 
 	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
 	if err != nil {
-		log.Errorf("unable to fetch native recommendation %s; %v", idStr, err)
+		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch recommendation",
@@ -489,6 +493,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultContainerRecsDBColumn, listoptions.ContainerAllowedOrderBy)
 	if err != nil {
@@ -502,7 +507,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 
 	results, totalCount, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
-		log.Errorf("unable to fetch native recommendations; %v", queryErr)
+		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",
@@ -529,6 +534,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	idStr := c.Param("recommendation-id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -537,7 +543,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 
 	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
 	if err != nil {
-		log.Errorf("unable to fetch native recommendation %s; %v", idStr, err)
+		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch recommendation",
@@ -587,6 +593,7 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 }
 
 func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions, userPerms map[string][]string) error {
+	hlog := requestLogger(c, orgID)
 	queryParams, err := MapQueryParameters(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
@@ -600,7 +607,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 	recSet := model.RecommendationSet{}
 	recSets, count, queryErr := recSet.GetRecommendationSets(orgID, opts, queryParams, userPerms)
 	if queryErr != nil {
-		log.Errorf("unable to fetch legacy records from database; %v", queryErr)
+		hlog.Errorf("unable to fetch legacy records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",
@@ -653,6 +660,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 }
 
 func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string][]string) error {
+	hlog := requestLogger(c, orgID)
 	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
 	if unitParseErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
@@ -661,7 +669,7 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 	recSetVar := model.RecommendationSet{}
 	recSet, err := recSetVar.GetRecommendationSetByID(orgID, idStr, userPerms)
 	if err != nil {
-		log.Errorf("legacy fallback: unable to fetch recommendation %s; %v", idStr, err)
+		hlog.WithField("recommendation_id", idStr).Errorf("legacy fallback: unable to fetch recommendation: %v", err)
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
 
@@ -692,6 +700,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	apiListOptions, err := listoptions.ListAPIOptions(c, listoptions.DefaultNsRecsDBColumn, listoptions.NsAllowedOrderBy)
 	if err != nil {
@@ -700,7 +709,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 
 	queryParams, err := MapNativeNamespaceQueryParameters(c)
 	if err != nil {
-		log.Error(err.Error())
+		hlog.Error(err.Error())
 		var pe *ParamError
 		if errors.As(err, &pe) && pe.UserErr {
 			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
@@ -710,7 +719,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 
 	results, count, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
-		log.Errorf("unable to fetch native namespace recommendations; %v", queryErr)
+		hlog.Errorf("unable to fetch native namespace recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch records from database",
@@ -721,7 +730,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		return serveNativeNamespaceList(c, results, int(count), apiListOptions)
 	}
 
-	log.Info("native namespace engine returned 0 results, falling back to Kruize path")
+	hlog.Info("native namespace engine returned 0 results, falling back to Kruize path")
 	return GetNamespaceRecommendationSetList(c)
 }
 
@@ -768,6 +777,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 	}
 	OrgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, OrgID)
 
 	idStr := c.Param("recommendation-id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -776,7 +786,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 
 	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms)
 	if err != nil {
-		log.Errorf("unable to fetch native namespace recommendation %s; %v", idStr, err)
+		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native namespace recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch recommendation",

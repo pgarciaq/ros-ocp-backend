@@ -37,6 +37,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	}
 	orgID := xrhid.Identity.OrgID
 	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgID)
 
 	if deprecated {
 		c.Response().Header().Set("Deprecation", "true")
@@ -72,7 +73,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	pool := database.GetPool()
 	if pool == nil {
-		log.Warnf("GetNodeUtilizationRecs: database pool unavailable")
+		hlog.Warnf("GetNodeUtilizationRecs: database pool unavailable")
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database connection unavailable",
@@ -83,7 +84,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	allClusters, err := getClustersForOrg(ctx, orgID)
 	if err != nil {
-		log.Warnf("GetNodeUtilizationRecs: failed to resolve clusters: %v", err)
+		hlog.Warnf("GetNodeUtilizationRecs: failed to resolve clusters: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
@@ -142,7 +143,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	countSQL := "SELECT COUNT(*) " + baseFrom
 	var totalCount int
 	if err := pool.QueryRow(ctx, countSQL, args...).Scan(&totalCount); err != nil {
-		log.Warnf("GetNodeUtilizationRecs: count query failed: %v", err)
+		hlog.Warnf("GetNodeUtilizationRecs: count query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to load node utilization recommendations",
@@ -164,7 +165,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	rows, err := pool.Query(ctx, dataSQL, args...)
 	if err != nil {
-		log.Warnf("GetNodeUtilizationRecs: query failed: %v", err)
+		hlog.Warnf("GetNodeUtilizationRecs: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to load node utilization recommendations",
@@ -191,7 +192,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		)
 		if err != nil {
 			scanErrors++
-			log.Warnf("GetNodeUtilizationRecs: scan failed (skipping row): %v", err)
+			hlog.Warnf("GetNodeUtilizationRecs: scan failed (skipping row): %v", err)
 			continue
 		}
 
@@ -201,7 +202,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		pagedRecs = append(pagedRecs, rec)
 	}
 	if err := rows.Err(); err != nil {
-		log.Warnf("GetNodeUtilizationRecs: rows iteration failed: %v", err)
+		hlog.Warnf("GetNodeUtilizationRecs: rows iteration failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to load node utilization recommendations",
