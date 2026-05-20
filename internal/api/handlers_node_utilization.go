@@ -36,6 +36,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	userPerms := get_user_permissions(c)
 
 	if deprecated {
 		c.Response().Header().Set("Deprecation", "true")
@@ -80,6 +81,23 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	ctx := c.Request().Context()
 
+	allClusters, err := getClustersForOrg(ctx, orgID)
+	if err != nil {
+		log.Warnf("GetNodeUtilizationRecs: failed to resolve clusters: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
+	if len(allowedClusters) == 0 {
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
+			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset},
+			Data: []model.NodeUtilizationRec{},
+		})
+	}
+
 	clusterFilter := c.QueryParam("cluster_uuid")
 	nodeFilter := c.QueryParam("node")
 	termFilter := c.QueryParam("term")
@@ -90,10 +108,10 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		FROM node_recommendations nr
 		JOIN clusters c ON nr.cluster_uuid::text = c.cluster_uuid::text
 		JOIN rh_accounts a ON c.tenant_id = a.id
-		WHERE a.org_id = $1`
+		WHERE a.org_id = $1 AND nr.cluster_uuid::text = ANY($2)`
 
-	args := []interface{}{orgID}
-	argIdx := 2
+	args := []interface{}{orgID, allowedClusters}
+	argIdx := 3
 
 	if clusterFilter != "" {
 		baseFrom += " AND nr.cluster_uuid = $" + strconv.Itoa(argIdx)

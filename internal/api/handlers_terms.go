@@ -181,8 +181,26 @@ func DeleteTermSettings(c echo.Context) error {
 	ctx := c.Request().Context()
 	pool := db.GetPool()
 
-	if _, err := pool.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		log.Errorf("failed to begin transaction for deleting term settings org %s: %v", orgID, err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database error",
+		})
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, "DELETE FROM org_recommendation_terms WHERE org_id = $1", orgID); err != nil {
 		log.Errorf("failed to delete term settings for org %s: %v", orgID, err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database error",
+		})
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Errorf("failed to commit delete term settings for org %s: %v", orgID, err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "database error",
