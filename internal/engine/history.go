@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // WriteRecommendationHistory batch-inserts recommendation snapshots into
@@ -80,7 +80,7 @@ func EnsureHistoryPartitions(ctx context.Context, pool *pgxpool.Pool) {
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureHistoryPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureHistoryPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }

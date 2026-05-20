@@ -8,7 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -140,7 +140,7 @@ func MatchGPUModel(modelName string) *GPUModelSpec {
 			}
 			gpuModelUnrecognized.WithLabelValues(label).Inc()
 			if _, loaded := unrecognizedLogOnce.LoadOrStore(s, struct{}{}); !loaded {
-				log.Warnf("gpu_metadata: unrecognized GPU model %q — add to gpu_catalog.yaml and matchGPUModelKey", modelName)
+				logging.GetLogger().WithField("gpu_model", modelName).Warn("gpu_metadata: unrecognized GPU model — add to gpu_catalog.yaml and matchGPUModelKey")
 			}
 		}
 		return nil

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // CoreToMillicores converts a floating-point core count string (e.g., "0.250")
@@ -269,12 +269,12 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 
 		row, parseErr := parseRecord(record, idx)
 		if parseErr != nil {
-			log.Debugf("ParseCSVRows: skipping line %d: %v", lineNum, parseErr)
+			logging.GetLogger().Debugf("ParseCSVRows: skipping line %d: %v", lineNum, parseErr)
 			continue
 		}
 
 		if valErr := ValidateMetricRow(row); valErr != nil {
-			log.Debugf("ParseCSVRows: skipping line %d: %v", lineNum, valErr)
+			logging.GetLogger().Debugf("ParseCSVRows: skipping line %d: %v", lineNum, valErr)
 			continue
 		}
 
