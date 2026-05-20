@@ -3,12 +3,46 @@
 # This file defines the hardware specifications for all recognized NVIDIA GPU
 # models. It is embedded at compile time via go:embed and parsed on startup.
 #
-# To add a new GPU:
+# MAINTENANCE WORKFLOW:
 #   1. Add an entry below with correct specs from NVIDIA's datasheet
 #   2. Add a matching case in matchGPUModelKey() in gpu_metadata.go
+#      (the input is the lowercase DCGM-reported model string)
 #   3. Add a test case in gpu_metadata_test.go
+#   4. Run: go test ./internal/engine/... -run "TestMatchGPUModel|TestGPUModelMIG"
 #
-# Sources: NVIDIA product datasheets, CUDA toolkit documentation
+# HOW TO KNOW WHEN TO UPDATE:
+#   Monitor the Prometheus counter `rosocp_gpu_model_unrecognized_total`.
+#   Any non-zero value means clusters are reporting GPUs not in this catalog.
+#   The `model_name` label shows the exact DCGM string to add support for.
+#
+# WHERE TO FIND SPECS:
+#   Data Center GPUs (A100, H100, H200, B200, L40S, etc.):
+#     https://www.nvidia.com/en-us/data-center/products/
+#     https://resources.nvidia.com/en-us-data-center-overview
+#
+#   Individual product datasheets (SM count, VRAM, MIG profiles):
+#     https://www.nvidia.com/en-us/data-center/a100/
+#     https://www.nvidia.com/en-us/data-center/h100/
+#     https://www.nvidia.com/en-us/data-center/h200/
+#     https://www.nvidia.com/en-us/data-center/b200/
+#     https://www.nvidia.com/en-us/data-center/l40s/
+#     https://www.nvidia.com/en-us/data-center/l4/
+#     https://www.nvidia.com/en-us/data-center/tesla-t4/
+#
+#   MIG partition geometries (slices, memory per profile):
+#     https://docs.nvidia.com/datacenter/tesla/mig-user-guide/index.html
+#     Section "Supported GPU Products" lists available profiles per model.
+#
+#   Cloud-specific variants (A10G for AWS, etc.):
+#     https://aws.amazon.com/ec2/instance-types/g5/
+#     https://cloud.google.com/compute/docs/gpus
+#     https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/overview
+#
+#   DCGM model name strings (what the operator reports):
+#     Run `nvidia-smi -L` on a node, or check DCGM_FI_DEV_NAME in Prometheus.
+#     Common formats: "NVIDIA A100-SXM4-80GB", "NVIDIA H100 80GB HBM3",
+#     "Tesla V100-SXM2-32GB", "NVIDIA A10G", "NVIDIA L4".
+#
 # Last updated: 2026-05-20
 
 models:
