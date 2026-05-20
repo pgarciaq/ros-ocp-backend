@@ -279,6 +279,8 @@ func initConfig() {
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("ROS_RETENTION_MONTHS", 6)
 	viper.SetDefault("ROS_HISTORY_RETENTION_DAYS", 90)
+	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 72)
+	viper.SetDefault("ROS_STALE_ARCHIVE_DAYS", 30)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
@@ -341,9 +343,21 @@ func validateLoadedConfig(c *Config) {
 	if c == nil {
 		return
 	}
+	if c.DBHost == "" || c.DBPort == "" || c.DBName == "" || c.DBUser == "" {
+		log.Fatalf("config: required database settings missing (DBHost=%q, DBPort=%q, DBName=%q, DBUser=%q)",
+			c.DBHost, c.DBPort, c.DBName, c.DBUser)
+	}
 	if c.MaxLookbackDays <= 0 {
 		log.Printf("config: ROS_MAX_LOOKBACK_DAYS (%d) is invalid; using 14", c.MaxLookbackDays)
 		c.MaxLookbackDays = 14
+	}
+	if c.StalenessThresholdHours <= 0 {
+		log.Printf("config: ROS_STALENESS_THRESHOLD_HOURS (%d) is invalid; using 72", c.StalenessThresholdHours)
+		c.StalenessThresholdHours = 72
+	}
+	if c.StaleArchiveDays <= 0 {
+		log.Printf("config: ROS_STALE_ARCHIVE_DAYS (%d) is invalid; using 30", c.StaleArchiveDays)
+		c.StaleArchiveDays = 30
 	}
 	if c.DBMaxConns <= 0 {
 		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using 10", c.DBMaxConns)

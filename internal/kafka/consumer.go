@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/featureflags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -51,10 +50,6 @@ func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, cons
 func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), auto_commit_option ...bool) {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
-
-	if err := featureflags.Init(); err != nil {
-		log.Errorf("Unleash Error: %v", err)
-	}
 
 	auto_commit := cfg.KafkaAutoCommit
 	if len(auto_commit_option) > 0 {
