@@ -61,6 +61,8 @@ Additional fixes from the P0/P1 pass:
 
 **P2 batch 6 — GORM/Model correctness + performance** (May 2026): Verified **6** issues already fixed in prior batches (**#129**, **#131**, **#163**, **#172**, **#173**, **#175**). Fixed **#168** (snapshot UTC timestamp). Extended **#123** (term config caching now shared across all API handlers via `engine.LoadTermConfigCached`). **Running total:** **75** fixed / **82** remaining P2.
 
+**P2 batch 7 — Configuration correctness + dead code** (May 2026): Fixed **6** issues (**#188**, **#189**, **#191**, **#192**, **#196**, **#248**) — added missing `viper.SetDefault` values, removed consumer-only Kafka property from producer, removed dead Unleash initialization, added fatal validation for empty required DB config, and strengthened `isDefault` term comparison. Verified **#249** already fixed (transaction wrapping present). **Running total:** **82** fixed / **75** remaining P2.
+
 ## Repository Impact Summary
 
 | Repository | P0 | P1 | P2 | P3 | Total |
@@ -928,33 +930,43 @@ Additional fixes from the P0/P1 pass:
 - **Resolution:** The plugin system (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) replaces ad-hoc feature toggles. Each recommendation type is a plugin that can be individually disabled.
 
 **#188 — `ROS_STALENESS_THRESHOLD_HOURS` has no `viper.SetDefault`**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
+- **Fix:** Added `viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 72)` and validation in `validateLoadedConfig`.
 
 **#189 — Producer config sets `enable.auto.commit` (consumer-specific property)**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - File: `internal/kafka/producer.go`
 - Misplaced in librdkafka producer config — likely ignored but confusing.
+- **Fix:** Removed `enable.auto.commit` from producer ConfigMap (consumer-only property).
 
 **#190 — Switching `USE_NATIVE_ENGINE` doesn't migrate or clean up other engine's data**
 - Repo: ros-ocp-backend
 - Toggling engines doesn't purge the other's rows—UI mixes stale legacy/native recommendations.
 
 **#191 — Unleash initialized but no feature flags are actually read**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - `featureflags.Init()` runs, consumes resources, but `flags.go` is empty — false sense of flag coverage.
+- **Fix:** Removed `featureflags.Init()` call from consumer startup. Package retained for future use but no longer initialized at runtime.
 
 **#192 — No fatal validation for empty required configs**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Missing required settings don't abort startup—service runs half-configured until runtime failures.
+- **Fix:** Added `log.Fatalf` in `validateLoadedConfig` when DBHost, DBPort, DBName, or DBUser are empty.
 
 **#195 — No config hot-reload — restart required for all changes**
 - Repo: ros-ocp-backend
 - Operators must bounce pods for every tuning change—slow iteration and higher outage windows.
 
 **#196 — `ROS_STALE_ARCHIVE_DAYS` has no `viper.SetDefault`**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
+- **Fix:** Added `viper.SetDefault("ROS_STALE_ARCHIVE_DAYS", 30)` and validation in `validateLoadedConfig`.
 
 **#197 — `PutTermSettings` has no request body size limit**
 - **Status:** **Fixed** in `f56c2d2`
@@ -1272,10 +1284,13 @@ Additional fixes from the P0/P1 pass:
 - RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
 
 **#248 — `GetTermSettings` `isDefault` check is fragile (length + first element only)**
+- **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Default detection inspects slice length/first element only—unexpected ordering marks wrong default.
+- **Fix:** Now compares all terms' `WindowDays` and `DecayHalfLifeHours` against defaults.
 
 **#249 — `PutTermSettings` does DELETE then re-INSERT without transaction wrapping**
+- **Status: ✅ FIXED** (verified P2 batch 7 — already wrapped in `pool.Begin()` / `tx.Commit()`)
 - Repo: ros-ocp-backend
 - Replace-all pattern lacks txn—callers can observe empty term windows mid-update.
 

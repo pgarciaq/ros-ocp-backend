@@ -33,7 +33,6 @@ func startProducer() {
 		configMap = kafka.ConfigMap{
 			"bootstrap.servers":        cfg.KafkaBootstrapServers,
 			"go.delivery.reports":      true,
-			"enable.auto.commit":       cfg.KafkaAutoCommit,
 			"go.logs.channel.enable":   true,
 			"allow.auto.create.topics": true,
 		}

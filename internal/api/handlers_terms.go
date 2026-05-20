@@ -51,7 +51,15 @@ func GetTermSettings(c echo.Context) error {
 	}
 
 	defaults := engine.DefaultTerms()
-	isDefault := len(terms) == len(defaults) && terms[0].WindowDays == defaults[0].WindowDays
+	isDefault := len(terms) == len(defaults)
+	if isDefault {
+		for i := range terms {
+			if terms[i].WindowDays != defaults[i].WindowDays || terms[i].DecayHalfLifeHours != defaults[i].DecayHalfLifeHours {
+				isDefault = false
+				break
+			}
+		}
+	}
 
 	items := make([]termSettingsResponseItem, len(terms))
 	for i, t := range terms {
