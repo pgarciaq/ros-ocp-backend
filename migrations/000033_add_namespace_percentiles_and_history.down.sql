@@ -1,4 +1,4 @@
--- Rollback migration 000031.
+-- Rollback migration 000033: remove namespace percentiles and native history columns.
 
 -- Drop namespace percentile columns.
 ALTER TABLE daily_namespace_digests
