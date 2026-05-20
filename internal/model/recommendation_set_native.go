@@ -146,8 +146,10 @@ type NativeContainerResult struct {
 }
 
 // NativeContainerID generates a deterministic UUID v5 from the composite key.
-func NativeContainerID(clusterUUID, namespace, workload, container string) string {
-	name := fmt.Sprintf("%s/%s/%s/%s", clusterUUID, namespace, workload, container)
+// workloadType is included to distinguish same-name workloads of different kinds
+// (e.g. Deployment "api" vs StatefulSet "api" in the same namespace).
+func NativeContainerID(clusterUUID, namespace, workload, workloadType, container string) string {
+	name := fmt.Sprintf("%s/%s/%s/%s/%s", clusterUUID, namespace, workload, workloadType, container)
 	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
 }
 
@@ -352,11 +354,12 @@ func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerm
 		ClusterUUID   string `gorm:"column:cluster_uuid"`
 		Namespace     string `gorm:"column:namespace"`
 		Workload      string `gorm:"column:workload"`
+		WorkloadType  string `gorm:"column:workload_type"`
 		ContainerName string `gorm:"column:container_name"`
 	}
 
 	keysQuery := db.Table("recommendation_sets rs").
-		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
+		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
 		Where("ra.org_id = ?", orgID).
@@ -371,7 +374,7 @@ func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerm
 
 	var matched *containerKey
 	for i := range keys {
-		if NativeContainerID(keys[i].ClusterUUID, keys[i].Namespace, keys[i].Workload, keys[i].ContainerName) == id {
+		if NativeContainerID(keys[i].ClusterUUID, keys[i].Namespace, keys[i].Workload, keys[i].WorkloadType, keys[i].ContainerName) == id {
 			matched = &keys[i]
 			break
 		}
@@ -412,6 +415,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		ClusterUUID   string
 		Namespace     string
 		Workload      string
+		WorkloadType  string
 		ContainerName string
 	}
 
@@ -419,7 +423,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 	grouped := map[containerKey][]NativeRecommendationRow{}
 
 	for _, r := range rows {
-		key := containerKey{r.ClusterUUID, r.Namespace, r.Workload, r.ContainerName}
+		key := containerKey{r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName}
 		if _, exists := grouped[key]; !exists {
 			orderKeys = append(orderKeys, key)
 		}
@@ -455,7 +459,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		}
 
 		result := NativeContainerResult{
-			ID:                      NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.ContainerName),
+			ID:                      NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
 			ClusterAlias:            first.ClusterAlias,
 			ClusterUUID:             first.ClusterUUID,
 			Container:               first.ContainerName,

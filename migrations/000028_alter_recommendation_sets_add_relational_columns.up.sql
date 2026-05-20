@@ -67,5 +67,7 @@ ALTER TABLE recommendation_sets ALTER COLUMN monitoring_end_time DROP NOT NULL;
 ALTER TABLE recommendation_sets ALTER COLUMN recommendations DROP NOT NULL;
 
 -- Step 8: Add new composite PK (6 rows per container: 3 terms x 2 engines).
+-- workload_type is included to prevent collisions between same-name workloads
+-- of different kinds (e.g. Deployment "foo" vs StatefulSet "foo").
 ALTER TABLE recommendation_sets ADD PRIMARY KEY
-    (org_id, cluster_uuid, namespace, workload, container_name, term, engine);
+    (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine);

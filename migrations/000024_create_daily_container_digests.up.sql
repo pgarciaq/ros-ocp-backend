@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS daily_container_digests (
     cpu_usage_mean_mc   BIGINT,
     memory_usage_mean_kib BIGINT,
     sample_count        BIGINT,
-    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, bucket_date)
+    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 ) PARTITION BY RANGE (bucket_date);
 
 -- Create initial monthly partitions (current + next 2 months).

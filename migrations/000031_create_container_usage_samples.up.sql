@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS container_usage_samples (
     container_name  TEXT NOT NULL,
     cpu_usage_mc    BIGINT NOT NULL,
     mem_usage_kib   BIGINT NOT NULL,
-    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, sample_time)
+    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, sample_time)
 ) PARTITION BY RANGE (sample_time);
 
 DO $$

@@ -6,12 +6,13 @@ CREATE TABLE IF NOT EXISTS recommendation_quality (
     cluster_uuid             UUID NOT NULL,
     namespace                TEXT NOT NULL,
     workload                 TEXT NOT NULL,
+    workload_type            TEXT NOT NULL,
     container_name           TEXT NOT NULL,
     oom_events_after_rec     BIGINT,
     stability_pct            REAL,
     adoption_detected        BOOLEAN DEFAULT false,
     recommendation_age_hours BIGINT,
-    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, measured_at)
+    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, measured_at)
 ) PARTITION BY RANGE (measured_at);
 
 DO $$
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS recommendation_history (
     cluster_uuid                    UUID NOT NULL,
     namespace                       TEXT NOT NULL,
     workload                        TEXT NOT NULL,
+    workload_type                   TEXT NOT NULL,
     container_name                  TEXT NOT NULL,
     term                            TEXT NOT NULL,
     engine                          TEXT NOT NULL,
@@ -53,7 +55,7 @@ CREATE TABLE IF NOT EXISTS recommendation_history (
     confidence_level                REAL,
     estimated_monthly_savings_usd   REAL,
     source_binary                   TEXT,
-    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, container_name, term, engine, recorded_at)
+    PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at)
 ) PARTITION BY RANGE (recorded_at);
 
 DO $$
