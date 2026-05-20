@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
@@ -145,7 +145,7 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 		return nil, fmt.Errorf("parse CSV: %w", err)
 	}
 	if len(rows) == 0 {
-		log.Infof("ProcessCSVToDigests: no rows parsed for org=%s cluster=%s", orgID, clusterUUID)
+		logging.ForOrg(orgID, clusterUUID).Info("ProcessCSVToDigests: no rows parsed")
 		return nil, nil
 	}
 
@@ -158,8 +158,8 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 	}
 
 	grouped := GroupCSVRows(rows, orgID, clusterUUID)
-	log.Infof("ProcessCSVToDigests: %d rows -> %d groups for org=%s cluster=%s",
-		len(rows), len(grouped), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d groups",
+		len(rows), len(grouped))
 
 	digestKeys := make([]DigestKey, 0, len(grouped))
 	for k := range grouped {
@@ -268,8 +268,8 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 		return nil, fmt.Errorf("commit container digests tx: %w", err)
 	}
 
-	log.Infof("ProcessCSVToDigests: upserted %d digests for org=%s cluster=%s",
-		len(grouped), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d digests",
+		len(grouped))
 
 	return rows, nil
 }
@@ -320,7 +320,7 @@ func EnsureGPUDigestPartitions(ctx context.Context, pool *pgxpool.Pool, months m
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureGPUDigestPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureGPUDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
@@ -488,8 +488,8 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		return fmt.Errorf("commit GPU digests tx: %w", err)
 	}
 
-	log.Infof("ProcessCSVToDigests: upserted %d GPU digests for org=%s cluster=%s",
-		len(groups), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests",
+		len(groups))
 	return nil
 }
 

@@ -37,7 +37,6 @@ var cost_app_id int
 // PK-based batching is used instead of ctid so deletes behave correctly on partitioned tables (partition
 // pruning-friendly, stable row identity) and remain portable across PostgreSQL versions.
 func deleteMatchingInBatches(db *gorm.DB, stepName, table string, pkColumns []string, whereClause string, args []any, orgID, clusterUUID string) error {
-	log := logging.GetLogger()
 	if len(pkColumns) == 0 {
 		return fmt.Errorf("%s: pkColumns required", stepName)
 	}
@@ -61,7 +60,7 @@ func deleteMatchingInBatches(db *gorm.DB, stepName, table string, pkColumns []st
 			break
 		}
 	}
-	log.Infof("sources cleanup: %s deleted %d rows total (org=%s cluster=%s)", stepName, total, orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("sources cleanup: %s deleted %d rows total", stepName, total)
 	return nil
 }
 
@@ -151,7 +150,7 @@ func sourcesListener(msg *k.Message, _ *k.Consumer) {
 					return
 				}
 				if err := cleanupClusterAnalytics(db, account.OrgId, cluster.ClusterUUID); err != nil {
-					log.Errorf("analytics cleanup failed for org=%s cluster=%s: %v", account.OrgId, cluster.ClusterUUID, err)
+					logging.ForOrg(account.OrgId, cluster.ClusterUUID).Errorf("analytics cleanup failed: %v", err)
 					return
 				}
 				workloads, err := model.GetWorkloadsByClusterID(cluster.ID)

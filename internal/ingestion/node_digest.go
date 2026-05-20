@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // NodeDayKey uniquely identifies a node-day combination for aggregation.
@@ -150,7 +150,7 @@ func EnsureNodeDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys ma
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
-			log.Warnf("EnsureNodeDigestPartitions: %s: %v (non-fatal)", partName, err)
+			logging.GetLogger().Warnf("EnsureNodeDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
@@ -234,7 +234,7 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 		return fmt.Errorf("commit node digests tx: %w", err)
 	}
 
-	log.Infof("FlushNodeDigests: upserted %d node digests for org=%s cluster=%s",
-		len(accumulators), orgID, clusterUUID)
+	logging.ForOrg(orgID, clusterUUID).Infof("FlushNodeDigests: upserted %d node digests",
+		len(accumulators))
 	return nil
 }

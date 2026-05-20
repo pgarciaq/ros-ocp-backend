@@ -90,3 +90,29 @@ func Set_request_details_recommendations(data types.RecommendationKafkaMsg) *log
 		"experiment_name":    data.Metadata.Experiment_name,
 	})
 }
+
+// ForOrg returns a logger scoped to an organization and cluster — use in pipeline/engine code
+// where a full KafkaMsg is not available.
+func ForOrg(orgID, clusterUUID string) *logrus.Entry {
+	return GetLogger().WithFields(logrus.Fields{
+		"org_id":       orgID,
+		"cluster_uuid": clusterUUID,
+	})
+}
+
+// ForOrgOnly returns a logger scoped to an organization — use in API handlers where
+// cluster context is not yet known.
+func ForOrgOnly(orgID string) *logrus.Entry {
+	return GetLogger().WithFields(logrus.Fields{
+		"org_id": orgID,
+	})
+}
+
+// ForRequest returns a logger scoped to an API request — includes org_id and request_id
+// for correlation with access logs and distributed tracing.
+func ForRequest(orgID, requestID string) *logrus.Entry {
+	return GetLogger().WithFields(logrus.Fields{
+		"org_id":     orgID,
+		"request_id": requestID,
+	})
+}
