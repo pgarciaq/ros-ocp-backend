@@ -195,7 +195,7 @@ func optFloat32Str(v *float32) string {
 	if v == nil {
 		return ""
 	}
-	return strconv.FormatFloat(float64(*v), 'f', 2, 32)
+	return strconv.FormatFloat(float64(*v), 'f', 3, 32)
 }
 
 func smallintArrayStr(codes model.SmallintArray) string {

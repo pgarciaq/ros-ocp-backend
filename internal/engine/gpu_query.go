@@ -41,7 +41,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
 		  AND interval_start >= $2 AND interval_start <= $3`
-	args := []interface{}{clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02")}
+	args := []interface{}{clusterUUID, start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02")}
 	argPos := 4
 	if digestFilters != nil {
 		if strings.TrimSpace(digestFilters.NodeNameExact) != "" {
@@ -121,14 +121,30 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 
 // filterGPUByWindow returns GPU digest rows within the last windowDays
 // from endDate (inclusive), anchored to the latest data point.
+// filterGPUByWindow returns GPU digest rows within the last windowDays from endDate (inclusive).
+// Rows are assumed sorted by interval_start (ascending) from the DB query.
 func filterGPUByWindow(rows []GPUDigestRow, endDate time.Time, windowDays int) []GPUDigestRow {
-	cutoff := endDate.AddDate(0, 0, -(windowDays - 1))
-	var result []GPUDigestRow
-	for _, r := range rows {
-		d := r.IntervalStart.Truncate(24 * time.Hour)
-		if !d.Before(cutoff.Truncate(24*time.Hour)) && !d.After(endDate.Truncate(24*time.Hour)) {
-			result = append(result, r)
+	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
+	endDay := endDate.Truncate(24 * time.Hour)
+
+	lo := 0
+	hi := len(rows)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if rows[mid].IntervalStart.Truncate(24 * time.Hour).Before(cutoffDay) {
+			lo = mid + 1
+		} else {
+			hi = mid
 		}
+	}
+
+	result := make([]GPUDigestRow, 0, len(rows)-lo)
+	for i := lo; i < len(rows); i++ {
+		d := rows[i].IntervalStart.Truncate(24 * time.Hour)
+		if d.After(endDay) {
+			break
+		}
+		result = append(result, rows[i])
 	}
 	return result
 }

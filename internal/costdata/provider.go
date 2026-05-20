@@ -70,8 +70,8 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 	params := url.Values{}
 	params.Set("org_id", orgID)
 	params.Set("cluster_id", clusterID)
-	params.Set("start_date", start.Format("2006-01-02"))
-	params.Set("end_date", end.Format("2006-01-02"))
+	params.Set("start_date", start.UTC().Format("2006-01-02"))
+	params.Set("end_date", end.UTC().Format("2006-01-02"))
 
 	reqURL := fmt.Sprintf("%s/api/cost-management/v1/effective_rates/?%s", p.BaseURL, params.Encode())
 

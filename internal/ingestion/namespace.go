@@ -521,6 +521,12 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 	}
 	EnsureNamespaceDigestPartitions(ctx, pool, digestKeys)
 
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin namespace digest tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	batch := &pgx.Batch{}
 	for key, group := range grouped {
 		d := ComputeNamespaceDigest(key, group)
@@ -577,13 +583,17 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		)
 	}
 
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
+	br := tx.SendBatch(ctx, batch)
 	for range grouped {
 		if _, err := br.Exec(); err != nil {
+			br.Close()
 			return fmt.Errorf("upsert namespace digest: %w", err)
 		}
+	}
+	br.Close()
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit namespace digests: %w", err)
 	}
 
 	log.Infof("ProcessNamespaceCSVToDigests: upserted %d digests for org=%s cluster=%s",
