@@ -44,7 +44,7 @@
 
 > **Reconciliation audit (2026-05-20):** Full audit of all 52 previously-unmarked P0-P2 issues completed. Results:
 > - **93 P2 issues resolved** (fixed via code changes in batches 1-11)
-> - **6 P2 issues remain active** — upgrade-path migration safety (#89, #90, #91, #92, #100) and one cascade concern
+> - **0 P2 issues remain active** — all resolved: #92 fixed (background-delete), #89/#90/#91/#100 mitigated (upgrade runbook)
 > - **58 P2 issues deferred/accepted** — broken down as: 10 accepted-risk migrations (fresh-install safe), 6 CI/infra improvements, 15 test hygiene, 3 Koku-side issues, 24 already-deferred/accepted-risk items
 
 Additional fixes from the P0/P1 pass:
@@ -75,6 +75,8 @@ Additional fixes from the P0/P1 pass:
 **P2 batch 10 — Performance & memory optimizations** (May 2026): Fixed **5** issues (**#119**, **#120**, **#124**, **#125**, **#126**). Pre-allocated CSV row slice (4096 capacity hint), replaced 12 unbounded `[]float64` GPU slices with O(1) running min/max/sum aggregation, optimized `filterByWindow` from linear scan to binary search (both container and node paths), added capacity hints to result slices across all recommenders. Removed dead code `Convert2DarrayToMap`. Closed **#122** as won't-fix (inherent to JSONB storage, bounded by page size). **Running total:** **85** fixed / **72** remaining P2.
 
 **P2 batch 11 — Data pipeline correctness + date/time consistency** (May 2026): Fixed **3** issues (**#146**, **#162**, **#166**, **#201**). Wrapped namespace digest batch in explicit transaction (atomicity fix). Added explicit `.UTC()` to date formatting in `costdata/provider.go` and `gpu_query.go` to prevent timezone-dependent date boundary shifts. Aligned CSV float precision to 3 decimal places matching JSON API. Optimized `filterGPUByWindow` to binary search. Closed **#150** (already transactional), **#147** (mitigated by idempotent upserts + transaction boundaries), **#169** (hours-based decay is correct by design), **#133** (idempotent partition drops). **Running total:** **89** fixed / **68** remaining P2.
+
+**P2 batch 12 — Final closure: background-delete + migration safety docs** (May 2026): Fixed **#92** (background-delete Kruize-era tables before cluster CASCADE — verified on SNO: 9,355 rows cleaned in ~1s). Mitigated **#89**, **#90**, **#91**, **#100** via `docs/upgrade-runbook.md` (pre-flight queries, maintenance window sizing, worker shutdown procedure). Added Koku effective_rates contract test. **Running total:** **94** fixed+mitigated / **63** remaining P2 (all deferred/accepted risk — no actionable issues remain).
 
 ## Repository Impact Summary
 
@@ -603,22 +605,22 @@ Additional fixes from the P0/P1 pass:
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#89 — 000041.up.sql: `cluster_uuid::uuid` cast fails on invalid data**
-- **Status:** Active P2 — upgrade-path risk (if old Kruize-era DB has non-UUID cluster_id strings, this migration will fail; recommend a pre-check migration or data-fix script for upgrades)
+- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 1–2 (pre-flight validation query + data fix procedure)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#90 — 000045.up.sql: unique index without CONCURRENTLY on populated table**
-- **Status:** Active P2 — upgrade-path risk (on populated tables, index creation blocks writes for duration; requires maintenance window for Kruize-to-native upgrade)
+- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 1 (estimate duration based on `gpu_container_digests` row count; schedule maintenance window)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#91 — 000058.up.sql: drops and recreates primary key — ACCESS EXCLUSIVE lock**
-- **Status:** Active P2 — upgrade-path risk (ACCESS EXCLUSIVE lock blocks all reads/writes to node_recommendations; requires maintenance window + worker shutdown for upgrade on populated DB)
+- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 3 (stop workers before migration) + §Step 1 (sub-second on small table)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
 **#92 — ON DELETE CASCADE on workloads/clusters — massive cascaded deletes**
-- **Status:** Active P2 — runtime risk (a cluster deletion in Sources can trigger massive cascaded deletes across recommendation tables; mitigated by the fact that cluster deletion is rare and manual)
+- **Status:** Fixed — `cleanupClusterAnalytics` now batch-deletes workload_metrics, historical_recommendation_sets, and workloads before `DeleteCluster()`, making CASCADE a no-op. Documented in `docs/upgrade-runbook.md` §ON DELETE CASCADE Consideration. Verified on SNO (9,355 rows cleaned in ~1s).
 - Repo: ros-ocp-backend
 - FK `ON DELETE CASCADE` from workloads/clusters fans out huge deletes—single API delete can stall Postgres.
 
@@ -658,7 +660,7 @@ Additional fixes from the P0/P1 pass:
 - If NULL, partition bounds are undefined — behavioral fragility.
 
 **#100 — Migration 000058 can deadlock with live PersistNodeRecommendations**
-- **Status:** Active P2 — upgrade-path risk (workers must be stopped before running this migration on a live system; document in upgrade runbook)
+- **Status:** Mitigated — documented in `docs/upgrade-runbook.md` §Step 3 (explicitly stop workers before migration; verify no active connections)
 - Repo: ros-ocp-backend
 - Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
 
