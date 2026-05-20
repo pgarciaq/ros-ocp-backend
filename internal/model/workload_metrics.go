@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,7 +30,7 @@ func BatchInsertWorkloadMetrics(data []WorkloadMetrics, org_id string) error {
 		DoNothing: true,
 	}).Create(data)
 	if result.Error != nil {
-		if strings.Contains(result.Error.Error(), "no partition") {
+		if IsPartitionMissing(result.Error) {
 			partitionMissing.With(prometheus.Labels{"resource_name": "workload_metrics"}).Inc()
 			dbError.Inc()
 			return fmt.Errorf("partition not found for resource %s with org_id %s", "workload_metrics", org_id)

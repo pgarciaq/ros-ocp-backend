@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -205,7 +206,10 @@ func WriteRecommendationQuality(
 }
 
 func isPartitionMissing(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "no partition")
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, ErrPartitionMissing) || strings.Contains(err.Error(), "no partition")
 }
 
 // EnsureQualityPartitions creates monthly partitions for recommendation_quality

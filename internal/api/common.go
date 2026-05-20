@@ -34,6 +34,9 @@ const (
 	SkipSanitizationForNamespace = true
 )
 
+// EnableUserAPIErr controls whether ParamError.UserErr is set in namespaceAPIErrf.
+// The constant is retained for the ParamError system; apiErrResponse itself now
+// always returns the standard {"status":"error","message":"..."} shape.
 const EnableUserAPIErr = false
 
 // validWorkloadTypes is the fixed set of allowed workload_type values (mirrors the sorted_workloadtype DB enum).

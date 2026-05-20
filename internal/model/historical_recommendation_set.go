@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,7 +29,7 @@ func (r *HistoricalRecommendationSet) CreateHistoricalRecommendationSet(tx *gorm
 	}).Create(r)
 
 	if result.Error != nil {
-		if strings.Contains(result.Error.Error(), "no partition") {
+		if IsPartitionMissing(result.Error) {
 			partitionMissing.With(prometheus.Labels{"resource_name": "historical_recommendation_set"}).Inc()
 			dbError.Inc()
 			return fmt.Errorf("partition not found for resource %s with org_id %s and end_time %s", "historical_recommendation_set", r.OrgId, r.MonitoringEndTime.String())

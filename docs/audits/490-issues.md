@@ -761,10 +761,11 @@ Additional fixes from the P0/P1 pass:
 - Files: `handlers_node_utilization.go`, `handlers_node_recs.go`, `handlers_terms.go`, `handlers.go`, `gpu_enrichment.go`
 - Disables request cancellation and deadline propagation.
 
-**#140 — Brittle `err.Error()` string matching in 5 locations**
+**#140 — Brittle `err.Error()` string matching in 5 locations** ✅ FIXED
 - Repo: ros-ocp-backend
 - Files: `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go`
 - `recommendation_poller.go`, `workload_metrics.go`, `historical_recommendation_set.go`, `handlers_snapshot_settings.go`, `quality.go` all use `strings.Contains(err.Error(), "...")` — breaks with error wrapping or locale changes.
+- **Fix:** Introduced sentinel errors (`ErrFieldsLocked`, `ErrPartitionMissing` in `internal/engine/errors.go`), `IsPartitionMissing()` helper in `internal/model/errors.go`, and replaced `strings.Contains` with `errors.Is` in `handlers_snapshot_settings.go`. Model-level checks now use the centralized helper.
 
 **#142 — Injectable SQL via `BucketSQL` in `boxplot.go`** ✅ Fixed
 - Repo: ros-ocp-backend
@@ -778,15 +779,17 @@ Additional fixes from the P0/P1 pass:
 - Files: `config.go`, `pvc.go`, `handlers.go`, `consumer.go`, `utils.go`, `snapshot.go`, etc.
 - Config binding, timestamp parsing (`pvc.go:131`), pipe closes, body closes, URL unescaping errors all silently discarded.
 
-**#144 — `fmt.Sprintf("DELETE FROM %s", table)` in retention.go**
+**#144 — `fmt.Sprintf("DELETE FROM %s", table)` in retention.go** ✅ FIXED
 - Repo: ros-ocp-backend
 - File: `internal/engine/retention.go`
 - While currently from a trusted slice, if `retainedTables` ever included dynamic values, this is identifier injection.
+- **Fix:** Added typed `RetentionTable` struct and an `init()` validator that panics at startup if any table/column name contains non-`[a-z0-9_]` characters. The compile-time slice is now defense-in-depth validated.
 
-**#145 — `NilCostDataProvider.GetEffectiveRates` returns `(nil, nil)` — double-nil footgun**
+**#145 — `NilCostDataProvider.GetEffectiveRates` returns `(nil, nil)` — double-nil footgun** ✅ FIXED
 - Repo: ros-ocp-backend
 - File: `internal/costdata/provider.go`
 - `GetEffectiveRates` returns `(nil, nil)`—callers can't distinguish "no provider" from "success, empty".
+- **Fix:** Now returns a non-nil `&ClusterCostData{}` with empty maps, so callers can safely dereference without nil checks.
 
 **#146 — Namespace pipeline has identical partial-commit risks**
 - Repo: ros-ocp-backend
@@ -972,9 +975,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Most GETs omit cache headers—browsers may cache volatile recommendation JSON.
 
-**#203 — `UpdateRecommendationJSON` can return nil — `recommendations` serializes as `null`**
+**#203 — `UpdateRecommendationJSON` can return nil — `recommendations` serializes as `null`** ✅ FIXED
 - Repo: ros-ocp-backend
 - Legacy serializer emits JSON `null`—strict OpenAPI clients expecting arrays explode.
+- **Fix:** Now returns `map[string]interface{}{}` (empty object) on unmarshal failure or empty input instead of nil.
 
 **#204 — Error responses leak internal Go error strings**
 - **Status:** **Verified — no change needed** *(handlers already return generic messages for 5xx)*
@@ -1000,25 +1004,29 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Live namespace payloads embed nested structs excluded from `NamespaceRecommendation` schema.
 
-**#209 — History CSV omits `notification_codes` column (present in JSON)**
+**#209 — History CSV omits `notification_codes` column (present in JSON)** ✅ FIXED
 - Repo: ros-ocp-backend
 - CSV exporter skips `notification_codes` present in JSON—analysts lose RCA columns.
+- **Fix:** Added `notification_codes` column to `historyCSVHeader` and `generateHistoryCSV` output, formatted as `[code1,code2,...]`.
 
-**#211 — PVC/Snapshot handlers return 503 when pool nil; spec documents only 500**
+**#211 — PVC/Snapshot handlers return 503 when pool nil; spec documents only 500** ✅ FIXED (batch 4)
 - Repo: ros-ocp-backend
 - Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+- **Fix:** Spec updated to document 503 (not 500) in the #64-#83 batch. Code already returns 503 consistently.
 
-**#212 — `apiErrResponse` shape differs from spec (has `status` field not documented)**
+**#212 — `apiErrResponse` shape differs from spec (has `status` field not documented)** ✅ FIXED
 - Repo: ros-ocp-backend
 - Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+- **Fix:** `apiErrResponse` now always returns `{"status":"error","message":"..."}` regardless of `EnableUserAPIErr` (previously returned `{}` when disabled). OpenAPI spec already documents this shape. Test assertions updated accordingly.
 
 **#213 — `PutSnapshotSettings` 403 returns `err.Error()` — may expose internals**
 - Repo: ros-ocp-backend
 - Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
 
-**#214 — Inconsistent date formats: RFC3339, fixed layout, `Time.String()` across responses**
+**#214 — Inconsistent date formats: RFC3339, fixed layout, `Time.String()` across responses** ✅ FIXED
 - Repo: ros-ocp-backend
 - Mix of RFC3339, logging layouts, and `Time.String()` breaks deterministic parsing.
+- **Fix:** Replaced `Time.String()` calls in the legacy CSV export path with `Format(time.RFC3339)` for consistent output. API JSON responses already use RFC3339 via `json:"..."` struct tags.
 
 ### Test Reliability (215-233)
 

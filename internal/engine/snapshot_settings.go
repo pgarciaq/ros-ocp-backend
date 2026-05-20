@@ -165,7 +165,7 @@ func UpdateSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID strin
 	// Check for locked fields
 	lockedAttempts := lockedFieldsInUpdate(update)
 	if len(lockedAttempts) > 0 {
-		return fmt.Errorf("fields locked by environment variable: %v", lockedAttempts)
+		return fmt.Errorf("%w: %v", ErrFieldsLocked, lockedAttempts)
 	}
 
 	// Resolve current settings to fill in missing values

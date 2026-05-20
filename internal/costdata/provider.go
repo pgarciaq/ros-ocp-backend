@@ -99,7 +99,9 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 	return &data, nil
 }
 
-// NilCostDataProvider always returns nil cost data. Used when no Koku URL is configured.
+// NilCostDataProvider returns zero-value cost data. Used when no Koku URL is configured.
+// Returns an empty (but non-nil) ClusterCostData so callers can safely dereference
+// without nil checks — all numeric fields default to zero, maps are empty.
 type NilCostDataProvider struct{}
 
 func (n *NilCostDataProvider) GetEffectiveRates(
@@ -107,5 +109,9 @@ func (n *NilCostDataProvider) GetEffectiveRates(
 	orgID, clusterID string,
 	start, end time.Time,
 ) (*ClusterCostData, error) {
-	return nil, nil
+	return &ClusterCostData{
+		ClusterID:       clusterID,
+		ConfiguredRates: map[string]RatePair{},
+		Namespaces:      map[string]NamespaceCosts{},
+	}, nil
 }

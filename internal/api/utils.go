@@ -1194,10 +1194,13 @@ func injectStoredRequestVariationPct(data map[string]interface{}, pcts *model.St
 // directly from the stored DB columns instead of being recomputed from the JSON blob.
 func UpdateRecommendationJSON(handlerName string, recommendationID string, clusterUUID string, unitsToTransform map[string]string, updateUnitsk8s bool, jsonData datatypes.JSON, storedPcts *model.StoredVariationPcts) map[string]interface{} {
 	var data map[string]interface{}
+	if len(jsonData) == 0 {
+		return map[string]interface{}{}
+	}
 	err := json.Unmarshal([]byte(jsonData), &data)
 	if err != nil {
 		log.Error("unable to unmarshall recommendation json")
-		return nil
+		return map[string]interface{}{}
 	}
 
 	// box-plots data is not required from list endpoints
@@ -1302,10 +1305,10 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				recommendationObj.Current.Requests.Cpu.Format,
 				fmt.Sprint(recommendationObj.Current.Requests.Memory.Amount),
 				recommendationObj.Current.Requests.Memory.Format,
-				recommendationObj.MonitoringEndTime.String(),
+				recommendationObj.MonitoringEndTime.Format(time.RFC3339),
 				termName,
 				fmt.Sprint(recommendationTerm.DurationInHours),
-				recommendationTerm.MonitoringStartTime.String(),
+				recommendationTerm.MonitoringStartTime.Format(time.RFC3339),
 				recommendationType,
 				formatPrecisionValuesToStr(convertCPUUnit("cores", recommendationEngine.Config.Limits.Cpu.Amount)),
 				recommendationEngine.Config.Limits.Cpu.Format,
@@ -1514,14 +1517,11 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	return nil
 }
 
-// apiErrResponse is the single gate for user-facing error visibility.
-// Logs the error; returns the specific error response if EnableUserAPIErr is set, otherwise 200 OK.
-// ParamError.UserErr from apiErrResponse is available for per-error override if needed in future.
+// apiErrResponse is the single gate for user-facing error responses.
+// Always returns the typed `{"status":"error","message":"..."}` shape documented
+// in the OpenAPI spec. The HTTP status code conveys severity; the message provides
+// actionable context. Logs the full error internally.
 func apiErrResponse(c echo.Context, err error, status int, userMsg string) error {
 	log.Error(err.Error())
-	resp := echo.Map{}
-	if EnableUserAPIErr {
-		resp = echo.Map{"status": "error", "message": userMsg}
-	}
-	return c.JSON(status, resp)
+	return c.JSON(status, echo.Map{"status": "error", "message": userMsg})
 }
