@@ -210,13 +210,49 @@ func parsePluginSet(raw string) map[string]bool {
 }
 
 // Boot runs one-time plugin registry startup logic. Safe to call multiple times.
+// It validates that no two enabled CSVIngestors claim the same CSV type and
+// warns if the Kruize plugin is enabled without native plugins.
 func Boot() {
 	bootOnce.Do(func() {
 		logging.GetLogger().WithField("registered_plugin_count", len(All())).Info("plugin registry bootstrapped")
+
+		validateCSVTypeClaims()
+		warnKruizeEnabled()
 	})
 }
 
 // Init is an alias for [Boot].
 func Init() {
 	Boot()
+}
+
+// validateCSVTypeClaims fatals if two enabled CSVIngestors claim the same type.
+func validateCSVTypeClaims() {
+	log := logging.GetLogger()
+	claims := make(map[string]string) // csvType → plugin name
+	for _, ing := range ByTrait[CSVIngestor]() {
+		for _, ct := range ing.SupportedCSVTypes() {
+			if prev, exists := claims[ct]; exists {
+				log.Fatalf(
+					"plugin registry collision: CSV type %q claimed by both %q and %q",
+					ct, prev, ing.Name(),
+				)
+			}
+			claims[ct] = ing.Name()
+		}
+	}
+}
+
+// warnKruizeEnabled emits a startup warning when the Kruize plugin is enabled,
+// since it requires an external Kruize service to be reachable.
+func warnKruizeEnabled() {
+	if !EnabledFor(KruizePluginName) {
+		return
+	}
+	logging.GetLogger().Warn(
+		"plugin registry: Kruize plugin is enabled. " +
+			"The external Kruize/Autotune service must be reachable at KRUIZE_URL " +
+			"for recommendation processing to succeed. " +
+			"Native plugins are disabled (mutual exclusivity).",
+	)
 }

@@ -40,7 +40,7 @@
 | P2 | 157 | 91 | 66 |
 | P3 | 263 | 0 | 263 |
 | Kruize no-op | 43 | — | — |
-| **New (plugin rearch)** | 5 | 3 | 2 |
+| **New (plugin rearch)** | 5 | 5 | 0 |
 
 > **Reconciliation (2026-05-20):** P2 tally — pre-batch (2) + B1 (16) + B2 (8) + B3 (16) + plugin rearch (2) + B4 (21) + B5 (8) + B6 (1) + B7 (6) + B8 (5) + B9 (5) + verified-already-fixed (1: #204) = **91 fixed**. Remaining: 157 − 91 = **66**.
 
@@ -2576,12 +2576,13 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 
 *Identified: 2026-05-20, post-plugin-rearchitecture audit.*
 
-**#491 — Plugin `init()` registration order is non-deterministic**
+**#491 — Plugin `init()` registration order is non-deterministic** ✅ Fixed
 - Severity: P3
 - Repo: ros-ocp-backend
-- Files: `internal/plugins/*/plugin.go`
-- Go's `init()` execution order across packages is undefined by the spec. If two plugins register the same route prefix, the winner depends on link order. Currently mitigated by `APIProvider.RoutePrefix()` uniqueness check in `registry.go` (panics on collision), but no test exercises collision detection at registration time.
+- Files: `internal/plugins/*/plugin.go`, `internal/plugin/registry.go`
+- Go's `init()` execution order across packages is undefined by the spec. If two plugins register the same CSV type, the winner depends on link order.
 - Effort: Small (add test)
+- **Fix:** Added `validateCSVTypeClaims()` in `Boot()` that fatals at startup if two enabled CSVIngestors claim the same CSV type. Added unit tests `TestValidateCSVTypeClaims_noPanicWhenUnique` and `TestValidateCSVTypeClaims_fatalsOnCollision`. Registration order is documented as by-design (plugins are independent, CSV claim sets don't overlap).
 
 **#492 — `PluginContext` defined but unused in production**
 - Severity: P3
@@ -2590,12 +2591,13 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 - The struct exists for future dependency injection but no production code passes a `PluginContext` to plugins. It's dead infrastructure until plugins need shared dependencies (DB pool, config, logger).
 - Effort: None (informational — wire when needed)
 
-**#493 — Kruize plugin has no functional implementation**
+**#493 — Kruize plugin has no functional implementation** ✅ Fixed
 - Severity: P2
 - Repo: ros-ocp-backend
-- File: `internal/plugins/kruize/plugin.go`
-- The Kruize plugin is a marker (satisfies `Plugin` interface) but doesn't implement `CSVIngestor`, `APIProvider`, or `RetentionProvider`. Enabling it only disables native plugins via mutual exclusivity; it doesn't route to old Kruize code paths. If someone enables Kruize expecting the legacy behavior, **no data will be processed** and no errors will surface.
-- Effort: Medium (document prominently, or wire legacy dispatch)
+- File: `internal/plugins/kruize/plugin.go`, `internal/plugin/registry.go`
+- The Kruize plugin is a marker that triggers mutual exclusivity. When enabled, the legacy code path in `ProcessReport` runs (via `useNativeCSVIngest=false`), not plugin trait dispatch. If the external Kruize service is unreachable, processing silently fails.
+- Effort: Small
+- **Fix:** Added `warnKruizeEnabled()` in `Boot()` that emits a prominent startup warning when Kruize plugin is enabled, explaining that the external Kruize/Autotune service must be reachable and that native plugins are disabled. Added unit tests. The legacy dispatch IS functional (verified: `ProcessReport` uses `plugin.EnabledFor(KruizePluginName)` to switch to the Kruize HTTP code path).
 
 **#494 — No integration test for full plugin-dispatched CSV-to-DB lifecycle** ✅ Fixed
 - Severity: P2
