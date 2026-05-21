@@ -657,6 +657,17 @@ func TestPersistRecommendations(t *testing.T) {
 }
 ```
 
+Key integration test suites:
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestGPU_MIG_EndToEnd_Integration` | `internal/engine/gpu_mig_integration_test.go` | Full MIG data flow: seeding → classification → MIG profile selection for all GPU classes |
+| `TestSavingsPipeline_Integration` | `internal/engine/savings_integration_test.go` | Recommendations → cost data → savings computation |
+| `TestMigrationRoundtrip` | `internal/engine/migration_roundtrip_test.go` | All migrations apply and roll back cleanly |
+| `TestWriteRecommendations_*` | `internal/engine/recommend_all_integration_test.go` | Full recommendation persistence pipeline |
+
+When adding new migrations, update the expected version in `TestMigrationRoundtrip`.
+
 ---
 
 ## Code Style
