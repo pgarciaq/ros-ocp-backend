@@ -223,7 +223,7 @@ func TestGetNodeRecommendations_Empty(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestGetNodeRecommendations_Empty(t *testing.T) {
 func TestGetNodeRecommendations_Unauthorized(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	app := setupNodeRecsEcho(pool)
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
@@ -265,7 +265,7 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	orgA := "orgAAAA1111"
 	orgB := "orgBBBB2222"
@@ -368,7 +368,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -414,7 +414,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -523,7 +523,7 @@ func seedTwoClustersWithGPUData(t *testing.T, pool *pgxpool.Pool) (cluster1, clu
 func TestGetNodeRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	cluster1, _ := seedTwoClustersWithGPUData(t, pool)
 
@@ -552,7 +552,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByNode(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -601,7 +601,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByNode(t *testing.T) {
 func TestGetNodeRecommendations_RBAC_ClusterAndNodeCombined(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	cluster1, cluster2 := seedTwoClustersWithGPUData(t, pool)
 
@@ -632,7 +632,7 @@ func TestGetNodeRecommendations_RBAC_ClusterAndNodeCombined(t *testing.T) {
 func TestGetNodeRecommendations_RBAC_GlobalWildcard(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, cluster2 := seedTwoClustersWithGPUData(t, pool)
 
@@ -664,7 +664,7 @@ func TestGetNodeRecommendations_PaginationMeta(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -693,7 +693,7 @@ func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -742,7 +742,7 @@ func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
 func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	app := setupNodeRecsEcho(pool)
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=invalid_field", nil)
@@ -757,7 +757,7 @@ func TestGetNodeRecommendations_OffsetBeyondResults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -814,7 +814,7 @@ func TestGetNodeUtilization_CanonicalPath_ReturnsCPURecommendationType(t *testin
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -850,7 +850,7 @@ func TestGetNodeUtilization_DeprecatedAlias_WarningAndDeprecationHeader(t *testi
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)

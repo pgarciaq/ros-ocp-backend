@@ -42,6 +42,7 @@ func setupTermsApp(t *testing.T) (*echo.Echo, string) {
 	require.NoError(t, err)
 	database.DB = gormDB
 	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -263,6 +264,7 @@ func TestPutTermSettings_OrgIsolation(t *testing.T) {
 	require.NoError(t, err)
 	database.DB = gormDB
 	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")

@@ -54,6 +54,7 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
 
 	// Seed rh_accounts and clusters so the JOIN resolves
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
@@ -130,9 +131,6 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
-
-	// Reset global
-	database.DB = nil
 }
 
 func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
@@ -145,7 +143,7 @@ func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -198,7 +196,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -300,7 +298,7 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	orgA := "orgAAAAAAAA"
 	orgB := "orgBBBBBBBB"
@@ -429,7 +427,7 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	cluster1 := "c1111111-1111-1111-1111-111111111111"
 	cluster2 := "c2222222-2222-2222-2222-222222222222"
@@ -509,7 +507,7 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -584,7 +582,7 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	cluster1 := "a1111111-1111-1111-1111-111111111111"
 	cluster2 := "a2222222-2222-2222-2222-222222222222"
@@ -677,7 +675,7 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -795,7 +793,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	require.NoError(t, err)
 	database.DB = gormDB
 	database.Pool = pool
-	defer func() { database.DB = nil; database.Pool = nil }()
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -967,6 +965,7 @@ func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
 
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
@@ -992,8 +991,6 @@ func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, 0, response.Meta.Count)
-
-	database.DB = nil
 }
 
 func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
@@ -1006,7 +1003,7 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 	})
 	require.NoError(t, err)
 	database.DB = gormDB
-	defer func() { database.DB = nil }()
+	t.Cleanup(func() { database.DB = nil })
 
 	orgID := "orgPAGINATION"
 	clusterUUID := "cccc3333-cccc-cccc-cccc-cccccccccccc"
