@@ -394,3 +394,48 @@ func TestRoundHalfToEven(t *testing.T) {
 	assert.Equal(t, int64(2), int64(math.Round(2.4999)))
 	assert.Equal(t, int64(3), int64(math.Round(2.5)))
 }
+
+// --- Fuzz tests: ensure ParseCSVRows never panics on arbitrary input ---
+
+func FuzzCoreToMillicores(f *testing.F) {
+	f.Add("1.0")
+	f.Add("0.250")
+	f.Add("")
+	f.Add("NaN")
+	f.Add("Inf")
+	f.Add("-1.5")
+	f.Add("abc")
+	f.Add("99999999999999999999999.9")
+	f.Fuzz(func(t *testing.T, s string) {
+		CoreToMillicores(s) //nolint:errcheck
+	})
+}
+
+func FuzzBytesToKiB(f *testing.F) {
+	f.Add("1048576.0")
+	f.Add("0.0")
+	f.Add("")
+	f.Add("NaN")
+	f.Add("-500")
+	f.Add("Inf")
+	f.Fuzz(func(t *testing.T, s string) {
+		BytesToKiB(s) //nolint:errcheck
+	})
+}
+
+func FuzzParseCSVRows(f *testing.F) {
+	validCSV := "interval_start,interval_end,namespace,pod,workload,workload_type,container_name," +
+		"cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg," +
+		"memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n" +
+		"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-1,test-deploy,deployment,main," +
+		"0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0\n"
+	f.Add(validCSV)
+	f.Add("")
+	f.Add("just,a,header\n")
+	f.Add("no_newline_header")
+	f.Add(strings.Repeat("a,", 100) + "b\n" + strings.Repeat("x,", 100) + "y\n")
+
+	f.Fuzz(func(t *testing.T, data string) {
+		ParseCSVRows(strings.NewReader(data)) //nolint:errcheck
+	})
+}

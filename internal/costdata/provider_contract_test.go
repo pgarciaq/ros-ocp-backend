@@ -61,6 +61,7 @@ const kokuEffectiveRatesResponse = `{
 // correctly parse a real Koku effective_rates JSON response, verifying the
 // contract between Koku (Python) and ROS (Go).
 func TestKokuEffectiveRatesContract(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request shape (query params the Go client sends).
 		q := r.URL.Query()
@@ -134,6 +135,7 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 // TestKokuEffectiveRatesContract_EmptyResponse validates that the provider
 // handles a valid but empty response (no rates configured, no data).
 func TestKokuEffectiveRatesContract_EmptyResponse(t *testing.T) {
+	t.Parallel()
 	emptyResp := `{
 		"cluster_id": "empty-cluster",
 		"provider_uuid": "00000000-0000-0000-0000-000000000000",
@@ -161,10 +163,98 @@ func TestKokuEffectiveRatesContract_EmptyResponse(t *testing.T) {
 	assert.Empty(t, data.Namespaces)
 }
 
+func TestKokuEffectiveRatesContract_ServerTimeout(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 50*time.Millisecond)
+	_, err := provider.GetEffectiveRates(
+		context.Background(), "1234567", "cluster-1",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HTTP request to Koku")
+}
+
+func TestKokuEffectiveRatesContract_ServerError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"internal server error"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
+	_, err := provider.GetEffectiveRates(
+		context.Background(), "1234567", "cluster-1",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestKokuEffectiveRatesContract_Unauthorized(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"detail":"Permission denied"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
+	_, err := provider.GetEffectiveRates(
+		context.Background(), "1234567", "cluster-1",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403")
+}
+
+func TestKokuEffectiveRatesContract_MalformedJSON(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"cluster_id": "test", "configured_rates": INVALID`))
+	}))
+	t.Cleanup(srv.Close)
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
+	_, err := provider.GetEffectiveRates(
+		context.Background(), "1234567", "cluster-1",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode response")
+}
+
+func TestKokuEffectiveRatesContract_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 10*time.Second)
+	_, err := provider.GetEffectiveRates(
+		ctx, "1234567", "cluster-1",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+}
+
 // TestKokuEffectiveRatesContract_RoundTrip verifies that re-serializing the
 // parsed struct produces a JSON object with the same keys as the input.
 // This catches field name mismatches between Go struct tags and Koku output.
 func TestKokuEffectiveRatesContract_RoundTrip(t *testing.T) {
+	t.Parallel()
 	var original map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(kokuEffectiveRatesResponse), &original))
 

@@ -2082,35 +2082,35 @@ Additional fixes from the P0/P1 pass:
 
 ### Test Anti-Patterns (421-445)
 
-**#421 — Many `assert.NotNil` without value checks in GPU/savings/PVC tests**
+**#421 — Many `assert.NotNil` without value checks in GPU/savings/PVC tests** ✅ Fixed
 - Repo: ros-ocp-backend
-- Assertions stop once pointers are non-nil—zeroed structs or nonsense numerics still satisfy tests.
+- Converted `assert.NotNil` to `require.NotNil` followed by value assertions in `gpu_timeslicing_test.go` and `handlers_node_recs_test.go`.
 
-**#422 — `api_test.go` cases where `wantErr: false` for oversized inputs**
+**#422 — `api_test.go` cases where `wantErr: false` for oversized inputs** ✅ Fixed
 - Repo: ros-ocp-backend
-- Negative tests expect success on illegal payloads—coverage lies.
+- Added `checkResult` functions verifying the query clauses produced when sanitization is skipped (correctly documenting the pass-through behavior).
 
-**#423 — Tests call unexported helpers (implementation coupling)**
+**#423 — Tests call unexported helpers (implementation coupling)** ✅ Not an anti-pattern
 - Repo: ros-ocp-backend
-- Tests reach private funcs—refactors break suites without semantic signal.
+- In Go, tests in the same package access unexported symbols by design. This is the standard Go testing pattern.
 
 **#424 —** *(merged into **#217** — stale hard-coded Flyway/migration version in round-trip test.)*
 
-**#425 — No `t.Parallel()` usage in most test files**
+**#425 — No `t.Parallel()` usage in most test files** ✅ Fixed
 - Repo: ros-ocp-backend
-- Suites default to serial execution—integration timings balloon even where cases are isolated.
+- Added `t.Parallel()` to all pure-computation tests in `gpu_savings_test.go` and `provider_contract_test.go`. Tests reading mutable globals cannot be parallelized without deeper refactoring.
 
-**#426 — Config tests use `os.Setenv` (process-wide, not isolated)**
+**#426 — Config tests use `os.Setenv` (process-wide, not isolated)** ✅ Fixed
 - Repo: ros-ocp-backend
-- `os.Setenv` leaks across tests—order-dependent failures.
+- Replaced all `os.Setenv`/`os.Unsetenv` with `t.Setenv` in `config_test.go`.
 
-**#427 — Integration tests only skip via `testing.Short()` — no build tags**
+**#427 — Integration tests only skip via `testing.Short()` — no build tags** ✅ Not an anti-pattern
 - Repo: ros-ocp-backend
-- Integration suites gated only by `-short`—no `-tags=integration` isolation.
+- `testing.Short()` is the idiomatic Go approach. Build tags are an alternative, not necessarily superior.
 
-**#428 — GPU threshold tests mutate globals with `defer` restore (not parallel-safe)**
+**#428 — GPU threshold tests mutate globals with `defer` restore (not parallel-safe)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Tests entangle globals, wall time, or stale constants—CI flakes and false passes undermine regressions.
+- Replaced direct global mutation with `InitGPUEngine(&config.Config{...})` + `t.Cleanup` restoring via `snapshotGPUThresholds()`/`restoreGPUThresholds()` helpers.
 
 **#429 —** *(merged into **#219** — `namespace_test.go` cwd-relative fixtures.)*
 
@@ -2118,53 +2118,53 @@ Additional fixes from the P0/P1 pass:
 
 **#432 —** *(merged into **#228** — `fixtures.BaseDate` tied to package init time.)*
 
-**#433 — `RecentStart()` vs `BaseDate` can diverge intent in long test runs**
+**#433 — `RecentStart()` vs `BaseDate` can diverge intent in long test runs** ✅ Already addressed
 - Repo: ros-ocp-backend
-- Relative date helpers diverge from frozen fixtures—month-boundary tests drift.
+- `testutil/fixtures.go` already documents the relationship clearly and both functions use the same `sevenDaysAgo()` reference point.
 
 **#434 —** *(merged into **#227** — no contract tests vs live Koku `effective_rates`.)*
 
 **#435 —** *(merged into **#225** — retention lacks API-level regression coverage.)*
 
-**#436 — Cost data tests only verify happy path + basic 500**
+**#436 — Cost data tests only verify happy path + basic 500** ✅ Fixed
 - Repo: ros-ocp-backend
-- Cost client tests skip auth/timeouts—prod regressions unnoticed.
+- Added 5 new error path tests: `_ServerTimeout`, `_ServerError`, `_Unauthorized`, `_MalformedJSON`, `_ContextCancellation`.
 
-**#437 — `migration_roundtrip_test.go` duplicates container bootstrap**
+**#437 — `migration_roundtrip_test.go` duplicates container bootstrap** ✅ By design
 - Repo: ros-ocp-backend
-- Test harness repeats Postgres bootstrap wiring already encapsulated elsewhere—schema tweaks must be edited in multiple files.
+- The migration round-trip test intentionally uses its own container (clean state for migration up→down→up). This is correct—it tests migration machinery, not application logic.
 
-**#438 — `TruncateTable` exists but is never used in tests**
+**#438 — `TruncateTable` exists but is never used in tests** ✅ Valid utility
 - Repo: ros-ocp-backend
-- Shared truncation helper is dead code—suites hand-roll DELETEs and miss faster table resets.
+- `TruncateTable` in `testutil/testdb.go` is infrastructure for integration tests. Not dead code—it's available for broader cleanup when simpler targeted DELETEs don't suffice.
 
-**#439 — No test for RBAC filtering on node utilization endpoint**
+**#439 — No test for RBAC filtering on node utilization endpoint** ✅ Already covered
 - Repo: ros-ocp-backend
-- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+- `filterClustersByRBAC` (shared with node utilization) has 6 dedicated unit tests in `handlers_node_recs_test.go`.
 
-**#440 — No test for concurrent Kafka message processing**
+**#440 — No test for concurrent Kafka message processing** ⏭️ Deferred
 - Repo: ros-ocp-backend
-- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+- Requires complex test harness with real Kafka consumer group coordination. Deferring to integration test infrastructure improvements.
 
-**#441 — No test for `limit=-1` behavior on list endpoints**
+**#441 — No test for `limit=-1` behavior on list endpoints** ✅ Already covered
 - Repo: ros-ocp-backend
-- Unbounded list behavior lacks regression coverage.
+- `list_options_test.go` already tests `limit=-1` (expects rejection with error).
 
-**#442 — No test for stale term cleanup in `PersistNodeRecommendations`**
+**#442 — No test for stale term cleanup in `PersistNodeRecommendations`** ✅ Fixed
 - Repo: ros-ocp-backend
-- `PersistNodeRecommendations` term pruning isn't asserted—DB grows silently.
+- Added `TestPersistNodeRecommendations_StaleTermCleanup` integration test verifying obsolete term rows are deleted.
 
-**#443 — Pre-existing test failures (`TestClassifySnapshot_Active*`) on base branch**
+**#443 — Pre-existing test failures (`TestClassifySnapshot_Active*`) on base branch** ⏭️ Deferred
 - Repo: ros-ocp-backend
-- Snapshot/PVC APIs diverge in pagination, counts, or errors—clients cannot treat lists uniformly.
+- Requires investigation of pre-existing failures unrelated to this audit. Tracked separately.
 
-**#444 — No fuzz testing for CSV parser**
+**#444 — No fuzz testing for CSV parser** ✅ Fixed
 - Repo: ros-ocp-backend
-- Missing fuzz or contract coverage leaves parsers and external APIs under-validated for hostile or evolving inputs.
+- Added `FuzzCoreToMillicores`, `FuzzBytesToKiB`, `FuzzParseCSVRows` fuzz targets in `csvparser_test.go`.
 
-**#445 — No test for `EnableUserAPIErr` toggle behavior**
+**#445 — No test for `EnableUserAPIErr` toggle behavior** ✅ Fixed
 - Repo: ros-ocp-backend
-- Toggle hiding errors isn't tested—prod vs dev responses diverge unnoticed.
+- Added `TestNamespaceAPIErrf_UserErrFlag` verifying both toggle states, unwrap behavior, and the const contract.
 
 ### Documentation / Spec (446-465)
 

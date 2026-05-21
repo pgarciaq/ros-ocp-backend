@@ -495,7 +495,13 @@ func TestComputeNodeTimeslicingRec_FreshNode(t *testing.T) {
 		},
 	}
 	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
-	assert.NotNil(t, rec, "fresh node (3 days ago) should produce a recommendation")
+	require.NotNil(t, rec, "fresh node (3 days ago) should produce a recommendation")
+	assert.Equal(t, "fresh-node", rec.NodeName)
+	assert.Equal(t, "T4", rec.GPUModel)
+	assert.GreaterOrEqual(t, rec.RecommendedReplicas, minReplicas)
+	assert.LessOrEqual(t, rec.RecommendedReplicas, maxReplicas)
+	assert.Greater(t, rec.Confidence, float32(0))
+	assert.Len(t, rec.CandidateContainers, 2)
 }
 
 func TestComputeNodeTimeslicingRec_ZeroLastSeen(t *testing.T) {
@@ -507,7 +513,9 @@ func TestComputeNodeTimeslicingRec_ZeroLastSeen(t *testing.T) {
 		},
 	}
 	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
-	assert.NotNil(t, rec, "zero LastSeen should be treated as fresh (backward compat)")
+	require.NotNil(t, rec, "zero LastSeen should be treated as fresh (backward compat)")
+	assert.Equal(t, "no-timestamp", rec.NodeName)
+	assert.GreaterOrEqual(t, rec.RecommendedReplicas, minReplicas)
 }
 
 // --- Container-level time-slicing savings ---
