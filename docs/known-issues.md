@@ -132,13 +132,25 @@ otherwise commit the offset with no replay path (see **`docs/audits/490-issues.m
 - **File URLs** — object storage locations; **presigned URLs** may embed
   credentials or time-limited signing material in query parameters
 
-**Hardening options** (pick based on org policy rather than a single default):
+**What the fix does:** Prior to the fix, unparsable messages were silently
+committed (offset advanced, payload lost forever — actual data loss). The fix
+logs the full payload before committing, giving SRE/Support a path to manually
+recover or replay the failed message. The trade-off is that sensitive fields
+(presigned URLs with signing parameters) end up in application logs.
 
-- **Redact or strip query strings** from presigned URLs before logging (or log
-  only bucket/key prefixes where sufficient).
-- **Avoid durable plaintext logging** of full payloads: route failures to a
-  **secure dead-letter topic** or isolated retention bucket with stricter access,
-  and keep correlation IDs in general application logs instead.
+**Open question — discuss with SRE:** Whether to redact presigned URL query
+strings before logging. Redacting improves compliance posture but removes
+information that SRE/Support may need to manually download and re-ingest the
+failed report. The decision depends on the deployment's log access controls,
+retention policies, and whether SRE prefers full URLs for incident response
+or would rather use a correlation ID to look up the URL separately.
+
+**Hardening options** (if redaction is desired):
+
+- **Strip query strings** from presigned URLs before logging (log only
+  `s3://bucket/key` path).
+- **Route failures to a dead-letter topic** with stricter access controls,
+  keeping only correlation IDs in general application logs.
 
 This caveat aligns with the broader **poison message / DLQ** gap tracked as
 REQ-0.7 in the executive summary; **`docs/audits/490-issues.md` #149** documents the
