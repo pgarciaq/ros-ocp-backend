@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/joho/godotenv"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 
@@ -143,6 +144,7 @@ type Config struct {
 var cfg *Config = nil
 
 func initConfig() {
+	_ = godotenv.Load() // loads .env into process environment if present; no-op otherwise
 	viper.AutomaticEnv()
 	if clowder.IsClowderEnabled() {
 		viper.SetDefault("LogFormater", "json")

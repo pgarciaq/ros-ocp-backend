@@ -12,3 +12,5 @@ comparison.csv
 .DS_Store
 .go/
 .prettierignore
+.env
+.env.local
