@@ -452,10 +452,13 @@ Phase 5c: Documentation updates
 
 ## Future Considerations
 
-- **Persistence:** If API-read-time computation becomes slow for large clusters
-(hundreds of nodes), add a `node_recommendations` table and compute during the
-ingestion pipeline (after GPU digests are written).  The API then reads from
-the table.  This is a performance optimization, not a design change.
+- **Persistence (DONE):** The `node_recommendations` table is now implemented
+(migration 000058) with per-term storage. Recommendations are computed during
+ingestion and persisted with a `term` column (short/medium/long), eliminating
+API-read-time computation overhead.
+- **Configurable terms (DONE):** Node recommendations use the TermProvider trait
+with defaults of 1d (short), 7d (medium), 15d (long) and a 90-day maximum.
+Terms are customizable per-tenant via the Settings API.
 - **Node-level detail endpoint:** `GET /recommendations/openshift/gpu/timeslicing` with filters (or a future `:node` sub-resource) for full history of time-slicing recommendations over time.
 - **Other node rec types:** Instance type recommendations and reserved instance
 recommendations follow the same `node_recommendations` table pattern with
