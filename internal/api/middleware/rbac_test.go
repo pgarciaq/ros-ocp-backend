@@ -99,6 +99,16 @@ func TestAggregatePermissions(t *testing.T) {
 				}
 				if len(gotVals) != len(wantVals) {
 					t.Errorf("key %q: got %v, want %v", k, gotVals, wantVals)
+					continue
+				}
+				wantSet := make(map[string]bool, len(wantVals))
+				for _, v := range wantVals {
+					wantSet[v] = true
+				}
+				for _, v := range gotVals {
+					if !wantSet[v] {
+						t.Errorf("key %q: unexpected value %q in result %v", k, v, gotVals)
+					}
 				}
 			}
 		})
