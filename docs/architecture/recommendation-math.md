@@ -98,6 +98,7 @@ Where x = day index, y = P98 value. A positive slope indicates growing resource 
 ## Idle Detection
 
 A container is classified as **idle** when:
+
 - CPU P95 < `DefaultIdleThresholdMC` (10 millicores) AND
 - Memory P95 < `DefaultIdleThresholdMemKiB` (10 MiB = 10240 KiB)
 
