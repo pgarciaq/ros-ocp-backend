@@ -225,6 +225,55 @@ func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string
 	}
 }
 
+// TestPersistNodeRecommendations_StaleTermCleanup verifies that rows with terms
+// no longer in the active config are deleted after upsert.
+func TestPersistNodeRecommendations_StaleTermCleanup(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	// Insert a recommendation with term "obsolete" directly (simulating a prior run).
+	_, err := pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, pod_count, updated_at)
+		VALUES ($1, $2, 'stale-node', 'obsolete', 50, 80, 60, 90, 1.0, false, false, 10, now())
+		ON CONFLICT (org_id, cluster_uuid, node, term) DO UPDATE SET updated_at = now()`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	// Persist new recommendations with active terms only.
+	recs := []engine.NodeRec{
+		{
+			Node: "stale-node", Term: "short_term",
+			CPUUtilP50: 40, CPUUtilP95: 70, MemUtilP50: 50, MemUtilP95: 80,
+			CPUOvercommitRatio: 0.8, IsUnderutilized: false, IsOvercommitted: false,
+			PodCount: 5,
+		},
+	}
+	validTerms := []string{"short_term", "medium_term", "long_term"}
+	err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms)
+	require.NoError(t, err)
+
+	// Verify: "obsolete" term should be deleted, "short_term" should exist.
+	var count int
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM node_recommendations
+		WHERE org_id = $1 AND cluster_uuid = $2 AND node = 'stale-node' AND term = 'obsolete'`,
+		orgID, clusterUUID).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "obsolete term should be cleaned up")
+
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM node_recommendations
+		WHERE org_id = $1 AND cluster_uuid = $2 AND node = 'stale-node' AND term = 'short_term'`,
+		orgID, clusterUUID).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "active term should exist")
+}
+
 // ensureDailyNodeDigestPartitions creates monthly RANGE partitions required for
 // inserts into daily_node_digests (parent table is PARTITION BY RANGE(bucket_date)).
 func ensureDailyNodeDigestPartitions(t *testing.T, pool *pgxpool.Pool, start time.Time, days int) {

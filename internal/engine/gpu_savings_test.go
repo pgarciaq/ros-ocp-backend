@@ -9,12 +9,14 @@ import (
 )
 
 func TestApplyGPUSavings_NilCostData(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	ApplyGPUSavings(rec, nil)
 	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
 }
 
 func TestApplyGPUSavings_NoGPURate(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
@@ -26,6 +28,7 @@ func TestApplyGPUSavings_NoGPURate(t *testing.T) {
 }
 
 func TestApplyGPUSavings_IdleGPU(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
@@ -38,6 +41,7 @@ func TestApplyGPUSavings_IdleGPU(t *testing.T) {
 }
 
 func TestApplyGPUSavings_MIGRightSizing_A100_80GB(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{
 		Classification:        GPUClassUnderutilized,
 		GPUModelName:          "NVIDIA A100-SXM4-80GB",
@@ -57,6 +61,7 @@ func TestApplyGPUSavings_MIGRightSizing_A100_80GB(t *testing.T) {
 }
 
 func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{
 		Classification:        GPUClassUnderutilized,
 		GPUModelName:          "NVIDIA A100-SXM4-80GB",
@@ -74,6 +79,7 @@ func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
 }
 
 func TestApplyGPUSavings_WellUtilized(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{
 		Classification: GPUClassWellUtilized,
 		GPUModelName:   "A100",
@@ -90,6 +96,7 @@ func TestApplyGPUSavings_WellUtilized(t *testing.T) {
 }
 
 func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
+	t.Parallel()
 	rec := &GPURec{
 		Classification:        GPUClassUnderutilized,
 		GPUModelName:          "Tesla T4",
@@ -107,6 +114,7 @@ func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
 }
 
 func TestApplyGPUSavings_NilRec(t *testing.T) {
+	t.Parallel()
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
 			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 0},
@@ -116,6 +124,7 @@ func TestApplyGPUSavings_NilRec(t *testing.T) {
 }
 
 func TestGpuMonthlyRate(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 0.0, GPUMonthlyRate(nil))
 	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{}))
 	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{
@@ -129,12 +138,14 @@ func TestGpuMonthlyRate(t *testing.T) {
 }
 
 func TestMigTotalSlices(t *testing.T) {
+	t.Parallel()
 	spec := MatchGPUModel("NVIDIA A100-SXM4-80GB")
 	require.NotNil(t, spec)
 	assert.Equal(t, 7, migTotalSlices(spec))
 }
 
 func TestMigProfileSlices(t *testing.T) {
+	t.Parallel()
 	spec := MatchGPUModel("NVIDIA A100-SXM4-80GB")
 	require.NotNil(t, spec)
 	assert.Equal(t, 1, migProfileSlices(spec, "1g.10gb"))

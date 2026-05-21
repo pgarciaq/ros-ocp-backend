@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -105,8 +106,8 @@ func TestGroupByNodeAndModel(t *testing.T) {
 			a100Group = &groups[i]
 		}
 	}
-	assert.NotNil(t, t4Group)
-	assert.NotNil(t, a100Group)
+	require.NotNil(t, t4Group, "expected T4 group to be found")
+	require.NotNil(t, a100Group, "expected A100 group to be found")
 	assert.Len(t, t4Group.Containers, 2)
 	assert.Len(t, a100Group.Containers, 1)
 	assert.Equal(t, "gpu-node-1", t4Group.NodeName)

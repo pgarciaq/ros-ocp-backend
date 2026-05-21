@@ -223,22 +223,38 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "container exceeds max length",
+			name:        "container exceeds max length - passes through (sanitization skipped)",
 			queryParams: map[string][]string{"container": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				key := containerCol + " ILIKE ?"
+				val, ok := result[key]
+				assert.True(t, ok, "oversized container should still produce a clause")
+				assert.Equal(t, []string{"%" + strings.Repeat("a", model.NamespaceMaxLen+1) + "%"}, val)
+			},
 		},
 		{
-			name:        "project exceeds max length",
+			name:        "project exceeds max length - passes through (sanitization skipped)",
 			queryParams: map[string][]string{"project": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				key := projectContainerCol + " ILIKE ?"
+				val, ok := result[key]
+				assert.True(t, ok, "oversized project should still produce a clause")
+				assert.Equal(t, []string{"%" + strings.Repeat("a", model.NamespaceMaxLen+1) + "%"}, val)
+			},
 		},
 		{
-			name: "multiple filters exceed max length - joined errors",
+			name: "multiple filters exceed max length - both pass through",
 			queryParams: map[string][]string{
 				"container": {strings.Repeat("a", model.NamespaceMaxLen+1)},
 				"project":   {strings.Repeat("b", model.NamespaceMaxLen+1)},
 			},
 			wantErr: false,
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Contains(t, result, containerCol+" ILIKE ?")
+				assert.Contains(t, result, projectContainerCol+" ILIKE ?")
+			},
 		},
 	}
 

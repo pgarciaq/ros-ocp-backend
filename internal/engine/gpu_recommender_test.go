@@ -203,8 +203,6 @@ func TestInitGPUEngine_NilNoOp(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_IdleThresholdOverride(t *testing.T) {
-	// sm_active_avg = 0.03 is above the default idle threshold (0.02)
-	// but below a raised threshold (0.05)
 	digests := []GPUDigestRow{
 		digestRow(0.1, 0.1, 0.03, 1000),
 		digestRow(0.1, 0.1, 0.03, 1000),
@@ -215,10 +213,18 @@ func TestClassifyGPUWorkload_IdleThresholdOverride(t *testing.T) {
 	assert.True(t, hasProf)
 	assert.NotEqual(t, GPUClassIdle, cls, "0.03 SM should not be idle with default threshold 0.02")
 
-	// Raise threshold: 0.03 < 0.05 → idle
-	orig := gpuIdleThreshold
-	gpuIdleThreshold = 0.05
-	defer func() { gpuIdleThreshold = orig }()
+	// Apply raised threshold via InitGPUEngine (config-driven, not direct mutation)
+	origCfg := snapshotGPUThresholds()
+	t.Cleanup(func() { restoreGPUThresholds(origCfg) })
+
+	InitGPUEngine(&config.Config{
+		GPUIdleThreshold:                0.05,
+		GPUUnderutilizedSMThreshold:     gpuUnderutilizedSM,
+		GPUUnderutilizedTensorThreshold: gpuUnderutilizedTensor,
+		GPUMemBoundDRAMThreshold:        gpuMemBoundDRAM,
+		GPUMemBoundTensorThreshold:      gpuMemBoundTensor,
+		GPUFBHeadroomFactor:             gpuFBHeadroomFactor,
+	})
 
 	cls2, hasProf2 := ClassifyGPUWorkload(digests)
 	assert.True(t, hasProf2)
@@ -226,7 +232,6 @@ func TestClassifyGPUWorkload_IdleThresholdOverride(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_MemBoundThresholdOverride(t *testing.T) {
-	// dram=0.55, tensor=0.10 — below default mem-bound thresholds (dram>0.60, tensor<0.15)
 	digests := []GPUDigestRow{
 		digestRow(0.10, 0.55, 0.30, 1000),
 	}
@@ -234,13 +239,37 @@ func TestClassifyGPUWorkload_MemBoundThresholdOverride(t *testing.T) {
 	cls, _ := ClassifyGPUWorkload(digests)
 	assert.NotEqual(t, GPUClassMemoryBound, cls, "should NOT be memory_bound with default DRAM threshold 0.60")
 
-	// Lower DRAM threshold so 0.55 qualifies
-	origDRAM := gpuMemBoundDRAM
-	gpuMemBoundDRAM = 0.50
-	defer func() { gpuMemBoundDRAM = origDRAM }()
+	// Apply lowered DRAM threshold via InitGPUEngine
+	origCfg := snapshotGPUThresholds()
+	t.Cleanup(func() { restoreGPUThresholds(origCfg) })
+
+	InitGPUEngine(&config.Config{
+		GPUIdleThreshold:                gpuIdleThreshold,
+		GPUUnderutilizedSMThreshold:     gpuUnderutilizedSM,
+		GPUUnderutilizedTensorThreshold: gpuUnderutilizedTensor,
+		GPUMemBoundDRAMThreshold:        0.50,
+		GPUMemBoundTensorThreshold:      gpuMemBoundTensor,
+		GPUFBHeadroomFactor:             gpuFBHeadroomFactor,
+	})
 
 	cls2, _ := ClassifyGPUWorkload(digests)
 	assert.Equal(t, GPUClassMemoryBound, cls2, "should be memory_bound with lowered DRAM threshold 0.50")
+}
+
+// snapshotGPUThresholds captures current GPU threshold globals for safe restore.
+func snapshotGPUThresholds() *config.Config {
+	return &config.Config{
+		GPUIdleThreshold:                gpuIdleThreshold,
+		GPUUnderutilizedSMThreshold:     gpuUnderutilizedSM,
+		GPUUnderutilizedTensorThreshold: gpuUnderutilizedTensor,
+		GPUMemBoundDRAMThreshold:        gpuMemBoundDRAM,
+		GPUMemBoundTensorThreshold:      gpuMemBoundTensor,
+		GPUFBHeadroomFactor:             gpuFBHeadroomFactor,
+	}
+}
+
+func restoreGPUThresholds(cfg *config.Config) {
+	InitGPUEngine(cfg)
 }
 
 func TestFilterGPUByWindow(t *testing.T) {
