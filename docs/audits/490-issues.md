@@ -52,7 +52,7 @@ Additional fixes from the P0/P1 pass:
 - NULL-scan bugs corrected in `term_config`, `handlers_pvc`, `handlers_node_utilization`, `quality.go`, and `cmd/compare`
 - Pre-existing `TestDeleteTermSettings` / `TestPutTermSettings` failures fixed
 
-**P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**) before P2 batch 1; **P2 batch 1** (May 2026) closed **#13**, **#25**, **#35**, **#40**, **#41**, **#42**, **#43**, **#45**, **#46**, **#47**, **#48**, **#52**, **#57**, **#58**, **#59**, **#61** — see commit SHAs on each row under [P2 — Medium](#p2--medium). Three partially narrowed (**#50**, **#80**, **#233**).
+**P2 follow-up (post P0/P1):** Two P2 items closed outright (**#37**, **#217**) before P2 batch 1; **P2 batch 1** (May 2026) closed **#13**, **#25**, **#35**, **#40**, **#41**, **#42**, **#43**, **#45**, **#46**, **#47**, **#48**, **#50**, **#52**, **#53**, **#57**, **#58**, **#59**, **#61** — see commit SHAs on each row under [P2 — Medium](#p2--medium). Two partially narrowed (**#80**, **#233**). **#53** closed by architecture (synchronous consumer = inherent backpressure). **#346**, **#349** fixed in fresh-install migrations.
 
 **P2 batch 2** (May 2026) closed **#123**, **#129**, **#131**, **#173**, **#182**, **#200**, **#205**, **#207** — pagination links, namespace paging, term config caching, pool config, composite indexes, config validation. **#185** deferred (matches Koku convention: no prod guardrails, Clowder overrides in production). **#206** verified already correct.
 
@@ -450,11 +450,11 @@ Additional fixes from the P0/P1 pass:
 - Liveness vs readiness mismatch — P2 operations.
 - Effort: Small
 
-**#53 — No backpressure when DB is slow** *(downgraded to P2)*
+**#53 — No backpressure when DB is slow** *(downgraded to P2)* ✅ Closed (by architecture)
 - Repo: ros-ocp-backend
 - Consumer/readahead vs DB throughput — P2 resilience.
-- Effort: Medium
-- **Status: Deferred —** Current throughput doesn't warrant backpressure. Kafka consumer processes one message at a time synchronously. If throughput becomes an issue, this can be revisited.
+- Effort: N/A
+- **Status: Not a bug.** The Kafka consumer loop is synchronous: `ReadMessage → processReport → CommitMessage → loop`. There is no goroutine pool, channel buffer, or async writer. If the DB is slow, the consumer naturally stalls on the current message and cannot fetch the next one — this *is* backpressure. No code change needed.
 
 ### Triaged from P1 — concurrency / lifecycle *(downgraded to P2)*
 
@@ -1878,9 +1878,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: nise
 - Nise fixtures may omit GPU/MIG/timestamp variants needed to match operator CSV contracts.
 
-**#365 — Operator GPU CSV header defined in `types.go` — changes break ROS parser**
-- Repo: koku-metrics-operator
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+**#365 — Operator GPU CSV header defined in `types.go` — changes break ROS parser** ✅ Mitigated
+- Repo: koku-metrics-operator, ros-ocp-backend
+- Mitigated by `internal/ingestion/csv_contract_test.go` which encodes the operator's exact CSV header and verifies parsability. If the operator header changes, this test fails — making the contract explicit and machine-checked.
 
 **#366 — Koku `ros_report_shipper.py` Kafka message format must match ROS consumer**
 - Repo: koku
@@ -1927,9 +1927,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Cost provider collapses auth 401, network timeouts, and JSON errors—operators can't tell credential vs outage vs schema drift.
 
-**#377 — No schema registry or contract testing between Koku Kafka and ROS consumer**
-- Repo: koku, ros-ocp-backend
-- Missing fuzz or contract coverage leaves parsers and external APIs under-validated for hostile or evolving inputs.
+**#377 — No schema registry or contract testing between Koku Kafka and ROS consumer** ✅ Fixed
+- Repo: ros-ocp-backend
+- Created `internal/ingestion/csv_contract_test.go` with operator header parity test + end-to-end row parsing test. Also documented the full column schema in `docs/architecture/kafka-schema.md`.
 
 **#378 — Nise `--write-monthly` flag behavior differs from `--daily-reports`**
 - Repo: nise
@@ -2266,9 +2266,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Three different Go toolchain pins diverge—developers, CI, and images can disagree on language/stdlib behavior across releases.
 
-**#473 — CodeQL action uses `@v2` — should be `@v3`/`@v4`**
+**#473 — CodeQL action uses `@v2` — should be `@v3`/`@v4`** ✅ Fixed
 - Repo: ros-ocp-backend
-- CodeQL `@v2` lags current GitHub releases—misses fixes from `@v3`/`@v4` and may stop working when runners deprecate Node runtimes.
+- Upgraded `actions/checkout@v3→@v4` and all `github/codeql-action/*@v2→@v3` in `.github/workflows/codeql.yml`.
 
 **#474 — `update-go-deps.yml` uses broad `go get -u ./...` — breaking updates risk**
 - Repo: ros-ocp-backend
@@ -2298,9 +2298,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Container build/dev-compose choices hurt reproducibility and security: floating tags, missing probes/limits, or dev secrets in defaults.
 
-**#482 — `clowdapp.yaml` Database version 13 — may need alignment**
+**#482 — `clowdapp.yaml` Database version 13 — may need alignment** ✅ Fixed
 - Repo: ros-ocp-backend
-- Template pins older Postgres—features/migrations may assume newer.
+- Bumped `database.version` from 13 to 16 in `clowdapp.yaml` to match production and local dev.
 
 **#483 — Nise GPU data generation doesn't cover MIG profiles**
 - Repo: nise
@@ -2344,12 +2344,12 @@ Promoted and fixed 5 P3 issues with data-integrity, security, or correctness imp
 | 296 | Node utilization endpoint missing RBAC cluster filtering | Added `filterClustersByRBAC` + `getClustersForOrg` |
 | 300 | `time.Now()` without `.UTC()` in report_processor | Already fixed in earlier batch |
 
-Investigated but deferred (migration complexity):
+Previously deferred, now fixed (applied to fresh-install migrations):
 
 | # | Issue | Decision |
 |---|-------|----------|
-| 346 | `container_usage_samples` PK omits `workload_type` | Deferred — ACCESS EXCLUSIVE on partitioned table; need telemetry |
-| 349 | `recommendation_sets` PK omits `workload_type` | Deferred — same collision class; needs coordinated PK rebuild |
+| 346 | `container_usage_samples` PK omits `workload_type` | ✅ Fixed — `workload_type` added to PKs of all 5 tables in original CREATE TABLE migrations (fresh-install only; no ACCESS EXCLUSIVE needed) |
+| 349 | `recommendation_sets` PK omits `workload_type` | ✅ Fixed — same commit as #346; ON CONFLICT clauses updated in Go code |
 
 ---
 
