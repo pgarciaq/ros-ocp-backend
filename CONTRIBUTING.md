@@ -13,24 +13,34 @@ CPU here", "this GPU is idle", "this node is under-utilized".
 
 It's part of Red Hat's Cost Management ecosystem:
 
-```
-┌─────────────────────┐     ┌─────────────────────┐     ┌────────────────┐
-│ OpenShift Cluster   │     │  Koku (cost-mgmt)   │     │  koku-ui       │
-│                     │     │                     │     │  (React)       │
-│ koku-metrics-       │────▶│  Ingestion pipeline │     │                │
-│ operator            │     │  Cost models        │────▶│  Cost views    │
-│ (collects metrics,  │     │  Reports API        │     │  Optimizations │
-│  produces CSVs)     │     └──────────┬──────────┘     └────────────────┘
-└─────────┬───────────┘                │                         ▲
-          │                            │ effective_rates          │
-          │ tar.gz (CSVs)              ▼                         │
-          │                   ┌─────────────────────┐            │
-          └──────────────────▶│  ros-ocp-backend    │────────────┘
-            via Kafka/S3      │  (this service)     │
-                              │                     │
-                              │  Recommendations    │
-                              │  API                │
-                              └─────────────────────┘
+```mermaid
+graph TD
+    subgraph cluster["OpenShift Cluster"]
+        operator["koku-metrics-operator<br/><i>collects metrics, produces CSVs</i>"]
+    end
+
+    operator -->|"tar.gz (CSVs) via Kafka/S3"| ingestion
+    operator -->|"tar.gz (CSVs) via Kafka/S3"| recsapi
+
+    subgraph koku["Koku (cost-mgmt)"]
+        ingestion["Ingestion pipeline"]
+        costmodels["Cost models"]
+        reports["Reports API"]
+    end
+
+    subgraph ros["ros-ocp-backend (this service)"]
+        recsapi["Recommendations API"]
+    end
+
+    koku -->|"effective_rates"| ros
+
+    subgraph ui["koku-ui (React)"]
+        costviews["Cost views"]
+        optimizations["Optimizations"]
+    end
+
+    koku -->|"cost data"| costviews
+    ros -->|"recommendations"| optimizations
 ```
 
 **Koku tells you what you're spending. ros-ocp-backend tells you what you could save.**
@@ -52,45 +62,41 @@ ros-ocp-backend runs as 4 separate processes (same binary, different subcommands
 
 ### Data Flow
 
-```
-1. koku-metrics-operator collects Prometheus metrics → packages as CSVs → uploads tar.gz
-2. Koku (ingress) stores the tar.gz in S3, publishes Kafka message
-3. Processor consumes Kafka msg → downloads CSV from S3 → parses rows → upserts digests
-4. Recommendation Poller reads digests → runs recommendation engine → persists recommendations
-5. API Server reads recommendations from PostgreSQL → serves to frontend
-```
+1. **koku-metrics-operator** collects Prometheus metrics → packages as CSVs → uploads tar.gz
+2. **Koku** (ingress) stores the tar.gz in S3, publishes Kafka message
+3. **Processor** consumes Kafka msg → downloads CSV from S3 → parses rows → upserts digests
+4. **Recommendation Poller** reads digests → runs recommendation engine → persists recommendations
+5. **API Server** reads recommendations from PostgreSQL → serves to frontend
 
 ### Key Packages
 
-```
-internal/
-├── api/            # Echo HTTP handlers, middleware, serialization
-├── config/         # Viper-based configuration (env vars, defaults)
-├── costdata/       # HTTP client for Koku's effective_rates endpoint
-├── db/             # pgxpool setup, connection management
-├── engine/         # Recommendation math: percentiles, decay, GPU classification,
-│                   #   node sizing, cost savings, retention sweeps
-├── ingestion/      # CSV parsing, digest computation pipeline
-├── kafka/          # Kafka consumer (confluent-kafka-go)
-├── logging/        # Structured logging (logrus + WithFields)
-├── metrics/        # Prometheus metric definitions
-├── model/          # Database models and query builders
-├── notifications/  # Notification code registry
-├── plugin/         # Plugin registry (interfaces, init, enable/disable)
-├── plugins/        # Plugin implementations:
-│   ├── container/  #   Container CPU/memory recommendations
-│   ├── gpu/        #   GPU MIG + time-slicing recommendations
-│   ├── node/       #   Node utilization recommendations
-│   ├── namespace/  #   Namespace-level aggregates
-│   ├── pvc/        #   PVC storage recommendations
-│   ├── snapshot/   #   VolumeSnapshot staleness detection
-│   └── kruize/     #   Legacy Kruize delegation (deprecated)
-├── rbac/           # Platform RBAC integration
-├── services/       # Report processing orchestration
-│   └── housekeeper/# Source deletion cleanup, partition management
-├── testutil/       # Test database setup, fixtures
-└── types/          # Shared type definitions
-```
+| Package | Description |
+|---------|-------------|
+| `internal/api/` | Echo HTTP handlers, middleware, serialization |
+| `internal/config/` | Viper-based configuration (env vars, defaults) |
+| `internal/costdata/` | HTTP client for Koku's effective_rates endpoint |
+| `internal/db/` | pgxpool setup, connection management |
+| `internal/engine/` | Recommendation math: percentiles, decay, GPU classification, node sizing, cost savings, retention sweeps |
+| `internal/ingestion/` | CSV parsing, digest computation pipeline |
+| `internal/kafka/` | Kafka consumer (confluent-kafka-go) |
+| `internal/logging/` | Structured logging (logrus + WithFields) |
+| `internal/metrics/` | Prometheus metric definitions |
+| `internal/model/` | Database models and query builders |
+| `internal/notifications/` | Notification code registry |
+| `internal/plugin/` | Plugin registry (interfaces, init, enable/disable) |
+| `internal/rbac/` | Platform RBAC integration |
+| `internal/services/` | Report processing orchestration |
+| `internal/services/housekeeper/` | Source deletion cleanup, partition management |
+| `internal/testutil/` | Test database setup, fixtures |
+| `internal/types/` | Shared type definitions |
+| **`internal/plugins/`** | **Plugin implementations:** |
+| `internal/plugins/container/` | Container CPU/memory recommendations |
+| `internal/plugins/gpu/` | GPU MIG + time-slicing recommendations |
+| `internal/plugins/node/` | Node utilization recommendations |
+| `internal/plugins/namespace/` | Namespace-level aggregates |
+| `internal/plugins/pvc/` | PVC storage recommendations |
+| `internal/plugins/snapshot/` | VolumeSnapshot staleness detection |
+| `internal/plugins/kruize/` | Legacy Kruize delegation (deprecated) |
 
 ### Plugin Architecture
 
@@ -98,11 +104,15 @@ Plugins are **compile-time, in-process** Go interfaces toggled at runtime via en
 No dynamic loading — all plugins ship in the same binary.
 
 Plugin interfaces:
-- **`CSVIngestor`** — owns CSV parsing for a payload type
-- **`IngestHook`** — runs after CSV parsing (e.g., GPU digest upserts)
-- **`APIProvider`** — registers HTTP routes
-- **`APIEnricher`** — enriches another plugin's API responses
-- **`RetentionProvider`** — owns data retention sweeps for its tables
+
+| Interface | Purpose |
+|-----------|---------|
+| `CSVIngestor` | Owns CSV parsing for a payload type |
+| `IngestHook` | Runs after CSV parsing (e.g., GPU digest upserts) |
+| `APIProvider` | Registers HTTP routes |
+| `APIEnricher` | Enriches another plugin's API responses |
+| `RetentionProvider` | Owns data retention sweeps for its tables |
+| `TermProvider` | Declares configurable recommendation time-window terms |
 
 See [`docs/architecture/plugin-architecture.md`](docs/architecture/plugin-architecture.md)
 for full design details.
@@ -219,16 +229,19 @@ go run rosocp.go start api
 ```
 
 **How it works:**
+
 1. `godotenv.Load()` reads `.env` into `os.Environ` (no-op if file is absent)
 2. `viper.AutomaticEnv()` binds all Viper keys to environment variables
 3. `viper.SetDefault(...)` provides fallback values for anything not set
 
 **Precedence** (highest to lowest):
+
 1. Explicit env vars (`LOG_LEVEL=DEBUG go run rosocp.go ...`)
 2. Values in `.env`
 3. Viper defaults in `config.go`
 
 **Files:**
+
 - `.env.example` — all available variables with their defaults (committed, documentation)
 - `.env` — your local overrides (gitignored, never committed)
 - `.env.local` — optional additional overrides (also gitignored)
@@ -621,6 +634,7 @@ assert.Greater(t, rec.Confidence, float32(0))
 #### Error Path Testing
 
 All external service integrations must have error-path tests covering:
+
 - Timeouts (server takes longer than client timeout)
 - Server errors (5xx)
 - Authentication failures (401/403)
@@ -715,6 +729,7 @@ if err := db.Query(ctx, sql); err != nil {
 ### Production (console.redhat.com)
 
 Deployed as a ClowdApp on OpenShift with:
+
 - 4 deployments (api, processor, recommendation-poller, housekeeper)
 - Managed PostgreSQL (RDS)
 - MSK Kafka
@@ -723,6 +738,7 @@ Deployed as a ClowdApp on OpenShift with:
 ### On-Premise (cost-onprem Helm chart)
 
 Deployed alongside Koku in a single Helm chart (`cost-onprem-chart/`):
+
 - Single PostgreSQL shared with Koku
 - Internal Kafka (AMQ Streams)
 - Keycloak for JWT authentication
@@ -780,6 +796,7 @@ The API contract is defined in `openapi.json` at the repository root.
 ### When to Update
 
 Update `openapi.json` whenever you:
+
 - Add a new API endpoint
 - Add/remove/rename query parameters or response fields
 - Change response status codes
@@ -965,6 +982,7 @@ Don't be surprised when test data "disappears" — check the retention sweep.
 ### Scraping
 
 Each process exposes metrics on its `PROMETHEUS_PORT`:
+
 - API: `:5007/metrics`
 - Processor: `:5005/metrics`
 - Recommendation Poller: `:5006/metrics`
@@ -1003,6 +1021,7 @@ Tests create local instances instead of mutating package globals.
 ### VS Code / Cursor
 
 Recommended extensions:
+
 - `golang.go` — Go language support (gopls, dlv debugger)
 - `redhat.vscode-yaml` — YAML validation for docker-compose
 

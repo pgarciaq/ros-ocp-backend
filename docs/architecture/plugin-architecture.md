@@ -20,23 +20,54 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 ### 1.2 Concrete coupling in the codebase
 
-**Kafka report dispatch — explicit outer branches per CSV type; inner ingest via plugins** (`internal/services/report_processor.go`):
+**Kafka report dispatch** (`internal/services/report_processor.go`):
 
-The outer `for _, file` loop in [`ProcessReport`](../../internal/services/report_processor.go) keys off [`DetermineCSVType`](../../internal/utils/utils.go) and [`PayloadType`](../../internal/types/kafkaMsg.go) constants, dispatching to `processContainerCSVNative`, `processNamespaceCSVNative`, `processStorageCSVNative`, or `processSnapshotCSVNative` when native CSV ingest is active (`useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)`). **Inside** `processContainerCSVNative`, matching **`CSVIngestor`** plugins receive the CSV via [`nativeCSVIngestViaPlugins`](../../internal/services/report_processor.go); **`IngestHook`** implementations run via [`runIngestHooksForCSV`](../../internal/services/report_processor.go) on returned **`[]MetricRow`** for coupled domains (GPU/node digest upserts). **Fallback:** when no **`CSVIngestor`** handles `"container"`, **`processContainerDigestFallback`** runs **`ParseAndDigestCSV`** and conditionally **`UpsertGPUDigests`** / **`UpsertNodeDigests`** only when **`plugin.EnabledFor("gpu")`** / **`plugin.EnabledFor("node")`** — preserving disable semantics that unconditional **`ProcessCSVToDigests`** would violate.
+- The outer `for _, file` loop in `ProcessReport` keys off `DetermineCSVType` and `PayloadType` constants.
+- Dispatches to `processContainerCSVNative`, `processNamespaceCSVNative`, `processStorageCSVNative`, or `processSnapshotCSVNative` when native ingest is active.
+- Native ingest gate: `useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)`.
 
-**Container CSV native path** (`internal/services/report_processor.go`): **`processContainerCSVNative`** fetches the CSV, runs **`nativeCSVIngestViaPlugins`** (or **`processContainerDigestFallback`** when no ingestor claims `"container"`), then recommendations/history/quality and **`runNodeRecommendations`**.
+**Inside `processContainerCSVNative`:**
 
-**GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins): **`ParseAndDigestCSV`** returns **`[]MetricRow`**. On the **plugin path**, **`IngestHook`** (`gpu`, `node`) runs **`UpsertGPUDigests`** / **`UpsertNodeDigests`**. On the **fallback path**, those upserts run only when **`plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`**. **`ingestion.ProcessCSVToDigests`** ([`pipeline.go`](../../internal/ingestion/pipeline.go)) remains for **CLI/tools/tests** and **always** chains GPU + node upserts after **`ParseAndDigestCSV`** (no registry awareness).
+- Matching `CSVIngestor` plugins receive the CSV via `nativeCSVIngestViaPlugins`.
+- `IngestHook` implementations run via `runIngestHooksForCSV` on returned `[]MetricRow` (GPU/node digest upserts).
+- **Fallback:** when no `CSVIngestor` handles `"container"`, `processContainerDigestFallback` runs `ParseAndDigestCSV` and conditionally `UpsertGPUDigests` / `UpsertNodeDigests` only when `plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`.
 
-Non-fatal **`IngestHook`** failures increment Prometheus **`ros_ocp_plugin_hook_errors_total`** (`plugin`, `hook_type`).
+**Container CSV native path** (`internal/services/report_processor.go`):
 
-**HTTP routes:** **`GPU`**, **`node`**, **`namespace`**, **`pvc`**, and **`snapshot`** domains register **`APIProvider`** routes from their plugins; **`internal/api/server.go`** keeps container list/detail (with Kruize fallback), settings/terms/history/quality/fleet-summary native gates, then invokes **`plugin.APIProviders()`**, then registers **`/:recommendation-id`** last.
+1. Fetch the CSV.
+2. Run `nativeCSVIngestViaPlugins` (or `processContainerDigestFallback` when no ingestor claims `"container"`).
+3. Run recommendations/history/quality.
+4. Run `runNodeRecommendations`.
 
-Under Echo, **`static > param > any`** matching means concrete paths such as **`/gpu`** are not consumed by **`/:recommendation-id`** when ordering follows §6.2 (plugin routes before catch‑alls).
+**GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins):
 
-**GPU enrichment:** **`APIEnricher`** — **`gpu`** implements **`EnrichResponse`** for **`NativeContainerEnrichmentInput`**; **`handlers.go`** calls **`EnrichNativeContainerResults`** instead of **`enrichWithGPU`** directly.
+- `ParseAndDigestCSV` returns `[]MetricRow`.
+- **Plugin path:** `IngestHook` (`gpu`, `node`) runs `UpsertGPUDigests` / `UpsertNodeDigests`.
+- **Fallback path:** upserts run only when `plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`.
+- `ingestion.ProcessCSVToDigests` remains for CLI/tools/tests and **always** chains GPU + node upserts (no registry awareness).
+- Non-fatal `IngestHook` failures increment Prometheus `ros_ocp_plugin_hook_errors_total`.
 
-**Retention sweeps** (`internal/engine/retention.go`): When **`RetentionProvider`** plugins are registered, they take priority — each plugin sweeps its own tables via **`SweepRetention`**. If **no** retention plugins are registered (for example minimal tests that omit plugin imports), core falls back to the **`retainedTables`** slice ([`retention.go`](../../internal/engine/retention.go)). That fallback list matches the **original pre-plugin monthly-partitioned digest/sample set**: container samples/digests plus **`daily_namespace_digests`**, **`namespace_usage_samples`**, and **`gpu_container_digests`**. **`RetentionProvider`** plugins still declare ownership of those namespace/GPU tables when loaded; the fallback exists so environments without the registry wiring still drop old partitions for that legacy set. **Node and PVC partitions are not on that list** — **`daily_node_digests`**, **`node_recommendations`**, and **`daily_pvc_digests`** are swept **only** when the **`node`** and **`pvc`** plugins register **`SweepRetention`**.
+**HTTP routes:**
+
+- `gpu`, `node`, `namespace`, `pvc`, and `snapshot` register `APIProvider` routes from their plugins.
+- `internal/api/server.go` registers in order:
+    1. Container list/detail (with Kruize fallback)
+    2. Settings/terms/history/quality/fleet-summary native gates
+    3. `plugin.APIProviders()` routes
+    4. `/:recommendation-id` (catch-all, last)
+- Echo `static > param > any` matching ensures concrete paths like `/gpu` are not consumed by `/:recommendation-id`.
+
+**GPU enrichment:**
+
+- `gpu` plugin implements `APIEnricher.EnrichResponse` for `NativeContainerEnrichmentInput`.
+- `handlers.go` calls `EnrichNativeContainerResults` instead of `enrichWithGPU` directly.
+
+**Retention sweeps** (`internal/engine/retention.go`):
+
+- When `RetentionProvider` plugins are registered, they take priority — each plugin sweeps its own tables via `SweepRetention`.
+- If **no** retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the `retainedTables` slice.
+- The fallback list covers the **original pre-plugin set**: container samples/digests, `daily_namespace_digests`, `namespace_usage_samples`, and `gpu_container_digests`.
+- **Node and PVC partitions are not in the fallback** — `daily_node_digests`, `node_recommendations`, and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`.
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -156,9 +187,30 @@ type MigrationProvider interface {
 	Plugin
 	OwnedTables() []string
 }
+
+// TermProvider plugins declare configurable recommendation terms (short/medium/long).
+// Implementing this trait enables:
+//   - Per-tenant term customization via PUT /settings/terms?recommendation_type=<name>
+//   - Admin-locked terms via ROS_TERMS_<PLUGIN>_<TERM>_<FIELD> environment variables
+//   - Listing in GET /settings/capabilities with supports_terms: true
+type TermProvider interface {
+	Plugin
+	DefaultTerms() []TermConfig  // Plugin-specific defaults (3 entries: short, medium, long)
+	MaxWindowDays() int          // Upper bound on window_days (enforced in API and env vars)
+}
 ```
 
-**IngestHook data contract (confirmed — Option B):** After the container **`CSVIngestor`** parses the CSV, hooks receive **`[]MetricRow`** — the existing struct in [`internal/ingestion/models.go`](../../internal/ingestion/models.go). That type is already the de facto DTO for **`upsertGPUDigests`** and **`upsertNodeDigests`** in the ingestion pipeline. **Option C** (hooks re-query the DB after the container writer persists rows) was rejected: it adds I/O, couples hooks to table shapes, and complicates tests. Passing **`[]MetricRow`** avoids an extra DB round-trip; hooks are trivially unit-testable with in-memory slices; and **`MetricRow`** can grow additively as the CSV schema evolves—hooks that only read fields they need remain compatible.
+**IngestHook data contract (confirmed — Option B):**
+
+After the container `CSVIngestor` parses the CSV, hooks receive `[]MetricRow` — the existing struct in `internal/ingestion/models.go`. That type is already the de facto DTO for `upsertGPUDigests` and `upsertNodeDigests`.
+
+**Why Option B (in-memory `[]MetricRow`):**
+
+- Avoids an extra DB round-trip
+- Hooks are trivially unit-testable with in-memory slices
+- `MetricRow` can grow additively as the CSV schema evolves — hooks that only read fields they need remain compatible
+
+**Rejected — Option C** (hooks re-query DB after container writer persists rows): adds I/O, couples hooks to table shapes, and complicates tests.
 
 **Note:** Kafka/message types and routing details stay in **`internal/types`** and **`internal/api`**; traits reference **`ingestion.MetricRow`** where needed rather than duplicating models.
 
@@ -200,19 +252,36 @@ import (
 
 ### 6.1 Ingestion (`report_processor.go`)
 
-**Hook orchestration rule:** Ingest-hook dispatch (which hooks run after which CSV ingestor, ordering, non-fatal errors) is orchestrated from **`internal/services/report_processor.go`**, not from **`internal/ingestion/`**. That avoids import cycles (**`ingestion`** imports **`plugin`** for **`CSVIngestor`** / **`[]MetricRow`** plumbing).
+**Hook orchestration rule:**
 
-**Container CSV seam:** [`ParseAndDigestCSV`](../../internal/ingestion/pipeline.go) returns **`[]MetricRow`** after upserting container digests. Enabled **`IngestHook`** plugins (**`gpu`**, **`node`**) run **`UpsertGPUDigests`** / **`UpsertNodeDigests`** from **`report_processor.go`** after **`CSVIngestor.IngestCSV`**. When no ingestor handles **`container`**, **`processContainerDigestFallback`** performs the same conditional upserts keyed off **`plugin.EnabledFor("gpu"|"node")`**. **[`ProcessCSVToDigests`](../../internal/ingestion/pipeline.go)** remains a tool/test helper that **always** chains GPU + node upserts (no registry awareness).
+- Ingest-hook dispatch is orchestrated from `internal/services/report_processor.go`, **not** from `internal/ingestion/`.
+- This avoids import cycles (`ingestion` imports `plugin` for `CSVIngestor` / `[]MetricRow` plumbing).
 
-**Outer Kafka routing:** The file-type **`if` chain** is unchanged at the top of [`ProcessReport`](../../internal/services/report_processor.go); inner dispatch uses plugins as above.
+**Container CSV seam:**
+
+- `ParseAndDigestCSV` returns `[]MetricRow` after upserting container digests.
+- Enabled `IngestHook` plugins (`gpu`, `node`) run `UpsertGPUDigests` / `UpsertNodeDigests` from `report_processor.go` after `CSVIngestor.IngestCSV`.
+- When no ingestor handles `container`, `processContainerDigestFallback` performs the same conditional upserts keyed off `plugin.EnabledFor("gpu"|"node")`.
+- `ProcessCSVToDigests` remains a tool/test helper that **always** chains GPU + node upserts (no registry awareness).
+
+**Outer Kafka routing:**
+
+- The file-type `if` chain is unchanged at the top of `ProcessReport`.
+- Inner dispatch uses plugins as above.
 
 ### 6.1.1 Hook failure semantics (confirmed)
 
-**`IngestHook`** invocations are **non-fatal by default**. If a hook (for example GPU digest upsert) returns an error, core **logs** it, **increments an error metric**, and **continues** processing the remainder of the pipeline (including other hooks and downstream steps that do not depend on the failed hook’s side effects). **Container recommendations are the primary product**: an auxiliary plugin bug must **not** prevent container CSV data and container-native recommendations from landing.
+`IngestHook` invocations are **non-fatal by default**. When a hook returns an error:
 
-This behavior is a core benefit of the plugin architecture: **isolation** between domains limits blast radius compared to older inlined chains where a GPU digest failure could fail the whole container ingest path when GPU upserts were unconditional tails on **`ProcessCSVToDigests`** (today **`processContainerDigestFallback`** + hooks isolate failures per domain where configured).
+1. Core **logs** the error.
+2. Core **increments** `ros_ocp_plugin_hook_errors_total`.
+3. Processing **continues** with remaining hooks and downstream steps.
 
-**Future extension:** A **`Critical() bool`** trait (or equivalent) on hooks could mark must-succeed contributors that should abort the batch—**not** part of the initial design.
+**Key principle:** Container recommendations are the primary product — an auxiliary plugin bug must not prevent container data from landing.
+
+**Why this matters:** Isolation between domains limits blast radius. Before plugins, a GPU digest failure could fail the entire container ingest path. Now `processContainerDigestFallback` + hooks isolate failures per domain.
+
+**Future extension:** A `Critical() bool` trait on hooks could mark must-succeed contributors that abort the batch — not part of the initial design.
 
 ### 6.2 API (`server.go` / handlers)
 
@@ -224,7 +293,15 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 
 ### 6.3 Retention (`internal/engine/retention.go`)
 
-**Framework-owned** tables (history, quality, non-partitioned date columns, etc.) stay in core. Domain-owned partitioned digest/sample tables are swept by **`RetentionProvider`** implementations when those plugins are registered. When **no** retention plugins are registered, core falls back to **`retainedTables`** — the **legacy monthly-partition sweep list** (container + namespace digest/samples + **`gpu_container_digests`**) from before plugin retention existed; **node** and **PVC** partitions are **not** included and require their plugins’ **`SweepRetention`** (see §1).
+**Framework-owned** tables (history, quality, non-partitioned date columns) stay in core.
+
+**Plugin-owned** partitioned digest/sample tables are swept by `RetentionProvider` implementations when registered.
+
+**Fallback behavior** (no retention plugins registered):
+
+- Core falls back to the `retainedTables` slice — the legacy monthly-partition sweep list.
+- Covers: container samples/digests, namespace digests/samples, `gpu_container_digests`.
+- **Not included:** node and PVC partitions — those require their plugins’ `SweepRetention`.
 
 Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](../../internal/engine/retention.go)**:
 
@@ -247,18 +324,31 @@ The golang-migrate driver loads **one** sequential chain (core + plugin contribu
 
 ### 6.5 Legacy Kruize engine (optional plugin — confirmed stance)
 
-The **`WithFallback`** handlers and **legacy dataframe CSV ingestion** paths keep a large **Kruize-facing** surface alive alongside the native Go engine: roughly **2.5k+ lines** across the HTTP client ([`internal/utils/kruize/`](../../internal/utils/kruize/)), payload types ([`internal/types/kruizePayload/`](../../internal/types/kruizePayload/)), the recommendation poller (**`recommendation_poller.go`**), legacy ingestion plumbing, and handler fallback branches.
+The Kruize-facing surface comprises roughly **2.5k+ lines**:
 
-**External dependencies** include HTTP calls to the Kruize server, consumption/production on the Kafka recommendation topic, and **`KRUIZE_*`** configuration variables.
+- HTTP client: `internal/utils/kruize/`
+- Payload types: `internal/types/kruizePayload/`
+- Recommendation poller: `recommendation_poller.go`
+- Legacy ingestion plumbing and handler fallback branches
 
-**Decision:** Treat Kruize integration as an **optional legacy plugin** behind the same registry as native domains. **`ROS_USE_NATIVE_ENGINE`** on **`Config`** is **deprecated** (see §11.1); **`plugin.EnabledFor(plugin.KruizePluginName)`** is the unified runtime signal for whether CSV dispatch and HTTP routing use native vs legacy branches. **Remove Kruize-only codepaths only** when product commits to **native-only** operation **and** all tenants are migrated off Kruize-backed flows—avoid stranding operators mid-cutover.
+**External dependencies:**
 
-**Mutual exclusivity with native plugins (confirmed):**
+- HTTP calls to the Kruize server
+- Consumption/production on the Kafka recommendation topic
+- `KRUIZE_*` configuration variables
 
-- The **Kruize legacy path is disabled by default** — deployments run native plugins unless **`ROS_ENABLED_PLUGINS`** lists **`kruize`** (or the deprecated compat bridge applies — §11.1).
-- **Enabling `kruize` automatically disables all other plugins** (the native engine’s domain plugins). The two engines are **mutually exclusive**: operators run **either** native plugins **or** the Kruize legacy plugin, **never both at once**.
-- **Startup enforcement:** When the plugin registry determines that Kruize is active, it **logs a warning** and **skips registration of every other plugin** so native hooks/routes/retention do not double-process the same workloads.
-- **Rationale:** Running Kruize alongside native plugins would emit **conflicting or duplicate recommendations** for the same workloads and risks **double-counting** savings or churn in APIs/UI. Mutual exclusivity keeps persisted state and API responses consistent with a single active engine.
+**Decision:** Treat Kruize as an **optional legacy plugin** behind the same registry.
+
+- `ROS_USE_NATIVE_ENGINE` on `Config` is **deprecated** (see §11.1).
+- `plugin.EnabledFor(plugin.KruizePluginName)` is the unified runtime signal.
+- Remove Kruize-only codepaths only when product commits to native-only operation **and** all tenants are migrated.
+
+**Mutual exclusivity with native plugins:**
+
+- **Disabled by default** — deployments run native plugins unless `ROS_ENABLED_PLUGINS` lists `kruize`.
+- **Enabling `kruize` automatically disables all other plugins.** The two engines are mutually exclusive.
+- **Startup enforcement:** Registry logs a warning and skips all non-Kruize plugins.
+- **Rationale:** Running both would emit conflicting/duplicate recommendations and risk double-counting savings.
 
 ---
 
@@ -324,17 +414,36 @@ See **`internal/plugins/example/README.md`** for trait contracts and registratio
 
 ## 9. Trait matrix (current recommendation types)
 
-| Domain | Plugin name | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | MigrationProvider |
-|--------|-------------|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|
-| Container CPU/memory | `container` | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — |
-| Namespace | `namespace` | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — |
-| GPU (MIG / time-slicing) | `gpu` | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — |
-| Node utilization | `node` | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — |
-| PVC | `pvc` | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — |
-| Snapshot | `snapshot` | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — |
-| Template (disabled by default) | `_example` | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait |
+| Domain | Plugin name | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | MigrationProvider | TermProvider |
+|--------|-------------|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
+| Container CPU/memory | `container` | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
+| Namespace | `namespace` | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — | ✅ (max 90d) |
+| GPU (MIG / time-slicing) | `gpu` | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
+| Node utilization | `node` | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
+| PVC | `pvc` | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
+| Snapshot | `snapshot` | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — | — |
+| Template (disabled by default) | `_example` | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait | ✅ stub |
 
 *`MigrationProvider` is implemented today **only** by **`example`** (`Name()` **`_example`**); the trait is **reserved** for future tooling — no production dispatch consumes it.*
+
+### 9.1 TermProvider — per-plugin default terms
+
+Plugins implementing **`TermProvider`** declare their domain-specific default recommendation terms. The choice of window sizes depends on how fast the underlying metric changes:
+
+| Plugin | short | medium | long | MaxWindowDays | Rationale |
+|--------|-------|--------|------|:-------------:|-----------|
+| `container` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | CPU/memory usage changes rapidly; long lookbacks are noisy |
+| `namespace` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | Aggregate of containers — same dynamics |
+| `node` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | Node capacity utilization patterns |
+| `gpu` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | GPU workloads often bursty; 90d sufficient |
+| `pvc` | 7d / min 3d | 30d / min 14d | 90d / min 30d | 365 | Storage growth is slow; long windows needed for trend detection |
+
+**Term resolution precedence** (per term, per plugin):
+1. **Admin env var** (`ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS`, etc.) — always wins, makes term "locked"
+2. **Tenant DB override** (via `PUT /settings/terms?recommendation_type=<plugin>`) — applied unless locked
+3. **Plugin default** (`DefaultTerms()`) — used when no override exists
+
+**Decay half-life:** Controls exponential weighting in time-series analysis. A value of `168` (1 week) means data from 1 week ago receives half the weight of today's data. Set to `0` for equal weighting. PVC defaults to `0` because storage growth is linear and doesn't benefit from recency weighting.
 
 ---
 
@@ -347,6 +456,7 @@ See **`internal/plugins/example/README.md`** for trait contracts and registratio
    - **`APIProvider`** for `/recommendations/openshift/vms` (exact paths follow OpenAPI policy).
    - **`RetentionProvider`** for `daily_vm_digests` and VM recommendation partitions.
    - **`MigrationProvider`** when DDL is plugin-owned.
+   - **`TermProvider`** (optional) if recommendations are parameterized by configurable time windows. Implement `DefaultTerms()` (3 terms) and `MaxWindowDays()`. See [`internal/plugins/example/plugin.go`](../../internal/plugins/example/plugin.go) for a template.
 4. **Add SQL** as the next sequential migration(s) under the central **`migrations/`** directory with a **`-- plugin: vm`** (or matching name) header comment—no **`internal/plugins/vm/migrations/`** subtree.
 5. **Blank-import** `_ ".../internal/plugins/vm"` from the main binary.
 6. **Update operator / ingest documentation** so the correct files arrive on Kafka when the plugin is enabled.
@@ -462,4 +572,17 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 
 ## 17. Summary
 
-A **trait-based, compile-time plugin model** with **`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`** gives operators control over recommendation domains **without forking the binary**. Confirmed mechanics: **`IngestHook`** receives **`[]MetricRow`** (§4), hook failures are **non-fatal by default** and increment **`ros_ocp_plugin_hook_errors_total`** (§6.1.1), migrations remain **one central numbered directory** with **`-- plugin:`** headers (§6.4), Echo **static-before-param** routing applies when core registers catch-alls **last** (§6.2), **Kruize stays an optional legacy path** (§6.5), **`PluginContext`** is **defined for future lifecycle injection** but **not consumed by dispatch yet**, plugins use **`config.GetConfig()`** / **`logging.GetLogger()`** like other packages (§3.1), the compilable **`internal/plugins/example`** template (**plugin id `_example`**) documents traits at compile time (§8.1), and **`MigrationProvider`** remains a **reserved / documentation-only** trait today (**[`ExamplePlugin`](../../internal/plugins/example/plugin.go)** only). Testing stays anchored on existing coverage plus wiring tests ([§16](#16-test-strategy)).
+A **trait-based, compile-time plugin model** with `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` gives operators control over recommendation domains without forking the binary.
+
+**Confirmed mechanics:**
+
+- `IngestHook` receives `[]MetricRow` (§4)
+- Hook failures are **non-fatal** and increment `ros_ocp_plugin_hook_errors_total` (§6.1.1)
+- Migrations remain **one central numbered directory** with `-- plugin:` headers (§6.4)
+- Echo **static-before-param** routing; core registers catch-alls last (§6.2)
+- Kruize stays an **optional legacy path** (§6.5)
+- `PluginContext` is defined for future lifecycle injection but not consumed by dispatch yet
+- Plugins use `config.GetConfig()` / `logging.GetLogger()` like other packages (§3.1)
+- The compilable `internal/plugins/example` template (plugin id `_example`) documents traits at compile time (§8.1)
+- `MigrationProvider` remains **reserved / documentation-only** (`ExamplePlugin` only)
+- Testing stays anchored on existing coverage plus wiring tests ([§16](#16-test-strategy))
