@@ -2128,6 +2128,8 @@ And add (if not already present from Phase 2):
 
 ### REQ-10.5: Update health checks and container resources [LOW] — PARTIAL
 
+> **⚠️ Implementation status:** `/healthz` and `/readyz` endpoints described below are **NOT implemented**. The current binary exposes only `/status` (simple 200 OK) and `/metrics` (Prometheus). Kubernetes liveness/readiness probes in production use `/status`. The dedicated probe endpoints with goroutine/deadlock/connectivity checks remain a future enhancement.
+
 **Required behavior:** Remove Kruize health check from ros-ocp-backend startup validation (`Setup_kruize_performance_profile` becomes unnecessary). Replace with `/healthz`, `/readyz` probe endpoints (NFR-4).
 
 **Container resource recommendations** (baseline, tune in production):
@@ -2841,6 +2843,8 @@ With Go computing digests in memory during CSV ingestion and storing only pre-ag
 
 ### NFR-2a: Circuit Breakers for External APIs
 
+> **⚠️ Implementation status:** Circuit breakers are **NOT implemented**. External HTTP calls (RBAC, Koku cost API) use simple timeout-based `http.Client` with no breaker pattern. Failures are logged and result in degraded responses (no savings, 403) but do not trigger open/half-open state transitions.
+
 All outbound HTTP calls to external services must use a circuit breaker pattern (e.g., `sony/gobreaker` or equivalent) to prevent cascading failures:
 
 | External Service | Timeout | Circuit Breaker Settings | Fallback |
@@ -2853,6 +2857,8 @@ All outbound HTTP calls to external services must use a circuit breaker pattern 
 Circuit breaker state transitions are logged and exposed via Prometheus counter `ros_circuit_breaker_state_transitions_total{service, from_state, to_state}`.
 
 ### NFR-3: Graceful Degradation
+
+> **⚠️ Implementation status:** Consumer pause on PG down is **NOT implemented**. The current binary exits fatally (`log.Fatalf`) when the database is unreachable at startup. During runtime, individual message processing errors are logged and the message is committed (skip-and-continue). There is no circuit-breaker or pause/resume mechanism.
 
 - If PostgreSQL is temporarily unavailable for digest writes: **pause the Kafka consumer** (stop calling `ReadMessage`) rather than buffering in memory. This creates natural backpressure — Kafka retains the messages on the broker. Resume consuming when the DB health check passes. This avoids OOM risk from unbounded in-memory buffering. The seek-back pattern (REQ-10.3 error handling) handles individual message failures; consumer pause handles sustained DB outages. Max pause duration before the consumer is considered stuck: `max.poll.interval.ms` (default 18 minutes, matching Koku). If exceeded, the consumer group rebalances — acceptable, as the DB outage affects all replicas.
 - If digest upsert fails for a batch: serve recommendations from last successful digest data, log errors, retry on next Kafka message.
