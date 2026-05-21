@@ -145,3 +145,60 @@ get_unleash_features:
 
 get-openapi:
 	curl -v -H "x-rh-identity: ${b64_identity}" -H "x-rh-request_id: testtesttest" http://localhost:8000/api/cost-management/v1/recommendations/openshift/openapi.json
+
+# --- Container Image ---
+
+IMAGE_NAME ?= ros-ocp-backend
+IMAGE_TAG ?= latest
+CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || echo docker)
+
+.PHONY: docker-build
+docker-build: ## Build container image
+	$(CONTAINER_RUNTIME) build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+.PHONY: docker-push
+docker-push: ## Push container image (set IMAGE_REGISTRY)
+ifdef IMAGE_REGISTRY
+	$(CONTAINER_RUNTIME) tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+	$(CONTAINER_RUNTIME) push $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+else
+	@echo "Set IMAGE_REGISTRY to push (e.g., make docker-push IMAGE_REGISTRY=quay.io/myuser)"
+	@exit 1
+endif
+
+# --- Documentation ---
+
+.PHONY: docs-install
+docs-install: ## Install documentation dependencies (gomarkdoc, mkdocs-material)
+	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+	pip install --quiet mkdocs-material mkdocs-section-index
+
+.PHONY: docs-generate
+docs-generate: ## Regenerate API reference from source code
+	./scripts/generate-docs.sh
+
+.PHONY: docs-build
+docs-build: docs-generate ## Build the static documentation site (→ _site/)
+	mkdocs build --config-file mkdocs.yml --site-dir _site
+
+.PHONY: docs-serve
+docs-serve: docs-generate ## Serve docs locally with live reload (http://localhost:8000)
+	mkdocs serve --config-file mkdocs.yml
+
+.PHONY: docs-clean
+docs-clean: ## Remove generated docs and build output
+	rm -f docs-site/api-reference/plugin.md docs-site/api-reference/container.md
+	rm -f docs-site/api-reference/gpu.md docs-site/api-reference/node.md
+	rm -f docs-site/api-reference/pvc.md docs-site/api-reference/namespace.md
+	rm -f docs-site/api-reference/snapshot.md docs-site/api-reference/kruize.md
+	rm -f docs-site/api-reference/example.md
+	rm -f docs-site/contributing.md docs-site/known-issues.md
+	rm -rf docs-site/architecture/ docs-site/operations/ docs-site/features/
+	rm -rf _site
+
+# --- Help ---
+
+.PHONY: help
+help: ## Show all available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
