@@ -2302,9 +2302,10 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Bumped `database.version` from 13 to 16 in `clowdapp.yaml` to match production and local dev.
 
-**#483 — Nise GPU data generation doesn't cover MIG profiles**
-- Repo: nise
+**#483 — Nise GPU data generation doesn't cover MIG profiles** ✅ Fixed
+- Repo: nise, ros-ocp-backend
 - GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- **Fix:** Updated `nise/examples/ros_ocp/ocp_static_data.yml` with MIG edge cases (1g.5gb, 3g.20gb, 4g.20gb profiles, idle/underutil/membound/compute-bound workloads, multi-GPU pods). Added `A10G` to nise's GPU catalog. Created `internal/engine/gpu_mig_integration_test.go` — a full E2E integration test (testcontainers PostgreSQL) that seeds 7 workloads across all GPU classification categories and verifies correct MIG profile selection end-to-end.
 
 **#484 — Nise doesn't generate multi-GPU-model clusters**
 - Repo: nise
@@ -2616,7 +2617,7 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
 | Priority | Issue | File |
 |----------|-------|------|
 | P3 | GPU metric generation alignment with operator headers (#361) | `nise/generators/ocp/ocp_generator.py` |
-| P3 | Add MIG profile test data (#483) | `nise/generators/ocp/ocp_generator.py` |
+| P3 | Add MIG profile test data (#483) ✅ | `nise/generators/ocp/ocp_generator.py`, `internal/engine/gpu_mig_integration_test.go` |
 | P3 | Add multi-GPU-model clusters (#484) | `nise/generators/ocp/ocp_generator.py` |
 | P3 | Edge-case dates in test data (#485) | `nise/report.py` |
 | P3 | Timestamp format alignment (#371) | `nise/generators/ocp/ocp_generator.py` |
