@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-16 (Kafka unparsable-message logging caveat — `docs/audits/490-issues.md` **#149**)
+Last updated: 2026-05-21 (per-plugin configurable terms, documentation site, Makefile targets)
 
 ---
 
@@ -22,7 +22,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Container recs** | Memory recommendations (percentile-based, OOM-aware) | **Shipping** |
 | **Container recs** | Data decay weighting (configurable half-life per term) | **Shipping** |
 | **Container recs** | OOM detection & feedback (logarithmic memory bump) | **Shipping** |
-| **Container recs** | Custom timeframes (1–90 day windows, 3 terms per org) | **Shipping** |
+| **Container recs** | Custom timeframes (1–90 day windows, 3 terms per plugin per org) | **Shipping** |
 | **Container recs** | Idle / abandoned workload detection | **Shipping** |
 | **Container recs** | CPU trend analysis (least-squares slope) | **Shipping** |
 | **Container recs** | Dollar savings estimates (via Koku cost data) | **Shipping** |
@@ -41,6 +41,15 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Fleet** | Fleet summary (cross-cluster aggregate) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
 | **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
+| **Platform** | Per-plugin configurable recommendation terms (TermProvider trait) | **Shipping** |
+| **Platform** | Admin env-var locking of term settings (per-term, per-plugin) | **Shipping** |
+| **Platform** | Plugin capabilities endpoint (`GET /settings/capabilities`) | **Shipping** |
+| **Platform** | Plugin registry with MaxWindowDays validation per domain | **Shipping** |
+| **Platform** | Structured logging (logrus + WithFields, org_id/request_id context) | **Shipping** |
+| **Platform** | Prometheus per-phase histograms and error counters | **Shipping** |
+| **Platform** | .env file support (godotenv) for local development | **Shipping** |
+| **Developer** | MkDocs documentation site with auto-generated plugin API reference | **Shipping** |
+| **Developer** | Comprehensive CONTRIBUTING.md with architecture, setup, plugin guide | **Shipping** |
 
 ### Implementation Statistics (from requirements.md audit)
 
@@ -178,14 +187,37 @@ in the operator PromQL queries. This is a one-line change but trades off
 freshness after scale-down events. The 15-minute window is consistent with the
 existing `workload-pod-count` query.
 
+### Recently Implemented (Phase 8 — May 2026)
+
+| Feature | Description | Branch |
+|---------|-------------|--------|
+| Per-plugin configurable terms | `TermProvider` trait, `DefaultTerms()`, `MaxWindowDays()` per plugin | `pgarciaq-rosocp-superpowers-phase8` |
+| Admin env-var locking | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` overrides, makes terms read-only | same |
+| Capabilities endpoint | `GET /settings/capabilities` lists plugins + traits + lock status | same |
+| PVC per-term output | PVC recommendations now include short/medium/long term results | same |
+| Cache invalidation on PUT/DELETE | `InvalidateTermCache()` called after term settings changes | same |
+| Validation (422 responses) | `window_days > MaxWindowDays` returns proper error | same |
+| E2E integration tests | Term precedence + effects tested end-to-end | same |
+| MkDocs developer docs site | Auto-generated plugin API reference + narrative docs | same |
+| Root Makefile targets | `docker-build`, `docs-*`, `help` targets | same |
+| Structured logging | `internal/logging` package, org_id/request_id context everywhere | earlier phase |
+| Prometheus per-phase metrics | Histograms and error counters for observability | earlier phase |
+| .env file support | `godotenv` auto-loading for local development | earlier phase |
+| Plugin architecture docs | Comprehensive doc with trait matrix, term defaults, precedence | same |
+
 ### Recently Fixed Caveats
 
 | Issue | Fix | Commit |
 |-------|-----|--------|
-| Performance vs cost profiles stored identical values | `recommend_all.go` / `recommend_namespace.go` now select `PerfRequest*`/`PerfLimit*` when `profile == "performance"` | This commit |
-| Memory trend notification used CPU slope at container level | Added separate `CPUTrendSlope` and `MemTrendSlope` to `ContainerRec`; `EvaluateNotifications` now checks `MemTrendSlope` | This commit |
-| Notification code 29 collision (PVC_OVERSIZED vs GPUTimeSharingCandidate) | `NotifGPUTimeSharingCandidate` reassigned to code 36; `NotifPVCOversized` remains 29 | This commit |
-| PromQL `group_left` bug in replica count queries | `ros:desired_replicas` and `ros:available_replicas` used `(replica_counts) * on(namespace, workload) group_left(container, pod) (pod_info)` which fails with multi-replica workloads ("many-to-many matching not allowed"). Fixed by swapping operands: `(pod_info) * on(namespace, workload) group_left() (replica_counts)`. Discovered during live Prometheus validation on SNO cluster. | `koku-metrics-operator/internal/collector/queries.go` |
+| Performance vs cost profiles stored identical values | `recommend_all.go` / `recommend_namespace.go` now select `PerfRequest*`/`PerfLimit*` when `profile == "performance"` | Phase 7 |
+| Memory trend notification used CPU slope at container level | Added separate `CPUTrendSlope` and `MemTrendSlope` to `ContainerRec` | Phase 7 |
+| Notification code 29 collision (PVC_OVERSIZED vs GPUTimeSharingCandidate) | `NotifGPUTimeSharingCandidate` reassigned to code 36 | Phase 7 |
+| PromQL `group_left` bug in replica count queries | Swapped operands in `ros:desired_replicas` / `ros:available_replicas` | `koku-metrics-operator` |
+| GPU filters applied in-memory causing pagination errors | Push `has_gpu`, `gpu_model`, `gpu_classification` to SQL | `bd25f04` |
+| Kafka auto-commit causing message loss | `KAFKA_AUTO_COMMIT` default flipped to `false` | `deddf88` |
+| `workload_type` missing from PKs causing upsert conflicts | Added to all `ON CONFLICT` clauses | `7d0fcf8` |
+| Dead code and naming issues (#383-#400) | Removed unused exports, fixed naming conventions | `9f13890` |
+| Test anti-patterns (#421-#445) | Added `t.Cleanup`, fixed global state, timing assertions | `f80ad08` |
 
 ---
 
@@ -193,19 +225,26 @@ existing `workload-pod-count` query.
 
 ### Custom Timeframes (Settings API)
 
-**Engine status:** Fully implemented. The engine supports configurable
-`window_days` and `decay_halflife_hours` per term via the
-`org_recommendation_terms` database table. `LoadTermConfig()` reads
-per-org overrides at engine run time. Defaults are 1d/7d/15d.
+**Engine status:** Fully implemented with per-plugin term configuration:
 
-**API status:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/terms`
-endpoints are implemented. Users can configure custom term windows (1-90 days)
-per org.
+- Each plugin declares `DefaultTerms()` and `MaxWindowDays()` via the `TermProvider` trait.
+- Terms are configurable per recommendation type: container (max 90d), namespace (90d), gpu (90d), node (90d), pvc (365d).
+- Exponential decay (`decay_halflife_hours`) is supported per term.
+- `min_data_days` is auto-computed as `ceil(window_days / 2)`, clamped to `[1, window_days]`.
 
-**UI status:** Not implemented. The koku-ui hardcodes term names
-("short_term" / "medium_term" / "long_term") and displays whatever the
-backend returns, but there is no settings page to configure window sizes or
-decay parameters.
+**Term resolution precedence** (per term, per plugin):
+
+1. Admin env var (`ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS`, etc.) — always wins, makes term "locked"
+2. Tenant DB override (via `PUT /settings/terms?recommendation_type=<plugin>`) — applied unless locked
+3. Plugin default (`DefaultTerms()`) — used when no override exists
+
+**API status:**
+
+- `GET/PUT/DELETE /settings/terms?recommendation_type=<plugin>` — per-plugin term management
+- `GET /settings/capabilities` — lists plugins, their traits, and whether terms are configurable/locked
+- Validation: `window_days` capped at `MaxWindowDays()`, 422 returned for out-of-range values
+
+**UI status:** Not implemented. No settings page for term configuration in koku-ui.
 
 ### Namespace Recommendations
 
@@ -580,7 +619,8 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift/pvcs` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |
-| `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented |
+| `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented (per-plugin via `?recommendation_type=`) |
+| `/recommendations/openshift/settings/capabilities` | GET | Implemented |
 | `/recommendations/openshift/history` | GET | Implemented |
 | `/recommendations/openshift/quality` | GET | Implemented |
 | `/recommendations/openshift/snapshots` | GET | Implemented |
