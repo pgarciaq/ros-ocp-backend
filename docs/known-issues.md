@@ -735,11 +735,13 @@ regardless of depth. No rows are scanned and discarded.
 
 ### When to Implement
 
-This is **not urgent**. Current scale (< 5,000 containers per org) is well
-within offset/limit performance. Prioritize when:
+This is a **medium-priority improvement**. Large customers have 200,000+
+containers per org, making deep-page offset/limit queries expensive
+(offset=5000 with 50 items/page forces the DB to skip 5000 rows).
+Prioritize when:
 
-- A customer reports slow pagination on deep pages
-- The history table exceeds 100k rows per org
+- Deep-page API latency exceeds SLA thresholds
+- The history table grows significantly (1 row/container/term/day)
 - The UI moves to infinite-scroll (no page numbers)
 
 ---
