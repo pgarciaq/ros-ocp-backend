@@ -30,8 +30,13 @@ changes are required for data collection.
 2. **Parsing**: `ingestion.ParsePVCRows()` reads CSV into `PVCRow` structs
 3. **Digestion**: `ComputePVCDigests()` aggregates hourly rows into daily min/max/avg
 4. **Upsert**: `UpsertPVCDigests()` writes to `daily_pvc_digests` table
-5. **Recommendation**: `RecommendPVCs()` loads 90 days of digests and classifies
+5. **Recommendation**: `RecommendPVCs()` loads digests within the configured term window and classifies
 6. **Persistence**: `WritePVCRecommendations()` upserts to `pvc_recommendation_sets`
+
+> **Configurable terms:** PVC uses the TermProvider trait with defaults of
+> 7d (short), 30d (medium), 90d (long). The maximum allowed window is 365 days
+> (storage growth patterns are slow-moving). Terms can be customized per-tenant
+> via the Settings API or locked by administrators via environment variables.
 
 ## Classification
 

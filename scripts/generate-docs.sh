@@ -63,6 +63,7 @@ mkdir -p "$DOCS_DIR/features"
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
     sed -e 's|(docs/architecture/|(architecture/|g' \
         -e 's|(openapi\.json)|(openapi.md)|g' \
+        -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/main/LICENSE)|g' \
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"
 fi
 
