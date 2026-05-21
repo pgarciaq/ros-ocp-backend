@@ -62,16 +62,49 @@ type GPURec struct {
 	Term                           string // short, medium, long
 }
 
-// Package-level GPU thresholds match viper defaults in internal/config until
-// InitGPUEngine applies values from the loaded Config (typically at process startup).
-var (
-	gpuIdleThreshold       = 0.02
-	gpuUnderutilizedSM     = 0.25
-	gpuUnderutilizedTensor = 0.15
-	gpuMemBoundDRAM        = 0.60
-	gpuMemBoundTensor      = 0.15
-	gpuFBHeadroomFactor    = 1.20
-)
+// GPUThresholds holds the configurable thresholds for GPU workload classification
+// and MIG profile selection. Construct via NewGPUThresholds or GPUThresholdsFromConfig.
+// Methods on GPUThresholds are safe to call concurrently from parallel tests without
+// global state mutation.
+type GPUThresholds struct {
+	IdleThreshold       float64
+	UnderutilizedSM     float64
+	UnderutilizedTensor float64
+	MemBoundDRAM        float64
+	MemBoundTensor      float64
+	FBHeadroomFactor    float64
+}
+
+// DefaultGPUThresholds returns the built-in defaults (matching viper defaults in config).
+func DefaultGPUThresholds() GPUThresholds {
+	return GPUThresholds{
+		IdleThreshold:       0.02,
+		UnderutilizedSM:     0.25,
+		UnderutilizedTensor: 0.15,
+		MemBoundDRAM:        0.60,
+		MemBoundTensor:      0.15,
+		FBHeadroomFactor:    1.20,
+	}
+}
+
+// GPUThresholdsFromConfig constructs GPUThresholds from the application Config.
+func GPUThresholdsFromConfig(cfg *config.Config) GPUThresholds {
+	if cfg == nil {
+		return DefaultGPUThresholds()
+	}
+	return GPUThresholds{
+		IdleThreshold:       cfg.GPUIdleThreshold,
+		UnderutilizedSM:     cfg.GPUUnderutilizedSMThreshold,
+		UnderutilizedTensor: cfg.GPUUnderutilizedTensorThreshold,
+		MemBoundDRAM:        cfg.GPUMemBoundDRAMThreshold,
+		MemBoundTensor:      cfg.GPUMemBoundTensorThreshold,
+		FBHeadroomFactor:    cfg.GPUFBHeadroomFactor,
+	}
+}
+
+// defaultThresholds is the process-wide instance used by top-level convenience
+// functions. Updated by InitGPUEngine at startup.
+var defaultThresholds = DefaultGPUThresholds()
 
 // InitGPUEngine copies GPU recommendation thresholds from the central config.
 // Call once after config load (e.g. from cmd/start.go or StartAPIServer).
@@ -79,17 +112,12 @@ func InitGPUEngine(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
-	gpuIdleThreshold = cfg.GPUIdleThreshold
-	gpuUnderutilizedSM = cfg.GPUUnderutilizedSMThreshold
-	gpuUnderutilizedTensor = cfg.GPUUnderutilizedTensorThreshold
-	gpuMemBoundDRAM = cfg.GPUMemBoundDRAMThreshold
-	gpuMemBoundTensor = cfg.GPUMemBoundTensorThreshold
-	gpuFBHeadroomFactor = cfg.GPUFBHeadroomFactor
+	defaultThresholds = GPUThresholdsFromConfig(cfg)
 }
 
-// ClassifyGPUWorkload determines the GPU utilization classification from daily digests.
+// Classify determines the GPU utilization classification from daily digests.
 // Returns empty classification and false HasProfilingData if all PROF_ metrics are zero/absent.
-func ClassifyGPUWorkload(digests []GPUDigestRow) (GPUClassification, bool) {
+func (th *GPUThresholds) Classify(digests []GPUDigestRow) (GPUClassification, bool) {
 	hasProf := false
 	for _, d := range digests {
 		if d.TensorPipeActiveAvg > 0 || d.DRAMActiveAvg > 0 || d.SMActiveAvg > 0 {
@@ -113,13 +141,13 @@ func ClassifyGPUWorkload(digests []GPUDigestRow) (GPUClassification, bool) {
 	avgSM := sumSM / n
 
 	switch {
-	case avgSM < gpuIdleThreshold:
+	case avgSM < th.IdleThreshold:
 		return GPUClassIdle, true
-	case avgDRAM > gpuMemBoundDRAM && avgTensor < gpuMemBoundTensor:
+	case avgDRAM > th.MemBoundDRAM && avgTensor < th.MemBoundTensor:
 		return GPUClassMemoryBound, true
-	case avgTensor < gpuUnderutilizedTensor && avgSM < gpuUnderutilizedSM:
+	case avgTensor < th.UnderutilizedTensor && avgSM < th.UnderutilizedSM:
 		return GPUClassUnderutilized, true
-	case avgTensor < gpuUnderutilizedSM && avgDRAM < 0.30:
+	case avgTensor < th.UnderutilizedSM && avgDRAM < 0.30:
 		return GPUClassComputeBoundUnderutil, true
 	default:
 		return GPUClassWellUtilized, true
@@ -129,13 +157,13 @@ func ClassifyGPUWorkload(digests []GPUDigestRow) (GPUClassification, bool) {
 // SelectMIGProfile recommends the smallest MIG profile that fits the workload's
 // frame buffer and compute requirements. Returns "" if no MIG profile fits or
 // GPU is not MIG-capable.
-func SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
+func (th *GPUThresholds) SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
 	if spec == nil || !spec.MIGSupported || len(spec.Profiles) == 0 || len(digests) == 0 {
 		return ""
 	}
 
 	fbMax := percentile98FB(digests)
-	requiredFB := fbMax * gpuFBHeadroomFactor
+	requiredFB := fbMax * th.FBHeadroomFactor
 
 	for _, p := range spec.Profiles {
 		if float64(p.FBSizeMiB) >= requiredFB {
@@ -143,6 +171,16 @@ func SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
 		}
 	}
 	return "full_gpu"
+}
+
+// ClassifyGPUWorkload is a convenience function using the process-wide default thresholds.
+func ClassifyGPUWorkload(digests []GPUDigestRow) (GPUClassification, bool) {
+	return defaultThresholds.Classify(digests)
+}
+
+// SelectMIGProfile is a convenience function using the process-wide default thresholds.
+func SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
+	return defaultThresholds.SelectMIGProfile(spec, digests)
 }
 
 func percentile98FB(digests []GPUDigestRow) float64 {
