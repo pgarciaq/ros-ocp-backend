@@ -1,0 +1,315 @@
+package unleash
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"net/http"
+	"net/url"
+	"sync"
+	"time"
+
+	"github.com/Unleash/unleash-go-sdk/v5/api"
+)
+
+var SEGMENT_CLIENT_SPEC_VERSION = "4.3.1"
+
+var (
+	errNoChange = errors.New("no change")
+)
+
+type repository struct {
+	repositoryChannels
+	sync.RWMutex
+	options         repositoryOptions
+	etag            string
+	close           chan struct{}
+	closed          chan struct{}
+	ctx             context.Context
+	cancel          func()
+	isReady         bool
+	refreshTicker   *time.Ticker
+	segments        map[int][]api.Constraint
+	errors          float64
+	maxSkips        float64
+	skips           float64
+	streamingClient *streamingClient
+	isStreaming     bool
+	deltaProcessor  *deltaProcessor
+}
+
+func newRepository(options repositoryOptions, channels repositoryChannels) *repository {
+	repo := &repository{
+		options:            options,
+		repositoryChannels: channels,
+		close:              make(chan struct{}),
+		closed:             make(chan struct{}),
+		refreshTicker:      time.NewTicker(options.refreshInterval),
+		segments:           map[int][]api.Constraint{},
+		errors:             0,
+		maxSkips:           10,
+		skips:              0,
+		isStreaming:        options.isStreaming,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	repo.ctx = ctx
+	repo.cancel = cancel
+
+	if options.httpClient == nil {
+		repo.options.httpClient = http.DefaultClient
+	}
+
+	if options.storage == nil {
+		repo.options.storage = &DefaultStorage{}
+	}
+
+	repo.options.storage.Init(options.backupPath, options.appName)
+	// In the future, remove the dependency of the repository and just pass in the storage
+	repo.deltaProcessor = newDeltaProcessor(repo.options.storage, repo, channels)
+	
+	if repo.isStreaming {
+		repo.streamingClient = newStreamingClient(
+			options,
+			channels,
+			repo.deltaProcessor,
+		)
+	}
+
+	go repo.sync()
+
+	return repo
+}
+
+func (r *repository) fetchAndReportError() {
+	var (
+		isUnchanged bool
+		err         error
+	)
+
+	err = r.fetch()
+
+	// Extract unchanged error from error
+	if err != nil {
+		isUnchanged = errors.Is(err, errNoChange)
+		if isUnchanged {
+			err = nil
+		}
+	}
+
+	if err != nil {
+		if urlErr, ok := err.(*url.Error); !(ok && urlErr.Err == context.Canceled) {
+			r.err(err)
+		}
+	} else if !r.isReady {
+		r.isReady = true
+		r.ready <- true
+	} else if !isUnchanged {
+		r.update <- true
+	}
+}
+
+func (r *repository) sync() {
+	// Single read lock to determine initial mode
+	r.RLock()
+	isStreaming := r.isStreaming
+	streamingClient := r.streamingClient
+	r.RUnlock()
+
+	// Start streaming mode if enabled
+	// The eventsource library handles all reconnections automatically with backoff and jitter
+	if isStreaming && streamingClient != nil {
+		if err := streamingClient.start(r.options.storage); err != nil {
+			r.err(fmt.Errorf("failed to start streaming client: %w", err))
+		}
+	}
+
+	// Use polling if not streaming
+	if !isStreaming {
+		r.fetchAndReportError()
+	}
+
+	for {
+		select {
+		case <-r.close:
+			if r.streamingClient != nil {
+				r.streamingClient.stop()
+			}
+			if err := r.options.storage.Persist(); err != nil {
+				r.err(err)
+			}
+			close(r.closed)
+			return
+		case <-r.refreshTicker.C:
+			// Only poll if not in streaming mode
+			r.RLock()
+			shouldPoll := !r.isStreaming
+			r.RUnlock()
+
+			if shouldPoll {
+				if r.skips == 0 {
+					r.fetchAndReportError()
+				} else {
+					r.decrementSkips()
+				}
+			}
+		}
+	}
+}
+
+func (r *repository) backoff() {
+	r.errors = math.Min(r.maxSkips, r.errors+1)
+	r.skips = r.errors
+}
+
+func (r *repository) successfulFetch() {
+	r.errors = math.Max(0, r.errors-1)
+	r.skips = r.errors
+}
+
+func (r *repository) decrementSkips() {
+	r.skips = math.Max(0, r.skips-1)
+}
+func (r *repository) configurationError() {
+	r.errors = r.maxSkips
+	r.skips = r.errors
+}
+
+func (r *repository) fetch() error {
+	u, _ := r.options.url.Parse(getFetchURLPath(r.options.projectName))
+
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return err
+	}
+	req = req.WithContext(r.ctx)
+
+	req.Header.Add("UNLEASH-APPNAME", r.options.appName)
+	req.Header.Add("UNLEASH-INSTANCEID", r.options.instanceId)
+	req.Header.Add("Unleash-Interval", fmt.Sprintf("%d", r.options.refreshInterval.Milliseconds()))
+	req.Header.Add("User-Agent", r.options.appName)
+	// Needs to reference a version of the client specifications that include
+	// global segments
+	req.Header.Add("Unleash-Client-Spec", SEGMENT_CLIENT_SPEC_VERSION)
+
+	for k, v := range r.options.headers {
+		req.Header[k] = v
+	}
+
+	if r.etag != "" {
+		req.Header.Add("If-None-Match", r.etag)
+	}
+
+	resp, err := r.options.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotModified {
+		return errNoChange
+	}
+	if err := r.statusIsOK(resp); err != nil {
+		return err
+	}
+
+	var featureResp api.FeatureResponse
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&featureResp); err != nil {
+		return err
+	}
+
+	r.Lock()
+	r.etag = resp.Header.Get("Etag")
+	r.segments = featureResp.SegmentsMap()
+	r.options.storage.Reset(featureResp.FeatureMap(), true)
+	r.successfulFetch()
+	r.Unlock()
+	return nil
+}
+
+// updateStorageWithDelta updates the storage with delta changes in a thread-safe manner
+func (r *repository) updateStorageWithDelta(features map[string]interface{}, segments map[int][]api.Constraint) error {
+	r.Lock()
+	defer r.Unlock()
+
+	// Update segments
+	r.segments = segments
+
+	// Update storage
+	return r.options.storage.Reset(features, true)
+}
+
+// IsStreaming returns whether the repository is currently in streaming mode
+func (r *repository) IsStreaming() bool {
+	r.RLock()
+	defer r.RUnlock()
+	return r.isStreaming
+}
+
+func (r *repository) statusIsOK(resp *http.Response) error {
+	s := resp.StatusCode
+	if http.StatusOK <= s && s < http.StatusMultipleChoices {
+		return nil
+	} else if s == http.StatusUnauthorized || s == http.StatusForbidden || s == http.StatusNotFound {
+		r.configurationError()
+		return fmt.Errorf("%s %s returned status code %d your SDK is most likely misconfigured, backing off to maximum (%f times our interval)", resp.Request.Method, resp.Request.URL, s, r.maxSkips)
+	} else if s == http.StatusTooManyRequests || s >= http.StatusInternalServerError {
+		r.backoff()
+		return fmt.Errorf("%s %s returned status code %d, backing off (%f times our interval)", resp.Request.Method, resp.Request.URL, s, r.errors)
+	}
+
+	return fmt.Errorf("%s %s returned status code %d", resp.Request.Method, resp.Request.URL, s)
+}
+
+func (r *repository) getToggle(key string) *api.Feature {
+	r.RLock()
+	defer r.RUnlock()
+
+	if toggle, found := r.options.storage.Get(key); found {
+		if feature, ok := toggle.(api.Feature); ok {
+			return &feature
+		}
+	}
+	return nil
+}
+
+func (r *repository) resolveSegmentConstraints(strategy api.Strategy) ([]api.Constraint, error) {
+	segmentConstraints := []api.Constraint{}
+
+	// Use repository's segments (works for both polling and streaming modes)
+	r.RLock()
+	segments := r.segments
+	r.RUnlock()
+
+	for _, segmentId := range strategy.Segments {
+		if resolvedConstraints, ok := segments[segmentId]; ok {
+			segmentConstraints = append(segmentConstraints, resolvedConstraints...)
+		} else {
+			return segmentConstraints, fmt.Errorf("segment does not exist")
+		}
+	}
+
+	return segmentConstraints, nil
+}
+
+func (r *repository) list() []api.Feature {
+	r.RLock()
+	defer r.RUnlock()
+
+	var features []api.Feature
+	for _, feature := range r.options.storage.List() {
+		features = append(features, feature.(api.Feature))
+	}
+	return features
+}
+
+func (r *repository) Close() error {
+	close(r.close)
+	r.cancel()
+	<-r.closed
+	r.refreshTicker.Stop()
+	return nil
+}
