@@ -87,5 +87,6 @@ The confidence score (0.0–1.0) is based on:
 
 - Classification logic: [`internal/engine/gpu_recommender.go`](../../internal/engine/gpu_recommender.go)
 - GPU model catalog: [`internal/engine/gpu_metadata.go`](../../internal/engine/gpu_metadata.go)
-- Threshold initialization: [`internal/engine/gpu_recommender.go` → `InitGPUEngine()`](../../internal/engine/gpu_recommender.go)
+- Threshold struct and classification: [`internal/engine/gpu_recommender.go` → `GPUThresholds.Classify()`](../../internal/engine/gpu_recommender.go)
+- Process-wide initialization: [`internal/engine/gpu_recommender.go` → `InitGPUEngine()`](../../internal/engine/gpu_recommender.go)
 - Config defaults: [`internal/config/config.go`](../../internal/config/config.go)

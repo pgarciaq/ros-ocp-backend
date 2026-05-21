@@ -2108,9 +2108,12 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - `testing.Short()` is the idiomatic Go approach. Build tags are an alternative, not necessarily superior.
 
-**#428 — GPU threshold tests mutate globals with `defer` restore (not parallel-safe)** ✅ Fixed
+**#428 — GPU threshold tests mutate globals with `defer` restore (not parallel-safe)** ✅ Fixed (fully)
 - Repo: ros-ocp-backend
-- Replaced direct global mutation with `InitGPUEngine(&config.Config{...})` + `t.Cleanup` restoring via `snapshotGPUThresholds()`/`restoreGPUThresholds()` helpers.
+- Introduced `GPUThresholds` struct with `Classify()` and `SelectMIGProfile()` methods.
+- Tests create local `GPUThresholds` instances (no global mutation) and use `t.Parallel()`.
+- Package-level `defaultThresholds` + `InitGPUEngine()` retained for backward compatibility.
+- All GPU classification tests now pass with `-race` flag in parallel.
 
 **#429 —** *(merged into **#219** — `namespace_test.go` cwd-relative fixtures.)*
 
