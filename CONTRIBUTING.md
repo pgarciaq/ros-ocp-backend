@@ -203,6 +203,36 @@ All configuration is via environment variables, loaded by `internal/config/confi
 using Viper. When running under ClowdApp (production), many values are injected
 automatically from the Clowder config.
 
+### Setting Configuration Locally
+
+The project uses [`godotenv`](https://github.com/joho/godotenv) to load a `.env`
+file from the repository root into the process environment **before** Viper reads
+it. This means you can configure everything in a single file without shell wrappers.
+
+```bash
+# One-time setup
+cp .env.example .env
+
+# Edit .env — uncomment and change only what you need
+# Then just run:
+go run rosocp.go start api
+```
+
+**How it works:**
+1. `godotenv.Load()` reads `.env` into `os.Environ` (no-op if file is absent)
+2. `viper.AutomaticEnv()` binds all Viper keys to environment variables
+3. `viper.SetDefault(...)` provides fallback values for anything not set
+
+**Precedence** (highest to lowest):
+1. Explicit env vars (`LOG_LEVEL=DEBUG go run rosocp.go ...`)
+2. Values in `.env`
+3. Viper defaults in `config.go`
+
+**Files:**
+- `.env.example` — all available variables with their defaults (committed, documentation)
+- `.env` — your local overrides (gitignored, never committed)
+- `.env.local` — optional additional overrides (also gitignored)
+
 ### Core Settings
 
 | Variable | Default | Description |
