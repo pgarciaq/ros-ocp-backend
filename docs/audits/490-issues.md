@@ -435,10 +435,10 @@ Additional fixes from the P0/P1 pass:
 - Effort: Medium
 - **Status: Deferred —** Native engine doesn't call Kruize. Only relevant if Kruize integration is re-enabled.
 
-**#50 — Kafka auto-commit on upload processor** *(downgraded to P2)*
-- **Fix progress:** ⚠️ Partially addressed (by P0/P1 work, commit affee58 — aligns with P0 #7 fix: explicit successful commits when auto-commit is off) — remaining: when `enable.auto.commit` is **true** (default), at-most-once window after commit-before-work still applies.
+**#50 — Kafka auto-commit on upload processor** *(downgraded to P2)* ✅ Fixed
+- **Fix progress:** Flipped `KAFKA_AUTO_COMMIT` default from `true` to `false`. Combined with P0/P1 explicit commit-on-success (commit affee58), consumer now uses at-least-once semantics by default. Idempotent upserts ensure reprocessing is safe.
 - Repo: ros-ocp-backend
-- File: `internal/kafka/consumer.go`, `internal/config/config.go` (`KAFKA_AUTO_COMMIT` defaults **true**)
+- File: `internal/kafka/consumer.go`, `internal/config/config.go` (`KAFKA_AUTO_COMMIT` now defaults **false**)
 - At-most-once window if the process dies after librdkafka commits but before work completes — real, but the **default Kafka consumer tradeoff**, overlapping operational concerns with #7 (manual commit path) and #58 (shutdown). Treat as reliability hardening, not the same class as wrong `meta.count` or corrupt upserts.
 - Effort: Medium
 - **Status: Deferred —** P0/P1 fixes already added explicit commit-on-success logic in ProcessReport. Auto-commit is a fallback; the primary path now uses manual commits with error checking.
@@ -1124,25 +1124,23 @@ Additional fixes from the P0/P1 pass:
 
 ### Test Reliability (215-233)
 
-**#215 — `handlers_fleet_integration_test.go` sets `database.DB`/`Pool` without `t.Cleanup`**
-- **Status:** Deferred — test hygiene (tests run sequentially via `-count=1`; parallel flaking not observed in practice)
+**#215 — `handlers_fleet_integration_test.go` sets `database.DB`/`Pool` without `t.Cleanup`** ✅ Fixed
+- **Status:** Fixed — added `t.Cleanup(func() { database.DB = nil; database.Pool = nil })` after every global assignment.
 - Repo: ros-ocp-backend
-- Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
+- Also fixed same pattern in `handlers_node_recs_integration_test.go` (16 occurrences), `handlers_integration_test.go`, and `handlers_gpu_summary_integration_test.go`.
 
-**#216 — `handlers_terms_integration_test.go` same: no cleanup of global DB/Pool**
-- **Status:** Deferred — test hygiene (same as #215)
+**#216 — `handlers_terms_integration_test.go` same: no cleanup of global DB/Pool** ✅ Fixed
+- **Status:** Fixed — added `t.Cleanup` in `setupTermsApp()` and `TestPutTermSettings_OrgIsolation()`.
 - Repo: ros-ocp-backend
-- Tests mutate global `database.DB`/`Pool` without cleanup—parallel packages flake.
 
 **#217 — `migration_roundtrip_test.go` asserts `ver == 55` — already wrong (58 migrations exist)**
 - **Status:** ✅ Fixed (by P0/P1 work, commit 365463f — assertion now expects migration **60**)
 - Repo: ros-ocp-backend
 - Expected schema version is hard-coded—new migrations merge without failing CI, so drift hides until prod boot.
 
-**#218 — `TestAssembleNamespaceBoxplots_LongTerm_Under5ms` asserts wall-clock timing**
-- **Status:** Deferred — test hygiene (hasn't flaked in CI yet; can increase threshold if it does)
+**#218 — `TestAssembleNamespaceBoxplots_LongTerm_Under5ms` asserts wall-clock timing** ✅ Fixed
+- **Status:** Fixed — replaced `assert.Less(maxDur, 50ms)` with 200ms threshold and `t.Errorf`/`t.Logf` pattern. Still catches regressions (>200ms) without flaking on slow CI.
 - Repo: ros-ocp-backend
-- Flakes on slow CI runners or loaded machines.
 
 **#219 — `namespace/namespace_test.go` uses `os.ReadFile` with relative path**
 - **Status:** Deferred — test hygiene (`go test ./...` from repo root works; only fails if running from wrong directory)
@@ -1154,10 +1152,9 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Tests entangle globals, wall time, or stale constants—CI flakes and false passes undermine regressions.
 
-**#221 — `TestAggregatePermissions` checks lengths but not element values**
-- **Status:** Deferred — test hygiene (test adequacy issue, not a production bug)
+**#221 — `TestAggregatePermissions` checks lengths but not element values** ✅ Fixed
+- **Status:** Fixed — inner loop now builds a `wantSet` and verifies each returned value is expected.
 - Repo: ros-ocp-backend
-- Asserts slice lengths only—incorrect permission entries still pass.
 
 **#222 — `api_test.go TestMapQueryParameters` asserts against current month boundaries**
 - **Status:** Deferred — test hygiene (extremely rare window for failure; only at UTC midnight on last day of month)
