@@ -1,0 +1,67 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'internal/plugin/**'
+      - 'internal/plugins/**'
+      - 'docs/**'
+      - 'docs-site/**'
+      - 'openapi.json'
+      - 'mkdocs.yml'
+      - 'CONTRIBUTING.md'
+      - '.github/workflows/docs.yml'
+      - 'scripts/generate-docs.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install gomarkdoc
+        run: go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+
+      - name: Install mkdocs-material
+        run: pip install mkdocs-material mkdocs-section-index
+
+      - name: Generate API reference from source
+        run: ./scripts/generate-docs.sh
+
+      - name: Build documentation site
+        run: mkdocs build --config-file mkdocs.yml --site-dir _site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

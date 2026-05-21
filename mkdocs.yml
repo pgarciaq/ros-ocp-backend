@@ -1,0 +1,91 @@
+site_name: ROS-OCP Backend Developer Documentation
+site_description: Resource Optimization for OpenShift — Go backend service documentation
+site_url: https://pgarciaq.github.io/ros-ocp-backend/
+repo_url: https://github.com/pgarciaq/ros-ocp-backend
+repo_name: pgarciaq/ros-ocp-backend
+docs_dir: docs-site
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: red
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - section-index
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Contributing: contributing.md
+      - Local Development: development.md
+  - Architecture:
+      - Plugin Architecture: architecture/plugin-architecture.md
+      - Recommendation Math: architecture/recommendation-math.md
+      - GPU Classification: architecture/gpu-classification.md
+      - Kafka Schema: architecture/kafka-schema.md
+      - Cost Integration: architecture/cost-integration.md
+      - API Versioning: architecture/api-versioning.md
+      - Native Migration: architecture/native-migration.md
+  - Plugin Reference:
+      - Overview: api-reference/index.md
+      - plugin (interfaces): api-reference/plugin.md
+      - container: api-reference/container.md
+      - gpu: api-reference/gpu.md
+      - node: api-reference/node.md
+      - pvc: api-reference/pvc.md
+      - namespace: api-reference/namespace.md
+      - snapshot: api-reference/snapshot.md
+      - kruize: api-reference/kruize.md
+      - example (template): api-reference/example.md
+  - API Specification:
+      - OpenAPI: openapi.md
+  - Operations:
+      - Upgrade Runbook: operations/upgrade-runbook.md
+      - Known Issues: known-issues.md
+  - Features:
+      - PVC Right-Sizing: features/pvc-rightsizing.md
+      - GPU Time-Slicing: features/gpu-time-slicing.md
+      - Snapshot Staleness: features/snapshot-staleness.md
