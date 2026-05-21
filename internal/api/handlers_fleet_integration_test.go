@@ -31,6 +31,7 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 	database.DB = gormDB
 	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
 	// Seed rh_accounts and clusters
 	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)

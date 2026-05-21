@@ -30,7 +30,7 @@ func setupGPUSummaryEcho(pool *pgxpool.Pool) *echo.Echo {
 func TestGetGPUSummary_UnauthorizedWithoutIdentity(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	app := setupGPUSummaryEcho(pool)
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu", nil)
@@ -45,7 +45,7 @@ func TestGetGPUSummary_OK_JSONStructureAndNonNegativeCounts(t *testing.T) {
 	ctx := context.Background()
 
 	database.Pool = pool
-	defer func() { database.Pool = nil }()
+	t.Cleanup(func() { database.Pool = nil })
 
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
