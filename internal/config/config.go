@@ -15,7 +15,7 @@ import (
 type Config struct {
 	// Application config
 	ServiceName                     string `mapstructure:"SERVICE_NAME"`
-	LogFormater                     string `mapstructure:"LogFormater"`
+	LogFormatter                    string `mapstructure:"LogFormater"`
 	LogLevel                        string `mapstructure:"LOG_LEVEL"`
 	RecommendationPollIntervalHours int    `mapstructure:"RECOMMENDATION_POLL_INTERVAL_HOURS"`
 	DataRetentionPeriod             int    `mapstructure:"DATA_RETENTION_PERIOD"`
@@ -396,7 +396,7 @@ func validateLoadedConfig(c *Config) {
 func GetConfig() *Config {
 	if cfg == nil {
 		initConfig()
-		fmt.Println("Config initialized")
+		log.Println("config: initialized")
 	}
 	return cfg
 }

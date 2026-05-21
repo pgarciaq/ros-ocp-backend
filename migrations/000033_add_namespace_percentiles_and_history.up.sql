@@ -1,4 +1,4 @@
--- Migration 000031: Add exact percentile columns to namespace digests,
+-- Migration 000033: Add exact percentile columns to namespace digests,
 -- and native relational columns to historical_namespace_recommendation_sets.
 
 -- 1. Add missing percentile columns to daily_namespace_digests so the engine
