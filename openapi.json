@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ROS OCP Backend API",
-    "description": "GO Echo API for Resource Optimization OCP Backend Service.\n\n**Plugin system:** Endpoints are served by plugins that can be individually enabled or disabled via `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` environment variables. Disabled plugin routes return `404 Not Found`. Available plugins: `container`, `namespace`, `gpu`, `node`, `pvc`, `snapshot`, `kruize`. Default: all native plugins enabled, kruize disabled. See docs/architecture/plugin-architecture.md for details.",
+    "description": "GO Echo API for Resource Optimization OCP Backend Service.\n\n**Plugin system:** Endpoints are served by plugins that can be individually enabled or disabled via `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` environment variables. Disabled plugin routes return `404 Not Found`. Available plugins: `container`, `namespace`, `gpu`, `node`, `pvc`, `snapshot`, `kruize`. Default: all native plugins enabled, kruize disabled. See docs/architecture/plugin-architecture.md for details.\n\n**Term configuration:** Recommendation terms (short/medium/long) control the lookback window for each plugin. Terms can be customized per-tenant via PUT /settings/terms. Administrators can lock terms via environment variables (`ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS`, `ROS_TERMS_<PLUGIN>_<TERM>_MIN_DATA_DAYS`, `ROS_TERMS_<PLUGIN>_<TERM>_DECAY_HALFLIFE_HOURS`). Locked terms cannot be modified by tenants (PUT returns 422). Maximum window_days varies by plugin: 90 for container/namespace/node/gpu, 365 for pvc.",
     "version": "v1",
     "license": {
       "name": "GPLv3",
@@ -977,8 +977,20 @@
       "get": {
         "tags": ["Settings"],
         "summary": "Get recommendation term settings",
-        "description": "Returns the current recommendation term configuration for the caller's org. If no custom terms have been set, returns the defaults (short=1d, medium=7d, long=15d).",
+        "description": "Returns the current recommendation term configuration for the caller's org and recommendation type. Resolves precedence: admin env var > tenant DB override > plugin default. Terms marked `locked: true` cannot be modified via the API.",
         "operationId": "getTermSettings",
+        "parameters": [
+          {
+            "name": "recommendation_type",
+            "in": "query",
+            "required": true,
+            "description": "The recommendation plugin to get terms for. Use GET /settings/capabilities to list valid values.",
+            "schema": {
+              "type": "string",
+              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Term settings",
@@ -989,14 +1001,29 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Missing or invalid recommendation_type"
           }
         }
       },
       "put": {
         "tags": ["Settings"],
         "summary": "Update recommendation term settings",
-        "description": "Replace the recommendation term configuration for the caller's org. Each term must have a name (short, medium, or long), window_days (1-90), and optionally decay_halflife_hours. Changes take effect on the next engine processing cycle.",
+        "description": "Replace the recommendation term configuration for the caller's org and recommendation type. Maximum window_days varies by plugin (90 for container/namespace/node/gpu, 365 for pvc). If min_data_days is omitted, it is auto-computed as half of window_days. Terms locked by administrator environment variables cannot be modified (returns 422).",
         "operationId": "putTermSettings",
+        "parameters": [
+          {
+            "name": "recommendation_type",
+            "in": "query",
+            "required": true,
+            "description": "The recommendation plugin to update terms for.",
+            "schema": {
+              "type": "string",
+              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1019,22 +1046,75 @@
             }
           },
           "400": {
-            "description": "Validation error"
+            "description": "Validation error (invalid name, window_days out of range, min_data_days > window_days, etc.)"
+          },
+          "422": {
+            "description": "One or more terms are locked by administrator environment variables and cannot be modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "error" },
+                    "message": { "type": "string" },
+                    "locked_terms": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
       "delete": {
         "tags": ["Settings"],
         "summary": "Reset recommendation term settings to defaults",
-        "description": "Removes any custom term configuration for the caller's org, reverting to the built-in defaults (short=1d, medium=7d, long=15d).",
+        "description": "Removes any custom term configuration for the caller's org and recommendation type, reverting to plugin defaults. If terms are admin-locked, the DELETE still succeeds (removes only the DB override; locked values remain active).",
         "operationId": "deleteTermSettings",
+        "parameters": [
+          {
+            "name": "recommendation_type",
+            "in": "query",
+            "required": true,
+            "description": "The recommendation plugin to reset terms for.",
+            "schema": {
+              "type": "string",
+              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Default term settings",
+            "description": "Default term settings (after reset)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TermSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid recommendation_type"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/capabilities": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "List recommendation capabilities",
+        "description": "Returns a list of all registered recommendation plugins, whether they are enabled, and whether they support configurable terms.",
+        "operationId": "getCapabilities",
+        "responses": {
+          "200": {
+            "description": "Plugin capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
                 }
               }
             }
@@ -2814,6 +2894,10 @@
       "TermSettingsResponse": {
         "type": "object",
         "properties": {
+          "recommendation_type": {
+            "type": "string",
+            "description": "The plugin these terms apply to"
+          },
           "terms": {
             "type": "array",
             "items": {
@@ -2832,17 +2916,23 @@
           "window_days": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 90
+            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu, 365 for pvc"
           },
           "min_data_days": {
             "type": "integer",
-            "description": "Auto-computed as half of window_days (minimum 1)"
+            "description": "Minimum days of data required. Auto-computed as half of window_days if not explicitly set."
           },
           "decay_halflife_hours": {
-            "type": "number"
+            "type": "number",
+            "description": "Exponential decay half-life in hours for weighted analysis. 0 means no decay (equal weighting)."
           },
           "is_default": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True if this term uses the plugin default (no tenant or admin override)"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "True if this term is locked by administrator environment variable and cannot be modified via PUT"
           }
         }
       },
@@ -2871,11 +2961,46 @@
           "window_days": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 90
+            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu, 365 for pvc"
+          },
+          "min_data_days": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional. If omitted, auto-computed as half of window_days (minimum 1). Must be <= window_days."
           },
           "decay_halflife_hours": {
             "type": "number",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 8760,
+            "description": "Optional. Exponential decay half-life in hours. 0 means no decay."
+          }
+        }
+      },
+      "CapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "recommendation_types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityItem"
+            }
+          }
+        }
+      },
+      "CapabilityItem": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Plugin name (e.g., container, pvc, gpu)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the plugin is currently enabled"
+          },
+          "supports_terms": {
+            "type": "boolean",
+            "description": "Whether the plugin supports configurable recommendation terms"
           }
         }
       },

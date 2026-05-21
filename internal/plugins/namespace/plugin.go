@@ -1,3 +1,46 @@
+// Package namespace implements the namespace-level resource recommendation plugin.
+//
+// This plugin aggregates container-level metrics at the namespace granularity
+// to recommend namespace resource quotas (CPU and memory requests/limits).
+// It supports multiple recommendation "engines" (profiles) per term: conservative
+// and aggressive, giving cluster admins a range of options.
+//
+// # Ingestion
+//
+// Namespace data arrives in "namespace" CSV reports from the koku-metrics-operator,
+// containing namespace-level aggregated CPU and memory metrics. These are processed
+// into daily_namespace_digests.
+//
+// # Recommendations
+//
+// The namespace engine ([engine.RecommendAllNamespaces]) processes digests within
+// each term's window using percentile-based sizing per engine profile:
+//   - Conservative: higher percentiles → fewer OOM kills, more headroom
+//   - Aggressive: lower percentiles → tighter packing, higher utilization
+//
+// Each (namespace × term × engine) combination produces one recommendation.
+//
+// # Default Terms
+//
+//   - short: 1-day window, 1 day minimum data, no decay
+//   - medium: 7-day window, 3 days minimum, 168h decay half-life
+//   - long: 15-day window, 7 days minimum, 360h decay half-life
+//
+// MaxWindowDays is 90 because namespace quotas reflect aggregate workload
+// behavior which, like individual containers, shifts with release cycles.
+//
+// # Special Behavior
+//
+// Unlike other plugins, NamespacePlugin stays enabled even in Kruize mode
+// because namespace HTTP routes need to remain accessible regardless of the
+// recommendation engine backend.
+//
+// # Traits Implemented
+//
+//   - [plugin.CSVIngestor] — parses "namespace" CSV type
+//   - [plugin.APIProvider] — namespace recommendation list/detail endpoints
+//   - [plugin.RetentionProvider] — sweeps daily_namespace_digests, namespace_usage_samples
+//   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days)
 package namespace
 
 import (
@@ -14,6 +57,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
+// NamespacePlugin handles namespace-level resource quota recommendations
+// using aggregated container metrics and multiple engine profiles.
 type NamespacePlugin struct{}
 
 func init() {
@@ -64,3 +109,13 @@ func (p *NamespacePlugin) RetentionTables() []string {
 func (p *NamespacePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
 	return engine.SweepPartitionedTables(ctx, pool, p.RetentionTables(), olderThan.Format("200601"))
 }
+
+func (p *NamespacePlugin) DefaultTerms() []plugin.TermConfig {
+	return []plugin.TermConfig{
+		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
+		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
+	}
+}
+
+func (p *NamespacePlugin) MaxWindowDays() int { return 90 }

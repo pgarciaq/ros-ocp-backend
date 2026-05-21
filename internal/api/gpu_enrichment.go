@@ -35,10 +35,10 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 	defer cancel()
 	now := time.Now().UTC()
 
-	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID, "gpu")
 	if err != nil {
 		log.Warnf("enrichWithGPU: load term config failed: %v", err)
-		terms = engine.DefaultTerms()
+		terms = engine.DefaultTermsForPlugin("gpu")
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 

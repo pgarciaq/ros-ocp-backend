@@ -51,7 +51,7 @@ func RecommendWorkloadsStreaming(
 	oomCfg OOMConfig,
 	emit func([]ContainerRec) error,
 ) error {
-	terms, err := LoadTermConfigCached(ctx, pool, orgID)
+	terms, err := LoadTermConfigCached(ctx, pool, orgID, "container")
 	if err != nil {
 		return fmt.Errorf("load term config: %w", err)
 	}

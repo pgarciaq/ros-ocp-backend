@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,9 +16,7 @@ const (
 	pvcOversizedThreshold = 0.20
 	// PVCs using more than 85% of capacity are near-full.
 	pvcNearFullThreshold = 0.85
-	// Minimum days of data required for a PVC recommendation.
-	pvcMinDataDays = 3
-	// Minimum days of data for growth trend projection.
+	// Minimum days of data for growth trend projection (per-term override below).
 	pvcMinTrendDays = 7
 
 	// PVC recommendation types.
@@ -44,26 +43,28 @@ type PVCDigestRow struct {
 
 // PVCRec is the output of the PVC recommendation engine.
 type PVCRec struct {
-	OrgID             string
-	ClusterUUID       string
-	Namespace         string
-	PVC               string
-	PV                string
-	StorageClass      string
-	CapacityBytes     int64
-	UsageBytesMax     int64
-	UsageRatio        float64
+	OrgID              string
+	ClusterUUID        string
+	Namespace          string
+	PVC                string
+	PV                 string
+	StorageClass       string
+	CapacityBytes      int64
+	UsageBytesMax      int64
+	UsageRatio         float64
 	RecommendationType string
-	RecommendedBytes  *int64
-	DaysToFull        *int
-	GrowthBytesPerDay int64
-	NotificationCodes []int16
-	DataDays          int
+	RecommendedBytes   *int64
+	DaysToFull         *int
+	GrowthBytesPerDay  int64
+	NotificationCodes  []int16
+	DataDays           int
+	Term               string
 }
 
-// RecommendPVCs reads PVC digest data and produces recommendations.
-func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]PVCRec, error) {
-	rows, err := queryPVCDigests(ctx, pool, orgID, clusterUUID)
+// RecommendPVCs reads PVC digest data and produces per-term recommendations.
+// Each term uses only the digests within its WindowDays of each PVC's latest bucket_date.
+func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCRec, error) {
+	rows, err := queryPVCDigests(ctx, pool, orgID, clusterUUID, terms)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,6 @@ func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 		return nil, nil
 	}
 
-	// Group by PVC identity
 	type pvcKey struct {
 		Namespace string
 		PVC       string
@@ -84,21 +84,41 @@ func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 
 	var results []PVCRec
 	for _, digests := range groups {
-		rec := computePVCRecommendation(digests, orgID, clusterUUID)
-		results = append(results, rec)
+		for _, tc := range terms {
+			windowed := windowDigests(digests, tc.WindowDays)
+			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc)
+			results = append(results, rec)
+		}
 	}
 	return results, nil
 }
 
-func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]PVCDigestRow, error) {
-	query := `
+// windowDigests returns the subset of digests within windowDays of the latest bucket_date.
+func windowDigests(digests []PVCDigestRow, windowDays int) []PVCDigestRow {
+	if len(digests) == 0 {
+		return nil
+	}
+	latest := digests[len(digests)-1].BucketDate
+	cutoff := latest.AddDate(0, 0, -windowDays)
+	var result []PVCDigestRow
+	for _, d := range digests {
+		if !d.BucketDate.Before(cutoff) {
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCDigestRow, error) {
+	lookbackDays := MaxWindowDays(terms, 90)
+	query := fmt.Sprintf(`
 		SELECT bucket_date, namespace, persistentvolumeclaim, persistentvolume,
 			storageclass, capacity_bytes, request_bytes,
 			usage_bytes_min, usage_bytes_max, usage_bytes_avg, sample_count
 		FROM daily_pvc_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
-			AND bucket_date >= (CURRENT_DATE - INTERVAL '90 days')
-		ORDER BY namespace, persistentvolumeclaim, bucket_date`
+			AND bucket_date >= (CURRENT_DATE - INTERVAL '%d days')
+		ORDER BY namespace, persistentvolumeclaim, bucket_date`, lookbackDays)
 
 	pgRows, err := pool.Query(ctx, query, orgID, clusterUUID)
 	if err != nil {
@@ -121,24 +141,24 @@ func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 	return results, pgRows.Err()
 }
 
-func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string) PVCRec {
+func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string, tc TermConfig) PVCRec {
 	if len(digests) == 0 {
-		return PVCRec{}
+		return PVCRec{Term: tc.Name, OrgID: orgID, ClusterUUID: clusterUUID, RecommendationType: PVCRecTypeHealthy}
 	}
 
 	latest := digests[len(digests)-1]
 	rec := PVCRec{
-		OrgID:       orgID,
-		ClusterUUID: clusterUUID,
-		Namespace:   latest.Namespace,
-		PVC:         latest.PVC,
-		PV:          latest.PV,
+		OrgID:        orgID,
+		ClusterUUID:  clusterUUID,
+		Namespace:    latest.Namespace,
+		PVC:          latest.PVC,
+		PV:           latest.PV,
 		StorageClass: latest.StorageClass,
 		CapacityBytes: latest.CapacityBytes,
-		DataDays:    len(digests),
+		DataDays:     len(digests),
+		Term:         tc.Name,
 	}
 
-	// Find max usage across all days
 	var maxUsage int64
 	allZero := true
 	for _, d := range digests {
@@ -151,17 +171,19 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string)
 	}
 	rec.UsageBytesMax = maxUsage
 
-	// Compute usage ratio
 	if latest.CapacityBytes > 0 {
 		rec.UsageRatio = float64(maxUsage) / float64(latest.CapacityBytes)
 	}
 
-	// Compute growth trend if enough data
-	if len(digests) >= pvcMinTrendDays {
-		slope := computePVCGrowthSlope(digests)
+	// Growth trend: require at least half the window days or pvcMinTrendDays (whichever is smaller)
+	minTrend := tc.MinDataDays
+	if minTrend < 2 {
+		minTrend = 2
+	}
+	if len(digests) >= minTrend {
+		slope := computePVCGrowthSlope(digests, tc.DecayHalfLifeHours)
 		rec.GrowthBytesPerDay = int64(slope)
 
-		// Project days to full
 		if slope > 0 && latest.CapacityBytes > 0 {
 			remaining := float64(latest.CapacityBytes) - float64(maxUsage)
 			if remaining > 0 {
@@ -171,15 +193,14 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string)
 		}
 	}
 
-	// Classify recommendation
+	// Classification requires MinDataDays
 	switch {
-	case allZero && len(digests) >= pvcMinDataDays:
+	case allZero && len(digests) >= tc.MinDataDays:
 		rec.RecommendationType = PVCRecTypeOrphaned
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
 
-	case rec.UsageRatio < pvcOversizedThreshold && len(digests) >= pvcMinDataDays:
+	case rec.UsageRatio < pvcOversizedThreshold && len(digests) >= tc.MinDataDays:
 		rec.RecommendationType = PVCRecTypeOversized
-		// Recommend 2x the max observed usage (with minimum 1 GiB)
 		recommended := maxUsage * 2
 		if recommended < 1<<30 {
 			recommended = 1 << 30
@@ -191,7 +212,6 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string)
 
 	case rec.UsageRatio > pvcNearFullThreshold:
 		rec.RecommendationType = PVCRecTypeNearFull
-		// Recommend expanding to 2x current usage
 		recommended := maxUsage * 2
 		rec.RecommendedBytes = &recommended
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
@@ -200,7 +220,6 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string)
 		rec.RecommendationType = PVCRecTypeHealthy
 	}
 
-	// Add growth warning if days-to-full < 30
 	if rec.DaysToFull != nil && *rec.DaysToFull < 30 && *rec.DaysToFull > 0 {
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
 	}
@@ -208,14 +227,24 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string)
 	return rec
 }
 
-// computePVCGrowthSlope computes the linear regression slope of daily average
-// usage over time, in bytes per day.
-func computePVCGrowthSlope(digests []PVCDigestRow) float64 {
+// computePVCGrowthSlope computes the regression slope of daily average usage
+// over time, in bytes per day. When decayHalfLifeHours > 0, exponential-weighted
+// least squares is used (recent data is weighted more heavily). When 0, plain
+// ordinary least squares is used.
+func computePVCGrowthSlope(digests []PVCDigestRow, decayHalfLifeHours float64) float64 {
 	n := len(digests)
 	if n < 2 {
 		return 0.0
 	}
 
+	if decayHalfLifeHours <= 0 {
+		return computePVCGrowthSlopeOLS(digests)
+	}
+	return computePVCGrowthSlopeWLS(digests, decayHalfLifeHours)
+}
+
+func computePVCGrowthSlopeOLS(digests []PVCDigestRow) float64 {
+	n := len(digests)
 	var sumX, sumY, sumXY, sumX2 float64
 	for i, d := range digests {
 		x := float64(i)
@@ -234,8 +263,37 @@ func computePVCGrowthSlope(digests []PVCDigestRow) float64 {
 	return (nf*sumXY - sumX*sumY) / denom
 }
 
-// WritePVCRecommendations upserts PVC recommendations to the database.
-func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) error {
+// computePVCGrowthSlopeWLS uses exponential-weighted least squares where the
+// most recent data point (last in digests) has weight 1.0 and older points
+// decay according to exp(-ln(2) * age_hours / halflife_hours). Age is measured
+// in days (index distance from the last point), converted to hours.
+func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) float64 {
+	n := len(digests)
+	lambda := 0.693147180559945 / halfLifeHours // ln(2) / halflife
+
+	var sumW, sumWX, sumWY, sumWXY, sumWX2 float64
+	for i, d := range digests {
+		x := float64(i)
+		y := float64(d.UsageBytesAvg)
+		ageHours := float64(n-1-i) * 24.0
+		w := math.Exp(-lambda * ageHours)
+		sumW += w
+		sumWX += w * x
+		sumWY += w * y
+		sumWXY += w * x * y
+		sumWX2 += w * x * x
+	}
+
+	denom := sumW*sumWX2 - sumWX*sumWX
+	if denom == 0 {
+		return 0.0
+	}
+	return (sumW*sumWXY - sumWX*sumWY) / denom
+}
+
+// WritePVCRecommendations upserts PVC recommendations to the database and
+// removes rows for terms no longer in the active configuration.
+func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec, validTerms []string) error {
 	var errs []error
 	for _, rec := range recs {
 		_, err := pool.Exec(ctx, `
@@ -244,9 +302,9 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				persistentvolume, storageclass, capacity_bytes,
 				usage_bytes_max, usage_ratio, recommendation_type,
 				recommended_bytes, days_to_full, growth_bytes_per_day,
-				notification_codes, data_days, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
-			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim)
+				notification_codes, data_days, term, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 			DO UPDATE SET
 				persistentvolume = EXCLUDED.persistentvolume,
 				storageclass = EXCLUDED.storageclass,
@@ -264,12 +322,28 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 			rec.PV, rec.StorageClass, rec.CapacityBytes,
 			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
-			rec.NotificationCodes, rec.DataDays,
+			rec.NotificationCodes, rec.DataDays, rec.Term,
 		)
 		if err != nil {
-			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s: %v", rec.Namespace, rec.PVC, err)
-			errs = append(errs, fmt.Errorf("%s/%s: %w", rec.Namespace, rec.PVC, err))
+			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s [%s]: %v", rec.Namespace, rec.PVC, rec.Term, err)
+			errs = append(errs, fmt.Errorf("%s/%s [%s]: %w", rec.Namespace, rec.PVC, rec.Term, err))
 		}
 	}
+
+	// Clean up stale terms for the org+cluster combinations we just wrote.
+	if len(validTerms) > 0 && len(recs) > 0 {
+		orgID := recs[0].OrgID
+		clusterUUID := recs[0].ClusterUUID
+		_, err := pool.Exec(ctx,
+			`DELETE FROM pvc_recommendation_sets
+			 WHERE org_id = $1 AND cluster_uuid = $2
+			   AND term != ALL($3)`,
+			orgID, clusterUUID, validTerms,
+		)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("cleanup stale PVC terms: %w", err))
+		}
+	}
+
 	return errors.Join(errs...)
 }

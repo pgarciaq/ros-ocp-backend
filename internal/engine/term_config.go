@@ -3,10 +3,17 @@ package engine
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
 const termConfigCacheTTL = 60 * time.Second
@@ -16,39 +23,55 @@ type termConfigCacheEntry struct {
 	until time.Time
 }
 
+type termConfigCacheKey struct {
+	orgID              string
+	recommendationType string
+}
+
 var (
 	termConfigMu    sync.RWMutex
-	termConfigByOrg = map[string]termConfigCacheEntry{}
+	termConfigCache = map[termConfigCacheKey]termConfigCacheEntry{}
 )
 
-// LoadTermConfigCached returns term configurations for an org, caching the
-// result for termConfigCacheTTL (60s) to avoid repeated DB queries on hot paths.
-func LoadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]TermConfig, error) {
+var termNames = [3]string{"short", "medium", "long"}
+
+// InvalidateTermCache removes cached term entries for an org + recommendation type,
+// ensuring subsequent calls to LoadTermConfigCached will re-read from DB.
+func InvalidateTermCache(orgID, recommendationType string) {
+	termConfigMu.Lock()
+	delete(termConfigCache, termConfigCacheKey{orgID: orgID, recommendationType: recommendationType})
+	termConfigMu.Unlock()
+}
+
+// LoadTermConfigCached returns term configurations for an org and recommendation type,
+// applying the precedence: admin env var > tenant DB override > plugin default.
+// Results are cached for termConfigCacheTTL (60s) per org+type combination.
+func LoadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationType string) ([]TermConfig, error) {
 	if pool == nil {
-		return DefaultTerms(), nil
+		return DefaultTermsForPlugin(recommendationType), nil
 	}
 	now := time.Now().UTC()
+	key := termConfigCacheKey{orgID: orgID, recommendationType: recommendationType}
+
 	termConfigMu.RLock()
-	e, ok := termConfigByOrg[orgID]
+	e, ok := termConfigCache[key]
 	termConfigMu.RUnlock()
 	if ok && now.Before(e.until) {
 		return e.terms, nil
 	}
 
-	terms, err := LoadTermConfig(ctx, pool, orgID)
+	terms, err := LoadTermConfig(ctx, pool, orgID, recommendationType)
 	if err != nil {
 		return nil, err
 	}
 	termConfigMu.Lock()
-	termConfigByOrg[orgID] = termConfigCacheEntry{terms: terms, until: now.Add(termConfigCacheTTL)}
+	termConfigCache[key] = termConfigCacheEntry{terms: terms, until: now.Add(termConfigCacheTTL)}
 	termConfigMu.Unlock()
 	return terms, nil
 }
 
-var termNames = [3]string{"short", "medium", "long"}
-
-// DefaultTerms returns the hardcoded term configurations used when
-// a customer has no overrides in org_recommendation_terms.
+// DefaultTerms returns the legacy hardcoded defaults (backward compat for callers
+// that don't yet specify a recommendation type).
 func DefaultTerms() []TermConfig {
 	return []TermConfig{
 		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
@@ -57,48 +80,145 @@ func DefaultTerms() []TermConfig {
 	}
 }
 
-// LoadTermConfig loads term configurations for an org.
-// If the org has custom overrides in org_recommendation_terms, those are used;
-// otherwise DefaultTerms() is returned.
-func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]TermConfig, error) {
+// DefaultTermsForPlugin returns plugin-specific defaults from the TermProvider trait,
+// falling back to the legacy global defaults if the plugin doesn't implement TermProvider.
+func DefaultTermsForPlugin(recommendationType string) []TermConfig {
+	for _, tp := range plugin.ByTrait[plugin.TermProvider]() {
+		if tp.Name() == recommendationType {
+			pTerms := tp.DefaultTerms()
+			return pluginTermsToEngine(pTerms)
+		}
+	}
+	return DefaultTerms()
+}
+
+// LoadTermConfig resolves effective terms for an org + recommendation type.
+// Precedence per term: admin env var (locked) > tenant DB > plugin default.
+func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationType string) ([]TermConfig, error) {
+	defaults := DefaultTermsForPlugin(recommendationType)
+
+	// Load tenant overrides from DB.
+	dbTerms, err := loadDBTerms(ctx, pool, orgID, recommendationType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build effective terms: for each position, apply precedence.
+	result := make([]TermConfig, 3)
+	for i, name := range termNames {
+		// Start with plugin default.
+		result[i] = defaults[i]
+
+		// Apply DB override (if exists and not locked).
+		if dbTerm, ok := dbTerms[i]; ok {
+			if !IsTermLocked(recommendationType, name) {
+				result[i] = dbTerm
+			}
+		}
+
+		// Apply env var override (always wins if set).
+		if envTerm, ok := loadEnvTerm(recommendationType, name, defaults[i]); ok {
+			result[i] = envTerm
+		}
+	}
+
+	return result, nil
+}
+
+// loadDBTerms reads tenant-specific overrides from org_recommendation_terms.
+func loadDBTerms(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationType string) (map[int]TermConfig, error) {
 	rows, err := pool.Query(ctx,
-		`SELECT term_ord, window_days, decay_halflife_hours
+		`SELECT term_ord, window_days, min_data_days, decay_halflife_hours
 		 FROM org_recommendation_terms
-		 WHERE org_id = $1
-		 ORDER BY term_ord`, orgID)
+		 WHERE org_id = $1 AND recommendation_type = $2
+		 ORDER BY term_ord`, orgID, recommendationType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	defaults := DefaultTerms()
-	var customs []TermConfig
+	result := make(map[int]TermConfig)
 	for rows.Next() {
 		var ord int
-		var windowDays int
+		var windowDays, minDataDays int
 		var decayHL sql.NullFloat64
-		if err := rows.Scan(&ord, &windowDays, &decayHL); err != nil {
+		if err := rows.Scan(&ord, &windowDays, &minDataDays, &decayHL); err != nil {
 			return nil, err
 		}
-		decay := defaults[ord-1].DecayHalfLifeHours
-		if decayHL.Valid {
-			decay = decayHL.Float64
+		tc := TermConfig{
+			Name:       termNames[ord-1],
+			WindowDays: windowDays,
+			MinDataDays: minDataDays,
 		}
-		customs = append(customs, TermConfig{
-			Name:               termNames[ord-1],
-			WindowDays:         windowDays,
-			MinDataDays:        computeMinDataDays(windowDays),
-			DecayHalfLifeHours: decay,
-		})
+		if decayHL.Valid {
+			tc.DecayHalfLifeHours = decayHL.Float64
+		}
+		result[ord-1] = tc
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	return result, rows.Err()
+}
+
+// loadEnvTerm checks if admin env vars override a specific term for a recommendation type.
+// Env var format: ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS, etc.
+// Returns (TermConfig, true) if any env var is set for this term.
+func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (TermConfig, bool) {
+	prefix := fmt.Sprintf("ROS_TERMS_%s_%s_", strings.ToUpper(recommendationType), strings.ToUpper(termName))
+	tc := fallback
+	tc.Name = termName
+	anySet := false
+	windowOverridden := false
+	minDataExplicit := false
+	maxWin := PluginMaxWindowDays(recommendationType)
+
+	if v := os.Getenv(prefix + "WINDOW_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= maxWin {
+			tc.WindowDays = n
+			anySet = true
+			windowOverridden = true
+		} else {
+			logging.GetLogger().Warnf("term_config: invalid env %sWINDOW_DAYS=%q (must be 1-%d), ignoring", prefix, v, maxWin)
+		}
+	}
+	if v := os.Getenv(prefix + "MIN_DATA_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			tc.MinDataDays = n
+			anySet = true
+			minDataExplicit = true
+		} else {
+			logging.GetLogger().Warnf("term_config: invalid env %sMIN_DATA_DAYS=%q, ignoring", prefix, v)
+		}
+	}
+	if v := os.Getenv(prefix + "DECAY_HALFLIFE_HOURS"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+			tc.DecayHalfLifeHours = f
+			anySet = true
+		} else {
+			logging.GetLogger().Warnf("term_config: invalid env %sDECAY_HALFLIFE_HOURS=%q, ignoring", prefix, v)
+		}
 	}
 
-	if len(customs) == 0 {
-		return DefaultTerms(), nil
+	// Auto-derive MinDataDays from the new window if window changed but min wasn't explicitly set.
+	if windowOverridden && !minDataExplicit {
+		tc.MinDataDays = ComputeMinDataDays(tc.WindowDays)
 	}
-	return customs, nil
+
+	// Validate: min_data_days must not exceed window_days.
+	if anySet && tc.MinDataDays > tc.WindowDays {
+		logging.GetLogger().Warnf(
+			"term_config: env %sMIN_DATA_DAYS=%d exceeds WINDOW_DAYS=%d, clamping to window_days",
+			prefix, tc.MinDataDays, tc.WindowDays)
+		tc.MinDataDays = tc.WindowDays
+	}
+	return tc, anySet
+}
+
+// IsTermLocked reports whether a specific term for a recommendation type is
+// locked by admin environment variables (tenant cannot modify).
+func IsTermLocked(recommendationType, termName string) bool {
+	prefix := fmt.Sprintf("ROS_TERMS_%s_%s_", strings.ToUpper(recommendationType), strings.ToUpper(termName))
+	return os.Getenv(prefix+"WINDOW_DAYS") != "" ||
+		os.Getenv(prefix+"MIN_DATA_DAYS") != "" ||
+		os.Getenv(prefix+"DECAY_HALFLIFE_HOURS") != ""
 }
 
 // MaxWindowDays returns the largest WindowDays across the given terms,
@@ -113,12 +233,36 @@ func MaxWindowDays(terms []TermConfig, minFloor int) int {
 	return max
 }
 
-// computeMinDataDays returns the minimum data days required for a given window.
+// ComputeMinDataDays returns the minimum data days required for a given window.
 // Rule: half the window, rounded down, but at least 1.
-func computeMinDataDays(windowDays int) int {
+func ComputeMinDataDays(windowDays int) int {
 	min := windowDays / 2
 	if min < 1 {
 		return 1
 	}
 	return min
+}
+
+// PluginMaxWindowDays returns the maximum allowed window_days for a given recommendation type.
+// Falls back to 365 if the plugin is not found or doesn't implement TermProvider.
+func PluginMaxWindowDays(recommendationType string) int {
+	for _, tp := range plugin.ByTrait[plugin.TermProvider]() {
+		if tp.Name() == recommendationType {
+			return tp.MaxWindowDays()
+		}
+	}
+	return 365
+}
+
+func pluginTermsToEngine(pts []plugin.TermConfig) []TermConfig {
+	out := make([]TermConfig, len(pts))
+	for i, pt := range pts {
+		out[i] = TermConfig{
+			Name:               pt.Name,
+			WindowDays:         pt.WindowDays,
+			MinDataDays:        pt.MinDataDays,
+			DecayHalfLifeHours: pt.DecayHalfLifeHours,
+		}
+	}
+	return out
 }

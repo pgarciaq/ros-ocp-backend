@@ -1,9 +1,10 @@
-// Package plugins ensures all built-in plugins are registered via init().
+// Package plugins ensures all built-in production plugins are registered via init().
+// The example plugin is intentionally excluded here; it exists solely as an authoring
+// template for developers and should only be imported explicitly in tests.
 package plugins
 
 import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
-	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/example"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"

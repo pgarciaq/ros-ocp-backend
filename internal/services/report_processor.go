@@ -614,10 +614,10 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
 			log.Warnf("native engine: marking GPU containers failed: %v", err)
 		}
-		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID)
+		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID, "gpu")
 		if termErr != nil {
 			log.Warnf("native engine: load term config for GPU classification failed: %v", termErr)
-			gpuTerms = engine.DefaultTerms()
+			gpuTerms = engine.DefaultTermsForPlugin("gpu")
 		}
 		if err := engine.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
 			log.Warnf("native engine: storing GPU classifications failed: %v", err)
@@ -650,10 +650,10 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		return nil
 	}
 
-	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID, "node")
 	if err != nil {
 		log.Errorf("node recs: load term config failed, using defaults: %v", err)
-		terms = engine.DefaultTerms()
+		terms = engine.DefaultTermsForPlugin("node")
 	}
 
 	cfg := engine.NodeRecConfig{
@@ -789,8 +789,14 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		}
 	}
 
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID, "pvc")
+	if err != nil {
+		log.Errorf("native storage engine: load term config failed, using defaults: %v", err)
+		terms = engine.DefaultTermsForPlugin("pvc")
+	}
+
 	tPVC := time.Now()
-	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID)
+	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID, terms)
 	metrics.ObserveRecommendation("pvc", tPVC)
 	if err != nil {
 		log.Errorf("native storage engine: PVC recommendation failed: %v", err)
@@ -802,7 +808,11 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 
-	if err := engine.WritePVCRecommendations(ctx, pool, results); err != nil {
+	validTerms := make([]string, len(terms))
+	for i, tc := range terms {
+		validTerms[i] = tc.Name
+	}
+	if err := engine.WritePVCRecommendations(ctx, pool, results, validTerms); err != nil {
 		log.Errorf("native storage engine: writing PVC recommendations failed: %v", err)
 		return fmt.Errorf("write PVC recommendations: %w", err)
 	}

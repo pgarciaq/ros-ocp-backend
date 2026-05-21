@@ -1,3 +1,30 @@
+// Package snapshot implements the VolumeSnapshot staleness detection plugin.
+//
+// This plugin identifies VolumeSnapshots that have become stale (not refreshed
+// within a configurable threshold) and surfaces them as optimization opportunities.
+// Stale snapshots consume storage capacity without providing useful point-in-time
+// recovery.
+//
+// # Ingestion
+//
+// Snapshot data arrives in "snapshot" CSV reports from the koku-metrics-operator,
+// containing VolumeSnapshot metadata (name, namespace, creation time, size, source PVC).
+//
+// # Recommendations
+//
+// The snapshot engine uses a simple age threshold (configurable per-tenant via the
+// settings endpoint) to classify snapshots as stale. Unlike other plugins, snapshot
+// recommendations are binary (stale/not-stale) rather than quantitative, so
+// configurable terms are not applicable here.
+//
+// # Traits Implemented
+//
+//   - [plugin.CSVIngestor] — parses "snapshot" CSV type
+//   - [plugin.APIProvider] — snapshot staleness list + per-tenant settings endpoints
+//
+// Note: This plugin does NOT implement [plugin.TermProvider] because snapshot
+// staleness is threshold-based (days since last refresh), not window-based.
+// Staleness settings are managed through a separate settings endpoint.
 package snapshot
 
 import (
@@ -13,7 +40,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
-// SnapshotPlugin handles snapshot/staleness CSV ingestion.
+// SnapshotPlugin handles VolumeSnapshot staleness detection and reporting.
 type SnapshotPlugin struct{}
 
 func init() {
