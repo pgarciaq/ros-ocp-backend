@@ -1949,55 +1949,55 @@ Additional fixes from the P0/P1 pass:
 
 **#382 —** *(merged into **#187** — `DISABLE_NAMESPACE_RECOMMENDATION` documented but unused.)*
 
-**#383 — `LogFormater` typo in config (should be Formatter)**
+**#383 — `LogFormater` typo in config (should be Formatter)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Config key typo breaks log formatter wiring—operators misconfigure tracing.
+- Renamed Go struct field `LogFormater` → `LogFormatter`; kept mapstructure tag `"LogFormater"` for backward compat.
 
-**#384 — Migration 000010 filename typo: `worload` instead of `workload`**
+**#384 — Migration 000010 filename typo: `worload` instead of `workload`** ⚠️ Won't fix
 - Repo: ros-ocp-backend
-- Flyway-style SQL bundles risky DDL/DML, weak downgrades, or blocking locks; upgrades/downgrades can fail or stall writes on large tenants.
+- Cannot rename migration files without breaking golang-migrate's sequential ordering on existing deployments.
 
 **#385 —** *(merged into **#171** — misleading `monStart` naming in namespace recommendations.)*
 
-**#386 — Unused `featureflags/flags.go` — empty package**
+**#386 — Unused `featureflags/flags.go` — empty package** ✅ Fixed
 - Repo: ros-ocp-backend
-- Unused modules suggest scaffolding that never shipped—dead imports obscure real feature-flag wiring.
+- Deleted empty `flags.go`; retained `client.go` (Unleash initialization scaffolding for future use).
 
 **#387 —** *(merged into **#97** — redundant `recommendation_applied_at` migration.)*
 
-**#389 — OpenTelemetry indirect dependencies — never wired**
+**#389 — OpenTelemetry indirect dependencies — never wired** ⚠️ Won't fix
 - Repo: ros-ocp-backend
-- `go.mod` lists OpenTelemetry only as indirect deps—no tracer/meter wired despite pulling the stack.
+- Transitive dependencies pulled by Unleash SDK (go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp). Cannot remove without dropping the direct dependency.
 
-**#390 — `initConfig` decode error printed to stdout (not logged)**
+**#390 — `initConfig` decode error printed to stdout (not logged)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Decode errors print to stdout instead of logger—lost in aggregated logs.
+- Replaced `fmt.Println("Config initialized")` with `log.Println("config: initialized")` in `GetConfig()`.
 
-**#391 — `cfg` package var in `report_processor.go` shadows config function**
+**#391 — `cfg` package var in `report_processor.go` shadows config function** ✅ Fixed
 - Repo: ros-ocp-backend
-- `cfg` reassignment per message breaks assumptions about immutability mid-flight.
+- Changed `cfg = config.GetConfig()` to `cfg := config.GetConfig()` in `ProcessReport()` — no longer mutates package-level variable.
 
-**#393 — `err.Error()` message in Identity middleware says "marshal" but means "unmarshal"**
+**#393 — `err.Error()` message in Identity middleware says "marshal" but means "unmarshal"** ✅ Fixed
 - Repo: ros-ocp-backend
-- Middleware error text says "marshal" when failures are unmarshalling—misroutes debugging.
+- Changed error message from "Unable to marshal" to "Unable to unmarshal" in identity middleware.
 
-**#396 — Migration 000033 comment references wrong migration (says 000031)**
+**#396 — Migration 000033 comment references wrong migration (says 000031)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+- Corrected comment from "Migration 000031" to "Migration 000033".
 
-**#397 — Migration 000056 comment references wrong migration (says 000024)**
+**#397 — Migration 000056 comment references wrong migration (says 000024)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+- Clarified comment: "Originally numbered 000024; renumbered to 000056 to resolve duplicate."
 
-**#398 — Migration 000057 comment references wrong migration (says 000025)**
+**#398 — Migration 000057 comment references wrong migration (says 000025)** ✅ Fixed
 - Repo: ros-ocp-backend
-- Comment points DBAs at the wrong rollback pairing—operators may undo migrations out of order during incidents.
+- Clarified comment: "Originally numbered 000025; renumbered to 000057 to resolve duplicate."
 
 **#399 —** *(merged into **#236** — hardcoded `nodeFreshnessDays = 7`.)*
 
-**#400 — `gpuIdleThreshold`, etc. bypass central config struct**
+**#400 — `gpuIdleThreshold`, etc. bypass central config struct** ✅ Fixed (earlier)
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- Already resolved by GPUThresholds struct refactor (see #428). Thresholds are initialized from config via `InitGPUEngine()` and stored in the `defaultThresholds` instance.
 
 ### Minor Performance (401-420)
 
