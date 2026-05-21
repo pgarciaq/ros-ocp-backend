@@ -2170,82 +2170,81 @@ Additional fixes from the P0/P1 pass:
 
 **#446 — `docs/architecture/requirements.md` describes `/healthz`, `/readyz` — not implemented**
 - Repo: ros-ocp-backend
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Status:** ✅ Fixed — Added implementation status disclaimer to requirements.md (REQ-10.5, NFR-4 sections) noting `/healthz`/`/readyz` are unimplemented; current binary uses `/status`.
 
 **#447 — Requirements doc describes consumer pause on PG down — not implemented**
 - Repo: ros-ocp-backend
-- Architecture doc promises paused consumers—real binary exits immediately.
+- **Status:** ✅ Fixed — Added implementation status disclaimer to NFR-3 section noting consumer pause is unimplemented; binary exits fatally on startup DB failure.
 
 **#448 — Requirements doc describes circuit breakers — not implemented**
 - Repo: ros-ocp-backend
-- File: `docs/architecture/requirements.md`
-- Documentation promises circuit-breaking behavior around downstream dependencies; code uses plain HTTP clients with no breaker pattern—operators misjudge failure modes.
+- **Status:** ✅ Fixed — Added implementation status disclaimer to NFR-2a section noting circuit breakers are unimplemented; code uses plain HTTP clients with timeouts.
 
 **#449 —** *(merged into **#71** — orphan `GPURecommendation` OpenAPI component.)*
 
 **#450 — OpenAPI paths omit `/api/cost-management/v1` prefix**
 - Repo: ros-ocp-backend
-- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+- **Status:** ✅ Fixed (prior work) — `servers` array contains `{"url": "/api/cost-management/v1"}`.
 
 **#451 — No documented API versioning strategy**
 - Repo: ros-ocp-backend
-- Clients lack guidance on `/v1` compatibility—breaking changes surprise embedders.
+- **Status:** ✅ Fixed — Created `docs/architecture/api-versioning.md` with compatibility policy, deprecation process, and consumer guidance.
 
 **#452 — No changelog for API breaking changes**
 - Repo: ros-ocp-backend
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Status:** ✅ Fixed — Created `CHANGELOG.md` at repository root following Keep a Changelog format.
 
 **#453 — `docs/plans/` reference phase-0 critical fixes — status unclear**
 - Repo: ros-ocp-backend
-- Planning docs reference ancient phases—new hires chase completed work.
+- **Status:** ✅ Fixed — All completed phase plans moved from `docs/plans/` to `docs/archive/`. Directory removed.
 
 **#454 — No documentation of Kafka message schema**
 - Repo: ros-ocp-backend
-- Kafka client settings or logging may auto-create topics, leak payloads on errors, or mismatch commit semantics.
+- **Status:** ✅ Fixed — Created `docs/architecture/kafka-schema.md` documenting upload announce message format, CSV payload columns, and Koku→ROS contract.
 
 **#455 — No documentation of retention policy behavior**
 - Repo: ros-ocp-backend
-- Retention sweeps may run unbounded deletes, skip failures silently, or lack cancellation—impacting latency and disk.
+- **Status:** ✅ Fixed — Created `docs/operations/retention.md` documenting all retention tiers, configuration, tables, partition naming, and metrics.
 
 **#456 — No documentation of stale detection algorithm**
 - Repo: ros-ocp-backend
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Status:** ✅ Fixed — Created `docs/operations/stale-detection.md` documenting detection algorithm, lifecycle, API filter, configuration, and edge cases.
 
 **#457 — No documentation of cost data integration contract**
-- Repo: ros-ocp-backend, koku
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- Repo: ros-ocp-backend
+- **Status:** ✅ Fixed — Created `docs/architecture/cost-integration.md` documenting effective_rates endpoint, request/response schemas, savings computation, and error handling.
 
 **#458 — No documentation of GPU classification thresholds**
 - Repo: ros-ocp-backend
-- GPU recommendation helpers assume simplified fleet geometry or freshness—heterogeneous nodes skew savings and classification.
+- **Status:** ✅ Fixed — Created `docs/architecture/gpu-classification.md` documenting decision tree, threshold env vars, MIG selection, confidence scoring, and two-tier support.
 
 **#459 — No documentation of distribution/aggregation math**
 - Repo: ros-ocp-backend
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Status:** ✅ Fixed — Created `docs/architecture/recommendation-math.md` documenting CPU/memory algorithms, decay weighting, adaptive margin, trend detection, idle/abandoned detection, and node classification.
 
 **#460 — No documentation of RBAC permission model for ROS**
 - Repo: ros-ocp-backend
-- RBAC filtering may diverge from middleware expectations—too broad lists or broken pagination against IT inventory APIs.
+- **Status:** ✅ Fixed — Created `docs/operations/rbac.md` documenting permission types, resolution flow, access control rules, endpoint coverage, and security notes.
 
 **#461 — OpenAPI spec for container detail references `RecommendationBoxPlots` — doesn't match `DetailResponse`**
 - Repo: ros-ocp-backend
-- Published OpenAPI disagrees with Echo routes or payloads—clients see wrong auth codes, limits, schemas, or missing paths.
+- **Status:** ✅ Fixed — Replaced 3 dangling `PlotsData` $ref entries with `NativePlot` in openapi.json.
 
 **#462 — No migration guide for legacy-to-native engine transition**
 - Repo: ros-ocp-backend
-- No documented cutover/cleanup plan when flipping `USE_NATIVE_ENGINE`—clusters accumulate contradictory recommendation rows.
+- **Status:** ✅ Fixed — Created `docs/architecture/native-migration.md` documenting engine selection, data separation, cleanup, verification, and rollback.
 
 **#463 — `performance-analysis.md` references issues that may already be fixed**
 - Repo: ros-ocp-backend
-- Static perf write-up may cite fixed hotspots—performance work aims wrong files.
+- **Status:** ✅ Fixed — Added staleness notice at top of `performance-analysis.md` directing readers to `native-engine-performance.md` and `490-issues.md` for current status.
 
 **#464 — No operational runbook for common failure modes**
 - Repo: ros-ocp-backend
-- Docs describe endpoints or controls that are not implemented—on-call playbooks and embed contracts go stale.
+- **Status:** ✅ Fixed (prior work) — `docs/operations/runbooks.md` created during structured logging implementation.
 
 **#465 — `AGENT_MEMORY_DUMP.md` may contain stale analysis**
 - Repo: ros-ocp-backend
-- Scratch analysis checked into repo—may contradict shipped behavior.
+- **Status:** ✅ Fixed — Moved `docs/AGENT_MEMORY_DUMP.md` to `docs/archive/` (historical development record, not authoritative).
 
 ### Remaining Minor Issues (468-490)
 
@@ -2752,3 +2751,19 @@ These items were previously listed as **P2 Medium** or **P3 Low** but apply **on
   5. All three GPU filters pushed to SQL via `MapNativeQueryParameters`: `has_gpu`, `gpu_model` (ILIKE), `gpu_classification` (IN)
   6. Partial indexes on `gpu_model_name` and `gpu_classification` for efficient filtering
   7. `filterGPUResults()` is now a no-op passthrough — no post-query filtering remains
+
+---
+
+### P3 documentation remediation pass (2026-05-21)
+
+**Status: COMPLETE** — All 18 P3 documentation issues (#446–#465) resolved.
+
+**Summary of changes:**
+1. **Requirements.md fixes (#446, #447, #448):** Added implementation status disclaimers to 3 sections (NFR-2a circuit breakers, NFR-3 consumer pause, NFR-4/REQ-10.5 health endpoints) noting unimplemented features.
+2. **New architecture docs (#454, #457, #458, #459, #451, #462):** Created 6 architecture documents: kafka-schema.md, cost-integration.md, gpu-classification.md, recommendation-math.md, api-versioning.md, native-migration.md.
+3. **New operations docs (#455, #456, #460):** Created 3 operations documents: retention.md, stale-detection.md, rbac.md.
+4. **CHANGELOG (#452):** Created `CHANGELOG.md` at repository root.
+5. **OpenAPI fix (#461):** Fixed 3 dangling `PlotsData` $ref entries → `NativePlot`.
+6. **Stale doc cleanup (#453, #463, #465):** Moved completed plans to `docs/archive/`, added staleness notice to performance-analysis.md, archived AGENT_MEMORY_DUMP.md.
+7. **#450:** Already fixed (servers array present). **#464:** Already fixed (runbooks.md created during logging work).
+8. **docs/README.md:** Updated to reference all new documentation.

@@ -1,5 +1,7 @@
 # ROS OCP Metrics Pipeline — Architecture & Performance Analysis
 
+> **⚠️ Staleness notice (2026-05-21):** This document was written during the design/early implementation phase. Some hotspots and issues referenced here have been resolved in subsequent development (P0/P1/P2 audit batches, streaming pipeline, GPU filter push-to-SQL, etc.). For current performance characteristics, see [`native-engine-performance.md`](../native-engine-performance.md). For the full issue resolution status, see [`490-issues.md`](../audits/490-issues.md).
+
 > **Date:** 2026-03-26 (updated: 2026-04-16)
 > **Last triage:** 2026-03-26 — all repos switched to `main` (autotune: `mvp_demo`) and triaged. See "Platform Update (March 2026 Triage)" notes in §17, §19, §20, §30 for details.
 > **Phase 6 audit (2026-04-16):** Two correctness gaps closed. (1) Container memory P60/P98/P99 percentiles were computed by `ComputeContainerDigest()` but discarded before persistence — migration 000035 adds 6 columns to `daily_container_digests`, restoring parity with `daily_namespace_digests`. (2) Namespace memory trend slope was computed but not surfaced — `EvaluateNamespaceNotifications()` now emits `NotifMemoryTrendingUp` when `MemTrendSlope > 500 KiB/day` (5× the container threshold). Idle detection remains intentionally excluded for namespaces.

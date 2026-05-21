@@ -3490,7 +3490,7 @@
             }
           },
           "plots": {
-            "$ref": "#/components/schemas/PlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           }
         }
       },
@@ -3522,7 +3522,7 @@
             }
           },
           "plots": {
-            "$ref": "#/components/schemas/PlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           }
         }
       },
@@ -3554,7 +3554,7 @@
             }
           },
           "plots": {
-            "$ref": "#/components/schemas/PlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           }
         }
       },
