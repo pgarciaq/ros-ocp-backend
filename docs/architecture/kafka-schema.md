@@ -68,21 +68,117 @@ Used by the housekeeper to detect source deletions and clean up orphaned data.
 
 ## CSV Payload Format
 
-The actual data payload (downloaded from the S3 URL) is a CSV file with headers matching the koku-metrics-operator output:
+The actual data payload (downloaded from the S3 URL) is a CSV file with headers
+matching the koku-metrics-operator's `rosContainerRow.csvHeader()` output.
 
-### Container/Pod CSV (`ros_usage`)
+**Source of truth:** `koku-metrics-operator/internal/collector/types.go`
 
-```csv
-report_period_start,report_period_end,interval_start,interval_end,namespace,pod,container,node,cpu_request_mc,cpu_limit_mc,cpu_usage_mc_p50,...,mem_request_kib,mem_limit_kib,...,desired_replicas,available_replicas
-```
+**Contract test:** `internal/ingestion/csv_contract_test.go` (verifies parsability)
 
-Key columns: CPU percentiles (p50, p90, p95, p98, p99, max), memory percentiles, OOM kill count, GPU metrics (when present), replica counts.
+### ROS Container CSV Columns
 
-### Node Capacity CSV (`node_labels`)
+The parser (`internal/ingestion/csvparser.go` → `buildColumnIndex`) recognizes
+the following columns. **Required** columns must be present or parsing fails.
+**Optional** columns default to zero/empty when absent.
 
-```csv
-interval_start,interval_end,node,node_capacity_cpu_cores,node_capacity_memory_bytes,...
-```
+#### Required Columns
+
+| Column | Type | Unit | Description |
+|--------|------|------|-------------|
+| `interval_start` | timestamp | UTC | Start of the metrics collection interval |
+| `interval_end` | timestamp | UTC | End of the metrics collection interval |
+| `namespace` | string | — | Kubernetes namespace |
+| `workload` | string | — | Owner workload name (Deployment, StatefulSet, etc.) |
+| `workload_type` | string | — | Owner kind (`Deployment`, `StatefulSet`, `DaemonSet`, etc.) |
+| `container_name` | string | — | Container name within the pod |
+| `pod` | string | — | Pod name |
+| `cpu_request_container_avg` | float | cores | Average CPU request across the interval |
+| `cpu_usage_container_avg` | float | cores | Average CPU usage across the interval |
+| `memory_request_container_avg` | float | bytes | Average memory request |
+| `memory_usage_container_avg` | float | bytes | Average memory usage |
+
+#### Optional Columns (Core Metrics)
+
+| Column | Type | Unit | Description |
+|--------|------|------|-------------|
+| `node` | string | — | Node the pod ran on |
+| `node_capacity_cpu_cores` | float | cores | Node total CPU capacity |
+| `node_capacity_memory_bytes` | float | bytes | Node total memory capacity |
+| `cpu_limit_container_avg` | float | cores | Average CPU limit |
+| `cpu_throttle_container_avg` | float | cores | Average CPU throttle time |
+| `memory_limit_container_avg` | float | bytes | Average memory limit |
+| `memory_rss_usage_container_avg` | float | bytes | Average RSS memory usage |
+| `oom_count` | float | count | Number of OOM kills in the interval |
+| `workload_pod_count` | float | count | Number of pods in the workload |
+| `desired_replicas` | float | count | Desired replica count (from HPA/spec) |
+| `available_replicas` | float | count | Available (ready) replicas |
+
+#### Optional Columns (GPU / Accelerator)
+
+| Column | Type | Unit | Description |
+|--------|------|------|-------------|
+| `accelerator_model_name` | string | — | GPU model (e.g., "NVIDIA A100-SXM4-40GB") |
+| `accelerator_profile_name` | string | — | MIG profile name if applicable |
+| `accelerator_frame_buffer_usage_min` | float | 0–1 | Min GPU frame buffer (VRAM) utilization |
+| `accelerator_frame_buffer_usage_max` | float | 0–1 | Max GPU frame buffer utilization |
+| `accelerator_frame_buffer_usage_avg` | float | 0–1 | Avg GPU frame buffer utilization |
+| `tensor_pipe_active_min` | float | 0–1 | Min tensor core pipeline activity |
+| `tensor_pipe_active_max` | float | 0–1 | Max tensor core pipeline activity |
+| `tensor_pipe_active_avg` | float | 0–1 | Avg tensor core pipeline activity |
+| `dram_active_min` | float | 0–1 | Min DRAM (HBM) bandwidth utilization |
+| `dram_active_max` | float | 0–1 | Max DRAM bandwidth utilization |
+| `dram_active_avg` | float | 0–1 | Avg DRAM bandwidth utilization |
+| `sm_active_min` | float | 0–1 | Min streaming multiprocessor activity |
+| `sm_active_max` | float | 0–1 | Max streaming multiprocessor activity |
+| `sm_active_avg` | float | 0–1 | Avg streaming multiprocessor activity |
+
+#### Columns Present in Operator Output But Ignored by ROS
+
+These columns are produced by the operator but not consumed by ROS:
+
+| Column | Reason Ignored |
+|--------|----------------|
+| `report_period_start` | Report metadata, not per-sample data |
+| `report_period_end` | Report metadata |
+| `owner_name` | Redundant with `workload` |
+| `owner_kind` | Redundant with `workload_type` |
+| `image_name` | Not used in recommendations |
+| `resource_id` | Not used in recommendations |
+| `cpu_request_container_sum` | ROS uses `_avg` variants only |
+| `cpu_limit_container_sum` | ROS uses `_avg` variants only |
+| `cpu_usage_container_min` | ROS uses `_avg` variants only |
+| `cpu_usage_container_max` | ROS uses `_avg` variants only |
+| `cpu_usage_container_sum` | ROS uses `_avg` variants only |
+| `cpu_throttle_container_max` | ROS uses `_avg` variant only |
+| `cpu_throttle_container_min` | ROS uses `_avg` variant only |
+| `cpu_throttle_container_sum` | ROS uses `_avg` variant only |
+| `memory_request_container_sum` | ROS uses `_avg` variants only |
+| `memory_limit_container_sum` | ROS uses `_avg` variants only |
+| `memory_usage_container_min` | ROS uses `_avg` variants only |
+| `memory_usage_container_max` | ROS uses `_avg` variants only |
+| `memory_usage_container_sum` | ROS uses `_avg` variants only |
+| `memory_rss_usage_container_min` | ROS uses `_avg` variant only |
+| `memory_rss_usage_container_max` | ROS uses `_avg` variant only |
+| `memory_rss_usage_container_sum` | ROS uses `_avg` variant only |
+
+### Timestamp Format
+
+The parser accepts multiple timestamp formats via `parseFlexibleTimestamp()`
+(defined in `internal/ingestion/pvc.go`):
+
+- `2006-01-02 15:04:05 +0000 UTC` — Go default `.String()` format (operator output)
+- `2006-01-02 15:04:05 -0700 MST` — Go format with named timezone
+- `2006-01-02 15:04:05+00:00` — datetime with numeric offset, no `T` separator
+- `2006-01-02T15:04:05Z07:00` — RFC 3339 (Nise output)
+
+### Unit Conversions
+
+| CSV Column Unit | Internal Unit | Conversion |
+|-----------------|---------------|------------|
+| cores (float) | millicores (int64) | `× 1000`, rounded |
+| bytes (float) | kibibytes (int64) | `÷ 1024`, rounded |
+| 0–1 ratio (float) | 0–1 ratio (float64) | passthrough |
+| count (float) | count (int64) | rounded |
 
 ## Contract Between Koku and ROS
 
