@@ -1,5 +1,9 @@
 # Contributing to ros-ocp-backend
 
+## License
+
+This project is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
+
 ## What is ros-ocp-backend?
 
 ros-ocp-backend is the **Resource Optimization for OpenShift** backend service.
@@ -685,7 +689,260 @@ Deployed alongside Koku in a single Helm chart (`cost-onprem-chart/`):
 
 ---
 
-## Commit Messages
+## Feature Flags (Unleash)
+
+ros-ocp-backend uses [Unleash](https://www.getunleash.io/) for feature flag management.
+
+### Current State
+
+The `internal/featureflags` package initializes the Unleash SDK client. As of now,
+the `flags.go` file is empty — no feature flags are actively checked in production code.
+The infrastructure is wired and ready for when new features need gradual rollout.
+
+### Local Development
+
+The docker-compose stack includes `unleash-edge` in offline mode with an empty
+feature set (`.unleash/bootstrap.json`). No external Unleash server is needed.
+
+### Finding Active Flags
+
+To discover what flags the code checks at any point:
+
+```bash
+# Search for Unleash IsEnabled calls
+grep -rn "unleash.IsEnabled\|IsFeatureEnabled" internal/
+
+# Check the bootstrap file for locally-defined flags
+cat .unleash/bootstrap.json
+```
+
+### Adding a New Feature Flag
+
+1. Define the flag name as a constant in `internal/featureflags/flags.go`
+2. Check it where needed: `unleash.IsEnabled("ros.my_feature", unleash.WithContext(...))`
+3. Add the flag to `.unleash/bootstrap.json` for local dev (set `enabled: true/false`)
+4. Register the flag in the Unleash server (production) with appropriate rollout strategy
+
+### Metrics That Need Operator Changes
+
+If your plugin introduces new Prometheus metric **types** that should be collected
+from OpenShift clusters (e.g., new DCGM metrics for GPU), those queries must be
+added to the **koku-metrics-operator** (`~/dev/koku/koku-metrics-operator/`).
+The operator is what collects the raw Prometheus data and packages it as CSVs.
+
+---
+
+## OpenAPI Specification
+
+The API contract is defined in `openapi.json` at the repository root.
+
+### When to Update
+
+Update `openapi.json` whenever you:
+- Add a new API endpoint
+- Add/remove/rename query parameters or response fields
+- Change response status codes
+- Add a new plugin that registers routes
+
+### How to Update
+
+The spec is **maintained manually** (not auto-generated). Edit `openapi.json` directly:
+
+1. Add your path under `paths`
+2. Add any new schemas under `components.schemas`
+3. If the endpoint belongs to a plugin, add `"x-plugin-required": "pluginname"` to the
+   operation object — this enables automatic filtering when the plugin is disabled
+4. Validate: `curl http://localhost:8000/api/cost-management/v1/recommendations/openshift/openapi.json | python3 -m json.tool`
+
+The API server serves the spec via `ServeFilteredOpenAPI` which dynamically removes
+paths for disabled plugins based on the `x-plugin-required` extension.
+
+---
+
+## Migration Best Practices
+
+### Creating Migrations
+
+```bash
+# Install golang-migrate CLI (one-time)
+make install-golang-migrate-cli-tool
+
+# Create a new migration pair
+$(LOCALBIN)/migrate create -ext sql -dir migrations -seq describe_what_it_does
+```
+
+This creates `migrations/000064_describe_what_it_does.{up,down}.sql`.
+
+### Rules
+
+1. **Never drop columns in production.** Add columns, deprecate, then remove in a later release.
+2. **Always write both up and down.** The down migration must cleanly reverse the up.
+3. **Partitioned tables** — Use the partition function pattern from existing migrations
+   (see `000005_partition_functions.up.sql` and `000060_ros_partitioned_parent_registry.up.sql`).
+4. **Indexes** — Add concurrently where possible (`CREATE INDEX CONCURRENTLY`). For
+   partitioned tables, standard `CREATE INDEX` is fine (PostgreSQL handles per-partition).
+5. **Data migrations** — Avoid large data transforms in migrations. If needed, make them
+   idempotent (safe to re-run).
+6. **Test migrations** — Run `go run rosocp.go db migrate up` then `down` then `up` again
+   to verify round-trip safety.
+7. **Never reorder** — Migration numbers must be sequential. Never insert between existing numbers.
+
+### Partitioned Table Pattern
+
+```sql
+-- up: Create a monthly-partitioned table
+CREATE TABLE IF NOT EXISTS daily_myplugin_digests (
+    id BIGSERIAL,
+    org_id TEXT NOT NULL,
+    cluster_uuid UUID NOT NULL,
+    interval_start TIMESTAMPTZ NOT NULL,
+    -- ... columns ...
+    PRIMARY KEY (id, interval_start)
+) PARTITION BY RANGE (interval_start);
+
+-- Register in the partition registry so retention sweep can find it
+INSERT INTO ros_partitioned_tables (table_name, partition_column, retention_months)
+VALUES ('daily_myplugin_digests', 'interval_start', 6)
+ON CONFLICT (table_name) DO NOTHING;
+```
+
+---
+
+## Multi-Tenancy
+
+### The org_id Model
+
+ros-ocp-backend is multi-tenant. Every row in the database is scoped to an
+`org_id` (organization identifier from the Red Hat identity system). This is
+the **#1 source of bugs** in the codebase.
+
+### Rules
+
+1. **Every database query MUST filter by `org_id`.**
+   If you forget, you'll return data from all organizations — a security vulnerability.
+
+2. **The `org_id` comes from the identity header**, decoded by middleware into the Echo context:
+   ```go
+   orgID := identityContext(c).OrgID
+   ```
+
+3. **Never hardcode `org_id` in tests.** Use `testutil.TestOrgID` constant.
+
+4. **Cross-org queries are forbidden** in the API layer. Only internal housekeeping
+   (retention sweeps, partition management) may iterate across orgs.
+
+5. **Kafka messages carry `org_id` in metadata.** The processor extracts it and passes
+   it through the entire pipeline. If `org_id` is empty, the message is rejected.
+
+### Common Mistakes
+
+```go
+// BAD — returns all orgs' data
+rows, _ := pool.Query(ctx, "SELECT * FROM recommendation_sets WHERE cluster_uuid = $1", clusterUUID)
+
+// GOOD — scoped to tenant
+rows, _ := pool.Query(ctx, "SELECT * FROM recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2", orgID, clusterUUID)
+```
+
+---
+
+## Common Pitfalls
+
+### Partition Boundaries
+
+Digest tables are partitioned by month. If you query across month boundaries
+without ensuring the partition exists, you'll get empty results (not errors).
+The partition creation is handled by `EnsurePartition()` during ingestion.
+
+### Kafka Offset Commits
+
+With `KAFKA_AUTO_COMMIT=true` (default), offsets are committed periodically.
+If the processor crashes mid-processing, the message will be reprocessed on restart.
+All database writes must be **idempotent** (use `ON CONFLICT ... DO UPDATE`).
+
+### pgxpool Connection Exhaustion
+
+The pool defaults to 10 connections (`ROS_DB_MAX_CONNS`). Long-running queries or
+forgotten rows (not calling `rows.Close()`) will exhaust the pool and deadlock the service.
+Always use `defer rows.Close()` and keep transactions short.
+
+### GPU Model Name Matching
+
+GPU model names from DCGM metrics are free-form strings that vary across driver versions.
+The `MatchGPUModel()` function uses substring matching against a catalog. If you see
+`rosocp_gpu_model_unrecognized_total` incrementing, add the new variant to
+`internal/engine/gpu_metadata.go`.
+
+### Time Zones
+
+All timestamps in the database are `TIMESTAMPTZ` stored in UTC. The API accepts
+and returns UTC. Never use local time in queries or comparisons.
+
+### Stale Recommendations
+
+Recommendations with no new data for `ROS_STALENESS_THRESHOLD_HOURS` (default 72h)
+are marked stale. After `ROS_STALE_ARCHIVE_DAYS` (default 30), they're deleted.
+Don't be surprised when test data "disappears" — check the retention sweep.
+
+---
+
+## Prometheus Metrics
+
+### Exported Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `rosocp_db_query_duration_seconds` | Histogram | `operation` | Database query latency |
+| `rosocp_recommendation_duration_seconds` | Histogram | `type` | Recommendation computation time |
+| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase pipeline timing |
+| `rosocp_recommendations_written_total` | Counter | `type` | Recommendations persisted |
+| `rosocp_kafka_messages_processed_total` | Counter | — | Kafka messages consumed |
+| `rosocp_ingestion_errors_total` | Counter | `stage` | Pipeline failures by stage |
+| `rosocp_invalid_csv_total` | Counter | — | Malformed CSVs received |
+| `rosocp_csv_fetch_error_total` | Counter | — | S3/HTTP download failures |
+| `rosocp_db_error_total` | Counter | — | Database errors |
+| `rosocp_partition_missing_error_total` | Counter | `table_name` | Missing partition errors |
+| `rosocp_retention_partitions_dropped_total` | Counter | — | Partitions dropped by sweep |
+| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | Unrecognized GPU models |
+| `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Plugin hook failures |
+| `rosocp_rh_account_created_total` | Counter | — | New tenant accounts |
+
+### Adding a New Metric
+
+1. Define in `internal/metrics/metrics.go` (or a package-local `metrics.go` if scoped):
+   ```go
+   var MyMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+       Name: "rosocp_my_metric_total",
+       Help: "Description of what this measures",
+   }, []string{"label1"})
+   ```
+2. Instrument the code: `metrics.MyMetric.WithLabelValues("value").Inc()`
+3. Use `promauto` (not `prometheus.MustRegister`) to avoid double-registration panics in tests
+
+### Scraping
+
+Each process exposes metrics on its `PROMETHEUS_PORT`:
+- API: `:5007/metrics`
+- Processor: `:5005/metrics`
+- Recommendation Poller: `:5006/metrics`
+
+---
+
+## Issue Tracking and Code Review
+
+### Filing Issues
+
+File bugs and feature requests at:
+**https://github.com/RedHatInsights/ros-ocp-backend**
+
+### Code Review Process
+
+- All changes require a pull request reviewed by the **Red Hat Resource Optimization Service team**
+- PRs are merged via **rebase** (linear history)
+- Run `go vet ./...` and `go test -race -short ./...` before submitting
+- CI must pass before merge
+
+### Commit Messages
 
 Use imperative mood, reference issue numbers:
 
@@ -696,12 +953,61 @@ Introduce GPUThresholds struct with Classify/SelectMIGProfile methods.
 Tests create local instances instead of mutating package globals.
 ```
 
-## Pull Requests
+---
 
-- One logical change per PR
-- Include test coverage for new/modified code
-- Run `go vet ./...` and `go test -race -short ./...` before pushing
-- Update relevant docs in `docs/` if changing behavior
+## IDE Setup
+
+### VS Code / Cursor
+
+Recommended extensions:
+- `golang.go` — Go language support (gopls, dlv debugger)
+- `redhat.vscode-yaml` — YAML validation for docker-compose
+
+Settings (`.vscode/settings.json`):
+```json
+{
+  "go.testFlags": ["-short", "-race"],
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--timeout=3m"],
+  "editor.formatOnSave": true
+}
+```
+
+### GoLand
+
+- Set `Go Modules` integration to enabled
+- Configure test flags: `-short -race`
+- Set `golangci-lint` as external linter
+
+### Debugging
+
+```bash
+# Attach debugger to running API server
+dlv attach $(pgrep -f "rosocp start api")
+
+# Or run with debugger
+dlv debug ./rosocp.go -- start api
+```
+
+### Useful psql Queries
+
+```sql
+-- Connect to local dev database
+psql -h localhost -p 15432 -U postgres -d postgres
+
+-- Check recommendations for an org
+SELECT org_id, cluster_uuid, container_name, last_reported
+FROM recommendation_sets WHERE org_id = '3340851' ORDER BY last_reported DESC LIMIT 10;
+
+-- Check GPU digests
+SELECT org_id, node_name, gpu_model_name, interval_start
+FROM gpu_container_digests WHERE org_id = '3340851' ORDER BY interval_start DESC LIMIT 10;
+
+-- Check partition health
+SELECT tablename FROM pg_tables WHERE tablename LIKE '%202%' ORDER BY tablename;
+```
+
+---
 
 ## Further Reading
 
