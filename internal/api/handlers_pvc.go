@@ -12,21 +12,22 @@ import (
 
 // PVCRecommendationResponse is a single PVC recommendation in the API response.
 type PVCRecommendationResponse struct {
-	ClusterUUID        string                                  `json:"cluster_uuid"`
-	Namespace          string                                  `json:"namespace"`
-	PersistentVolumeClaim string                               `json:"persistentvolumeclaim"`
-	PersistentVolume   string                                  `json:"persistentvolume,omitempty"`
-	StorageClass       string                                  `json:"storageclass,omitempty"`
-	CapacityBytes      int64                                   `json:"capacity_bytes"`
-	UsageBytesMax      int64                                   `json:"usage_bytes_max"`
-	UsageRatio         float64                                 `json:"usage_ratio"`
-	RecommendationType string                                  `json:"recommendation_type"`
-	RecommendedBytes   *int64                                  `json:"recommended_bytes,omitempty"`
-	DaysToFull         *int                                    `json:"days_to_full,omitempty"`
-	GrowthBytesPerDay  *int64                                  `json:"growth_bytes_per_day,omitempty"` // nil when DB column is NULL (insufficient trend data)
-	Notifications      map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	DataDays           int                                     `json:"data_days"`
-	ResizeNote         string                                  `json:"resize_note,omitempty"`
+	ClusterUUID           string                                     `json:"cluster_uuid"`
+	Namespace             string                                     `json:"namespace"`
+	PersistentVolumeClaim string                                     `json:"persistentvolumeclaim"`
+	PersistentVolume      string                                     `json:"persistentvolume,omitempty"`
+	StorageClass          string                                     `json:"storageclass,omitempty"`
+	CapacityBytes         int64                                      `json:"capacity_bytes"`
+	UsageBytesMax         int64                                      `json:"usage_bytes_max"`
+	UsageRatio            float64                                    `json:"usage_ratio"`
+	RecommendationType    string                                     `json:"recommendation_type"`
+	RecommendedBytes      *int64                                     `json:"recommended_bytes,omitempty"`
+	DaysToFull            *int                                       `json:"days_to_full,omitempty"`
+	GrowthBytesPerDay     *int64                                     `json:"growth_bytes_per_day,omitempty"`
+	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	DataDays              int                                        `json:"data_days"`
+	Term                  string                                     `json:"term"`
+	ResizeNote            string                                     `json:"resize_note,omitempty"`
 }
 
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
@@ -75,12 +76,16 @@ func GetPVCRecommendations(c echo.Context) error {
 	clusterFilter := c.QueryParam("cluster_uuid")
 	namespaceFilter := c.QueryParam("namespace")
 	typeFilter := c.QueryParam("recommendation_type")
+	termFilter := c.QueryParam("term")
+	if termFilter == "" {
+		termFilter = "medium"
+	}
 
 	ctx := c.Request().Context()
 
-	filterSQL := ""
-	args := []interface{}{orgID}
-	argIdx := 2
+	filterSQL := " AND term = $2"
+	args := []interface{}{orgID, termFilter}
+	argIdx := 3
 
 	if clusterFilter != "" {
 		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
@@ -112,7 +117,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		SELECT cluster_uuid, namespace, persistentvolumeclaim, persistentvolume,
 			storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
 			recommendation_type, recommended_bytes, days_to_full,
-			growth_bytes_per_day, notification_codes, data_days
+			growth_bytes_per_day, notification_codes, data_days, term
 		FROM pvc_recommendation_sets
 		WHERE org_id = $1` + filterSQL
 
@@ -138,7 +143,7 @@ func GetPVCRecommendations(c echo.Context) error {
 			&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.PersistentVolume,
 			&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
 			&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
-			&growth, &codes, &r.DataDays,
+			&growth, &codes, &r.DataDays, &r.Term,
 		); err != nil {
 			hlog.Errorf("scanning PVC recommendation row: %v", err)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{

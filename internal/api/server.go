@@ -138,6 +138,7 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/settings/terms", GetTermSettings)
 		v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
 		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
+		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}
 
 	// Historical tracking and quality metrics (native engine only).

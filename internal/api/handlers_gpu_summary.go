@@ -38,10 +38,10 @@ func GetGPUSummary(c echo.Context) error {
 	ctx := c.Request().Context()
 	now := time.Now().UTC()
 
-	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr)
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr, "gpu")
 	if err != nil {
 		hlog.Warnf("GetGPUSummary: load term config failed: %v", err)
-		terms = engine.DefaultTerms()
+		terms = engine.DefaultTermsForPlugin("gpu")
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 

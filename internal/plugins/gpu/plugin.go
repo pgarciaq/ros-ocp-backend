@@ -1,3 +1,41 @@
+// Package gpu implements the GPU recommendation plugin.
+//
+// This plugin handles NVIDIA GPU utilization analysis, classification, and
+// right-sizing recommendations including MIG (Multi-Instance GPU) partitioning
+// and time-slicing strategies.
+//
+// # Ingestion
+//
+// GPU data piggybacks on container CSV reports: the plugin implements [plugin.IngestHook]
+// to extract GPU-specific columns (DCGM profiling metrics, GPU model, MIG profiles)
+// after the container ingestor runs. These are upserted into gpu_container_digests.
+//
+// # Recommendations
+//
+// The GPU engine ([engine.RecommendGPU]) analyzes utilization patterns to classify
+// GPU usage (compute-bound, memory-bound, idle, mixed) and recommends:
+//   - Current GPU appropriateness (over/under-provisioned)
+//   - MIG partition profiles when applicable
+//   - Time-slicing replica counts for shared GPU scenarios
+//   - Node-level GPU scheduling recommendations
+//
+// # Default Terms
+//
+//   - short: 1-day window, 1 day minimum data, no decay
+//   - medium: 7-day window, 3 days minimum, 168h decay half-life
+//   - long: 15-day window, 7 days minimum, 360h decay half-life
+//
+// MaxWindowDays is 90 because GPU workloads (ML training, inference) tend to
+// change characteristics with model/framework updates on a similar cadence to
+// CPU/memory container workloads.
+//
+// # Traits Implemented
+//
+//   - [plugin.IngestHook] — extracts GPU data after "container" CSV processing
+//   - [plugin.APIEnricher] — decorates container list/detail responses with GPU info
+//   - [plugin.APIProvider] — GPU summary, time-slicing, and MIG endpoints
+//   - [plugin.RetentionProvider] — sweeps gpu_container_digests
+//   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days)
 package gpu
 
 import (
@@ -13,6 +51,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
+// GPUPlugin handles GPU utilization analysis, classification, and right-sizing
+// recommendations (MIG partitioning and time-slicing).
 type GPUPlugin struct{}
 
 func init() {
@@ -56,3 +96,13 @@ func (p *GPUPlugin) RetentionTables() []string {
 func (p *GPUPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
 	return engine.SweepPartitionedTables(ctx, pool, p.RetentionTables(), olderThan.Format("200601"))
 }
+
+func (p *GPUPlugin) DefaultTerms() []plugin.TermConfig {
+	return []plugin.TermConfig{
+		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
+		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
+	}
+}
+
+func (p *GPUPlugin) MaxWindowDays() int { return 90 }

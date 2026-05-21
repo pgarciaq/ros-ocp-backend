@@ -77,3 +77,29 @@ func (p *ExamplePlugin) OwnedTables() []string {
 	logging.GetLogger().WithField("plugin", p.Name()).Debug("ExamplePlugin.OwnedTables")
 	return nil
 }
+
+// --- TermProvider trait (optional) ---
+// Implement TermProvider to declare that this plugin's recommendations are
+// parameterized by configurable time-window terms (short, medium, long).
+// Plugins implementing this trait:
+//   - Appear in GET /settings/capabilities with supports_terms: true
+//   - Allow per-tenant term customization via PUT /settings/terms?recommendation_type=<name>
+//   - Can have terms locked by admin env vars (ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>)
+//
+// DefaultTerms returns the plugin-specific default term configurations.
+// These are used when no admin or tenant override is set.
+// Choose values appropriate for your domain:
+//   - Fast-moving metrics (CPU, memory): short windows (1/7/15 days)
+//   - Slow-moving metrics (PVC storage): longer windows (7/30/90 days)
+func (p *ExamplePlugin) DefaultTerms() []plugin.TermConfig {
+	return []plugin.TermConfig{
+		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
+		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
+	}
+}
+
+// MaxWindowDays returns the maximum window_days allowed for this plugin.
+// Enforced in both admin env var validation and tenant API PUT requests.
+// Choose based on how far back data is meaningful for recommendations.
+func (p *ExamplePlugin) MaxWindowDays() int { return 90 }
