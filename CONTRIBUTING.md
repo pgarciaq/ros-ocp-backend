@@ -261,7 +261,7 @@ go run rosocp.go start api
 |----------|---------|-------------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Kafka broker addresses |
 | `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group |
-| `KAFKA_AUTO_COMMIT` | `true` | Auto-commit offsets |
+| `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets (manual commit-on-success) |
 | `UPLOAD_TOPIC` | `platform.upload.announce` | Upload notification topic |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Recommendation trigger topic |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Source lifecycle events |
@@ -886,9 +886,11 @@ The partition creation is handled by `EnsurePartition()` during ingestion.
 
 ### Kafka Offset Commits
 
-With `KAFKA_AUTO_COMMIT=true` (default), offsets are committed periodically.
-If the processor crashes mid-processing, the message will be reprocessed on restart.
-All database writes must be **idempotent** (use `ON CONFLICT ... DO UPDATE`).
+With `KAFKA_AUTO_COMMIT=false` (default), offsets are committed explicitly after
+successful processing (at-least-once semantics). If the processor crashes mid-processing,
+the message will be redelivered on restart. All database writes must be **idempotent**
+(use `ON CONFLICT ... DO UPDATE`). Set `KAFKA_AUTO_COMMIT=true` to revert to periodic
+auto-commit (at-most-once semantics).
 
 ### pgxpool Connection Exhaustion
 
