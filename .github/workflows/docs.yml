@@ -2,7 +2,7 @@ name: Documentation
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
     paths:
       - 'internal/plugin/**'
       - 'internal/plugins/**'
