@@ -18,7 +18,7 @@ func Identity(next echo.HandlerFunc) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusUnauthorized, "Unable to decode X-Rh-Identity")
 		}
 		if err := json.Unmarshal(decodedIdentity, &id); err != nil {
-			return echo.NewHTTPError(http.StatusUnauthorized, "Unable to marshal X-Rh-Identity into struct")
+			return echo.NewHTTPError(http.StatusUnauthorized, "Unable to unmarshal X-Rh-Identity into struct")
 		}
 		c.Set("Identity", id)
 		return next(c)

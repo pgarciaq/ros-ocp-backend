@@ -34,7 +34,7 @@ func initLogger() {
 		logLevel = logrus.InfoLevel
 	}
 
-	if cfg.LogFormater == "text" {
+	if cfg.LogFormatter == "text" {
 		logger.Formatter = &logrus.TextFormatter{}
 	} else {
 		logger.Formatter = &logrus.JSONFormatter{}

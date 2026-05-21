@@ -74,7 +74,7 @@ func processContainerDigestFallback(ctx context.Context, pool *pgxpool.Pool, r i
 
 func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	log := logging.GetLogger()
-	cfg = config.GetConfig()
+	cfg := config.GetConfig()
 	validate := validator.New()
 
 	commitOnPermanentFailure := func(reason string) {
