@@ -345,6 +345,7 @@ not label recommendations as "increase" / "decrease" / "well-sized".
 evaluates daily node digests and produces per-node recommendations.
 
 **Detection signals:**
+
 - **Underutilized:** Both CPU and memory p95 below threshold (default 30%)
 - **Overcommitted:** CPU request/allocatable ratio exceeds threshold (default 150%)
 - **Stranded resources:** EMA-smoothed normalized imbalance detection — per-day
@@ -360,6 +361,7 @@ engine → `node_recommendations` table. Falls back to request-based estimates
 when capacity data is unavailable.
 
 **Configuration (env vars):**
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_NODE_UNDERUTIL_THRESHOLD` | 0.30 | p95 below this = underutilized |
@@ -400,6 +402,7 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 27 (memory-bound), 28 (no profiling data).
 
 **Implemented but not listed above:**
+
 - GPU savings estimation from Koku cost data (`ApplyGPUSavings` in
   `gpu_recommender.go`): reads `configured_rates["gpu_cost_per_month"]` from
   the Koku `effective_rates` endpoint. Idle GPU = full monthly rate; MIG
@@ -424,9 +427,11 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   in the container API response.
 
 **Not yet implemented in UI:**
+
 - Koku-UI display of GPU recommendations (classifications, savings, time-slicing)
 
 **Known limitations (accepted risk):**
+
 - **Retention vs ingestion race**: `RunRetentionSweep` could DROP a partition
   while `upsertGPUDigests` writes to it (e.g., during backfill of old data).
   PostgreSQL locking makes this fail loud (write error) rather than corrupt.
@@ -552,6 +557,7 @@ route `storage-usage` files to the ROS Kafka topic via `_ros_extra_patterns`.
 See the snapshot staleness design doc for architectural context.
 
 **Classifications:**
+
 - **Oversized** — usage/capacity < 20% sustained (recommends 2x max usage)
 - **Near-full** — usage/capacity > 85% (warns, recommends expansion)
 - **Orphaned** — zero usage for 3+ days (`NotifPVCOrphaned`)
@@ -700,12 +706,14 @@ regardless of depth. No rows are scanned and discarded.
 ### Implementation Path
 
 **ros-ocp-backend (Go):**
+
 - Add `after` query parameter to `ListAPIOptions`
 - Decode cursor → `WHERE (sort_col) > (cursor_value)` SQL clause
 - Encode last row's sort key into `next` cursor in response `links`
 - Keep `offset`/`limit` as fallback (backward compatible)
 
 **Koku (Django):**
+
 - Django REST Framework ships `CursorPagination` built-in:
   ```python
   from rest_framework.pagination import CursorPagination
@@ -729,6 +737,7 @@ regardless of depth. No rows are scanned and discarded.
 
 This is **not urgent**. Current scale (< 5,000 containers per org) is well
 within offset/limit performance. Prioritize when:
+
 - A customer reports slow pagination on deep pages
 - The history table exceeds 100k rows per org
 - The UI moves to infinite-scroll (no page numbers)
