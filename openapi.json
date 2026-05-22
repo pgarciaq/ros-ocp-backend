@@ -1518,6 +1518,39 @@
         }
       }
     },
+    "/recommendations/openshift/settings/business-hours": {
+      "get": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Get org-default business hours schedule",
+        "description": "Returns the effective org-default business hours schedule. Requires native engine and ROS_BUSINESS_HOURS_ENABLED.",
+        "operationId": "getBusinessHoursOrgDefault",
+        "x-plugin-required": "business-hours",
+        "responses": {
+          "200": { "description": "Business hours settings" },
+          "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
+        }
+      },
+      "put": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Update org-default business hours schedule",
+        "operationId": "putBusinessHoursOrgDefault",
+        "x-plugin-required": "business-hours",
+        "responses": {
+          "202": { "description": "Accepted; re-ingestion triggered asynchronously" },
+          "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
+        }
+      },
+      "delete": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Remove org-default business hours override",
+        "operationId": "deleteBusinessHoursOrgDefault",
+        "x-plugin-required": "business-hours",
+        "responses": {
+          "204": { "description": "Override removed" },
+          "404": { "description": "Feature disabled or override not found" }
+        }
+      }
+    },
     "/recommendations/openshift/settings/capabilities": {
       "get": {
         "tags": ["Settings"],
@@ -4015,6 +4048,10 @@
             "items": {
               "$ref": "#/components/schemas/CapabilityItem"
             }
+          },
+          "business_hours": {
+            "type": "boolean",
+            "description": "Whether business-hours settings and dual-stream recommendations are enabled (ROS_BUSINESS_HOURS_ENABLED)"
           }
         }
       },

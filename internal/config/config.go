@@ -106,6 +106,16 @@ type Config struct {
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
+	// BusinessHoursEnabled gates business-hours settings routes, OpenAPI paths, capabilities,
+	// and (when implemented) dual-stream ingestion. Default true; set ROS_BUSINESS_HOURS_ENABLED=false to disable.
+	BusinessHoursEnabled bool `mapstructure:"ROS_BUSINESS_HOURS_ENABLED"`
+
+	// ReshipPollerIntervalSecs is the background retry interval for pending masu reshships (default 60).
+	ReshipPollerIntervalSecs int `mapstructure:"ROS_RESHIP_POLLER_INTERVAL_SECS"`
+
+	// ReshipMaxRetries is the consecutive poller retry budget before ros_reship_failures_total increments (default 10).
+	ReshipMaxRetries int `mapstructure:"ROS_RESHIP_MAX_RETRIES"`
+
 	// Node right-sizing (Tier 1) configuration
 	NodeUnderutilThreshold         float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
 	NodeOvercommitThreshold        float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
@@ -312,6 +322,9 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_MAX_CONNS", 10)
 	viper.SetDefault("ROS_DB_ACQUIRE_TIMEOUT_SECS", 5)
 	viper.SetDefault("KOKU_MASU_URL", "")
+	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
+	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
+	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)

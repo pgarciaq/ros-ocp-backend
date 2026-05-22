@@ -36,13 +36,24 @@ func registerRecommendationRoutes(v1 *echo.Group) {
 }
 
 func StartAPIServer() {
+const businessHoursPluginName = "business-hours"
+
 // pluginRecommendationRoutesActive reports whether gpu/node/pvc/snapshot HTTP routes are registered:
 // those plugins omit routes entirely when Kruize owns recommendations or when the plugin is disabled.
+// The business-hours feature uses x-plugin-required "business-hours" and ROS_BUSINESS_HOURS_ENABLED.
 func pluginRecommendationRoutesActive(pluginName string) bool {
 	if plugin.EnabledFor(plugin.KruizePluginName) {
 		return false
 	}
+	if pluginName == businessHoursPluginName {
+		return config.BusinessHoursFeatureEnabled()
+	}
 	return plugin.EnabledFor(pluginName)
+}
+
+// businessHoursRoutesActive reports whether business-hours settings routes should be registered.
+func businessHoursRoutesActive() bool {
+	return pluginRecommendationRoutesActive(businessHoursPluginName)
 }
 
 func disabledPluginRoute404(pluginName string) echo.HandlerFunc {
@@ -74,6 +85,26 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.GET("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
 		v1.PUT("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
 	}
+	registerBusinessHoursRouteGuards(v1)
+}
+
+// registerBusinessHoursRouteGuards installs 404 handlers for business-hours settings paths when
+// ROS_BUSINESS_HOURS_ENABLED is false (or the native engine is off). Real handlers register in
+// Phase 3 when the feature is enabled.
+func registerBusinessHoursRouteGuards(v1 *echo.Group) {
+	if businessHoursRoutesActive() {
+		return
+	}
+	bh404 := disabledPluginRoute404(businessHoursPluginName)
+	v1.GET("/recommendations/openshift/settings/business-hours", bh404)
+	v1.PUT("/recommendations/openshift/settings/business-hours", bh404)
+	v1.DELETE("/recommendations/openshift/settings/business-hours", bh404)
+	v1.GET("/recommendations/openshift/settings/business-hours/clusters/:cluster_id", bh404)
+	v1.PUT("/recommendations/openshift/settings/business-hours/clusters/:cluster_id", bh404)
+	v1.DELETE("/recommendations/openshift/settings/business-hours/clusters/:cluster_id", bh404)
+	v1.GET("/recommendations/openshift/settings/business-hours/clusters/:cluster_id/namespaces/:namespace", bh404)
+	v1.PUT("/recommendations/openshift/settings/business-hours/clusters/:cluster_id/namespaces/:namespace", bh404)
+	v1.DELETE("/recommendations/openshift/settings/business-hours/clusters/:cluster_id/namespaces/:namespace", bh404)
 }
 
 // StartAPIServer runs the REST API and Prometheus metrics listener until ctx is cancelled,

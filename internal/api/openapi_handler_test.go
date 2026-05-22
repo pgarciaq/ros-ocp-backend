@@ -3,6 +3,7 @@ package api
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -91,4 +92,56 @@ func TestFilterPaths_NoAnnotation_AlwaysIncluded(t *testing.T) {
 	result := filterSpecByPlugins(spec)
 	paths := result["paths"].(map[string]interface{})
 	assert.Contains(t, paths, "/status")
+}
+
+func TestOpenAPI_BusinessHoursPathsFiltered(t *testing.T) {
+	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "false")
+	t.Setenv("ROS_ENABLED_PLUGINS", "container")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	spec := map[string]interface{}{
+		"paths": map[string]interface{}{
+			"/recommendations/openshift/settings/business-hours": map[string]interface{}{
+				"get": map[string]interface{}{
+					"x-plugin-required": "business-hours",
+				},
+				"put": map[string]interface{}{
+					"x-plugin-required": "business-hours",
+				},
+			},
+			"/recommendations/openshift": map[string]interface{}{
+				"get": map[string]interface{}{
+					"x-plugin-required": "container",
+				},
+			},
+		},
+	}
+
+	result := filterSpecByPlugins(spec)
+	paths := result["paths"].(map[string]interface{})
+
+	assert.NotContains(t, paths, "/recommendations/openshift/settings/business-hours")
+	assert.Contains(t, paths, "/recommendations/openshift")
+}
+
+func TestOpenAPI_BusinessHoursPathsIncludedWhenEnabled(t *testing.T) {
+	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
+	t.Setenv("ROS_ENABLED_PLUGINS", "container")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	spec := map[string]interface{}{
+		"paths": map[string]interface{}{
+			"/recommendations/openshift/settings/business-hours": map[string]interface{}{
+				"get": map[string]interface{}{
+					"x-plugin-required": "business-hours",
+				},
+			},
+		},
+	}
+
+	result := filterSpecByPlugins(spec)
+	paths := result["paths"].(map[string]interface{})
+	assert.Contains(t, paths, "/recommendations/openshift/settings/business-hours")
 }

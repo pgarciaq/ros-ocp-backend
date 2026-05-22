@@ -15,6 +15,7 @@ type capabilityItem struct {
 
 type capabilitiesResponse struct {
 	RecommendationTypes []capabilityItem `json:"recommendation_types"`
+	BusinessHours       bool             `json:"business_hours"`
 }
 
 // GetCapabilities handles GET /recommendations/openshift/settings/capabilities.
@@ -38,5 +39,8 @@ func GetCapabilities(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, capabilitiesResponse{RecommendationTypes: items})
+	return c.JSON(http.StatusOK, capabilitiesResponse{
+		RecommendationTypes: items,
+		BusinessHours:       businessHoursRoutesActive(),
+	})
 }
