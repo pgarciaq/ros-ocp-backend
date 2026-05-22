@@ -71,6 +71,9 @@ func LoadSchedules(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 			OffHoursWeight: float64(offHoursWeight),
 			Enabled:        enabled,
 		}
+		if err := initScheduleLocation(&sched); err != nil {
+			return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
+		}
 
 		switch {
 		case rowClusterUUID == OrgClusterSentinelUUID && namespace == "":

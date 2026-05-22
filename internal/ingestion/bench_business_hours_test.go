@@ -20,7 +20,7 @@ import (
 //   BH-PERF-001: ~41ms/op (threshold 10ms) — weighted digest dominates
 //   BH-PERF-002: ~0.07–0.12 µs/lookup (threshold 1ms) — PASS
 //   BH-PERF-003: single ~2ms/100 ctr, dual ~500ms/100 ctr (~250×; weighted BH path)
-//   BH-PERF-007: ~71–104ms/10k rows (threshold 50ms) — schedule eval + TZ load
+//   BH-PERF-007: ~1–2ms/10k rows (threshold 50ms) — schedule eval with cached TZ
 
 const (
 	benchContainerCount = 10_000
@@ -29,7 +29,7 @@ const (
 )
 
 func benchWeekdaySchedule() bhschedule.Schedule {
-	return bhschedule.Schedule{
+	s := bhschedule.Schedule{
 		Enabled:        true,
 		Timezone:       "America/New_York",
 		Days:           []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
@@ -37,6 +37,10 @@ func benchWeekdaySchedule() bhschedule.Schedule {
 		EndTime:        "17:00",
 		OffHoursWeight: 0.1,
 	}
+	if err := s.InitLocation(); err != nil {
+		panic(err)
+	}
+	return s
 }
 
 func benchMetricRows(containerIdx int, samples int) []MetricRow {

@@ -5,12 +5,17 @@ package bhschedule
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
-var weekdayToName = []string{
-	"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
-}
+var (
+	weekdayToName = []string{
+		"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+	}
+	// timezoneLocations caches IANA zones for schedules constructed without InitLocation (tests).
+	timezoneLocations sync.Map
+)
 
 // Schedule is the effective business-hours configuration for ingestion weighting.
 type Schedule struct {
@@ -23,11 +28,49 @@ type Schedule struct {
 	EndTime        string // HH:MM local wall clock
 	OffHoursWeight float64
 	Enabled        bool
+	loc            *time.Location // set by initScheduleLocation at load time
 }
 
 // AllHoursSchedule returns a disabled placeholder (all-hours-only behavior).
 func AllHoursSchedule() Schedule {
 	return Schedule{Enabled: false}
+}
+
+// InitLocation loads and caches the IANA timezone for enabled schedules.
+// Call once after constructing a Schedule outside LoadSchedules (e.g. tests).
+func (s *Schedule) InitLocation() error {
+	return initScheduleLocation(s)
+}
+
+// initScheduleLocation loads and caches the IANA timezone for enabled schedules.
+func initScheduleLocation(s *Schedule) error {
+	if !s.Enabled || s.Timezone == "" {
+		return nil
+	}
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return err
+	}
+	s.loc = loc
+	return nil
+}
+
+func (s Schedule) location() *time.Location {
+	if s.loc != nil {
+		return s.loc
+	}
+	if s.Timezone == "" {
+		return nil
+	}
+	if v, ok := timezoneLocations.Load(s.Timezone); ok {
+		return v.(*time.Location)
+	}
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return nil
+	}
+	timezoneLocations.Store(s.Timezone, loc)
+	return loc
 }
 
 // InBusinessHours reports whether intervalStart (UTC) falls inside the schedule's
@@ -37,8 +80,8 @@ func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 		return false
 	}
 
-	loc, err := time.LoadLocation(schedule.Timezone)
-	if err != nil {
+	loc := schedule.location()
+	if loc == nil {
 		return false
 	}
 
