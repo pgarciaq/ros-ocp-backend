@@ -4,7 +4,12 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 )
+
+// RowWeightFunc returns the schedule weight for a CSV row (0 excludes the sample).
+type RowWeightFunc func(MetricRow) float64
 
 // ComputeDigest computes exact percentiles and aggregates from a sorted slice
 // of int64 values. Uses slices.Sort() for O(n log n) exact computation.
@@ -52,12 +57,130 @@ func percentileFromSorted(sorted []int64, pct float64) int64 {
 	return sorted[idx]
 }
 
-// GroupCSVRows groups parsed MetricRows by (container, day) for digest
-// computation. The orgID and clusterUUID are provided by the caller
-// (from the Kafka message metadata).
+// ComputeWeightedDigest computes percentiles using per-sample weights.
+// Samples with weight <= 0 are excluded. When all retained weights are 1.0,
+// results match [ComputeDigest] on the same values.
+func ComputeWeightedDigest(values []int64, weights []float64) Digest {
+	n := len(values)
+	if n == 0 || len(weights) != n {
+		return Digest{}
+	}
+
+	type indexed struct {
+		v int64
+		w float64
+	}
+	pairs := make([]indexed, 0, n)
+	for i := range values {
+		if weights[i] > 0 {
+			pairs = append(pairs, indexed{values[i], weights[i]})
+		}
+	}
+	if len(pairs) == 0 {
+		return Digest{}
+	}
+
+	slices.SortFunc(pairs, func(a, b indexed) int {
+		if a.v < b.v {
+			return -1
+		}
+		if a.v > b.v {
+			return 1
+		}
+		return 0
+	})
+
+	sortedVals := make([]int64, len(pairs))
+	sortedWeights := make([]float64, len(pairs))
+	for i, p := range pairs {
+		sortedVals[i] = p.v
+		sortedWeights[i] = p.w
+	}
+
+	var sum int64
+	var weightedSum float64
+	var totalWeight float64
+	for i, v := range sortedVals {
+		sum += v
+		weightedSum += float64(v) * sortedWeights[i]
+		totalWeight += sortedWeights[i]
+	}
+	mean := int64(0)
+	if totalWeight > 0 {
+		mean = int64(weightedSum / totalWeight)
+	}
+
+	return Digest{
+		P50:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.50),
+		P60:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.60),
+		P95:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.95),
+		P98:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.98),
+		P99:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.99),
+		Max:   sortedVals[len(sortedVals)-1],
+		Mean:  mean,
+		Sum:   sum,
+		Count: int64(len(sortedVals)),
+	}
+}
+
+func weightedPercentileFromSorted(sorted []int64, weights []float64, pct float64) int64 {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return sorted[0]
+	}
+
+	allOnes := true
+	for _, w := range weights {
+		if w != 1.0 {
+			allOnes = false
+			break
+		}
+	}
+	if allOnes {
+		return percentileFromSorted(sorted, pct)
+	}
+
+	var total float64
+	for _, w := range weights {
+		total += w
+	}
+	if total <= 0 {
+		return 0
+	}
+	target := pct * total
+	cum := 0.0
+	for i, w := range weights {
+		cum += w
+		if cum >= target {
+			return sorted[i]
+		}
+	}
+	return sorted[n-1]
+}
+
+// GroupCSVRows groups parsed MetricRows by (container, day) for the all_hours stream.
 func GroupCSVRows(rows []MetricRow, orgID, clusterUUID string) map[DigestKey][]MetricRow {
+	return GroupCSVRowsForStream(rows, orgID, clusterUUID, ScheduleTypeAllHours, nil)
+}
+
+// GroupCSVRowsForStream groups rows by container-day and schedule_type.
+// When weightFn is non-nil, rows with weight <= 0 are omitted (off_hours_weight=0 fast path).
+func GroupCSVRowsForStream(
+	rows []MetricRow,
+	orgID, clusterUUID string,
+	scheduleType ScheduleType,
+	weightFn RowWeightFunc,
+) map[DigestKey][]MetricRow {
 	groups := make(map[DigestKey][]MetricRow, len(rows)/24+1)
 	for _, row := range rows {
+		if weightFn != nil {
+			if w := weightFn(row); w <= 0 {
+				continue
+			}
+		}
 		bucketDate := time.Date(
 			row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(),
 			0, 0, 0, 0, time.UTC,
@@ -70,28 +193,60 @@ func GroupCSVRows(rows []MetricRow, orgID, clusterUUID string) map[DigestKey][]M
 			WorkloadType:  row.WorkloadType,
 			ContainerName: row.ContainerName,
 			BucketDate:    bucketDate,
+			ScheduleType:  scheduleType,
 		}
 		groups[key] = append(groups[key], row)
 	}
 	return groups
 }
 
-// ComputeContainerDigest computes a full set of digest columns for a group
-// of MetricRows belonging to the same (container, day).
-func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResult {
-	cpuRequests := extractField(rows, func(r MetricRow) int64 { return r.CPURequestMC })
-	cpuUsages := extractField(rows, func(r MetricRow) int64 { return r.CPUUsageMC })
-	cpuThrottles := extractField(rows, func(r MetricRow) int64 { return r.CPUThrottleMC })
-	memRequests := extractField(rows, func(r MetricRow) int64 { return r.MemRequestKiB })
-	memUsages := extractField(rows, func(r MetricRow) int64 { return r.MemUsageKiB })
-	memRSS := extractField(rows, func(r MetricRow) int64 { return r.MemRSSKiB })
+// BusinessHoursRowWeightFn builds a weight function for the business_hours stream.
+func BusinessHoursRowWeightFn(sched bhschedule.Schedule) RowWeightFunc {
+	if !sched.Enabled {
+		return nil
+	}
+	skipZero := sched.OffHoursWeight == 0
+	return func(row MetricRow) float64 {
+		w := bhschedule.ScheduleWeight(row.IntervalStart, sched)
+		if skipZero && w <= 0 {
+			return 0
+		}
+		return w
+	}
+}
 
-	cpuReqD := ComputeDigest(cpuRequests)
-	cpuUseD := ComputeDigest(cpuUsages)
-	cpuThrD := ComputeDigest(cpuThrottles)
-	memReqD := ComputeDigest(memRequests)
-	memUseD := ComputeDigest(memUsages)
-	memRssD := ComputeDigest(memRSS)
+// ComputeContainerDigest computes digest columns for a (container, day, schedule_type) group.
+func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResult {
+	return ComputeContainerDigestWeighted(key, rows, nil)
+}
+
+// ComputeContainerDigestWeighted computes digests with optional per-row weights.
+func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn RowWeightFunc) ContainerDigestResult {
+	var (
+		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest
+	)
+	if weightFn == nil {
+		cpuRequests := extractField(rows, func(r MetricRow) int64 { return r.CPURequestMC })
+		cpuUsages := extractField(rows, func(r MetricRow) int64 { return r.CPUUsageMC })
+		cpuThrottles := extractField(rows, func(r MetricRow) int64 { return r.CPUThrottleMC })
+		memRequests := extractField(rows, func(r MetricRow) int64 { return r.MemRequestKiB })
+		memUsages := extractField(rows, func(r MetricRow) int64 { return r.MemUsageKiB })
+		memRSS := extractField(rows, func(r MetricRow) int64 { return r.MemRSSKiB })
+
+		cpuReqD = ComputeDigest(cpuRequests)
+		cpuUseD = ComputeDigest(cpuUsages)
+		cpuThrD = ComputeDigest(cpuThrottles)
+		memReqD = ComputeDigest(memRequests)
+		memUseD = ComputeDigest(memUsages)
+		memRssD = ComputeDigest(memRSS)
+	} else {
+		cpuReqD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPURequestMC })
+		cpuUseD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPUUsageMC })
+		cpuThrD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPUThrottleMC })
+		memReqD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemRequestKiB })
+		memUseD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemUsageKiB })
+		memRssD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemRSSKiB })
+	}
 
 	var oomTotal int64
 	for _, r := range rows {
@@ -334,4 +489,18 @@ func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {
 		vals[i] = fn(r)
 	}
 	return vals
+}
+
+func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldFn func(MetricRow) int64) Digest {
+	vals := make([]int64, 0, len(rows))
+	weights := make([]float64, 0, len(rows))
+	for _, r := range rows {
+		w := weightFn(r)
+		if w <= 0 {
+			continue
+		}
+		vals = append(vals, fieldFn(r))
+		weights = append(weights, w)
+	}
+	return ComputeWeightedDigest(vals, weights)
 }

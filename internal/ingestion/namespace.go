@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -37,12 +38,13 @@ type NamespaceMetricRow struct {
 	MemRSSMaxKiB     int64
 }
 
-// NamespaceDigestKey uniquely identifies a namespace-day combination.
+// NamespaceDigestKey uniquely identifies a namespace-day and schedule stream.
 type NamespaceDigestKey struct {
-	OrgID       string
-	ClusterUUID string
-	Namespace   string
-	BucketDate  time.Time
+	OrgID        string
+	ClusterUUID  string
+	Namespace    string
+	BucketDate   time.Time
+	ScheduleType ScheduleType
 }
 
 // NamespaceDigestResult holds computed digest columns for a single
@@ -326,38 +328,81 @@ func ValidateNamespaceMetricRow(row NamespaceMetricRow) error {
 	return nil
 }
 
-// GroupNamespaceCSVRows groups namespace metric rows by (namespace, day).
+// GroupNamespaceCSVRows groups namespace metric rows by (namespace, day) for all_hours.
 func GroupNamespaceCSVRows(rows []NamespaceMetricRow, orgID, clusterUUID string) map[NamespaceDigestKey][]NamespaceMetricRow {
+	return GroupNamespaceCSVRowsForStream(rows, orgID, clusterUUID, ScheduleTypeAllHours, nil)
+}
+
+// NamespaceRowWeightFunc returns schedule weight for a namespace CSV row.
+type NamespaceRowWeightFunc func(NamespaceMetricRow) float64
+
+// GroupNamespaceCSVRowsForStream groups rows by namespace-day and schedule_type.
+func GroupNamespaceCSVRowsForStream(
+	rows []NamespaceMetricRow,
+	orgID, clusterUUID string,
+	scheduleType ScheduleType,
+	weightFn NamespaceRowWeightFunc,
+) map[NamespaceDigestKey][]NamespaceMetricRow {
 	groups := make(map[NamespaceDigestKey][]NamespaceMetricRow)
 	for _, row := range rows {
+		if weightFn != nil {
+			if w := weightFn(row); w <= 0 {
+				continue
+			}
+		}
 		bucketDate := time.Date(
 			row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(),
 			0, 0, 0, 0, time.UTC,
 		)
 		key := NamespaceDigestKey{
-			OrgID:       orgID,
-			ClusterUUID: clusterUUID,
-			Namespace:   row.Namespace,
-			BucketDate:  bucketDate,
+			OrgID:        orgID,
+			ClusterUUID:  clusterUUID,
+			Namespace:    row.Namespace,
+			BucketDate:   bucketDate,
+			ScheduleType: scheduleType,
 		}
 		groups[key] = append(groups[key], row)
 	}
 	return groups
 }
 
-// ComputeNamespaceDigest computes digest columns for a namespace-day group.
-// Uses request SUM values and usage AVG/MAX values as the per-interval
-// measurements, then computes percentiles across the day's intervals.
-func ComputeNamespaceDigest(key NamespaceDigestKey, rows []NamespaceMetricRow) NamespaceDigestResult {
-	cpuRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPURequestSumMC })
-	cpuUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPUUsageAvgMC })
-	memRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemRequestSumKiB })
-	memUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemUsageAvgKiB })
+func namespaceBusinessHoursRowWeightFn(sched bhschedule.Schedule) NamespaceRowWeightFunc {
+	if !sched.Enabled {
+		return nil
+	}
+	skipZero := sched.OffHoursWeight == 0
+	return func(row NamespaceMetricRow) float64 {
+		w := bhschedule.ScheduleWeight(row.IntervalStart, sched)
+		if skipZero && w <= 0 {
+			return 0
+		}
+		return w
+	}
+}
 
-	cpuReqD := ComputeDigest(cpuRequests)
-	cpuUseD := ComputeDigest(cpuUsages)
-	memReqD := ComputeDigest(memRequests)
-	memUseD := ComputeDigest(memUsages)
+// ComputeNamespaceDigest computes digest columns for a namespace-day group.
+func ComputeNamespaceDigest(key NamespaceDigestKey, rows []NamespaceMetricRow) NamespaceDigestResult {
+	return ComputeNamespaceDigestWeighted(key, rows, nil)
+}
+
+// ComputeNamespaceDigestWeighted computes namespace digests with optional per-row weights.
+func ComputeNamespaceDigestWeighted(key NamespaceDigestKey, rows []NamespaceMetricRow, weightFn NamespaceRowWeightFunc) NamespaceDigestResult {
+	var cpuReqD, cpuUseD, memReqD, memUseD Digest
+	if weightFn == nil {
+		cpuRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPURequestSumMC })
+		cpuUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPUUsageAvgMC })
+		memRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemRequestSumKiB })
+		memUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemUsageAvgKiB })
+		cpuReqD = ComputeDigest(cpuRequests)
+		cpuUseD = ComputeDigest(cpuUsages)
+		memReqD = ComputeDigest(memRequests)
+		memUseD = ComputeDigest(memUsages)
+	} else {
+		cpuReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPURequestSumMC })
+		cpuUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPUUsageAvgMC })
+		memReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemRequestSumKiB })
+		memUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemUsageAvgKiB })
+	}
 
 	// For max, use the per-interval max column if available; fall back to
 	// the digest max of the avg column.
@@ -412,6 +457,152 @@ func extractNSField(rows []NamespaceMetricRow, fn func(NamespaceMetricRow) int64
 		vals[i] = fn(r)
 	}
 	return vals
+}
+
+func computeWeightedNSFieldDigest(rows []NamespaceMetricRow, weightFn NamespaceRowWeightFunc, fieldFn func(NamespaceMetricRow) int64) Digest {
+	vals := make([]int64, 0, len(rows))
+	weights := make([]float64, 0, len(rows))
+	for _, r := range rows {
+		w := weightFn(r)
+		if w <= 0 {
+			continue
+		}
+		vals = append(vals, fieldFn(r))
+		weights = append(weights, w)
+	}
+	return ComputeWeightedDigest(vals, weights)
+}
+
+func buildNamespaceBusinessHoursGroups(
+	rows []NamespaceMetricRow,
+	orgID, clusterUUID string,
+	cache *bhschedule.Cache,
+) map[NamespaceDigestKey][]NamespaceMetricRow {
+	if cache == nil {
+		return nil
+	}
+	byNS := make(map[string][]NamespaceMetricRow)
+	for _, row := range rows {
+		byNS[row.Namespace] = append(byNS[row.Namespace], row)
+	}
+	out := make(map[NamespaceDigestKey][]NamespaceMetricRow)
+	for ns, nsRows := range byNS {
+		sched := cache.Resolve(ns)
+		if !sched.Enabled {
+			continue
+		}
+		weightFn := namespaceBusinessHoursRowWeightFn(sched)
+		for k, g := range GroupNamespaceCSVRowsForStream(nsRows, orgID, clusterUUID, ScheduleTypeBusinessHours, weightFn) {
+			out[k] = g
+		}
+	}
+	return out
+}
+
+func mergeNamespaceDigestGroups(all, bh map[NamespaceDigestKey][]NamespaceMetricRow) map[NamespaceDigestKey][]NamespaceMetricRow {
+	merged := make(map[NamespaceDigestKey][]NamespaceMetricRow, len(all)+len(bh))
+	for k, g := range all {
+		merged[k] = g
+	}
+	for k, g := range bh {
+		merged[k] = g
+	}
+	return merged
+}
+
+func namespaceRowWeightFnForKey(key NamespaceDigestKey, cache *bhschedule.Cache) NamespaceRowWeightFunc {
+	if key.ScheduleType != ScheduleTypeBusinessHours || cache == nil {
+		return nil
+	}
+	sched := cache.Resolve(key.Namespace)
+	if !sched.Enabled {
+		return nil
+	}
+	return namespaceBusinessHoursRowWeightFn(sched)
+}
+
+func upsertNamespaceDigests(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	grouped map[NamespaceDigestKey][]NamespaceMetricRow,
+	scheduleCache *bhschedule.Cache,
+) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin namespace digest tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	batch := &pgx.Batch{}
+	for key, group := range grouped {
+		weightFn := namespaceRowWeightFnForKey(key, scheduleCache)
+		d := ComputeNamespaceDigestWeighted(key, group, weightFn)
+		batch.Queue(`
+			INSERT INTO daily_namespace_digests (
+				bucket_date, org_id, cluster_uuid, namespace, schedule_type,
+				cpu_request_p50_mc, cpu_request_p60_mc, cpu_request_p95_mc, cpu_request_p98_mc, cpu_request_p99_mc,
+				cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
+				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
+				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
+				cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+			) VALUES (
+				$1, $2, $3, $4, $5,
+				$6, $7, $8, $9, $10,
+				$11, $12, $13, $14, $15, $16,
+				$17, $18, $19, $20, $21,
+				$22, $23, $24, $25, $26, $27,
+				$28, $29, $30
+			)
+			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
+			DO UPDATE SET
+				cpu_request_p50_mc = EXCLUDED.cpu_request_p50_mc,
+				cpu_request_p60_mc = EXCLUDED.cpu_request_p60_mc,
+				cpu_request_p95_mc = EXCLUDED.cpu_request_p95_mc,
+				cpu_request_p98_mc = EXCLUDED.cpu_request_p98_mc,
+				cpu_request_p99_mc = EXCLUDED.cpu_request_p99_mc,
+				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
+				cpu_usage_p60_mc = EXCLUDED.cpu_usage_p60_mc,
+				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
+				cpu_usage_p98_mc = EXCLUDED.cpu_usage_p98_mc,
+				cpu_usage_p99_mc = EXCLUDED.cpu_usage_p99_mc,
+				cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
+				memory_request_p50_kib = EXCLUDED.memory_request_p50_kib,
+				memory_request_p60_kib = EXCLUDED.memory_request_p60_kib,
+				memory_request_p95_kib = EXCLUDED.memory_request_p95_kib,
+				memory_request_p98_kib = EXCLUDED.memory_request_p98_kib,
+				memory_request_p99_kib = EXCLUDED.memory_request_p99_kib,
+				memory_usage_p50_kib = EXCLUDED.memory_usage_p50_kib,
+				memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
+				memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
+				memory_usage_p98_kib = EXCLUDED.memory_usage_p98_kib,
+				memory_usage_p99_kib = EXCLUDED.memory_usage_p99_kib,
+				memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
+				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
+				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
+				sample_count = EXCLUDED.sample_count`,
+			key.BucketDate.Format("2006-01-02"),
+			key.OrgID, key.ClusterUUID, key.Namespace, string(key.ScheduleType),
+			d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
+			d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
+			d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
+			d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
+			d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
+		)
+	}
+
+	br := tx.SendBatch(ctx, batch)
+	for range grouped {
+		if _, err := br.Exec(); err != nil {
+			br.Close()
+			return fmt.Errorf("upsert namespace digest: %w", err)
+		}
+	}
+	br.Close()
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit namespace digests: %w", err)
+	}
+	return nil
 }
 
 // EnsureNamespaceSamplePartitions creates monthly partitions of
@@ -511,9 +702,20 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		return fmt.Errorf("upsert namespace usage samples: %w", err)
 	}
 
-	grouped := GroupNamespaceCSVRows(rows, orgID, clusterUUID)
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: %d rows -> %d groups",
-		len(rows), len(grouped))
+	groupedAll := GroupNamespaceCSVRows(rows, orgID, clusterUUID)
+
+	var scheduleCache *bhschedule.Cache
+	if BusinessHoursAggregationEnabled() {
+		var loadErr error
+		scheduleCache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
+		if loadErr != nil {
+			return fmt.Errorf("load business hours schedules: %w", loadErr)
+		}
+	}
+	groupedBH := buildNamespaceBusinessHoursGroups(rows, orgID, clusterUUID, scheduleCache)
+	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: %d rows -> %d all_hours groups, %d business_hours groups",
+		len(rows), len(groupedAll), len(groupedBH))
 
 	digestKeys := make([]NamespaceDigestKey, 0, len(grouped))
 	for k := range grouped {
@@ -521,79 +723,8 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 	}
 	EnsureNamespaceDigestPartitions(ctx, pool, digestKeys)
 
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin namespace digest tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	batch := &pgx.Batch{}
-	for key, group := range grouped {
-		d := ComputeNamespaceDigest(key, group)
-		batch.Queue(`
-			INSERT INTO daily_namespace_digests (
-				bucket_date, org_id, cluster_uuid, namespace,
-				cpu_request_p50_mc, cpu_request_p60_mc, cpu_request_p95_mc, cpu_request_p98_mc, cpu_request_p99_mc,
-				cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
-				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
-				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
-				cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
-			) VALUES (
-				$1, $2, $3, $4,
-				$5, $6, $7, $8, $9,
-				$10, $11, $12, $13, $14, $15,
-				$16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26,
-				$27, $28, $29
-			)
-			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date)
-			DO UPDATE SET
-				cpu_request_p50_mc = EXCLUDED.cpu_request_p50_mc,
-				cpu_request_p60_mc = EXCLUDED.cpu_request_p60_mc,
-				cpu_request_p95_mc = EXCLUDED.cpu_request_p95_mc,
-				cpu_request_p98_mc = EXCLUDED.cpu_request_p98_mc,
-				cpu_request_p99_mc = EXCLUDED.cpu_request_p99_mc,
-				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
-				cpu_usage_p60_mc = EXCLUDED.cpu_usage_p60_mc,
-				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
-				cpu_usage_p98_mc = EXCLUDED.cpu_usage_p98_mc,
-				cpu_usage_p99_mc = EXCLUDED.cpu_usage_p99_mc,
-				cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
-				memory_request_p50_kib = EXCLUDED.memory_request_p50_kib,
-				memory_request_p60_kib = EXCLUDED.memory_request_p60_kib,
-				memory_request_p95_kib = EXCLUDED.memory_request_p95_kib,
-				memory_request_p98_kib = EXCLUDED.memory_request_p98_kib,
-				memory_request_p99_kib = EXCLUDED.memory_request_p99_kib,
-				memory_usage_p50_kib = EXCLUDED.memory_usage_p50_kib,
-				memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
-				memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
-				memory_usage_p98_kib = EXCLUDED.memory_usage_p98_kib,
-				memory_usage_p99_kib = EXCLUDED.memory_usage_p99_kib,
-				memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
-				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
-				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
-				sample_count = EXCLUDED.sample_count`,
-			key.BucketDate.Format("2006-01-02"),
-			orgID, clusterUUID, key.Namespace,
-			d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
-			d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
-			d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
-			d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
-			d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
-		)
-	}
-
-	br := tx.SendBatch(ctx, batch)
-	for range grouped {
-		if _, err := br.Exec(); err != nil {
-			br.Close()
-			return fmt.Errorf("upsert namespace digest: %w", err)
-		}
-	}
-	br.Close()
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit namespace digests: %w", err)
+	if err := upsertNamespaceDigests(ctx, pool, grouped, scheduleCache); err != nil {
+		return err
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: upserted %d digests",

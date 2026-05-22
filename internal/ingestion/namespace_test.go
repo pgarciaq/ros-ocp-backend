@@ -135,30 +135,33 @@ func TestGroupNamespaceCSVRows(t *testing.T) {
 	}
 
 	keyA1 := NamespaceDigestKey{
-		OrgID:       "org1",
-		ClusterUUID: "cluster-1",
-		Namespace:   "ns-a",
-		BucketDate:  time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+		OrgID:        "org1",
+		ClusterUUID:  "cluster-1",
+		Namespace:    "ns-a",
+		BucketDate:   time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+		ScheduleType: ScheduleTypeAllHours,
 	}
 	if len(groups[keyA1]) != 2 {
 		t.Errorf("expected 2 rows for ns-a day 2026-03-20, got %d", len(groups[keyA1]))
 	}
 
 	keyB1 := NamespaceDigestKey{
-		OrgID:       "org1",
-		ClusterUUID: "cluster-1",
-		Namespace:   "ns-b",
-		BucketDate:  time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+		OrgID:        "org1",
+		ClusterUUID:  "cluster-1",
+		Namespace:    "ns-b",
+		BucketDate:   time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+		ScheduleType: ScheduleTypeAllHours,
 	}
 	if len(groups[keyB1]) != 1 {
 		t.Errorf("expected 1 row for ns-b day 2026-03-20, got %d", len(groups[keyB1]))
 	}
 
 	keyA2 := NamespaceDigestKey{
-		OrgID:       "org1",
-		ClusterUUID: "cluster-1",
-		Namespace:   "ns-a",
-		BucketDate:  time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC),
+		OrgID:        "org1",
+		ClusterUUID:  "cluster-1",
+		Namespace:    "ns-a",
+		BucketDate:   time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC),
+		ScheduleType: ScheduleTypeAllHours,
 	}
 	if len(groups[keyA2]) != 1 {
 		t.Errorf("expected 1 row for ns-a day 2026-03-21, got %d", len(groups[keyA2]))

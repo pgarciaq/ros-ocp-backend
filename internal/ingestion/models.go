@@ -56,7 +56,7 @@ func (m *MetricRow) HasGPU() bool {
 	return m.AcceleratorModelName != ""
 }
 
-// DigestKey uniquely identifies a container-day combination for aggregation.
+// DigestKey uniquely identifies a container-day and schedule stream for aggregation.
 type DigestKey struct {
 	OrgID         string
 	ClusterUUID   string
@@ -65,6 +65,7 @@ type DigestKey struct {
 	WorkloadType  string
 	ContainerName string
 	BucketDate    time.Time
+	ScheduleType  ScheduleType
 }
 
 // Digest holds pre-computed percentile values for a single container-day.

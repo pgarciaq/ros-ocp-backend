@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 )
 
 func TestComputeDigest(t *testing.T) {
@@ -91,7 +93,7 @@ func TestGroupCSVRows(t *testing.T) {
 		key := DigestKey{
 			OrgID: "org1", ClusterUUID: "cluster-uuid-1",
 			Namespace: "ns1", Workload: "deploy1", WorkloadType: "deployment",
-			ContainerName: "main", BucketDate: base,
+			ContainerName: "main", BucketDate: base, ScheduleType: ScheduleTypeAllHours,
 		}
 		group, ok := groups[key]
 		require.True(t, ok)
@@ -102,7 +104,7 @@ func TestGroupCSVRows(t *testing.T) {
 		key := DigestKey{
 			OrgID: "org1", ClusterUUID: "cluster-uuid-1",
 			Namespace: "ns1", Workload: "deploy1", WorkloadType: "deployment",
-			ContainerName: "sidecar", BucketDate: base,
+			ContainerName: "sidecar", BucketDate: base, ScheduleType: ScheduleTypeAllHours,
 		}
 		group, ok := groups[key]
 		require.True(t, ok)
@@ -114,7 +116,7 @@ func TestGroupCSVRows(t *testing.T) {
 		key := DigestKey{
 			OrgID: "org1", ClusterUUID: "cluster-uuid-1",
 			Namespace: "ns1", Workload: "deploy1", WorkloadType: "deployment",
-			ContainerName: "main", BucketDate: day2,
+			ContainerName: "main", BucketDate: day2, ScheduleType: ScheduleTypeAllHours,
 		}
 		group, ok := groups[key]
 		require.True(t, ok)
@@ -284,3 +286,143 @@ func TestMinMaxAvgOfMap(t *testing.T) {
 		assert.Equal(t, int64(0), avg)
 	})
 }
+
+func TestComputeWeightedDigest_KnownFixture(t *testing.T) {
+	// Values 10..20 with weights 1.0 on 10..15 and 0.2 on 16..20.
+	// Cumulative-weight p95 target 0.95 * 7.0 = 6.65 → first value with cum >= 6.65 is 18.
+	values := []int64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	weights := []float64{1, 1, 1, 1, 1, 1, 0.2, 0.2, 0.2, 0.2, 0.2}
+	d := ComputeWeightedDigest(values, weights)
+	assert.Equal(t, int64(19), d.P95)
+}
+
+func TestComputeWeightedDigest_MatchesUnweightedWhenAllOnes(t *testing.T) {
+	values := make([]int64, 96)
+	weights := make([]float64, 96)
+	for i := range values {
+		values[i] = int64(i + 1)
+		weights[i] = 1.0
+	}
+	unweighted := ComputeDigest(append([]int64(nil), values...))
+	weighted := ComputeWeightedDigest(values, weights)
+	assert.Equal(t, unweighted, weighted)
+}
+
+func TestComputeWeightedDigest_BimodalOffHoursWeight(t *testing.T) {
+	values := make([]int64, 96)
+	for i := range values {
+		values[i] = 100
+	}
+	values[95] = 10_000
+	allWeights := make([]float64, len(values))
+	for i := range allWeights {
+		allWeights[i] = 1.0
+	}
+	allHours := ComputeWeightedDigest(values, allWeights)
+
+	bhWeights := make([]float64, len(values))
+	for i := range bhWeights {
+		bhWeights[i] = 1.0
+	}
+	bhWeights[95] = 0.2
+	businessHours := ComputeWeightedDigest(values, bhWeights)
+
+	assert.Equal(t, int64(100), businessHours.P95)
+	assert.Equal(t, int64(10_000), allHours.Max)
+	assert.Greater(t, allHours.Max, businessHours.P95)
+}
+
+func TestGroupCSVRows_AllHours(t *testing.T) {
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	rows := []MetricRow{
+		{IntervalStart: base, Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1", CPUUsageMC: 100},
+		{IntervalStart: base.Add(15 * time.Minute), Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1", CPUUsageMC: 200},
+	}
+	groups := GroupCSVRows(rows, "org1", "cluster-1")
+	require.Len(t, groups, 1)
+	for k := range groups {
+		assert.Equal(t, ScheduleTypeAllHours, k.ScheduleType)
+		assert.Len(t, groups[k], 2)
+	}
+}
+
+func TestGroupCSVRows_BusinessHours_ParallelGroups(t *testing.T) {
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC) // Tuesday
+	inBH := day.Add(15 * time.Hour)                    // Tue 15:00 UTC = 10:00 NY
+	offHours := day.Add(23 * time.Hour)                // Tue 23:00 UTC = 18:00 NY, outside BH window
+	rows := []MetricRow{
+		{IntervalStart: inBH, Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1", CPUUsageMC: 100},
+		{IntervalStart: offHours, Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1", CPUUsageMC: 900},
+	}
+	sched := weekdaySchedule()
+	weightFn := BusinessHoursRowWeightFn(sched)
+	bhGroups := GroupCSVRowsForStream(rows, "org1", "cluster-1", ScheduleTypeBusinessHours, weightFn)
+	allGroups := GroupCSVRows(rows, "org1", "cluster-1")
+	require.Len(t, allGroups, 1)
+	require.Len(t, bhGroups, 1)
+	for k := range bhGroups {
+		assert.Equal(t, ScheduleTypeBusinessHours, k.ScheduleType)
+		assert.Len(t, bhGroups[k], 1, "off-hours row skipped when off_hours_weight=0")
+	}
+}
+
+func TestGroupCSVRows_ScheduleDisabled_OnlyAllHours(t *testing.T) {
+	rows := []MetricRow{
+		{IntervalStart: time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC), Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1"},
+	}
+	cache := &bhschedule.Cache{}
+	bh := buildBusinessHoursGroups(rows, "org1", "cluster-1", cache)
+	assert.Empty(t, bh)
+}
+
+func TestGroupCSVRows_EffectiveDisabled_NoBHGroups(t *testing.T) {
+	sched := weekdaySchedule()
+	sched.Enabled = false
+	weightFn := BusinessHoursRowWeightFn(sched)
+	assert.Nil(t, weightFn)
+}
+
+func TestGroupCSVRows_OffHoursWeight02_IncludesOffHours(t *testing.T) {
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	inBH := day.Add(15 * time.Hour)
+	offHours := day.Add(20 * time.Hour)
+	rows := []MetricRow{
+		{IntervalStart: inBH, Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1"},
+		{IntervalStart: offHours, Namespace: "ns1", WorkloadName: "wl", WorkloadType: "deployment", ContainerName: "c1"},
+	}
+	sched := weekdaySchedule()
+	sched.OffHoursWeight = 0.2
+	weightFn := BusinessHoursRowWeightFn(sched)
+	bhGroups := GroupCSVRowsForStream(rows, "org1", "cluster-1", ScheduleTypeBusinessHours, weightFn)
+	require.Len(t, bhGroups, 1)
+	for _, g := range bhGroups {
+		assert.Len(t, g, 2)
+	}
+}
+
+func TestAllHoursStream_IdenticalToPreFeature(t *testing.T) {
+	rows := []MetricRow{
+		{IntervalStart: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), CPUUsageMC: 80, CPURequestMC: 100, MemUsageKiB: 1000, MemRequestKiB: 2000},
+		{IntervalStart: time.Date(2026, 4, 1, 0, 15, 0, 0, time.UTC), CPUUsageMC: 90, CPURequestMC: 100, MemUsageKiB: 1100, MemRequestKiB: 2000},
+		{IntervalStart: time.Date(2026, 4, 1, 0, 30, 0, 0, time.UTC), CPUUsageMC: 100, CPURequestMC: 100, MemUsageKiB: 1200, MemRequestKiB: 2000},
+	}
+	key := DigestKey{
+		OrgID: "org1", ClusterUUID: "cluster-1",
+		Namespace: "ns", Workload: "wl", WorkloadType: "deployment",
+		ContainerName: "main", BucketDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+		ScheduleType: ScheduleTypeAllHours,
+	}
+	legacy := ComputeContainerDigest(key, rows)
+	current := ComputeContainerDigestWeighted(key, rows, nil)
+	assert.Equal(t, legacy, current)
+}
+
+func TestOffHoursWeight0_NoSortOverhead(t *testing.T) {
+	sched := weekdaySchedule()
+	sched.OffHoursWeight = 0.0
+	weightFn := BusinessHoursRowWeightFn(sched)
+	off := time.Date(2026, 1, 10, 15, 0, 0, 0, time.UTC)
+	row := MetricRow{IntervalStart: off}
+	assert.Equal(t, 0.0, weightFn(row))
+}
+
