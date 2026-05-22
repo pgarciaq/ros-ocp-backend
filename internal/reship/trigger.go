@@ -1,0 +1,54 @@
+package reship
+
+import (
+	"context"
+	"sync"
+
+	"github.com/google/uuid"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+)
+
+const orgMaxConcurrent = 2
+
+// Triggerer triggers historical ROS CSV re-shipment via Koku masu (Phase 7).
+type Triggerer interface {
+	TriggerReship(ctx context.Context, orgID string, clusterUUID uuid.UUID) error
+}
+
+// NoopTriggerer is a no-op stub when masu URL is unset.
+type NoopTriggerer struct{}
+
+func (n *NoopTriggerer) TriggerReship(context.Context, string, uuid.UUID) error {
+	return nil
+}
+
+// DefaultTriggerer returns the reship Service when configured, otherwise noop.
+func DefaultTriggerer() Triggerer {
+	return &NoopTriggerer{}
+}
+
+// TriggerAsync fires reship in the background for one or more clusters (org fan-out capped).
+func TriggerAsync(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
+	if trigger == nil || len(clusterUUIDs) == 0 {
+		return
+	}
+	if cfg := config.GetConfig(); cfg.KokuMasuURL == "" {
+		return
+	}
+	go func() {
+		ctx := context.Background()
+		sem := make(chan struct{}, orgMaxConcurrent)
+		var wg sync.WaitGroup
+		for _, id := range clusterUUIDs {
+			wg.Add(1)
+			go func(clusterID uuid.UUID) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				_ = trigger.TriggerReship(ctx, orgID, clusterID)
+			}(id)
+		}
+		wg.Wait()
+	}()
+}

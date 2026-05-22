@@ -16,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
+	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
 
 var log *logrus.Entry = logging.GetLogger()
@@ -170,6 +171,11 @@ func StartAPIServer(ctx context.Context) {
 		v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
 		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
+	}
+
+	if nativeRecommendationRoutes && businessHoursRoutesActive() {
+		bhHandler := NewBusinessHoursSettingsHandler(reship.DefaultTriggerer())
+		RegisterBusinessHoursRoutes(v1, bhHandler)
 	}
 
 	// Historical tracking and quality metrics (native engine only).
