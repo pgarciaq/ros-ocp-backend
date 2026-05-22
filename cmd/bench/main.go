@@ -366,7 +366,7 @@ func buildBulkInsertSQL() func(nContainers int) string {
 			}
 			b.WriteString(")")
 		}
-		b.WriteString(` ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+		b.WriteString(` ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 			DO NOTHING`)
 		return b.String()
 	}
