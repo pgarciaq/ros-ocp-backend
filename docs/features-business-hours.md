@@ -291,8 +291,8 @@ Stores hierarchy parallel to [`snapshot_settings`](migrations/000049_create_snap
 ```sql
 CREATE TABLE business_hours_schedules (
     org_id              TEXT NOT NULL,
-    cluster_uuid        UUID,              -- NULL = org default
-    namespace           TEXT,              -- NULL = cluster-level; both NULL = org default
+    cluster_uuid        UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    namespace           TEXT NOT NULL DEFAULT '',
     timezone            TEXT NOT NULL,
     days                TEXT[] NOT NULL,   -- e.g. ARRAY['monday','tuesday',...]
     start_time          TIME NOT NULL,     -- local wall clock
@@ -304,7 +304,15 @@ CREATE TABLE business_hours_schedules (
 );
 ```
 
-Use sentinel NULLs for hierarchy (one row per level). Alternative: separate `scope` enum column — implementation choice at migration time.
+**Hierarchy sentinels (not SQL NULL):** PostgreSQL does not allow NULL in PRIMARY KEY columns, so scope uses sentinel values instead:
+
+| Scope | `cluster_uuid` | `namespace` |
+|-------|----------------|-------------|
+| Org default | `00000000-0000-0000-0000-000000000000` | `''` (empty string) |
+| Cluster override | actual cluster UUID | `''` |
+| Namespace override | actual cluster UUID | namespace name |
+
+See [`migrations/000066_create_business_hours_schedules.up.sql`](../migrations/000066_create_business_hours_schedules.up.sql) and [`internal/bhschedule/cache.go`](../internal/bhschedule/cache.go).
 
 **Indexes:** `(org_id)`, `(org_id, cluster_uuid)` for bulk cluster lookups during ingestion.
 
@@ -551,7 +559,7 @@ POST /api/cost-management/v1/reship_ros/?schema={schema}&provider_uuid={uuid}&st
 
 **ros-ocp-backend caller:**
 
-- Env: `KOKU_MASU_URL` (e.g. `http://masu-server:5042/api/cost-management/v1`)
+- Env: `KOKU_MASU_URL` — masu host only (e.g. `http://masu-server:5042`); client appends `/api/cost-management/v1/reship_ros/`
 - Date range: `[now - MaxWindowDays(), now]` per affected cluster
 - Async goroutine to avoid blocking Settings API (return `202 Accepted`)
 - **Retry on masu unavailability:** If `reship_ros` call fails (network error, masu down, 5xx), persist a `reship_pending` flag in `business_hours_schedules` (`reship_pending_since TIMESTAMPTZ`). A background poller (e.g., every 60 seconds) retries pending reshships until success or max retries (configurable, default 10). On success, clear the flag. On max retries exceeded, log an error and expose via Prometheus metric (`ros_reship_failures_total`). This ensures eventual consistency even if masu is temporarily unavailable.

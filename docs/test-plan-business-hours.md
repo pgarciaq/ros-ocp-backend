@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | Draft — Implementation Guide |
+| **Status** | Accepted |
 | **Design Doc** | [features-business-hours.md](./features-business-hours.md) |
 | **Last Updated** | 2026-05-22 (design decisions 2026-05-22) |
 | **Approach** | Red → Green → Refactor per phase |
@@ -102,7 +102,7 @@ PostgreSQL can store business-hours schedules and digest rows discriminated by `
 
 | Artifact | Action |
 |----------|--------|
-| `migrations/000066_create_business_hours_schedules.up.sql` | Create `business_hours_schedules` per design (NULL `cluster_uuid`/`namespace` for hierarchy) |
+| `migrations/000066_create_business_hours_schedules.up.sql` | Create `business_hours_schedules` with sentinel PK values for hierarchy (not SQL NULL) |
 | `migrations/000066_create_business_hours_schedules.down.sql` | Drop table |
 | `migrations/000067_add_schedule_type_to_digests.up.sql` | `CREATE TYPE digest_schedule_type AS ENUM (...)`; ALTER `daily_container_digests`, `daily_namespace_digests`; extend PK; `DEFAULT 'all_hours'` |
 | `migrations/000067_add_schedule_type_to_digests.down.sql` | Reverse PK + enum |
@@ -149,7 +149,7 @@ Pure functions resolve org → cluster → namespace schedules, evaluate `InBusi
 | BH-UNIT-024 | `internal/engine/business_hours_settings_test.go` | `TestResolveSchedule_NoRows_AllHoursOnly` | `Enabled=false` | Same |
 | BH-UNIT-025 | `internal/engine/business_hours_settings_test.go` | `TestResolveSchedule_NamespaceDisabled` | NS `enabled:false` disables BH | Same |
 | BH-UNIT-026 | `internal/engine/business_hours_settings_test.go` | `TestLoadSchedules_CacheSingleQuery` | One map; `Resolve` O(1) | No cache |
-| BH-UNIT-027 | `internal/engine/business_hours_settings_test.go` | `TestResolveSchedule_OrgRowSentinelNulls` | NULL `cluster_uuid` + NULL `namespace` | No store |
+| BH-UNIT-027 | `internal/engine/business_hours_settings_test.go` | `TestResolveSchedule_OrgRowSentinelNulls` | Sentinel `cluster_uuid` + empty `namespace` | No store |
 | BH-UNIT-030 | `internal/engine/business_hours_test.go` | `TestInBusinessHours_WeekdayInside` | Tue 10:00 America/New_York → true | Function missing |
 | BH-UNIT-114 *(new)* | `internal/engine/business_hours_test.go` | `TestInBusinessHours_IntervalStartOnly_PartialOverlap` | BH 07:50–17:00, `IntervalStart=07:45` → false (v1 start-only rule) | Proportional overlap not implemented |
 | BH-UNIT-031 | `internal/engine/business_hours_test.go` | `TestInBusinessHours_SaturdayOutside` | Sat 10:00 → false | Same |
