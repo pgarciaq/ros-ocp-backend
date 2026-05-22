@@ -250,6 +250,76 @@ func TestNamespaceDigest_DualStream(t *testing.T) {
 	assert.Equal(t, 2, count)
 }
 
+// BH-UNIT-079: schedules are read from DB at CSV process time, not cached from a prior batch.
+func TestProcessCSV_ReadsScheduleAtProcessTime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-schedule-v2-" + t.Name()
+	cluster := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+
+	// v1: narrow Monday 08:30–08:45 UTC window — only the 08:30 sample is in-window.
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "UTC", Days: []string{"monday"},
+		StartTime: "08:30", EndTime: "08:45", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	csv := csvHeader + "\n"
+	day := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC) // Monday
+	intervals := []struct {
+		hour, minute int
+		cpu          string
+	}{
+		{8, 30, "0.90"}, // only in-window spike for v1 (08:30–08:45 UTC)
+		{12, 0, "0.05"}, // off-hours for v1
+	}
+	for _, iv := range intervals {
+		start := day.Add(time.Duration(iv.hour)*time.Hour + time.Duration(iv.minute)*time.Minute)
+		end := start.Add(15 * time.Minute)
+		csv += csvRow(start.Format("2006-01-02 15:04:05 +0000 UTC"), end.Format("2006-01-02 15:04:05 +0000 UTC"),
+			"sched-ns", "pod-1", "deploy-1", "deployment", "main",
+			"0.1", "0.15", iv.cpu, "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n"
+	}
+
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+
+	var bhSamplesV1 int
+	err = pool.QueryRow(ctx,
+		`SELECT sample_count FROM daily_container_digests
+		 WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID).Scan(&bhSamplesV1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, bhSamplesV1, "v1 schedule should include only the 08:30 in-window sample")
+
+	// v2: full-day schedule — simulates a settings change before the next Kafka message is processed.
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "UTC",
+		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "00:00", EndTime: "23:59", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	_, err = ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+
+	var bhSamplesV2 int
+	err = pool.QueryRow(ctx,
+		`SELECT sample_count FROM daily_container_digests
+		 WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID).Scan(&bhSamplesV2)
+	require.NoError(t, err)
+	assert.Equal(t, 2, bhSamplesV2, "v2 full-day schedule includes both Monday samples at process time")
+	assert.Greater(t, bhSamplesV2, bhSamplesV1, "second batch must use updated schedule from DB, not v1 cache")
+}
+
 func TestMixedNamespaces_DifferentBHPercentiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

@@ -25,6 +25,9 @@ func (n *NoopTriggerer) TriggerReship(context.Context, string, uuid.UUID) error 
 
 // DefaultTriggerer returns the reship Service when configured, otherwise noop.
 func DefaultTriggerer() Triggerer {
+	if svc := DefaultService(); svc != nil {
+		return svc
+	}
 	return &NoopTriggerer{}
 }
 

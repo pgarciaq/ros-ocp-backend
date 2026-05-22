@@ -94,6 +94,41 @@ func TestProcessContainerCSVNative_EndToEnd(t *testing.T) {
 	assert.Greater(t, recCount, 0, "should have written recommendations")
 }
 
+// BH-INT-028: expired presigned URL (403) must not update digests; processing logs fetch error.
+func TestConsumer_PresignedDownload403(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+
+	origPool := db.Pool
+	db.Pool = pool
+	t.Cleanup(func() { db.Pool = origPool })
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer ts.Close()
+
+	kafkaMsg := types.KafkaMsg{
+		Request_id:   "test-req-403",
+		B64_identity: "dGVzdA==",
+		Files:        []string{ts.URL},
+	}
+	kafkaMsg.Metadata.Org_id = "org-403"
+	kafkaMsg.Metadata.Source_id = "src-403"
+	kafkaMsg.Metadata.Cluster_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+	kafkaMsg.Metadata.Cluster_alias = "forbidden-cluster"
+
+	err := processContainerCSVNative(ts.URL, kafkaMsg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403")
+
+	ctx := context.Background()
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1`, "org-403").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "digest must not be updated when presigned download returns 403")
+}
+
 func TestProcessContainerCSVNative_HTTPFailure(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 

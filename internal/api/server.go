@@ -14,6 +14,7 @@ import (
 
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
@@ -176,6 +177,7 @@ func StartAPIServer(ctx context.Context) {
 	if nativeRecommendationRoutes && businessHoursRoutesActive() {
 		bhHandler := NewBusinessHoursSettingsHandler(reship.DefaultTriggerer())
 		RegisterBusinessHoursRoutes(v1, bhHandler)
+		reship.StartPoller(ctx, db.GetPool(), cfg)
 	}
 
 	// Historical tracking and quality metrics (native engine only).
