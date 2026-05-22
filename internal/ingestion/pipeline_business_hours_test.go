@@ -320,6 +320,55 @@ func TestProcessCSV_ReadsScheduleAtProcessTime(t *testing.T) {
 	assert.Greater(t, bhSamplesV2, bhSamplesV1, "second batch must use updated schedule from DB, not v1 cache")
 }
 
+func TestParseAndDigestCSV_PruneBHDigestsWhenNoSchedule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-prune-" + t.Name()
+	cluster := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+	})
+
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "UTC",
+		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "00:00", EndTime: "23:59",
+		OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	csv := csvHeader + "\n" +
+		csvRow("2026-01-06 15:00:00 +0000 UTC", "2026-01-06 15:15:00 +0000 UTC",
+			"prune-ns", "pod-1", "deploy-1", "deployment", "main",
+			"0.1", "0.15", "0.50", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+	var bhBefore int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1 AND schedule_type = 'business_hours'`,
+		orgID).Scan(&bhBefore)
+	require.NoError(t, err)
+	require.Equal(t, 1, bhBefore)
+
+	_, err = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	require.NoError(t, err)
+
+	_, err = ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+	var bhAfter int
+	err = pool.QueryRow(ctx,
+		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1 AND schedule_type = 'business_hours'`,
+		orgID).Scan(&bhAfter)
+	require.NoError(t, err)
+	assert.Equal(t, 0, bhAfter)
+}
+
 func TestMixedNamespaces_DifferentBHPercentiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
