@@ -41,7 +41,7 @@ func TestReshipHTTP_Success_ClearsPending(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 	require.NoError(t, svc.TriggerReship(context.Background(), orgID, clusterID))
 	require.Equal(t, int32(1), calls.Load())
@@ -67,7 +67,7 @@ func TestReshipHTTP_MasuUnavailable_SetsPending(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	err := svc.TriggerReship(context.Background(), orgID, clusterID)
 	require.Error(t, err)
 
@@ -90,7 +90,7 @@ func TestReshipHTTP_NetworkError_SetsPending(t *testing.T) {
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	masuURL := masu.URL + "/api/cost-management/v1"
+	masuURL := masu.URL
 	masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masuURL, MaxRetries: 10})
@@ -109,7 +109,7 @@ func TestReshipHTTP_5xx_SetsPending(t *testing.T) {
 func TestReshipHTTP_CorrectURL(t *testing.T) {
 	clusterID := uuid.MustParse(testutil.TestClusterUUID)
 	start, end := dateRange()
-	url := ReshipURL("http://masu.example/api/cost-management/v1", "1234567", clusterID, start, end)
+	url := ReshipURL("http://masu.example:5042", "1234567", clusterID, start, end)
 	assert.Contains(t, url, "/api/cost-management/v1/reship_ros/?")
 	assert.Contains(t, url, "schema=org1234567")
 	assert.Contains(t, url, "provider_uuid="+clusterID.String())
@@ -148,7 +148,7 @@ func TestReshipPoller_RetrySuccess(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 	require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
 	require.Equal(t, int32(1), calls.Load())
@@ -178,7 +178,7 @@ func TestReshipPoller_MaxRetries_IncrementsMetric(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 3})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3})
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
 	before := counterValue(t, "ros_reship_failures_total", orgID)
@@ -218,7 +218,7 @@ func TestReshipLock_ThreePUTs_MaxTwoExecutions(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -267,7 +267,7 @@ func TestReshipLock_SingleFlight(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -306,7 +306,7 @@ func TestReshipLock_TrailingReshipOnRelease(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -343,7 +343,7 @@ func TestReshipLock_DifferentClusters(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -391,7 +391,7 @@ func TestReshipLock_MaxTwoPerOrg(t *testing.T) {
 		seedBHScheduleRow(t, pool, orgID, c.String())
 	}
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	TriggerAsync(svc, orgID, clusters)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) && inFlight.Load() > 0 {
@@ -440,7 +440,7 @@ func TestReshipMetrics_InProgress(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1"})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -488,7 +488,7 @@ func TestReshipPoller_MaxRetriesDefault10(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc = NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 0})
+	svc = NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 0})
 	require.Equal(t, 10, svc.maxRetries)
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
@@ -522,7 +522,7 @@ func TestReshipClient_400_SetsPending(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
 	err := svc.TriggerReship(context.Background(), orgID, clusterID)
 	require.Error(t, err)
 
@@ -547,7 +547,7 @@ func TestReshipClient_404_SetsPending(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
 	err := svc.TriggerReship(context.Background(), orgID, clusterID)
 	require.Error(t, err)
 
@@ -577,7 +577,7 @@ func TestReshipConsumerUnavailable_PendingUntilIngest(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
 	require.Error(t, svc.TriggerReship(context.Background(), orgID, clusterID))
 
 	pending, err := ReshipPendingSince(context.Background(), pool, orgID, clusterID)
@@ -601,7 +601,7 @@ func TestReshipConsumerUnavailable_PendingUntilIngest(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer masuOK.Close()
-	svc = NewService(pool, ServiceConfig{MasuURL: masuOK.URL + "/api/cost-management/v1", MaxRetries: 10})
+	svc = NewService(pool, ServiceConfig{MasuURL: masuOK.URL, MaxRetries: 10})
 	require.NoError(t, svc.TriggerReship(context.Background(), orgID, clusterID))
 
 	pending, err = ReshipPendingSince(context.Background(), pool, orgID, clusterID)
@@ -677,7 +677,7 @@ func counterValue(t *testing.T, name, orgID string) float64 {
 
 func TestReshipContract_NoReUpload(t *testing.T) {
 	// ros-ocp-backend only POSTs to masu reship_ros; it never re-uploads CSVs to S3.
-	client := NewHTTPClient("http://127.0.0.1:1/api/cost-management/v1", &http.Client{Timeout: 50 * time.Millisecond})
+	client := NewHTTPClient("http://127.0.0.1:1", &http.Client{Timeout: 50 * time.Millisecond})
 	_, err := client.PostReship(context.Background(), "1234567", uuid.New())
 	require.Error(t, err)
 }

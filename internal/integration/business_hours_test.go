@@ -600,7 +600,7 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer masu.Close()
-	t.Setenv("KOKU_MASU_URL", masu.URL+"/api/cost-management/v1")
+	t.Setenv("KOKU_MASU_URL", masu.URL)
 
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-bh-int-reship"

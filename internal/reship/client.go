@@ -28,11 +28,17 @@ type ReshipResult struct {
 }
 
 // NewHTTPClient builds a client for the masu reship_ros endpoint.
+// baseURL is the Koku masu host only (e.g. "http://cost-onprem-masu:5042"), matching HTTPCostDataProvider.
 func NewHTTPClient(baseURL string, client *http.Client) *HTTPClient {
 	if client == nil {
 		client = &http.Client{Timeout: 60 * time.Second}
 	}
 	return &HTTPClient{baseURL: strings.TrimRight(baseURL, "/"), httpClient: client}
+}
+
+// masuAPIV1Base returns the cost-management v1 API prefix for a masu host URL.
+func masuAPIV1Base(host string) string {
+	return strings.TrimRight(host, "/") + "/api/cost-management/v1"
 }
 
 // ReshipURL builds the masu reship_ros URL with query parameters.
@@ -42,7 +48,7 @@ func ReshipURL(baseURL, orgID string, clusterUUID uuid.UUID, startDate, endDate 
 	params.Set("provider_uuid", clusterUUID.String())
 	params.Set("start_date", startDate)
 	params.Set("end_date", endDate)
-	return fmt.Sprintf("%s/reship_ros/?%s", strings.TrimRight(baseURL, "/"), params.Encode())
+	return fmt.Sprintf("%s/reship_ros/?%s", masuAPIV1Base(baseURL), params.Encode())
 }
 
 // PostReship issues POST reship_ros for one cluster over the configured date window.

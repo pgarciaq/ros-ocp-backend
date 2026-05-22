@@ -32,7 +32,7 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	t.Setenv("KOKU_MASU_URL", masu.URL+"/api/cost-management/v1")
+	t.Setenv("KOKU_MASU_URL", masu.URL)
 	enableBusinessHoursForTest(t)
 
 	pool := testutil.SetupTestDB(t)

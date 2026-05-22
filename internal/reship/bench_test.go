@@ -66,7 +66,7 @@ func BenchmarkReshipThroughput(b *testing.B) {
 		_, _ = w.Write([]byte(fmt.Sprintf(`{"files_processed":%d,"files_total":%d}`, benchReshipDays, benchReshipDays)))
 	}))
 	defer masu.Close()
-	client := NewHTTPClient(masu.URL+"/api/cost-management/v1", nil)
+	client := NewHTTPClient(masu.URL, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
