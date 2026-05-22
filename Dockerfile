@@ -9,7 +9,10 @@ RUN go build -o rosocp rosocp.go && \
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 WORKDIR /
 RUN microdnf -y update \
-    --disableplugin=subscription-manager
+    --disableplugin=subscription-manager && \
+    microdnf -y reinstall tzdata \
+    --disableplugin=subscription-manager && \
+    microdnf clean all
 COPY --from=builder /go/src/app/rosocp ./rosocp
 COPY --from=builder /go/src/app/go_version_details ./go_version_details
 COPY migrations ./migrations
