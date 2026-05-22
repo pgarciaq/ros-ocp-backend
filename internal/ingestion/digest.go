@@ -1,8 +1,10 @@
 package ingestion
 
 import (
+	"cmp"
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
@@ -57,6 +59,27 @@ func percentileFromSorted(sorted []int64, pct float64) int64 {
 	return sorted[idx]
 }
 
+type weightedPair struct {
+	v int64
+	w float64
+}
+
+const weightedCountingSortMaxSpan = 4096
+
+type weightedDigestScratch struct {
+	pairs   []weightedPair
+	counts  []int
+	sorted  []weightedPair
+}
+
+var weightedDigestScratchPool = sync.Pool{
+	New: func() any {
+		return &weightedDigestScratch{
+			pairs: make([]weightedPair, 0, 128),
+		}
+	},
+}
+
 // ComputeWeightedDigest computes percentiles using per-sample weights.
 // Samples with weight <= 0 are excluded. When all retained weights are 1.0,
 // results match [ComputeDigest] on the same values.
@@ -66,61 +89,175 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 		return Digest{}
 	}
 
-	type indexed struct {
-		v int64
-		w float64
+	scratch := weightedDigestScratchPool.Get().(*weightedDigestScratch)
+	pairs := scratch.pairs[:0]
+	if cap(pairs) < n {
+		pairs = make([]weightedPair, 0, n)
 	}
-	pairs := make([]indexed, 0, n)
 	for i := range values {
 		if weights[i] > 0 {
-			pairs = append(pairs, indexed{values[i], weights[i]})
+			pairs = append(pairs, weightedPair{values[i], weights[i]})
 		}
 	}
-	if len(pairs) == 0 {
+	pn := len(pairs)
+	if pn == 0 {
+		scratch.pairs = pairs
+		weightedDigestScratchPool.Put(scratch)
 		return Digest{}
 	}
 
-	slices.SortFunc(pairs, func(a, b indexed) int {
-		if a.v < b.v {
-			return -1
-		}
-		if a.v > b.v {
-			return 1
-		}
-		return 0
-	})
-
-	sortedVals := make([]int64, len(pairs))
-	sortedWeights := make([]float64, len(pairs))
-	for i, p := range pairs {
-		sortedVals[i] = p.v
-		sortedWeights[i] = p.w
-	}
+	sortWeightedPairs(scratch, pairs)
 
 	var sum int64
 	var weightedSum float64
 	var totalWeight float64
-	for i, v := range sortedVals {
-		sum += v
-		weightedSum += float64(v) * sortedWeights[i]
-		totalWeight += sortedWeights[i]
+	allOnes := true
+	for _, p := range pairs {
+		sum += p.v
+		weightedSum += float64(p.v) * p.w
+		totalWeight += p.w
+		if p.w != 1.0 {
+			allOnes = false
+		}
 	}
+
 	mean := int64(0)
 	if totalWeight > 0 {
 		mean = int64(weightedSum / totalWeight)
 	}
 
+	var p50, p60, p95, p98, p99 int64
+	if allOnes {
+		p50 = percentileFromWeightedPairs(pairs, 0.50)
+		p60 = percentileFromWeightedPairs(pairs, 0.60)
+		p95 = percentileFromWeightedPairs(pairs, 0.95)
+		p98 = percentileFromWeightedPairs(pairs, 0.98)
+		p99 = percentileFromWeightedPairs(pairs, 0.99)
+	} else {
+		p50, p60, p95, p98, p99 = weightedPercentilesFromPairs(pairs, totalWeight)
+	}
+
+	scratch.pairs = pairs
+	weightedDigestScratchPool.Put(scratch)
+
 	return Digest{
-		P50:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.50),
-		P60:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.60),
-		P95:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.95),
-		P98:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.98),
-		P99:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.99),
-		Max:   sortedVals[len(sortedVals)-1],
+		P50:   p50,
+		P60:   p60,
+		P95:   p95,
+		P98:   p98,
+		P99:   p99,
+		Max:   pairs[pn-1].v,
 		Mean:  mean,
 		Sum:   sum,
-		Count: int64(len(sortedVals)),
+		Count: int64(pn),
 	}
+}
+
+func sortWeightedPairs(scratch *weightedDigestScratch, pairs []weightedPair) {
+	pn := len(pairs)
+	if pn <= 1 {
+		return
+	}
+	minV, maxV := pairs[0].v, pairs[0].v
+	for _, p := range pairs[1:] {
+		if p.v < minV {
+			minV = p.v
+		}
+		if p.v > maxV {
+			maxV = p.v
+		}
+	}
+	span := int(maxV - minV + 1)
+	if span > weightedCountingSortMaxSpan {
+		slices.SortFunc(pairs, func(a, b weightedPair) int {
+			return cmp.Compare(a.v, b.v)
+		})
+		return
+	}
+
+	counts := scratch.counts
+	if cap(counts) < span {
+		counts = make([]int, span)
+	} else {
+		counts = counts[:span]
+		clear(counts)
+	}
+	for _, p := range pairs {
+		counts[p.v-minV]++
+	}
+	pos := 0
+	for i := range counts {
+		c := counts[i]
+		counts[i] = pos
+		pos += c
+	}
+
+	sorted := scratch.sorted
+	if cap(sorted) < pn {
+		sorted = make([]weightedPair, pn)
+	} else {
+		sorted = sorted[:pn]
+	}
+	for _, p := range pairs {
+		idx := counts[p.v-minV]
+		sorted[idx] = p
+		counts[p.v-minV]++
+	}
+	copy(pairs, sorted)
+
+	scratch.counts = counts
+	scratch.sorted = sorted
+}
+
+func percentileFromWeightedPairs(pairs []weightedPair, pct float64) int64 {
+	n := len(pairs)
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return pairs[0].v
+	}
+	rank := int(pct * float64(n-1))
+	if rank >= n {
+		rank = n - 1
+	}
+	return pairs[rank].v
+}
+
+// weightedPercentilesFromPairs returns p50, p60, p95, p98, p99 in one cumulative-weight pass.
+func weightedPercentilesFromPairs(pairs []weightedPair, total float64) (p50, p60, p95, p98, p99 int64) {
+	if total <= 0 {
+		return 0, 0, 0, 0, 0
+	}
+	n := len(pairs)
+	if n == 1 {
+		v := pairs[0].v
+		return v, v, v, v, v
+	}
+
+	targets := [5]float64{
+		0.50 * total,
+		0.60 * total,
+		0.95 * total,
+		0.98 * total,
+		0.99 * total,
+	}
+	results := [5]int64{}
+	last := pairs[n-1].v
+	next := 0
+	cum := 0.0
+	for i := range pairs {
+		cum += pairs[i].w
+		for next < 5 && cum >= targets[next] {
+			results[next] = pairs[i].v
+			next++
+		}
+	}
+	for next < 5 {
+		results[next] = last
+		next++
+	}
+	return results[0], results[1], results[2], results[3], results[4]
 }
 
 func weightedPercentileFromSorted(sorted []int64, weights []float64, pct float64) int64 {

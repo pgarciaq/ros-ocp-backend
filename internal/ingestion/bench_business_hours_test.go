@@ -16,8 +16,8 @@ import (
 //   BH-PERF-006: off_hours_weight=0 path <1.05× unweighted
 //   BH-PERF-007: schedule eval per row <50ms for 10k rows
 //
-// Last run (Intel Ultra 7 165H, go test -run=^$ -benchmem -count=3):
-//   BH-PERF-001: ~41ms/op (threshold 10ms) — weighted digest dominates
+// Last run (Intel Ultra 7 165H, go test -run=^$ -benchmem -count=5):
+//   BH-PERF-001: ~6–9ms/op (threshold 10ms) — sync.Pool + counting sort for narrow spans
 //   BH-PERF-002: ~0.07–0.12 µs/lookup (threshold 1ms) — PASS
 //   BH-PERF-003: single ~2ms/100 ctr, dual ~500ms/100 ctr (~250×; weighted BH path)
 //   BH-PERF-007: ~1–2ms/10k rows (threshold 50ms) — schedule eval with cached TZ

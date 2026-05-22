@@ -1,6 +1,8 @@
 package ingestion
 
 import (
+	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -330,6 +332,135 @@ func TestComputeWeightedDigest_BimodalOffHoursWeight(t *testing.T) {
 	assert.Equal(t, int64(100), businessHours.P95)
 	assert.Equal(t, int64(10_000), allHours.Max)
 	assert.Greater(t, allHours.Max, businessHours.P95)
+}
+
+// computeWeightedDigestBaseline is the pre-optimization reference implementation.
+func computeWeightedDigestBaseline(values []int64, weights []float64) Digest {
+	n := len(values)
+	if n == 0 || len(weights) != n {
+		return Digest{}
+	}
+
+	type indexed struct {
+		v int64
+		w float64
+	}
+	pairs := make([]indexed, 0, n)
+	for i := range values {
+		if weights[i] > 0 {
+			pairs = append(pairs, indexed{values[i], weights[i]})
+		}
+	}
+	if len(pairs) == 0 {
+		return Digest{}
+	}
+
+	slices.SortFunc(pairs, func(a, b indexed) int {
+		if a.v < b.v {
+			return -1
+		}
+		if a.v > b.v {
+			return 1
+		}
+		return 0
+	})
+
+	sortedVals := make([]int64, len(pairs))
+	sortedWeights := make([]float64, len(pairs))
+	for i, p := range pairs {
+		sortedVals[i] = p.v
+		sortedWeights[i] = p.w
+	}
+
+	var sum int64
+	var weightedSum float64
+	var totalWeight float64
+	for i, v := range sortedVals {
+		sum += v
+		weightedSum += float64(v) * sortedWeights[i]
+		totalWeight += sortedWeights[i]
+	}
+	mean := int64(0)
+	if totalWeight > 0 {
+		mean = int64(weightedSum / totalWeight)
+	}
+
+	return Digest{
+		P50:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.50),
+		P60:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.60),
+		P95:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.95),
+		P98:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.98),
+		P99:   weightedPercentileFromSorted(sortedVals, sortedWeights, 0.99),
+		Max:   sortedVals[len(sortedVals)-1],
+		Mean:  mean,
+		Sum:   sum,
+		Count: int64(len(sortedVals)),
+	}
+}
+
+func TestComputeWeightedDigest_MatchesBaseline(t *testing.T) {
+	fixtures := []struct {
+		name    string
+		values  []int64
+		weights []float64
+	}{
+		{
+			name:    "known_fixture",
+			values:  []int64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+			weights: []float64{1, 1, 1, 1, 1, 1, 0.2, 0.2, 0.2, 0.2, 0.2},
+		},
+		{
+			name:    "all_ones_96",
+			values:  func() []int64 { v := make([]int64, 96); for i := range v { v[i] = int64(i + 1) }; return v }(),
+			weights: func() []float64 { w := make([]float64, 96); for i := range w { w[i] = 1.0 }; return w }(),
+		},
+		{
+			name:    "bimodal_bh",
+			values:  func() []int64 { v := make([]int64, 96); for i := range v { v[i] = 100 }; v[95] = 10_000; return v }(),
+			weights: func() []float64 { w := make([]float64, 96); for i := range w { w[i] = 1.0 }; w[95] = 0.2; return w }(),
+		},
+		{
+			name:    "single_sample",
+			values:  []int64{42},
+			weights: []float64{0.5},
+		},
+		{
+			name:    "zero_weights_filtered",
+			values:  []int64{1, 2, 3},
+			weights: []float64{0, 1.0, 0},
+		},
+	}
+
+	for _, tc := range fixtures {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComputeWeightedDigest(tc.values, tc.weights)
+			want := computeWeightedDigestBaseline(tc.values, tc.weights)
+			assert.Equal(t, want, got)
+		})
+	}
+
+	for seed := int64(0); seed < 20; seed++ {
+		t.Run("random", func(t *testing.T) {
+			rng := rand.New(rand.NewSource(seed))
+			n := 96
+			values := make([]int64, n)
+			weights := make([]float64, n)
+			for i := range values {
+				values[i] = int64(rng.Intn(1000))
+				switch rng.Intn(4) {
+				case 0:
+					weights[i] = 0
+				case 1:
+					weights[i] = 1.0
+				default:
+					weights[i] = 0.1 + rng.Float64()*0.9
+				}
+			}
+			got := ComputeWeightedDigest(values, weights)
+			want := computeWeightedDigestBaseline(values, weights)
+			assert.Equal(t, want, got)
+		})
+	}
 }
 
 func TestGroupCSVRows_AllHours(t *testing.T) {
