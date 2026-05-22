@@ -82,10 +82,18 @@ type DetailEngines struct {
 	Performance *DetailEngine `json:"performance,omitempty"`
 }
 
+// BusinessHoursDetail is the Kruize-compatible nested business_hours block on an engine.
+type BusinessHoursDetail struct {
+	Requests *DetailResourcePair `json:"requests,omitempty"`
+	Limits   *DetailResourcePair `json:"limits,omitempty"`
+	Reason   string              `json:"reason,omitempty"`
+}
+
 // DetailEngine is the Kruize-compatible engine recommendation shape.
 // The UI reads config.requests.cpu.amount, variation.requests.cpu.amount, etc.
 type DetailEngine struct {
 	Config        *DetailResourceConfig                      `json:"config,omitempty"`
+	BusinessHours *BusinessHoursDetail                       `json:"business_hours,omitempty"`
 	Variation     *DetailResourceConfig                      `json:"variation,omitempty"`
 	Notifications map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
@@ -237,10 +245,31 @@ func toDetailEngine(eng *EngineRecommendation) *DetailEngine {
 		}
 	}
 
-	return &DetailEngine{
+	de := &DetailEngine{
 		Config:        config,
 		Variation:     variation,
 		Notifications: eng.Notifications,
+	}
+	if eng.BusinessHours != nil {
+		de.BusinessHours = businessHoursToDetail(eng.BusinessHours)
+	}
+	return de
+}
+
+func businessHoursToDetail(bh *BusinessHoursRecommendation) *BusinessHoursDetail {
+	if bh == nil {
+		return nil
+	}
+	if bh.Reason != "" {
+		return &BusinessHoursDetail{Reason: bh.Reason}
+	}
+	limits := &DetailResourcePair{}
+	return &BusinessHoursDetail{
+		Requests: &DetailResourcePair{
+			CPU:    mcToCores(bh.CPURequestMillicores),
+			Memory: kibToMiB(bh.MemRequestKiB),
+		},
+		Limits: limits,
 	}
 }
 

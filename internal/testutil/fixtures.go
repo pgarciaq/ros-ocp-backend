@@ -49,6 +49,7 @@ type ContainerDigestRow struct {
 	CPURequestP50MC  int64
 	CPURequestP95MC  int64
 	CPUUsageP50MC    int64
+	CPUUsageP60MC    int64
 	CPUUsageP95MC    int64
 	CPUUsageP98MC    int64
 	CPUUsageP99MC    int64
@@ -72,17 +73,30 @@ type ContainerDigestRow struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
+	ScheduleType     string // digest_schedule_type; defaults to all_hours
+}
+
+func cpuUsageP60(row ContainerDigestRow) int64 {
+	if row.CPUUsageP60MC > 0 {
+		return row.CPUUsageP60MC
+	}
+	return row.CPUUsageP95MC
 }
 
 // SeedContainerDigest inserts a single row into daily_container_digests.
 func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRow) {
 	t.Helper()
+	scheduleType := row.ScheduleType
+	if scheduleType == "" {
+		scheduleType = "all_hours"
+	}
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO daily_container_digests (
 			bucket_date, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+			schedule_type,
 			cpu_request_p50_mc, cpu_request_p95_mc,
-			cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
+			cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
 			cpu_throttle_p95_mc, cpu_throttle_max_mc,
 			memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
 			memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
@@ -90,14 +104,16 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11, $12, $13, $14,
-			$15, $16,
-			$17, $18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27,
-			$28, $29,
-			$30, $31, $32, $33
+			$8::digest_schedule_type,
+			$9, $10,
+			$11, $12, $13, $14, $15, $16,
+			$17, $18,
+			$19, $20, $21, $22, $23,
+			$24, $25, $26, $27, $28, $29,
+			$30, $31,
+			$32, $33, $34, $35
 		)
-		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 		DO UPDATE SET
 			cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
 			cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
@@ -108,8 +124,9 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
 			sample_count = EXCLUDED.sample_count`,
 		row.BucketDate, row.OrgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
+		scheduleType,
 		row.CPURequestP50MC, row.CPURequestP95MC,
-		row.CPUUsageP50MC, row.CPUUsageP95MC, row.CPUUsageP98MC, row.CPUUsageP99MC, row.CPUUsageMaxMC,
+		row.CPUUsageP50MC, cpuUsageP60(row), row.CPUUsageP95MC, row.CPUUsageP98MC, row.CPUUsageP99MC, row.CPUUsageMaxMC,
 		row.CPUThrottleP95MC, row.CPUThrottleMaxMC,
 		row.MemRequestP50KiB, row.MemRequestP60KiB, row.MemRequestP95KiB, row.MemRequestP98KiB, row.MemRequestP99KiB,
 		row.MemUsageP50KiB, row.MemUsageP60KiB, row.MemUsageP95KiB, row.MemUsageP98KiB, row.MemUsageP99KiB, row.MemUsageMaxKiB,
@@ -189,7 +206,7 @@ func SeedNamespaceDigestSeries(t *testing.T, pool *pgxpool.Pool, namespace strin
 				$10, $11, $12, $13, $14,
 				$15, $16, $17
 			)
-			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date)
+			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
 			BaseDate.AddDate(0, 0, i), TestOrgID, TestClusterUUID, namespace,
 			cpuVal-20, cpuVal+10,
@@ -229,7 +246,7 @@ func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace s
 				$18, $19, $20, $21, $22, $23,
 				$24, $25, $26
 			)
-			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date)
+			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
 			BaseDate.AddDate(0, 0, i), TestOrgID, TestClusterUUID, namespace,
 			cpuVal-20, cpuVal-10, cpuVal+10, cpuVal+20,

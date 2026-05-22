@@ -623,3 +623,150 @@ func TestBuildNamespaceDetailResponse_SkipsMonitoringEndTimeKey(t *testing.T) {
 	assert.False(t, hasMetKey, "monitoring_end_time should not appear as a term")
 	assert.Equal(t, "2026-04-10T00:00:00Z", detail.Recommendations.MonitoringEndTime)
 }
+
+func TestBuildDetailResponse_BusinessHoursPresent(t *testing.T) {
+	cpuReq := int64(800)
+	memReq := int64(2048)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: int64Ptr(500),
+					MemRequestKiB:        int64Ptr(1024),
+					BusinessHours: &BusinessHoursRecommendation{
+						CPURequestMillicores: &cpuReq,
+						MemRequestKiB:        &memReq,
+					},
+				},
+			},
+		},
+	}
+
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	cost := detail.Recommendations.RecommendationTerms["short_term"].RecommendationEngines.Cost
+	require.NotNil(t, cost.BusinessHours)
+	require.NotNil(t, cost.BusinessHours.Requests)
+	require.NotNil(t, cost.BusinessHours.Requests.CPU)
+	assert.InDelta(t, 0.8, cost.BusinessHours.Requests.CPU.Amount, 0.001)
+	assert.Equal(t, "cores", cost.BusinessHours.Requests.CPU.Format)
+	require.NotNil(t, cost.BusinessHours.Limits)
+}
+
+func TestBuildDetailResponse_BusinessHoursAbsent(t *testing.T) {
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{CPURequestMillicores: int64Ptr(500)},
+			},
+		},
+	}
+
+	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}))
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), `"business_hours"`)
+}
+
+func TestBuildDetailResponse_KillSwitch_NoBHField(t *testing.T) {
+	cpuBH := int64(900)
+	native := &NativeContainerResult{
+		ID:          "test-uuid",
+		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container:   "main",
+		Project:     "default",
+		Workload:    "api-deploy",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: int64Ptr(500),
+					BusinessHours:        &BusinessHoursRecommendation{CPURequestMillicores: &cpuBH},
+				},
+			},
+		},
+	}
+	// Kill switch is enforced at enrichment time; builder only omits nil BusinessHours.
+	native.Recommendations["short_term"] = TermRecommendation{
+		Cost: &EngineRecommendation{CPURequestMillicores: int64Ptr(500)},
+	}
+	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}))
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), `"business_hours"`)
+}
+
+func TestBusinessHours_KruizeAmountFormat(t *testing.T) {
+	cpu := int64(1500)
+	mem := int64(4194304) // 4 GiB in KiB
+	native := &NativeContainerResult{
+		ID: "x", ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container: "c", Project: "ns", Workload: "w",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {Cost: &EngineRecommendation{
+				BusinessHours: &BusinessHoursRecommendation{
+					CPURequestMillicores: &cpu,
+					MemRequestKiB:        &mem,
+				},
+			}},
+		},
+	}
+	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}))
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(b, &raw))
+	bh := raw["recommendations"].(map[string]any)["recommendation_terms"].(map[string]any)["short_term"].(map[string]any)["recommendation_engines"].(map[string]any)["cost"].(map[string]any)["business_hours"].(map[string]any)
+	cpuObj := bh["requests"].(map[string]any)["cpu"].(map[string]any)
+	assert.Equal(t, "cores", cpuObj["format"])
+	assert.IsType(t, float64(0), cpuObj["amount"])
+	memObj := bh["requests"].(map[string]any)["memory"].(map[string]any)
+	assert.Equal(t, "MiB", memObj["format"])
+}
+
+func TestBusinessHours_LimitsObjectPresent(t *testing.T) {
+	cpu := int64(100)
+	native := &NativeContainerResult{
+		ID: "x", ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container: "c", Project: "ns", Workload: "w",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {Cost: &EngineRecommendation{
+				BusinessHours: &BusinessHoursRecommendation{CPURequestMillicores: &cpu},
+			}},
+		},
+	}
+	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}))
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(b, &raw))
+	bh := raw["recommendations"].(map[string]any)["recommendation_terms"].(map[string]any)["short_term"].(map[string]any)["recommendation_engines"].(map[string]any)["cost"].(map[string]any)["business_hours"].(map[string]any)
+	limits, ok := bh["limits"].(map[string]any)
+	require.True(t, ok, "limits key must be present")
+	assert.Empty(t, limits)
+}
+
+func TestBusinessHours_ListDetailParity(t *testing.T) {
+	cpu := int64(600)
+	bh := &BusinessHoursRecommendation{CPURequestMillicores: &cpu}
+	native := &NativeContainerResult{
+		ID: "x", ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container: "c", Project: "ns", Workload: "w",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {Cost: &EngineRecommendation{BusinessHours: bh}},
+		},
+	}
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	listJSON, _ := json.Marshal(detail)
+	detail2 := BuildDetailResponse(native, nil, time.Time{})
+	detailJSON, _ := json.Marshal(detail2)
+	assert.JSONEq(t, string(listJSON), string(detailJSON))
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}

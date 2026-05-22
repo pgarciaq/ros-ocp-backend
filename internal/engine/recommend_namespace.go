@@ -79,6 +79,7 @@ func RecommendAllNamespaces(
 		FROM daily_namespace_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = 'all_hours'
 		ORDER BY namespace, bucket_date`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {

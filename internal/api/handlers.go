@@ -727,6 +727,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 	}
 
 	if count > 0 {
+		EnrichNativeNamespaceResults(c.Request().Context(), OrgID, results)
 		return serveNativeNamespaceList(c, results, int(count), apiListOptions)
 	}
 
@@ -869,6 +870,10 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 
 		met, _ = model.NamespaceMonitoringEndTime(ctx, pool, key)
 	}
+
+	singleSlice := []model.NativeNamespaceResult{*result}
+	EnrichNativeNamespaceResults(ctx, orgID, singleSlice)
+	*result = singleSlice[0]
 
 	return model.BuildNamespaceDetailResponse(result, plots, met)
 }

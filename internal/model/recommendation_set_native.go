@@ -167,6 +167,15 @@ type TermRecommendation struct {
 	Plots       *NativePlot           `json:"plots,omitempty"`
 }
 
+// BusinessHoursRecommendation is the optional business-hours perspective nested under an engine.
+type BusinessHoursRecommendation struct {
+	CPURequestMillicores *int64 `json:"-"`
+	CPULimitMillicores   *int64 `json:"-"`
+	MemRequestKiB        *int64 `json:"-"`
+	MemLimitKiB          *int64 `json:"-"`
+	Reason               string `json:"reason,omitempty"`
+}
+
 // EngineRecommendation holds the actual CPU/memory recommendation values.
 type EngineRecommendation struct {
 	CPURequestMillicores   *int64                                     `json:"cpu_request_millicores,omitempty"`
@@ -184,6 +193,7 @@ type EngineRecommendation struct {
 	ConfidenceLevel        *float32                                   `json:"confidence_level,omitempty"`
 	NotificationCodes      SmallintArray                              `json:"notification_codes"`
 	Notifications          map[string]notifications.NotificationEntry `json:"notifications"`
+	BusinessHours          *BusinessHoursRecommendation               `json:"business_hours,omitempty"`
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
