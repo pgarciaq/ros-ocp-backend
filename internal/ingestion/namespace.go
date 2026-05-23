@@ -711,7 +711,7 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		if loadErr != nil {
 			return fmt.Errorf("load business hours schedules: %w", loadErr)
 		}
-		if scheduleCache != nil && !scheduleCache.HasAnyEnabled() {
+		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
 			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
 				return err
 			}

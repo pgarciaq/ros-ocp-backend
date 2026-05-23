@@ -37,5 +37,15 @@ func DeleteBusinessHoursSchedule(ctx context.Context, pool *pgxpool.Pool, orgID,
 	return bhschedule.DeleteSchedule(ctx, pool, orgID, clusterUUID, namespace)
 }
 
+// PruneClusterBusinessHoursDigests removes all business_hours digest rows for a cluster.
+func PruneClusterBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
+	return bhschedule.PruneClusterBusinessHoursDigests(ctx, pool, orgID, clusterUUID)
+}
+
+// PruneNamespaceBusinessHoursDigests removes business_hours digest rows for one namespace.
+func PruneNamespaceBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, namespace string) error {
+	return bhschedule.PruneNamespaceBusinessHoursDigests(ctx, pool, orgID, clusterUUID, namespace)
+}
+
 // Re-export pgx.ErrNoRows for callers that compare delete outcomes.
 var ErrNoRows = pgx.ErrNoRows

@@ -112,6 +112,26 @@ func (c *Cache) HasAnyEnabled() bool {
 	return false
 }
 
+// ProducesBusinessHoursDigests reports whether this cluster should retain business_hours digests.
+// Org defaults apply only when no cluster override exists; a disabled cluster override blocks org inheritance.
+func (c *Cache) ProducesBusinessHoursDigests() bool {
+	if c == nil {
+		return false
+	}
+	for _, row := range c.namespace {
+		if row.Enabled {
+			return true
+		}
+	}
+	if c.cluster != nil {
+		return c.cluster.Enabled
+	}
+	if c.org != nil {
+		return c.org.Enabled
+	}
+	return false
+}
+
 // Resolve returns the effective schedule for namespace using inheritance.
 func (c *Cache) Resolve(namespace string) Schedule {
 	if c == nil {

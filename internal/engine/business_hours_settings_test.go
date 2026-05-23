@@ -91,6 +91,27 @@ func TestResolveSchedule_NamespaceDisabled(t *testing.T) {
 	assert.False(t, got.Enabled)
 }
 
+func TestProducesBusinessHoursDigests_ClusterDisabledBlocksOrg(t *testing.T) {
+	cache := bhschedule.NewCacheForTest(
+		ptrSchedule(BusinessHoursSchedule{Enabled: true}),
+		ptrSchedule(BusinessHoursSchedule{Enabled: false}),
+		nil,
+	)
+	assert.False(t, cache.ProducesBusinessHoursDigests())
+	assert.True(t, cache.HasAnyEnabled())
+}
+
+func TestProducesBusinessHoursDigests_EnabledNamespaceOverride(t *testing.T) {
+	cache := bhschedule.NewCacheForTest(
+		nil,
+		ptrSchedule(BusinessHoursSchedule{Enabled: false}),
+		map[string]BusinessHoursSchedule{
+			"team-a": {Enabled: true},
+		},
+	)
+	assert.True(t, cache.ProducesBusinessHoursDigests())
+}
+
 func TestLoadSchedules_CacheSingleQuery(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

@@ -255,6 +255,20 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 		return serviceUnavailable(c, "unable to save business hours settings")
 	}
 
+	if config.BusinessHoursFeatureEnabled() && !sched.Enabled {
+		if namespace != "" {
+			if err := engine.PruneNamespaceBusinessHoursDigests(ctx, pool, orgID, clusterUUID, namespace); err != nil {
+				hlog.Errorf("prune namespace business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		} else if clusterUUID != engine.OrgClusterSentinelUUID {
+			if err := engine.PruneClusterBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
+				hlog.Errorf("prune cluster business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		}
+	}
+
 	clusterIDs, err := h.reshipClusterIDs(ctx, pool, orgID, clusterUUID, orgLevel)
 	if err != nil {
 		hlog.Errorf("resolve reship clusters: %v", err)

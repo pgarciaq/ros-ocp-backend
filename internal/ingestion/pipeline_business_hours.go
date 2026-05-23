@@ -61,19 +61,7 @@ func rowWeightFnForDigestKey(key DigestKey, cache *bhschedule.Cache) RowWeightFu
 // pruneBusinessHoursDigests removes business_hours digest rows when no enabled schedule applies
 // (e.g. after DELETE of the last schedule row and re-ingestion).
 func pruneBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
-	if _, err := pool.Exec(ctx, `
-		DELETE FROM daily_container_digests
-		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND schedule_type = 'business_hours'`,
-		orgID, clusterUUID); err != nil {
-		return fmt.Errorf("prune container business_hours digests: %w", err)
-	}
-	if _, err := pool.Exec(ctx, `
-		DELETE FROM daily_namespace_digests
-		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND schedule_type = 'business_hours'`,
-		orgID, clusterUUID); err != nil {
-		return fmt.Errorf("prune namespace business_hours digests: %w", err)
-	}
-	return nil
+	return bhschedule.PruneClusterBusinessHoursDigests(ctx, pool, orgID, clusterUUID)
 }
 
 func upsertContainerDigests(

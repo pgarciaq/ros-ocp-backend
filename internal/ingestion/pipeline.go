@@ -167,7 +167,7 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 		if loadErr != nil {
 			return nil, fmt.Errorf("load business hours schedules: %w", err)
 		}
-		if scheduleCache != nil && !scheduleCache.HasAnyEnabled() {
+		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
 			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
 				return nil, err
 			}
