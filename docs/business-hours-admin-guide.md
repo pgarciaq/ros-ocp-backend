@@ -131,10 +131,12 @@ OpenAPI: `/api/cost-management/v1/openapi.json` (when feature enabled).
 
 1. `000066_create_business_hours_schedules`
 2. `000067_add_schedule_type_to_digests`
-3. `000069_add_reship_forward_only_since`
+3. `000068_container_usage_samples_pk_workload_type`
+4. `000069_add_reship_forward_only_since`
 
-Deploy **koku masu** (`reship_ros`) before or with ros-ocp-backend. If ros
-deploys first, the pending-flag poller retries until masu is available.
+Deploy order: **koku masu** (`reship_ros`) → **ros-ocp-backend** (migrations 066–069) →
+**cost-onprem-chart** (Helm values). If ros deploys before koku, the pending-flag
+poller retries until masu is available.
 
 ### Helm values (cost-onprem)
 
