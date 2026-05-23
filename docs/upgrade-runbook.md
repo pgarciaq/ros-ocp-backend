@@ -283,3 +283,38 @@ WHERE NOT EXISTS (SELECT 1 FROM clusters c WHERE c.cluster_uuid = d.cluster_uuid
 This gives at-least-once semantics without changing the Kafka consumer mode.
 Defer implementation until scale demands it (> 1000 clusters per tenant or
 frequent source churn).
+
+---
+
+## Business Hours (migrations 066–069)
+
+### Prerequisites
+
+- Koku `reship_ros` endpoint must be deployed first (koku branch: `feature/reship-ros-endpoint`)
+- `ROS_BUSINESS_HOURS_ENABLED` defaults to `false` — set to `true` to activate
+
+### Migration sequence
+
+1. **000066** — Creates `business_hours_schedules` table
+2. **000067** — Adds `schedule_type` ENUM and column to digest tables, extends PKs
+3. **000068** — Adds `workload_type` to `container_usage_samples` PK (required for ON CONFLICT)
+4. **000069** — Adds `reship_forward_only_since` column to `business_hours_schedules`
+
+### Deploy order
+
+1. Deploy koku with `reship_ros` endpoint
+2. Deploy ros-ocp-backend with migrations 066–069
+3. Update Helm chart with BH env vars enabled
+
+### First schedule creation
+
+- PUT triggers an immediate reship of historical data (up to `window_days`, default 14)
+- Reship calls koku's `reship_ros` → S3 presigned URLs → Kafka → ros re-ingestion
+- First-time reship for a large cluster (1000+ containers, 14 days) takes 1–5 minutes
+
+### Rollback
+
+- Set `ROS_BUSINESS_HOURS_ENABLED=false` → kill-switch hides endpoints, stops BH processing
+- Existing `business_hours` digests remain in DB but are ignored
+- To fully remove: run migration 067 DOWN, then 066 DOWN (drops BH data)
+- Migration 068/069 are additive and safe to leave in place
