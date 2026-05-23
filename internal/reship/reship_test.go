@@ -3,7 +3,6 @@ package reship
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,11 +33,11 @@ func TestReshipHTTP_Success_ClearsPending(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"files_processed":3,"files_total":5}`))
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
@@ -62,9 +61,9 @@ func TestReshipHTTP_MasuUnavailable_SetsPending(t *testing.T) {
 	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -87,9 +86,9 @@ func TestReshipHTTP_NetworkError_SetsPending(t *testing.T) {
 	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	masuURL := masu.URL
 	masu.Close()
 
@@ -107,12 +106,12 @@ func TestReshipHTTP_5xx_SetsPending(t *testing.T) {
 }
 
 func TestReshipHTTP_CorrectURL(t *testing.T) {
-	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	providerID := uuid.MustParse(testutil.TestProviderUUID)
 	start, end := dateRange()
-	url := ReshipURL("http://masu.example:5042", "1234567", clusterID, start, end)
+	url := ReshipURL("http://masu.example:5042", "1234567", providerID, start, end)
 	assert.Contains(t, url, "/api/cost-management/v1/reship_ros/?")
 	assert.Contains(t, url, "schema=org1234567")
-	assert.Contains(t, url, "provider_uuid="+clusterID.String())
+	assert.Contains(t, url, "provider_uuid="+providerID.String())
 	assert.Contains(t, url, "start_date="+start)
 	assert.Contains(t, url, "end_date="+end)
 }
@@ -139,13 +138,13 @@ func TestReshipPoller_RetrySuccess(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
@@ -172,10 +171,10 @@ func TestReshipPoller_MaxRetries_IncrementsMetric(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3})
@@ -208,14 +207,14 @@ func TestReshipLock_ThreePUTs_MaxTwoExecutions(t *testing.T) {
 
 	started := make(chan struct{})
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		if calls.Load() == 1 {
 			close(started)
 			time.Sleep(200 * time.Millisecond)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -257,14 +256,14 @@ func TestReshipLock_SingleFlight(t *testing.T) {
 
 	started := make(chan struct{})
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		if calls.Load() == 1 {
 			close(started)
 			time.Sleep(200 * time.Millisecond)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -296,14 +295,14 @@ func TestReshipLock_TrailingReshipOnRelease(t *testing.T) {
 
 	started := make(chan struct{})
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		if calls.Load() == 1 {
 			close(started)
 			time.Sleep(150 * time.Millisecond)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -336,11 +335,11 @@ func TestReshipLock_DifferentClusters(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterB.String())
 
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		time.Sleep(50 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -361,7 +360,7 @@ func TestReshipLock_DifferentClusters(t *testing.T) {
 func TestReshipLock_MaxTwoPerOrg(t *testing.T) {
 	var inFlight atomic.Int32
 	var peak atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		cur := inFlight.Add(1)
 		for {
 			old := peak.Load()
@@ -372,7 +371,7 @@ func TestReshipLock_MaxTwoPerOrg(t *testing.T) {
 		time.Sleep(80 * time.Millisecond)
 		inFlight.Add(-1)
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	if testing.Short() {
@@ -433,11 +432,11 @@ func TestReshipMetrics_InProgress(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	started := make(chan struct{})
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		close(started)
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
@@ -482,10 +481,10 @@ func TestReshipPoller_MaxRetriesDefault10(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	var calls atomic.Int32
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
+	})
 	defer masu.Close()
 
 	svc = NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 0})
@@ -517,9 +516,9 @@ func TestReshipClient_400_SetsPending(t *testing.T) {
 	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
@@ -542,9 +541,9 @@ func TestReshipClient_404_SetsPending(t *testing.T) {
 	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
@@ -572,9 +571,9 @@ func TestReshipConsumerUnavailable_PendingUntilIngest(t *testing.T) {
 	})
 	seedBHScheduleRow(t, pool, orgID, clusterStr)
 
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
+	})
 	defer masu.Close()
 
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
@@ -597,9 +596,9 @@ func TestReshipConsumerUnavailable_PendingUntilIngest(t *testing.T) {
 	require.NotNil(t, pending, "digest ingest must not clear reship_pending_since")
 
 	masu.Close()
-	masuOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masuOK := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masuOK.Close()
 	svc = NewService(pool, ServiceConfig{MasuURL: masuOK.URL, MaxRetries: 10})
 	require.NoError(t, svc.TriggerReship(context.Background(), orgID, clusterID))
@@ -678,6 +677,7 @@ func counterValue(t *testing.T, name, orgID string) float64 {
 func TestReshipContract_NoReUpload(t *testing.T) {
 	// ros-ocp-backend only POSTs to masu reship_ros; it never re-uploads CSVs to S3.
 	client := NewHTTPClient("http://127.0.0.1:1", &http.Client{Timeout: 50 * time.Millisecond})
+	client.resolver = staticProviderResolver{providerUUID: uuid.MustParse(testutil.TestProviderUUID)}
 	_, err := client.PostReship(context.Background(), "1234567", uuid.New())
 	require.Error(t, err)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -61,10 +60,10 @@ func benchReshipRows(dayOffset, containerIdx, samples int) []ingestion.MetricRow
 // BenchmarkReshipThroughput simulates one masu reship call plus per-day re-ingestion CPU.
 func BenchmarkReshipThroughput(b *testing.B) {
 	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(fmt.Sprintf(`{"files_processed":%d,"files_total":%d}`, benchReshipDays, benchReshipDays)))
-	}))
+	})
 	defer masu.Close()
 	client := NewHTTPClient(masu.URL, nil)
 

@@ -3,7 +3,6 @@ package reship
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -26,14 +25,14 @@ func TestReshipPending_PollerClears(t *testing.T) {
 	seedBHScheduleRow(t, pool, orgID, clusterID.String())
 
 	var calls int
-	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if calls == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
 	defer masu.Close()
 
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))

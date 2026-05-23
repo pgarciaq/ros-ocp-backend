@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +27,17 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 		query  string
 	}
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/effective_rates/") {
+			w.Header().Set("Content-Type", "application/json")
+			clusterID := r.URL.Query().Get("cluster_id")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"cluster_id":           clusterID,
+				"provider_uuid":        testutil.TestProviderUUID,
+				"configured_rates":     map[string]interface{}{},
+				"namespace_aggregates": map[string]interface{}{},
+			})
+			return
+		}
 		captured.method = r.Method
 		captured.path = r.URL.Path
 		captured.query = r.URL.RawQuery
@@ -60,7 +73,7 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 	require.Equal(t, http.MethodPost, captured.method)
 	require.Equal(t, "/api/cost-management/v1/reship_ros/", captured.path)
 	require.Contains(t, captured.query, "schema=")
-	require.Contains(t, captured.query, "provider_uuid="+testutil.TestClusterUUID)
+	require.Contains(t, captured.query, "provider_uuid="+testutil.TestProviderUUID)
 	require.Contains(t, captured.query, "start_date=")
 	require.Contains(t, captured.query, "end_date=")
 }

@@ -19,6 +19,7 @@ import (
 type HTTPClient struct {
 	baseURL    string
 	httpClient *http.Client
+	resolver   ProviderResolver
 }
 
 // ReshipResult holds masu response metadata for metrics and logging.
@@ -33,7 +34,11 @@ func NewHTTPClient(baseURL string, client *http.Client) *HTTPClient {
 	if client == nil {
 		client = &http.Client{Timeout: 60 * time.Second}
 	}
-	return &HTTPClient{baseURL: strings.TrimRight(baseURL, "/"), httpClient: client}
+	return &HTTPClient{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		httpClient: client,
+		resolver:   NewHTTPEffectiveRatesResolver(baseURL),
+	}
 }
 
 // masuAPIV1Base returns the cost-management v1 API prefix for a masu host URL.
@@ -42,10 +47,10 @@ func masuAPIV1Base(host string) string {
 }
 
 // ReshipURL builds the masu reship_ros URL with query parameters.
-func ReshipURL(baseURL, orgID string, clusterUUID uuid.UUID, startDate, endDate string) string {
+func ReshipURL(baseURL, orgID string, providerUUID uuid.UUID, startDate, endDate string) string {
 	params := url.Values{}
 	params.Set("schema", tenantSchema(orgID))
-	params.Set("provider_uuid", clusterUUID.String())
+	params.Set("provider_uuid", providerUUID.String())
 	params.Set("start_date", startDate)
 	params.Set("end_date", endDate)
 	return fmt.Sprintf("%s/reship_ros/?%s", masuAPIV1Base(baseURL), params.Encode())
@@ -53,8 +58,13 @@ func ReshipURL(baseURL, orgID string, clusterUUID uuid.UUID, startDate, endDate 
 
 // PostReship issues POST reship_ros for one cluster over the configured date window.
 func (c *HTTPClient) PostReship(ctx context.Context, orgID string, clusterUUID uuid.UUID) (ReshipResult, error) {
+	providerUUID, err := c.resolver.ResolveProviderUUID(ctx, orgID, clusterUUID)
+	if err != nil {
+		return ReshipResult{}, err
+	}
+
 	start, end := dateRange()
-	reqURL := ReshipURL(c.baseURL, orgID, clusterUUID, start, end)
+	reqURL := ReshipURL(c.baseURL, orgID, providerUUID, start, end)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
 	if err != nil {
