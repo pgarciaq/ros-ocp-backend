@@ -107,7 +107,7 @@ type Config struct {
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
 	// BusinessHoursEnabled gates business-hours settings routes, OpenAPI paths, capabilities,
-	// and (when implemented) dual-stream ingestion. Default true; set ROS_BUSINESS_HOURS_ENABLED=false to disable.
+	// and dual-stream ingestion. Default true; set ROS_BUSINESS_HOURS_ENABLED=false to disable.
 	BusinessHoursEnabled bool `mapstructure:"ROS_BUSINESS_HOURS_ENABLED"`
 
 	// ReshipPollerIntervalSecs is the background retry interval for pending masu reshships (default 60).
