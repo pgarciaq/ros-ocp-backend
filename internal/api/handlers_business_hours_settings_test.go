@@ -515,6 +515,27 @@ func TestSettingsAPI_PUT_Returns202Not200(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, rec.Code)
 }
 
+func TestSettingsAPI_PUT_ClusterMarksReshipPending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-pending-put"
+	clusterID := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, clusterID)
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + clusterID
+	rec := serveBH(t, e, http.MethodPut, path, orgID, validBHPayload())
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	pending, err := reship.ReshipPendingSince(context.Background(), pool, orgID, uuid.MustParse(clusterID))
+	require.NoError(t, err)
+	require.NotNil(t, pending, "PUT must set reship_pending_since before async reship completes")
+}
+
 func TestSettingsAPI_GET_OrgDefault_RoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

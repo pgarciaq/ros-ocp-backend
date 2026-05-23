@@ -247,6 +247,11 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 		return serviceUnavailable(c, "unable to trigger re-ingestion")
 	}
 	if config.BusinessHoursFeatureEnabled() {
+		for _, clusterID := range clusterIDs {
+			if err := reship.MarkReshipPending(ctx, pool, orgID, clusterID); err != nil {
+				hlog.Errorf("mark reship pending: %v", err)
+			}
+		}
 		reship.TriggerAsync(h.Reship, orgID, clusterIDs)
 	}
 
@@ -298,6 +303,11 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 		return serviceUnavailable(c, "unable to trigger re-ingestion")
 	}
 	if config.BusinessHoursFeatureEnabled() {
+		for _, clusterID := range clusterIDs {
+			if err := reship.MarkReshipPending(ctx, pool, orgID, clusterID); err != nil {
+				hlog.Errorf("mark reship pending: %v", err)
+			}
+		}
 		reship.TriggerAsync(h.Reship, orgID, clusterIDs)
 	}
 
