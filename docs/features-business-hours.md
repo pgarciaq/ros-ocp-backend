@@ -702,10 +702,11 @@ In steady state (99.9% of API calls), recommendations are served from the precom
 1. Migration `000066_create_business_hours_schedules.up.sql`
 2. Migration `000067_add_schedule_type_to_digests.up.sql` — all digest tables + partition parent registry if needed
 3. Migration `000068_container_usage_samples_pk_workload_type.up.sql` — bundled on the `feature/business-hours` branch for E2E compatibility with the deployed chart schema (unrelated to business hours logic; ensures migration version alignment in integration tests)
-4. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
-5. Deploy Koku masu `reship_ros` endpoint
-6. No automatic backfill — operators/customers trigger re-ship after configuring schedules
-7. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
+4. Migration `000069_add_reship_forward_only_since.up.sql` — optional forward-only reship fallback state (`reship_forward_only_since`)
+5. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
+6. Deploy Koku masu `reship_ros` endpoint
+7. No automatic backfill — operators/customers trigger re-ship after configuring schedules
+8. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
 
 ### Deploy Order (Three Repos)
 
@@ -997,3 +998,133 @@ Optional future: Echo rate limiter on mutating BH routes if abuse is observed.
 - [`snapshot_settings`](migrations/000049_create_snapshot_tables.up.sql) and [`handlers_terms.go`](../internal/api/handlers_terms.go) use `updated_at` (or implicit write time) without user attribution.
 - Platform identity middleware provides org context; **who** changed a setting is available from **ingress/API gateway audit logs** (OpenShift/Kafka audit, RHBK access logs on-prem).
 - Add `updated_by TEXT` later if product requires in-app audit history.
+
+---
+
+## v1.1 Roadmap
+
+The v1 release ships an opt-in forward-only reship fallback (`ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK`, default `false`). When masu reship retries are exhausted with the flag enabled, the cluster transitions to `reship_status: "forward_only"` and business-hours recommendations continue using forward-only data (new ingest only, no historical reprocessing). The items below are planned for v1.1.
+
+### v1.1: Slow periodic backfill retry
+
+For clusters in `forward_only` state, ros-ocp-backend will attempt masu reship again on a slow cadence instead of giving up permanently.
+
+| Setting | Env var | Default (proposed) |
+|---------|---------|-------------------|
+| Retry interval | `ROS_BUSINESS_HOURS_FORWARD_RETRY_INTERVAL` | `24h` |
+
+**Behavior:**
+
+1. Poller selects clusters where `reship_forward_only_since IS NOT NULL` and `NOW() - reship_forward_only_since >= interval`.
+2. Clears `reship_forward_only_since`, sets `reship_pending_since`, and runs a full reship attempt (same masu `reship_ros` path as v1).
+3. On **success**: clears both pending and forward-only flags; `GET` returns `reship_status: "complete"`.
+4. On **failure**: re-enters the v1 retry loop; if retries exhaust again with fallback enabled, sets `reship_forward_only_since` again.
+
+This auto-heals when masu or cost-model configuration becomes available after an outage without requiring manual intervention.
+
+### v1.1: UI degraded-mode banner (koku-ui)
+
+**Scope:** `koku-ui-onprem` only. Business hours settings are not exposed in the SaaS (console.redhat.com) UI.
+
+#### When to show the banner
+
+Show a **warning banner** on the Business Hours recommendations section for a cluster when the settings API reports degraded reship state.
+
+**API check:**
+
+```
+GET /api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}
+```
+
+Response fields (v1):
+
+```json
+{
+  "enabled": true,
+  "timezone": "America/New_York",
+  "schedule": { "days": ["monday"], "start_time": "08:00", "end_time": "17:00" },
+  "off_hours_weight": 0.0,
+  "reship_status": "forward_only",
+  "reship_status_since": "2026-05-23T10:00:00.000Z"
+}
+```
+
+| `reship_status` | UI action |
+|-----------------|-----------|
+| `"complete"` | No banner (normal operation) |
+| `"pending"` | Optional subtle info: reship in progress; recommendations may update shortly |
+| `"forward_only"` | **Show degraded-mode warning banner** (required) |
+
+#### Banner placement
+
+- **Primary:** Business Hours tab/section on cluster recommendations (where BH-adjusted CPU/memory suggestions are shown).
+- **Secondary (optional):** Cluster settings page where the BH schedule is edited — can reuse the same banner component.
+
+#### Suggested copy
+
+**Title:** Business hours recommendations use partial data
+
+**Body:**
+
+> Business hours recommendations for this cluster are based on partial data (since {formatted `reship_status_since`}). Historical data could not be reprocessed. Recommendations will improve over time as new data arrives.
+
+Format `reship_status_since` in the user's locale/timezone (ISO-8601 from API is UTC).
+
+#### Call to action
+
+- Link label: **Review business hours settings**
+- Target: Settings route for the cluster's business-hours schedule (same cluster UUID in the path).
+- Help text (tooltip or secondary line): Re-saving the schedule triggers a new reship attempt.
+
+Admins can **PUT** the same schedule again (or tweak and save) to re-arm reship: v1 clears `reship_forward_only_since`, sets `reship_pending_since`, and triggers async reship immediately (bypasses the exhausted retry counter).
+
+#### Implementation notes for koku-ui developers
+
+1. Fetch cluster BH settings when rendering the BH recommendations panel (or reuse existing settings fetch if already loaded).
+2. Branch on `reship_status === "forward_only"` for the warning `Alert` (PatternFly `Alert variant="warning"`).
+3. Do not block rendering recommendations when status is `forward_only` — show recommendations **and** the banner.
+4. Namespace-level GET also includes cluster-scoped `reship_status` / `reship_status_since` (same values as cluster GET).
+5. Org-default GET does **not** include reship fields (reship is per cluster).
+6. Poll or refetch settings after a PUT until `reship_status` returns to `"complete"` if showing progress UI.
+
+#### Example React sketch (pseudocode)
+
+```tsx
+const { data: bhSettings } = useBusinessHoursClusterSettings(clusterId);
+
+const showDegradedBanner = bhSettings?.reship_status === "forward_only";
+
+{showDegradedBanner && (
+  <Alert variant="warning" title={intl.formatMessage({ id: "bh.degraded.title" })} isInline>
+    <p>{intl.formatMessage(
+      { id: "bh.degraded.body" },
+      { since: formatDateTime(bhSettings.reship_status_since) }
+    )}</p>
+    <AlertActionLink component={RouterLink} to={settingsPath(clusterId)}>
+      {intl.formatMessage({ id: "bh.degraded.settingsLink" })}
+    </AlertActionLink>
+  </Alert>
+)}
+```
+
+### v1.1: Admin notification
+
+Optional operator notification when a cluster **transitions into** `forward_only` (not on every poller tick).
+
+**Proposed behavior:**
+
+- Emit a structured log event at WARN (already in v1 when fallback triggers).
+- Increment Prometheus counter `ros_reship_fallback_forward_only_total{org_id}` (v1).
+- **v1.1 add-on:** configurable webhook URL (`ROS_BUSINESS_HOURS_FORWARD_ONLY_WEBHOOK_URL`) POSTing JSON:
+
+```json
+{
+  "event": "business_hours_reship_forward_only",
+  "org_id": "1234567",
+  "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
+  "since": "2026-05-23T10:00:00.000Z",
+  "reason": "masu reship_ros returned 503"
+}
+```
+
+On OpenShift deployments with Alertmanager, a PrometheusRule on `increase(ros_reship_fallback_forward_only_total[5m]) > 0` can route to the same notification channels as other ROS alerts.
