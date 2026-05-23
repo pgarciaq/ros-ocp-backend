@@ -746,10 +746,11 @@ In steady state (99.9% of API calls), recommendations are served from the precom
 2. Migration `000067_add_schedule_type_to_digests.up.sql` — all digest tables + partition parent registry if needed
 3. Migration `000068_container_usage_samples_pk_workload_type.up.sql` — bundled on the `feature/business-hours` branch for E2E compatibility with the deployed chart schema (unrelated to business hours logic; ensures migration version alignment in integration tests)
 4. Migration `000069_add_reship_forward_only_since.up.sql` — optional forward-only reship fallback state (`reship_forward_only_since`)
-5. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
-6. Deploy Koku masu `reship_ros` endpoint
-7. No automatic backfill — operators/customers trigger re-ship after configuring schedules
-8. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
+5. Deploy Koku masu `reship_ros` endpoint
+6. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
+7. Update cost-onprem-chart Helm values to enable BH env vars
+8. No automatic backfill — operators/customers trigger re-ship after configuring schedules
+9. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
 
 ### Deploy Order (Three Repos)
 
@@ -950,7 +951,7 @@ Unit tests: `BH-UNIT-039`, `BH-UNIT-095`; mirror cases in [`digest_test.go`](../
 | **ros integration (Phase 9)** | Optional docker-compose job with masu stub or recorded fixtures. |
 | **cost-onprem-chart (Phase 10)** | Only place that **must** run both new images together for end-to-end reship. |
 
-Deploy order for production: migration (ros) → ros API + ingestion → koku `reship_ros` → enable feature. Either side can ship first if the other’s endpoint is absent (pending flag + poller on ros; masu 404 until deployed).
+Deploy order for production: koku `reship_ros` → ros-ocp-backend (migrations + API + ingestion) → cost-onprem-chart (Helm values). If ros deploys before koku, the pending-flag poller retries until masu is available (graceful degradation).
 
 ### R2: Global rate limiting for reship
 
