@@ -57,6 +57,7 @@ mkdir -p "$DOCS_DIR/features"
 [ -f "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" ] && cp "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" "$DOCS_DIR/features/pvc-rightsizing.md"
 [ -f "$ROOT_DIR/docs/gpu-time-slicing-plan.md" ] && cp "$ROOT_DIR/docs/gpu-time-slicing-plan.md" "$DOCS_DIR/features/gpu-time-slicing.md"
 [ -f "$ROOT_DIR/docs/features-f-snapshot-staleness.md" ] && cp "$ROOT_DIR/docs/features-f-snapshot-staleness.md" "$DOCS_DIR/features/snapshot-staleness.md"
+[ -f "$ROOT_DIR/docs/business-hours-admin-guide.md" ] && cp "$ROOT_DIR/docs/business-hours-admin-guide.md" "$DOCS_DIR/features/business-hours.md"
 
 # Top-level docs
 [ -f "$ROOT_DIR/docs/known-issues.md" ] && cp "$ROOT_DIR/docs/known-issues.md" "$DOCS_DIR/known-issues.md"

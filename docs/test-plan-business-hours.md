@@ -806,6 +806,8 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k business_hours
 
 ## Phase 11: Documentation (Post-Implementation)
 
+**Status:** Complete (2026-05-23)
+
 **Goal:** Update the developer website and operational docs to reflect the implemented feature.
 
 **Prerequisite:** Phases 1–10 complete and merged.
@@ -814,11 +816,11 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k business_hours
 
 | ID | Check | Expected failure |
 |----|-------|-----------------|
-| BH-DOC-001 | Developer website has no "Business Hours" page | Missing page |
-| BH-DOC-002 | API reference doesn't show BH endpoints | Missing endpoints |
-| BH-DOC-003 | Architecture diagrams don't show BH data flow | Stale diagram |
-| BH-DOC-004 | Upgrade runbook has no BH section | Missing section |
-| BH-DOC-005 | Configuration guide has no `ROS_BUSINESS_HOURS_ENABLED` | Missing knob |
+| BH-DOC-001 | Developer website has no "Business Hours" page | ~~Missing page~~ **Done** — `docs/business-hours-admin-guide.md` |
+| BH-DOC-002 | API reference doesn't show BH endpoints | OpenAPI when feature enabled |
+| BH-DOC-003 | Architecture diagrams don't show BH data flow | **Done** — mermaid in business-hours page |
+| BH-DOC-004 | Upgrade runbook has no BH section | See features doc deployment section |
+| BH-DOC-005 | Configuration guide has no `ROS_BUSINESS_HOURS_ENABLED` | **Done** — configuration table in business-hours page |
 
 ### Green (Write the docs)
 

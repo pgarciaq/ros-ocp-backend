@@ -89,3 +89,4 @@ nav:
       - PVC Right-Sizing: features/pvc-rightsizing.md
       - GPU Time-Slicing: features/gpu-time-slicing.md
       - Snapshot Staleness: features/snapshot-staleness.md
+      - Business Hours: features/business-hours.md
