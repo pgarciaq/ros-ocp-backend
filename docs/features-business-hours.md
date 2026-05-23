@@ -635,10 +635,53 @@ Confirmed: the koku-metrics-operator normalizes all timestamps to UTC via `now()
 | Area | Impact |
 |------|--------|
 | Storage | ~2× digest rows when BH enabled (partitioned monthly tables unchanged) |
-| Ingestion CPU | +1 timezone conversion + schedule check per CSV row |
+| Ingestion CPU | Dual stream adds ~1.7–2× digest CPU vs all-hours-only (see benchmark data below) |
 | Re-ingestion | Bounded by window × files/day; see "First-Time Reship Expectations" below |
-| Recommendation CPU | ~2× digest scans when BH enabled; still <100ms per container per stream |
+| Recommendation CPU | ~1.7× per container when BH enabled (~12µs vs ~7µs in engine benchmark) |
 | Kafka | Burst of messages on schedule change; consumer horizontal scale unchanged |
+
+### Benchmark Results (BH-PERF-003, May 2026)
+
+Measured with `go test -bench=BenchmarkDualDigestIngestion_Overhead -benchmem -count=3`
+on Intel Core Ultra 7 165H (`internal/ingestion/bench_business_hours_test.go`):
+
+| Path | ns/op (100 containers × 96 samples) | B/op | allocs/op | Per container-day |
+|------|-------------------------------------|------|-----------|-------------------|
+| **single** (all_hours only) | ~1.6–2.7 ms | ~461 KB | 600 | ~16–27 µs |
+| **dual** (all_hours + weighted BH) | ~3.6–4.1 ms | ~1.15 MB | 901 | ~36–41 µs |
+| **Ratio** | **~1.7–2×** | ~2.5× | ~1.5× | — |
+
+**What the benchmark measures:** In-memory digest computation only (no CSV I/O,
+DB upsert, or Kafka). Dual path runs `ComputeContainerDigest` plus
+`ComputeContainerDigestWeighted` with `off_hours_weight=0.1` (weighted
+percentile path).
+
+**Was 250× real?** The earlier ~250× figure (~2 ms vs ~500 ms) was caused by
+two implementation bugs, not inherent algorithmic cost:
+
+1. **`parseHHMM` via `fmt.Sscanf` on every row evaluation** — schedule window
+   bounds were re-parsed for each of 96 rows × 6 metric fields × 100 containers.
+2. **Redundant weight evaluation** — `computeWeightedFieldDigest` called the
+   weight function separately for each of six metric columns.
+
+Fixes (May 2026): cache `startMin`/`endMin` at schedule load time; evaluate row
+weights once in `computeAllWeightedFieldDigests`. Post-fix ratio aligns with the
+design target of **<2× dual overhead**.
+
+**Production impact estimate** (1,000 containers, 14-day reship, ~1 ROS CSV/day):
+
+| Phase | Time |
+|-------|------|
+| Digest CPU only | 14 days × 1,000 ctr × ~40 µs dual ≈ **0.6 s** |
+| Full file re-ingest (download + parse + upsert) | **~30–90 s** (I/O bound) |
+| End-to-end reship wall clock | Dominated by masu S3 list + network, not digest math |
+
+Recommendation engine dual stream adds ~5 µs per container (~12 µs vs ~7 µs);
+negligible vs API and DB latency.
+
+**When `off_hours_weight=0`:** Off-hours rows are filtered before grouping —
+BH weighted path cost approaches zero extra work for excluded samples
+(BH-PERF-006: <1.05× vs unweighted single stream).
 
 ### First-Time Full-Window Reship Expectations
 

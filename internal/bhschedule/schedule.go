@@ -29,6 +29,9 @@ type Schedule struct {
 	OffHoursWeight float64
 	Enabled        bool
 	loc            *time.Location // set by initScheduleLocation at load time
+	boundsReady    bool           // startMin/endMin parsed at load time
+	startMin       int            // minutes since midnight (local wall clock)
+	endMin         int
 }
 
 // AllHoursSchedule returns a disabled placeholder (all-hours-only behavior).
@@ -44,14 +47,27 @@ func (s *Schedule) InitLocation() error {
 
 // initScheduleLocation loads and caches the IANA timezone for enabled schedules.
 func initScheduleLocation(s *Schedule) error {
-	if !s.Enabled || s.Timezone == "" {
+	if !s.Enabled {
 		return nil
 	}
-	loc, err := time.LoadLocation(s.Timezone)
-	if err != nil {
-		return err
+	if s.Timezone != "" {
+		loc, err := time.LoadLocation(s.Timezone)
+		if err != nil {
+			return err
+		}
+		s.loc = loc
 	}
-	s.loc = loc
+	startMin, err := parseHHMM(s.StartTime)
+	if err != nil {
+		return fmt.Errorf("start_time: %w", err)
+	}
+	endMin, err := parseHHMM(s.EndTime)
+	if err != nil {
+		return fmt.Errorf("end_time: %w", err)
+	}
+	s.startMin = startMin
+	s.endMin = endMin
+	s.boundsReady = true
 	return nil
 }
 
@@ -90,13 +106,17 @@ func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 		return false
 	}
 
-	startMin, err := parseHHMM(schedule.StartTime)
-	if err != nil {
-		return false
-	}
-	endMin, err := parseHHMM(schedule.EndTime)
-	if err != nil {
-		return false
+	startMin, endMin := schedule.startMin, schedule.endMin
+	if !schedule.boundsReady {
+		var err error
+		startMin, err = parseHHMM(schedule.StartTime)
+		if err != nil {
+			return false
+		}
+		endMin, err = parseHHMM(schedule.EndTime)
+		if err != nil {
+			return false
+		}
 	}
 
 	localMin := local.Hour()*60 + local.Minute()

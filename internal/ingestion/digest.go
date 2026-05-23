@@ -377,12 +377,7 @@ func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn Ro
 		memUseD = ComputeDigest(memUsages)
 		memRssD = ComputeDigest(memRSS)
 	} else {
-		cpuReqD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPURequestMC })
-		cpuUseD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPUUsageMC })
-		cpuThrD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.CPUThrottleMC })
-		memReqD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemRequestKiB })
-		memUseD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemUsageKiB })
-		memRssD = computeWeightedFieldDigest(rows, weightFn, func(r MetricRow) int64 { return r.MemRSSKiB })
+		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeAllWeightedFieldDigests(rows, weightFn)
 	}
 
 	var oomTotal int64
@@ -640,4 +635,67 @@ func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldF
 		weights = append(weights, w)
 	}
 	return ComputeWeightedDigest(vals, weights)
+}
+
+type weightedMetricSample struct {
+	weight          float64
+	cpuReq          int64
+	cpuUse          int64
+	cpuThr          int64
+	memReq          int64
+	memUse          int64
+	memRss          int64
+}
+
+// computeAllWeightedFieldDigests evaluates row weights once and reuses them for all metric fields.
+func computeAllWeightedFieldDigests(rows []MetricRow, weightFn RowWeightFunc) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
+	samples := make([]weightedMetricSample, 0, len(rows))
+	for _, r := range rows {
+		w := weightFn(r)
+		if w <= 0 {
+			continue
+		}
+		samples = append(samples, weightedMetricSample{
+			weight: w,
+			cpuReq: r.CPURequestMC,
+			cpuUse: r.CPUUsageMC,
+			cpuThr: r.CPUThrottleMC,
+			memReq: r.MemRequestKiB,
+			memUse: r.MemUsageKiB,
+			memRss: r.MemRSSKiB,
+		})
+	}
+	if len(samples) == 0 {
+		return Digest{}, Digest{}, Digest{}, Digest{}, Digest{}, Digest{}
+	}
+	weights := make([]float64, len(samples))
+	for i := range samples {
+		weights[i] = samples[i].weight
+	}
+	vals := make([]int64, len(samples))
+	for i := range samples {
+		vals[i] = samples[i].cpuReq
+	}
+	cpuReqD = ComputeWeightedDigest(vals, weights)
+	for i := range samples {
+		vals[i] = samples[i].cpuUse
+	}
+	cpuUseD = ComputeWeightedDigest(vals, weights)
+	for i := range samples {
+		vals[i] = samples[i].cpuThr
+	}
+	cpuThrD = ComputeWeightedDigest(vals, weights)
+	for i := range samples {
+		vals[i] = samples[i].memReq
+	}
+	memReqD = ComputeWeightedDigest(vals, weights)
+	for i := range samples {
+		vals[i] = samples[i].memUse
+	}
+	memUseD = ComputeWeightedDigest(vals, weights)
+	for i := range samples {
+		vals[i] = samples[i].memRss
+	}
+	memRssD = ComputeWeightedDigest(vals, weights)
+	return cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD
 }

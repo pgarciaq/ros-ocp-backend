@@ -19,7 +19,7 @@ import (
 // Last run (Intel Ultra 7 165H, go test -run=^$ -benchmem -count=5):
 //   BH-PERF-001: ~6–9ms/op (threshold 10ms) — sync.Pool + counting sort for narrow spans
 //   BH-PERF-002: ~0.07–0.12 µs/lookup (threshold 1ms) — PASS
-//   BH-PERF-003: single ~2ms/100 ctr, dual ~500ms/100 ctr (~250×; weighted BH path)
+//   BH-PERF-003: single ~1.5–2.5ms/100 ctr, dual ~3.5–4.5ms/100 ctr (~1.7–2×; after HH:MM cache + shared weights)
 //   BH-PERF-007: ~1–2ms/10k rows (threshold 50ms) — schedule eval with cached TZ
 
 const (
