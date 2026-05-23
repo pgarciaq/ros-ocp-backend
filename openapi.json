@@ -1526,7 +1526,16 @@
         "operationId": "getBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
         "responses": {
-          "200": { "description": "Business hours settings" },
+          "200": {
+            "description": "Business hours settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursSettingsResponse"
+                }
+              }
+            }
+          },
           "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
         }
       },
@@ -1535,8 +1544,27 @@
         "summary": "Update org-default business hours schedule",
         "operationId": "putBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessHoursPutRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "202": { "description": "Accepted; re-ingestion triggered asynchronously" },
+          "202": {
+            "description": "Accepted; re-ingestion triggered asynchronously",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursPutResponse"
+                }
+              }
+            }
+          },
           "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
         }
       },
@@ -1545,6 +1573,203 @@
         "summary": "Remove org-default business hours override",
         "operationId": "deleteBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
+        "responses": {
+          "204": { "description": "Override removed" },
+          "404": { "description": "Feature disabled or override not found" }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}": {
+      "get": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Get cluster business hours schedule",
+        "description": "Returns the effective business hours schedule for a cluster (cluster override or inherited org default).",
+        "operationId": "getBusinessHoursCluster",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business hours settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursSettingsResponse"
+                }
+              }
+            }
+          },
+          "404": { "description": "Feature disabled or cluster not found" }
+        }
+      },
+      "put": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Update cluster business hours schedule",
+        "operationId": "putBusinessHoursCluster",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessHoursPutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted; re-ingestion triggered asynchronously",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursPutResponse"
+                }
+              }
+            }
+          },
+          "404": { "description": "Feature disabled or cluster not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Remove cluster business hours override",
+        "operationId": "deleteBusinessHoursCluster",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Override removed" },
+          "404": { "description": "Feature disabled or override not found" }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}": {
+      "get": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Get namespace business hours schedule",
+        "description": "Returns the effective business hours schedule for a namespace (namespace override, cluster override, or org default).",
+        "operationId": "getBusinessHoursNamespace",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "description": "Kubernetes namespace name",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business hours settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursSettingsResponse"
+                }
+              }
+            }
+          },
+          "404": { "description": "Feature disabled or namespace not found" }
+        }
+      },
+      "put": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Update namespace business hours schedule",
+        "operationId": "putBusinessHoursNamespace",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "description": "Kubernetes namespace name",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessHoursPutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted; re-ingestion triggered asynchronously",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursPutResponse"
+                }
+              }
+            }
+          },
+          "404": { "description": "Feature disabled or namespace not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Business Hours Settings"],
+        "summary": "Remove namespace business hours override",
+        "operationId": "deleteBusinessHoursNamespace",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "path",
+            "required": true,
+            "description": "OpenShift cluster UUID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "required": true,
+            "description": "Kubernetes namespace name",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "204": { "description": "Override removed" },
           "404": { "description": "Feature disabled or override not found" }
@@ -4054,6 +4279,90 @@
             "description": "Whether business-hours settings and dual-stream recommendations are enabled (ROS_BUSINESS_HOURS_ENABLED)"
           }
         }
+      },
+      "BusinessHoursScheduleBody": {
+        "type": "object",
+        "required": ["days", "start_time", "end_time"],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "example": "08:00"
+          },
+          "end_time": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "example": "17:00"
+          }
+        }
+      },
+      "BusinessHoursPutRequest": {
+        "type": "object",
+        "required": ["timezone", "schedule"],
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone name (e.g. America/New_York)",
+            "example": "America/New_York"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/BusinessHoursScheduleBody"
+          },
+          "off_hours_weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0,
+            "description": "Weight applied to off-hours samples (0 excludes off-hours from BH digest)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When false, BH digests are pruned and only all-hours recommendations are produced"
+          }
+        }
+      },
+      "BusinessHoursSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "timezone": { "type": "string" },
+          "schedule": { "$ref": "#/components/schemas/BusinessHoursScheduleBody" },
+          "off_hours_weight": { "type": "number" },
+          "enabled": { "type": "boolean" },
+          "reship_status": {
+            "type": "string",
+            "enum": ["complete", "pending", "forward_only"],
+            "description": "Historical re-ingestion status for this scope"
+          },
+          "reship_status_since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the current reship_status was set"
+          }
+        }
+      },
+      "BusinessHoursPutResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/BusinessHoursSettingsResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "warnings": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Non-fatal warnings (e.g. storage impact)"
+              }
+            }
+          }
+        ]
       },
       "CapabilityItem": {
         "type": "object",
