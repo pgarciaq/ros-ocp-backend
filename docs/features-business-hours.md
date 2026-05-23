@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Author** | ros-ocp-backend team |
-| **Last Updated** | 2026-05-22 |
+| **Last Updated** | 2026-05-23 |
 
 ## Summary
 
@@ -479,8 +479,9 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
 2. **Dual run:** After container ingest or on recommendation poller tick:
    - Always compute/persist `all_hours` recommendations.
    - If schedule enabled for workload namespace, compute `business_hours` recommendations.
-3. **Persistence:** Extend `recommendation_sets` / native result structs to store both configs, or embed `business_hours` in JSON recommendation blob (align with existing native storage patterns in [`internal/model/`](../internal/model/)).
-4. **List/detail API:** Merge into response in [`BuildDetailResponse`](../internal/model/detail_response.go) — add `BusinessHours *DetailResourceConfig` on `DetailEngine` or sibling field under `config`.
+3. **Stale detection:** Recommendations use `clusters.last_reported_at` (not digest `bucket_date`) to determine staleness. This prevents reshipped historical data from being marked stale when the cluster is actively reporting new metrics. See [`loadClusterLastReportedAt`](../internal/engine/recommend_all.go).
+4. **Persistence:** Extend `recommendation_sets` / native result structs to store both configs, or embed `business_hours` in JSON recommendation blob (align with existing native storage patterns in [`internal/model/`](../internal/model/)).
+5. **List/detail API:** Merge into response in [`BuildDetailResponse`](../internal/model/detail_response.go) — add `BusinessHours *DetailResourceConfig` on `DetailEngine` or sibling field under `config`.
 
 **Example response shape** (detail / term level):
 
@@ -561,8 +562,12 @@ POST /api/cost-management/v1/reship_ros/?schema={schema}&provider_uuid={uuid}&st
 
 - Env: `KOKU_MASU_URL` — masu host only (e.g. `http://masu-server:5042`); client appends `/api/cost-management/v1/reship_ros/`
 - Date range: `[now - MaxWindowDays(), now]` per affected cluster
+- **Provider UUID resolution:** ros-ocp-backend stores OpenShift **cluster UUIDs** but masu `reship_ros` expects **provider UUIDs**. Before calling `reship_ros`, the reship client resolves `cluster_uuid → provider_uuid` by calling masu's `GET .../effective_rates/?org_id={org_id}&cluster_id={cluster_uuid}` endpoint (see [`internal/reship/provider_resolver.go`](../internal/reship/provider_resolver.go)). The response includes `provider_uuid` for the cluster's Koku source.
+- **Resolution failure observability:** When `effective_rates` fails, the resolver categorizes the error (`no_cost_model` for HTTP 404, `masu_unavailable` for 5xx/connection errors, `not_found` for empty/unparseable responses, `timeout` for deadline/timeout errors), emits a WARNING-level structured log (`provider_uuid resolution failed; reship deferred`), and increments `ros_reship_provider_resolution_failures_total{org_id, reason}`. Reship is deferred; `reship_pending_since` stays set for poller retry.
+- **Resolution failure fallback:** If resolution fails after max poller retries, `reship_pending_since` remains set. The next schedule PUT/DELETE or poller cycle will retry. No ROS data is lost — S3 objects persist for the retention window.
 - Async goroutine to avoid blocking Settings API (return `202 Accepted`)
-- **Retry on masu unavailability:** If `reship_ros` call fails (network error, masu down, 5xx), persist a `reship_pending` flag in `business_hours_schedules` (`reship_pending_since TIMESTAMPTZ`). A background poller (e.g., every 60 seconds) retries pending reshships until success or max retries (configurable, default 10). On success, clear the flag. On max retries exceeded, log an error and expose via Prometheus metric (`ros_reship_failures_total`). This ensures eventual consistency even if masu is temporarily unavailable.
+- **Optimistic `reship_pending_since`:** On PUT/DELETE, `reship_pending_since` is set **before** the async reship goroutine runs (not only on masu failure). It is cleared only after masu HTTP success. This ensures the pending flag is visible immediately if anything goes wrong during reship (masu down, provider lookup failure, lock contention).
+- **Retry on masu unavailability:** If `reship_ros` call fails (network error, masu down, 5xx, provider UUID resolution failure), the `reship_pending_since` flag remains set. A background poller (e.g., every 60 seconds) retries pending reshships until success or max retries (configurable, default 10). On success, clear the flag. On max retries exceeded, log an error and expose via Prometheus metric (`ros_reship_failures_total`). This ensures eventual consistency even if masu is temporarily unavailable.
 - **Testing impact:** Integration tests that exercise the reship flow need masu to be reachable (or mocked). Unit tests mock the HTTP call. E2E tests on the SNO cluster require the full stack (masu + S3 + Kafka) to be healthy. The retry mechanism can be tested by injecting a temporary masu failure (stop masu, PUT schedule, verify `reship_pending` flag is set, restart masu, verify reship completes within poller interval).
 
 **Idempotency:** Digest upserts already use `ON CONFLICT DO UPDATE` in [`pipeline.go`](../internal/ingestion/pipeline.go); reprocessing the same CSV replaces percentiles deterministically.
@@ -678,6 +683,7 @@ expensive reship scenario. Here are the expected performance characteristics:
 - `ros_reship_in_progress` gauge (0/1) — visible in Prometheus/Grafana
 - `ros_reship_files_processed` counter — progress tracking
 - `ros_reship_duration_seconds` histogram — latency per file
+- `ros_reship_provider_resolution_failures_total{org_id, reason}` counter — masu `effective_rates` lookup failures (`no_cost_model`, `masu_unavailable`, `not_found`, `timeout`)
 - Worker logs emit structured JSON: `{"msg":"reship progress","org_id":"...","files_done":45,"files_total":90}`
 
 ### Caching Strategy
@@ -693,12 +699,13 @@ In steady state (99.9% of API calls), recommendations are served from the precom
 
 ## Migration Strategy
 
-1. Migration `NNNN_create_business_hours_schedules.up.sql`
-2. Migration `NNNN_add_schedule_type_to_digests.up.sql` — all digest tables + partition parent registry if needed
-3. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
-4. Deploy Koku masu `reship_ros` endpoint
-5. No automatic backfill — operators/customers trigger re-ship after configuring schedules
-6. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
+1. Migration `000066_create_business_hours_schedules.up.sql`
+2. Migration `000067_add_schedule_type_to_digests.up.sql` — all digest tables + partition parent registry if needed
+3. Migration `000068_container_usage_samples_pk_workload_type.up.sql` — bundled on the `feature/business-hours` branch for E2E compatibility with the deployed chart schema (unrelated to business hours logic; ensures migration version alignment in integration tests)
+4. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
+5. Deploy Koku masu `reship_ros` endpoint
+6. No automatic backfill — operators/customers trigger re-ship after configuring schedules
+7. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
 
 ### Deploy Order (Three Repos)
 
