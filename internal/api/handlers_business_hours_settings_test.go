@@ -746,3 +746,260 @@ func TestSettingsAPI_GetCluster_ReshipStatus(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, reship.ReshipStatusPending, body["reship_status"])
 }
+
+func TestSettingsAPI_DELETE_ClusterOverride(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-del-cluster-keep-ns"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: engine.OrgClusterSentinelUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday"}, StartTime: "07:00", EndTime: "17:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "team-a",
+		Timezone: "America/Los_Angeles", Days: []string{"wednesday"}, StartTime: "10:00", EndTime: "16:00", Enabled: true,
+	}))
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	clusterPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+	rec := serveBH(t, e, http.MethodDelete, clusterPath, orgID, nil)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	nsPath := clusterPath + "/namespaces/team-a"
+	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var nsResp businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
+	assert.Equal(t, "America/Los_Angeles", nsResp.Timezone)
+	assert.Equal(t, "10:00", nsResp.Schedule.StartTime)
+
+	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
+	assert.Equal(t, "America/New_York", nsResp.Timezone)
+	assert.Equal(t, "07:00", nsResp.Schedule.StartTime)
+}
+
+func TestSettingsAPI_DELETE_NamespaceOverride(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-del-ns-inherit"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "team-a",
+		Timezone: "America/Los_Angeles", Days: []string{"wednesday"}, StartTime: "10:00", EndTime: "16:00", Enabled: true,
+	}))
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	nsPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
+	rec := serveBH(t, e, http.MethodDelete, nsPath, orgID, nil)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "America/Chicago", resp.Timezone)
+	assert.Equal(t, "09:00", resp.Schedule.StartTime)
+}
+
+func TestSettingsAPI_DELETE_Cluster_InheritsOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-del-cluster-inherit-org"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: engine.OrgClusterSentinelUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday"}, StartTime: "07:00", EndTime: "17:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	clusterPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+	rec := serveBH(t, e, http.MethodDelete, clusterPath, orgID, nil)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	rec = serveBH(t, e, http.MethodGet, clusterPath, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "America/New_York", resp.Timezone)
+	assert.Equal(t, "07:00", resp.Schedule.StartTime)
+}
+
+func TestSettingsAPI_DELETE_Namespace_InheritsCluster(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-del-ns-inherit-cluster"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "team-a",
+		Timezone: "America/Los_Angeles", Days: []string{"wednesday"}, StartTime: "10:00", EndTime: "16:00", Enabled: true,
+	}))
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	nsPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
+	rec := serveBH(t, e, http.MethodDelete, nsPath, orgID, nil)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "America/Chicago", resp.Timezone)
+	assert.Equal(t, "09:00", resp.Schedule.StartTime)
+}
+
+func TestSettingsAPI_PUT_TimezoneChange_TriggersReship(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-tz-reship"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+
+	rec := serveBH(t, e, http.MethodPut, path, orgID, validBHPayload())
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	payload := validBHPayload()
+	payload["timezone"] = "America/Chicago"
+	rec = serveBH(t, e, http.MethodPut, path, orgID, payload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	waitForReshipCalls(t, trigger, 2)
+	assert.Len(t, trigger.snapshot(), 2)
+}
+
+func TestSettingsAPI_PUT_EnabledFalse_StillReships(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-enabled-false-reship"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+
+	trigger := &recordingReshipTrigger{}
+	e := setupBHTestEcho(t, pool, trigger, orgID)
+	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+
+	payload := validBHPayload()
+	payload["enabled"] = false
+	rec := serveBH(t, e, http.MethodPut, path, orgID, payload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	waitForReshipCalls(t, trigger, 1)
+
+	var resp businessHoursPutResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Enabled)
+}
+
+func TestSettingsAPI_PUT_NamespaceOverride_OnlyAffectsTargetNamespace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-ns-override-only"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	clusterPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+	clusterPayload := validBHPayload()
+	clusterPayload["schedule"] = map[string]interface{}{
+		"days": []string{"monday"}, "start_time": "08:00", "end_time": "17:00",
+	}
+	rec := serveBH(t, e, http.MethodPut, clusterPath, orgID, clusterPayload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	nsPath := clusterPath + "/namespaces/team-a"
+	nsPayload := validBHPayload()
+	nsPayload["schedule"] = map[string]interface{}{
+		"days": []string{"tuesday"}, "start_time": "10:00", "end_time": "15:00",
+	}
+	rec = serveBH(t, e, http.MethodPut, nsPath, orgID, nsPayload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var nsResp businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
+	assert.Equal(t, "10:00", nsResp.Schedule.StartTime)
+
+	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
+	assert.Equal(t, "08:00", nsResp.Schedule.StartTime)
+}
+
+func TestSettingsAPI_PUT_InvalidIANA(t *testing.T) {
+	enableBusinessHoursForTest(t)
+	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-invalid-iana")
+	payload := validBHPayload()
+	payload["timezone"] = "Invalid/Zone"
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-invalid-iana", payload)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
