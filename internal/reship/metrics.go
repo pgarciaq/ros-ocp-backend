@@ -40,6 +40,14 @@ var (
 		},
 		[]string{"org_id"},
 	)
+
+	ReshipProviderResolutionFailuresTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ros_reship_provider_resolution_failures_total",
+			Help: "Failures resolving cluster_uuid to provider_uuid via masu effective_rates",
+		},
+		[]string{"org_id", "reason"},
+	)
 )
 
 func observeReshipStart(orgID, clusterUUID string) {
@@ -56,4 +64,20 @@ func observeReshipEnd(orgID, clusterUUID string, start time.Time, filesProcessed
 
 func incReshipFailures(orgID string) {
 	ReshipFailuresTotal.WithLabelValues(orgID).Inc()
+}
+
+func recordProviderResolutionFailure(orgID, clusterUUID string, attempt int, err error) {
+	reason, statusCode := resolutionFailureDetails(err)
+	ReshipProviderResolutionFailuresTotal.WithLabelValues(orgID, reason).Inc()
+	fields := map[string]interface{}{
+		"msg":           "provider_uuid resolution failed; reship deferred",
+		"org_id":        orgID,
+		"cluster_uuid":  clusterUUID,
+		"reason":        reason,
+		"retry_attempt": attempt,
+	}
+	if statusCode > 0 {
+		fields["http_status"] = statusCode
+	}
+	reshipLog.WithFields(fields).Warn(err.Error())
 }

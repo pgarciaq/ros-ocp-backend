@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -104,4 +106,108 @@ func TestPostReship_ResolverFailure(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "provider lookup failed")
+}
+
+func TestHTTPEffectiveRatesResolver_HTTP404(t *testing.T) {
+	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"not found"}`))
+	}))
+	defer masu.Close()
+
+	resolver := NewHTTPEffectiveRatesResolver(masu.URL)
+	_, err := resolver.ResolveProviderUUID(
+		context.Background(),
+		"1234567",
+		uuid.MustParse(testutil.TestClusterUUID),
+	)
+	require.Error(t, err)
+	var resErr *ProviderResolutionError
+	require.ErrorAs(t, err, &resErr)
+	assert.Equal(t, ReasonNoCostModel, resErr.Reason)
+	assert.Equal(t, 404, resErr.StatusCode)
+}
+
+func TestHTTPEffectiveRatesResolver_HTTP503(t *testing.T) {
+	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer masu.Close()
+
+	resolver := NewHTTPEffectiveRatesResolver(masu.URL)
+	_, err := resolver.ResolveProviderUUID(
+		context.Background(),
+		"1234567",
+		uuid.MustParse(testutil.TestClusterUUID),
+	)
+	require.Error(t, err)
+	var resErr *ProviderResolutionError
+	require.ErrorAs(t, err, &resErr)
+	assert.Equal(t, ReasonMasuUnavailable, resErr.Reason)
+	assert.Equal(t, 503, resErr.StatusCode)
+}
+
+func TestHTTPEffectiveRatesResolver_EmptyProviderUUID(t *testing.T) {
+	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"cluster_id":    testutil.TestClusterUUID,
+			"provider_uuid": "",
+		})
+	}))
+	defer masu.Close()
+
+	resolver := NewHTTPEffectiveRatesResolver(masu.URL)
+	_, err := resolver.ResolveProviderUUID(
+		context.Background(),
+		"1234567",
+		uuid.MustParse(testutil.TestClusterUUID),
+	)
+	require.Error(t, err)
+	var resErr *ProviderResolutionError
+	require.ErrorAs(t, err, &resErr)
+	assert.Equal(t, ReasonNotFound, resErr.Reason)
+	assert.Equal(t, 200, resErr.StatusCode)
+}
+
+func TestPostReship_ResolutionFailureIncrementsMetric(t *testing.T) {
+	orgID := "org-resolver-metric"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer masu.Close()
+
+	before := resolutionFailureCounter(t, orgID, ReasonNoCostModel)
+	client := NewHTTPClient(masu.URL, &http.Client{Timeout: 2 * time.Second})
+	_, err := client.PostReship(WithReshipAttempt(context.Background(), 3), orgID, clusterID)
+	require.Error(t, err)
+	after := resolutionFailureCounter(t, orgID, ReasonNoCostModel)
+	assert.Equal(t, before+1, after)
+}
+
+func resolutionFailureCounter(t *testing.T, orgID, reason string) float64 {
+	t.Helper()
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		if mf.GetName() != "ros_reship_provider_resolution_failures_total" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			var gotOrg, gotReason string
+			for _, lp := range m.GetLabel() {
+				switch lp.GetName() {
+				case "org_id":
+					gotOrg = lp.GetValue()
+				case "reason":
+					gotReason = lp.GetValue()
+				}
+			}
+			if gotOrg == orgID && gotReason == reason {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
 }

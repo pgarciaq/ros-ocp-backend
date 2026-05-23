@@ -60,6 +60,7 @@ func ReshipURL(baseURL, orgID string, providerUUID uuid.UUID, startDate, endDate
 func (c *HTTPClient) PostReship(ctx context.Context, orgID string, clusterUUID uuid.UUID) (ReshipResult, error) {
 	providerUUID, err := c.resolver.ResolveProviderUUID(ctx, orgID, clusterUUID)
 	if err != nil {
+		recordProviderResolutionFailure(orgID, clusterUUID.String(), reshipAttemptFromContext(ctx), err)
 		return ReshipResult{}, err
 	}
 

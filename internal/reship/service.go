@@ -147,7 +147,7 @@ func (s *Service) RetryPending(ctx context.Context, orgID string, clusterUUID uu
 	s.retries[key] = attempt
 	s.retryMu.Unlock()
 
-	err := s.TriggerReship(ctx, orgID, clusterUUID)
+	err := s.TriggerReship(WithReshipAttempt(ctx, attempt), orgID, clusterUUID)
 	if err != nil {
 		if attempt >= s.maxRetries {
 			incReshipFailures(orgID)
