@@ -45,10 +45,12 @@ type businessHoursPutRequest struct {
 }
 
 type businessHoursSettingsResponse struct {
-	Timezone       string                    `json:"timezone,omitempty"`
-	Schedule       *businessHoursScheduleBody `json:"schedule,omitempty"`
-	OffHoursWeight float64                   `json:"off_hours_weight,omitempty"`
-	Enabled        bool                      `json:"enabled"`
+	Timezone         string                     `json:"timezone,omitempty"`
+	Schedule         *businessHoursScheduleBody `json:"schedule,omitempty"`
+	OffHoursWeight   float64                    `json:"off_hours_weight,omitempty"`
+	Enabled          bool                       `json:"enabled"`
+	ReshipStatus     string                     `json:"reship_status,omitempty"`
+	ReshipStatusSince *time.Time                `json:"reship_status_since,omitempty"`
 }
 
 type businessHoursPutResponse struct {
@@ -88,7 +90,7 @@ func RegisterBusinessHoursRoutes(v1 *echo.Group, h *BusinessHoursSettingsHandler
 }
 
 func (h *BusinessHoursSettingsHandler) GetOrgDefault(c echo.Context) error {
-	return h.getSettings(c, engine.OrgClusterSentinelUUID, "", false)
+	return h.getSettings(c, engine.OrgClusterSentinelUUID, "", false, false)
 }
 
 func (h *BusinessHoursSettingsHandler) PutOrgDefault(c echo.Context) error {
@@ -104,7 +106,7 @@ func (h *BusinessHoursSettingsHandler) GetCluster(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return h.getSettings(c, clusterUUID, "", true)
+	return h.getSettings(c, clusterUUID, "", true, true)
 }
 
 func (h *BusinessHoursSettingsHandler) PutCluster(c echo.Context) error {
@@ -132,7 +134,7 @@ func (h *BusinessHoursSettingsHandler) GetNamespace(c echo.Context) error {
 	if namespace == "" {
 		return badRequest(c, "namespace is required")
 	}
-	return h.getSettings(c, clusterUUID, namespace, true)
+	return h.getSettings(c, clusterUUID, namespace, true, true)
 }
 
 func (h *BusinessHoursSettingsHandler) PutNamespace(c echo.Context) error {
@@ -159,7 +161,7 @@ func (h *BusinessHoursSettingsHandler) DeleteNamespace(c echo.Context) error {
 	return h.deleteSettings(c, clusterUUID, namespace, false)
 }
 
-func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, namespace string, useInheritance bool) error {
+func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, namespace string, useInheritance, includeReshipStatus bool) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -186,7 +188,11 @@ func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, 
 			return serviceUnavailable(c, "unable to read business hours settings")
 		}
 		effective := cache.Resolve(namespace)
-		return c.JSON(http.StatusOK, scheduleToResponse(effective))
+		resp := scheduleToResponse(effective)
+		if includeReshipStatus {
+			enrichReshipStatus(ctx, pool, orgID, clusterUUID, &resp)
+		}
+		return c.JSON(http.StatusOK, resp)
 	}
 
 	row, found, err := loadScheduleRow(ctx, pool, orgID, clusterUUID, namespace)
@@ -195,9 +201,17 @@ func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, 
 		return serviceUnavailable(c, "unable to read business hours settings")
 	}
 	if !found {
-		return c.JSON(http.StatusOK, businessHoursSettingsResponse{Enabled: false})
+		resp := businessHoursSettingsResponse{Enabled: false}
+		if includeReshipStatus {
+			enrichReshipStatus(ctx, pool, orgID, clusterUUID, &resp)
+		}
+		return c.JSON(http.StatusOK, resp)
 	}
-	return c.JSON(http.StatusOK, scheduleToResponse(row))
+	resp := scheduleToResponse(row)
+	if includeReshipStatus {
+		enrichReshipStatus(ctx, pool, orgID, clusterUUID, &resp)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, namespace string, orgLevel bool) error {
@@ -431,6 +445,22 @@ func scheduleToResponse(sched engine.BusinessHoursSchedule) businessHoursSetting
 			StartTime: sched.StartTime,
 			EndTime:   sched.EndTime,
 		},
+	}
+}
+
+func enrichReshipStatus(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, resp *businessHoursSettingsResponse) {
+	clusterID, err := uuid.Parse(clusterUUID)
+	if err != nil {
+		return
+	}
+	status, err := reship.GetClusterReshipStatus(ctx, pool, orgID, clusterID)
+	if err != nil {
+		return
+	}
+	resp.ReshipStatus = status.Status
+	if status.Since != nil {
+		ts := status.Since.UTC()
+		resp.ReshipStatusSince = &ts
 	}
 }
 

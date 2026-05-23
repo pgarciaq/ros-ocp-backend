@@ -23,7 +23,8 @@ type PendingCluster struct {
 func MarkReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) error {
 	tag, err := pool.Exec(ctx, `
 		UPDATE business_hours_schedules
-		SET reship_pending_since = NOW()
+		SET reship_pending_since = NOW(),
+		    reship_forward_only_since = NULL
 		WHERE org_id = $1
 		  AND (
 		    cluster_uuid = $2::uuid
@@ -47,7 +48,9 @@ func MarkReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, cl
 				0.0, false, NOW(), NOW()
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace)
-			DO UPDATE SET reship_pending_since = NOW()`,
+			DO UPDATE SET
+				reship_pending_since = NOW(),
+				reship_forward_only_since = NULL`,
 			orgID, clusterUUID.String(),
 		)
 		if err != nil {
@@ -57,11 +60,12 @@ func MarkReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, cl
 	return nil
 }
 
-// ClearReshipPending clears reship_pending_since for the cluster scope.
+// ClearReshipPending clears reship_pending_since and reship_forward_only_since for the cluster scope.
 func ClearReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE business_hours_schedules
-		SET reship_pending_since = NULL
+		SET reship_pending_since = NULL,
+		    reship_forward_only_since = NULL
 		WHERE org_id = $1
 		  AND (
 		    cluster_uuid = $2::uuid
@@ -71,6 +75,25 @@ func ClearReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, c
 	)
 	if err != nil {
 		return fmt.Errorf("clear reship pending: %w", err)
+	}
+	return nil
+}
+
+// MarkReshipForwardOnly clears reship_pending_since and records forward-only fallback time.
+func MarkReshipForwardOnly(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) error {
+	_, err := pool.Exec(ctx, `
+		UPDATE business_hours_schedules
+		SET reship_pending_since = NULL,
+		    reship_forward_only_since = NOW()
+		WHERE org_id = $1
+		  AND (
+		    cluster_uuid = $2::uuid
+		    OR cluster_uuid = $3::uuid
+		  )`,
+		orgID, clusterUUID.String(), bhschedule.OrgClusterSentinelUUID,
+	)
+	if err != nil {
+		return fmt.Errorf("mark reship forward-only: %w", err)
 	}
 	return nil
 }
@@ -143,6 +166,47 @@ func ReshipPendingSince(ctx context.Context, pool *pgxpool.Pool, orgID string, c
 		return nil, fmt.Errorf("reship pending since: %w", err)
 	}
 	return ts, nil
+}
+
+const (
+	ReshipStatusComplete    = "complete"
+	ReshipStatusPending     = "pending"
+	ReshipStatusForwardOnly = "forward_only"
+)
+
+// ClusterReshipStatus summarizes masu reship state for a cluster.
+type ClusterReshipStatus struct {
+	Status string
+	Since  *time.Time
+}
+
+// GetClusterReshipStatus returns reship_status and reship_status_since for a cluster.
+func GetClusterReshipStatus(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) (ClusterReshipStatus, error) {
+	var forwardOnly, pending *time.Time
+	err := pool.QueryRow(ctx, `
+		SELECT MAX(reship_forward_only_since), MAX(reship_pending_since)
+		FROM business_hours_schedules
+		WHERE org_id = $1
+		  AND cluster_uuid = $2::uuid`,
+		orgID, clusterUUID.String(),
+	).Scan(&forwardOnly, &pending)
+	if err != nil {
+		if errorsIsNoRows(err) {
+			return ClusterReshipStatus{Status: ReshipStatusComplete}, nil
+		}
+		return ClusterReshipStatus{}, fmt.Errorf("cluster reship status: %w", err)
+	}
+
+	switch {
+	case forwardOnly != nil:
+		ts := forwardOnly.UTC()
+		return ClusterReshipStatus{Status: ReshipStatusForwardOnly, Since: &ts}, nil
+	case pending != nil:
+		ts := pending.UTC()
+		return ClusterReshipStatus{Status: ReshipStatusPending, Since: &ts}, nil
+	default:
+		return ClusterReshipStatus{Status: ReshipStatusComplete}, nil
+	}
 }
 
 func errorsIsNoRows(err error) bool {

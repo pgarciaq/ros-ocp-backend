@@ -116,6 +116,9 @@ type Config struct {
 	// ReshipMaxRetries is the consecutive poller retry budget before ros_reship_failures_total increments (default 10).
 	ReshipMaxRetries int `mapstructure:"ROS_RESHIP_MAX_RETRIES"`
 
+	// ReshipForwardOnlyFallback enables forward-only BH recommendations after max reship retries (default false).
+	ReshipForwardOnlyFallback bool `mapstructure:"ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK"`
+
 	// Node right-sizing (Tier 1) configuration
 	NodeUnderutilThreshold         float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
 	NodeOvercommitThreshold        float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
@@ -325,6 +328,7 @@ func initConfig() {
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
 	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
+	viper.SetDefault("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", false)
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)

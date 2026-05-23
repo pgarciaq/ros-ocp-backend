@@ -702,3 +702,47 @@ func TestSettingsAPI_Reship_ScopedToClusterProvider(t *testing.T) {
 	waitForReshipCalls(t, trigger, 1)
 	require.Equal(t, cluster, trigger.snapshot()[0].ClusterUUID.String())
 }
+
+func TestSettingsAPI_GetCluster_ReshipStatus(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-reship-status"
+	cluster := testutil.TestClusterUUID
+	clusterUUID := uuid.MustParse(cluster)
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
+
+	rec := serveBH(t, e, http.MethodGet, path, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, reship.ReshipStatusComplete, body["reship_status"])
+
+	require.NoError(t, reship.MarkReshipPending(context.Background(), pool, orgID, clusterUUID))
+	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, reship.ReshipStatusPending, body["reship_status"])
+	require.NotEmpty(t, body["reship_status_since"])
+
+	require.NoError(t, reship.MarkReshipForwardOnly(context.Background(), pool, orgID, clusterUUID))
+	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, reship.ReshipStatusForwardOnly, body["reship_status"])
+	require.NotEmpty(t, body["reship_status_since"])
+
+	payload := validBHPayload()
+	rec = serveBH(t, e, http.MethodPut, path, orgID, payload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, reship.ReshipStatusPending, body["reship_status"])
+}

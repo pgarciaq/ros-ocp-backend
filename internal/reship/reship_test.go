@@ -159,6 +159,128 @@ func TestReshipPoller_RetrySuccess(t *testing.T) {
 	assert.Nil(t, pending)
 }
 
+func TestReshipPoller_MaxRetries_FallbackDisabled_PendingStays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-maxretry-no-fallback"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
+	seedBHScheduleRow(t, pool, orgID, clusterID.String())
+
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	defer masu.Close()
+
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3, ForwardOnlyFallback: false})
+	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
+
+	for i := 0; i < 3; i++ {
+		require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
+	}
+
+	pending, err := ReshipPendingSince(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	require.NotNil(t, pending, "pending must remain when forward-only fallback is disabled")
+
+	status, err := GetClusterReshipStatus(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Equal(t, ReshipStatusPending, status.Status)
+}
+
+func TestReshipPoller_MaxRetries_FallbackEnabled_TransitionsForwardOnly(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-maxretry-fallback"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
+	seedBHScheduleRow(t, pool, orgID, clusterID.String())
+
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	defer masu.Close()
+
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3, ForwardOnlyFallback: true})
+	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
+
+	before := counterValue(t, "ros_reship_fallback_forward_only_total", orgID)
+	for i := 0; i < 3; i++ {
+		require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
+	}
+
+	pending, err := ReshipPendingSince(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Nil(t, pending, "pending must be cleared after forward-only transition")
+
+	status, err := GetClusterReshipStatus(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Equal(t, ReshipStatusForwardOnly, status.Status)
+	require.NotNil(t, status.Since)
+
+	after := counterValue(t, "ros_reship_fallback_forward_only_total", orgID)
+	assert.Equal(t, before+1, after)
+}
+
+func TestReshipForwardOnly_PUTRearmsPending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-put-rearm"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
+	seedBHScheduleRow(t, pool, orgID, clusterID.String())
+
+	require.NoError(t, MarkReshipForwardOnly(context.Background(), pool, orgID, clusterID))
+	status, err := GetClusterReshipStatus(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	require.Equal(t, ReshipStatusForwardOnly, status.Status)
+
+	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
+	status, err = GetClusterReshipStatus(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Equal(t, ReshipStatusPending, status.Status)
+
+	pending, err := ReshipPendingSince(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	require.NotNil(t, pending)
+}
+
+func TestReshipForwardOnly_SuccessClearsBoth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-success-forward-only"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
+	seedBHScheduleRow(t, pool, orgID, clusterID.String())
+
+	require.NoError(t, MarkReshipForwardOnly(context.Background(), pool, orgID, clusterID))
+
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"files_processed":1,"files_total":1}`))
+	})
+	defer masu.Close()
+
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3})
+	require.NoError(t, svc.TriggerReship(context.Background(), orgID, clusterID))
+
+	status, err := GetClusterReshipStatus(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Equal(t, ReshipStatusComplete, status.Status)
+}
+
 func TestReshipPoller_MaxRetries_IncrementsMetric(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

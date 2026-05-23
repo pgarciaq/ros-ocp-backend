@@ -6,6 +6,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConfig_ReshipForwardOnlyFallback_DefaultFalse(t *testing.T) {
+	t.Setenv("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", "")
+	ResetForTest()
+
+	c := GetConfig()
+	require.False(t, c.ReshipForwardOnlyFallback)
+}
+
+func TestConfig_ReshipForwardOnlyFallback_EnvParsing(t *testing.T) {
+	t.Setenv("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", "true")
+	ResetForTest()
+
+	c := GetConfig()
+	require.True(t, c.ReshipForwardOnlyFallback)
+}
+
 func TestConfig_BusinessHoursEnabled_DefaultTrue(t *testing.T) {
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "")
 	ResetForTest()

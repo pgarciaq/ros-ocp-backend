@@ -22,16 +22,18 @@ type Service struct {
 	client *HTTPClient
 	lock   *LockCoordinator
 
-	maxRetries int
-	retryMu    sync.Mutex
-	retries    map[lockKey]int
+	maxRetries              int
+	forwardOnlyFallback     bool
+	retryMu                 sync.Mutex
+	retries                 map[lockKey]int
 }
 
 // ServiceConfig tunes reship behavior.
 type ServiceConfig struct {
-	MasuURL  string
-	LockTTL  time.Duration
-	MaxRetries int
+	MasuURL                 string
+	LockTTL                 time.Duration
+	MaxRetries              int
+	ForwardOnlyFallback     bool
 }
 
 // NewService wires a reship Service. Returns nil when masu URL is empty.
@@ -48,20 +50,22 @@ func NewService(pool *pgxpool.Pool, cfg ServiceConfig) *Service {
 		ttl = defaultLockTTL
 	}
 	return &Service{
-		pool:       pool,
-		client:     NewHTTPClient(cfg.MasuURL, nil),
-		lock:       NewLockCoordinator(ttl),
-		maxRetries: maxRetries,
-		retries:    make(map[lockKey]int),
+		pool:                pool,
+		client:              NewHTTPClient(cfg.MasuURL, nil),
+		lock:                NewLockCoordinator(ttl),
+		maxRetries:          maxRetries,
+		forwardOnlyFallback: cfg.ForwardOnlyFallback,
+		retries:             make(map[lockKey]int),
 	}
 }
 
 // ServiceConfigFromApp builds ServiceConfig from application config.
 func ServiceConfigFromApp(cfg *config.Config) ServiceConfig {
 	return ServiceConfig{
-		MasuURL:    cfg.KokuMasuURL,
-		LockTTL:    time.Hour,
-		MaxRetries: cfg.ReshipMaxRetries,
+		MasuURL:             cfg.KokuMasuURL,
+		LockTTL:             time.Hour,
+		MaxRetries:          cfg.ReshipMaxRetries,
+		ForwardOnlyFallback: cfg.ReshipForwardOnlyFallback,
 	}
 }
 
@@ -156,7 +160,24 @@ func (s *Service) RetryPending(ctx context.Context, orgID string, clusterUUID uu
 				"org_id":       orgID,
 				"cluster_uuid": clusterUUID.String(),
 				"attempts":     attempt,
+				"reason":       err.Error(),
 			}).Error(err.Error())
+			if s.forwardOnlyFallback {
+				if markErr := MarkReshipForwardOnly(ctx, s.pool, orgID, clusterUUID); markErr != nil {
+					reshipLog.Errorf("mark reship forward-only: %v", markErr)
+				} else {
+					reshipLog.WithFields(map[string]interface{}{
+						"msg":          "Reship retries exhausted, transitioning to forward-only BH recommendations",
+						"org_id":       orgID,
+						"cluster_uuid": clusterUUID.String(),
+						"reason":       err.Error(),
+					}).Warn("Reship retries exhausted, transitioning to forward-only BH recommendations")
+					incReshipFallbackForwardOnly(orgID)
+				}
+				s.retryMu.Lock()
+				delete(s.retries, key)
+				s.retryMu.Unlock()
+			}
 		}
 		return err
 	}

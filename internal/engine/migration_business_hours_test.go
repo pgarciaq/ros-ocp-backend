@@ -250,9 +250,10 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.Equal(t, 66, versions[0])
 	assert.Equal(t, 67, versions[len(versions)-1])
 
-	// Latest migration must be 000068 (greater than 000065).
+	// Latest migration must be 000069 (greater than 000065).
 	assert.True(t, names["000065_org_recommendation_terms_add_type.up.sql"])
 	assert.True(t, names["000068_container_usage_samples_pk_workload_type.up.sql"])
+	assert.True(t, names["000069_add_reship_forward_only_since.up.sql"])
 	assert.Greater(t, int(latestMigrationVersion), 65)
 }
 

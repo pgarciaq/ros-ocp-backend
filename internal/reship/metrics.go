@@ -48,6 +48,14 @@ var (
 		},
 		[]string{"org_id", "reason"},
 	)
+
+	ReshipFallbackForwardOnlyTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ros_reship_fallback_forward_only_total",
+			Help: "Clusters transitioned to forward-only BH recommendations after reship retry exhaustion",
+		},
+		[]string{"org_id"},
+	)
 )
 
 func observeReshipStart(orgID, clusterUUID string) {
@@ -64,6 +72,10 @@ func observeReshipEnd(orgID, clusterUUID string, start time.Time, filesProcessed
 
 func incReshipFailures(orgID string) {
 	ReshipFailuresTotal.WithLabelValues(orgID).Inc()
+}
+
+func incReshipFallbackForwardOnly(orgID string) {
+	ReshipFallbackForwardOnlyTotal.WithLabelValues(orgID).Inc()
 }
 
 func recordProviderResolutionFailure(orgID, clusterUUID string, attempt int, err error) {
