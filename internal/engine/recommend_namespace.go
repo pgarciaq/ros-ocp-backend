@@ -121,6 +121,8 @@ func RecommendAllNamespaces(
 	}
 
 	now := time.Now().UTC()
+	stalenessThreshold := StalenessThreshold()
+	clusterLastReported := loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID)
 	results := make([]NamespaceRec, 0, len(grouped)*2)
 
 	for key, digestRows := range grouped {
@@ -130,7 +132,7 @@ func RecommendAllNamespaces(
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
 
-		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > StalenessThreshold()
+		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
 
 		for _, tc := range terms {
 			windowRows := filterByWindow(digestRows, latest.BucketDate, tc.WindowDays)

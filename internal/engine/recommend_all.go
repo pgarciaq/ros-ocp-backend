@@ -88,6 +88,7 @@ func RecommendWorkloadsStreaming(
 
 	now := time.Now().UTC()
 	stalenessThreshold := StalenessThreshold()
+	clusterLastReported := loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID)
 
 	var currentKey containerKey
 	var currentDigests []DigestRow
@@ -112,7 +113,7 @@ func RecommendWorkloadsStreaming(
 		currentCPULimMC := latest.CPURequestP95MC
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
-		stale := now.Sub(latest.BucketDate.Truncate(24*time.Hour)) > stalenessThreshold
+		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
 
 		for _, tc := range terms {
 			windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
@@ -508,6 +509,32 @@ func sumOOMCounts(rows []DigestRow) int64 {
 
 // DefaultStalenessThreshold is used when ROS_STALENESS_THRESHOLD_HOURS is not set.
 const DefaultStalenessThreshold = 3 * 24 * time.Hour // 72 hours
+
+// loadClusterLastReportedAt returns clusters.last_reported_at for org+cluster, or zero time if unknown.
+func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) time.Time {
+	var ts time.Time
+	err := pool.QueryRow(ctx, `
+		SELECT c.last_reported_at
+		FROM clusters c
+		JOIN rh_accounts ra ON ra.id = c.tenant_id
+		WHERE ra.org_id = $1 AND c.cluster_uuid = $2::uuid`,
+		orgID, clusterUUID).Scan(&ts)
+	if err != nil {
+		return time.Time{}
+	}
+	return ts.UTC()
+}
+
+// isStaleRecommendation marks a recommendation stale when the cluster has not
+// reported within the threshold. Reship and delayed uploads refresh
+// last_reported_at even when digest bucket_dates are historical, so cluster
+// activity takes precedence over per-container digest age.
+func isStaleRecommendation(now, latestDigestDate, clusterLastReported time.Time, threshold time.Duration) bool {
+	if !clusterLastReported.IsZero() {
+		return now.Sub(clusterLastReported) > threshold
+	}
+	return now.Sub(latestDigestDate.Truncate(24*time.Hour)) > threshold
+}
 
 // StalenessThreshold returns the configured staleness threshold duration.
 func StalenessThreshold() time.Duration {

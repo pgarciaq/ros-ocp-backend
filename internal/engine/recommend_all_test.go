@@ -333,6 +333,41 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 	}
 }
 
+func TestIsStaleRecommendation_ClusterLastReportedTakesPrecedence(t *testing.T) {
+	threshold := 72 * time.Hour
+	now := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
+	oldDigest := time.Date(2026, 5, 19, 0, 0, 0, 0, time.UTC)
+	recentReport := time.Date(2026, 5, 23, 2, 0, 0, 0, time.UTC)
+
+	assert.False(t, isStaleRecommendation(now, oldDigest, recentReport, threshold),
+		"fresh cluster report should keep recommendations non-stale despite old digests")
+	assert.True(t, isStaleRecommendation(now, oldDigest, time.Time{}, threshold),
+		"without cluster report, stale follows digest age")
+	assert.True(t, isStaleRecommendation(now, oldDigest, now.Add(-96*time.Hour), threshold),
+		"stale when cluster has not reported within threshold")
+}
+
+func TestRecommendAllWorkloads_StaleDetection_RecentClusterReport(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'reship-cluster', 'src-reship', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	// Historical digests ending 5 days ago (older than default 72h threshold).
+	testutil.SeedDigestSeries(t, pool, 3, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 2)
+	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	for _, r := range results {
+		assert.False(t, r.Stale, "reship with fresh last_reported_at should not mark recommendations stale")
+	}
+}
+
 func TestRecommendAllWorkloads_TermWindowScoping(t *testing.T) {
 	// T-1.8: Verify that short (1 day), medium (7 days), and long (15 days)
 	// actually use only their respective data windows.
