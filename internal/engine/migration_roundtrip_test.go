@@ -88,7 +88,7 @@ func TestMigrationRoundtrip_BusinessHours(t *testing.T) {
 
 	connStr := setupMigratePostgres(t)
 	runMigrationsUp(t, connStr)
-	require.Equal(t, uint(67), migrationVersion(t, connStr))
+	require.Equal(t, latestMigrationVersion, migrationVersion(t, connStr))
 
 	poolCfg, err := pgxpool.ParseConfig(connStr)
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestMigrationRoundtrip_BusinessHours(t *testing.T) {
 	assert.False(t, columnExists(t, pool, "daily_container_digests", "schedule_type"))
 
 	runMigrationsUp(t, connStr)
-	require.Equal(t, uint(67), migrationVersion(t, connStr))
+	require.Equal(t, latestMigrationVersion, migrationVersion(t, connStr))
 
 	pkCols := queryPrimaryKeyColumns(t, pool, "daily_container_digests")
 	assert.Contains(t, pkCols, "schedule_type")

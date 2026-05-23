@@ -250,17 +250,17 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.Equal(t, 66, versions[0])
 	assert.Equal(t, 67, versions[len(versions)-1])
 
-	// Latest migration must be 000067 (greater than 000065).
+	// Latest migration must be 000068 (greater than 000065).
 	assert.True(t, names["000065_org_recommendation_terms_add_type.up.sql"])
-	maxVer := versions[len(versions)-1]
-	assert.Greater(t, maxVer, 65)
+	assert.True(t, names["000068_container_usage_samples_pk_workload_type.up.sql"])
+	assert.Greater(t, int(latestMigrationVersion), 65)
 }
 
 // BH-INT-040
 func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T) {
 	connStr := setupMigratePostgres(t)
 	runMigrationsUp(t, connStr)
-	require.Equal(t, uint(67), migrationVersion(t, connStr))
+	require.Equal(t, latestMigrationVersion, migrationVersion(t, connStr))
 
 	poolCfg, err := pgxpool.ParseConfig(connStr)
 	require.NoError(t, err)
