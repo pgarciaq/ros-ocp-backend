@@ -13,7 +13,7 @@ dollar impact using Koku cost model rates.
 | Namespace Quota Optimization | namespace | cost, performance | Planned | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
 | GPU MIG Profiling | gpu | single | No | Yes |
-| GPU Time-Slicing | gpu | single | No | Yes |
+| GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
 | Snapshot Lifecycle | snapshot | single | Yes (cost) | Yes |
 | Business Hours | container, namespace | cost, performance | Yes | Yes |
