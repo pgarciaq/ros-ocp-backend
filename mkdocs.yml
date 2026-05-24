@@ -63,12 +63,24 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - UI Integration:
-      - Frontend Integration Guide: ui-integration-guide.md
   - Getting Started:
       - Contributing: contributing.md
       - Local Development: development.md
-  - Testing & Quality: testing.md
+      - Testing & Quality: testing.md
+  - Features:
+      - features/index.md
+      - Container Right-Sizing: features/container-recommendations.md
+      - Namespace Quota Optimization: features/namespace-recommendations.md
+      - Node Consolidation: features/node-recommendations.md
+      - GPU MIG Profiling: features/gpu-mig.md
+      - GPU Time-Slicing: features/gpu-time-slicing.md
+      - PVC Right-Sizing: features/pvc-rightsizing.md
+      - Snapshot Staleness: features/snapshot-staleness.md
+      - Business Hours: features/business-hours.md
+      - Configurable Thresholds: features/configurable-thresholds.md
+      - Dual Engine (Cost vs Performance): features/dual-engine.md
+      - Savings Estimations: features/savings-estimations.md
+      - History & Quality: features/history-and-quality.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Recommendation Engines: architecture/recommendation-engines.md
@@ -95,17 +107,5 @@ nav:
   - Operations:
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Issues: known-issues.md
-  - Features:
-      - features/index.md
-      - Container Right-Sizing: features/container-recommendations.md
-      - Namespace Quota Optimization: features/namespace-recommendations.md
-      - Node Consolidation: features/node-recommendations.md
-      - GPU MIG Profiling: features/gpu-mig.md
-      - GPU Time-Slicing: features/gpu-time-slicing.md
-      - PVC Right-Sizing: features/pvc-rightsizing.md
-      - Snapshot Staleness: features/snapshot-staleness.md
-      - Business Hours: features/business-hours.md
-      - Configurable Thresholds: features/configurable-thresholds.md
-      - Dual Engine (Cost vs Performance): features/dual-engine.md
-      - Savings Estimations: features/savings-estimations.md
-      - History & Quality: features/history-and-quality.md
+  - UI Integration:
+      - Frontend Integration Guide: ui-integration-guide.md
