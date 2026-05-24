@@ -29,6 +29,7 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 ## Quick Links
 
 - [Cost Integration](architecture/cost-integration.md) — savings formulas, kill-switch, currency, fleet savings summary, plugin matrix
+- [Recommendation Engines](architecture/recommendation-engines.md) — complete threshold, percentile, and term reference for all plugins
 - [Contributing Guide](contributing.md) — setup, testing, PR process
 - [Plugin Architecture](architecture/plugin-architecture.md) — how plugins work
 - [Plugin Reference](api-reference/index.md) — auto-generated from source code

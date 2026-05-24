@@ -6,7 +6,8 @@
 |----------|-------------|
 | [requirements.md](architecture/requirements.md) | Master requirements document — 60 features, 87 REQs, database schema, phasing strategy, deployment model |
 | [plugin-architecture.md](architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
-| [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — percentiles, decay weighting, adaptive margin, trend detection |
+| [recommendation-engines.md](architecture/recommendation-engines.md) | **Complete reference** — all plugin thresholds, percentiles, terms, and env vars |
+| [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — decay weighting, adaptive margin, trend detection |
 | [gpu-classification.md](architecture/gpu-classification.md) | GPU utilization classification thresholds and MIG profile selection |
 | [cost-integration.md](architecture/cost-integration.md) | Cost/savings integration with Koku — `effective_rates`, kill-switch, currency field, fleet savings summary, node/PVC/container/GPU formulas, plugin matrix |
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |

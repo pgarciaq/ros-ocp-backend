@@ -2,6 +2,9 @@
 
 This document describes the integration between ROS-OCP-Backend and Koku for cost/savings estimation.
 
+For recommendation thresholds and term configuration (not cost-specific), see
+[Recommendation Engine Reference](recommendation-engines.md).
+
 ## Overview
 
 ROS-OCP-Backend fetches cost model rates from Koku to compute estimated monthly savings for each recommendation. The integration uses Koku's internal `effective_rates` endpoint.

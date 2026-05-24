@@ -63,6 +63,7 @@ nav:
       - Local Development: development.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
+      - Recommendation Engines: architecture/recommendation-engines.md
       - Recommendation Math: architecture/recommendation-math.md
       - GPU Classification: architecture/gpu-classification.md
       - Kafka Schema: architecture/kafka-schema.md

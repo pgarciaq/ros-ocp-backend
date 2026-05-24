@@ -2,6 +2,9 @@
 
 This document describes how ROS-OCP-Backend classifies GPU workload utilization.
 
+For the full cross-plugin parameter reference (including time-slicing and term defaults),
+see [Recommendation Engine Reference](recommendation-engines.md).
+
 ## Classification Algorithm
 
 GPU classification uses three DCGM profiling metrics averaged across all daily digests within the term window:
