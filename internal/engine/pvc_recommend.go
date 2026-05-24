@@ -43,22 +43,24 @@ type PVCDigestRow struct {
 
 // PVCRec is the output of the PVC recommendation engine.
 type PVCRec struct {
-	OrgID              string
-	ClusterUUID        string
-	Namespace          string
-	PVC                string
-	PV                 string
-	StorageClass       string
-	CapacityBytes      int64
-	UsageBytesMax      int64
-	UsageRatio         float64
-	RecommendationType string
-	RecommendedBytes   *int64
-	DaysToFull         *int
-	GrowthBytesPerDay  int64
-	NotificationCodes  []int16
-	DataDays           int
-	Term               string
+	OrgID                      string
+	ClusterUUID                string
+	Namespace                  string
+	PVC                        string
+	PV                         string
+	StorageClass               string
+	CapacityBytes              int64
+	RequestBytes               int64
+	UsageBytesMax              int64
+	UsageRatio                 float64
+	RecommendationType         string
+	RecommendedBytes           *int64
+	DaysToFull                 *int
+	GrowthBytesPerDay          int64
+	EstimatedMonthlySavingsUSD float32
+	NotificationCodes          []int16
+	DataDays                   int
+	Term                       string
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
@@ -155,7 +157,8 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		PV:           latest.PV,
 		StorageClass: latest.StorageClass,
 		CapacityBytes: latest.CapacityBytes,
-		DataDays:     len(digests),
+		RequestBytes:  latest.RequestBytes,
+		DataDays:      len(digests),
 		Term:         tc.Name,
 	}
 
@@ -302,8 +305,10 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				persistentvolume, storageclass, capacity_bytes,
 				usage_bytes_max, usage_ratio, recommendation_type,
 				recommended_bytes, days_to_full, growth_bytes_per_day,
-				notification_codes, data_days, term, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+				notification_codes, data_days, term,
+				estimated_monthly_savings_usd,
+				updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
 			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 			DO UPDATE SET
 				persistentvolume = EXCLUDED.persistentvolume,
@@ -317,12 +322,14 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				growth_bytes_per_day = EXCLUDED.growth_bytes_per_day,
 				notification_codes = EXCLUDED.notification_codes,
 				data_days = EXCLUDED.data_days,
+				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				updated_at = NOW()`,
 			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.PVC,
 			rec.PV, rec.StorageClass, rec.CapacityBytes,
 			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
 			rec.NotificationCodes, rec.DataDays, rec.Term,
+			rec.EstimatedMonthlySavingsUSD,
 		)
 		if err != nil {
 			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s [%s]: %v", rec.Namespace, rec.PVC, rec.Term, err)

@@ -168,6 +168,10 @@ func GetNodeRecommendations(c echo.Context) error {
 	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
 
 	setRecommendationNoStore(c)
+	nodeCurrency := costdata.DefaultCurrency
+	if len(clusterUUIDs) > 0 {
+		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterUUIDs[0])
+	}
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
 			Count:           totalCount,
@@ -178,6 +182,7 @@ func GetNodeRecommendations(c echo.Context) error {
 		Data:     paged,
 		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
 		Warnings: warnings,
+		Currency: nodeCurrency,
 	})
 }
 
@@ -286,6 +291,10 @@ func respondNodeGPURecommendationsTripleSQL(
 	}
 
 	setRecommendationNoStore(c)
+	nodeCurrency := costdata.DefaultCurrency
+	if len(triples) > 0 {
+		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
+	}
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
 			Count:           totalCount,
@@ -296,6 +305,7 @@ func respondNodeGPURecommendationsTripleSQL(
 		Data:     allRecs,
 		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
 		Warnings: warnings,
+		Currency: nodeCurrency,
 	})
 }
 

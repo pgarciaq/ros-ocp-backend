@@ -32,9 +32,10 @@ type SnapshotRecommendationResponse struct {
 // SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
 type SnapshotRecommendationListResponse struct {
 	Meta struct {
-		Count  int `json:"count"`
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Count    int    `json:"count"`
+		Limit    int    `json:"limit"`
+		Offset   int    `json:"offset"`
+		Currency string `json:"currency"`
 	} `json:"meta"`
 	Links Links                           `json:"links"`
 	Data  []SnapshotRecommendationResponse `json:"data"`
@@ -166,6 +167,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
 	if resp.Data == nil {

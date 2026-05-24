@@ -167,7 +167,8 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			cluster_uuid UUID NOT NULL,
 			node TEXT NOT NULL,
 			term TEXT NOT NULL DEFAULT 'medium',
-			PRIMARY KEY (org_id, cluster_uuid, node, term)
+			engine TEXT NOT NULL DEFAULT 'cost',
+			PRIMARY KEY (org_id, cluster_uuid, node, term, engine)
 		)`,
 		// Kruize-era tables referenced by the background-delete steps.
 		`CREATE TABLE clusters (

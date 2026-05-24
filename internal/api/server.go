@@ -191,6 +191,7 @@ func StartAPIServer(ctx context.Context) {
 	// Fleet-level summary (native engine only).
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
+		v1.GET("/recommendations/openshift/savings-summary", GetFleetSavingsSummary)
 	}
 
 	// Plugin-provided routes ([plugin.APIProviders] returns individually enabled plugins,

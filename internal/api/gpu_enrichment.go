@@ -96,9 +96,15 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			if !ok || len(recs) == 0 {
 				continue
 			}
+			blockCurrency := costdata.DefaultCurrency
+			if costData != nil {
+				blockCurrency = costdata.ResolveCurrency(costData)
+			}
 			gpuMap := make(map[string]*model.GPURecommendation, len(recs))
 			for _, rec := range recs {
-				gpuMap[rec.Term] = toGPURecommendation(rec)
+				gpuRec := toGPURecommendation(rec)
+				gpuRec.Currency = blockCurrency
+				gpuMap[rec.Term] = gpuRec
 			}
 			r.GPU = gpuMap
 		}
@@ -107,7 +113,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 
 func getGPUCostProvider() costdata.CostDataProvider {
 	cfg := config.GetConfig()
-	if cfg.KokuMasuURL == "" {
+	if !cfg.SavingsEstimatesEnabled || cfg.KokuMasuURL == "" {
 		return nil
 	}
 	timeout := time.Duration(cfg.GlobalHTTPClientTimeoutSecs) * time.Second

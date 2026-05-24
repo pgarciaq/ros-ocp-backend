@@ -8,8 +8,8 @@ type NodeGPURecommendation struct {
 	RecommendationType  string             `json:"recommendation_type"`
 	GPUModel            string             `json:"gpu_model"`
 	RecommendedReplicas int                `json:"recommended_replicas"`
-	SavingsPerGPUUSD    *float32           `json:"savings_per_gpu_usd"`
-	TotalNodeSavingsUSD *float32           `json:"total_node_savings_usd"`
+	SavingsPerGPUUSD    *float32           `json:"savings_per_gpu_usd,omitempty"`
+	TotalNodeSavingsUSD *float32           `json:"total_node_savings_usd,omitempty"`
 	Confidence          float32            `json:"confidence"`
 	CandidateContainers []NodeContainerRef `json:"candidate_containers"`
 	ImpactedContainers  []NodeContainerRef `json:"impacted_containers"`
@@ -33,6 +33,7 @@ type NodeRecommendationListResponse struct {
 	Data     []NodeGPURecommendation `json:"data"`
 	Links    PaginationLinks         `json:"links"`
 	Warnings []string                `json:"warnings,omitempty"`
+	Currency string                  `json:"currency"`
 }
 
 // NodeRecommendationMeta holds metadata for the node recommendations response.

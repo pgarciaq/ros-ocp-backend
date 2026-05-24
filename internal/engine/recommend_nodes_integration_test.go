@@ -75,7 +75,9 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 
 		recByNode := map[string]engine.NodeRec{}
 		for _, r := range recs {
-			recByNode[r.Node] = r
+			if r.Engine == "cost" {
+				recByNode[r.Node] = r
+			}
 		}
 
 		if underutil, ok := recByNode["underutilized-node"]; ok {
@@ -130,7 +132,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 
 		var isUnderutilized bool
 		err = pool.QueryRow(ctx,
-			`SELECT is_underutilized FROM node_recommendations WHERE org_id = $1 AND node = $2`,
+			`SELECT is_underutilized FROM node_recommendations WHERE org_id = $1 AND node = $2 AND engine = 'cost'`,
 			orgID, "underutilized-node").Scan(&isUnderutilized)
 		require.NoError(t, err)
 		assert.True(t, isUnderutilized)
@@ -236,18 +238,18 @@ func TestPersistNodeRecommendations_StaleTermCleanup(t *testing.T) {
 
 	// Insert a recommendation with term "obsolete" directly (simulating a prior run).
 	_, err := pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term,
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, pod_count, updated_at)
-		VALUES ($1, $2, 'stale-node', 'obsolete', 50, 80, 60, 90, 1.0, false, false, 10, now())
-		ON CONFLICT (org_id, cluster_uuid, node, term) DO UPDATE SET updated_at = now()`,
+		VALUES ($1, $2, 'stale-node', 'obsolete', 'cost', 50, 80, 60, 90, 1.0, false, false, 10, now())
+		ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET updated_at = now()`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
 	// Persist new recommendations with active terms only.
 	recs := []engine.NodeRec{
 		{
-			Node: "stale-node", Term: "short_term",
+			Node: "stale-node", Term: "short_term", Engine: "cost",
 			CPUUtilP50: 40, CPUUtilP95: 70, MemUtilP50: 50, MemUtilP95: 80,
 			CPUOvercommitRatio: 0.8, IsUnderutilized: false, IsOvercommitted: false,
 			PodCount: 5,

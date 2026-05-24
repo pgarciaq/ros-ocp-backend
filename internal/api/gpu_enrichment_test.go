@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -207,4 +208,20 @@ func TestGPUMonthlyRate_MissingKey(t *testing.T) {
 	}
 	rate := engine.GPUMonthlyRate(cd)
 	assert.Equal(t, 0.0, rate)
+}
+
+func TestGetGPUCostProvider_SavingsEstimatesDisabled(t *testing.T) {
+	t.Setenv("KOKU_MASU_URL", "http://masu.example:5042")
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "false")
+	config.ResetForTest()
+
+	assert.Nil(t, getGPUCostProvider())
+}
+
+func TestGetGPUCostProvider_SavingsEstimatesEnabled(t *testing.T) {
+	t.Setenv("KOKU_MASU_URL", "http://masu.example:5042")
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
+	config.ResetForTest()
+
+	assert.NotNil(t, getGPUCostProvider())
 }

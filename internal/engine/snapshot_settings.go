@@ -9,7 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 )
+
+const storageGBUsagePerMonthMetric = "storage_gb_usage_per_month"
 
 // SnapshotSettingsDefaults are the compiled-in defaults.
 var SnapshotSettingsDefaults = SnapshotSettings{
@@ -86,9 +89,23 @@ func IsFieldLocked(field string) bool {
 	return false
 }
 
-// ResolveSnapshotSettings resolves settings in priority order:
-// 1. Env variable (locked) → 2. DB stored value → 3. Compiled-in default
-func ResolveSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (SnapshotSettings, error) {
+// ResolveSnapshotSettings resolves snapshot classification settings.
+//
+// Threshold fields (orphan/stale/etc.) use: env variable (locked) → DB → compiled default.
+//
+// CostPerGiBMonth uses a separate priority when costData is provided (ingestion path):
+//  1. Per-org DB setting (user explicitly configured via Settings API)
+//  2. ROS_SNAPSHOT_COST_PER_GIB_MONTH env var (admin override)
+//  3. storage_gb_usage_per_month from effective-rates (infra + supplementary sum)
+//  4. Compiled default ($0.05/GiB/month)
+//
+// When costData is nil (Settings API GET/PUT), step 3 is skipped.
+func ResolveSnapshotSettings(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	costData *costdata.ClusterCostData,
+) (SnapshotSettings, error) {
 	cfg := config.GetConfig()
 
 	// Start with compiled-in defaults
@@ -96,6 +113,7 @@ func ResolveSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID stri
 
 	// Override with DB values if a row exists
 	var dbRow SnapshotSettingsRow
+	dbHasRow := false
 	err := pool.QueryRow(ctx, `
 		SELECT orphan_age_days, never_restored_days, stale_days,
 			redundant_threshold, cost_per_gib_month_usd
@@ -104,14 +122,16 @@ func ResolveSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID stri
 		&dbRow.RedundantThreshold, &dbRow.CostPerGiBMonthUSD)
 
 	if err == nil {
+		dbHasRow = true
 		result.OrphanAgeDays = dbRow.OrphanAgeDays
 		result.NeverRestoredDays = dbRow.NeverRestoredDays
 		result.StaleDays = dbRow.StaleDays
 		result.RedundantThreshold = dbRow.RedundantThreshold
-		result.CostPerGiBMonth = dbRow.CostPerGiBMonthUSD
 	} else if err != pgx.ErrNoRows {
 		return result, fmt.Errorf("querying snapshot settings: %w", err)
 	}
+
+	result.CostPerGiBMonth = resolveCostPerGiBMonth(cfg, dbHasRow, dbRow.CostPerGiBMonthUSD, costData)
 
 	// Override with env variables (highest priority — locked)
 	if cfg.SnapshotOrphanAgeDays != 0 {
@@ -134,18 +154,50 @@ func ResolveSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID stri
 			result.RedundantThreshold = cfg.SnapshotRedundantThreshold
 		}
 	}
-	if cfg.SnapshotCostPerGiBMonth != 0 {
-		if _, ok := os.LookupEnv("ROS_SNAPSHOT_COST_PER_GIB_MONTH"); ok {
-			result.CostPerGiBMonth = cfg.SnapshotCostPerGiBMonth
-		}
-	}
 
 	return result, nil
 }
 
+// resolveCostPerGiBMonth resolves the snapshot cost rate for ingestion/classification.
+// See ResolveSnapshotSettings for the priority chain.
+func resolveCostPerGiBMonth(
+	cfg *config.Config,
+	dbHasRow bool,
+	dbValue float64,
+	costData *costdata.ClusterCostData,
+) float64 {
+	if dbHasRow {
+		return dbValue
+	}
+	if _, ok := os.LookupEnv("ROS_SNAPSHOT_COST_PER_GIB_MONTH"); ok {
+		return cfg.SnapshotCostPerGiBMonth
+	}
+	if rate, ok := storageGBUsageRateFromCostData(costData); ok {
+		return rate
+	}
+	return SnapshotSettingsDefaults.CostPerGiBMonth
+}
+
+// storageGBUsageRateFromCostData returns the sum of infrastructure and supplementary
+// rates for storage_gb_usage_per_month from Koku effective-rates configured_rates.
+func storageGBUsageRateFromCostData(costData *costdata.ClusterCostData) (float64, bool) {
+	if costData == nil || costData.ConfiguredRates == nil {
+		return 0, false
+	}
+	pair, ok := costData.ConfiguredRates[storageGBUsagePerMonthMetric]
+	if !ok {
+		return 0, false
+	}
+	sum := pair.Infrastructure + pair.Supplementary
+	if sum <= 0 {
+		return 0, false
+	}
+	return sum, true
+}
+
 // GetSnapshotSettingsForAPI resolves settings and adds locked_fields for the GET response.
 func GetSnapshotSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID string) (SnapshotSettingsResponse, error) {
-	settings, err := ResolveSnapshotSettings(ctx, pool, orgID)
+	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, nil)
 	if err != nil {
 		return SnapshotSettingsResponse{}, err
 	}
@@ -169,7 +221,7 @@ func UpdateSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID strin
 	}
 
 	// Resolve current settings to fill in missing values
-	current, err := ResolveSnapshotSettings(ctx, pool, orgID)
+	current, err := ResolveSnapshotSettings(ctx, pool, orgID, nil)
 	if err != nil {
 		return err
 	}

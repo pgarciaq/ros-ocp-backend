@@ -20,6 +20,7 @@ type GPURecommendation struct {
 	FBUsageMaxMiB                 float32  `json:"fb_usage_max_mib"`
 	EstimatedMonthlyGPUSavingsUSD         *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
 	EstimatedMonthlyTimeslicingSavingsUSD *float32 `json:"estimated_monthly_timeslicing_savings_usd,omitempty"`
+	Currency                              string   `json:"currency,omitempty"`
 	Notifications                         []int16  `json:"notifications,omitempty"`
 	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`
 	TimeSlicingReplicas                   *int     `json:"time_slicing_replicas,omitempty"`
@@ -42,6 +43,7 @@ type DetailResponse struct {
 	WorkloadType    string                `json:"workload_type"`
 	SourceID        string                `json:"source_id"`
 	LastReported    string                `json:"last_reported"`
+	Currency        string                `json:"currency,omitempty"`
 	Recommendations DetailRecommendations `json:"recommendations"`
 	GPU             map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
@@ -203,6 +205,7 @@ func BuildDetailResponse(
 		WorkloadType:    native.WorkloadType,
 		SourceID:        native.SourceID,
 		LastReported:    native.LastReported,
+		Currency:        native.Currency,
 		Recommendations: recs,
 		GPU:             native.GPU,
 	}

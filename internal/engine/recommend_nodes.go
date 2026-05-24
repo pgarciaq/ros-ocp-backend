@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,20 +17,31 @@ import (
 // deadlocks without requiring manual worker shutdown during migrations.
 const nodeRecsAdvisoryLock = 7358001
 
+// NodeEngineConfig holds per-engine sizing parameters for node recommendations.
+type NodeEngineConfig struct {
+	Name              string
+	TargetUtilization float64
+}
+
+var nodeEngines = []NodeEngineConfig{
+	{Name: "cost", TargetUtilization: 0.80},
+	{Name: "performance", TargetUtilization: 0.55},
+}
+
 // NodeDigestRow represents a single daily digest for a node, loaded from the database.
 type NodeDigestRow struct {
-	BucketDate       time.Time
-	Node             string
-	CPUUsageP50MC    int64
-	CPUUsageP95MC    int64
-	MemUsageP50KiB   int64
-	MemUsageP95KiB   int64
-	MaxCPUAllocMC    *int64
-	MaxMemAllocKiB   *int64
-	MaxCPURequestsMC int64
+	BucketDate        time.Time
+	Node              string
+	CPUUsageP50MC     int64
+	CPUUsageP95MC     int64
+	MemUsageP50KiB    int64
+	MemUsageP95KiB    int64
+	MaxCPUAllocMC     *int64
+	MaxMemAllocKiB    *int64
+	MaxCPURequestsMC  int64
 	MaxMemRequestsKiB int64
-	MaxPodCount      int64
-	SampleCount      int64
+	MaxPodCount       int64
+	SampleCount       int64
 }
 
 // NodeRecConfig holds configuration parameters for the node recommendation engine.
@@ -41,33 +53,63 @@ type NodeRecConfig struct {
 	EMAAlpha                   float64
 }
 
-// NodeRec holds the computed recommendation for a single node within a single term.
+// NodeRec holds the computed recommendation for a single node within a single term and engine.
 type NodeRec struct {
-	Node                string
-	Term                string
-	CPUUtilP50          float32
-	CPUUtilP95          float32
-	MemUtilP50          float32
-	MemUtilP95          float32
-	CPUOvercommitRatio  float32
-	IsUnderutilized     bool
-	IsOvercommitted     bool
-	StrandedResource    *string
-	PodCount            int64
-	TrendSlope          float32
-	NotificationCodes   []int16
+	Node                       string
+	Term                       string
+	Engine                     string
+	CPUUtilP50                 float32
+	CPUUtilP95                 float32
+	MemUtilP50                 float32
+	MemUtilP95                 float32
+	CPUOvercommitRatio         float32
+	IsUnderutilized            bool
+	IsOvercommitted            bool
+	StrandedResource           *string
+	PodCount                   int64
+	TrendSlope                 float32
+	CurrentCPUCores            float64
+	CurrentMemoryGiB           float64
+	RecommendedCPUCores        float64
+	RecommendedMemoryGiB       float64
+	NodeCountReduction         int
+	EstimatedMonthlySavingsUSD float32
+	NotificationCodes          []int16
+}
+
+// nodeClassification holds shared utilization signals and flags computed once per (node, term).
+type nodeClassification struct {
+	Node               string
+	PodCount           int64
+	validDays          int
+	CPUUtilP50         float32
+	CPUUtilP95         float32
+	MemUtilP50         float32
+	MemUtilP95         float32
+	CPUOvercommitRatio float32
+	IsUnderutilized    bool
+	IsOvercommitted    bool
+	StrandedResource   *string
+	TrendSlope         float32
+	CurrentCPUCores    float64
+	CurrentMemoryGiB   float64
+	NotificationCodes  []int16
+	maxCPUUsageP95MC   int64
+	maxMemUsageP95KiB  int64
+	maxCPURequestsMC   int64
+	maxMemRequestsKiB  int64
 }
 
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
-// It produces one NodeRec per node per term. Each term's recommendation uses only
-// the digest rows within that term's window, anchored to the node's latest digest date.
+// It produces one NodeRec per node per term per engine. Shared classification is
+// computed once per (node, term); engine-specific sizing and consolidation differ.
 func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConfig) []NodeRec {
 	grouped := map[string][]NodeDigestRow{}
 	for _, d := range digests {
 		grouped[d.Node] = append(grouped[d.Node], d)
 	}
 
-	results := make([]NodeRec, 0, len(grouped)*2)
+	results := make([]NodeRec, 0, len(grouped)*len(terms)*len(nodeEngines))
 	for node, allDays := range grouped {
 		latest := latestNodeDigest(allDays)
 
@@ -76,12 +118,37 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConf
 			if len(windowDays) < tc.MinDataDays {
 				continue
 			}
-			rec := evaluateNode(node, windowDays, cfg)
-			rec.Term = tc.Name
-			results = append(results, rec)
+			class := classifyNode(node, windowDays, cfg)
+			for _, eng := range nodeEngines {
+				rec := nodeRecFromClassification(class)
+				rec.Term = tc.Name
+				rec.Engine = eng.Name
+				rec.RecommendedCPUCores, rec.RecommendedMemoryGiB, rec.NodeCountReduction =
+					sizeNodeForEngine(class, eng)
+				results = append(results, rec)
+			}
 		}
 	}
 	return results
+}
+
+func nodeRecFromClassification(class nodeClassification) NodeRec {
+	return NodeRec{
+		Node:               class.Node,
+		PodCount:           class.PodCount,
+		CPUUtilP50:         class.CPUUtilP50,
+		CPUUtilP95:         class.CPUUtilP95,
+		MemUtilP50:         class.MemUtilP50,
+		MemUtilP95:         class.MemUtilP95,
+		CPUOvercommitRatio: class.CPUOvercommitRatio,
+		IsUnderutilized:    class.IsUnderutilized,
+		IsOvercommitted:    class.IsOvercommitted,
+		StrandedResource:   class.StrandedResource,
+		TrendSlope:         class.TrendSlope,
+		CurrentCPUCores:    class.CurrentCPUCores,
+		CurrentMemoryGiB:   class.CurrentMemoryGiB,
+		NotificationCodes:  append([]int16(nil), class.NotificationCodes...),
+	}
 }
 
 // filterNodeByWindow returns node digest rows within the last windowDays
@@ -127,20 +194,23 @@ func latestNodeDigest(rows []NodeDigestRow) NodeDigestRow {
 	return best
 }
 
-func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec {
-	rec := NodeRec{Node: node}
+// classifyNode computes shared utilization classification for a node over a term window.
+func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig) nodeClassification {
+	class := nodeClassification{Node: node}
 
 	var (
-		cpuUtilSum50 float64
-		cpuUtilSum95 float64
-		memUtilSum50 float64
-		memUtilSum95 float64
-		validDays    int
-		maxRequests  int64
-		maxMemReqs   int64
-		maxPodCount  int64
-		cpuMeans     []float64
-		imbalances   []float64
+		cpuUtilSum50      float64
+		cpuUtilSum95      float64
+		memUtilSum50      float64
+		memUtilSum95      float64
+		validDays         int
+		maxRequests       int64
+		maxMemReqs        int64
+		maxPodCount       int64
+		maxCPUUsageP95MC  int64
+		maxMemUsageP95KiB int64
+		cpuMeans          []float64
+		imbalances        []float64
 	)
 
 	for _, d := range days {
@@ -176,6 +246,12 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 			}
 		}
 
+		if d.CPUUsageP95MC > maxCPUUsageP95MC {
+			maxCPUUsageP95MC = d.CPUUsageP95MC
+		}
+		if d.MemUsageP95KiB > maxMemUsageP95KiB {
+			maxMemUsageP95KiB = d.MemUsageP95KiB
+		}
 		if d.MaxCPURequestsMC > maxRequests {
 			maxRequests = d.MaxCPURequestsMC
 		}
@@ -187,10 +263,15 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 		}
 	}
 
-	rec.PodCount = maxPodCount
+	class.PodCount = maxPodCount
+	class.maxCPUUsageP95MC = maxCPUUsageP95MC
+	class.maxMemUsageP95KiB = maxMemUsageP95KiB
+	class.maxCPURequestsMC = maxRequests
+	class.maxMemRequestsKiB = maxMemReqs
+	class.validDays = validDays
 
 	if validDays == 0 {
-		return rec
+		return class
 	}
 
 	avgCPU50 := cpuUtilSum50 / float64(validDays)
@@ -198,32 +279,35 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 	avgMem50 := memUtilSum50 / float64(validDays)
 	avgMem95 := memUtilSum95 / float64(validDays)
 
-	rec.CPUUtilP50 = float32(avgCPU50)
-	rec.CPUUtilP95 = float32(avgCPU95)
-	rec.MemUtilP50 = float32(avgMem50)
-	rec.MemUtilP95 = float32(avgMem95)
+	class.CPUUtilP50 = float32(avgCPU50)
+	class.CPUUtilP95 = float32(avgCPU95)
+	class.MemUtilP50 = float32(avgMem50)
+	class.MemUtilP95 = float32(avgMem95)
 
-	// Underutilized: both CPU and memory p95 below threshold
 	if avgCPU95 < cfg.UnderutilThreshold && avgMem95 < cfg.UnderutilThreshold {
-		rec.IsUnderutilized = true
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifNodeUnderutilized)
+		class.IsUnderutilized = true
+		class.NotificationCodes = append(class.NotificationCodes, NotifNodeUnderutilized)
 	}
 
-	// Overcommitted: request/allocatable ratio exceeds threshold
 	lastDay := days[len(days)-1]
 	allocCPU := resolveAllocatable(lastDay.MaxCPUAllocMC, lastDay.MaxCPURequestsMC, cfg.AllocatableFactor)
+	allocMem := resolveAllocatableMem(lastDay.MaxMemAllocKiB, lastDay.MaxMemRequestsKiB, cfg.AllocatableFactor)
+	if allocCPU > 0 {
+		class.CurrentCPUCores = float64(allocCPU) / 1000.0
+	}
+	if allocMem > 0 {
+		class.CurrentMemoryGiB = float64(allocMem) / (1024.0 * 1024.0)
+	}
+
 	if allocCPU > 0 && maxRequests > 0 {
 		ratio := float64(maxRequests) / float64(allocCPU)
-		rec.CPUOvercommitRatio = float32(ratio)
+		class.CPUOvercommitRatio = float32(ratio)
 		if ratio > cfg.OvercommitThreshold {
-			rec.IsOvercommitted = true
-			rec.NotificationCodes = append(rec.NotificationCodes, NotifNodeOvercommitted)
+			class.IsOvercommitted = true
+			class.NotificationCodes = append(class.NotificationCodes, NotifNodeOvercommitted)
 		}
 	}
 
-	// Stranded resources: EMA-smoothed normalized imbalance detection.
-	// imbalance(day) = |cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)
-	// If the smoothed imbalance exceeds the threshold, the lower resource is stranded.
 	if len(imbalances) >= 2 {
 		imbalanceThresh := cfg.StrandedImbalanceThreshold
 		if imbalanceThresh == 0 {
@@ -238,26 +322,90 @@ func evaluateNode(node string, days []NodeDigestRow, cfg NodeRecConfig) NodeRec 
 		if finalImbalance > imbalanceThresh {
 			if avgCPU95 > avgMem95 {
 				s := "memory"
-				rec.StrandedResource = &s
+				class.StrandedResource = &s
 			} else {
 				s := "cpu"
-				rec.StrandedResource = &s
+				class.StrandedResource = &s
 			}
-			rec.NotificationCodes = append(rec.NotificationCodes, NotifStrandedResources)
+			class.NotificationCodes = append(class.NotificationCodes, NotifStrandedResources)
 		}
 	}
 
-	// Trend slope via linear regression on EMA-smoothed daily CPU utilization
 	if len(cpuMeans) >= 3 {
 		alpha := cfg.EMAAlpha
 		if alpha == 0 {
 			alpha = 0.3
 		}
 		smoothed := emaSmooth(cpuMeans, alpha)
-		rec.TrendSlope = float32(linearRegressionSlope(smoothed))
+		class.TrendSlope = float32(linearRegressionSlope(smoothed))
 	}
 
-	return rec
+	return class
+}
+
+// sizeNodeForEngine derives engine-specific recommended capacity and consolidation flag.
+func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig) (cpuCores, memGiB float64, nodeCountReduction int) {
+	cpuCores, memGiB = recommendedNodeCapacity(
+		class.maxCPUUsageP95MC, class.maxMemUsageP95KiB,
+		class.maxCPURequestsMC, class.maxMemRequestsKiB,
+		eng.TargetUtilization,
+	)
+
+	if !class.IsUnderutilized {
+		return cpuCores, memGiB, 0
+	}
+
+	switch eng.Name {
+	case "cost":
+		// Cost engine: recommend consolidation when underutilized workloads fit at 80% target.
+		nodeCountReduction = 1
+	case "performance":
+		// Performance engine: only consolidate with extreme waste — workloads fit at 55%
+		// and current capacity has a full spare node worth of headroom.
+		if hasFullSpareNodeHeadroom(class.CurrentCPUCores, class.CurrentMemoryGiB, cpuCores, memGiB) {
+			nodeCountReduction = 1
+		}
+	}
+	return cpuCores, memGiB, nodeCountReduction
+}
+
+// hasFullSpareNodeHeadroom reports whether freed capacity could fit another copy of the workload.
+func hasFullSpareNodeHeadroom(currentCPU, currentMem, recCPU, recMem float64) bool {
+	if recCPU <= 0 || recMem <= 0 || currentCPU <= 0 || currentMem <= 0 {
+		return false
+	}
+	return currentCPU >= 2*recCPU && currentMem >= 2*recMem
+}
+
+// recommendedNodeCapacity derives right-sized CPU cores and memory GiB from peak
+// usage and request totals, targeting the given utilization headroom.
+func recommendedNodeCapacity(maxCPUUsageP95MC, maxMemUsageP95KiB, maxCPURequestsMC, maxMemRequestsKiB int64, targetUtilization float64) (cpuCores, memGiB float64) {
+	var recommendedCPUMC, recommendedMemKiB float64
+	if maxCPUUsageP95MC > 0 {
+		recommendedCPUMC = float64(maxCPUUsageP95MC) / targetUtilization
+	}
+	if maxCPURequestsMC > 0 {
+		requestBased := float64(maxCPURequestsMC) / targetUtilization
+		if requestBased > recommendedCPUMC {
+			recommendedCPUMC = requestBased
+		}
+	}
+	if maxMemUsageP95KiB > 0 {
+		recommendedMemKiB = float64(maxMemUsageP95KiB) / targetUtilization
+	}
+	if maxMemRequestsKiB > 0 {
+		requestBased := float64(maxMemRequestsKiB) / targetUtilization
+		if requestBased > recommendedMemKiB {
+			recommendedMemKiB = requestBased
+		}
+	}
+	if recommendedCPUMC > 0 {
+		cpuCores = math.Ceil(recommendedCPUMC / 1000.0)
+	}
+	if recommendedMemKiB > 0 {
+		memGiB = math.Ceil(recommendedMemKiB / (1024.0 * 1024.0))
+	}
+	return cpuCores, memGiB
 }
 
 // resolveAllocatable returns the effective allocatable CPU in millicores.
@@ -384,13 +532,15 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 	for _, r := range recs {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO node_recommendations (
-				org_id, cluster_uuid, node, term,
+				org_id, cluster_uuid, node, term, engine,
 				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 				cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 				stranded_resource, pod_count, trend_slope, notification_codes,
+				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+				estimated_monthly_savings_usd,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())
-			ON CONFLICT (org_id, cluster_uuid, node, term) DO UPDATE SET
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
+			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
 				mem_util_p50 = EXCLUDED.mem_util_p50,
@@ -402,11 +552,17 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				pod_count = EXCLUDED.pod_count,
 				trend_slope = EXCLUDED.trend_slope,
 				notification_codes = EXCLUDED.notification_codes,
+				recommended_cpu_cores = EXCLUDED.recommended_cpu_cores,
+				recommended_memory_gib = EXCLUDED.recommended_memory_gib,
+				node_count_reduction = EXCLUDED.node_count_reduction,
+				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				updated_at = now()`,
-			orgID, clusterUUID, r.Node, r.Term,
+			orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
 			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted,
 			r.StrandedResource, r.PodCount, r.TrendSlope, r.NotificationCodes,
+			r.RecommendedCPUCores, r.RecommendedMemoryGiB, r.NodeCountReduction,
+			r.EstimatedMonthlySavingsUSD,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)

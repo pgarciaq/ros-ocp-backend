@@ -534,11 +534,15 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		MaxBump:  appCfg.OOMMaxBump,
 	}
 
-	costProvider := getCostDataProvider(appCfg)
-	costData, costErr := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
-	if costErr != nil {
-		log.Warnf("native engine: cost data fetch failed (NotifNoCostData applied via ApplySavingsEstimates): %v", costErr)
-		costData = nil
+	var costData *costdata.ClusterCostData
+	if appCfg.SavingsEstimatesEnabled {
+		costProvider := getCostDataProvider(appCfg)
+		var costErr error
+		costData, costErr = costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+		if costErr != nil {
+			log.Warnf("native engine: cost data fetch failed (NotifNoCostData applied via ApplySavingsEstimates): %v", costErr)
+			costData = nil
+		}
 	}
 
 	oldRecs, err := engine.ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID)
@@ -625,7 +629,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
 	}
 
-	if err := runNodeRecommendations(ctx, pool, orgID, clusterUUID, start, now, appCfg); err != nil {
+	if err := runNodeRecommendations(ctx, pool, orgID, clusterUUID, start, now, appCfg, costData); err != nil {
 		log.Warnf("native engine: node recommendations incomplete: %v", err)
 		return fmt.Errorf("node recommendations: %w", err)
 	}
@@ -634,7 +638,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
 // Tier 1 node utilization signals, and persists the results.
-func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config) error {
+func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config, costData *costdata.ClusterCostData) error {
 	t0 := time.Now()
 	defer func() { metrics.ObserveRecommendation("node", t0) }()
 
@@ -668,6 +672,8 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		log.Info("node recs: no recommendations produced")
 		return nil
 	}
+
+	engine.ApplyNodeSavings(recs, costData)
 
 	validTerms := make([]string, len(terms))
 	for i, tc := range terms {
@@ -808,6 +814,21 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 
+	appCfg := config.GetConfig()
+	var costData *costdata.ClusterCostData
+	if appCfg.SavingsEstimatesEnabled {
+		now := time.Now().UTC()
+		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
+		costProvider := getCostDataProvider(appCfg)
+		var costErr error
+		costData, costErr = costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+		if costErr != nil {
+			log.Warnf("native storage engine: cost data fetch failed (NotifNoCostData applied via ApplyPVCSavings): %v", costErr)
+			costData = nil
+		}
+	}
+	engine.ApplyPVCSavings(results, costData)
+
 	validTerms := make([]string, len(terms))
 	for i, tc := range terms {
 		validTerms[i] = tc.Name
@@ -858,7 +879,21 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		}
 	}
 
-	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID)
+	appCfg := config.GetConfig()
+	var costData *costdata.ClusterCostData
+	if appCfg.SavingsEstimatesEnabled {
+		now := time.Now().UTC()
+		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
+		costProvider := getCostDataProvider(appCfg)
+		var costErr error
+		costData, costErr = costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+		if costErr != nil {
+			log.Warnf("native snapshot engine: cost data fetch failed (using static snapshot cost rate): %v", costErr)
+			costData = nil
+		}
+	}
+
+	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID, costData)
 	if err != nil {
 		log.Errorf("native snapshot engine: settings resolution failed: %v", err)
 		return fmt.Errorf("snapshot settings: %w", err)
@@ -880,7 +915,6 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		log.Infof("native snapshot engine: wrote %d snapshot recommendations", len(recs))
 	}
 
-	appCfg := config.GetConfig()
 	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, appCfg.SnapshotStaleGraceHours)
 	if err != nil {
 		log.Errorf("native snapshot engine: reconciliation failed: %v", err)
@@ -893,9 +927,9 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 }
 
 // getCostDataProvider returns a CostDataProvider based on configuration.
-// Returns a NilCostDataProvider if KOKU_MASU_URL is not configured.
+// Returns a NilCostDataProvider if savings estimates are disabled or KOKU_MASU_URL is not configured.
 func getCostDataProvider(cfg *config.Config) costdata.CostDataProvider {
-	if cfg.KokuMasuURL == "" {
+	if !cfg.SavingsEstimatesEnabled || cfg.KokuMasuURL == "" {
 		return &costdata.NilCostDataProvider{}
 	}
 	timeout := time.Duration(cfg.GlobalHTTPClientTimeoutSecs) * time.Second

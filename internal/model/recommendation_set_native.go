@@ -140,6 +140,7 @@ type NativeContainerResult struct {
 	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
+	Currency                string                        `json:"currency,omitempty"`
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`

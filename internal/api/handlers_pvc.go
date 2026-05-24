@@ -23,8 +23,9 @@ type PVCRecommendationResponse struct {
 	RecommendationType    string                                     `json:"recommendation_type"`
 	RecommendedBytes      *int64                                     `json:"recommended_bytes,omitempty"`
 	DaysToFull            *int                                       `json:"days_to_full,omitempty"`
-	GrowthBytesPerDay     *int64                                     `json:"growth_bytes_per_day,omitempty"`
-	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`
+	EstimatedMonthlySavingsUSD *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	DataDays              int                                        `json:"data_days"`
 	Term                  string                                     `json:"term"`
 	ResizeNote            string                                     `json:"resize_note,omitempty"`
@@ -33,9 +34,10 @@ type PVCRecommendationResponse struct {
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
 type PVCRecommendationListResponse struct {
 	Meta struct {
-		Count  int `json:"count"`
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Count    int    `json:"count"`
+		Limit    int    `json:"limit"`
+		Offset   int    `json:"offset"`
+		Currency string `json:"currency"`
 	} `json:"meta"`
 	Links Links                      `json:"links"`
 	Data  []PVCRecommendationResponse `json:"data"`
@@ -117,7 +119,8 @@ func GetPVCRecommendations(c echo.Context) error {
 		SELECT cluster_uuid, namespace, persistentvolumeclaim, persistentvolume,
 			storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
 			recommendation_type, recommended_bytes, days_to_full,
-			growth_bytes_per_day, notification_codes, data_days, term
+			growth_bytes_per_day, notification_codes, data_days, term,
+			estimated_monthly_savings_usd
 		FROM pvc_recommendation_sets
 		WHERE org_id = $1` + filterSQL
 
@@ -139,11 +142,13 @@ func GetPVCRecommendations(c echo.Context) error {
 		var r PVCRecommendationResponse
 		var codes []int16
 		var growth sql.NullInt64
+		var savings sql.NullFloat64
 		if err := rows.Scan(
 			&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.PersistentVolume,
 			&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
 			&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
 			&growth, &codes, &r.DataDays, &r.Term,
+			&savings,
 		); err != nil {
 			hlog.Errorf("scanning PVC recommendation row: %v", err)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -154,6 +159,10 @@ func GetPVCRecommendations(c echo.Context) error {
 		if growth.Valid {
 			v := growth.Int64
 			r.GrowthBytesPerDay = &v
+		}
+		if savings.Valid {
+			v := float32(savings.Float64)
+			r.EstimatedMonthlySavingsUSD = &v
 		}
 		r.Notifications = notifications.MapToKruizeFormat(codes)
 		switch r.RecommendationType {
@@ -176,6 +185,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
 	if resp.Data == nil {

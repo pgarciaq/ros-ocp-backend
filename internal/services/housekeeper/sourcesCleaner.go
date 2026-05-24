@@ -87,7 +87,7 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		{"recommendation_sets", "recommendation_sets", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "term", "engine"}, `org_id = ? AND cluster_uuid = ?`, []any{orgID, clusterUUID}},
 		{"snapshot_inventory", "snapshot_inventory", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"snapshot_recommendation_sets", "snapshot_recommendation_sets", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
-		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node", "term"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"node_recommendations", "node_recommendations", []string{"org_id", "cluster_uuid", "node", "term", "engine"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		// Kruize-era tables: delete children before workloads to avoid CASCADE fan-out.
 		// workload_metrics and historical_recommendation_sets reference workloads(id).
 		{"workload_metrics", "workload_metrics", []string{"id"}, `workload_id IN (SELECT id FROM workloads WHERE cluster_id = (SELECT id FROM clusters WHERE cluster_uuid = ?::uuid LIMIT 1))`, []any{clusterUUID}},

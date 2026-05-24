@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
@@ -18,6 +19,7 @@ type FleetSummaryResponse struct {
 	AbandonedContainers    int     `json:"abandoned_containers"`
 	TotalMonthlySavingsUSD float64 `json:"total_monthly_savings_usd"`
 	ClusterCount           int     `json:"cluster_count"`
+	Currency               string  `json:"currency"`
 }
 
 func fleetSummaryNeedsClusterFilter(userPerms map[string][]string) bool {
@@ -69,6 +71,7 @@ func GetFleetSummary(c echo.Context) error {
 		}
 		allowed := filterClustersByRBAC(clusterUUIDs, userPerms)
 		if len(allowed) == 0 {
+			summary.Currency = costdata.DefaultCurrency
 			return c.JSON(http.StatusOK, summary)
 		}
 		err = pool.QueryRow(ctx, `
@@ -118,6 +121,11 @@ func GetFleetSummary(c echo.Context) error {
 			"status":  "error",
 			"message": "unable to fetch fleet summary",
 		})
+	}
+
+	summary.Currency = costdata.DefaultCurrency
+	if clusterUUIDs, qerr := getClustersForOrg(ctx, orgID); qerr == nil && len(clusterUUIDs) > 0 {
+		summary.Currency = fetchClusterCurrency(ctx, orgID, clusterUUIDs[0])
 	}
 
 	return c.JSON(http.StatusOK, summary)

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +44,24 @@ func makeDigestRow(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs
 
 func ptr64(v int64) *int64 { return &v }
 
+func recsByNodeEngine(recs []NodeRec) map[string]NodeRec {
+	m := make(map[string]NodeRec, len(recs))
+	for _, r := range recs {
+		m[r.Node+"/"+r.Engine] = r
+	}
+	return m
+}
+
+func recsForNode(recs []NodeRec, node string) []NodeRec {
+	var out []NodeRec
+	for _, r := range recs {
+		if r.Node == node {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 	cfg := defaultNodeRecConfig()
 	digests := []NodeDigestRow{
@@ -67,13 +86,23 @@ func TestRecommendNodes_Underutilized(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	rec := results[0]
+	require.Len(t, results, 2)
 
-	assert.True(t, rec.IsUnderutilized, "node should be flagged as underutilized")
-	assert.False(t, rec.IsOvercommitted)
-	assert.Nil(t, rec.StrandedResource)
-	assert.Contains(t, rec.NotificationCodes, NotifNodeUnderutilized)
+	byEngine := recsByNodeEngine(results)
+	costRec := byEngine["node-idle/cost"]
+	perfRec := byEngine["node-idle/performance"]
+	require.NotEmpty(t, costRec.Node)
+	require.NotEmpty(t, perfRec.Node)
+
+	assert.True(t, costRec.IsUnderutilized, "node should be flagged as underutilized")
+	assert.True(t, perfRec.IsUnderutilized)
+	assert.False(t, costRec.IsOvercommitted)
+	assert.False(t, perfRec.IsOvercommitted)
+	assert.Nil(t, costRec.StrandedResource)
+	assert.Contains(t, costRec.NotificationCodes, NotifNodeUnderutilized)
+	assert.Equal(t, costRec.IsUnderutilized, perfRec.IsUnderutilized)
+	assert.Equal(t, costRec.IsOvercommitted, perfRec.IsOvercommitted)
+	assert.Equal(t, costRec.StrandedResource, perfRec.StrandedResource)
 }
 
 func TestRecommendNodes_Overcommitted(t *testing.T) {
@@ -88,13 +117,13 @@ func TestRecommendNodes_Overcommitted(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	rec := results[0]
+	require.Len(t, results, 2)
+	costRec := recsByNodeEngine(results)["node-hot/cost"]
 
-	assert.True(t, rec.IsOvercommitted, "node should be flagged as overcommitted")
-	assert.False(t, rec.IsUnderutilized)
-	assert.Contains(t, rec.NotificationCodes, NotifNodeOvercommitted)
-	assert.True(t, rec.CPUOvercommitRatio > 1.5)
+	assert.True(t, costRec.IsOvercommitted, "node should be flagged as overcommitted")
+	assert.False(t, costRec.IsUnderutilized)
+	assert.Contains(t, costRec.NotificationCodes, NotifNodeOvercommitted)
+	assert.True(t, costRec.CPUOvercommitRatio > 1.5)
 }
 
 func TestRecommendNodes_StrandedCPU(t *testing.T) {
@@ -110,8 +139,8 @@ func TestRecommendNodes_StrandedCPU(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	rec := results[0]
+	require.Len(t, results, 2)
+	rec := recsByNodeEngine(results)["node-mem/cost"]
 
 	require.NotNil(t, rec.StrandedResource)
 	assert.Equal(t, "cpu", *rec.StrandedResource)
@@ -131,8 +160,8 @@ func TestRecommendNodes_StrandedMemory(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	rec := results[0]
+	require.Len(t, results, 2)
+	rec := recsByNodeEngine(results)["node-cpu/cost"]
 
 	require.NotNil(t, rec.StrandedResource)
 	assert.Equal(t, "memory", *rec.StrandedResource)
@@ -152,10 +181,8 @@ func TestRecommendNodes_NormalNode(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	rec := results[0]
-
-	assert.False(t, rec.IsUnderutilized)
+	require.Len(t, results, 2)
+	rec := recsByNodeEngine(results)["node-ok/cost"]
 	assert.False(t, rec.IsOvercommitted)
 	assert.Nil(t, rec.StrandedResource)
 	assert.Empty(t, rec.NotificationCodes)
@@ -178,15 +205,12 @@ func TestRecommendNodes_MultipleNodes(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 2)
+	require.Len(t, results, 4)
 
-	recMap := map[string]NodeRec{}
-	for _, r := range results {
-		recMap[r.Node] = r
-	}
+	recMap := recsByNodeEngine(results)
 
-	assert.True(t, recMap["node-a"].IsUnderutilized)
-	assert.False(t, recMap["node-b"].IsUnderutilized)
+	assert.True(t, recMap["node-a/cost"].IsUnderutilized)
+	assert.False(t, recMap["node-b/cost"].IsUnderutilized)
 }
 
 func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
@@ -200,10 +224,8 @@ func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	// With requests=8000 and factor=0.93, effective alloc = 8000/0.93 ≈ 8602
-	// CPU p95 avg ≈ 1100/8602 ≈ 0.128 (below 0.30 threshold)
-	assert.True(t, results[0].IsUnderutilized)
+	require.Len(t, results, 2)
+	assert.True(t, recsByNodeEngine(results)["node-nap/cost"].IsUnderutilized)
 }
 
 func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
@@ -221,16 +243,17 @@ func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
 	// Default threshold (0.6): not stranded (imbalance ~0.51)
 	cfgDefault := defaultNodeRecConfig()
 	results := RecommendNodes(digests, cfgDefault, singleMediumTerm())
-	require.Len(t, results, 1)
-	assert.Nil(t, results[0].StrandedResource, "should not detect stranded with default 0.6 threshold")
+	require.Len(t, results, 2)
+	assert.Nil(t, recsByNodeEngine(results)["node-x/cost"].StrandedResource, "should not detect stranded with default 0.6 threshold")
 
 	// Lowered threshold (0.4): now detects stranded memory (cpu > mem)
 	cfgLowered := defaultNodeRecConfig()
 	cfgLowered.StrandedImbalanceThreshold = 0.4
 	results = RecommendNodes(digests, cfgLowered, singleMediumTerm())
-	require.Len(t, results, 1)
-	require.NotNil(t, results[0].StrandedResource, "should detect stranded with lowered threshold")
-	assert.Equal(t, "memory", *results[0].StrandedResource)
+	require.Len(t, results, 2)
+	stranded := recsByNodeEngine(results)["node-x/cost"].StrandedResource
+	require.NotNil(t, stranded, "should detect stranded with lowered threshold")
+	assert.Equal(t, "memory", *stranded)
 }
 
 func TestRecommendNodes_StrandedTransientSpikeDampened(t *testing.T) {
@@ -248,8 +271,8 @@ func TestRecommendNodes_StrandedTransientSpikeDampened(t *testing.T) {
 
 	cfg := defaultNodeRecConfig()
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	assert.Nil(t, results[0].StrandedResource,
+	require.Len(t, results, 2)
+	assert.Nil(t, recsByNodeEngine(results)["node-t/cost"].StrandedResource,
 		"single-day spike should be dampened by EMA and not trigger stranded detection")
 }
 
@@ -314,10 +337,8 @@ func TestTrendSlope_SpikesDampened(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, singleMediumTerm())
-	require.Len(t, results, 1)
-	// With EMA smoothing, the spike should be dampened and the trend should be
-	// approximately flat (near zero) rather than strongly positive
-	assert.InDelta(t, 0.0, float64(results[0].TrendSlope), 0.05,
+	require.Len(t, results, 2)
+	assert.InDelta(t, 0.0, float64(recsByNodeEngine(results)["node-spike/cost"].TrendSlope), 0.05,
 		"EMA-smoothed trend should be near-zero for a node with a single spike")
 }
 
@@ -342,7 +363,9 @@ func TestRecommendNodes_ShortTermWithFutureEnd(t *testing.T) {
 
 	termMap := map[string]NodeRec{}
 	for _, r := range results {
-		termMap[r.Term] = r
+		if r.Engine == "cost" {
+			termMap[r.Term] = r
+		}
 	}
 
 	require.Contains(t, termMap, "short", "short-term should be produced with 1 day of data")
@@ -373,4 +396,104 @@ func TestFilterNodeByWindow(t *testing.T) {
 
 	result = filterNodeByWindow(rows, endDate, 30)
 	require.Len(t, result, 5)
+}
+
+func TestRecommendNodes_DualEnginesPerNodeTerm(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	digests := []NodeDigestRow{
+		makeDigestRow("node-dual", 1, 8000, 10000, 30000, 40000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-dual", 2, 8500, 10500, 32000, 42000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-dual", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
+	}
+
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
+	require.Len(t, results, 2)
+
+	engines := map[string]bool{}
+	for _, r := range results {
+		engines[r.Engine] = true
+	}
+	assert.True(t, engines["cost"])
+	assert.True(t, engines["performance"])
+}
+
+func TestRecommendNodes_CostEngineSmallerCapacityThanPerformance(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	digests := []NodeDigestRow{
+		makeDigestRow("node-size", 1, 8000, 10000, 30000, 40000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-size", 2, 8500, 10500, 32000, 42000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRow("node-size", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
+	}
+
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
+	byEngine := recsByNodeEngine(results)
+	costRec := byEngine["node-size/cost"]
+	perfRec := byEngine["node-size/performance"]
+
+	assert.LessOrEqual(t, costRec.RecommendedCPUCores, perfRec.RecommendedCPUCores)
+	assert.LessOrEqual(t, costRec.RecommendedMemoryGiB, perfRec.RecommendedMemoryGiB)
+}
+
+func TestRecommendNodes_CostEngineMoreAggressiveConsolidation(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(8000)
+	allocMem := ptr64(32768)
+
+	// Underutilized 8-core node: cost engine consolidates; performance keeps the node.
+	digests := []NodeDigestRow{
+		makeDigestRow("node-consolidate", 1, 1500, 2000, 4000, 6000, 4000, 24000, allocCPU, allocMem),
+		makeDigestRow("node-consolidate", 2, 1600, 2100, 4200, 6200, 4000, 24000, allocCPU, allocMem),
+		makeDigestRow("node-consolidate", 3, 1550, 2050, 4100, 6100, 4000, 24000, allocCPU, allocMem),
+	}
+
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
+	byEngine := recsByNodeEngine(results)
+	costRec := byEngine["node-consolidate/cost"]
+	perfRec := byEngine["node-consolidate/performance"]
+
+	require.True(t, costRec.IsUnderutilized)
+	assert.Equal(t, 1, costRec.NodeCountReduction, "cost engine should recommend consolidation when underutilized")
+	assert.Equal(t, 0, perfRec.NodeCountReduction, "performance engine should not consolidate without extreme waste")
+}
+
+func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	digests := []NodeDigestRow{
+		makeDigestRow("node-savings", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-savings", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-savings", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
+	}
+
+	results := RecommendNodes(digests, cfg, singleMediumTerm())
+	byEngine := recsByNodeEngine(results)
+	costRec := byEngine["node-savings/cost"]
+	perfRec := byEngine["node-savings/performance"]
+
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
+			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
+		},
+	}
+	recs := []NodeRec{costRec, perfRec}
+	ApplyNodeSavings(recs, cd)
+
+	assert.Greater(t, recs[0].EstimatedMonthlySavingsUSD, recs[1].EstimatedMonthlySavingsUSD,
+		"cost engine should show higher savings than performance for underutilized node")
+}
+
+func TestHasFullSpareNodeHeadroom(t *testing.T) {
+	assert.True(t, hasFullSpareNodeHeadroom(16, 64, 4, 16))
+	assert.False(t, hasFullSpareNodeHeadroom(16, 64, 9, 32))
+	assert.False(t, hasFullSpareNodeHeadroom(0, 64, 4, 16))
 }

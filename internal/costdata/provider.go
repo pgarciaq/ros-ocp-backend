@@ -13,12 +13,13 @@ import (
 // ClusterCostData holds the cost model rates and namespace-level cost/usage
 // aggregates returned by the Koku effective-rates endpoint.
 type ClusterCostData struct {
-	ClusterID        string                       `json:"cluster_id"`
-	ProviderUUID     string                       `json:"provider_uuid"`
-	DistributionType string                       `json:"distribution_type"`
-	MarkupPct        float64                      `json:"markup_pct"`
-	ConfiguredRates  map[string]RatePair          `json:"configured_rates"`
-	Namespaces       map[string]NamespaceCosts    `json:"namespace_aggregates"`
+	ClusterID        string                    `json:"cluster_id"`
+	ProviderUUID     string                    `json:"provider_uuid"`
+	DistributionType string                    `json:"distribution_type"`
+	MarkupPct        float64                   `json:"markup_pct"`
+	Currency         string                    `json:"currency"`
+	ConfiguredRates  map[string]RatePair       `json:"configured_rates"`
+	Namespaces       map[string]NamespaceCosts `json:"namespace_aggregates"`
 }
 
 // RatePair holds the infrastructure and supplementary rate for a metric.
@@ -111,6 +112,7 @@ func (n *NilCostDataProvider) GetEffectiveRates(
 ) (*ClusterCostData, error) {
 	return &ClusterCostData{
 		ClusterID:       clusterID,
+		Currency:        DefaultCurrency,
 		ConfiguredRates: map[string]RatePair{},
 		Namespaces:      map[string]NamespaceCosts{},
 	}, nil

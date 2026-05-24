@@ -23,6 +23,7 @@ const kokuEffectiveRatesResponse = `{
   "provider_uuid": "12345678-1234-1234-1234-123456789abc",
   "distribution_type": "cpu",
   "markup_pct": 10.0,
+  "currency": "USD",
   "configured_rates": {
     "cpu_core_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.007},
     "cpu_core_request_per_hour": {"infrastructure": 0.0, "supplementary": 0.2},
@@ -98,6 +99,7 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 	assert.Equal(t, "12345678-1234-1234-1234-123456789abc", data.ProviderUUID)
 	assert.Equal(t, "cpu", data.DistributionType)
 	assert.InDelta(t, 10.0, data.MarkupPct, 0.001)
+	assert.Equal(t, "USD", data.Currency)
 
 	// Verify configured rates structure
 	require.Len(t, data.ConfiguredRates, 8, "should parse all 8 metric rates")
@@ -141,6 +143,7 @@ func TestKokuEffectiveRatesContract_EmptyResponse(t *testing.T) {
 		"provider_uuid": "00000000-0000-0000-0000-000000000000",
 		"distribution_type": "cpu",
 		"markup_pct": 0,
+		"currency": "USD",
 		"configured_rates": {},
 		"namespace_aggregates": {}
 	}`

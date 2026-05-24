@@ -823,11 +823,11 @@ func TestGetNodeUtilization_CanonicalPath_ReturnsCPURecommendationType(t *testin
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (
-			org_id, cluster_uuid, node, term,
+			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 			stranded_resource, pod_count, trend_slope, notification_codes
-		) VALUES ($1, $2::uuid, 'worker-1', 'medium',
+		) VALUES ($1, $2::uuid, 'worker-1', 'medium', 'cost',
 			0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -843,6 +843,8 @@ func TestGetNodeUtilization_CanonicalPath_ReturnsCPURecommendationType(t *testin
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data)
 	assert.Equal(t, "cpu_memory_utilization", resp.Data[0].RecommendationType)
+	require.NotNil(t, resp.Data[0].RecommendationTerms["medium_term"].RecommendationEngines)
+	require.NotNil(t, resp.Data[0].RecommendationTerms["medium_term"].RecommendationEngines.Cost)
 	assert.Empty(t, rec.Header().Get("Deprecation"))
 }
 
@@ -859,11 +861,11 @@ func TestGetNodeUtilization_DeprecatedAlias_WarningAndDeprecationHeader(t *testi
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (
-			org_id, cluster_uuid, node, term,
+			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 			stranded_resource, pod_count, trend_slope, notification_codes
-		) VALUES ($1, $2::uuid, 'worker-dep', 'medium',
+		) VALUES ($1, $2::uuid, 'worker-dep', 'medium', 'cost',
 			0.05, 0.1, 0.1, 0.15, 1.0, false, false, NULL, 2, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -883,4 +885,50 @@ func TestGetNodeUtilization_DeprecatedAlias_WarningAndDeprecationHeader(t *testi
 	assert.Contains(t, resp.Warnings[0], "deprecated")
 	require.NotEmpty(t, resp.Data)
 	assert.Equal(t, "cpu_memory_utilization", resp.Data[0].RecommendationType)
+}
+
+func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'n-cluster-2', 'src-nu2', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+			estimated_monthly_savings_usd
+		) VALUES
+			($1, $2::uuid, 'worker-2', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 450),
+			($1, $2::uuid, 'worker-2', 'medium', 'performance',
+			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 7, 28, 0, 120)`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+
+	medium := resp.Data[0].RecommendationTerms["medium_term"]
+	require.NotNil(t, medium.RecommendationEngines)
+	require.NotNil(t, medium.RecommendationEngines.Cost)
+	require.NotNil(t, medium.RecommendationEngines.Performance)
+	assert.InDelta(t, 450, float64(*medium.RecommendationEngines.Cost.EstimatedMonthlySavingsUSD), 0.01)
+	assert.InDelta(t, 120, float64(*medium.RecommendationEngines.Performance.EstimatedMonthlySavingsUSD), 0.01)
 }

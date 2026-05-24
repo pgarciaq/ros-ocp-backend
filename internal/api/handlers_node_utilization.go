@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -19,6 +21,46 @@ import (
 const defaultNodeUtilLimit = 10
 
 const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cost-management/v1/recommendations/openshift/nodes for node CPU/memory utilization recommendations.`
+
+var nodeUtilAllowedOrderBy = map[string]string{
+	"node":                        "f.node",
+	"estimated_monthly_savings_usd": "sort_savings",
+}
+
+const (
+	nodeUtilDefaultOrderBy  = "estimated_monthly_savings_usd"
+	nodeUtilDefaultOrderHow = listoptions.OrderDesc
+	nodeUtilPrimaryTerm     = "medium"
+	nodeUtilPrimaryEngine   = "cost"
+)
+
+type nodeUtilRow struct {
+	Node                     string
+	ClusterUUID              string
+	Term                     string
+	Engine                   string
+	CPUUtilP50               float32
+	CPUUtilP95               float32
+	MemUtilP50               float32
+	MemUtilP95               float32
+	CPUOvercommitRatio       float32
+	IsUnderutilized          bool
+	IsOvercommitted          bool
+	StrandedResource         *string
+	PodCount                 int64
+	TrendSlope               float32
+	RecommendedCPUCores      sql.NullFloat64
+	RecommendedMemoryGiB     sql.NullFloat64
+	NodeCountReduction       int
+	EstimatedMonthlySavings  sql.NullFloat64
+	NotificationCodes        []int16
+	UpdatedAt                time.Time
+}
+
+type nodeUtilKey struct {
+	ClusterUUID string
+	Node        string
+}
 
 // GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes (node CPU/memory utilization).
 func GetNodeUtilizationRecs(c echo.Context) error {
@@ -71,6 +113,26 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		offset = o
 	}
 
+	orderBy := strings.TrimSpace(c.QueryParam("order_by"))
+	if orderBy == "" {
+		orderBy = nodeUtilDefaultOrderBy
+	}
+	orderCol, ok := nodeUtilAllowedOrderBy[orderBy]
+	if !ok {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": fmt.Sprintf("invalid order_by: %s", orderBy),
+		})
+	}
+
+	orderHow := strings.TrimSpace(c.QueryParam("order_how"))
+	if orderHow == "" {
+		orderHow = nodeUtilDefaultOrderHow
+	}
+	if orderHow != listoptions.OrderAsc && orderHow != listoptions.OrderDesc {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid order_how"})
+	}
+
 	pool := database.GetPool()
 	if pool == nil {
 		hlog.Warnf("GetNodeUtilizationRecs: database pool unavailable")
@@ -94,7 +156,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset},
+			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency},
 			Data: []model.NodeUtilizationRec{},
 		})
 	}
@@ -102,8 +164,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	clusterFilter := c.QueryParam("cluster_uuid")
 	nodeFilter := c.QueryParam("node")
 	termFilter := c.QueryParam("term")
+	engineFilter := c.QueryParam("engine")
 	underutilFilter := c.QueryParam("is_underutilized")
 	overcommitFilter := c.QueryParam("is_overcommitted")
+
+	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
+	}
 
 	baseFrom := `
 		FROM node_recommendations nr
@@ -129,6 +196,11 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		args = append(args, termFilter)
 		argIdx++
 	}
+	if engineFilter != "" {
+		baseFrom += " AND nr.engine = $" + strconv.Itoa(argIdx)
+		args = append(args, engineFilter)
+		argIdx++
+	}
 	if underutilFilter == "true" {
 		baseFrom += " AND nr.is_underutilized = true"
 	} else if underutilFilter == "false" {
@@ -140,7 +212,10 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		baseFrom += " AND nr.is_overcommitted = false"
 	}
 
-	countSQL := "SELECT COUNT(*) " + baseFrom
+	countSQL := `
+		SELECT COUNT(*) FROM (
+			SELECT DISTINCT nr.cluster_uuid, nr.node` + baseFrom + `
+		) node_keys`
 	var totalCount int
 	if err := pool.QueryRow(ctx, countSQL, args...).Scan(&totalCount); err != nil {
 		hlog.Warnf("GetNodeUtilizationRecs: count query failed: %v", err)
@@ -150,20 +225,46 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	dataSQL := `
-		SELECT nr.node, nr.cluster_uuid, COALESCE(nr.term, 'medium'),
-			COALESCE(nr.cpu_util_p50, 0), COALESCE(nr.cpu_util_p95, 0),
-			COALESCE(nr.mem_util_p50, 0), COALESCE(nr.mem_util_p95, 0),
-			COALESCE(nr.cpu_overcommit_ratio, 0),
-			COALESCE(nr.is_underutilized, false), COALESCE(nr.is_overcommitted, false),
-			nr.stranded_resource, COALESCE(nr.pod_count, 0),
-			COALESCE(nr.trend_slope, 0), COALESCE(nr.notification_codes, '{}'),
-			COALESCE(nr.updated_at, 'epoch'::timestamptz)` + baseFrom + `
-		ORDER BY nr.node, nr.term
-		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	args = append(args, limit, offset)
+	sortEngine := nodeUtilPrimaryEngine
+	if engineFilter != "" {
+		sortEngine = engineFilter
+	}
+	sortTerm := nodeUtilPrimaryTerm
+	if termFilter != "" {
+		sortTerm = termFilter
+	}
 
-	rows, err := pool.Query(ctx, dataSQL, args...)
+	orderFragment := listoptions.SQLOrderByFragment(orderCol, orderHow)
+	pageSQL := `
+		WITH filtered AS (
+			SELECT nr.*` + baseFrom + `
+		),
+		node_page AS (
+			SELECT f.cluster_uuid, f.node,
+				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
+					THEN f.estimated_monthly_savings_usd END) AS sort_savings
+			FROM filtered f
+			GROUP BY f.cluster_uuid, f.node
+			ORDER BY ` + orderFragment + `, f.node ASC
+			LIMIT $` + strconv.Itoa(argIdx+2) + ` OFFSET $` + strconv.Itoa(argIdx+3) + `
+		)
+		SELECT f.node, f.cluster_uuid, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
+			COALESCE(f.cpu_util_p50, 0), COALESCE(f.cpu_util_p95, 0),
+			COALESCE(f.mem_util_p50, 0), COALESCE(f.mem_util_p95, 0),
+			COALESCE(f.cpu_overcommit_ratio, 0),
+			COALESCE(f.is_underutilized, false), COALESCE(f.is_overcommitted, false),
+			f.stranded_resource, COALESCE(f.pod_count, 0),
+			COALESCE(f.trend_slope, 0), COALESCE(f.notification_codes, '{}'),
+			f.recommended_cpu_cores, f.recommended_memory_gib, COALESCE(f.node_count_reduction, 0),
+			f.estimated_monthly_savings_usd,
+			COALESCE(f.updated_at, 'epoch'::timestamptz)
+		FROM filtered f
+		INNER JOIN node_page np ON f.cluster_uuid = np.cluster_uuid AND f.node = np.node
+		ORDER BY np.sort_savings ` + orderHow + ` NULLS LAST, f.node, f.term, f.engine`
+
+	pageArgs := append(append([]interface{}{}, args...), sortTerm, sortEngine, limit, offset)
+
+	rows, err := pool.Query(ctx, pageSQL, pageArgs...)
 	if err != nil {
 		hlog.Warnf("GetNodeUtilizationRecs: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -173,33 +274,28 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	}
 	defer rows.Close()
 
-	var pagedRecs []model.NodeUtilizationRec
+	var rawRows []nodeUtilRow
 	var scanErrors int
 	for rows.Next() {
-		var rec model.NodeUtilizationRec
-		var codes []int16
-		var updatedAt time.Time
-
+		var row nodeUtilRow
 		err := rows.Scan(
-			&rec.Node, &rec.ClusterUUID, &rec.Term,
-			&rec.CPUUtilP50, &rec.CPUUtilP95,
-			&rec.MemUtilP50, &rec.MemUtilP95,
-			&rec.CPUOvercommitRatio,
-			&rec.IsUnderutilized, &rec.IsOvercommitted,
-			&rec.StrandedResource, &rec.PodCount,
-			&rec.TrendSlope, &codes,
-			&updatedAt,
+			&row.Node, &row.ClusterUUID, &row.Term, &row.Engine,
+			&row.CPUUtilP50, &row.CPUUtilP95,
+			&row.MemUtilP50, &row.MemUtilP95,
+			&row.CPUOvercommitRatio,
+			&row.IsUnderutilized, &row.IsOvercommitted,
+			&row.StrandedResource, &row.PodCount,
+			&row.TrendSlope, &row.NotificationCodes,
+			&row.RecommendedCPUCores, &row.RecommendedMemoryGiB, &row.NodeCountReduction,
+			&row.EstimatedMonthlySavings,
+			&row.UpdatedAt,
 		)
 		if err != nil {
 			scanErrors++
 			hlog.Warnf("GetNodeUtilizationRecs: scan failed (skipping row): %v", err)
 			continue
 		}
-
-		rec.RecommendationType = "cpu_memory_utilization"
-		rec.Notifications = notifications.MapToKruizeFormat(codes)
-		rec.UpdatedAt = updatedAt.Format(time.RFC3339)
-		pagedRecs = append(pagedRecs, rec)
+		rawRows = append(rawRows, row)
 	}
 	if err := rows.Err(); err != nil {
 		hlog.Warnf("GetNodeUtilizationRecs: rows iteration failed: %v", err)
@@ -209,12 +305,18 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
+	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter)
 	if pagedRecs == nil {
 		pagedRecs = []model.NodeUtilizationRec{}
 	}
 
 	resp := model.NodeUtilizationListResponse{
-		Meta:  model.NodeUtilizationMeta{Count: totalCount, Limit: limit, Offset: offset},
+		Meta: model.NodeUtilizationMeta{
+			Count:    totalCount,
+			Limit:    limit,
+			Offset:   offset,
+			Currency: fetchClusterCurrency(ctx, orgID, clusterFilter),
+		},
 		Data:  pagedRecs,
 		Links: buildUtilLinks(c.Request(), totalCount, limit, offset),
 	}
@@ -231,6 +333,121 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, resp)
+}
+
+func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter string) []model.NodeUtilizationRec {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	type grouped struct {
+		rec     model.NodeUtilizationRec
+		primary *nodeUtilRow
+		order   int
+	}
+
+	groups := make(map[nodeUtilKey]*grouped)
+	order := make([]nodeUtilKey, 0)
+
+	for i, row := range rows {
+		if engineFilter != "" && row.Engine != engineFilter {
+			continue
+		}
+		if termFilter != "" && row.Term != termFilter {
+			continue
+		}
+
+		key := nodeUtilKey{ClusterUUID: row.ClusterUUID, Node: row.Node}
+		g, exists := groups[key]
+		if !exists {
+			g = &grouped{order: i}
+			groups[key] = g
+			order = append(order, key)
+		}
+
+		if g.primary == nil || nodeUtilPrimaryScore(&rows[i]) > nodeUtilPrimaryScore(g.primary) {
+			g.primary = &rows[i]
+		}
+
+		termKey := model.NodeUtilTermAPIKey(row.Term)
+		if g.rec.RecommendationTerms == nil {
+			g.rec.RecommendationTerms = make(map[string]model.NodeUtilizationTermRec)
+		}
+		termRec := g.rec.RecommendationTerms[termKey]
+		if termRec.RecommendationEngines == nil {
+			termRec.RecommendationEngines = &model.NodeUtilizationEngines{}
+		}
+
+		engineRec := nodeUtilRowToEngineRec(row)
+		switch row.Engine {
+		case "cost":
+			termRec.RecommendationEngines.Cost = engineRec
+		case "performance":
+			termRec.RecommendationEngines.Performance = engineRec
+		}
+		g.rec.RecommendationTerms[termKey] = termRec
+	}
+
+	out := make([]model.NodeUtilizationRec, 0, len(order))
+	for _, key := range order {
+		g := groups[key]
+		if g.primary == nil {
+			continue
+		}
+		p := g.primary
+		g.rec.Node = p.Node
+		g.rec.ClusterUUID = p.ClusterUUID
+		g.rec.RecommendationType = "cpu_memory_utilization"
+		g.rec.Classification = model.NodeUtilizationClassification{
+			IsUnderutilized:  p.IsUnderutilized,
+			IsOvercommitted:  p.IsOvercommitted,
+			StrandedResource: p.StrandedResource,
+		}
+		g.rec.Metrics = model.NodeUtilizationMetrics{
+			CPUUtilP50: p.CPUUtilP50,
+			CPUUtilP95: p.CPUUtilP95,
+			MemUtilP50: p.MemUtilP50,
+			MemUtilP95: p.MemUtilP95,
+		}
+		g.rec.PodCount = p.PodCount
+		g.rec.CPUOvercommitRatio = p.CPUOvercommitRatio
+		g.rec.TrendSlope = p.TrendSlope
+		out = append(out, g.rec)
+	}
+	return out
+}
+
+func nodeUtilPrimaryScore(row *nodeUtilRow) int {
+	if row == nil {
+		return -1
+	}
+	score := 0
+	if row.Term == nodeUtilPrimaryTerm {
+		score += 2
+	}
+	if row.Engine == nodeUtilPrimaryEngine {
+		score += 1
+	}
+	return score
+}
+
+func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
+	rec := &model.NodeUtilizationEngineRec{
+		NodeCountReduction: row.NodeCountReduction,
+		Notifications:      notifications.MapToKruizeFormat(row.NotificationCodes),
+		UpdatedAt:          row.UpdatedAt.Format(time.RFC3339),
+	}
+	if row.RecommendedCPUCores.Valid {
+		rec.RecommendedCPUCores = float32(row.RecommendedCPUCores.Float64)
+	}
+	if row.RecommendedMemoryGiB.Valid {
+		rec.RecommendedMemoryGiB = float32(row.RecommendedMemoryGiB.Float64)
+	}
+	if row.EstimatedMonthlySavings.Valid {
+		v := float32(row.EstimatedMonthlySavings.Float64)
+		rec.EstimatedMonthlySavingsUSD = &v
+	}
+	return rec
 }
 
 func buildUtilLinks(r *http.Request, total, limit, offset int) model.PaginationLinks {
