@@ -280,7 +280,7 @@ Notifications use a Kruize-compatible map:
 }
 ```
 
-See [Section 12 — Notification codes](#notification-codes-reference) for the full table.
+See [Section 16 — Notification codes](#notification-codes-reference) for the full table.
 
 ### Confidence score
 
@@ -315,6 +315,43 @@ Detected via notification codes (not a separate column):
 | **8** | Abandoned — zero CPU **and** zero memory across the window | 100% recoverable; supersedes idle |
 
 Highlight these rows for potential decommissioning. Show full savings estimate when present.
+
+### UI Integration Recommendations
+
+**Container recommendations**
+
+- Show a sortable PatternFly **Table** with columns: container, namespace, cluster, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), and estimated monthly savings.
+- Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.).
+- Color-code rows with **Badge** plus text labels (never color alone): red for abandoned (code 8), orange for idle (code 5), yellow for over-provisioned (negative variation), green for well-sized.
+- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for boxplots, term selection, and notification details.
+- Default to **cost** engine and **medium_term**; provide toggles for engine and term on list and detail views.
+- Show **confidence_level** as a badge or **Progress** bar; warn when below 0.5 or notification codes 1/7 are present.
+- Include a "Show stale" toggle wired to `?stale=only`; default excludes stale rows.
+- Support CSV export via `format=csv` for bulk analysis and compliance workflows.
+- When `gpu` is present on a row, show a GPU indicator column linking to MIG and time-slicing views.
+- Respect RBAC: empty states should explain insufficient permissions, not imply zero recommendations.
+- Surface notification badges inline; use tooltips with full `notifications` messages from detail responses.
+- Paginate with `offset`/`limit`; show `meta.count` and standard `links` for navigation.
+
+**Namespace recommendations**
+
+- Display as **Card** grids or a **Table** grouped by cluster.
+- Show current quota vs recommended quota for CPU and memory (requests and limits where applicable).
+- Highlight namespaces with memory growth trends using a trend arrow icon when notification code 9 is present.
+- Link each namespace row to a filtered container list (`?project=`) for container-level drill-down.
+- Use the same engine/term defaults as the container view for consistency.
+- Show `estimated_monthly_savings_usd` at namespace level; when code 25 is present, show "—" instead of `$0.00`.
+- Support CSV export and the same stale filter behavior as container recommendations.
+
+**Dual engine (cost vs performance)**
+
+- Provide a segmented control or **Radio** group: "Optimize for cost" / "Optimize for performance".
+- Switching engines updates displayed values client-side from nested `recommendations.{term}.{cost|performance}` — no separate API fetch.
+- Default to cost engine; persist the user's choice in local storage or user settings.
+- When engines diverge significantly (e.g., CPU recommendation differs by >50%), show a subtle **Alert**: "Performance engine recommends 2× more CPU for this workload."
+- On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
+- When `business_hours` is present, add tabs: "All hours" and "Business hours" with side-by-side comparison.
+- Negative savings: phrase as "Additional resources needed" with absolute usage delta, not negative currency.
 
 ---
 
@@ -446,6 +483,31 @@ GET /recommendations/openshift/gpu/timeslicing
 
 Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on container `gpu` objects.
 
+### UI Integration Recommendations
+
+**Node CPU/memory utilization**
+
+- Add a dashboard widget showing fleet health: X underutilized, Y overcommitted, Z well-utilized (derive from classification flags).
+- Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings.
+- Display `node_count_reduction` prominently: "You could save N nodes" on cost-engine rows.
+- Include per-node `estimated_monthly_savings_usd` and cluster-level consolidation summary in a **Card** header.
+- Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
+- Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).
+- Show notification codes 11–13 inline with accessible text labels matching badge colors.
+- Link node rows to pod/workload views filtered by node where available.
+- When cost and performance engines diverge on consolidation, show a callout comparing recommended node counts.
+
+**GPU time-slicing**
+
+- Show a node-level view with GPU utilization **ProgressBar** per GPU model.
+- Display `recommended_replicas` prominently as the primary action metric.
+- Compare current vs recommended time-slicing configuration in a side-by-side layout.
+- Show `total_node_savings_usd` and `savings_per_gpu_usd` with currency from `meta.currency`.
+- Expand `candidate_containers` and `impacted_containers` in a nested **Table** with classification badges.
+- Link from container GPU fields (`time_slicing_node`, `time_slicing_replicas`) to the filtered time-slicing list.
+- Show confidence as a badge; surface notification code 36 with link to this view from container rows.
+- Sort by `total_node_savings_usd` descending by default to prioritize highest-impact nodes.
+
 ---
 
 ## 4. PVC Recommendations
@@ -518,6 +580,20 @@ GET /recommendations/openshift/pvcs
 Requires minimum trend data (default 7 days). Near-full alerts can fire on projection even when
 current usage is below 85%.
 
+### UI Integration Recommendations
+
+- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
+- Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
+- When `growth_bytes_per_day` and `days_to_full` are available, show a growth projection line or "full in N days" callout.
+- Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
+- Always display `resize_note` in an **Alert** for oversized and orphaned PVCs — Kubernetes cannot shrink PVCs in place.
+- Show `recommended_bytes` alongside `capacity_bytes` with human-readable units (GiB).
+- Handle negative or zero savings gracefully; near-full rows prioritize capacity risk over cost savings.
+- Filter by `recommendation_type` via tabs or a filter toolbar wired to query params.
+- Surface notification codes 20, 29, 30 inline with severity-appropriate badges.
+- Link PVC rows to namespace and cluster context; group by namespace in fleet views when helpful.
+- Default term to `medium`; expose term selector when comparing short vs long observation windows.
+
 ---
 
 ## 5. Snapshot Recommendations
@@ -579,6 +655,20 @@ GET /recommendations/openshift/snapshots
 tenant override, or default $0.05/GiB/month). This is **ongoing cost**, not savings — sum for
 waste dashboards.
 
+### UI Integration Recommendations
+
+- Show snapshots in a sortable **Table**: snapshot name, namespace, cluster, age (`age_days`), classification, source PVC exists, estimated cost.
+- Use **Badge** for classification with text labels: orphaned (red), stale (orange), never_restored (yellow), redundant (gray), managed (green), active (green/info).
+- Display `estimated_monthly_cost_usd` as ongoing waste cost (not savings); sum for waste dashboard totals.
+- Show `source_pvc_exists: false` with a warning icon and code 31 notification text.
+- Provide action buttons: "Delete" for orphaned/stale (with confirmation modal), "Verify" for never_restored (link to restore history).
+- For `managed` snapshots (Velero/OADP), show caution **Alert** — review retention policy before deletion.
+- Link to snapshot settings (`GET /settings/snapshot`) for configuring staleness thresholds.
+- Filter by `recommendation_type` and cluster/namespace; default view excludes `active` snapshots.
+- Show `restore_size_bytes` and `storageclass` for cost context.
+- Include `creation_timestamp` and `restored_pvc_count` in detail tooltips or expandable rows.
+- Aggregate waste cost at namespace and cluster level for executive summary cards.
+
 ---
 
 ## 6. Savings Summary
@@ -632,7 +722,22 @@ When `has_cost_data` is false, show “cost model not configured” instead of `
 **Note:** `by_plugin.gpu` is always `0` in this summary; use GPU-specific endpoints for GPU dollar estimates.
 `snapshot` sums **cost** (waste), not savings.
 
-Related: `GET /recommendations/openshift/fleet-summary` for counts (idle/abandoned/stale containers).
+See [Section 15 — Fleet Summary](#15-fleet-summary) for idle/abandoned container counts.
+
+### UI Integration Recommendations
+
+- Show a dashboard **Card** hero metric: "Estimated monthly savings: {amount}" using `total_estimated_monthly_savings_usd` and `currency` from the response.
+- Break down savings by plugin in a pie chart or bar chart using `by_plugin` (container, node, pvc, snapshot).
+- Display per-cluster savings in a **Table** within the fleet view using `by_cluster` rows.
+- Wire engine toggle to `?engine=cost|performance`; all totals and breakdowns update on fetch.
+- When `has_cost_data` is false for a cluster, show "Cost model not configured" instead of `$0.00`.
+- Handle negative aggregate savings as "Additional investment needed: {amount}" with info styling (blue), not green savings styling.
+- Never hardcode `$`; format currency using the `currency` field and user locale.
+- Include a disclaimer **Tooltip** on savings figures: "Based on current cost model rates."
+- Note that `by_plugin.gpu` is always `0` here — link to GPU MIG and time-slicing views for GPU dollar estimates.
+- Treat `by_plugin.snapshot` as waste cost, not savings; label accordingly in the breakdown chart.
+- Show `gpu_savings_note` text when present so users understand GPU exclusion from fleet totals.
+- Pair with fleet-summary counts (Section 15) for idle/abandoned container context on the same dashboard.
 
 ---
 
@@ -697,6 +802,19 @@ Changes apply on the **next ingestion/recommendation cycle** (not retroactive to
 Call `DELETE` to reset to compiled defaults.
 
 Default max windows: 90 days (container/namespace/node/gpu), 365 days (pvc).
+
+### UI Integration Recommendations
+
+- Show term settings in a **Form** grouped by plugin (`recommendation_type` selector: container, namespace, node, gpu, pvc).
+- Display three term rows (short, medium, long) with fields: `window_days`, `min_data_days`, `decay_halflife_hours`.
+- Indicate `locked: true` terms with disabled fields and tooltip: "Set by administrator."
+- Show `is_default: true` badge when tenant has not customized; offer "Reset to defaults" via DELETE.
+- Validate client-side before PUT: window_days within plugin max (90 days for most, 365 for pvc).
+- On PUT success, show toast: "Term settings updated. Changes apply on the next ingestion cycle."
+- On 422 with `locked_terms`, highlight locked rows and show inline error messages.
+- Hide term settings for plugins where `supports_terms: false` (e.g., snapshot) per capabilities.
+- Explain the relationship between `min_data_days` and confidence badges in recommendation lists.
+- Link to [Recommendation Engines](architecture/recommendation-engines.md) for algorithm context.
 
 ---
 
@@ -797,6 +915,20 @@ Namespace uses the same field set with a higher default `mem_trend_slope_thresho
 See [Configurability — Recommended Values by Use Case](architecture/configurability.md#recommended-values-by-use-case)
 for aggressive cost optimization, stability-first, GPU training, and batch storage profiles.
 
+### UI Integration Recommendations
+
+- Build a Settings page with **Form** fields grouped by recommendation type (container, namespace, node, gpu, pvc tabs).
+- For each field, show the current effective value and whether it is default, admin-overridden (`locked_fields`), or tenant-customized.
+- Disable (grey out) locked fields with tooltip: "Set by administrator."
+- Provide a "Reset to defaults" button per plugin (calls DELETE on the thresholds endpoint).
+- Show inline validation errors on out-of-range values before submit; mirror server validation ranges from the tables above.
+- After PUT success, show toast: "Thresholds updated. Recommendations will refresh within 60 seconds."
+- Place GPU threshold fields in an "Advanced" **Accordion** with expert-only warning **Alert** and link to [GPU Classification](architecture/gpu-classification.md).
+- For node thresholds, group utilization vs consolidation fields separately for clarity.
+- For PVC thresholds, validate that `oversized_threshold` < `near_full_threshold` client-side.
+- Consider a future "Preview impact" mode showing how many recommendations would change (not yet API-supported).
+- Link to [Recommended Values by Use Case](architecture/configurability.md#recommended-values-by-use-case) as preset profiles.
+
 ---
 
 ## 9. Settings: Snapshot
@@ -816,6 +948,18 @@ No DELETE — PUT partial fields to override; omit locked fields.
 | `redundant_threshold` | 3 | Max snapshots per PVC before older ones flagged redundant |
 | `cost_per_gib_month_usd` | 0.05 | Fallback $/GiB/month when Koku rates unavailable |
 | `locked_fields` | [] | Present on GET — fields controlled by admin env vars |
+
+### UI Integration Recommendations
+
+- Show snapshot threshold settings in a dedicated Settings **Form** section.
+- Display each field with current value, default indicator, and locked status from `locked_fields`.
+- Disable locked fields with tooltip: "Set by administrator."
+- Fields: `orphan_age_days`, `never_restored_days`, `stale_days`, `redundant_threshold`, `cost_per_gib_month_usd`.
+- Use **NumberInput** components with min/max validation matching server constraints.
+- Explain each threshold with helper text tied to snapshot classification types (Section 5).
+- On PUT success, show toast: "Snapshot settings updated. Classifications will refresh on next processing cycle."
+- Link from snapshot recommendation list to this settings page for threshold tuning.
+- No DELETE endpoint — provide "Reset to defaults" only if the API adds one; until then, document defaults inline.
 
 ---
 
@@ -893,6 +1037,20 @@ Org-level GET does **not** include `reship_status`.
 
 After schedule changes, expect one ingestion cycle before updated `business_hours` blocks appear in recommendations.
 
+### UI Integration Recommendations
+
+- Provide a schedule configuration UI with a weekly calendar grid showing business vs off-hours blocks.
+- Preview which hours are "business" vs "off-hours" based on `timezone`, `days`, `start_time`, and `end_time`.
+- Support org, cluster, and namespace override levels with clear hierarchy indicator (namespace → cluster → org).
+- Show dual recommendation display on detail views: "All Hours" tab + "Business Hours" tab when `business_hours` block is present.
+- Display `reship_status` on cluster and namespace settings pages: `complete` (green), `pending` (in-progress banner), `forward_only` (persistent warning **Alert**).
+- When `reship_status` is `pending`, show banner: "Recalculating business-hours data…" and expect absent `business_hours` blocks temporarily.
+- After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).
+- Show `off_hours_weight` with slider or **NumberInput** (0.0–1.0) and explain its effect on off-hours sample weighting.
+- Provide `enabled` toggle per scope; disabling stops business-hours digest generation for that scope.
+- Link to [Business Hours feature doc](features-business-hours.md) for reship flow details.
+- On recommendation detail, default to all-hours view; switch to business-hours tab when user opts in.
+
 ---
 
 ## 11. Settings: Capabilities
@@ -925,9 +1083,203 @@ Discover which plugins and features are active for conditional UI rendering.
 
 Legacy Kruize mode excludes disabled Kruize plugin from the list.
 
+### UI Integration Recommendations
+
+- Call `GET /settings/capabilities` once per session (or on app init) to drive conditional navigation.
+- Hide nav items and routes for plugins where `enabled: false` — do not render empty states implying zero data.
+- Show term configuration in Settings only when `supports_terms: true` for that plugin.
+- Show business-hours settings and dual-perspective recommendation UI only when `business_hours: true`.
+- When a disabled plugin endpoint returns `404`, show nothing rather than an error page in navigation contexts.
+- Use capabilities response to conditionally render dashboard cards (GPU, node, PVC, snapshot sections).
+- Re-fetch capabilities after settings changes that enable/disable plugins (if applicable in deployment).
+
 ---
 
-## 12. Common Patterns
+
+## 12. GPU Recommendations
+
+### GPU summary
+
+```http
+GET /recommendations/openshift/gpu
+```
+
+Lightweight entry point for GPU optimization views. Returns counts and links to detailed lists.
+
+```json
+{
+  "mig": { "count": 12, "link": "/api/cost-management/v1/recommendations/openshift/gpu/mig" },
+  "timeslicing": { "count": 3, "link": "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing" },
+  "total_gpus_analyzed": 48,
+  "clusters_with_gpu_data": 2
+}
+```
+
+Use this endpoint for dashboard cards that link to MIG and time-slicing drill-downs.
+
+### GPU MIG profile recommendations
+
+```http
+GET /recommendations/openshift/gpu/mig
+```
+
+Lists containers with MIG profile recommendations (`recommended_gpu_profile` set and not `full_gpu`).
+
+| Parameter | Description |
+|-----------|-------------|
+| `cluster` | Filter by cluster alias |
+| `project` | Filter by namespace |
+| `container` | Filter by container name |
+| `gpu_classification` | Exact match on classification |
+| `term` | `short`, `medium`, or `long` |
+| `order_by` | `cluster`, `project`, `container`, `gpu_classification`, `confidence`, etc. |
+| `offset`, `limit` | Pagination |
+
+```json
+{
+  "meta": { "count": 5, "limit": 20, "offset": 0 },
+  "data": [
+    {
+      "cluster_uuid": "...",
+      "namespace": "ml",
+      "workload": "train",
+      "container": "worker",
+      "term": "medium",
+      "gpu_model": "NVIDIA-A100",
+      "node_name": "gpu-node-1",
+      "recommended_gpu_profile": "1g.5gb",
+      "current_gpu_profile": "full_gpu",
+      "gpu_classification": "underutilized",
+      "confidence": 0.8
+    }
+  ]
+}
+```
+
+Container list rows also embed GPU data under `gpu.{term}` when the GPU plugin is enabled.
+
+### UI Integration Recommendations
+
+- Use the GPU summary endpoint for dashboard **Card** widgets showing MIG vs time-slicing counts with links to detailed views.
+- Show MIG recommendations in a **Table**: container, namespace, cluster, GPU model, current allocation, recommended MIG profile, savings.
+- Use **Badge** for classification with text labels: idle (red), underutilized (yellow), memory_bound (blue), well_utilized (green), no_profiling (gray).
+- Add tooltip explaining MIG profile format (e.g., "1g.5gb = 1 compute slice, 5 GB memory").
+- For idle classification (code 26), show warning **Alert**: "Consider removing GPU allocation entirely."
+- Link MIG rows to container detail views and node context via `node_name`.
+- Show `confidence` as a badge; reduce prominence when code 28 (no profiling data) is present.
+- Filter by `gpu_classification` and `term`; default to medium term.
+- Surface `estimated_monthly_gpu_savings_usd` from container list `gpu` objects when dollar amounts are needed.
+- Cross-link to time-slicing view (Section 3) when notification code 36 is present.
+- Never rely on color alone — pair badge colors with classification text for accessibility.
+
+---
+
+## 13. Recommendation History
+
+```http
+GET /recommendations/openshift/history
+```
+
+Historical snapshots of recommendation values for trend analysis and audit.
+
+| Parameter | Description |
+|-----------|-------------|
+| `cluster`, `project`, `workload`, `container` | Entity filters |
+| `term`, `engine` | Filter by term and engine |
+| `start_date`, `end_date` | `YYYY-MM-DD` range on `recorded_at` (default: current month) |
+| `order_by` | `recorded_at` (default), `cluster`, `project`, `workload`, `container`, `term`, `engine` |
+| `order_how` | `asc` or `desc` |
+| `offset`, `limit` | Pagination |
+| `format` | `json` or `csv` |
+
+Responses include `Cache-Control: private, max-age=300` — safe to cache briefly client-side.
+
+### UI Integration Recommendations
+
+- Show a sparkline chart of recommendation CPU/memory values over time per container on detail views.
+- Fetch history filtered by container/workload/term/engine for the sparkline data source.
+- Provide a fleet-level history explorer with **Table** + date range picker.
+- Support CSV export (`format=csv`) with a **Button** for compliance and audit downloads.
+- Default date range to current month; allow custom ranges via `start_date`/`end_date`.
+- Overlay current recommendation on the sparkline for comparison.
+- Show term and engine selectors that refetch history with matching query params.
+- Handle empty history gracefully when `min_data_days` has not yet been met for new workloads.
+- Use `recorded_at` on the x-axis; format values with the same unit toggles as list views (`cpu-unit`, `memory-unit`).
+- Link from container detail "History" tab to full history explorer pre-filtered to that container.
+
+---
+
+## 14. Recommendation Quality
+
+```http
+GET /recommendations/openshift/quality
+```
+
+Quality metrics per container: stability, adoption, OOM events after recommendation.
+
+| Parameter | Description |
+|-----------|-------------|
+| `cluster`, `project`, `workload`, `container` | Entity filters |
+| `start_date`, `end_date` | `YYYY-MM-DD` range on `measured_at` (default: current month) |
+| `order_by` | `measured_at` (default), `stability`, `adoption`, `oom_events`, `recommendation_age` |
+| `order_how` | `asc` or `desc` |
+| `offset`, `limit` | Pagination |
+| `format` | `json` or `csv` |
+
+Key response fields: `stability_pct`, `adoption_detected`, `oom_events_after_rec`, `recommendation_age_hours`.
+
+### UI Integration Recommendations
+
+- Show `stability_pct` as a **Badge** on each recommendation row (e.g., "92% stable").
+- Build a quality dashboard **Card** showing aggregate stability across the fleet.
+- Display adoption indicator: checkmark icon when `adoption_detected` is true (actual usage matches recommendation).
+- Highlight containers with `oom_events_after_rec` > 0 using error **Badge** and link to performance engine recommendations.
+- Sort quality table by `stability` ascending to surface unstable recommendations first.
+- Provide CSV export for compliance reporting.
+- Show `recommendation_age_hours` to indicate how long the current recommendation has been active.
+- Combine quality metrics with history sparklines on container detail for full context.
+- Filter by cluster/project to compare quality across teams.
+- Use info **Alert** when stability is below 50% suggesting insufficient observation data or volatile workload.
+
+---
+
+## 15. Fleet Summary
+
+```http
+GET /recommendations/openshift/fleet-summary
+```
+
+Org-wide aggregate counts for dashboard hero metrics alongside savings summary.
+
+```json
+{
+  "total_containers": 450,
+  "active_containers": 420,
+  "idle_containers": 15,
+  "abandoned_containers": 8,
+  "total_monthly_savings_usd": 12500.75,
+  "cluster_count": 5,
+  "currency": "USD"
+}
+```
+
+Complements `GET /recommendations/openshift/savings-summary` (Section 6) with workload classification counts.
+
+### UI Integration Recommendations
+
+- Show fleet summary as dashboard **Card** tiles: total containers, active, idle, abandoned.
+- Use **Badge** counts for idle (code 5) and abandoned (code 8) with links to filtered recommendation lists.
+- Display `total_monthly_savings_usd` alongside savings-summary for a complete fleet overview.
+- Show `cluster_count` and `currency` in the dashboard header.
+- Wire idle/abandoned tile clicks to container list with appropriate notification code filters.
+- Differentiate idle vs abandoned visually (yellow vs red badges) with text labels.
+- Refresh on page load; respect RBAC-scoped counts automatically from the API.
+- Pair with savings-summary breakdown (Section 6) on the same overview page.
+- Show "active" as `active_containers` / `total_containers` in a **ProgressBar** for fleet health.
+- When all counts are zero, distinguish "no data" from "no permissions" using capabilities and sources status.
+
+---
+## 16. Common Patterns
 
 ### Pagination
 
@@ -1010,7 +1362,9 @@ Severity mapping for badges: `CRITICAL` → error, `WARNING` → warning, `INFO`
 
 ---
 
-## 13. UX Recommendations
+## 17. Cross-cutting UX Patterns
+
+These patterns apply across multiple feature sections above. See each feature's **UI Integration Recommendations** for domain-specific guidance.
 
 1. **Default view:** Cost engine, medium term, all-hours perspective.
 2. **Engine toggle:** Tab or segmented control for cost vs performance — do not fetch separately.
@@ -1027,15 +1381,6 @@ Severity mapping for badges: `CRITICAL` → error, `WARNING` → warning, `INFO`
 
 ---
 
-## Appendix: Additional native endpoints
+## Appendix: Notification codes endpoint
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /recommendations/openshift/gpu` | GPU summary counts + links to timeslicing/MIG lists |
-| `GET /recommendations/openshift/gpu/mig` | Container MIG profile recommendations |
-| `GET /recommendations/openshift/fleet-summary` | Org-wide container counts (idle/abandoned/stale) + savings |
-| `GET /recommendations/openshift/history` | Historical recommendation trends |
-| `GET /recommendations/openshift/quality` | OOM rate, stability, adoption metrics |
-| `GET /recommendations/openshift/notification-codes` | Machine-readable notification catalog |
-
-These endpoints follow the same authentication and pagination patterns described above.
+`GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are also documented in [Section 16 — Notification codes](#notification-codes-reference).
