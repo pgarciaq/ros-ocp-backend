@@ -39,8 +39,10 @@ plugins:
   - search
   - section-index
   - git-revision-date-localized:
-      enable_creation_date: true
-      type: datetime
+      enable_creation_date: false
+      type: custom
+      custom_format: "%B %d, %Y %H:%M:%S UTC"
+      timezone: UTC
 
 markdown_extensions:
   - admonition
