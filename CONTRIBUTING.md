@@ -335,6 +335,10 @@ go run rosocp.go start api
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KOKU_MASU_URL` | — | Koku masu API URL for effective_rates |
+| `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Set `false` to skip Masu cost fetches; savings `$0`, `NotifNoCostData` on recommendations |
+
+API responses include a `currency` field (ISO 4217 from Koku, default `USD`) alongside
+existing `_usd` monetary fields. See [docs/architecture/cost-integration.md](docs/architecture/cost-integration.md) for OCP-on-cloud behavior, per-plugin savings coverage, fleet savings summary (`GET .../savings-summary`), and negative savings semantics.
 
 ### RBAC
 

@@ -193,16 +193,43 @@ Returns `403` with an error message if any requested field is in `locked_fields`
 
 ### Resolution Order
 
+Threshold fields (`orphan_age_days`, etc.):
+
 1. If the env variable is set → use that value (locked, API returns it as read-only)
 2. If the user has set a value via API → use that (stored in `snapshot_settings`)
 3. Otherwise → use the compiled-in default
 
+`cost_per_gib_month_usd` (ingestion/classification only) uses a different chain:
+
+1. Per-org Settings API value (DB row exists) — highest priority
+2. `ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var (admin override, locked in API)
+3. `storage_gb_usage_per_month` from Koku `effective_rates` (infra + supplementary sum) — when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Masu fetch succeeds
+4. Compiled default `$0.05`/GiB/month
+
+The Settings API GET response does **not** include the dynamic effective-rates
+value from step 3; it shows the stored org setting, env-locked value, or compiled
+default only.
+
 ## Cost Rate Configuration
 
 Snapshot cost estimation is based on `restore_size_bytes` multiplied by a
-configurable per-GiB monthly rate. The rate is **user-configurable** — not
-hardcoded — because actual costs vary significantly by provider and storage
-tier:
+configurable per-GiB monthly rate. At ingestion time ROS resolves the rate using
+the priority chain in **Resolution Order** above.
+
+When savings estimates are enabled, ROS fetches Masu `effective_rates` once per
+snapshot ingestion cycle (same pattern as container savings) and uses
+`configured_rates["storage_gb_usage_per_month"]` (infrastructure + supplementary)
+as a cluster-specific default. That metric is the OCP cost model PVC **usage**
+rate — not snapshot-specific storage — but it reflects the customer's actual
+cost model better than a hardcoded `$0.05`.
+
+When `ROS_SAVINGS_ESTIMATES_ENABLED=false` or Masu is unreachable, step 3 is
+skipped and ROS falls back to the Settings API value, env var, or compiled default.
+
+See [architecture/cost-integration.md](architecture/cost-integration.md).
+
+The rate remains **user-configurable** via the Settings API because actual
+snapshot economics still vary by provider and storage tier:
 
 - AWS EBS snapshots: ~$0.05/GiB/month (incremental after first)
 - Azure Managed Disk: ~$0.05/GiB/month
@@ -229,7 +256,7 @@ For v2, the cost rate API could accept per-`volume_snapshot_class` rates:
 
 ```json
 {
-  "default_cost_per_gib_month_usd": 0.05,
+  "default_cost_per_gib_month": 0.05,
   "overrides": {
     "csi-aws-vsc-io2": 0.10,
     "ocs-storagecluster-rbdplugin-snapclass": 0.001
@@ -244,11 +271,15 @@ StorageClass alone.
 
 ### Default Rate
 
-`ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var, default: `0.05`
+Compiled default: `$0.05`/GiB/month (`SnapshotSettingsDefaults.CostPerGiBMonth`).
 
-The cost rate is managed through the unified settings API (see "Settings API"
-above). When set via env var, it appears in `locked_fields` and cannot be
-changed via API. The setting is stored per-org in `snapshot_settings`.
+When no org DB override or env var is set and savings estimates are enabled,
+ROS uses `storage_gb_usage_per_month` from effective-rates instead of this default.
+
+`ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var overrides the dynamic default (but not
+a per-org Settings API value). When set via env var, the field appears in
+`locked_fields` and cannot be changed via API. Explicit org settings are stored
+in `snapshot_settings`.
 
 ### Cost Formula
 
@@ -258,6 +289,25 @@ estimated_monthly_cost_usd = (restore_size_bytes / 1073741824) * cost_per_gib_mo
 
 The API response includes a note that this is a ceiling estimate for
 providers with incremental snapshot behavior.
+
+### Future: Dedicated Snapshot Cost Model Metric (v2)
+
+Tracked in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
+
+The current dynamic default reuses `storage_gb_usage_per_month` from the OCP cost
+model — a PVC storage **usage** rate, not snapshot-specific pricing. A proper
+solution is a dedicated cost model metric:
+
+| Component | Work |
+|-----------|------|
+| **Koku** | Add `snapshot_gb_per_month` to `api/metrics/constants.py`; expose via masu `effective_rates` `configured_rates` |
+| **koku-ui** | Cost model editor support for the new metric |
+| **koku-metrics-operator** | Optionally collect VolumeSnapshot storage bytes for usage-based snapshot costing |
+| **ROS** | Prefer `configured_rates["snapshot_gb_per_month"]` over the PVC storage proxy when present |
+
+Until that metric exists, `storage_gb_usage_per_month` remains the best
+cluster-specific default. Per-`volume_snapshot_class` overrides (see above) can
+further refine estimates without waiting on Koku cost model changes.
 
 ## Database Tables
 
@@ -404,7 +454,7 @@ locked (read-only via API).
 
 ```json
 {
-  "meta": { "count": 2, "limit": 20, "offset": 0 },
+  "meta": { "count": 2, "limit": 20, "offset": 0, "currency": "USD" },
   "data": [
     {
       "cluster_uuid": "aaaaaaaa-...",

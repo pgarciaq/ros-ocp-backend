@@ -348,7 +348,7 @@ list endpoints for consistency:
 - `limit` (default 10, -1 for unlimited)
 - `offset` (default 0)
 - `order_by` (allowed: `node_name`, `cluster_uuid`, `gpu_model`,
-  `recommended_replicas`, `confidence`, `total_node_savings`)
+  `recommended_replicas`, `confidence`, `total_node_savings_usd`)
 - `order_how` (`asc` or `desc`, default `desc`)
 
 Since node recommendations are computed in-memory (not via SQL), sorting

@@ -24,9 +24,11 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 - **Dual engine**: Native Go engine (default) or legacy Kruize (Java) backend
 - **Multi-tenant**: Isolated per organization via `org_id` scoping
 - **Prometheus-compatible**: Exposes operational metrics for monitoring
+- **Cost-aware savings:** Integrates with Koku Masu `effective_rates` for dollar estimates across container, node, PVC, GPU, and snapshot plugins; fleet savings summary at `GET .../savings-summary` ([Cost Integration](architecture/cost-integration.md))
 
 ## Quick Links
 
+- [Cost Integration](architecture/cost-integration.md) — savings formulas, kill-switch, currency, fleet savings summary, plugin matrix
 - [Contributing Guide](contributing.md) — setup, testing, PR process
 - [Plugin Architecture](architecture/plugin-architecture.md) — how plugins work
 - [Plugin Reference](api-reference/index.md) — auto-generated from source code

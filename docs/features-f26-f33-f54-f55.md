@@ -203,7 +203,8 @@ fleet-wide counts and totals.
   "idle_containers": 45,
   "abandoned_containers": 12,
   "total_monthly_savings_usd": 4532.17,
-  "cluster_count": 8
+  "cluster_count": 8,
+  "currency": "USD"
 }
 ```
 
@@ -217,6 +218,7 @@ fleet-wide counts and totals.
 | `abandoned_containers` | Count where `notification_codes` contains code 8 (`NotifAbandonedWorkload`) |
 | `total_monthly_savings_usd` | Sum of `estimated_monthly_savings_usd` for active recs |
 | `cluster_count` | Distinct `cluster_uuid` count |
+| `currency` | ISO 4217 code from Koku cost model (default `USD`) |
 
 ### Scope
 
@@ -229,6 +231,53 @@ fleet-wide counts and totals.
 - `internal/api/handlers_fleet.go` — `GetFleetSummary()` handler
 - `internal/api/server.go` — Route registration
 - `internal/api/handlers_fleet_integration_test.go` — Integration test
+
+---
+
+## Fleet Savings Summary
+
+Cross-plugin aggregate of **persisted** monthly savings (container, node, PVC,
+snapshot). Complements fleet-summary (container health counts only).
+
+### Endpoint
+
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+
+### Query Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `engine` | `cost` | Engine profile for container and node totals (`cost` or `performance`). PVC and snapshot totals are engine-agnostic. |
+
+### Response (abbreviated)
+
+```json
+{
+  "currency": "USD",
+  "total_estimated_monthly_savings_usd": 12450.00,
+  "by_plugin": {
+    "container": 8200.00,
+    "node": 3100.00,
+    "pvc": 950.00,
+    "snapshot": 200.00,
+    "gpu": 0
+  },
+  "by_cluster": [
+    { "cluster_uuid": "...", "cluster_alias": "prod", "savings": 6200.00, "has_cost_data": true }
+  ],
+  "gpu_savings_note": "GPU savings are computed at API read time and are excluded from this summary."
+}
+```
+
+GPU savings are excluded because they are computed at API read time, not persisted
+at ingestion. See [architecture/cost-integration.md](architecture/cost-integration.md)
+for formulas, negative savings semantics, and v2 roadmap (real-time recalculation,
+GPU persistence, COST-7523 snapshot metric).
+
+### Key Files
+
+- `internal/api/handlers_savings_summary.go` — `GetFleetSavingsSummary()` handler
+- `internal/api/handlers_savings_summary_integration_test.go` — Integration tests
 
 ---
 
@@ -274,3 +323,6 @@ To test these features manually:
 
 4. **Fleet Summary**: Call `/recommendations/fleet-summary` and verify counts
    match the total recommendation list.
+
+5. **Fleet Savings Summary**: Call `/recommendations/savings-summary?engine=cost`
+   and verify `by_plugin` totals match persisted savings columns.

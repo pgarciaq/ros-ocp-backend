@@ -76,11 +76,47 @@ Ceph RBD via CSI), the backing volume is exactly the size of the PVC request.
 You pay for provisioned capacity, not used capacity. Oversized PVCs mean paying
 for storage you don't use.
 
+## Dollar savings estimates
+
+When `KOKU_MASU_URL` is configured and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default),
+ROS computes `estimated_monthly_savings_usd` at ingestion for **oversized** PVCs using
+storage rates from Masu `effective_rates`:
+
+```
+(current_gib - recommended_gib) × storage_gb_request_per_month
+```
+
+(falls back to `storage_gb_usage_per_month` when the request rate is zero).
+
+Requires migration **000070**. When Masu is unavailable or savings are disabled,
+the field is `$0` / null and notification code **25** (`NotifNoCostData`) is appended.
+
+Full plugin matrix and troubleshooting: [architecture/cost-integration.md](architecture/cost-integration.md).
+
+## Realizing PVC savings (migration path)
+
+Most CSI drivers and cloud block storage backends **do not support in-place PVC
+shrinking**. When ROS classifies a PVC as oversized, the `estimated_monthly_savings_usd`
+field reflects the monthly cost difference between the current provisioned size
+and the recommended size — but realizing that savings requires a manual migration:
+
+1. Create a new PVC at the recommended (smaller) size.
+2. Copy or migrate application data to the new volume (for example via a temporary
+   Job, Velero, or application-specific tooling).
+3. Update the workload to mount the new PVC.
+4. Delete the old PVC to release the backing volume and stop paying for unused capacity.
+
+The API `resize_note` on oversized PVCs repeats this guidance. Near-full and
+orphaned PVC recommendations follow different actions (expand or delete). See
+[Negative savings](architecture/cost-integration.md#negative-savings) when a
+near-full recommendation implies expansion (negative savings = additional monthly cost).
+
 ## Notification Codes
 
 | Code | Severity | Message |
 |------|----------|---------|
 | 20 | WARNING | PVC has zero usage across all intervals |
+| 25 | INFO | No cost data available — savings estimate not computed |
 | 29 | INFO | PVC capacity significantly exceeds sustained usage — consider shrinking |
 | 30 | WARNING | PVC usage approaching capacity — consider expanding or investigate growth |
 
@@ -102,7 +138,7 @@ for storage you don't use.
 
 ```json
 {
-  "meta": { "count": 3, "limit": 20, "offset": 0 },
+  "meta": { "count": 3, "limit": 20, "offset": 0, "currency": "USD" },
   "data": [
     {
       "cluster_uuid": "aaaaaaaa-...",
@@ -120,6 +156,7 @@ for storage you don't use.
         "20": { "type": "WARNING", "message": "PVC has zero usage...", "code": 20 }
       },
       "data_days": 14,
+      "estimated_monthly_savings_usd": 12.50,
       "resize_note": "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
     }
   ]
@@ -143,9 +180,11 @@ Overwritten on each ingestion cycle.
 |------|---------|
 | `internal/ingestion/pvc.go` | CSV parsing, digest computation, upsert |
 | `internal/engine/pvc_recommend.go` | Classification, growth trend, DB write |
+| `internal/engine/pvc_savings.go` | Dollar savings from Masu storage rates |
 | `internal/api/handlers_pvc.go` | API handler |
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
 | `migrations/000048_add_pvc_notification_codes.up.sql` | Notification seed |
+| `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_monthly_savings_usd` column |
 
 ## Manual QE Verification
 

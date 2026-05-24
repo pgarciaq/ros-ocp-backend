@@ -66,6 +66,24 @@ Key code:
 Helm (cost-onprem-chart): set under `ros-api` and `ros-processor` env blocks;
 see chart values on branch `feature/business-hours-e2e`.
 
+### Savings estimates (Koku cost data)
+
+Business hours affects **CPU/memory recommendation sizing**, not dollar savings
+math. Savings estimates are configured separately:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `KOKU_MASU_URL` | `""` | Masu base URL for `GET .../effective_rates/` (required for non-zero savings) |
+| `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Kill-switch — `false` skips all Masu cost fetches; savings are `$0` and recommendations include `NotifNoCostData` (code 25) |
+
+For OCP-on-cloud clusters (OCP on AWS/Azure/GCP), `effective_rates` already includes
+correlated cloud infrastructure costs in `namespace_aggregates.infrastructure_cost`
+when both Koku sources are configured — no ROS-side correlation work is needed.
+
+Plugin coverage, OCP-on-cloud details, currency field, fleet savings summary
+(`GET .../savings-summary`), and troubleshooting:
+[architecture/cost-integration.md](architecture/cost-integration.md).
+
 ### Schedule inheritance
 
 Resolution order: **namespace override → cluster override → org default → disabled**.

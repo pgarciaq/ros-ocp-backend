@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-21 (per-plugin configurable terms, documentation site, Makefile targets)
+Last updated: 2026-05-24 (dual node engines, fleet savings summary, currency field)
 
 ---
 
@@ -25,7 +25,9 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Container recs** | Custom timeframes (1–90 day windows, 3 terms per plugin per org) | **Shipping** |
 | **Container recs** | Idle / abandoned workload detection | **Shipping** |
 | **Container recs** | CPU trend analysis (least-squares slope) | **Shipping** |
-| **Container recs** | Dollar savings estimates (via Koku cost data) | **Shipping** |
+| **Container recs** | Dollar savings estimates (via Koku `effective_rates`; CPU, memory, infra, distributed) | **Shipping** |
+| **Node recs** | Dollar savings estimates (CPU/memory capacity + node consolidation) | **Shipping** |
+| **Storage** | PVC dollar savings estimates (storage cost model rates) | **Shipping** |
 | **Container recs** | Replica count display (min/max/avg pod count) | **Shipping** |
 | **Container recs** | Recommendation history tracking | **Shipping** |
 | **Container recs** | Recommendation quality (stability %, adoption detection) | **Shipping** |
@@ -37,8 +39,9 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **GPU** | GPU savings estimates (from Koku cost model rates) | **Shipping** |
 | **Storage** | PVC right-sizing (oversized/near-full/orphaned/healthy + growth trend) | **Shipping** |
 | **Snapshots** | Snapshot staleness detection (orphaned/stale/never-restored/redundant) | **Shipping** |
-| **Node recs** | Node CPU/memory right-sizing (Tier 1: underutilized, overcommitted, EMA-smoothed stranded detection) | **Shipping (enabled by default)** |
-| **Fleet** | Fleet summary (cross-cluster aggregate) | **Shipping** |
+| **Node recs** | Node CPU/memory right-sizing (Tier 1: dual cost/performance engines, nested API) | **Shipping (enabled by default)** |
+| **Fleet** | Fleet summary (cross-cluster container health aggregate) | **Shipping** |
+| **Fleet** | Fleet savings summary (cross-plugin persisted savings, `?engine=`) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
 | **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
 | **Platform** | Per-plugin configurable recommendation terms (TermProvider trait) | **Shipping** |
@@ -114,6 +117,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
+| Savings stale until re-ingestion | Container/node/PVC `estimated_monthly_savings_usd` reflects rates from the last successful Masu fetch during ingestion; Koku cost model changes do not update ROS rows until the next report cycle | Low — by design | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
@@ -370,12 +374,23 @@ when capacity data is unavailable.
 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed imbalance above this = stranded |
 | `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha (higher = less smoothing) |
 
-**API status:** Canonical **`GET /recommendations/openshift/nodes`** returns
-per-node utilization, overcommit ratios, stranded resource flags, and trend slopes.
-Deprecated alias: **`GET /recommendations/openshift/nodes/utilization`** (same payload;
-responses include a deprecation warning).
+**Dual engines:** Each node/term stores separate **cost** (80% target utilization)
+and **performance** (55% target) engine rows, mirroring container
+`recommendation_engines`. Classification (underutilized, overcommitted, stranded)
+is shared; sizing and savings differ per engine.
 
-**Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources).
+**API status:** Canonical **`GET /recommendations/openshift/nodes`** returns one
+object per node with shared classification/metrics and nested
+`recommendation_terms.<term>.recommendation_engines.{cost,performance}`.
+Optional `?engine=cost|performance` filters which engine blocks are returned.
+Pagination counts distinct nodes; default sort is medium-term
+`estimated_monthly_savings_usd` (cost engine unless filtered). `meta.currency`
+reflects the Koku cost model unit. Deprecated alias:
+`GET .../nodes/utilization`.
+
+**Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 25 (`NotifNoCostData` when savings cannot be computed).
+
+**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
 **UI status:** Not implemented. Requires a node recommendations view and a null
 state for the 3-day cold start period.
@@ -481,15 +496,42 @@ information in the recommendation detail view.
 **Engine status:** Fully implemented. `ApplySavingsEstimates()` in
 `internal/engine/savings.go` computes `EstimatedSavingsUSD` for each
 container recommendation using cost data fetched from a Koku masu
-internal endpoint (`GET /effective-rates/`). Savings include cost model
+internal endpoint (`GET /effective_rates/`). Savings include cost model
 rates (CPU + memory), infrastructure costs (raw + markup), and
 distributed overhead (platform, worker, storage, network, GPU),
 apportioned by the cost model's distribution type (cpu or memory) and
 scaled by replica count.
 
-**API status:** Fully implemented. `estimated_monthly_savings_usd` is
-returned in the recommendation detail response. When no cost data is
-available, a `NotifNoCostData` notification is included.
+**OCP-on-cloud:** For clusters registered as OCP on AWS/Azure/GCP with both
+sources ingested in Koku, `namespace_aggregates.infrastructure_cost` from
+`effective_rates` already reflects correlated cloud infrastructure spend.
+No additional ROS correlation logic is required.
+
+**Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` (default `true`) disables
+Masu `effective_rates` fetches on ros-processor and ros-api. Recommendations are
+still produced; dollar fields are `$0` / omitted and `NotifNoCostData` (code 25)
+is appended on container, node, and PVC responses. Snapshot recoverable-cost
+estimates skip the dynamic effective-rates default (Settings API, env, and compiled
+default still apply). See [architecture/cost-integration.md](./architecture/cost-integration.md).
+
+**Plugin coverage** (identical matrix in [cost-integration.md](./architecture/cost-integration.md)):
+
+| Plugin | Dollar estimates |
+|--------|------------------|
+| Container | Yes (ingestion) |
+| GPU (container detail) | Yes (API read) |
+| Node GPU time-slicing | Yes (API read) |
+| Node (CPU/memory) | Yes (ingestion) |
+| Namespace | No |
+| PVC | Yes (ingestion) |
+| Snapshot | Yes — recoverable monthly cost (ingestion) |
+
+**API status:** `estimated_monthly_savings_usd` on container detail, nested node
+engine blocks, and PVC list responses. `GET .../savings-summary` aggregates
+persisted container, node, PVC, and snapshot totals (GPU excluded — read-time only).
+Responses include top-level or `meta.currency` (ISO 4217 from Koku). When no cost
+data is available, `NotifNoCostData` (code 25) is included on container, node, and
+PVC recommendations.
 
 **UI status:** Not implemented. The koku-ui does not display the estimated
 savings value in the recommendation detail view.
@@ -567,9 +609,14 @@ Growth trend projection (linear regression on daily avg usage) estimates
 days-to-full for capacity planning.
 
 **API status:** `GET /recommendations/openshift/pvcs` with filters for
-`cluster_uuid`, `namespace`, `recommendation_type`, pagination.
+`cluster_uuid`, `namespace`, `recommendation_type`, pagination. Responses include
+`estimated_monthly_savings_usd` when Masu storage rates are available.
 
-**Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full).
+**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
+using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
+Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
+
+**Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 
 **UI status:** Not implemented.
 
@@ -615,7 +662,8 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
   zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
 - **Adoption detection (F54, REQ-10.7):** Compares current requests to prior recommendation
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
-- **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` aggregate endpoint.
+- **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` container health aggregate.
+- **Fleet savings summary:** `GET /recommendations/openshift/savings-summary` cross-plugin savings totals with optional `?engine=` (default `cost`). See [cost-integration.md](./architecture/cost-integration.md).
 - **Box plots (REQ-6.6):** Five-number summary (min, Q1, median, Q3, max) per term for containers and namespaces.
 - **Quality metrics (F53, REQ-10.6):** Stability %, adoption detection, OOM events after rec.
 - **History tracking (F56):** Time-series of past recs in `recommendation_history`, API at `/history`.
@@ -633,7 +681,8 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 | `/recommendations/openshift/gpu/mig` | GET | Implemented — MIG profile recommendations list |
 | `/recommendations/openshift/nodes` | GET | Implemented — node CPU/memory utilization |
 | `/recommendations/openshift/nodes/utilization` | GET | Deprecated alias of `/nodes` (same behavior + warning) |
-| `/recommendations/openshift/fleet-summary` | GET | Implemented |
+| `/recommendations/openshift/fleet-summary` | GET | Implemented — container health aggregate |
+| `/recommendations/openshift/savings-summary` | GET | Implemented — cross-plugin savings (`?engine=cost\|performance`) |
 | `/recommendations/openshift/pvcs` | GET | Implemented |
 | `/openshift/namespace/recommendations` | GET | Implemented |
 | `/recommendations/openshift/namespace/:id` | GET | Implemented |

@@ -318,3 +318,83 @@ frequent source churn).
 - Existing `business_hours` digests remain in DB but are ignored
 - To fully remove: run migration 067 DOWN, then 066 DOWN (drops BH data)
 - Migration 068/069 are additive and safe to leave in place
+
+---
+
+## Currency field on API responses (additive)
+
+ROS API responses include a top-level `currency` field (ISO 4217 code from the Koku
+cost model, default `"USD"`) alongside existing `_usd` savings and cost JSON fields.
+Clients can use `currency` to format monetary values correctly when the cost model uses
+a non-USD unit.
+
+Koku's `GET /api/cost-management/v1/effective_rates/` includes the same `currency` field.
+
+### Deploy notes
+
+- Deploy **koku** (Masu `effective_rates` currency field) before or with **ros-ocp-backend**.
+- No client migration required — existing `_usd` field names are unchanged.
+- No worker stop required; no PostgreSQL schema changes.
+
+---
+
+## Node and PVC savings columns (migration 000070)
+
+### What it adds
+
+Migration **000070** adds `estimated_monthly_savings_usd REAL` to:
+
+- `node_recommendations`
+- `pvc_recommendation_sets`
+
+Container recommendations already had this column (migration 000026).
+
+### Deploy notes
+
+- **Safe on live deployments** — additive `ADD COLUMN IF NOT EXISTS`, no data backfill required
+- Savings populate on the **next ingestion cycle** after deploy when `KOKU_MASU_URL` is set and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default)
+- No worker stop required (unlike migration 000058 PK rebuild)
+- Rollback: run `000070` down migration to drop the columns (savings values are recomputed on re-upgrade)
+
+See [architecture/cost-integration.md](architecture/cost-integration.md) for formulas and plugin matrix.
+
+---
+
+## Node recommendation engines (migration 000071)
+
+### What it adds
+
+Migration **000071** adds an `engine TEXT NOT NULL DEFAULT 'cost'` column to `node_recommendations` and rebuilds the primary key to `(org_id, cluster_uuid, node, term, engine)`. Each node/term now stores separate **cost** and **performance** engine rows, mirroring container `recommendation_engines`.
+
+### Transition period after deploy
+
+1. **Immediately after migration:** Existing rows default to `engine = 'cost'`. Only cost-engine data is present until the next ingestion cycle completes.
+2. **Performance engine rows** are written on the **next report ingestion** (typically within one upload cycle, up to ~6 hours on default operator settings).
+3. **During this window:** API responses nest `recommendation_terms.*.recommendation_engines.performance` as empty/omitted. This is expected and self-resolving — no manual backfill required.
+4. **API shape:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms` / `recommendation_engines` (not flat per-engine rows).
+
+### Deploy notes
+
+- Uses advisory lock **7358001** (same as migration 000058) — workers block briefly rather than deadlocking.
+- Rollback (`000071` down) deletes all `engine = 'performance'` rows before dropping the column.
+- Pair with migration **000072** (sizing columns) so API engine blocks include `recommended_cpu_cores`, `recommended_memory_gib`, and `node_count_reduction`.
+
+---
+
+## Node sizing columns (migration 000072)
+
+### What it adds
+
+Migration **000072** adds to `node_recommendations`:
+
+- `recommended_cpu_cores REAL`
+- `recommended_memory_gib REAL`
+- `node_count_reduction INTEGER NOT NULL DEFAULT 0`
+
+These values are persisted at ingestion alongside `estimated_monthly_savings_usd` and exposed under each engine in the nested nodes API response.
+
+### Deploy notes
+
+- Additive `ADD COLUMN IF NOT EXISTS` — safe on live deployments.
+- Values populate on the **next ingestion cycle** after deploy (no historical backfill).
+- Rollback drops the three columns; values are recomputed on re-upgrade.

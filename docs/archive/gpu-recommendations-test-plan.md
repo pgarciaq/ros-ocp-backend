@@ -812,8 +812,8 @@ All 84 tests (78 existing + 6 GPU-specific) must pass.
 **File:** `internal/engine/gpu_timeslicing_test.go`
 **Input:** 3 candidate T4s, gpu_monthly_rate = $300, recommended_replicas = 4
 **Assert:**
-- `savings_per_gpu` = $300 * (1 - 1/4) = $225
-- `total_node_savings` = $225 * 3 = $675
+- `savings_per_gpu_usd` = $300 * (1 - 1/4) = $225
+- `total_node_savings_usd` = $225 * 3 = $675
 
 ### E-T11. Savings nil when no cost data
 

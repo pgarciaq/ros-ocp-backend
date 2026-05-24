@@ -184,15 +184,34 @@ GROUP BY state;
 
 ## Runbook: Cost Data Fetch Failures
 
-**Symptom:** Logs showing `cost data fetch failed` warnings. Recommendations still produced but without savings estimates (all savings = $0).
+**Symptom:** Logs showing `cost data fetch failed` warnings. Recommendations still produced but without savings estimates (savings = `$0` or omitted).
+
+**Affected plugins:** Container, node, and PVC append `NotifNoCostData` (code **25**) when Masu data is missing. GPU/time-slicing API enrichment omits dollar fields without code 25. Snapshot recoverable cost skips the dynamic effective-rates default only.
 
 ### Diagnosis
 
-- Check Koku API health: `curl http://koku-server:8000/api/cost-management/v1/status/`
-- Check `NotifNoCostData` notification appears in API responses (expected behavior when cost model is missing).
+- Check whether savings are intentionally disabled: `ROS_SAVINGS_ESTIMATES_ENABLED=false` skips all Masu calls by design (see [cost-integration.md](../architecture/cost-integration.md)).
+- Check `KOKU_MASU_URL` is set on **both** ros-processor and ros-api.
+- Check Koku/Masu health: `curl http://koku-server:8000/api/cost-management/v1/status/`
+- Verify migrations **000070**–**000072** applied if node/PVC savings columns or nested node engines are missing:
+  ```sql
+  SELECT column_name FROM information_schema.columns
+  WHERE table_name IN ('node_recommendations', 'pvc_recommendation_sets')
+    AND column_name = 'estimated_monthly_savings_usd';
+
+  SELECT column_name FROM information_schema.columns
+  WHERE table_name = 'node_recommendations'
+    AND column_name IN ('engine', 'recommended_cpu_cores', 'recommended_memory_gib', 'node_count_reduction');
+  ```
+- Check API responses for `NotifNoCostData` (code 25) on container detail, `GET .../nodes`, and `GET .../pvcs`.
 
 ### Resolution
 
-- This is **non-fatal** — recommendations are still written, just without dollar savings estimates.
-- Verify cost model is assigned to the OCP provider in the Koku UI.
+- **Non-fatal** — recommendations are still written; only dollar fields are affected.
+- Set `ROS_SAVINGS_ESTIMATES_ENABLED=true` and configure `KOKU_MASU_URL` if disabled.
+- Verify an OCP cost model is assigned to the provider in the Koku UI (storage rates required for PVC/snapshot dynamic defaults).
+- For OCP-on-cloud clusters, confirm both OCP and cloud sources are ingested and correlated (`infrastructure_cost` in `effective_rates` namespace aggregates).
 - Trigger cost model recalculation: `curl http://masu-server:5042/api/cost-management/v1/update_cost_model_costs/?provider_uuid=UUID&schema=orgNNNNN`
+- Wait for the next ingestion cycle (container/node/PVC) or re-query GPU endpoints after Masu recovery.
+
+See [cost-integration.md](../architecture/cost-integration.md) for formulas, plugin matrix, and [upgrade-runbook.md](../upgrade-runbook.md) for migrations **000070**–**000072**.

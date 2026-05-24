@@ -8,7 +8,7 @@
 | [plugin-architecture.md](architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
 | [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — percentiles, decay weighting, adaptive margin, trend detection |
 | [gpu-classification.md](architecture/gpu-classification.md) | GPU utilization classification thresholds and MIG profile selection |
-| [cost-integration.md](architecture/cost-integration.md) | Cost data integration contract with Koku (effective_rates endpoint) |
+| [cost-integration.md](architecture/cost-integration.md) | Cost/savings integration with Koku — `effective_rates`, kill-switch, currency field, fleet savings summary, node/PVC/container/GPU formulas, plugin matrix |
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |
 | [api-versioning.md](architecture/api-versioning.md) | API versioning strategy and compatibility policy |
 | [native-migration.md](architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
@@ -32,7 +32,7 @@
 
 | Document | Scope |
 |----------|-------|
-| [features-f26-f33-f54-f55.md](features-f26-f33-f54-f55.md) | Staleness, idle/abandoned detection, adoption, fleet summary |
+| [features-f26-f33-f54-f55.md](features-f26-f33-f54-f55.md) | Staleness, idle/abandoned detection, adoption, fleet summary, fleet savings summary |
 | [features-f27-pvc-rightsizing.md](features-f27-pvc-rightsizing.md) | PVC right-sizing: oversized, near-full, orphaned, growth trend |
 | [features-f-snapshot-staleness.md](features-f-snapshot-staleness.md) | Snapshot staleness detection |
 | [known-issues.md](known-issues.md) | Feature status report — executive summary, implementation status, caveats |
