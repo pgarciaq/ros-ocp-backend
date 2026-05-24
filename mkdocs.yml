@@ -38,6 +38,9 @@ theme:
 plugins:
   - search
   - section-index
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: datetime
 
 markdown_extensions:
   - admonition
