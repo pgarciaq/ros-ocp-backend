@@ -63,6 +63,8 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - UI Integration:
+      - Frontend Integration Guide: ui-integration-guide.md
   - Getting Started:
       - Contributing: contributing.md
       - Local Development: development.md

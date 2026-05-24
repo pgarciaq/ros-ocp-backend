@@ -38,15 +38,24 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/business-hours` | GET, PUT, DELETE | **Existing** | Org-default business-hours schedule. |
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
-| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT | **Proposed** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
+| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
 
 When a parameter is locked by an admin env var, the Settings API marks it `"locked": true`
 in GET responses and rejects PUT attempts for that field.
 
+**Threshold recalculation:** After a successful PUT, ROS re-runs the native recommendation
+engine asynchronously for every cluster in the tenant, using existing digest data in
+PostgreSQL (no masu reship or Kafka). The PUT returns `200 OK` immediately; updated
+recommendations typically appear within seconds. Disable with
+`ROS_THRESHOLD_RECALCULATION_ENABLED=false` if needed. See
+[`threshold_recalculate.go`](../../internal/engine/threshold_recalculate.go).
+
 Implementation references: [`handlers_terms.go`](../../internal/api/handlers_terms.go),
 [`handlers_snapshot_settings.go`](../../internal/api/handlers_snapshot_settings.go),
 [`handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go),
-[`term_config.go`](../../internal/engine/term_config.go).
+[`handlers_threshold_settings.go`](../../internal/api/handlers_threshold_settings.go),
+[`term_config.go`](../../internal/engine/term_config.go),
+[`threshold_settings.go`](../../internal/engine/threshold_settings.go).
 
 ---
 
@@ -280,6 +289,20 @@ Internal reship poller for business-hours historical data backfill. Admin-only.
 |---------|---------|------|-------------|---------------------|--------|
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | 60 | int | Retry interval. <br><em>Expanded: How often (in seconds) the reship poller checks for pending reship requests and retries failed ones. The reship poller manages backfill of historical usage data needed for business-hours analysis. 60 seconds means failed reship attempts are retried every minute until success or max retries.</em> | No | Already exists |
 | `ROS_RESHIP_MAX_RETRIES` | 10 | int | Max failures. <br><em>Expanded: Maximum number of retry attempts for a failed reship request before it is abandoned. After this many failures, the reship request is marked as permanently failed and business-hours recommendations for that time range will use whatever data is available (possibly with reduced confidence). Prevents infinite retry loops against unreachable clusters.</em> | No | Already exists |
+
+---
+
+## Threshold Recalculation
+
+Async re-recommendation after tenant threshold changes (Settings API PUT). Unlike business
+hours, thresholds only change how existing digests are interpreted—no masu/Kafka/S3
+backfill is required.
+
+| Env var | Default | Type | Description | Tenant-configurable | Status |
+|---------|---------|------|-------------|---------------------|--------|
+| `ROS_THRESHOLD_RECALCULATION_ENABLED` | true | bool | Kill-switch for async recalculation after threshold PUT. <br><em>Expanded: When true (default), each successful threshold settings PUT triggers background re-recommendation for all clusters in the org (bounded to 3 concurrent clusters). When false, settings are saved and the threshold cache is invalidated, but existing recommendations are not recomputed until the next ingestion cycle.</em> | No | New |
+
+Prometheus: `ros_threshold_recalculation_total{org_id,recommendation_type,status}`.
 
 ---
 

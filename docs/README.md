@@ -1,5 +1,11 @@
 # ros-ocp-backend Documentation
 
+## UI Integration
+
+| Document | Description |
+|----------|-------------|
+| [ui-integration-guide.md](ui-integration-guide.md) | **Frontend integration guide** — REST API reference for koku-ui: recommendations, settings, notifications, pagination, UX patterns |
+
 ## Architecture & Design
 
 | Document | Description |

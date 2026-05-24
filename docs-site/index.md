@@ -28,6 +28,7 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 
 ## Quick Links
 
+- [UI Integration Guide](ui-integration-guide.md) — REST API reference for koku-ui frontend developers
 - [Cost Integration](architecture/cost-integration.md) — savings formulas, kill-switch, currency, fleet savings summary, plugin matrix
 - [Recommendation Engines](architecture/recommendation-engines.md) — complete threshold, percentile, and term reference for all plugins
 - [Configurability Reference](architecture/configurability.md) — environment variables, Settings API, and tuning guidance
