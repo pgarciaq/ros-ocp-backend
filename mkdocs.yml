@@ -68,6 +68,7 @@ nav:
   - Getting Started:
       - Contributing: contributing.md
       - Local Development: development.md
+  - Testing & Quality: testing.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Recommendation Engines: architecture/recommendation-engines.md
