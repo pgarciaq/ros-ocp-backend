@@ -3,6 +3,9 @@
 Complete reference for recommendation thresholds, percentiles, term windows, and
 configuration parameters across all native-engine plugins.
 
+For the full environment variable catalog, Settings API routes, precedence model,
+and tuning guidance, see [Configurability Reference](configurability.md).
+
 For algorithm details (decay weighting, adaptive margin formula, trend detection),
 see [Recommendation Math](recommendation-math.md). For dollar estimates and savings
 formulas, see [Cost Integration](cost-integration.md).
@@ -331,6 +334,7 @@ Admin guide: [Business Hours](../features/business-hours.md).
 | [GPU Classification](gpu-classification.md) | GPU decision tree, MIG, confidence scoring, two-tier support |
 | [Cost Integration](cost-integration.md) | Savings formulas, kill-switch, fleet summary, plugin savings matrix |
 | [Plugin Architecture](plugin-architecture.md) | Plugin traits, term provider, registry |
+| [Configurability Reference](configurability.md) | All `ROS_*` env vars, Settings API, precedence, tuning |
 
 ## Source File Index
 

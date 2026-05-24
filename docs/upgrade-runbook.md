@@ -5,6 +5,10 @@ instance from a Kruize-era database schema to the native engine schema.
 
 **Audience:** Operators performing the upgrade on a live deployment.
 
+**Configuration:** For new environment variables introduced in recent releases (sizing
+thresholds, GPU confidence tiers, PVC parameters, etc.), see
+[Configurability Reference](architecture/configurability.md).
+
 **Scope:** Covers migration safety concerns documented in 490-issues.md
 (#84, #89, #90, #91, #92, #100). Fresh installations do NOT need this
 runbook — all migrations run safely on an empty database.
@@ -292,6 +296,7 @@ frequent source churn).
 
 - Koku `reship_ros` endpoint must be deployed first (koku branch: `feature/reship-ros-endpoint`)
 - `ROS_BUSINESS_HOURS_ENABLED` defaults to `false` — set to `true` to activate
+- See [Configurability Reference — Business Hours](architecture/configurability.md#business-hours) for all BH env vars
 
 ### Migration sequence
 
@@ -353,6 +358,7 @@ Container recommendations already had this column (migration 000026).
 
 - **Safe on live deployments** — additive `ADD COLUMN IF NOT EXISTS`, no data backfill required
 - Savings populate on the **next ingestion cycle** after deploy when `KOKU_MASU_URL` is set and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default)
+- See [Configurability Reference — Savings / Cost](architecture/configurability.md#savings-cost) for savings-related env vars
 - No worker stop required (unlike migration 000058 PK rebuild)
 - Rollback: run `000070` down migration to drop the columns (savings values are recomputed on re-upgrade)
 
