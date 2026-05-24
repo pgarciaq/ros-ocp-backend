@@ -804,6 +804,10 @@ func UpdateThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID, rec
 		return fmt.Errorf("unsupported recommendation_type %q", recType)
 	}
 
+	if err := ValidateThresholdSettingsUpdate(ctx, pool, orgID, recType, rawUpdate); err != nil {
+		return err
+	}
+
 	var lockedAttempts []string
 	switch recType {
 	case "container":

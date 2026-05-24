@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,10 +65,44 @@ func TestGetThresholdSettings_ReturnsDefaults(t *testing.T) {
 	assert.Empty(t, locked)
 }
 
+func TestPutThresholdSettings_TriggersAsyncRecalculation(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-recalc"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	var mu sync.Mutex
+	var triggeredOrg, triggeredType string
+	engine.SetThresholdRecalcHookForTest(func(oid, rt string) {
+		mu.Lock()
+		triggeredOrg = oid
+		triggeredType = rt
+		mu.Unlock()
+	})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"cpu_cost_percentile": 0.72}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, orgID, triggeredOrg)
+	assert.Equal(t, "container", triggeredType)
+}
+
 func TestPutThresholdSettings_UpdatesAndReturnsMerged(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-put"
 	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
 
 	body := bytes.NewReader([]byte(`{"cpu_cost_percentile": 0.71}`))
 	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container", body)
@@ -79,6 +114,58 @@ func TestPutThresholdSettings_UpdatesAndReturnsMerged(t *testing.T) {
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.InDelta(t, 0.71, resp["cpu_cost_percentile"].(float64), 1e-9)
+}
+
+func TestPutThresholdSettings_RejectsOutOfRange(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-bad-range"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	body := bytes.NewReader([]byte(`{"cpu_cost_percentile": 2.0}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "error", resp["status"])
+	assert.Contains(t, resp["message"], "cpu_cost_percentile")
+	errs, ok := resp["validation_errors"].([]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, errs)
+}
+
+func TestPutThresholdSettings_RejectsMinMarginGreaterThanMax(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-min-max"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	body := bytes.NewReader([]byte(`{"min_margin": 2.5, "max_margin": 1.5}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Contains(t, resp["message"], "min_margin")
+}
+
+func TestPutThresholdSettings_ValidationBeforeLockedField(t *testing.T) {
+	t.Setenv("ROS_CONTAINER_CPU_COST_PERCENTILE", "0.65")
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-validate-first"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	body := bytes.NewReader([]byte(`{"cpu_cost_percentile": 5.0}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestPutThresholdSettings_ForbiddenWhenEnvLocksField(t *testing.T) {

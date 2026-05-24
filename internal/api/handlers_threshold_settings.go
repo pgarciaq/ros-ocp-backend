@@ -95,6 +95,14 @@ func PutThresholdSettings(c echo.Context) error {
 	}
 
 	if err := engine.UpdateThresholdSettings(c.Request().Context(), pool, orgID, rt, json.RawMessage(body)); err != nil {
+		var valErr *engine.ThresholdValidationError
+		if errors.As(err, &valErr) {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":            "error",
+				"message":           valErr.Error(),
+				"validation_errors": valErr.Errors,
+			})
+		}
 		if errors.Is(err, engine.ErrFieldsLocked) {
 			lockedFields := engine.LockedFieldsFromError(err)
 			return c.JSON(http.StatusForbidden, echo.Map{
@@ -117,6 +125,8 @@ func PutThresholdSettings(c echo.Context) error {
 			"message": "settings saved but unable to read back",
 		})
 	}
+
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, rt)
 
 	return c.JSON(http.StatusOK, resp)
 }

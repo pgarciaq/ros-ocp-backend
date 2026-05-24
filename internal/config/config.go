@@ -114,6 +114,10 @@ type Config struct {
 	// and dual-stream ingestion. Default true; set ROS_BUSINESS_HOURS_ENABLED=false to disable.
 	BusinessHoursEnabled bool `mapstructure:"ROS_BUSINESS_HOURS_ENABLED"`
 
+	// ThresholdRecalculationEnabled triggers async recommendation recalculation when tenant
+	// threshold settings change via the Settings API PUT. Default true.
+	ThresholdRecalculationEnabled bool `mapstructure:"ROS_THRESHOLD_RECALCULATION_ENABLED"`
+
 	// ReshipPollerIntervalSecs is the background retry interval for pending masu reshships (default 60).
 	ReshipPollerIntervalSecs int `mapstructure:"ROS_RESHIP_POLLER_INTERVAL_SECS"`
 
@@ -386,6 +390,7 @@ func initConfig() {
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
+	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
 	viper.SetDefault("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", false)
