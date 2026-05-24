@@ -18,7 +18,7 @@ JSON field names retain the `_usd` suffix for backward compatibility.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
   Rec[Recommendation] --> Delta[Current − recommended resources]
   Delta --> Rates[Koku effective_rates]
   Rates --> Calc[Monthly $ estimate]
