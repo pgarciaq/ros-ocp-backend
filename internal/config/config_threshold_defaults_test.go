@@ -34,7 +34,7 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, int64(25), cfg.NamespaceCPUFloorMC)
 	assert.Equal(t, int64(10), cfg.NamespaceIdleCPUThresholdMC)
 	assert.Equal(t, int64(10240), cfg.NamespaceIdleMemThresholdKiB)
-	assert.InDelta(t, 100.0, cfg.NamespaceMemTrendSlopeThreshold, 1e-9)
+	assert.InDelta(t, 500.0, cfg.NamespaceMemTrendSlopeThreshold, 1e-9)
 	assert.InDelta(t, float32(0.5), cfg.NamespaceLowConfidenceThreshold, 1e-9)
 
 	assert.InDelta(t, 0.80, cfg.NodeCostTargetUtilization, 1e-9)
