@@ -61,6 +61,12 @@ func RecommendAllNamespaces(
 		return nil, fmt.Errorf("load term config: %w", err)
 	}
 
+	sizingThresholds, err := ResolveNamespaceSizingThresholds(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load namespace thresholds: %w", err)
+	}
+	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
+
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date,
 			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
@@ -145,10 +151,10 @@ func RecommendAllNamespaces(
 			monStart := latest.BucketDate.AddDate(0, 0, -tc.WindowDays)
 
 			for _, profile := range []string{"cost", "performance"} {
-				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
+				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
+				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, profile)
 
-			cpuRec := RecommendCPU(windowRows, cpuCfg)
+				cpuRec := RecommendCPU(windowRows, cpuCfg)
 			memRec := RecommendMemory(windowRows, memCfg)
 
 			var recCPUReq, recCPULim, recMemReq, recMemLim int64
@@ -189,7 +195,7 @@ func RecommendAllNamespaces(
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
 				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-				rec.NotificationCodes = EvaluateNamespaceNotifications(rec)
+				rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
 
 				results = append(results, rec)
 			}
@@ -335,19 +341,22 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 // and naturally exhibits larger absolute swings.
 const namespaceMemTrendSlopeThreshold = 500.0
 
-// EvaluateNamespaceNotifications produces notification codes for a namespace
-// recommendation. Checks confidence, newness, and memory trend. OOM and idle
-// detection are not applicable at namespace granularity.
+// EvaluateNamespaceNotifications produces notification codes for a namespace recommendation.
 func EvaluateNamespaceNotifications(rec NamespaceRec) []int16 {
+	return EvaluateNamespaceNotificationsWithThresholds(rec, NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds))
+}
+
+// EvaluateNamespaceNotificationsWithThresholds produces namespace notification codes using explicit thresholds.
+func EvaluateNamespaceNotificationsWithThresholds(rec NamespaceRec, th NotificationThresholds) []int16 {
 	var codes []int16
 
 	if rec.DataDays < 1 {
 		codes = append(codes, NotifNewWorkload)
 	}
-	if rec.ConfidenceLevel < 0.5 && rec.DataDays > 0 {
+	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
 	}
-	if rec.MemTrendSlope > namespaceMemTrendSlopeThreshold {
+	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)
 	}
 

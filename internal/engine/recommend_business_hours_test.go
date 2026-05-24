@@ -465,7 +465,7 @@ func TestRecommendContainer_DecayIndependent(t *testing.T) {
 	require.NoError(t, err)
 	key := containerKey{Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload, WorkloadType: testutil.TestWorkloadType, ContainerName: testutil.TestContainer}
 	terms := DefaultTerms()
-	bhByTerm := recommendContainerStream(key, bhGrouped[key], terms, OOMConfig{})
+	bhByTerm := recommendContainerStream(key, bhGrouped[key], terms, OOMConfig{}, defaultContainerSizingThresholds)
 	bhMedium := bhByTerm["medium_term"]["cost"].CPURequestMillicores
 
 	require.NotNil(t, bhMedium)
@@ -552,7 +552,7 @@ func TestRecommendNamespace_DualStream(t *testing.T) {
 	bhGrouped, err := queryNamespaceDigestsByScheduleType(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end, digestScheduleBusinessHours)
 	require.NoError(t, err)
 	terms := DefaultTerms()
-	bhByTerm := recommendNamespaceStream(bhGrouped[namespaceKey{Namespace: testutil.TestNamespace}], terms)
+	bhByTerm := recommendNamespaceStream(bhGrouped[namespaceKey{Namespace: testutil.TestNamespace}], terms, defaultNamespaceSizingThresholds)
 	bhMedium := bhByTerm["medium_term"]["cost"].CPURequestMillicores
 	require.NotNil(t, bhMedium)
 	assert.NotEqual(t, allMediumCPU, *bhMedium)

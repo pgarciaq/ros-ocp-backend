@@ -124,8 +124,10 @@ type CPUConfig struct {
 	MinMargin          float64
 	MaxMargin          float64
 	LimitMultiplier    float64
-	FloorMC            int64
-	DecayHalfLifeHours float64
+	FloorMC             int64
+	IdleThresholdMC     int64
+	IdleThresholdMemKiB int64
+	DecayHalfLifeHours  float64
 	Now                time.Time
 }
 
@@ -145,29 +147,57 @@ type MemoryConfig struct {
 
 // DefaultCPUConfig returns the default CPU recommendation parameters.
 func DefaultCPUConfig(now time.Time, decayHalfLifeHours float64) CPUConfig {
-	return CPUConfig{
-		CostPercentile:     0.60,
-		PerfPercentile:     0.98,
-		MinMargin:          1.15,
-		MaxMargin:          1.50,
-		LimitMultiplier:    1.05,
-		FloorMC:            25,
-		DecayHalfLifeHours: decayHalfLifeHours,
-		Now:                now,
+	return CPUConfigFromSizing(defaultContainerSizingThresholds, now, decayHalfLifeHours, "")
+}
+
+// CPUConfigFromSizing builds CPUConfig from resolved sizing thresholds.
+func CPUConfigFromSizing(th SizingThresholdSettings, now time.Time, decayHalfLifeHours float64, profile string) CPUConfig {
+	cfg := CPUConfig{
+		CostPercentile:      th.CPUCostPercentile,
+		PerfPercentile:      th.CPUPerfPercentile,
+		MinMargin:           th.MinMargin,
+		MaxMargin:           th.MaxMargin,
+		LimitMultiplier:     th.LimitMultiplier,
+		FloorMC:             th.CPUFloorMC,
+		IdleThresholdMC:     th.IdleCPUThresholdMC,
+		IdleThresholdMemKiB: th.IdleMemThresholdKiB,
+		DecayHalfLifeHours:  decayHalfLifeHours,
+		Now:                 now,
 	}
+	if profile == "performance" {
+		cfg.CostPercentile = th.CPUPerfPercentile
+		cfg.PerfPercentile = th.CPUPerfPercentile
+	}
+	return cfg
 }
 
 // DefaultMemoryConfig returns the default memory recommendation parameters.
 func DefaultMemoryConfig(now time.Time, decayHalfLifeHours float64) MemoryConfig {
-	return MemoryConfig{
-		CostPercentile:     0.95,
-		PerfPercentile:     1.0,
-		MinMargin:          1.15,
-		MaxMargin:          1.50,
-		LimitMultiplier:    1.05,
+	return MemoryConfigFromSizing(defaultContainerSizingThresholds, now, decayHalfLifeHours, OOMConfig{}, "")
+}
+
+// MemoryConfigFromSizing builds MemoryConfig from resolved sizing thresholds.
+func MemoryConfigFromSizing(th SizingThresholdSettings, now time.Time, decayHalfLifeHours float64, oom OOMConfig, profile string) MemoryConfig {
+	cfg := MemoryConfig{
+		CostPercentile:     th.MemCostPercentile,
+		PerfPercentile:     th.MemPerfPercentile,
+		MinMargin:          th.MinMargin,
+		MaxMargin:          th.MaxMargin,
+		LimitMultiplier:    th.LimitMultiplier,
 		DecayHalfLifeHours: decayHalfLifeHours,
 		Now:                now,
 		OOMBaseBump:        0.15,
 		OOMMaxBump:         1.60,
 	}
+	if profile == "performance" {
+		cfg.CostPercentile = th.MemPerfPercentile
+		cfg.PerfPercentile = th.MemPerfPercentile
+	}
+	if oom.BaseBump > 0 {
+		cfg.OOMBaseBump = oom.BaseBump
+	}
+	if oom.MaxBump > 0 {
+		cfg.OOMMaxBump = oom.MaxBump
+	}
+	return cfg
 }

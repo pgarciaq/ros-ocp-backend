@@ -70,7 +70,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	var entries []model.GPUMIGRecommendationEntry
 
 	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
+		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, clusterUUID, start, now, terms, nil)
 		if err != nil {
 			hlog.Warnf("GetGPUMIGRecommendations: failed for cluster %s: %v", clusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))

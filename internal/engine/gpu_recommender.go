@@ -67,12 +67,12 @@ type GPURec struct {
 // Methods on GPUThresholds are safe to call concurrently from parallel tests without
 // global state mutation.
 type GPUThresholds struct {
-	IdleThreshold       float64
-	UnderutilizedSM     float64
-	UnderutilizedTensor float64
-	MemBoundDRAM        float64
-	MemBoundTensor      float64
-	FBHeadroomFactor    float64
+	IdleThreshold       float64 `json:"idle_threshold"`
+	UnderutilizedSM     float64 `json:"underutilized_sm_threshold"`
+	UnderutilizedTensor float64 `json:"underutilized_tensor_threshold"`
+	MemBoundDRAM        float64 `json:"membound_dram_threshold"`
+	MemBoundTensor      float64 `json:"membound_tensor_threshold"`
+	FBHeadroomFactor    float64 `json:"fb_headroom_factor"`
 }
 
 // DefaultGPUThresholds returns the built-in defaults (matching viper defaults in config).
@@ -112,7 +112,8 @@ func InitGPUEngine(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
-	defaultThresholds = GPUThresholdsFromConfig(cfg)
+	InitThresholdDefaults(cfg)
+	defaultThresholds = defaultGPUThresholdSettings.GPUThresholds
 }
 
 // Classify determines the GPU utilization classification from daily digests.
@@ -173,17 +174,69 @@ func (th *GPUThresholds) SelectMIGProfile(spec *GPUModelSpec, digests []GPUDiges
 	return "full_gpu"
 }
 
-// ClassifyGPUWorkload is a convenience function using the process-wide default thresholds.
+// ClassifyWithSettings classifies GPU workloads using extended threshold settings.
+func (s GPUThresholdSettings) ClassifyWithSettings(digests []GPUDigestRow) (GPUClassification, bool) {
+	hasProf := false
+	for _, d := range digests {
+		if d.TensorPipeActiveAvg > 0 || d.DRAMActiveAvg > 0 || d.SMActiveAvg > 0 {
+			hasProf = true
+			break
+		}
+	}
+	if !hasProf {
+		return "", false
+	}
+
+	var sumTensor, sumDRAM, sumSM float64
+	for _, d := range digests {
+		sumTensor += float64(d.TensorPipeActiveAvg)
+		sumDRAM += float64(d.DRAMActiveAvg)
+		sumSM += float64(d.SMActiveAvg)
+	}
+	n := float64(len(digests))
+	avgTensor := sumTensor / n
+	avgDRAM := sumDRAM / n
+	avgSM := sumSM / n
+	th := s.GPUThresholds
+
+	switch {
+	case avgSM < th.IdleThreshold:
+		return GPUClassIdle, true
+	case avgDRAM > th.MemBoundDRAM && avgTensor < th.MemBoundTensor:
+		return GPUClassMemoryBound, true
+	case avgTensor < th.UnderutilizedTensor && avgSM < th.UnderutilizedSM:
+		return GPUClassUnderutilized, true
+	case avgTensor < th.UnderutilizedSM && avgDRAM < s.ComputeBoundDRAMThreshold:
+		return GPUClassComputeBoundUnderutil, true
+	default:
+		return GPUClassWellUtilized, true
+	}
+}
+
+// SelectMIGProfileWithSettings recommends a MIG profile using extended settings.
+func (s GPUThresholdSettings) SelectMIGProfileWithSettings(spec *GPUModelSpec, digests []GPUDigestRow) string {
+	if spec == nil || !spec.MIGSupported || len(spec.Profiles) == 0 || len(digests) == 0 {
+		return ""
+	}
+	fbMax := percentileFB(digests, s.MIGFBPercentile)
+	requiredFB := fbMax * s.FBHeadroomFactor
+	for _, p := range spec.Profiles {
+		if float64(p.FBSizeMiB) >= requiredFB {
+			return p.Name
+		}
+	}
+	return "full_gpu"
+}
 func ClassifyGPUWorkload(digests []GPUDigestRow) (GPUClassification, bool) {
-	return defaultThresholds.Classify(digests)
+	return defaultGPUThresholdSettings.ClassifyWithSettings(digests)
 }
 
 // SelectMIGProfile is a convenience function using the process-wide default thresholds.
 func SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
-	return defaultThresholds.SelectMIGProfile(spec, digests)
+	return defaultGPUThresholdSettings.SelectMIGProfileWithSettings(spec, digests)
 }
 
-func percentile98FB(digests []GPUDigestRow) float64 {
+func percentileFB(digests []GPUDigestRow, pct float64) float64 {
 	vals := make([]float64, 0, len(digests))
 	for _, d := range digests {
 		vals = append(vals, float64(d.FBUsageMaxMiB))
@@ -192,7 +245,7 @@ func percentile98FB(digests []GPUDigestRow) float64 {
 	if len(vals) == 0 {
 		return 0
 	}
-	idx := int(math.Ceil(float64(len(vals))*0.98)) - 1
+	idx := int(math.Ceil(float64(len(vals))*pct)) - 1
 	if idx < 0 {
 		idx = 0
 	}
@@ -202,21 +255,25 @@ func percentile98FB(digests []GPUDigestRow) float64 {
 	return vals[idx]
 }
 
+func percentile98FB(digests []GPUDigestRow) float64 {
+	return percentileFB(digests, defaultGPUThresholdSettings.MIGFBPercentile)
+}
+
 // GPUConfidence computes a 0.0-1.0 confidence score for a GPU recommendation.
-// Scoring factors:
-//  1. Data volume (base score): <3 days → 0.3, <7 days → 0.6, <14 days → 0.8, ≥14 → 1.0
-//  2. Utilization stability penalty: if max SM activity exceeds 5× average SM activity
-//     (indicating extreme bursty/spiky usage), base score is reduced by 30% (×0.7)
-//     because bursty workloads are harder to classify reliably.
 func GPUConfidence(digests []GPUDigestRow) float32 {
+	return GPUConfidenceWithSettings(digests, defaultGPUThresholdSettings)
+}
+
+// GPUConfidenceWithSettings computes confidence using explicit GPU threshold settings.
+func GPUConfidenceWithSettings(digests []GPUDigestRow, settings GPUThresholdSettings) float32 {
 	days := len(digests)
 	var base float32
 	switch {
-	case days < 3:
+	case days < settings.ConfidenceDaysTier1:
 		base = 0.3
-	case days < 7:
+	case days < settings.ConfidenceDaysTier2:
 		base = 0.6
-	case days < 14:
+	case days < settings.ConfidenceDaysTier3:
 		base = 0.8
 	default:
 		base = 1.0
@@ -230,8 +287,8 @@ func GPUConfidence(digests []GPUDigestRow) float32 {
 		sumSMAvg += float64(d.SMActiveAvg)
 	}
 	avgSM := sumSMAvg / float64(days)
-	if days > 0 && avgSM > 0 && maxSM/avgSM > 5.0 {
-		base *= 0.7
+	if days > 0 && avgSM > 0 && maxSM/avgSM > settings.SpikeRatioThreshold {
+		base *= float32(settings.SpikeConfidencePenalty)
 	}
 
 	return base
@@ -240,6 +297,11 @@ func GPUConfidence(digests []GPUDigestRow) float32 {
 // RecommendGPU produces a GPU recommendation for a container given its daily GPU digests.
 // Returns nil if no GPU data is present.
 func RecommendGPU(digests []GPUDigestRow) *GPURec {
+	return RecommendGPUWithSettings(digests, defaultGPUThresholdSettings)
+}
+
+// RecommendGPUWithSettings produces a GPU recommendation using explicit threshold settings.
+func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSettings) *GPURec {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -249,7 +311,7 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 
 	spec := MatchGPUModel(modelName)
 
-	classification, hasProf := ClassifyGPUWorkload(digests)
+	classification, hasProf := settings.ClassifyWithSettings(digests)
 
 	rec := &GPURec{
 		GPUModelName:      modelName,
@@ -276,14 +338,14 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 		rec.Classification = GPUClassNoProfiling
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUNoProfilingData)
 		if spec != nil && spec.MIGSupported {
-			rec.RecommendedGPUProfile = SelectMIGProfile(spec, digests)
+			rec.RecommendedGPUProfile = settings.SelectMIGProfileWithSettings(spec, digests)
 		}
-		rec.Confidence = GPUConfidence(digests) * 0.5
+		rec.Confidence = GPUConfidenceWithSettings(digests, settings) * float32(settings.NoProfilingConfidenceFactor)
 		return rec
 	}
 
 	rec.Classification = classification
-	rec.Confidence = GPUConfidence(digests)
+	rec.Confidence = GPUConfidenceWithSettings(digests, settings)
 
 	switch classification {
 	case GPUClassIdle:
@@ -298,7 +360,7 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 	if spec != nil && spec.MIGSupported {
 		switch classification {
 		case GPUClassIdle, GPUClassUnderutilized, GPUClassComputeBoundUnderutil, GPUClassMemoryBound:
-			rec.RecommendedGPUProfile = SelectMIGProfile(spec, digests)
+			rec.RecommendedGPUProfile = settings.SelectMIGProfileWithSettings(spec, digests)
 		}
 	}
 

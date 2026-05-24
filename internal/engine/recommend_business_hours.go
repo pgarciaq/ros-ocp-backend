@@ -104,6 +104,7 @@ func recommendContainerStream(
 	digests []DigestRow,
 	terms []TermConfig,
 	oomCfg OOMConfig,
+	sizingThresholds SizingThresholdSettings,
 ) map[string]map[string]BusinessHoursEngineResult {
 	if len(digests) == 0 {
 		return nil
@@ -132,15 +133,9 @@ func recommendContainerStream(
 			}
 
 			oomTotal := sumOOMCounts(windowRows)
-			cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-			memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
+			cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds)
+			memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds, oomCfg)
 			memCfg.OOMCountSum = oomTotal
-			if oomCfg.BaseBump > 0 {
-				memCfg.OOMBaseBump = oomCfg.BaseBump
-			}
-			if oomCfg.MaxBump > 0 {
-				memCfg.OOMMaxBump = oomCfg.MaxBump
-			}
 			if memCfg.OOMMaxBump < 1.0 {
 				memCfg.OOMMaxBump = 1.0
 			}
@@ -204,6 +199,11 @@ func EnrichNativeContainerResultsWithBusinessHours(
 		return fmt.Errorf("load term config for business hours: %w", err)
 	}
 
+	sizingThresholds, err := ResolveContainerSizingThresholds(ctx, pool, orgID)
+	if err != nil {
+		return fmt.Errorf("load container thresholds for business hours: %w", err)
+	}
+
 	oomCfg := OOMConfig{}
 
 	for clusterUUID, indices := range byCluster {
@@ -240,7 +240,7 @@ func EnrichNativeContainerResultsWithBusinessHours(
 			if len(digests) == 0 {
 				continue
 			}
-			bhByTerm := recommendContainerStream(key, digests, terms, oomCfg)
+			bhByTerm := recommendContainerStream(key, digests, terms, oomCfg, sizingThresholds)
 			attachBusinessHoursToContainerTerms(r, bhByTerm)
 		}
 	}
@@ -377,7 +377,7 @@ func queryNamespaceDigestsByScheduleType(
 	return grouped, nil
 }
 
-func recommendNamespaceStream(digests []DigestRow, terms []TermConfig) map[string]map[string]BusinessHoursEngineResult {
+func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThresholds SizingThresholdSettings) map[string]map[string]BusinessHoursEngineResult {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -403,8 +403,8 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig) map[strin
 				continue
 			}
 
-			cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-			memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
+			cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds)
+			memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds, OOMConfig{})
 			cpuRec := RecommendCPU(windowRows, cpuCfg)
 			memRec := RecommendMemory(windowRows, memCfg)
 
@@ -456,6 +456,11 @@ func EnrichNativeNamespaceResultsWithBusinessHours(
 		return fmt.Errorf("load namespace term config for business hours: %w", err)
 	}
 
+	sizingThresholds, err := ResolveNamespaceSizingThresholds(ctx, pool, orgID)
+	if err != nil {
+		return fmt.Errorf("load namespace thresholds for business hours: %w", err)
+	}
+
 	for clusterUUID, indices := range byCluster {
 		start, end, err := digestWindowForCluster(ctx, pool, orgID, clusterUUID, "daily_namespace_digests", maxTermWindowDays(terms))
 		if err != nil {
@@ -485,7 +490,7 @@ func EnrichNativeNamespaceResultsWithBusinessHours(
 			if len(digests) == 0 {
 				continue
 			}
-			bhByTerm := recommendNamespaceStream(digests, terms)
+			bhByTerm := recommendNamespaceStream(digests, terms, sizingThresholds)
 			attachBusinessHoursToNamespaceTerms(r, bhByTerm)
 		}
 	}

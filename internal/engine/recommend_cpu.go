@@ -34,7 +34,7 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 	perfLimit := int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
 
 	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.CPUUsageP98MC })
-	isIdle := DetectIdle(rows, DefaultIdleThresholdMC, DefaultIdleThresholdMemKiB)
+	isIdle := DetectIdle(rows, cfg.IdleThresholdMC, cfg.IdleThresholdMemKiB)
 
 	return CPURec{
 		CostRequestMC: costRequest,

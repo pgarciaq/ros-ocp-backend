@@ -40,18 +40,24 @@ const (
 )
 
 const (
-	memTrendSlopeThreshold = 100.0
+	defaultMemTrendSlopeThreshold     = 100.0
+	defaultLowConfidenceThreshold     float32 = 0.5
 )
 
 // EvaluateNotifications produces notification codes for a recommendation.
 // minDataDays is the minimum data days for the term to be considered reliable.
 func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
+	return EvaluateNotificationsWithThresholds(rec, minDataDays, NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
+}
+
+// EvaluateNotificationsWithThresholds produces notification codes using explicit thresholds.
+func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th NotificationThresholds) []int16 {
 	var codes []int16
 
 	if rec.DataDays < 1 {
 		codes = append(codes, NotifNewWorkload)
 	}
-	if rec.ConfidenceLevel < 0.5 && rec.DataDays > 0 {
+	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
 	}
 	if rec.OOMCountSum > 0 {
@@ -65,7 +71,7 @@ func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
 	if rec.Stale {
 		codes = append(codes, NotifStaleData)
 	}
-	if rec.MemTrendSlope > memTrendSlopeThreshold {
+	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)
 	}
 

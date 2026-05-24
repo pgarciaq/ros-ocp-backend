@@ -129,7 +129,7 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 	}
 
 	recs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(
-		ctx, pool, testutil.TestClusterUUID, start, now, terms, nil)
+		ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, now, terms, nil)
 	require.NoError(t, err)
 	require.NotNil(t, recs)
 

@@ -23,11 +23,6 @@ type NodeEngineConfig struct {
 	TargetUtilization float64
 }
 
-var nodeEngines = []NodeEngineConfig{
-	{Name: "cost", TargetUtilization: 0.80},
-	{Name: "performance", TargetUtilization: 0.55},
-}
-
 // NodeDigestRow represents a single daily digest for a node, loaded from the database.
 type NodeDigestRow struct {
 	BucketDate        time.Time
@@ -103,7 +98,8 @@ type nodeClassification struct {
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
 // It produces one NodeRec per node per term per engine. Shared classification is
 // computed once per (node, term); engine-specific sizing and consolidation differ.
-func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConfig) []NodeRec {
+func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings NodeThresholdSettings, terms []TermConfig) []NodeRec {
+	nodeEngines := NodeEnginesFromThresholds(nodeSettings)
 	grouped := map[string][]NodeDigestRow{}
 	for _, d := range digests {
 		grouped[d.Node] = append(grouped[d.Node], d)
@@ -118,13 +114,13 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, terms []TermConf
 			if len(windowDays) < tc.MinDataDays {
 				continue
 			}
-			class := classifyNode(node, windowDays, cfg)
+			class := classifyNode(node, windowDays, cfg, nodeSettings.TrendMinDays)
 			for _, eng := range nodeEngines {
 				rec := nodeRecFromClassification(class)
 				rec.Term = tc.Name
 				rec.Engine = eng.Name
 				rec.RecommendedCPUCores, rec.RecommendedMemoryGiB, rec.NodeCountReduction =
-					sizeNodeForEngine(class, eng)
+					sizeNodeForEngine(class, eng, nodeSettings)
 				results = append(results, rec)
 			}
 		}
@@ -195,7 +191,7 @@ func latestNodeDigest(rows []NodeDigestRow) NodeDigestRow {
 }
 
 // classifyNode computes shared utilization classification for a node over a term window.
-func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig) nodeClassification {
+func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, trendMinDays int) nodeClassification {
 	class := nodeClassification{Node: node}
 
 	var (
@@ -331,7 +327,7 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig) nodeClas
 		}
 	}
 
-	if len(cpuMeans) >= 3 {
+	if len(cpuMeans) >= trendMinDays {
 		alpha := cfg.EMAAlpha
 		if alpha == 0 {
 			alpha = 0.3
@@ -344,7 +340,7 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig) nodeClas
 }
 
 // sizeNodeForEngine derives engine-specific recommended capacity and consolidation flag.
-func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig) (cpuCores, memGiB float64, nodeCountReduction int) {
+func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig, nodeSettings NodeThresholdSettings) (cpuCores, memGiB float64, nodeCountReduction int) {
 	cpuCores, memGiB = recommendedNodeCapacity(
 		class.maxCPUUsageP95MC, class.maxMemUsageP95KiB,
 		class.maxCPURequestsMC, class.maxMemRequestsKiB,
@@ -360,9 +356,9 @@ func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig) (cpuCores
 		// Cost engine: recommend consolidation when underutilized workloads fit at 80% target.
 		nodeCountReduction = 1
 	case "performance":
-		// Performance engine: only consolidate with extreme waste — workloads fit at 55%
+		// Performance engine: only consolidate with extreme waste — workloads fit at target
 		// and current capacity has a full spare node worth of headroom.
-		if hasFullSpareNodeHeadroom(class.CurrentCPUCores, class.CurrentMemoryGiB, cpuCores, memGiB) {
+		if hasFullSpareNodeHeadroom(class.CurrentCPUCores, class.CurrentMemoryGiB, cpuCores, memGiB, nodeSettings.PerfConsolidationHeadroomMultiplier) {
 			nodeCountReduction = 1
 		}
 	}
@@ -370,11 +366,11 @@ func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig) (cpuCores
 }
 
 // hasFullSpareNodeHeadroom reports whether freed capacity could fit another copy of the workload.
-func hasFullSpareNodeHeadroom(currentCPU, currentMem, recCPU, recMem float64) bool {
-	if recCPU <= 0 || recMem <= 0 || currentCPU <= 0 || currentMem <= 0 {
+func hasFullSpareNodeHeadroom(currentCPU, currentMem, recCPU, recMem, multiplier float64) bool {
+	if recCPU <= 0 || recMem <= 0 || currentCPU <= 0 || currentMem <= 0 || multiplier <= 0 {
 		return false
 	}
-	return currentCPU >= 2*recCPU && currentMem >= 2*recMem
+	return currentCPU >= multiplier*recCPU && currentMem >= multiplier*recMem
 }
 
 // recommendedNodeCapacity derives right-sized CPU cores and memory GiB from peak

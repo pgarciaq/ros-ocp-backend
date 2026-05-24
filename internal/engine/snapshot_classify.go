@@ -10,10 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// snapshotInventoryFreshHours is the recent-ingest window used when reading
-// snapshot_inventory for classification and for reconcile NOT EXISTS checks.
-const snapshotInventoryFreshHours = 6
-
 // SnapshotSettings holds resolved snapshot classification thresholds.
 type SnapshotSettings struct {
 	OrphanAgeDays      int
@@ -83,7 +79,7 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		WHERE org_id = $1 AND cluster_uuid = $2
 			AND ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
 		ORDER BY namespace, snapshot_name, ingested_at DESC`,
-		orgID, clusterUUID, snapshotInventoryFreshHours,
+		orgID, clusterUUID, SnapshotInventoryFreshHours(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying snapshot inventory: %w", err)
@@ -317,7 +313,7 @@ func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, o
 			(SELECT COUNT(*) FROM snapshot_inventory
 			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
 			   AND ingested_at >= NOW() - ($4 * INTERVAL '1 hour'))`,
-		orgID, clusterUUID, snapshotInventoryFreshHours, staleGraceHours,
+		orgID, clusterUUID, SnapshotInventoryFreshHours(), staleGraceHours,
 	).Scan(&cntFresh, &cntGrace)
 	if err != nil {
 		return 0, fmt.Errorf("count snapshot inventory: %w", err)
@@ -336,7 +332,7 @@ func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, o
 			  AND si.namespace = srs.namespace
 			  AND si.snapshot_name = srs.snapshot_name
 			  AND si.ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
-		)`, orgID, clusterUUID, snapshotInventoryFreshHours)
+		)`, orgID, clusterUUID, SnapshotInventoryFreshHours())
 	if err != nil {
 		return 0, fmt.Errorf("reconciling snapshot recommendations: %w", err)
 	}

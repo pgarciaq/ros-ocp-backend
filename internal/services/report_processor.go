@@ -660,14 +660,14 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		terms = engine.DefaultTermsForPlugin("node")
 	}
 
-	cfg := engine.NodeRecConfig{
-		UnderutilThreshold:         appCfg.NodeUnderutilThreshold,
-		OvercommitThreshold:        appCfg.NodeOvercommitThreshold,
-		AllocatableFactor:          appCfg.NodeAllocatableFactor,
-		StrandedImbalanceThreshold: appCfg.NodeStrandedImbalanceThreshold,
-		EMAAlpha:                   appCfg.NodeEMAAlpha,
+	nodeSettings, err := engine.ResolveNodeThresholdSettings(ctx, pool, orgID)
+	if err != nil {
+		log.Warnf("node recs: load threshold settings failed, using defaults: %v", err)
+		nodeSettings = engine.DefaultNodeThresholdSettings()
 	}
-	recs := engine.RecommendNodes(digests, cfg, terms)
+
+	cfg := engine.NodeRecConfigFromThresholds(nodeSettings)
+	recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
 	if len(recs) == 0 {
 		log.Info("node recs: no recommendations produced")
 		return nil

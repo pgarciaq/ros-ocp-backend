@@ -73,7 +73,7 @@ func GetGPUSummary(c echo.Context) error {
 		})
 	}
 
-	migCount := countMIGRecommendationsForSummary(ctx, pool, clusterUUIDs, userPerms, terms, start, now)
+	migCount := countMIGRecommendationsForSummary(ctx, pool, orgIDStr, clusterUUIDs, userPerms, terms, start, now)
 
 	resp := model.GPUSummaryResponse{
 		MIG: model.GPUStrategySummary{
@@ -94,6 +94,7 @@ func GetGPUSummary(c echo.Context) error {
 func countMIGRecommendationsForSummary(
 	ctx context.Context,
 	pool *pgxpool.Pool,
+	orgID string,
 	clusterUUIDs []string,
 	userPerms map[string][]string,
 	terms []engine.TermConfig,
@@ -101,7 +102,7 @@ func countMIGRecommendationsForSummary(
 ) int {
 	n := 0
 	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
+		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, terms, nil)
 		if err != nil || gpuRecs == nil {
 			continue
 		}

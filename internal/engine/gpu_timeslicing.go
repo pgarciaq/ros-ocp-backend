@@ -9,13 +9,8 @@ const (
 	// GPU time-slicing is recommended. Code 36 (code 29 is NotifPVCOversized).
 	NotifGPUTimeSharingCandidate int16 = 36
 
-	// NodeGPUFreshnessDays is the maximum age of the latest node telemetry (from gpu_container_digests)
-	// for node-level time-slicing recommendations. Matches ComputeNodeTimeslicingRec stale-node exclusion.
-	NodeGPUFreshnessDays int = 7
-	timeslicingBasePenalty        = float32(0.7)
-	impactedContainerPenaltyWt   = float32(0.3)
-	minReplicas                  = 2
-	maxReplicas                  = 8
+	// NodeGPUFreshnessDays is the compiled default node telemetry freshness window.
+	NodeGPUFreshnessDays = 7
 )
 
 // TimeslicingRec holds the time-slicing recommendation for a single node × GPU model × term.
@@ -61,8 +56,12 @@ type NodeGPUContainer struct {
 	Rec       *GPURec
 }
 
+func timeslicingSettings() GPUThresholdSettings {
+	return defaultGPUThresholdSettings
+}
+
 // computeReplicas determines the recommended nvidia.com/gpu.replicas value.
-func computeReplicas(avgSM, avgDRAM, avgFBFrac float32) (int, bool) {
+func computeReplicas(avgSM, avgDRAM, avgFBFrac float32, settings GPUThresholdSettings) (int, bool) {
 	peak := avgSM
 	if avgDRAM > peak {
 		peak = avgDRAM
@@ -71,25 +70,27 @@ func computeReplicas(avgSM, avgDRAM, avgFBFrac float32) (int, bool) {
 		peak = avgFBFrac
 	}
 	if peak <= 0 {
-		return maxReplicas, true
+		return settings.TimeslicingMaxReplicas, true
 	}
 	r := int(1.0 / peak)
-	if r < minReplicas {
+	if r < settings.TimeslicingMinReplicas {
 		return 0, false
 	}
-	if r > maxReplicas {
-		r = maxReplicas
+	if r > settings.TimeslicingMaxReplicas {
+		r = settings.TimeslicingMaxReplicas
 	}
 	return r, true
 }
 
 // computeTimeslicingConfidence computes confidence for a time-slicing recommendation.
-func computeTimeslicingConfidence(avgCandidateConf float32, nImpacted, nTotal int) float32 {
+func computeTimeslicingConfidence(avgCandidateConf float32, nImpacted, nTotal int, settings GPUThresholdSettings) float32 {
 	if nTotal == 0 {
 		return 0
 	}
 	impactedRatio := float32(nImpacted) / float32(nTotal)
-	return avgCandidateConf * timeslicingBasePenalty * (1.0 - impactedContainerPenaltyWt*impactedRatio)
+	basePenalty := float32(settings.TimeslicingBasePenalty)
+	impactedWeight := float32(settings.TimeslicingImpactedWeight)
+	return avgCandidateConf * basePenalty * (1.0 - impactedWeight*impactedRatio)
 }
 
 // computeTimeslicingSavings calculates per-GPU and total-node savings.
@@ -152,18 +153,23 @@ func avgCandidateUtilization(candidates []NodeGPUContainer, totalFBMiB float32) 
 }
 
 // isNodeFresh returns true if the node was seen within the freshness window.
-func isNodeFresh(lastSeen, now time.Time) bool {
-	return now.Sub(lastSeen) <= time.Duration(NodeGPUFreshnessDays)*24*time.Hour
+func isNodeFresh(lastSeen, now time.Time, freshnessDays int) bool {
+	return now.Sub(lastSeen) <= time.Duration(freshnessDays)*24*time.Hour
 }
 
 // ComputeNodeTimeslicingRec produces a time-slicing recommendation for a single
 // node × GPU model group. Returns nil if the node is not a good candidate.
 func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Time) *TimeslicingRec {
+	return ComputeNodeTimeslicingRecWithSettings(group, gpuRate, now, timeslicingSettings())
+}
+
+// ComputeNodeTimeslicingRecWithSettings produces a time-slicing recommendation using explicit settings.
+func ComputeNodeTimeslicingRecWithSettings(group NodeGPUGroup, gpuRate *float32, now time.Time, settings GPUThresholdSettings) *TimeslicingRec {
 	if len(group.Containers) == 0 {
 		return nil
 	}
 
-	if !group.LastSeen.IsZero() && !isNodeFresh(group.LastSeen, now) {
+	if !group.LastSeen.IsZero() && !isNodeFresh(group.LastSeen, now, settings.NodeFreshnessDays) {
 		return nil
 	}
 
@@ -172,13 +178,11 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Ti
 		return nil
 	}
 
-	// Majority threshold: candidates must be >= 50% of eligible (candidates + impacted).
 	eligible := len(candidates) + len(impacted)
-	if eligible > 0 && float32(len(candidates))/float32(eligible) < 0.5 {
+	if eligible > 0 && float32(len(candidates))/float32(eligible) < float32(settings.TimeslicingMajorityThreshold) {
 		return nil
 	}
 
-	// Get GPU model spec for FB capacity
 	spec := MatchGPUModel(group.GPUModel)
 	var totalFBMiB float32
 	if spec != nil {
@@ -187,12 +191,11 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Ti
 
 	avgSM, avgDRAM, avgFBFrac := avgCandidateUtilization(candidates, totalFBMiB)
 
-	replicas, ok := computeReplicas(avgSM, avgDRAM, avgFBFrac)
+	replicas, ok := computeReplicas(avgSM, avgDRAM, avgFBFrac, settings)
 	if !ok {
 		return nil
 	}
 
-	// Average confidence of candidate containers
 	var sumConf float32
 	for _, c := range candidates {
 		sumConf += c.Rec.Confidence
@@ -200,7 +203,7 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Ti
 	avgCandConf := sumConf / float32(len(candidates))
 
 	perGPU, totalSavings := computeTimeslicingSavings(replicas, len(candidates), gpuRate)
-	confidence := computeTimeslicingConfidence(avgCandConf, len(impacted), eligible)
+	confidence := computeTimeslicingConfidence(avgCandConf, len(impacted), eligible, settings)
 
 	rec := &TimeslicingRec{
 		NodeName:            group.NodeName,
@@ -222,12 +225,12 @@ func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Ti
 			SMActiveAvg:    c.Rec.SMActiveAvg,
 			Classification: c.Rec.Classification,
 		})
-		c.Rec.NotificationCodes = append(c.Rec.NotificationCodes, NotifGPUTimeSharingCandidate)
 		c.Rec.TimeSlicingNode = group.NodeName
 		c.Rec.TimeSlicingReplicas = replicas
+		c.Rec.NotificationCodes = append(c.Rec.NotificationCodes, NotifGPUTimeSharingCandidate)
 		if perGPU != nil {
-			v := *perGPU
-			c.Rec.EstimatedTimeslicingSavingsUSD = &v
+			savings := *perGPU
+			c.Rec.EstimatedTimeslicingSavingsUSD = &savings
 		}
 	}
 	for _, c := range impacted {

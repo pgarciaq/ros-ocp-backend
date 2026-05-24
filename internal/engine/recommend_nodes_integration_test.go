@@ -70,7 +70,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		terms := []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
 		}
-		recs := engine.RecommendNodes(digests, cfg, terms)
+		nodeSettings := engine.DefaultNodeThresholdSettings()
+		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
 		require.NotEmpty(t, recs)
 
 		recByNode := map[string]engine.NodeRec{}
@@ -116,7 +117,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		terms := []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
 		}
-		recs := engine.RecommendNodes(digests, cfg, terms)
+		nodeSettings := engine.DefaultNodeThresholdSettings()
+		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
 		require.NotEmpty(t, recs)
 
 		validTerms := []string{"medium"}

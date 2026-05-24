@@ -1,0 +1,75 @@
+package config
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// Verifies viper defaults for the 49 new threshold environment variables from configurability.md.
+func TestThresholdEnvDefaults(t *testing.T) {
+	ResetForTest()
+	cfg := GetConfig()
+
+	assert.InDelta(t, 0.60, cfg.ContainerCPUCostPercentile, 1e-9)
+	assert.InDelta(t, 0.98, cfg.ContainerCPUPerfPercentile, 1e-9)
+	assert.InDelta(t, 0.95, cfg.ContainerMemCostPercentile, 1e-9)
+	assert.InDelta(t, 1.0, cfg.ContainerMemPerfPercentile, 1e-9)
+	assert.InDelta(t, 1.15, cfg.ContainerMinMargin, 1e-9)
+	assert.InDelta(t, 1.50, cfg.ContainerMaxMargin, 1e-9)
+	assert.InDelta(t, 1.05, cfg.ContainerLimitMultiplier, 1e-9)
+	assert.Equal(t, int64(25), cfg.ContainerCPUFloorMC)
+	assert.Equal(t, int64(10), cfg.ContainerIdleCPUThresholdMC)
+	assert.Equal(t, int64(10240), cfg.ContainerIdleMemThresholdKiB)
+	assert.InDelta(t, 100.0, cfg.ContainerMemTrendSlopeThreshold, 1e-9)
+	assert.InDelta(t, float32(0.5), cfg.ContainerLowConfidenceThreshold, 1e-9)
+
+	assert.InDelta(t, 0.60, cfg.NamespaceCPUCostPercentile, 1e-9)
+	assert.InDelta(t, 0.98, cfg.NamespaceCPUPerfPercentile, 1e-9)
+	assert.InDelta(t, 0.95, cfg.NamespaceMemCostPercentile, 1e-9)
+	assert.InDelta(t, 1.0, cfg.NamespaceMemPerfPercentile, 1e-9)
+	assert.InDelta(t, 1.15, cfg.NamespaceMinMargin, 1e-9)
+	assert.InDelta(t, 1.50, cfg.NamespaceMaxMargin, 1e-9)
+	assert.InDelta(t, 1.05, cfg.NamespaceLimitMultiplier, 1e-9)
+	assert.Equal(t, int64(25), cfg.NamespaceCPUFloorMC)
+	assert.Equal(t, int64(10), cfg.NamespaceIdleCPUThresholdMC)
+	assert.Equal(t, int64(10240), cfg.NamespaceIdleMemThresholdKiB)
+	assert.InDelta(t, 100.0, cfg.NamespaceMemTrendSlopeThreshold, 1e-9)
+	assert.InDelta(t, float32(0.5), cfg.NamespaceLowConfidenceThreshold, 1e-9)
+
+	assert.InDelta(t, 0.80, cfg.NodeCostTargetUtilization, 1e-9)
+	assert.InDelta(t, 0.55, cfg.NodePerfTargetUtilization, 1e-9)
+	assert.InDelta(t, 2.0, cfg.NodePerfConsolidationHeadroomMultiplier, 1e-9)
+	assert.Equal(t, 3, cfg.NodeTrendMinDays)
+
+	assert.InDelta(t, 0.30, cfg.GPUComputeBoundDRAMThreshold, 1e-9)
+	assert.InDelta(t, 0.98, cfg.GPUMIGFBPercentile, 1e-9)
+	assert.Equal(t, 3, cfg.GPUConfidenceDaysTier1)
+	assert.Equal(t, 7, cfg.GPUConfidenceDaysTier2)
+	assert.Equal(t, 14, cfg.GPUConfidenceDaysTier3)
+	assert.InDelta(t, 5.0, cfg.GPUSpikeRatioThreshold, 1e-9)
+	assert.InDelta(t, 0.70, cfg.GPUSpikeConfidencePenalty, 1e-9)
+	assert.InDelta(t, 0.50, cfg.GPUNoProfilingConfidenceFactor, 1e-9)
+	assert.InDelta(t, 0.50, cfg.GPUTimeslicingMajorityThreshold, 1e-9)
+	assert.Equal(t, 2, cfg.GPUTimeslicingMinReplicas)
+	assert.Equal(t, 8, cfg.GPUTimeslicingMaxReplicas)
+	assert.InDelta(t, 0.70, cfg.GPUTimeslicingBasePenalty, 1e-9)
+	assert.InDelta(t, 0.30, cfg.GPUTimeslicingImpactedWeight, 1e-9)
+	assert.Equal(t, 7, cfg.GPUNodeFreshnessDays)
+
+	assert.InDelta(t, 0.20, cfg.PVCOversizedThreshold, 1e-9)
+	assert.InDelta(t, 0.85, cfg.PVCNearFullThreshold, 1e-9)
+	assert.Equal(t, 7, cfg.PVCMinTrendDays)
+	assert.Equal(t, 2, cfg.PVCRecommendedSizeMultiplier)
+	assert.Equal(t, 1, cfg.PVCMinRecommendedGiB)
+	assert.Equal(t, 30, cfg.PVCDaysToFullAlert)
+
+	assert.Equal(t, 6, cfg.SnapshotInventoryFreshHours)
+}
+
+func TestThresholdEnvOverride(t *testing.T) {
+	t.Setenv("ROS_CONTAINER_CPU_COST_PERCENTILE", "0.72")
+	ResetForTest()
+	cfg := GetConfig()
+	assert.InDelta(t, 0.72, cfg.ContainerCPUCostPercentile, 1e-9)
+}

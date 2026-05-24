@@ -29,7 +29,11 @@ type containerID struct {
 //   - recs: map keyed by "namespace/workload/container" → []*GPURec (one per term)
 //   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
 //   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
-func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+	gpuSettings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("load gpu thresholds: %w", err)
+	}
 	query := `
 		SELECT interval_start, namespace, workload, container_name,
 			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
@@ -106,7 +110,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, clusterUUI
 			if len(windowDigests) < tc.MinDataDays {
 				continue
 			}
-			rec := RecommendGPU(windowDigests)
+			rec := RecommendGPUWithSettings(windowDigests, gpuSettings)
 			if rec != nil {
 				rec.Term = tc.Name
 				result[key] = append(result[key], rec)
@@ -224,7 +228,7 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -MaxWindowDays(terms, 30))
 
-	gpuRecs, _, _, err := QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
+	gpuRecs, _, _, err := QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, terms, nil)
 	if err != nil {
 		return fmt.Errorf("query GPU recommendations for classification: %w", err)
 	}

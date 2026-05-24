@@ -91,7 +91,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	var allRecs []model.NodeGPURecommendation
 	var gpuClusterErrors []error
 	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, clusterUUID, start, now, terms, nil)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, clusterUUID, start, now, terms, nil)
 		if err != nil {
 			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
@@ -236,7 +236,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	var gpuClusterErrors []error
 	for _, tr := range triples {
 		f := &engine.GPUQueryFilters{NodeNameExact: tr.NodeName, GPUModelExact: tr.GPUModel}
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, tr.ClusterUUID, start, now, terms, f)
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, tr.ClusterUUID, start, now, terms, f)
 		if err != nil {
 			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", tr.ClusterUUID, err)
 			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", tr.ClusterUUID, err))

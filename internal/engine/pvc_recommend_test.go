@@ -26,7 +26,7 @@ func TestComputePVCRecommendation_Orphaned(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.Equal(t, PVCRecTypeOrphaned, rec.RecommendationType)
 	assert.Contains(t, rec.NotificationCodes, NotifPVCOrphaned)
@@ -53,7 +53,7 @@ func TestComputePVCRecommendation_Oversized(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.Equal(t, PVCRecTypeOversized, rec.RecommendationType)
 	assert.Contains(t, rec.NotificationCodes, NotifPVCOversized)
@@ -80,7 +80,7 @@ func TestComputePVCRecommendation_NearFull(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.Equal(t, PVCRecTypeNearFull, rec.RecommendationType)
 	assert.Contains(t, rec.NotificationCodes, NotifPVCNearFull)
@@ -106,7 +106,7 @@ func TestComputePVCRecommendation_Healthy(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
 	assert.Empty(t, rec.NotificationCodes)
@@ -132,7 +132,7 @@ func TestComputePVCRecommendation_GrowthTrend(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.InDelta(t, float64(1<<30), float64(rec.GrowthBytesPerDay), float64(1<<28))
 	assert.NotNil(t, rec.DaysToFull)
@@ -159,7 +159,7 @@ func TestComputePVCRecommendation_InsufficientData(t *testing.T) {
 		},
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 
 	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
 }
@@ -193,14 +193,14 @@ func TestComputePVCRecommendation_ShortTermSeesBurst(t *testing.T) {
 	// Short term (window=1): sees day 14 + 15 (cutoff = latest - 1 day).
 	// Max usage is 90 GiB → near_full
 	shortWindow := windowDigests(digests, shortTerm.WindowDays)
-	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm)
+	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultPVCThresholdSettings())
 	assert.Equal(t, PVCRecTypeNearFull, recShort.RecommendationType)
 	assert.Equal(t, "short", recShort.Term)
 
 	// Long term: sees all 15 days — max is still 90 GiB (near_full),
 	// but has growth trend data over the full window
 	longWindow := windowDigests(digests, longTerm.WindowDays)
-	recLong := computePVCRecommendation(longWindow, "org123", "cluster-uuid", longTerm)
+	recLong := computePVCRecommendation(longWindow, "org123", "cluster-uuid", longTerm, DefaultPVCThresholdSettings())
 	assert.Equal(t, PVCRecTypeNearFull, recLong.RecommendationType)
 	assert.Equal(t, "long", recLong.Term)
 	assert.True(t, recLong.DataDays >= 15)
@@ -232,11 +232,11 @@ func TestComputePVCRecommendation_ShortTermInsufficientButLongTermClassifies(t *
 
 	// Short term sees 2 days, min_data=1 → classifies as orphaned
 	shortWindow := windowDigests(digests, shortTerm.WindowDays)
-	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm)
+	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultPVCThresholdSettings())
 	assert.Equal(t, PVCRecTypeOrphaned, recShort.RecommendationType)
 
 	// Medium term with min_data=3 → insufficient data → healthy
-	recMedium := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm)
+	recMedium := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
 	assert.Equal(t, PVCRecTypeHealthy, recMedium.RecommendationType)
 }
 

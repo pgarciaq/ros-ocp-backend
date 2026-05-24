@@ -40,9 +40,9 @@ func benchMediumTerms() []TermConfig {
 
 func benchmarkAllHoursRec(rows []DigestRow) {
 	now := time.Now().UTC()
-	cfg := cpuConfigForProfile("cost", now, 168)
+	cfg := cpuConfigForProfile("cost", now, 168, defaultContainerSizingThresholds)
 	_ = RecommendCPU(rows, cfg)
-	memCfg := memConfigForProfile("cost", now, 168)
+	memCfg := memConfigForProfile("cost", now, 168, defaultContainerSizingThresholds, OOMConfig{})
 	_ = RecommendMemory(rows, memCfg)
 }
 
@@ -68,7 +68,7 @@ func BenchmarkDualRecommendation_Overhead(b *testing.B) {
 	b.Run("all_hours_plus_business_hours", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			benchmarkAllHoursRec(allHours)
-			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{})
+			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{}, defaultContainerSizingThresholds)
 		}
 	})
 
@@ -78,7 +78,7 @@ func BenchmarkDualRecommendation_Overhead(b *testing.B) {
 		start := time.Now()
 		for i := 0; i < b.N; i++ {
 			benchmarkAllHoursRec(allHours)
-			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{})
+			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{}, defaultContainerSizingThresholds)
 		}
 		ms := float64(time.Since(start).Nanoseconds()) / float64(b.N) / 1e6
 		b.ReportMetric(ms, "ms/op")

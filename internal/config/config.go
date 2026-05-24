@@ -123,12 +123,44 @@ type Config struct {
 	// ReshipForwardOnlyFallback enables forward-only BH recommendations after max reship retries (default false).
 	ReshipForwardOnlyFallback bool `mapstructure:"ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK"`
 
+	// Container sizing and classification thresholds (tenant-configurable via Settings API).
+	ContainerCPUCostPercentile        float64 `mapstructure:"ROS_CONTAINER_CPU_COST_PERCENTILE"`
+	ContainerCPUPerfPercentile        float64 `mapstructure:"ROS_CONTAINER_CPU_PERF_PERCENTILE"`
+	ContainerMemCostPercentile        float64 `mapstructure:"ROS_CONTAINER_MEM_COST_PERCENTILE"`
+	ContainerMemPerfPercentile        float64 `mapstructure:"ROS_CONTAINER_MEM_PERF_PERCENTILE"`
+	ContainerMinMargin                float64 `mapstructure:"ROS_CONTAINER_MIN_MARGIN"`
+	ContainerMaxMargin                float64 `mapstructure:"ROS_CONTAINER_MAX_MARGIN"`
+	ContainerLimitMultiplier          float64 `mapstructure:"ROS_CONTAINER_LIMIT_MULTIPLIER"`
+	ContainerCPUFloorMC               int64   `mapstructure:"ROS_CONTAINER_CPU_FLOOR_MC"`
+	ContainerIdleCPUThresholdMC       int64   `mapstructure:"ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC"`
+	ContainerIdleMemThresholdKiB      int64   `mapstructure:"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB"`
+	ContainerMemTrendSlopeThreshold   float64 `mapstructure:"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD"`
+	ContainerLowConfidenceThreshold   float32 `mapstructure:"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD"`
+
+	// Namespace sizing and classification thresholds (same shape as container).
+	NamespaceCPUCostPercentile        float64 `mapstructure:"ROS_NAMESPACE_CPU_COST_PERCENTILE"`
+	NamespaceCPUPerfPercentile        float64 `mapstructure:"ROS_NAMESPACE_CPU_PERF_PERCENTILE"`
+	NamespaceMemCostPercentile        float64 `mapstructure:"ROS_NAMESPACE_MEM_COST_PERCENTILE"`
+	NamespaceMemPerfPercentile        float64 `mapstructure:"ROS_NAMESPACE_MEM_PERF_PERCENTILE"`
+	NamespaceMinMargin                float64 `mapstructure:"ROS_NAMESPACE_MIN_MARGIN"`
+	NamespaceMaxMargin                float64 `mapstructure:"ROS_NAMESPACE_MAX_MARGIN"`
+	NamespaceLimitMultiplier          float64 `mapstructure:"ROS_NAMESPACE_LIMIT_MULTIPLIER"`
+	NamespaceCPUFloorMC               int64   `mapstructure:"ROS_NAMESPACE_CPU_FLOOR_MC"`
+	NamespaceIdleCPUThresholdMC       int64   `mapstructure:"ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC"`
+	NamespaceIdleMemThresholdKiB      int64   `mapstructure:"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB"`
+	NamespaceMemTrendSlopeThreshold   float64 `mapstructure:"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD"`
+	NamespaceLowConfidenceThreshold   float32 `mapstructure:"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD"`
+
 	// Node right-sizing (Tier 1) configuration
 	NodeUnderutilThreshold         float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
 	NodeOvercommitThreshold        float64 `mapstructure:"ROS_NODE_OVERCOMMIT_THRESHOLD"`
 	NodeAllocatableFactor          float64 `mapstructure:"ROS_NODE_ALLOCATABLE_FACTOR"`
 	NodeStrandedImbalanceThreshold float64 `mapstructure:"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD"`
 	NodeEMAAlpha                   float64 `mapstructure:"ROS_NODE_EMA_ALPHA"`
+	NodeCostTargetUtilization      float64 `mapstructure:"ROS_NODE_COST_TARGET_UTILIZATION"`
+	NodePerfTargetUtilization      float64 `mapstructure:"ROS_NODE_PERF_TARGET_UTILIZATION"`
+	NodePerfConsolidationHeadroomMultiplier float64 `mapstructure:"ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER"`
+	NodeTrendMinDays               int     `mapstructure:"ROS_NODE_TREND_MIN_DAYS"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`
@@ -137,6 +169,28 @@ type Config struct {
 	GPUMemBoundDRAMThreshold        float64 `mapstructure:"ROS_GPU_MEMBOUND_DRAM_THRESHOLD"`
 	GPUMemBoundTensorThreshold      float64 `mapstructure:"ROS_GPU_MEMBOUND_TENSOR_THRESHOLD"`
 	GPUFBHeadroomFactor             float64 `mapstructure:"ROS_GPU_FB_HEADROOM_FACTOR"`
+	GPUComputeBoundDRAMThreshold      float64 `mapstructure:"ROS_GPU_COMPUTE_BOUND_DRAM_THRESHOLD"`
+	GPUMIGFBPercentile              float64 `mapstructure:"ROS_GPU_MIG_FB_PERCENTILE"`
+	GPUConfidenceDaysTier1          int     `mapstructure:"ROS_GPU_CONFIDENCE_DAYS_TIER1"`
+	GPUConfidenceDaysTier2          int     `mapstructure:"ROS_GPU_CONFIDENCE_DAYS_TIER2"`
+	GPUConfidenceDaysTier3          int     `mapstructure:"ROS_GPU_CONFIDENCE_DAYS_TIER3"`
+	GPUSpikeRatioThreshold          float64 `mapstructure:"ROS_GPU_SPIKE_RATIO_THRESHOLD"`
+	GPUSpikeConfidencePenalty       float64 `mapstructure:"ROS_GPU_SPIKE_CONFIDENCE_PENALTY"`
+	GPUNoProfilingConfidenceFactor  float64 `mapstructure:"ROS_GPU_NO_PROFILING_CONFIDENCE_FACTOR"`
+	GPUTimeslicingMajorityThreshold float64 `mapstructure:"ROS_GPU_TIMESLICING_MAJORITY_THRESHOLD"`
+	GPUTimeslicingMinReplicas       int     `mapstructure:"ROS_GPU_TIMESLICING_MIN_REPLICAS"`
+	GPUTimeslicingMaxReplicas       int     `mapstructure:"ROS_GPU_TIMESLICING_MAX_REPLICAS"`
+	GPUTimeslicingBasePenalty       float64 `mapstructure:"ROS_GPU_TIMESLICING_BASE_PENALTY"`
+	GPUTimeslicingImpactedWeight    float64 `mapstructure:"ROS_GPU_TIMESLICING_IMPACTED_WEIGHT"`
+	GPUNodeFreshnessDays            int     `mapstructure:"ROS_GPU_NODE_FRESHNESS_DAYS"`
+
+	// PVC right-sizing thresholds.
+	PVCOversizedThreshold         float64 `mapstructure:"ROS_PVC_OVERSIZED_THRESHOLD"`
+	PVCNearFullThreshold          float64 `mapstructure:"ROS_PVC_NEAR_FULL_THRESHOLD"`
+	PVCMinTrendDays               int     `mapstructure:"ROS_PVC_MIN_TREND_DAYS"`
+	PVCRecommendedSizeMultiplier  int     `mapstructure:"ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER"`
+	PVCMinRecommendedGiB          int     `mapstructure:"ROS_PVC_MIN_RECOMMENDED_GIB"`
+	PVCDaysToFullAlert            int     `mapstructure:"ROS_PVC_DAYS_TO_FULL_ALERT"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -145,6 +199,7 @@ type Config struct {
 	SnapshotStaleDays           int     `mapstructure:"ROS_SNAPSHOT_STALE_DAYS"`
 	SnapshotRedundantThreshold  int     `mapstructure:"ROS_SNAPSHOT_REDUNDANT_THRESHOLD"`
 	SnapshotCostPerGiBMonth     float64 `mapstructure:"ROS_SNAPSHOT_COST_PER_GIB_MONTH"`
+	SnapshotInventoryFreshHours int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_FRESH_HOURS"`
 	SnapshotInventoryRetentionH int     `mapstructure:"ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS"`
 	// SnapshotStaleGraceHours bounds how long we tolerate missing *fresh* inventory
 	// before treating the cluster as abandoned for snapshot_recommendation_sets cleanup.
@@ -334,22 +389,71 @@ func initConfig() {
 	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
 	viper.SetDefault("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", false)
+	viper.SetDefault("ROS_CONTAINER_CPU_COST_PERCENTILE", 0.60)
+	viper.SetDefault("ROS_CONTAINER_CPU_PERF_PERCENTILE", 0.98)
+	viper.SetDefault("ROS_CONTAINER_MEM_COST_PERCENTILE", 0.95)
+	viper.SetDefault("ROS_CONTAINER_MEM_PERF_PERCENTILE", 1.0)
+	viper.SetDefault("ROS_CONTAINER_MIN_MARGIN", 1.15)
+	viper.SetDefault("ROS_CONTAINER_MAX_MARGIN", 1.50)
+	viper.SetDefault("ROS_CONTAINER_LIMIT_MULTIPLIER", 1.05)
+	viper.SetDefault("ROS_CONTAINER_CPU_FLOOR_MC", 25)
+	viper.SetDefault("ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC", 10)
+	viper.SetDefault("ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB", 10240)
+	viper.SetDefault("ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD", 100.0)
+	viper.SetDefault("ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD", 0.5)
+	viper.SetDefault("ROS_NAMESPACE_CPU_COST_PERCENTILE", 0.60)
+	viper.SetDefault("ROS_NAMESPACE_CPU_PERF_PERCENTILE", 0.98)
+	viper.SetDefault("ROS_NAMESPACE_MEM_COST_PERCENTILE", 0.95)
+	viper.SetDefault("ROS_NAMESPACE_MEM_PERF_PERCENTILE", 1.0)
+	viper.SetDefault("ROS_NAMESPACE_MIN_MARGIN", 1.15)
+	viper.SetDefault("ROS_NAMESPACE_MAX_MARGIN", 1.50)
+	viper.SetDefault("ROS_NAMESPACE_LIMIT_MULTIPLIER", 1.05)
+	viper.SetDefault("ROS_NAMESPACE_CPU_FLOOR_MC", 25)
+	viper.SetDefault("ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC", 10)
+	viper.SetDefault("ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB", 10240)
+	viper.SetDefault("ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD", 100.0)
+	viper.SetDefault("ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD", 0.5)
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)
 	viper.SetDefault("ROS_NODE_STRANDED_IMBALANCE_THRESHOLD", 0.6)
 	viper.SetDefault("ROS_NODE_EMA_ALPHA", 0.3)
+	viper.SetDefault("ROS_NODE_COST_TARGET_UTILIZATION", 0.80)
+	viper.SetDefault("ROS_NODE_PERF_TARGET_UTILIZATION", 0.55)
+	viper.SetDefault("ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER", 2.0)
+	viper.SetDefault("ROS_NODE_TREND_MIN_DAYS", 3)
 	viper.SetDefault("ROS_GPU_IDLE_THRESHOLD", 0.02)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_SM_THRESHOLD", 0.25)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD", 0.15)
 	viper.SetDefault("ROS_GPU_MEMBOUND_DRAM_THRESHOLD", 0.60)
 	viper.SetDefault("ROS_GPU_MEMBOUND_TENSOR_THRESHOLD", 0.15)
 	viper.SetDefault("ROS_GPU_FB_HEADROOM_FACTOR", 1.20)
+	viper.SetDefault("ROS_GPU_COMPUTE_BOUND_DRAM_THRESHOLD", 0.30)
+	viper.SetDefault("ROS_GPU_MIG_FB_PERCENTILE", 0.98)
+	viper.SetDefault("ROS_GPU_CONFIDENCE_DAYS_TIER1", 3)
+	viper.SetDefault("ROS_GPU_CONFIDENCE_DAYS_TIER2", 7)
+	viper.SetDefault("ROS_GPU_CONFIDENCE_DAYS_TIER3", 14)
+	viper.SetDefault("ROS_GPU_SPIKE_RATIO_THRESHOLD", 5.0)
+	viper.SetDefault("ROS_GPU_SPIKE_CONFIDENCE_PENALTY", 0.70)
+	viper.SetDefault("ROS_GPU_NO_PROFILING_CONFIDENCE_FACTOR", 0.50)
+	viper.SetDefault("ROS_GPU_TIMESLICING_MAJORITY_THRESHOLD", 0.50)
+	viper.SetDefault("ROS_GPU_TIMESLICING_MIN_REPLICAS", 2)
+	viper.SetDefault("ROS_GPU_TIMESLICING_MAX_REPLICAS", 8)
+	viper.SetDefault("ROS_GPU_TIMESLICING_BASE_PENALTY", 0.70)
+	viper.SetDefault("ROS_GPU_TIMESLICING_IMPACTED_WEIGHT", 0.30)
+	viper.SetDefault("ROS_GPU_NODE_FRESHNESS_DAYS", 7)
+	viper.SetDefault("ROS_PVC_OVERSIZED_THRESHOLD", 0.20)
+	viper.SetDefault("ROS_PVC_NEAR_FULL_THRESHOLD", 0.85)
+	viper.SetDefault("ROS_PVC_MIN_TREND_DAYS", 7)
+	viper.SetDefault("ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER", 2)
+	viper.SetDefault("ROS_PVC_MIN_RECOMMENDED_GIB", 1)
+	viper.SetDefault("ROS_PVC_DAYS_TO_FULL_ALERT", 30)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)
 	viper.SetDefault("ROS_SNAPSHOT_REDUNDANT_THRESHOLD", 3)
 	viper.SetDefault("ROS_SNAPSHOT_COST_PER_GIB_MONTH", 0.05)
+	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_FRESH_HOURS", 6)
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 

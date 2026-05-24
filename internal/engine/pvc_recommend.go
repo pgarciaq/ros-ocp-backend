@@ -12,13 +12,6 @@ import (
 )
 
 const (
-	// PVCs using less than 20% of capacity are oversized.
-	pvcOversizedThreshold = 0.20
-	// PVCs using more than 85% of capacity are near-full.
-	pvcNearFullThreshold = 0.85
-	// Minimum days of data for growth trend projection (per-term override below).
-	pvcMinTrendDays = 7
-
 	// PVC recommendation types.
 	PVCRecTypeOversized = "oversized"
 	PVCRecTypeNearFull  = "near_full"
@@ -64,8 +57,15 @@ type PVCRec struct {
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
-// Each term uses only the digests within its WindowDays of each PVC's latest bucket_date.
 func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCRec, error) {
+	pvcSettings, err := ResolvePVCThresholdSettings(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load pvc thresholds: %w", err)
+	}
+	return recommendPVCsWithSettings(ctx, pool, orgID, clusterUUID, terms, pvcSettings)
+}
+
+func recommendPVCsWithSettings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig, settings PVCThresholdSettings) ([]PVCRec, error) {
 	rows, err := queryPVCDigests(ctx, pool, orgID, clusterUUID, terms)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 	for _, digests := range groups {
 		for _, tc := range terms {
 			windowed := windowDigests(digests, tc.WindowDays)
-			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc)
+			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc, settings)
 			results = append(results, rec)
 		}
 	}
@@ -143,7 +143,7 @@ func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 	return results, pgRows.Err()
 }
 
-func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string, tc TermConfig) PVCRec {
+func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string, tc TermConfig, settings PVCThresholdSettings) PVCRec {
 	if len(digests) == 0 {
 		return PVCRec{Term: tc.Name, OrgID: orgID, ClusterUUID: clusterUUID, RecommendationType: PVCRecTypeHealthy}
 	}
@@ -178,10 +178,10 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		rec.UsageRatio = float64(maxUsage) / float64(latest.CapacityBytes)
 	}
 
-	// Growth trend: require at least half the window days or pvcMinTrendDays (whichever is smaller)
+	// Growth trend: require at least MinDataDays with a floor from MinTrendDays (default 2).
 	minTrend := tc.MinDataDays
-	if minTrend < 2 {
-		minTrend = 2
+	if minTrend < settings.MinTrendDays {
+		minTrend = settings.MinTrendDays
 	}
 	if len(digests) >= minTrend {
 		slope := computePVCGrowthSlope(digests, tc.DecayHalfLifeHours)
@@ -202,20 +202,21 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		rec.RecommendationType = PVCRecTypeOrphaned
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
 
-	case rec.UsageRatio < pvcOversizedThreshold && len(digests) >= tc.MinDataDays:
+	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= tc.MinDataDays:
 		rec.RecommendationType = PVCRecTypeOversized
-		recommended := maxUsage * 2
-		if recommended < 1<<30 {
-			recommended = 1 << 30
+		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
+		minRecommended := int64(settings.MinRecommendedGiB) << 30
+		if recommended < minRecommended {
+			recommended = minRecommended
 		}
 		if recommended < latest.CapacityBytes {
 			rec.RecommendedBytes = &recommended
 		}
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOversized)
 
-	case rec.UsageRatio > pvcNearFullThreshold:
+	case rec.UsageRatio > settings.NearFullThreshold:
 		rec.RecommendationType = PVCRecTypeNearFull
-		recommended := maxUsage * 2
+		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
 		rec.RecommendedBytes = &recommended
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
 
@@ -223,7 +224,7 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		rec.RecommendationType = PVCRecTypeHealthy
 	}
 
-	if rec.DaysToFull != nil && *rec.DaysToFull < 30 && *rec.DaysToFull > 0 {
+	if rec.DaysToFull != nil && *rec.DaysToFull < settings.DaysToFullAlert && *rec.DaysToFull > 0 {
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
 	}
 

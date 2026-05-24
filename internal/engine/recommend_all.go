@@ -56,6 +56,12 @@ func RecommendWorkloadsStreaming(
 		return fmt.Errorf("load term config: %w", err)
 	}
 
+	sizingThresholds, err := ResolveContainerSizingThresholds(ctx, pool, orgID)
+	if err != nil {
+		return fmt.Errorf("load container thresholds: %w", err)
+	}
+	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
+
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date,
 			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
@@ -130,15 +136,9 @@ func RecommendWorkloadsStreaming(
 			monEnd := windowRows[len(windowRows)-1].BucketDate
 
 			for _, profile := range []string{"cost", "performance"} {
-				cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours)
-				memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours)
+				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
+				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, profile)
 				memCfg.OOMCountSum = oomTotal
-				if oomCfg.BaseBump > 0 {
-					memCfg.OOMBaseBump = oomCfg.BaseBump
-				}
-				if oomCfg.MaxBump > 0 {
-					memCfg.OOMMaxBump = oomCfg.MaxBump
-				}
 				if memCfg.OOMMaxBump < 1.0 {
 					memCfg.OOMMaxBump = 1.0
 				}
@@ -197,7 +197,7 @@ func RecommendWorkloadsStreaming(
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
 				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
 				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-				rec.NotificationCodes = EvaluateNotifications(rec, tc.MinDataDays)
+				rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
 
 				batch = append(batch, rec)
 			}
@@ -426,24 +426,12 @@ func computeVariation(current, rec int64) int32 {
 	return int32(math.Round(float64(rec-current) / float64(current) * 100))
 }
 
-func cpuConfigForProfile(profile string, now time.Time, decayHL float64) CPUConfig {
-	if profile == "performance" {
-		cfg := DefaultCPUConfig(now, decayHL)
-		cfg.CostPercentile = 0.98
-		cfg.PerfPercentile = 0.98
-		return cfg
-	}
-	return DefaultCPUConfig(now, decayHL)
+func cpuConfigForProfile(profile string, now time.Time, decayHL float64, th SizingThresholdSettings) CPUConfig {
+	return CPUConfigFromSizing(th, now, decayHL, profile)
 }
 
-func memConfigForProfile(profile string, now time.Time, decayHL float64) MemoryConfig {
-	if profile == "performance" {
-		cfg := DefaultMemoryConfig(now, decayHL)
-		cfg.CostPercentile = 1.0
-		cfg.PerfPercentile = 1.0
-		return cfg
-	}
-	return DefaultMemoryConfig(now, decayHL)
+func memConfigForProfile(profile string, now time.Time, decayHL float64, th SizingThresholdSettings, oomCfg OOMConfig) MemoryConfig {
+	return MemoryConfigFromSizing(th, now, decayHL, oomCfg, profile)
 }
 
 // aggregatePodCounts computes min-of-mins, max-of-maxes, and weighted average

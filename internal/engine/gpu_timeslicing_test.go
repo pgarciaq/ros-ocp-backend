@@ -47,7 +47,7 @@ func TestComputeReplicas(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reps, ok := computeReplicas(tt.smAvg, tt.dramAvg, tt.fbFrac)
+			reps, ok := computeReplicas(tt.smAvg, tt.dramAvg, tt.fbFrac, defaultGPUThresholdSettings)
 			assert.Equal(t, tt.wantOK, ok, "ok mismatch")
 			if ok {
 				assert.Equal(t, tt.wantReps, reps, "replicas mismatch")
@@ -75,7 +75,7 @@ func TestComputeTimeslicingConfidence(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := computeTimeslicingConfidence(tt.avgCandConf, tt.nImpacted, tt.nTotal)
+			got := computeTimeslicingConfidence(tt.avgCandConf, tt.nImpacted, tt.nTotal, defaultGPUThresholdSettings)
 			assert.InDelta(t, tt.wantConf, got, 0.01)
 		})
 	}
@@ -215,19 +215,19 @@ func TestAvgCandidateUtilization_Empty(t *testing.T) {
 func TestIsNodeFresh(t *testing.T) {
 	now := time.Now().UTC()
 	t.Run("seen_today", func(t *testing.T) {
-		assert.True(t, isNodeFresh(now.AddDate(0, 0, -1), now))
+		assert.True(t, isNodeFresh(now.AddDate(0, 0, -1), now, NodeGPUFreshnessDays))
 	})
 	t.Run("seen_6_days_ago", func(t *testing.T) {
-		assert.True(t, isNodeFresh(now.AddDate(0, 0, -6), now))
+		assert.True(t, isNodeFresh(now.AddDate(0, 0, -6), now, NodeGPUFreshnessDays))
 	})
 	t.Run("seen_7_days_ago", func(t *testing.T) {
-		assert.True(t, isNodeFresh(now.AddDate(0, 0, -7), now))
+		assert.True(t, isNodeFresh(now.AddDate(0, 0, -7), now, NodeGPUFreshnessDays))
 	})
 	t.Run("seen_8_days_ago", func(t *testing.T) {
-		assert.False(t, isNodeFresh(now.AddDate(0, 0, -8), now))
+		assert.False(t, isNodeFresh(now.AddDate(0, 0, -8), now, NodeGPUFreshnessDays))
 	})
 	t.Run("seen_30_days_ago", func(t *testing.T) {
-		assert.False(t, isNodeFresh(now.AddDate(0, 0, -30), now))
+		assert.False(t, isNodeFresh(now.AddDate(0, 0, -30), now, NodeGPUFreshnessDays))
 	})
 }
 
@@ -498,8 +498,8 @@ func TestComputeNodeTimeslicingRec_FreshNode(t *testing.T) {
 	require.NotNil(t, rec, "fresh node (3 days ago) should produce a recommendation")
 	assert.Equal(t, "fresh-node", rec.NodeName)
 	assert.Equal(t, "T4", rec.GPUModel)
-	assert.GreaterOrEqual(t, rec.RecommendedReplicas, minReplicas)
-	assert.LessOrEqual(t, rec.RecommendedReplicas, maxReplicas)
+	assert.GreaterOrEqual(t, rec.RecommendedReplicas, defaultGPUThresholdSettings.TimeslicingMinReplicas)
+	assert.LessOrEqual(t, rec.RecommendedReplicas, defaultGPUThresholdSettings.TimeslicingMaxReplicas)
 	assert.Greater(t, rec.Confidence, float32(0))
 	assert.Len(t, rec.CandidateContainers, 2)
 }
@@ -515,7 +515,7 @@ func TestComputeNodeTimeslicingRec_ZeroLastSeen(t *testing.T) {
 	rec := ComputeNodeTimeslicingRec(input, nil, time.Now().UTC())
 	require.NotNil(t, rec, "zero LastSeen should be treated as fresh (backward compat)")
 	assert.Equal(t, "no-timestamp", rec.NodeName)
-	assert.GreaterOrEqual(t, rec.RecommendedReplicas, minReplicas)
+	assert.GreaterOrEqual(t, rec.RecommendedReplicas, defaultGPUThresholdSettings.TimeslicingMinReplicas)
 }
 
 // --- Container-level time-slicing savings ---
