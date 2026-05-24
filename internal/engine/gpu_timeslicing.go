@@ -1,7 +1,10 @@
 package engine
 
 import (
+	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -54,10 +57,6 @@ type NodeGPUContainer struct {
 	Workload  string
 	Container string
 	Rec       *GPURec
-}
-
-func timeslicingSettings() GPUThresholdSettings {
-	return defaultGPUThresholdSettings
 }
 
 // computeReplicas determines the recommended nvidia.com/gpu.replicas value.
@@ -158,9 +157,20 @@ func isNodeFresh(lastSeen, now time.Time, freshnessDays int) bool {
 }
 
 // ComputeNodeTimeslicingRec produces a time-slicing recommendation for a single
-// node × GPU model group. Returns nil if the node is not a good candidate.
+// node × GPU model group using process-wide default GPU thresholds.
+// Prefer ComputeNodeTimeslicingRecForOrg when org-specific settings are available.
 func ComputeNodeTimeslicingRec(group NodeGPUGroup, gpuRate *float32, now time.Time) *TimeslicingRec {
-	return ComputeNodeTimeslicingRecWithSettings(group, gpuRate, now, timeslicingSettings())
+	return ComputeNodeTimeslicingRecWithSettings(group, gpuRate, now, defaultGPUThresholdSettings)
+}
+
+// ComputeNodeTimeslicingRecForOrg resolves per-org GPU thresholds (including time-slicing
+// parameters) and produces a time-slicing recommendation for a single node × GPU model group.
+func ComputeNodeTimeslicingRecForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string, group NodeGPUGroup, gpuRate *float32, now time.Time) *TimeslicingRec {
+	settings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
+	if err != nil {
+		settings = defaultGPUThresholdSettings
+	}
+	return ComputeNodeTimeslicingRecWithSettings(group, gpuRate, now, settings)
 }
 
 // ComputeNodeTimeslicingRecWithSettings produces a time-slicing recommendation using explicit settings.

@@ -123,7 +123,7 @@ func GetNodeRecommendations(c echo.Context) error {
 		}
 
 		for _, group := range groups {
-			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate, now)
+			tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
 			if tsRec == nil {
 				continue
 			}
@@ -251,7 +251,7 @@ func respondNodeGPURecommendationsTripleSQL(
 			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
 				continue
 			}
-			tsRec := engine.ComputeNodeTimeslicingRec(group, gpuRate, now)
+			tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
 			if tsRec == nil {
 				continue
 			}
