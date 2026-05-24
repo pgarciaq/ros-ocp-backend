@@ -215,6 +215,9 @@ func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, 
 }
 
 func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, namespace string, orgLevel bool) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -294,6 +297,9 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 }
 
 func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUID, namespace string, orgLevel bool) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err

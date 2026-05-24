@@ -40,6 +40,9 @@ func GetSnapshotSettings(c echo.Context) error {
 
 // PutSnapshotSettings handles PUT /recommendations/openshift/settings/snapshot.
 func PutSnapshotSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err

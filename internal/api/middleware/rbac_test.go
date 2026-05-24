@@ -82,6 +82,20 @@ func TestAggregatePermissions(t *testing.T) {
 			},
 			want: map[string][]string{},
 		},
+		{
+			name: "settings write permission",
+			acls: []types.RbacData{
+				{Permission: "cost-management:settings:write"},
+			},
+			want: map[string][]string{"settings.write": {"*"}},
+		},
+		{
+			name: "settings read permission",
+			acls: []types.RbacData{
+				{Permission: "cost-management:settings:read"},
+			},
+			want: map[string][]string{"settings.read": {"*"}},
+		},
 	}
 
 	for _, tt := range tests {

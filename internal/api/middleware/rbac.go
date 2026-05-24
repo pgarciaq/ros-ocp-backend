@@ -31,6 +31,26 @@ func Rbac(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func appendResourcePermissions(permissions map[string][]string, key string, defs []types.RbacResourceDefinitions) {
+	if _, ok := permissions[key]; !ok {
+		permissions[key] = []string{}
+	}
+	if len(defs) == 0 {
+		permissions[key] = append(permissions[key], "*")
+		return
+	}
+	for _, resourceDefinition := range defs {
+		switch t := resourceDefinition.AttributeFilter.Value.(type) {
+		case []interface{}:
+			for _, v := range t {
+				permissions[key] = append(permissions[key], fmt.Sprint(v))
+			}
+		case string:
+			permissions[key] = append(permissions[key], t)
+		}
+	}
+}
+
 // aggregate_permissions loop over all the permissions/roles/alcs of the user returned
 // from rbac and creates and return the map of permissions where key is
 // resourceType (openshift.cluster, openshift.node, openshift.project) and the values are the
@@ -47,23 +67,10 @@ func aggregate_permissions(acls []types.RbacData) map[string][]string {
 		}
 		resourceType := parts[1]
 		if strings.Contains(resourceType, "openshift") {
-			if _, ok := permissions[resourceType]; !ok {
-				permissions[resourceType] = []string{}
-			}
-			if len(acl.ResourceDefinitions) == 0 {
-				permissions[resourceType] = append(permissions[resourceType], "*")
-			} else {
-				for _, resourceDefinition := range acl.ResourceDefinitions {
-					switch t := resourceDefinition.AttributeFilter.Value.(type) {
-					case []interface{}:
-						for _, v := range t {
-							permissions[resourceType] = append(permissions[resourceType], fmt.Sprint(v))
-						}
-					case string:
-						permissions[resourceType] = append(permissions[resourceType], t)
-					}
-				}
-			}
+			appendResourcePermissions(permissions, resourceType, acl.ResourceDefinitions)
+		} else if resourceType == "settings" && len(parts) >= 3 {
+			operation := parts[2]
+			appendResourcePermissions(permissions, resourceType+"."+operation, acl.ResourceDefinitions)
 		} else if resourceType == "*" {
 			permissions["*"] = []string{}
 		}

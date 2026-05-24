@@ -111,6 +111,9 @@ func GetTermSettings(c echo.Context) error {
 }
 
 func PutTermSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -249,6 +252,9 @@ func PutTermSettings(c echo.Context) error {
 }
 
 func DeleteTermSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err

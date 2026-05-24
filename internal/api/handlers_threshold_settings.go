@@ -66,6 +66,9 @@ func GetThresholdSettings(c echo.Context) error {
 
 // PutThresholdSettings handles PUT /recommendations/openshift/settings/thresholds.
 func PutThresholdSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -133,6 +136,9 @@ func PutThresholdSettings(c echo.Context) error {
 
 // DeleteThresholdSettings handles DELETE /recommendations/openshift/settings/thresholds.
 func DeleteThresholdSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
