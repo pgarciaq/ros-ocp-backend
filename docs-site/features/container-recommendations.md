@@ -16,7 +16,7 @@ without ignoring spikes or OOM events.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
   CSV[ROS usage CSV] --> Digest[Daily digests]
   Digest --> Percentile[Weighted percentiles + EMA decay]
   Percentile --> Margin[Adaptive margin]
