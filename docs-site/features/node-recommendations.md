@@ -1,0 +1,141 @@
+# Node Consolidation & Right-Sizing
+
+!!! info "Quick Facts"
+    **API:** `GET /api/cost-management/v1/recommendations/openshift/nodes`  
+    **Configurable:** Yes  
+    **Engines:** cost, performance (filter with `?engine=cost` or `?engine=performance`)  
+    **Savings:** Yes — `estimated_monthly_savings_usd` per engine row
+
+## Overview
+
+Node recommendations analyze cluster-level CPU and memory utilization to identify
+waste and sizing opportunities. Each node receives a **classification** (shared
+across engines) plus **engine-specific sizing** and optional **consolidation**
+guidance — recommending fewer nodes when workloads fit at a target utilization.
+
+This is distinct from [GPU Time-Slicing](gpu-time-slicing.md), which covers
+software GPU sharing at `GET .../gpu/timeslicing`.
+
+## How it works
+
+```mermaid
+flowchart TD
+  ND[Node daily digests] --> Class[classifyNode]
+  Class --> Shared[Shared classification]
+  Shared --> Cost[cost engine: 80% target]
+  Shared --> Perf[performance engine: 55% target]
+  Cost --> Out[recommended_cpu_cores, node_count_reduction]
+  Perf --> Out
+```
+
+1. **Digest aggregation** — Node allocatable capacity, P95 usage, and pod
+   request totals are computed per day within the term window.
+2. **Classification** — Each node is labeled once (see table below).
+3. **Dual-engine sizing** — Recommended capacity =
+   `max(usage_p95, requests) / target_utilization`.
+4. **Consolidation** — When underutilized, the cost engine recommends removing
+   one node; the performance engine requires extreme headroom before consolidating.
+5. **Savings** — Dollar estimates compare current vs recommended node CPU, memory,
+   and monthly node cost. See [Cost Integration — Node Savings](../architecture/cost-integration.md#node-savings-cpumemory-utilization).
+
+## Classification types
+
+| Type | Condition |
+|------|-----------|
+| **underutilized** | CPU P95 **and** memory P95 < 30% of allocatable |
+| **overcommitted** | CPU requests / allocatable > 150% |
+| **stranded_cpu** | EMA-smoothed CPU/memory imbalance > 0.6, CPU higher |
+| **stranded_memory** | Same imbalance threshold, memory higher |
+| **well_utilized** | None of the above |
+
+Stranded-resource nodes have one dimension heavily used while the other sits idle
+— a signal that instance type or workload placement may be mismatched.
+
+## Dual engine behavior
+
+| Aspect | Cost engine | Performance engine |
+|--------|-------------|---------------------|
+| Target utilization | 80% | 55% |
+| Consolidation | When underutilized (`node_count_reduction = 1`) | Only when underutilized **and** current ≥ 2× recommended on **both** CPU and memory |
+| Savings | More aggressive consolidation | Conservative; preserves headroom |
+
+Filter list results: `?engine=cost` (default for sorting) or `?engine=performance`.
+
+## Sizing output
+
+| Field | Meaning |
+|-------|---------|
+| `recommended_cpu_cores` | Target CPU capacity for the node (or cluster slice) |
+| `recommended_memory_gib` | Target memory capacity (GiB) |
+| `node_count_reduction` | Suggested nodes to remove (0 or 1 today) |
+| `estimated_monthly_savings_usd` | Dollar delta vs current allocation |
+
+## Term support
+
+Short, medium, and long terms use the same defaults as container (1d / 7d / 15d).
+List API defaults to **medium** term for classification display; all terms are
+nested under `recommendation_terms`.
+
+## API
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/nodes
+```
+
+Query parameters include `cluster`, `engine`, `term`, `order_by`
+(default `estimated_monthly_savings_usd`), and pagination.
+
+### Example (abbreviated)
+
+```json
+{
+  "meta": { "count": 12, "currency": "USD" },
+  "data": [{
+    "node": "worker-3.example.com",
+    "cluster_uuid": "...",
+    "recommendation_type": "underutilized",
+    "recommendation_terms": {
+      "medium_term": {
+        "recommendation_engines": {
+          "cost": {
+            "recommended_cpu_cores": 8,
+            "recommended_memory_gib": 32,
+            "node_count_reduction": 1,
+            "estimated_monthly_savings_usd": 850.00
+          },
+          "performance": {
+            "recommended_cpu_cores": 12,
+            "recommended_memory_gib": 48,
+            "node_count_reduction": 0,
+            "estimated_monthly_savings_usd": 200.00
+          }
+        }
+      }
+    }
+  }]
+}
+```
+
+## Configurable thresholds
+
+`GET/PUT/DELETE .../settings/thresholds?recommendation_type=node`
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `underutil_threshold` | 0.30 | P95 util below → underutilized |
+| `overcommit_threshold` | 1.50 | Request/allocatable ratio alert |
+| `allocatable_factor` | 0.93 | Fallback when allocatable unknown |
+| `stranded_imbalance_threshold` | 0.60 | CPU/memory imbalance detection |
+| `ema_alpha` | 0.30 | EMA smoothing for trends |
+| `cost_target_utilization` | 0.80 | Cost engine sizing target |
+| `perf_target_utilization` | 0.55 | Performance engine sizing target |
+| `perf_consolidation_headroom_multiplier` | 2.0 | Performance consolidation guard |
+| `trend_min_days` | 3 | Min days for CPU trend slope |
+
+Env vars: `ROS_NODE_*` — see [Configurability](../architecture/configurability.md#node).
+
+## Related
+
+- [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
+- [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals
+- [GPU Time-Slicing](gpu-time-slicing.md) — Separate node-level GPU feature
