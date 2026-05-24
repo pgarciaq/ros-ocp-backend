@@ -146,3 +146,192 @@ func TestSnapshotInventoryFreshHours_FromConfig(t *testing.T) {
 	config.ResetForTest()
 	assert.Equal(t, 12, SnapshotInventoryFreshHours())
 }
+
+func TestResolveNodeThresholds_EnvOverridesDefault(t *testing.T) {
+	t.Setenv("ROS_NODE_COST_TARGET_UTILIZATION", "0.72")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-node-env"
+
+	got, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.72, got.CostTargetUtilization, 1e-9)
+	assert.InDelta(t, DefaultNodeThresholdSettings().UnderutilThreshold, got.UnderutilThreshold, 1e-9)
+}
+
+func TestResolveNodeThresholds_DBOverridesDefault(t *testing.T) {
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-node-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'node', '{"cost_target_utilization": 0.71}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.71, got.CostTargetUtilization, 1e-9)
+	assert.InDelta(t, DefaultNodeThresholdSettings().OvercommitThreshold, got.OvercommitThreshold, 1e-9)
+}
+
+func TestResolveNodeThresholds_EnvLocksDBOverride(t *testing.T) {
+	t.Setenv("ROS_NODE_COST_TARGET_UTILIZATION", "0.88")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-node-env-lock"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'node', '{"cost_target_utilization": 0.71}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.88, got.CostTargetUtilization, 1e-9)
+
+	resp, err := GetThresholdSettingsForAPI(ctx, pool, orgID, "node")
+	require.NoError(t, err)
+	settings, ok := resp.(NodeThresholdSettingsResponse)
+	require.True(t, ok)
+	assert.Contains(t, settings.LockedFields, "cost_target_utilization")
+}
+
+func TestResolveGPUThresholds_EnvOverridesDefault(t *testing.T) {
+	t.Setenv("ROS_GPU_IDLE_THRESHOLD", "0.08")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-gpu-env"
+
+	got, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.08, got.IdleThreshold, 1e-9)
+	assert.InDelta(t, DefaultGPUThresholdSettings().UnderutilizedSM, got.UnderutilizedSM, 1e-9)
+}
+
+func TestResolveGPUThresholds_DBOverridesDefault(t *testing.T) {
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-gpu-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'gpu', '{"idle_threshold": 0.06}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.06, got.IdleThreshold, 1e-9)
+	assert.InDelta(t, DefaultGPUThresholdSettings().MIGFBPercentile, got.MIGFBPercentile, 1e-9)
+}
+
+func TestResolvePVCThresholds_EnvOverridesDefault(t *testing.T) {
+	t.Setenv("ROS_PVC_OVERSIZED_THRESHOLD", "0.28")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-pvc-env"
+
+	got, err := ResolvePVCThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.28, got.OversizedThreshold, 1e-9)
+	assert.InDelta(t, DefaultPVCThresholdSettings().NearFullThreshold, got.NearFullThreshold, 1e-9)
+}
+
+func TestResolvePVCThresholds_DBOverridesDefault(t *testing.T) {
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-pvc-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'pvc', '{"oversized_threshold": 0.33}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolvePVCThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.33, got.OversizedThreshold, 1e-9)
+	assert.Equal(t, DefaultPVCThresholdSettings().MinTrendDays, got.MinTrendDays)
+}
+
+func TestResolveNamespaceThresholds_EnvOverridesDefault(t *testing.T) {
+	t.Setenv("ROS_NAMESPACE_CPU_COST_PERCENTILE", "0.77")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-namespace-env"
+
+	got, err := ResolveNamespaceSizingThresholds(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.77, got.CPUCostPercentile, 1e-9)
+	assert.InDelta(t, DefaultNamespaceSizingThresholds().MemTrendSlopeThreshold, got.MemTrendSlopeThreshold, 1e-9)
+}
+
+func TestResolveNamespaceThresholds_DBOverridesDefault(t *testing.T) {
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-namespace-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'namespace', '{"cpu_cost_percentile": 0.69}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolveNamespaceSizingThresholds(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.69, got.CPUCostPercentile, 1e-9)
+	assert.InDelta(t, DefaultNamespaceSizingThresholds().MemCostPercentile, got.MemCostPercentile, 1e-9)
+}

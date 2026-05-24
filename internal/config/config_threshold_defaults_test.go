@@ -37,11 +37,22 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.InDelta(t, 500.0, cfg.NamespaceMemTrendSlopeThreshold, 1e-9)
 	assert.InDelta(t, float32(0.5), cfg.NamespaceLowConfidenceThreshold, 1e-9)
 
+	assert.InDelta(t, 0.30, cfg.NodeUnderutilThreshold, 1e-9)
+	assert.InDelta(t, 1.50, cfg.NodeOvercommitThreshold, 1e-9)
+	assert.InDelta(t, 0.93, cfg.NodeAllocatableFactor, 1e-9)
+	assert.InDelta(t, 0.6, cfg.NodeStrandedImbalanceThreshold, 1e-9)
+	assert.InDelta(t, 0.3, cfg.NodeEMAAlpha, 1e-9)
 	assert.InDelta(t, 0.80, cfg.NodeCostTargetUtilization, 1e-9)
 	assert.InDelta(t, 0.55, cfg.NodePerfTargetUtilization, 1e-9)
 	assert.InDelta(t, 2.0, cfg.NodePerfConsolidationHeadroomMultiplier, 1e-9)
 	assert.Equal(t, 3, cfg.NodeTrendMinDays)
 
+	assert.InDelta(t, 0.02, cfg.GPUIdleThreshold, 1e-9)
+	assert.InDelta(t, 0.25, cfg.GPUUnderutilizedSMThreshold, 1e-9)
+	assert.InDelta(t, 0.15, cfg.GPUUnderutilizedTensorThreshold, 1e-9)
+	assert.InDelta(t, 0.60, cfg.GPUMemBoundDRAMThreshold, 1e-9)
+	assert.InDelta(t, 0.15, cfg.GPUMemBoundTensorThreshold, 1e-9)
+	assert.InDelta(t, 1.20, cfg.GPUFBHeadroomFactor, 1e-9)
 	assert.InDelta(t, 0.30, cfg.GPUComputeBoundDRAMThreshold, 1e-9)
 	assert.InDelta(t, 0.98, cfg.GPUMIGFBPercentile, 1e-9)
 	assert.Equal(t, 3, cfg.GPUConfidenceDaysTier1)
@@ -64,7 +75,14 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, 1, cfg.PVCMinRecommendedGiB)
 	assert.Equal(t, 30, cfg.PVCDaysToFullAlert)
 
+	assert.Equal(t, 7, cfg.SnapshotOrphanAgeDays)
+	assert.Equal(t, 30, cfg.SnapshotNeverRestoredDays)
+	assert.Equal(t, 90, cfg.SnapshotStaleDays)
+	assert.Equal(t, 3, cfg.SnapshotRedundantThreshold)
+	assert.InDelta(t, 0.05, cfg.SnapshotCostPerGiBMonth, 1e-9)
 	assert.Equal(t, 6, cfg.SnapshotInventoryFreshHours)
+	assert.Equal(t, 48, cfg.SnapshotInventoryRetentionH)
+	assert.Equal(t, 48, cfg.SnapshotStaleGraceHours)
 }
 
 func TestThresholdEnvOverride(t *testing.T) {

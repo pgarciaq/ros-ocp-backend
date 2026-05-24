@@ -182,6 +182,290 @@ func TestPutThresholdSettings_ForbiddenWhenEnvLocksField(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, rec.Code)
 }
 
+func TestGetThresholdSettings_Node_ReturnsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-get-node"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.80, resp["cost_target_utilization"].(float64), 1e-9)
+	assert.InDelta(t, 0.30, resp["underutil_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 1.50, resp["overcommit_threshold"].(float64), 1e-9)
+	locked, ok := resp["locked_fields"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, locked)
+}
+
+func TestGetThresholdSettings_GPU_ReturnsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-get-gpu"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.02, resp["idle_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.25, resp["underutilized_sm_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.30, resp["compute_bound_dram_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.98, resp["mig_fb_percentile"].(float64), 1e-9)
+	locked, ok := resp["locked_fields"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, locked)
+}
+
+func TestGetThresholdSettings_PVC_ReturnsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-get-pvc"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.20, resp["oversized_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.85, resp["near_full_threshold"].(float64), 1e-9)
+	assert.InDelta(t, float64(2), resp["min_trend_days"].(float64), 1e-9)
+	locked, ok := resp["locked_fields"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, locked)
+}
+
+func TestGetThresholdSettings_Namespace_ReturnsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-get-namespace"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.60, resp["cpu_cost_percentile"].(float64), 1e-9)
+	assert.InDelta(t, 500.0, resp["mem_trend_slope_threshold"].(float64), 1e-9)
+	locked, ok := resp["locked_fields"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, locked)
+}
+
+func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-put-node"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"cost_target_utilization": 0.75}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.75, resp["cost_target_utilization"].(float64), 1e-9)
+}
+
+func TestPutThresholdSettings_GPU_PersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-put-gpu"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"idle_threshold": 0.05}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.05, resp["idle_threshold"].(float64), 1e-9)
+}
+
+func TestPutThresholdSettings_PVC_PersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-put-pvc"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"oversized_threshold": 0.25}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.25, resp["oversized_threshold"].(float64), 1e-9)
+}
+
+func TestPutThresholdSettings_Namespace_PersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-put-namespace"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"cpu_cost_percentile": 0.71}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.71, resp["cpu_cost_percentile"].(float64), 1e-9)
+}
+
+func TestDeleteThresholdSettings_Node_ResetsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-delete-node"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	putBody := bytes.NewReader([]byte(`{"cost_target_utilization": 0.72}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", nil)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.80, resp["cost_target_utilization"].(float64), 1e-9)
+}
+
+func TestDeleteThresholdSettings_GPU_ResetsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-delete-gpu"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	putBody := bytes.NewReader([]byte(`{"idle_threshold": 0.08}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu", nil)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.02, resp["idle_threshold"].(float64), 1e-9)
+}
+
+func TestDeleteThresholdSettings_PVC_ResetsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-delete-pvc"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	putBody := bytes.NewReader([]byte(`{"oversized_threshold": 0.30}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc", nil)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.20, resp["oversized_threshold"].(float64), 1e-9)
+}
+
+func TestDeleteThresholdSettings_Namespace_ResetsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-delete-namespace"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	putBody := bytes.NewReader([]byte(`{"cpu_cost_percentile": 0.68}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace", nil)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.60, resp["cpu_cost_percentile"].(float64), 1e-9)
+}
+
 func TestDeleteThresholdSettings_NoContent(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-delete"

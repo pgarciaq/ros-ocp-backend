@@ -16,6 +16,22 @@ import (
 
 const thresholdSettingsCacheTTL = 60 * time.Second
 
+var thresholdSettingsNow = func() time.Time { return time.Now().UTC() }
+
+// ClearThresholdSettingsCacheForTest removes all cached threshold entries.
+func ClearThresholdSettingsCacheForTest() {
+	thresholdSettingsMu.Lock()
+	thresholdSettingsCache = map[thresholdSettingsCacheKey]thresholdSettingsCacheEntry{}
+	thresholdSettingsMu.Unlock()
+}
+
+// SetThresholdSettingsNowForTest replaces the clock used for cache TTL and returns a restore func.
+func SetThresholdSettingsNowForTest(now func() time.Time) func() {
+	prev := thresholdSettingsNow
+	thresholdSettingsNow = now
+	return func() { thresholdSettingsNow = prev }
+}
+
 type thresholdSettingsCacheKey struct {
 	orgID              string
 	recommendationType string
@@ -49,7 +65,7 @@ func resolveThresholdCached[T any](
 	if pool == nil {
 		return resolve(ctx, pool, orgID)
 	}
-	now := time.Now().UTC()
+	now := thresholdSettingsNow()
 	key := thresholdSettingsCacheKey{orgID: orgID, recommendationType: recType}
 
 	thresholdSettingsMu.RLock()

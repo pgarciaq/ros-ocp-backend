@@ -129,6 +129,63 @@ func TestUpdateThresholdSettings_ValidationBeforeLockedFields(t *testing.T) {
 	require.ErrorAs(t, err, &valErr)
 }
 
+func TestValidateNamespaceThresholds_ValidInput(t *testing.T) {
+	current := DefaultNamespaceSizingThresholds()
+	err := validateSizingThresholdUpdate(SizingThresholdSettingsUpdate{
+		CPUCostPercentile:      ptrFloat64(0.71),
+		MemTrendSlopeThreshold: ptrFloat64(600.0),
+		MinMargin:              ptrFloat64(1.2),
+		MaxMargin:              ptrFloat64(1.5),
+	}, current)
+	require.NoError(t, err)
+}
+
+func TestValidateNamespaceThresholds_InvalidPercentile(t *testing.T) {
+	current := DefaultNamespaceSizingThresholds()
+	err := validateSizingThresholdUpdate(SizingThresholdSettingsUpdate{
+		CPUCostPercentile: ptrFloat64(1.5),
+	}, current)
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "cpu_cost_percentile")
+}
+
+func TestValidateNodeThresholds_ValidInput(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		UnderutilThreshold:    ptrFloat64(0.25),
+		OvercommitThreshold:   ptrFloat64(1.75),
+		CostTargetUtilization: ptrFloat64(0.75),
+		TrendMinDays:          ptrInt(5),
+	})
+	require.NoError(t, err)
+}
+
+func TestValidateNodeThresholds_InvalidUtilization(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		CostTargetUtilization: ptrFloat64(1.5),
+		UnderutilThreshold:    ptrFloat64(0.0),
+	})
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "cost_target_utilization")
+	assert.Contains(t, valErr.Error(), "underutil_threshold")
+}
+
+func TestValidateNodeThresholds_OvercommitBelowUtilization(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		OvercommitThreshold: ptrFloat64(0.80),
+	})
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "overcommit_threshold")
+}
+
 func ptrFloat64(v float64) *float64 { return &v }
 func ptrInt64(v int64) *int64     { return &v }
 func ptrInt(v int) *int           { return &v }
