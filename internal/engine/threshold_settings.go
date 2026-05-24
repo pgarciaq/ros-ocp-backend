@@ -5,12 +5,71 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
+
+const thresholdSettingsCacheTTL = 60 * time.Second
+
+type thresholdSettingsCacheKey struct {
+	orgID              string
+	recommendationType string
+}
+
+type thresholdSettingsCacheEntry struct {
+	value any
+	until time.Time
+}
+
+var (
+	thresholdSettingsMu    sync.RWMutex
+	thresholdSettingsCache = map[thresholdSettingsCacheKey]thresholdSettingsCacheEntry{}
+)
+
+// InvalidateThresholdCache removes cached threshold entries for an org + recommendation type,
+// ensuring subsequent Resolve* calls will re-read from DB.
+func InvalidateThresholdCache(orgID, recommendationType string) {
+	thresholdSettingsMu.Lock()
+	delete(thresholdSettingsCache, thresholdSettingsCacheKey{orgID: orgID, recommendationType: recommendationType})
+	thresholdSettingsMu.Unlock()
+}
+
+func resolveThresholdCached[T any](
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, recType string,
+	resolve func(context.Context, *pgxpool.Pool, string) (T, error),
+) (T, error) {
+	var zero T
+	if pool == nil {
+		return resolve(ctx, pool, orgID)
+	}
+	now := time.Now().UTC()
+	key := thresholdSettingsCacheKey{orgID: orgID, recommendationType: recType}
+
+	thresholdSettingsMu.RLock()
+	e, ok := thresholdSettingsCache[key]
+	thresholdSettingsMu.RUnlock()
+	if ok && now.Before(e.until) {
+		if v, ok := e.value.(T); ok {
+			return v, nil
+		}
+	}
+
+	result, err := resolve(ctx, pool, orgID)
+	if err != nil {
+		return zero, err
+	}
+	thresholdSettingsMu.Lock()
+	thresholdSettingsCache[key] = thresholdSettingsCacheEntry{value: result, until: now.Add(thresholdSettingsCacheTTL)}
+	thresholdSettingsMu.Unlock()
+	return result, nil
+}
 
 // Valid threshold recommendation types for the Settings API.
 var validThresholdRecommendationTypes = map[string]struct{}{
@@ -475,16 +534,38 @@ func applyPVCEnvLocks(base PVCThresholdSettings, cfg *config.Config) PVCThreshol
 
 // ResolveContainerSizingThresholds resolves container sizing thresholds for an org.
 func ResolveContainerSizingThresholds(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds(), containerEnvLockMap())
+	return resolveThresholdCached(ctx, pool, orgID, "container", resolveContainerSizingThresholdsUncached)
 }
 
 // ResolveNamespaceSizingThresholds resolves namespace sizing thresholds for an org.
 func ResolveNamespaceSizingThresholds(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds(), namespaceEnvLockMap())
+	return resolveThresholdCached(ctx, pool, orgID, "namespace", resolveNamespaceSizingThresholdsUncached)
 }
 
 // ResolveNodeThresholdSettings resolves node thresholds for an org.
 func ResolveNodeThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (NodeThresholdSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, "node", resolveNodeThresholdSettingsUncached)
+}
+
+// ResolveGPUThresholdSettings resolves GPU thresholds for an org.
+func ResolveGPUThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (GPUThresholdSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, "gpu", resolveGPUThresholdSettingsUncached)
+}
+
+// ResolvePVCThresholdSettings resolves PVC thresholds for an org.
+func ResolvePVCThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (PVCThresholdSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, "pvc", resolvePVCThresholdSettingsUncached)
+}
+
+func resolveContainerSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
+	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds(), containerEnvLockMap())
+}
+
+func resolveNamespaceSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
+	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds(), namespaceEnvLockMap())
+}
+
+func resolveNodeThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (NodeThresholdSettings, error) {
 	result := DefaultNodeThresholdSettings()
 	if err := overlayThresholdJSON(ctx, pool, orgID, "node", &result); err != nil {
 		return result, err
@@ -494,8 +575,7 @@ func ResolveNodeThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 	return result, nil
 }
 
-// ResolveGPUThresholdSettings resolves GPU thresholds for an org.
-func ResolveGPUThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (GPUThresholdSettings, error) {
+func resolveGPUThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (GPUThresholdSettings, error) {
 	result := DefaultGPUThresholdSettings()
 	if err := overlayThresholdJSON(ctx, pool, orgID, "gpu", &result); err != nil {
 		return result, err
@@ -505,8 +585,7 @@ func ResolveGPUThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 	return result, nil
 }
 
-// ResolvePVCThresholdSettings resolves PVC thresholds for an org.
-func ResolvePVCThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (PVCThresholdSettings, error) {
+func resolvePVCThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (PVCThresholdSettings, error) {
 	result := DefaultPVCThresholdSettings()
 	if err := overlayThresholdJSON(ctx, pool, orgID, "pvc", &result); err != nil {
 		return result, err
@@ -772,7 +851,11 @@ func UpdateThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID, rec
 	if err := mergeRawUpdateIntoOverrides(overrides, rawUpdate); err != nil {
 		return err
 	}
-	return upsertThresholdOverrides(ctx, pool, orgID, recType, overrides)
+	if err := upsertThresholdOverrides(ctx, pool, orgID, recType, overrides); err != nil {
+		return err
+	}
+	InvalidateThresholdCache(orgID, recType)
+	return nil
 }
 
 // DeleteThresholdSettings removes tenant overrides for the given recommendation type.
@@ -786,6 +869,7 @@ func DeleteThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID, rec
 	if err != nil {
 		return fmt.Errorf("delete recommendation thresholds: %w", err)
 	}
+	InvalidateThresholdCache(orgID, recType)
 	return nil
 }
 
