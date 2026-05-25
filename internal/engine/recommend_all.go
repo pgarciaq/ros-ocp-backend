@@ -375,6 +375,12 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			return fmt.Errorf("batch exec: %w", err)
 		}
 	}
+
+	orgID := recs[0].OrgID
+	if err := model.RefreshOrgRecommendationStatsTx(ctx, tx, orgID); err != nil {
+		return err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit recommendations tx: %w", err)
 	}
