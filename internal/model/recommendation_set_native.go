@@ -231,6 +231,82 @@ type EngineRecommendation struct {
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+	if usesOrgContainerKeys(queryParams) {
+		return getNativeRecommendationsFromOrgKeys(orgID, opts, queryParams, userPerms)
+	}
+	return getNativeRecommendationsDistinct(orgID, opts, queryParams, userPerms)
+}
+
+func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+	db := database.GetDB()
+	keysParams, detailParams := splitNativeListQueryParams(queryParams)
+
+	keysQuery := db.Table("org_container_keys ock").
+		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.container_name, ock.workload_type").
+		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
+		Where("ock.org_id = ?", orgID)
+	keysQuery = ApplyNativeRBAC(keysQuery, userPerms, "ock.namespace")
+	keysQuery = ApplyQueryParamsToKeys(keysQuery, keysParams)
+
+	if opts.HasCursor {
+		keysQuery = keysQuery.Where(
+			"(ock.namespace, ock.workload, ock.container_name) > (?, ?, ?)",
+			opts.AfterNamespace, opts.AfterWorkload, opts.AfterContainer,
+		)
+	}
+
+	pageLimit := opts.Limit + 1
+	keysQuery = keysQuery.Order("ock.namespace, ock.workload, ock.container_name")
+	if opts.HasCursor {
+		keysQuery = keysQuery.Limit(pageLimit)
+	} else {
+		keysQuery = keysQuery.Offset(opts.Offset).Limit(pageLimit)
+	}
+
+	pageSubquery := db.Table("(?) AS page_keys", keysQuery).
+		Select("page_keys.cluster_uuid, page_keys.namespace, page_keys.workload, page_keys.container_name, page_keys.workload_type")
+
+	var rows []NativeRecommendationRow
+	t0 := time.Now().UTC()
+	detailQuery := db.Table("recommendation_sets rs").
+		Select(nativeDetailSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
+			AND page.namespace = rs.namespace
+			AND page.workload = rs.workload
+			AND page.container_name = rs.container_name`, pageSubquery).
+		Where("rs.org_id = ?", orgID).
+		Where("rs.stale = false")
+	detailQuery = ApplyQueryParams(detailQuery, detailParams)
+	err := detailQuery.
+		Order("rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine").
+		Find(&rows).Error
+	if err != nil {
+		return NativeListPage{}, err
+	}
+
+	results := assembleNativeResults(rows)
+
+	hasNext := len(results) > opts.Limit
+	if hasNext {
+		results = results[:opts.Limit]
+	}
+
+	totalContainers, err := resolveOrgContainerCount(orgID, db, nil)
+	if err != nil {
+		return NativeListPage{}, err
+	}
+
+	log.Infof("native list query: %dms (%d containers, %d rows)", time.Since(t0).Milliseconds(), totalContainers, len(rows))
+
+	return NativeListPage{
+		Results: results,
+		Count:   int(totalContainers),
+		HasNext: hasNext,
+	}, nil
+}
+
+func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
 	db := database.GetDB()
 
 	distinctSubquery := db.Table("recommendation_sets rs").
@@ -262,20 +338,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
 	err := db.Table("recommendation_sets rs").
-		Select(`rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
-			rs.container_name, rs.term, rs.engine,
-			rs.rec_cpu_request_millicores, rs.rec_cpu_limit_millicores,
-			rs.rec_memory_request_kib, rs.rec_memory_limit_kib,
-			rs.current_cpu_request_millicores, rs.current_cpu_limit_millicores,
-			rs.current_memory_request_kib, rs.current_memory_limit_kib,
-			rs.variation_cpu_request_pct, rs.variation_cpu_limit_pct,
-			rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
-			rs.notification_codes, rs.confidence_level, rs.stale,
-			rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
-			rs.estimated_monthly_savings_usd,
-			rs.monitoring_end_time,
-			rs.updated_at,
-			c.source_id, c.cluster_alias, c.last_reported_at`).
+		Select(nativeDetailSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
@@ -310,6 +373,14 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 }
 
 func resolveOrgContainerCount(orgID string, db *gorm.DB, filteredDistinct *gorm.DB) (int64, error) {
+	if filteredDistinct != nil {
+		var total int64
+		if err := db.Table("(?) AS dc", filteredDistinct).Count(&total).Error; err != nil {
+			return 0, err
+		}
+		return total, nil
+	}
+
 	if count, ok, err := GetOrgContainerCount(orgID); err != nil {
 		return 0, err
 	} else if ok {
@@ -317,8 +388,7 @@ func resolveOrgContainerCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 	}
 
 	var total int64
-	if err := db.Table("(?) AS dc", filteredDistinct).
-		Count(&total).Error; err != nil {
+	if err := db.Table("org_container_keys").Where("org_id = ?", orgID).Count(&total).Error; err != nil {
 		return 0, err
 	}
 	return total, nil

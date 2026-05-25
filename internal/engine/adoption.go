@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // adoptionToleranceFraction uses the same 5% tolerance as quality.go's DetectAdoption.
@@ -85,6 +86,9 @@ func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID str
 	}
 	if tag.RowsAffected() > 0 {
 		logging.ForOrg(orgID, clusterUUID).Infof("adoption: marked %d container(s) adopted", tag.RowsAffected())
+	}
+	if err := model.RefreshOrgContainerKeys(ctx, pool, orgID); err != nil {
+		return fmt.Errorf("refresh org container keys after adoption: %w", err)
 	}
 	return nil
 }

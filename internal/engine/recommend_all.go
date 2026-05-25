@@ -377,6 +377,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 	}
 
 	orgID := recs[0].OrgID
+	if err := model.RefreshOrgContainerKeysTx(ctx, tx, orgID); err != nil {
+		return err
+	}
 	if err := model.RefreshOrgRecommendationStatsTx(ctx, tx, orgID); err != nil {
 		return err
 	}

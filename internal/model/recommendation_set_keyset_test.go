@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -60,8 +62,9 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	require.NotEmpty(t, recs)
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
 
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
 	opts := listoptions.ListOptions{Limit: 1}
-	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}})
+	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
 	require.NoError(t, err)
 	require.Len(t, page1.Results, 1)
 	assert.GreaterOrEqual(t, page1.Count, 2)
@@ -71,10 +74,159 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	opts.AfterNamespace = page1.Results[0].Project
 	opts.AfterWorkload = page1.Results[0].Workload
 	opts.AfterContainer = page1.Results[0].Container
-	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}})
+	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
 	require.NoError(t, err)
 	require.Len(t, page2.Results, 1)
 	assert.NotEqual(t, page1.Results[0].ID, page2.Results[0].ID)
+}
+
+func setupNativeListGormDB(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+}
+
+func seedNativeListCluster(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, alias string, tenantID int) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, tenantID, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2, $3, 'src-1', now()) ON CONFLICT DO NOTHING`, tenantID, clusterUUID, alias)
+	require.NoError(t, err)
+}
+
+func TestGetNativeRecommendations_UsesOrgContainerKeys(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	var keyCount int
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, testutil.TestOrgID).Scan(&keyCount)
+	require.NoError(t, err)
+	require.Equal(t, 1, keyCount)
+
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, testutil.TestContainer, page.Results[0].Container)
+}
+
+func TestGetNativeRecommendations_RBACClusterFilter(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+
+	cfg := config.GetConfig()
+	origRBAC := cfg.RBACEnabled
+	cfg.RBACEnabled = true
+	t.Cleanup(func() { cfg.RBACEnabled = origRBAC })
+
+	clusterAllowed := "11111111-1111-1111-1111-111111111111"
+	clusterDenied := "22222222-2222-2222-2222-222222222222"
+	seedNativeListCluster(t, pool, testutil.TestOrgID, clusterAllowed, "allowed", 1)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, clusterDenied, "denied", 1)
+
+	start := testutil.RecentStart()
+	end := start.AddDate(0, 0, 6)
+	for i := 0; i < 7; i++ {
+		for _, spec := range []struct {
+			clusterUUID, namespace string
+		}{
+			{clusterAllowed, "allowed-namespace"},
+			{clusterDenied, "denied-namespace"},
+		} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate:       start.AddDate(0, 0, i),
+				OrgID:            testutil.TestOrgID,
+				ClusterUUID:      spec.clusterUUID,
+				Namespace:        spec.namespace,
+				Workload:         testutil.TestWorkload,
+				WorkloadType:     testutil.TestWorkloadType,
+				ContainerName:    testutil.TestContainer,
+				CPURequestP50MC:  180,
+				CPURequestP95MC:  210,
+				CPUUsageP50MC:    170,
+				CPUUsageP95MC:    200,
+				MemRequestP50KiB: 512000,
+				MemRequestP95KiB: 524288,
+				MemUsageP50KiB:   500000,
+				MemUsageP95KiB:   520000,
+			})
+		}
+	}
+	for _, spec := range []struct {
+		clusterUUID, namespace string
+	}{
+		{clusterAllowed, "allowed-namespace"},
+		{clusterDenied, "denied-namespace"},
+	} {
+		recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, spec.clusterUUID, start, end, engine.OOMConfig{})
+		require.NoError(t, err)
+		require.NotEmpty(t, recs)
+		require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	}
+
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
+	perms := map[string][]string{"openshift.cluster": {clusterAllowed}}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, perms)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, clusterAllowed, page.Results[0].ClusterUUID)
+}
+
+func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate:      start,
+		OrgID:           testutil.TestOrgID,
+		ClusterUUID:     testutil.TestClusterUUID,
+		Namespace:       "other-namespace",
+		Workload:        "workload-b",
+		WorkloadType:    testutil.TestWorkloadType,
+		ContainerName:   "container-b",
+		CPURequestP50MC: 180,
+		CPURequestP95MC: 210,
+		CPUUsageP50MC:   170,
+		CPUUsageP95MC:   200,
+		MemRequestP50KiB: 512000,
+		MemRequestP95KiB: 524288,
+		MemUsageP50KiB:   500000,
+		MemUsageP95KiB:   520000,
+	})
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":  false,
+		"rs.namespace = ?": testutil.TestNamespace,
+	}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, testutil.TestNamespace, page.Results[0].Project)
 }
 
 func TestRefreshOrgRecommendationStats(t *testing.T) {
