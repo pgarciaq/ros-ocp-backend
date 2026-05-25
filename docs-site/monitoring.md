@@ -148,8 +148,46 @@ When tenants change recommendation thresholds via the Settings API:
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `ros_threshold_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | `success` vs `error` |
-| `ros_threshold_cache_entries` | Gauge | — | In-memory cache size |
+| `ros_threshold_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | `success`, `error`, or **`skipped`** (cluster hash unchanged) |
+| `ros_threshold_cache_entries` | Gauge | — | In-memory threshold resolution cache size |
+
+**Skip behavior:** After a Settings PUT, ROS compares each cluster's stored
+threshold hash against the new settings. Unchanged clusters increment
+`status=skipped` instead of re-running the engine. Tune parallel fan-out with
+`ROS_THRESHOLD_RECALC_CONCURRENCY` (default `3`). Disable recalc entirely with
+`ROS_THRESHOLD_RECALCULATION_ENABLED=false`.
+
+**High skip ratio is healthy** — it means redundant work is being avoided:
+
+```promql
+sum(rate(ros_threshold_recalculation_total{status="skipped"}[1h]))
+/ sum(rate(ros_threshold_recalculation_total[1h]))
+```
+
+### Kafka parallel workers
+
+Parallel ingestion is controlled by `ROS_KAFKA_PARALLEL` (default `true`) and
+`ROS_KAFKA_WORKERS` (default `3`). There is no dedicated worker-pool gauge;
+throughput appears on `rosocp_kafka_messages_processed_total`. The processor
+logs batch progress every 100 messages at INFO level.
+
+**Tuning signals:**
+
+- Flat `rate(rosocp_kafka_messages_processed_total[5m])` with rising external
+  consumer lag → increase workers or check DB pool limits (`ROS_DB_MAX_CONNS`).
+- Rising `rosocp_ingestion_errors_total` after raising workers → pool
+  saturation; reduce workers or increase `ROS_DB_MAX_CONNS`.
+
+### RBAC permission cache
+
+The API caches RBAC permission lookups in memory keyed by `X-Rh-Identity`.
+TTL is set by `ROS_RBAC_CACHE_TTL` (default **60 seconds**; `0` disables).
+
+There is no exported cache hit/miss metric. Observable effects:
+
+- Lower RBAC service request rate at steady API traffic.
+- Permission changes may take up to TTL seconds to propagate for cached identities.
+- Set `ROS_RBAC_CACHE_TTL=0` temporarily when debugging authorization issues.
 
 ### Retention
 
@@ -203,6 +241,10 @@ Aggregate logs by `org_id` and `request_id` in your log platform (Loki, Elastics
 
 ## Configuration
 
+Performance and observability-related environment variables. For the complete
+reference (database, Kafka, thresholds, plugins), see
+[Configuration Reference](configuration.md).
+
 | Environment variable | Default | Purpose |
 |---------------------|---------|---------|
 | `LOG_LEVEL` | `INFO` | Verbosity |
@@ -210,8 +252,14 @@ Aggregate logs by `org_id` and `request_id` in your log platform (Loki, Elastics
 | `SERVICE_NAME` | `rosocp` | Log `service` field |
 | `PROMETHEUS_PORT` | `5005` / `9000` | Metrics listener port |
 | `API_PORT` | `8000` | REST API port |
+| `ROS_KAFKA_PARALLEL` | `true` | Parallel Kafka processing |
+| `ROS_KAFKA_WORKERS` | `3` | Kafka worker goroutines |
+| `ROS_RBAC_CACHE_TTL` | `60` | RBAC cache TTL (seconds; `0` = off) |
 | `ROS_DB_MAX_CONNS` | `10` | DB pool size |
+| `ROS_DB_MIN_CONNS` | `2` | DB pool minimum |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool wait timeout |
+| `ROS_THRESHOLD_RECALC_CONCURRENCY` | `3` | Parallel cluster threshold recalc |
+| `ROS_RESHIP_CONCURRENCY` | `2` | Parallel masu reship calls |
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Reship retry interval |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Max consecutive reship failures |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Threshold-change recalc |
@@ -307,6 +355,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 ## Related Documentation
 
+- [Configuration Reference](configuration.md)
 - [Upgrade Runbook](operations/upgrade-runbook.md)
 - [Known Issues](known-issues.md)
 - [Configurability Reference](architecture/configurability.md)
