@@ -117,7 +117,7 @@ func TestGetRecommendationQuality_Integration(t *testing.T) {
 	})
 
 	t.Run("filter by project", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/quality?project="+testutil.TestNamespace, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/quality?filter%5Bproject%5D="+testutil.TestNamespace, nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)

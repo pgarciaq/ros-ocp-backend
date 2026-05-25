@@ -73,10 +73,10 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		}
 	}
 
-	// Optional filters (Koku: filter[cluster], filter[project]; legacy: cluster_uuid, namespace)
-	clusterFilter := queryparams.FirstFilter(c, "cluster", "cluster_uuid")
-	namespaceFilter := queryparams.FirstFilter(c, "project", "namespace")
-	typeFilter := queryparams.FirstFilter(c, "recommendation_type", "recommendation_type")
+	// Optional filters: filter[cluster], filter[project], filter[recommendation_type]
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	namespaceFilter := queryparams.FirstFilter(c, "project")
+	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
 
 	ctx := c.Request().Context()
 

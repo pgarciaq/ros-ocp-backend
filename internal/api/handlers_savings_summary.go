@@ -58,7 +58,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	userPerms := get_user_permissions(c)
 	hlog := requestLogger(c, orgID)
 
-	engineProfile := queryparams.FirstFilter(c, "engine", "engine")
+	engineProfile := queryparams.FirstFilter(c, "engine")
 	if engineProfile == "" {
 		engineProfile = "cost"
 	}

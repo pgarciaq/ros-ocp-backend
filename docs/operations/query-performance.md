@@ -410,7 +410,7 @@ Tag sync is implemented via `POST /api/cost-management/v1/internal/tags/sync` (g
 `ROS_TAGS_ENABLED`, authenticated with a Kubernetes ServiceAccount bearer token). Sync
 freshness is exposed at `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
 Koku pushes namespace-level tags into `org_container_keys.resolved_tags`; the container list applies
-`?filter[tag:key]=value1,value2` (Koku syntax) or legacy `?tag=key:value` on step 1 using
+`?filter[tag:key]=value1,value2` on step 1 using
 the GIN index.
 
 **Filter by tag value** — GIN-indexed containment:

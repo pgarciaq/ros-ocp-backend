@@ -130,7 +130,7 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 	})
 
 	t.Run("filter by container", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/history?container="+testutil.TestContainer, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/history?filter%5Bcontainer%5D="+testutil.TestContainer, nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)

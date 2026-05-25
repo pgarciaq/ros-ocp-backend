@@ -152,12 +152,12 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	clusterFilter := queryparams.FirstFilter(c, "cluster", "cluster_uuid")
-	nodeFilter := queryparams.FirstFilter(c, "node", "node")
-	termFilter := queryparams.FirstFilter(c, "term", "term")
-	engineFilter := queryparams.FirstFilter(c, "engine", "engine")
-	underutilFilter := queryparams.FirstFilter(c, "is_underutilized", "is_underutilized")
-	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted", "is_overcommitted")
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	nodeFilter := queryparams.FirstFilter(c, "node")
+	termFilter := queryparams.FirstFilter(c, "term")
+	engineFilter := queryparams.FirstFilter(c, "engine")
+	underutilFilter := queryparams.FirstFilter(c, "is_underutilized")
+	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted")
 
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})

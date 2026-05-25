@@ -222,7 +222,7 @@ See [tag-sync-auth.md](tag-sync-auth.md) for current auth and the planned **mTLS
 **Data flow and lifecycle:** [tag-sync.md](tag-sync.md)
 
 List filtering supports Koku syntax `?filter[tag:key]=value1,value2` (OR within a key,
-AND across keys) and legacy `?tag=key:value`.
+AND across keys). See [features/tag-filtering.md](../features/tag-filtering.md).
 
 ---
 

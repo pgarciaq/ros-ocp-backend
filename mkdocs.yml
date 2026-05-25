@@ -81,6 +81,7 @@ nav:
       - Dual Engine (Cost vs Performance): features/dual-engine.md
       - Savings Estimations: features/savings-estimations.md
       - History & Quality: features/history-and-quality.md
+      - Tag Filtering: features/tag-filtering.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Recommendation Engines: architecture/recommendation-engines.md

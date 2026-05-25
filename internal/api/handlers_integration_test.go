@@ -475,7 +475,7 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	identityHeader := makeIdentityHeader(testutil.TestOrgID)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift?cluster=alpha-cluster", nil)
+		"/api/cost-management/v1/recommendations/openshift?filter%5Bcluster%5D=alpha-cluster", nil)
 	req.Header.Set("X-Rh-Identity", identityHeader)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -549,7 +549,7 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	identityHeader := makeIdentityHeader(testutil.TestOrgID)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift?project=production", nil)
+		"/api/cost-management/v1/recommendations/openshift?filter%5Bproject%5D=production", nil)
 	req.Header.Set("X-Rh-Identity", identityHeader)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -881,7 +881,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	})
 
 	t.Run("has_gpu=true filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?has_gpu=true", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?filter%5Bhas_gpu%5D=true", nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
@@ -897,7 +897,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	})
 
 	t.Run("has_gpu=false filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?has_gpu=false", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?filter%5Bhas_gpu%5D=false", nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
@@ -913,7 +913,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	})
 
 	t.Run("gpu_model filter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?gpu_model=A100", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?filter%5Bgpu_model%5D=A100", nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)

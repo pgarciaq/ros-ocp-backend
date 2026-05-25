@@ -1,8 +1,7 @@
 # API Query Parameters
 
 ROS-OCP Backend list and filter endpoints accept **Koku-aligned bracket notation** for
-query parameters. Legacy flat parameter names remain supported for backward compatibility
-but are deprecated.
+query parameters.
 
 Authentication uses the `x-rh-identity` header today. **Mutual TLS (mTLS)** is the planned
 upgrade path for on-prem service-to-service calls; bracket syntax is unchanged under mTLS.
@@ -35,6 +34,12 @@ Use `filter[field]` with comma-separated values (OR within the same field):
 | `container` | Container name |
 | `node` | Node name (node/GPU endpoints) |
 | `tag:<key>` | Resolved cost-management tag (feature-flagged) |
+| `has_gpu` | GPU presence (`true` / `false`) |
+| `gpu_model` | GPU model substring match |
+| `gpu_classification` | GPU classification exact match |
+| `stale` | Staleness filter (`true`, `false`, `only`) |
+| `is_underutilized` | Node utilization filter |
+| `recommendation_type` | Recommendation category (PVC/snapshot endpoints) |
 
 **Exact and exclude modes** (container/namespace list endpoints):
 
@@ -43,11 +48,11 @@ Use `filter[field]` with comma-separated values (OR within the same field):
 ?exclude[project]=openshift-*
 ```
 
-Legacy equivalents (`?project=…`, `?cluster=…`, `?cluster_uuid=…`, `?namespace=…`) still work.
+Flat parameter names (e.g. `?project=…`, `?cluster_uuid=…`) are **not** supported.
 
 ## Ordering
 
-Koku syntax embeds direction in the bracket value:
+Sort direction is embedded in the bracket value:
 
 ```
 ?order_by[last_reported]=desc
@@ -55,11 +60,7 @@ Koku syntax embeds direction in the bracket value:
 ?order_by[cpu_variation_short_cost]=desc
 ```
 
-Legacy syntax (deprecated):
-
-```
-?order_by=project&order_how=asc
-```
+The legacy `?order_by=field&order_how=asc|desc` pair is **not** supported.
 
 Allowed `order_by` keys vary by endpoint; see `internal/api/listoptions/list_options.go`.
 
@@ -92,5 +93,4 @@ Accept: text/csv
 ## Implementation
 
 Parsing lives in [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
-Handlers merge Koku bracket values with legacy keys via `IncludeValues`, `ExactValues`, and
-`ExcludeValues`.
+Handlers read filters via `IncludeValues`, `ExactValues`, and `ExcludeValues` on bracket keys only.

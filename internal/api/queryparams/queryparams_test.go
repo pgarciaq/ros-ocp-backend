@@ -27,9 +27,9 @@ func TestSplitCommaValues(t *testing.T) {
 }
 
 func TestIncludeValues(t *testing.T) {
-	t.Run("legacy repeated keys", func(t *testing.T) {
+	t.Run("flat keys are ignored", func(t *testing.T) {
 		c := newEchoContext("project=alpha&project=beta")
-		assert.Equal(t, []string{"alpha", "beta"}, IncludeValues(c, "project"))
+		assert.Nil(t, IncludeValues(c, "project"))
 	})
 
 	t.Run("koku bracket comma separated", func(t *testing.T) {
@@ -37,9 +37,9 @@ func TestIncludeValues(t *testing.T) {
 		assert.Equal(t, []string{"payments", "frontend"}, IncludeValues(c, "project"))
 	})
 
-	t.Run("legacy and koku merged", func(t *testing.T) {
-		c := newEchoContext("project=legacy&filter%5Bproject%5D=koku")
-		assert.Equal(t, []string{"legacy", "koku"}, IncludeValues(c, "project"))
+	t.Run("repeated bracket keys", func(t *testing.T) {
+		c := newEchoContext("filter%5Bproject%5D=alpha&filter%5Bproject%5D=beta")
+		assert.Equal(t, []string{"alpha", "beta"}, IncludeValues(c, "project"))
 	})
 }
 
@@ -52,12 +52,12 @@ func TestExcludeAndExactValues(t *testing.T) {
 func TestFirstFilter(t *testing.T) {
 	t.Run("koku cluster filter", func(t *testing.T) {
 		c := newEchoContext("filter%5Bcluster%5D=550e8400-e29b-41d4-a716-446655440000")
-		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster", "cluster_uuid"))
+		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster"))
 	})
 
-	t.Run("legacy cluster_uuid alias", func(t *testing.T) {
+	t.Run("flat cluster param ignored", func(t *testing.T) {
 		c := newEchoContext("cluster_uuid=legacy-uuid")
-		assert.Equal(t, "legacy-uuid", FirstFilter(c, "cluster", "cluster_uuid"))
+		assert.Equal(t, "", FirstFilter(c, "cluster"))
 	})
 }
 
@@ -75,12 +75,12 @@ func TestParseOrderBy(t *testing.T) {
 		assert.Equal(t, "asc", dir)
 	})
 
-	t.Run("legacy syntax", func(t *testing.T) {
+	t.Run("legacy flat order_by ignored", func(t *testing.T) {
 		c := newEchoContext("order_by=project&order_how=asc")
 		col, dir, err := ParseOrderBy(c, allowed, "last_reported", "desc")
 		require.NoError(t, err)
-		assert.Equal(t, "ns.namespace", col)
-		assert.Equal(t, "asc", dir)
+		assert.Equal(t, "clusters.last_reported_at", col)
+		assert.Equal(t, "desc", dir)
 	})
 
 	t.Run("default when unset", func(t *testing.T) {

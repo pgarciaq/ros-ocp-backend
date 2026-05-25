@@ -54,4 +54,4 @@ Use the sidebar to navigate to individual plugin documentation. Each page includ
 ## Query parameters
 
 List endpoints use Koku-aligned bracket notation (`filter[project]`, `order_by[field]`).
-See [Query Parameters](query-parameters.md) for the full reference and legacy aliases.
+See [Query Parameters](query-parameters.md) for the full bracket-syntax reference.

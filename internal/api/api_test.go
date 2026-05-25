@@ -122,7 +122,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 	}{
 		{
 			name:        "container include (partial match)",
-			queryParams: map[string][]string{"container": {"web-server"}},
+			queryParams: map[string][]string{"filter[container]": {"web-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ?"])
 			},
@@ -167,8 +167,8 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "workload_type plain param uses exact match not partial",
-			queryParams: map[string][]string{"workload_type": {"deployment"}},
+			name:        "workload_type filter uses exact match not partial",
+			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				assert.Equal(t, []string{"deployment"}, result[workloadTypeCol+" = ?"])
 				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
@@ -190,7 +190,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "workload_type invalid value returns error",
-			queryParams: map[string][]string{"workload_type": {"not-a-real-type"}},
+			queryParams: map[string][]string{"filter[workload_type]": {"not-a-real-type"}},
 			wantErr:     true,
 			errContains: "invalid workload_type",
 		},
@@ -223,7 +223,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "container koku filter with legacy exact still works",
+			name:        "container koku filter partial match",
 			queryParams: map[string][]string{"filter[container]": {"web-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ?"])
@@ -231,7 +231,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "container partial match multiple values",
-			queryParams: map[string][]string{"container": {"web-server", "api-server"}},
+			queryParams: map[string][]string{"filter[container]": {"web-server", "api-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				key := containerCol + " ILIKE ? OR " + containerCol + " ILIKE ?"
 				assert.Equal(t, []string{"%web-server%", "%api-server%"}, result[key])
@@ -247,7 +247,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "workload partial match multiple values",
-			queryParams: map[string][]string{"workload": {"cart-svc", "pay-svc"}},
+			queryParams: map[string][]string{"filter[workload]": {"cart-svc", "pay-svc"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				key := workloadCol + " ILIKE ? OR " + workloadCol + " ILIKE ?"
 				assert.Equal(t, []string{"%cart-svc%", "%pay-svc%"}, result[key])
@@ -255,7 +255,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "project partial match multiple values",
-			queryParams: map[string][]string{"project": {"ns-alpha", "ns-beta"}},
+			queryParams: map[string][]string{"filter[project]": {"ns-alpha", "ns-beta"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				key := projectContainerCol + " ILIKE ? OR " + projectContainerCol + " ILIKE ?"
 				assert.Equal(t, []string{"%ns-alpha%", "%ns-beta%"}, result[key])
@@ -263,7 +263,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "container exceeds max length - passes through (sanitization skipped)",
-			queryParams: map[string][]string{"container": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
+			queryParams: map[string][]string{"filter[container]": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				key := containerCol + " ILIKE ?"
@@ -274,7 +274,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		},
 		{
 			name:        "project exceeds max length - passes through (sanitization skipped)",
-			queryParams: map[string][]string{"project": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
+			queryParams: map[string][]string{"filter[project]": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				key := projectContainerCol + " ILIKE ?"
@@ -286,8 +286,8 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 		{
 			name: "multiple filters exceed max length - both pass through",
 			queryParams: map[string][]string{
-				"container": {strings.Repeat("a", model.NamespaceMaxLen+1)},
-				"project":   {strings.Repeat("b", model.NamespaceMaxLen+1)},
+				"filter[container]": {strings.Repeat("a", model.NamespaceMaxLen+1)},
+				"filter[project]":   {strings.Repeat("b", model.NamespaceMaxLen+1)},
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {

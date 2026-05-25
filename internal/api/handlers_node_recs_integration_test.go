@@ -396,7 +396,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 	app := setupNodeRecsEcho(pool)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?node_name=target-node", nil)
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bnode%5D=target-node", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -443,7 +443,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	app := setupNodeRecsEcho(pool)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?gpu_model=L4", nil)
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bgpu_model%5D=L4", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -724,7 +724,7 @@ func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
 	}
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=confidence&order_how=asc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by%5Bconfidence%5D=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -746,7 +746,7 @@ func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=invalid_field", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by%5Binvalid_field%5D=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)

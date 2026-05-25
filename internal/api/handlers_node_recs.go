@@ -78,9 +78,9 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
-	nodeNameFilter := queryparams.FirstFilter(c, "node", "node_name")
-	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model", "gpu_model")
-	termFilter := queryparams.FirstFilter(c, "term", "term")
+	nodeNameFilter := queryparams.FirstFilter(c, "node")
+	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model")
+	termFilter := queryparams.FirstFilter(c, "term")
 
 	useTripleSQL := termFilter == "" &&
 		opts.Format != listoptions.ResponseFormatCSV &&

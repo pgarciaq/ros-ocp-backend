@@ -62,6 +62,9 @@ perspectives for the same workload: cost-minimizing vs headroom-maximizing.
 **[History & Quality](history-and-quality.md)** — Time-series of past
 recommendations and quality metrics (stability, adoption, OOM events).
 
+**[Tag Filtering](tag-filtering.md)** — Filter container recommendations by
+OpenShift labels synced from Koku (`filter[tag:key]=value`).
+
 !!! tip "Getting Started"
     Integrate with the REST API and UI using the
     **[Frontend Integration Guide](../ui-integration-guide.md)**. It covers

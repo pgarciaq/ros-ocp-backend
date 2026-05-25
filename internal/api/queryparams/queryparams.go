@@ -1,5 +1,5 @@
 // Package queryparams parses HTTP query parameters using Koku-aligned bracket
-// notation (filter[field], order_by[field]) while accepting legacy flat names.
+// notation (filter[field], order_by[field]).
 package queryparams
 
 import (
@@ -45,12 +45,9 @@ func BracketKey(name string) string {
 	return FilterPrefix + name + "]"
 }
 
-// IncludeValues returns include-filter values from legacy repeated keys (?project=a&project=b)
-// and Koku bracket syntax (?filter[project]=a,b). Legacy flat names are deprecated.
+// IncludeValues returns include-filter values from Koku bracket syntax (?filter[field]=a,b).
 func IncludeValues(c echo.Context, name string) []string {
-	legacy := c.QueryParams()[name]
-	bracket := c.QueryParams()[BracketKey(name)]
-	return SplitCommaValues(append(legacy, bracket...))
+	return SplitCommaValues(c.QueryParams()[BracketKey(name)])
 }
 
 // ExcludeValues returns exclude-filter values from exclude[name] bracket syntax.
@@ -70,29 +67,22 @@ func AllFilterValues(c echo.Context, name string) []string {
 	return append(append(IncludeValues(c, name), ExactValues(c, name)...), ExcludeValues(c, name)...)
 }
 
-// FirstValue returns the first non-empty value from IncludeValues or a legacy single-key lookup.
-// names lists Koku filter names in order; legacyAliases are deprecated flat parameter names.
-func FirstValue(c echo.Context, names []string, legacyAliases ...string) string {
+// FirstValue returns the first non-empty value from IncludeValues for the given filter names.
+func FirstValue(c echo.Context, names ...string) string {
 	for _, name := range names {
 		if vals := IncludeValues(c, name); len(vals) > 0 {
 			return vals[0]
-		}
-	}
-	for _, alias := range legacyAliases {
-		if v := strings.TrimSpace(c.QueryParam(alias)); v != "" {
-			return v
 		}
 	}
 	return ""
 }
 
 // FirstFilter is shorthand for FirstValue with a single Koku filter name.
-func FirstFilter(c echo.Context, name string, legacyAliases ...string) string {
-	return FirstValue(c, []string{name}, legacyAliases...)
+func FirstFilter(c echo.Context, name string) string {
+	return FirstValue(c, name)
 }
 
-// ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc or legacy
-// order_by=field&order_how=asc|desc. Legacy flat order_by/order_how are deprecated.
+// ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc syntax.
 func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField, defaultDirection string) (dbColumn, direction string, err error) {
 	if dbCol, dir, bracketErr := bracketOrderBy(c, allowedFields); bracketErr != nil {
 		return "", "", bracketErr
@@ -100,31 +90,14 @@ func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField,
 		return dbCol, dir, nil
 	}
 
-	orderBy := strings.TrimSpace(c.QueryParam("order_by"))
-	orderHow := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
-
-	if orderBy == "" {
-		if defaultField == "" {
-			return "", defaultDirection, nil
-		}
-		dbCol, ok := allowedFields[defaultField]
-		if !ok {
-			return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
-		}
-		return dbCol, defaultDirection, nil
+	if defaultField == "" {
+		return "", defaultDirection, nil
 	}
-
-	dbCol, ok := allowedFields[orderBy]
+	dbCol, ok := allowedFields[defaultField]
 	if !ok {
-		return "", "", fmt.Errorf("invalid order_by value: %s", orderBy)
+		return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
 	}
-	if orderHow == "" {
-		orderHow = defaultDirection
-	}
-	if orderHow != "asc" && orderHow != "desc" {
-		return "", "", fmt.Errorf("invalid order_how value: %s", orderHow)
-	}
-	return dbCol, orderHow, nil
+	return dbCol, defaultDirection, nil
 }
 
 // bracketOrderBy returns dbColumn when bracket order_by is present; empty dbColumn when absent.
@@ -165,22 +138,13 @@ func ParseOrderByAPIKey(c echo.Context, allowedFields map[string]string, default
 		return field, dir, nil
 	}
 
-	orderBy := strings.TrimSpace(c.QueryParam("order_by"))
-	orderHow := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
-
-	if orderBy == "" {
+	if defaultField == "" {
 		return defaultField, defaultDirection, nil
 	}
-	if _, ok := allowedFields[orderBy]; !ok {
-		return "", "", fmt.Errorf("invalid order_by value: %s", orderBy)
+	if _, ok := allowedFields[defaultField]; !ok {
+		return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
 	}
-	if orderHow == "" {
-		orderHow = defaultDirection
-	}
-	if orderHow != "asc" && orderHow != "desc" {
-		return "", "", fmt.Errorf("invalid order_how value: %s", orderHow)
-	}
-	return orderBy, orderHow, nil
+	return defaultField, defaultDirection, nil
 }
 
 func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, err error) {

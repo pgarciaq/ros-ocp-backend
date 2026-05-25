@@ -201,27 +201,44 @@ workload-specific tuning examples, see
 |----------|---------|-------------|
 | `ROS_TAGS_ENABLED` | `false` | Enables tag push API and tag list filters. When `false`, push returns 404 and tag params are ignored. |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags. Empty accepts any authenticated cluster SA. |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for local testing. |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for local testing (set the same value on Koku). |
 
 Koku pushes resolved container tags to ROS via:
 
 - `POST /api/cost-management/v1/internal/tags/sync` — full-replace sync per org
-- `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` — sync freshness
+- `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` — sync freshness (`synced_at`, tag key catalog)
 
 ### Authentication
 
-**Current:** Kubernetes ServiceAccount token validation via the TokenReview API.
-Koku sends `Authorization: Bearer <service-account-token>`; ROS validates the caller
-is an authenticated in-cluster ServiceAccount. `ROS_TAGS_DEV_TOKEN` is a dev-only fallback.
+**Current (production):** Kubernetes ServiceAccount token validation via the TokenReview API.
+Koku worker sends `Authorization: Bearer <service-account-token>`; ROS validates the caller
+is an authenticated in-cluster ServiceAccount.
+
+**Development:** Set `ROS_TAGS_DEV_TOKEN` to the same static value on **both** Koku and ROS
+when projected SA tokens are unavailable (docker-compose).
 
 **Future: mTLS** — Planned upgrade for on-prem deployments. Mutual TLS between Koku and
 ros-ocp-backend pods (via cert-manager or a service-mesh sidecar) will provide
 bidirectional authentication and eliminate token rotation concerns. TokenReview auth
-will remain supported during migration.
+will remain supported during migration behind a feature flag.
 
-Internal reference: [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
+### Koku-side variables
 
-Group-by tag dimensions are planned for a follow-up release.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Enables Celery tag sync tasks |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | ROS API base URL for push |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev bearer token (must match ROS) |
+
+### Data flow and filtering
+
+See [Tag Filtering](features/tag-filtering.md) for lifecycle scenarios, freshness guarantees,
+and list API syntax (`?filter[tag:key]=value1,value2`).
+
+Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filtering.md),
+[`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
+
+Group-by tag dimensions (`group_by[tag:key]=*`) are planned for a follow-up release.
 
 ---
 

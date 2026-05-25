@@ -4,6 +4,8 @@ Internal tag sync endpoints (`POST /api/cost-management/v1/internal/tags/sync`,
 `GET /api/cost-management/v1/internal/tags/status`) are not exposed through the
 public ROS API identity/RBAC middleware. Access is restricted to in-cluster callers.
 
+---
+
 ## Current: Kubernetes ServiceAccount Token Validation
 
 Koku pushes resolved tags from the worker/listener pod using a bearer token:
@@ -28,7 +30,7 @@ token via the Kubernetes **TokenReview API**:
 
 **Dev fallback:** When `ROS_TAGS_DEV_TOKEN` is set, matching bearer tokens are accepted
 with a warning log. Use only for local/docker-compose development where TokenReview is
-unavailable.
+unavailable. Set the **same** token on Koku (`ROS_TAGS_DEV_TOKEN`) and ROS.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -38,6 +40,92 @@ unavailable.
 
 Implementation: [`internal/tags/auth.go`](../../internal/tags/auth.go),
 [`internal/api/handlers_tags_sync.go`](../../internal/api/handlers_tags_sync.go).
+
+---
+
+## Tag Lifecycle and Auth Interaction
+
+Authentication gates **who** may push; lifecycle events determine **when** pushes occur.
+
+| Scenario | Sync triggered? | Auth required? | ROS state if sync fails |
+|----------|-----------------|----------------|-------------------------|
+| Tag key enabled in Settings | Yes (immediate) | Bearer token | Previous tags retained |
+| Tag key disabled | Yes (immediate) | Bearer token | Stale until success |
+| OCP summarization complete | Yes (per tenant) | Bearer token | Stale until success |
+| Periodic safety-net (6h) | Yes (all tenants) | Bearer token | Stale until success |
+| Invalid/missing token | N/A | **401/403** | Unchanged |
+| ROS pod restart | N/A | N/A | Tags persisted in DB |
+
+Failed auth does **not** corrupt tag data — ROS rejects the request before the
+full-replace transaction begins.
+
+---
+
+## Failure Modes and Recovery
+
+### TokenReview unavailable
+
+**Symptoms:** ROS logs `service account reviewer token unavailable` or TokenReview HTTP errors.
+
+**Causes:** ROS API pod not running with a mounted SA token; wrong `KUBERNETES_TOKEN_REVIEW_URL`; API server unreachable.
+
+**Recovery:**
+
+1. Verify ROS deployment has `automountServiceAccountToken: true`.
+2. Confirm in-cluster DNS to `kubernetes.default.svc`.
+3. For local dev, set `ROS_TAGS_DEV_TOKEN` on both Koku and ROS.
+
+### Caller token rejected
+
+**Symptoms:** `token not authenticated` or `service account "…" is not allowed`.
+
+**Causes:** Expired projected token; SA not in `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`; non-SA user token.
+
+**Recovery:**
+
+1. Confirm Koku worker uses the expected ServiceAccount.
+2. Add SA name to `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` or leave empty for any SA.
+3. Check projected token volume mount on Koku worker pod.
+
+### Koku cannot read SA token
+
+**Symptoms:** Koku log `service account token unavailable for ROS tag sync`.
+
+**Recovery:** Set `ROS_TAGS_DEV_TOKEN` for dev, or fix SA token mount on Koku worker.
+
+### Sync succeeds but filters stale
+
+**Symptoms:** `GET /internal/tags/status` shows old `synced_at`.
+
+**Causes:** Network partition after summarization; Celery task backlog; `ROS_TAGS_ENABLED=false` on Koku.
+
+**Recovery:** Wait for 6-hour periodic sync or manually trigger summarization/tag settings change. Monitor Koku `ROS tag sync failed` logs.
+
+### Partial org corruption (theoretical)
+
+Full-replace runs in a transaction — a mid-sync crash rolls back. Worst case: last **successful** sync remains visible (eventual consistency, not data loss).
+
+---
+
+## Monitoring and Alerting
+
+| Signal | Source | Suggested alert |
+|--------|--------|-----------------|
+| Sync failures | Koku log `ROS tag sync failed` | > N failures in 1h per org |
+| Stale `synced_at` | `GET /internal/tags/status` | `synced_at` older than 7h |
+| Auth failures | ROS API 401/403 on `/internal/tags/*` | Spike in unauthorized pushes |
+| Zero `updated` rows | Sync response `updated: 0` with non-empty payload | Investigate missing `org_container_keys` rows |
+| Removed keys | ROS log `tag sync: removed tag key` | Informational (expected on disable) |
+
+**Health check workflow:**
+
+```bash
+# From a pod with the Koku worker SA token:
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
+```
+
+Compare `synced_at` to last successful OCP manifest completion time.
 
 ---
 
@@ -74,18 +162,21 @@ mTLS addresses these by establishing **bidirectional authentication** at the tra
 
 1. Ship mTLS support alongside existing TokenReview auth (feature flag, e.g. `ROS_TAGS_MTLS_ENABLED`).
 2. Helm chart mounts cert-manager `Certificate` resources for Koku worker and ROS API.
-3. Deprecate TokenReview for tag sync once mTLS is validated in cost-onprem CI.
-4. Remove `ROS_TAGS_DEV_TOKEN` requirement for production paths.
+3. Configure Koku `requests` client with client cert; ROS Echo with `VerifyClientCertIfGiven` or mesh policy.
+4. Deprecate TokenReview for tag sync once mTLS is validated in cost-onprem CI.
+5. Remove `ROS_TAGS_DEV_TOKEN` requirement for production paths.
 
 **What mTLS does not replace:**
 
 - Feature gating (`ROS_TAGS_ENABLED`) — still required to enable tag sync endpoints.
 - Payload validation and org scoping — ROS still validates `org_id` and applies full-replace semantics.
+- Periodic safety-net — still recommended until webhook-based instant sync exists.
 
 ---
 
 ## Related
 
+- Feature overview: [`../features/tag-filtering.md`](../features/tag-filtering.md)
 - Tag sync data flow: [`tag-sync.md`](tag-sync.md)
 - Configuration reference: [`configuration.md`](configuration.md#tag-sync)
 - Koku integration: [`koku/docs/architecture/ros-ocp-integration.md`](../../../../koku/docs/architecture/ros-ocp-integration.md)
