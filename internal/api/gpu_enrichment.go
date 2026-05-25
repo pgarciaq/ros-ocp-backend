@@ -2,8 +2,8 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -11,6 +11,12 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+)
+
+var (
+	gpuCostProvider     costdata.CostDataProvider
+	gpuCostProviderMu   sync.RWMutex
+	gpuCostProviderBase string
 )
 
 // EnrichNativeContainerResultsWithGPU attaches GPU utilization and savings data (APIEnricher delegate).
@@ -61,13 +67,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 
 		var costData *costdata.ClusterCostData
 		if costProvider != nil && orgID != "" {
-			kokuOrgID := strings.TrimPrefix(orgID, "org")
-			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, clusterUUID, start, now)
-			if err != nil {
-				log.Warnf("enrichWithGPU: cost data fetch failed for cluster %s: %v", clusterUUID, err)
-			} else {
-				costData = cd
-			}
+			costData = GetCachedCostRates(ctx, orgID, clusterUUID, start, now)
 		}
 
 		var gpuRate *float32
@@ -91,7 +91,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 
 		for _, idx := range indices {
 			r := &results[idx]
-			key := fmt.Sprintf("%s/%s/%s", r.Project, r.Workload, r.Container)
+			key := r.Project + "/" + r.Workload + "/" + r.Container
 			recs, ok := gpuRecs[key]
 			if !ok || len(recs) == 0 {
 				continue
@@ -116,8 +116,24 @@ func getGPUCostProvider() costdata.CostDataProvider {
 	if !cfg.SavingsEstimatesEnabled || cfg.KokuMasuURL == "" {
 		return nil
 	}
+
+	gpuCostProviderMu.RLock()
+	if gpuCostProvider != nil && gpuCostProviderBase == cfg.KokuMasuURL {
+		p := gpuCostProvider
+		gpuCostProviderMu.RUnlock()
+		return p
+	}
+	gpuCostProviderMu.RUnlock()
+
+	gpuCostProviderMu.Lock()
+	defer gpuCostProviderMu.Unlock()
+	if gpuCostProvider != nil && gpuCostProviderBase == cfg.KokuMasuURL {
+		return gpuCostProvider
+	}
 	timeout := time.Duration(cfg.GlobalHTTPClientTimeoutSecs) * time.Second
-	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
+	gpuCostProvider = costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
+	gpuCostProviderBase = cfg.KokuMasuURL
+	return gpuCostProvider
 }
 
 // filterGPUResults is a no-op: all GPU filters (has_gpu, gpu_model,

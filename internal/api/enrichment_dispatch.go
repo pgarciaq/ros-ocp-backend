@@ -20,6 +20,7 @@ func EnrichNativeContainerResults(ctx context.Context, in *NativeContainerEnrich
 	if in == nil || len(in.Results) == 0 {
 		return
 	}
+	ctx = WithEnrichmentCache(ctx, in.OrgID)
 	for _, e := range plugin.ByTrait[plugin.APIEnricher]() {
 		if err := e.EnrichResponse(ctx, in); err != nil {
 			log.Warnf("API enricher %s: %v", e.Name(), err)

@@ -2,38 +2,36 @@ package api
 
 import (
 	"context"
-	"strings"
-	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func fetchClusterCurrency(ctx context.Context, orgID, clusterUUID string) string {
-	provider := getGPUCostProvider()
-	if provider == nil || clusterUUID == "" {
-		return costdata.DefaultCurrency
-	}
-	kokuOrgID := strings.TrimPrefix(orgID, "org")
-	now := time.Now().UTC()
-	start := now.AddDate(0, 0, -30)
-	cd, err := provider.GetEffectiveRates(ctx, kokuOrgID, clusterUUID, start, now)
-	if err != nil {
-		return costdata.DefaultCurrency
-	}
-	return costdata.ResolveCurrency(cd)
+	return GetCachedCurrency(ctx, orgID, clusterUUID)
 }
 
 func enrichContainerCurrency(ctx context.Context, orgID string, results []model.NativeContainerResult) {
-	clusterCurrencies := map[string]string{}
+	if len(results) == 0 {
+		return
+	}
+	sampleCluster := results[0].ClusterUUID
+	currency := GetCachedCurrency(ctx, orgID, sampleCluster)
 	for i := range results {
 		clusterUUID := results[i].ClusterUUID
-		if currency, ok := clusterCurrencies[clusterUUID]; ok {
+		if clusterUUID != sampleCluster {
+			// Per-cluster currency when clusters differ on the page.
+			results[i].Currency = GetCachedCurrency(ctx, orgID, clusterUUID)
+		} else {
 			results[i].Currency = currency
-			continue
 		}
-		currency := fetchClusterCurrency(ctx, orgID, clusterUUID)
-		clusterCurrencies[clusterUUID] = currency
-		results[i].Currency = currency
 	}
+}
+
+// resolveClusterCurrency is a helper for handlers that need currency from cost data.
+func resolveClusterCurrency(ctx context.Context, orgID, clusterUUID string) string {
+	if clusterUUID == "" {
+		return costdata.DefaultCurrency
+	}
+	return fetchClusterCurrency(ctx, orgID, clusterUUID)
 }
