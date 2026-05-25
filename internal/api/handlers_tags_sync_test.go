@@ -28,13 +28,11 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 
 	body, err := json.Marshal(tags.SyncRequest{
 		OrgID: testutil.TestOrgID,
-		ContainerTags: []tags.ContainerTags{
+		NamespaceTags: []tags.NamespaceTags{
 			{
-				ClusterUUID:   testutil.TestClusterUUID,
-				Namespace:     "ns",
-				Workload:      "wl",
-				ContainerName: "ctr",
-				Tags:          map[string]string{"environment": "prod"},
+				ClusterUUID: testutil.TestClusterUUID,
+				Namespace:   "ns",
+				Tags:        map[string]string{"environment": "prod"},
 			},
 		},
 	})
@@ -54,7 +52,6 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 	t.Run("enabled without token returns 401", func(t *testing.T) {
 		config.ResetTagsForTest()
 		t.Setenv("ROS_TAGS_ENABLED", "true")
-		t.Setenv("ROS_TAGS_INTERNAL_TOKEN", "secret-token")
 
 		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -63,10 +60,10 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 
-	t.Run("enabled with token updates rows", func(t *testing.T) {
+	t.Run("enabled with dev token updates rows", func(t *testing.T) {
 		config.ResetTagsForTest()
 		t.Setenv("ROS_TAGS_ENABLED", "true")
-		t.Setenv("ROS_TAGS_INTERNAL_TOKEN", "secret-token")
+		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
 
 		_, err := pool.Exec(t.Context(), `
 			INSERT INTO org_container_keys (
@@ -79,7 +76,7 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		req.Header.Set("X-ROS-Internal-Token", "secret-token")
+		req.Header.Set(echo.HeaderAuthorization, "Bearer dev-token")
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)

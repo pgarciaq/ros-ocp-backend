@@ -1046,6 +1046,27 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	return nil
 }
 
+// parseTagFiltersFromRequest accepts legacy ?tag=key:value and Koku ?filter[tag:key]=v1,v2 syntax.
+func parseTagFiltersFromRequest(c echo.Context) ([]model.TagFilter, error) {
+	var filters []model.TagFilter
+
+	if tagValues := c.QueryParams()["tag"]; len(tagValues) > 0 {
+		legacy, err := model.ParseTagFilters(tagValues)
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, legacy...)
+	}
+
+	kokuFilters, err := model.ParseKokuTagFilterParams(c.QueryParams())
+	if err != nil {
+		return nil, err
+	}
+	filters = append(filters, kokuFilters...)
+
+	return model.MergeTagFilters(filters), nil
+}
+
 // apiErrResponse is the single gate for user-facing error responses.
 // Always returns the typed `{"status":"error","message":"..."}` shape documented
 // in the OpenAPI spec. The HTTP status code conveys severity; the message provides

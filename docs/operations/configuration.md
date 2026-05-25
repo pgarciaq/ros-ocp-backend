@@ -208,12 +208,13 @@ exposed for list filtering when tag sync is enabled.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch for tag sync push API and `?tag=` list filters. When `false`, the push endpoint returns 404 and tag query params are ignored. |
-| `ROS_TAGS_INTERNAL_TOKEN` | (empty) | Shared secret for `X-ROS-Internal-Token` on `POST /api/cost-management/v1/internal/tags/sync`. Required when tag sync is enabled. |
+| `ROS_TAGS_ENABLED` | `false` | Master switch for tag sync push API and tag list filters. When `false`, the push endpoint returns 404 and tag query params are ignored. |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API. Empty accepts any authenticated cluster SA. |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback; logged as a warning when used. |
 
-Koku (SaaS Celery task or on-prem script) pushes resolved tags via the internal sync
-endpoint. Group-by tag dimensions (`?group_by=tag:environment`) are planned for a
-follow-up release.
+Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
+using `Authorization: Bearer <service-account-token>`. List filtering supports Koku syntax
+`?filter[tag:key]=value1,value2` (OR within a key, AND across keys) and legacy `?tag=key:value`.
 
 ---
 

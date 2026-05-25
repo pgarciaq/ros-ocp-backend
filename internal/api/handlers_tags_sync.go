@@ -11,9 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 )
 
-const internalTagsTokenHeader = "X-ROS-Internal-Token"
-
-// PostTagsSync receives resolved container tags from Koku (or an operator script).
+// PostTagsSync receives resolved namespace tags from Koku.
 // Gated by ROS_TAGS_ENABLED; returns 404 when disabled.
 func PostTagsSync(c echo.Context) error {
 	if !config.TagsFeatureEnabled() {
@@ -23,18 +21,11 @@ func PostTagsSync(c echo.Context) error {
 		})
 	}
 
-	expectedToken := strings.TrimSpace(config.GetConfig().TagsInternalToken)
-	if expectedToken == "" {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status":  "unavailable",
-			"message": "tag sync token is not configured",
-		})
-	}
-	gotToken := strings.TrimSpace(c.Request().Header.Get(internalTagsTokenHeader))
-	if gotToken == "" || gotToken != expectedToken {
+	bearerToken := tags.BearerTokenFromHeader(c.Request().Header.Get(echo.HeaderAuthorization))
+	if err := tags.ValidateBearerToken(c.Request().Context(), bearerToken); err != nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{
 			"status":  "unauthorized",
-			"message": "invalid or missing internal token",
+			"message": "invalid or missing service account token",
 		})
 	}
 
@@ -53,7 +44,7 @@ func PostTagsSync(c echo.Context) error {
 	}
 
 	svc := tags.NewSyncService(database.GetPool())
-	updated, err := svc.SyncOrgTags(c.Request().Context(), req.OrgID, req.ContainerTags)
+	updated, err := svc.SyncOrgTags(c.Request().Context(), req.OrgID, req.NamespaceTags)
 	if err != nil {
 		hlog := requestLogger(c, req.OrgID)
 		hlog.Errorf("tag sync failed: %v", err)

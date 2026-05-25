@@ -110,8 +110,9 @@ The key table reduces list latency to **under 5 ms at any page depth**.
 ### Tag filtering (implemented)
 
 Tag sync writes resolved tags via `POST /api/cost-management/v1/internal/tags/sync`
-(`ROS_TAGS_ENABLED`, `X-ROS-Internal-Token`). List API supports `?tag=key:value`
-(and `?tag=key:*` for key existence) on `org_container_keys` using `idx_ock_tags`.
+(`ROS_TAGS_ENABLED`, ServiceAccount bearer token). List API supports Koku
+`?filter[tag:key]=value1,value2` and legacy `?tag=key:value` (and `?tag=key:*` for key
+existence) on `org_container_keys` using `idx_ock_tags`.
 
 Group-by tag dimensions (`?group_by=tag:environment`) are planned for a follow-up.
 

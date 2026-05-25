@@ -199,8 +199,9 @@ workload-specific tuning examples, see
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Enables tag push API and `?tag=` list filters. When `false`, push returns 404 and tag params are ignored. |
-| `ROS_TAGS_INTERNAL_TOKEN` | (empty) | Shared secret for `X-ROS-Internal-Token` on `POST /api/cost-management/v1/internal/tags/sync`. |
+| `ROS_TAGS_ENABLED` | `false` | Enables tag push API and tag list filters. When `false`, push returns 404 and tag params are ignored. |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags. Empty accepts any authenticated cluster SA. |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for local testing. |
 
 Koku pushes resolved container tags to ROS via the internal sync endpoint.
 Group-by tag dimensions are planned for a follow-up release.

@@ -333,11 +333,11 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	if config.TagsFeatureEnabled() {
-		if tagValues := c.QueryParams()["tag"]; len(tagValues) > 0 {
-			tagFilters, err := model.ParseTagFilters(tagValues)
-			if err != nil {
-				return queryParams, err
-			}
+		tagFilters, err := parseTagFiltersFromRequest(c)
+		if err != nil {
+			return queryParams, err
+		}
+		if len(tagFilters) > 0 {
 			queryParams[model.TagFiltersQueryKey] = tagFilters
 		}
 	}

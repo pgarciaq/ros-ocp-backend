@@ -8,19 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ContainerTags holds resolved tag key/value pairs for one container identity.
-type ContainerTags struct {
-	ClusterUUID   string            `json:"cluster_uuid"`
-	Namespace     string            `json:"namespace"`
-	Workload      string            `json:"workload"`
-	ContainerName string            `json:"container_name"`
-	Tags          map[string]string `json:"tags"`
+// NamespaceTags holds resolved tag key/value pairs for all containers in a namespace.
+type NamespaceTags struct {
+	ClusterUUID string            `json:"cluster_uuid"`
+	Namespace   string            `json:"namespace"`
+	Tags        map[string]string `json:"tags"`
 }
 
 // SyncRequest is the body for POST /internal/tags/sync.
 type SyncRequest struct {
-	OrgID          string          `json:"org_id"`
-	ContainerTags  []ContainerTags `json:"container_tags"`
+	OrgID         string          `json:"org_id"`
+	NamespaceTags []NamespaceTags `json:"namespace_tags"`
 }
 
 // SyncResponse reports how many org_container_keys rows were updated.
@@ -38,17 +36,14 @@ func NewSyncService(pool *pgxpool.Pool) *SyncService {
 	return &SyncService{pool: pool}
 }
 
-// SyncOrgTags updates resolved_tags for existing org_container_keys rows that match
-// each container identity in containerTags. Rows that do not exist are skipped.
-func (s *SyncService) SyncOrgTags(ctx context.Context, orgID string, containerTags []ContainerTags) (int, error) {
+// SyncOrgTags fully replaces resolved_tags for an org, then applies namespace-level tags
+// to all matching org_container_keys rows.
+func (s *SyncService) SyncOrgTags(ctx context.Context, orgID string, namespaceTags []NamespaceTags) (int, error) {
 	if s == nil || s.pool == nil {
 		return 0, fmt.Errorf("tag sync service is not configured")
 	}
 	if orgID == "" {
 		return 0, fmt.Errorf("org_id is required")
-	}
-	if len(containerTags) == 0 {
-		return 0, nil
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -57,35 +52,37 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, orgID string, containerTa
 	}
 	defer tx.Rollback(ctx)
 
+	if _, err := tx.Exec(ctx, `
+		UPDATE org_container_keys
+		SET resolved_tags = '{}'::jsonb
+		WHERE org_id = $1`, orgID); err != nil {
+		return 0, fmt.Errorf("reset resolved_tags for org %q: %w", orgID, err)
+	}
+
 	updated := 0
-	for _, ct := range containerTags {
-		if ct.Namespace == "" || ct.Workload == "" || ct.ContainerName == "" {
+	for _, nt := range namespaceTags {
+		if nt.Namespace == "" || nt.ClusterUUID == "" {
 			continue
 		}
-		if ct.ClusterUUID == "" {
-			continue
-		}
-		tags := ct.Tags
+		tags := nt.Tags
 		if tags == nil {
 			tags = map[string]string{}
 		}
 		payload, err := json.Marshal(tags)
 		if err != nil {
-			return 0, fmt.Errorf("marshal tags for %s/%s/%s: %w", ct.Namespace, ct.Workload, ct.ContainerName, err)
+			return 0, fmt.Errorf("marshal tags for %s/%s: %w", nt.ClusterUUID, nt.Namespace, err)
 		}
 
 		tag, err := tx.Exec(ctx, `
 			UPDATE org_container_keys
-			SET resolved_tags = $6::jsonb
+			SET resolved_tags = $4::jsonb
 			WHERE org_id = $1
 			  AND cluster_uuid = $2::uuid
-			  AND namespace = $3
-			  AND workload = $4
-			  AND container_name = $5`,
-			orgID, ct.ClusterUUID, ct.Namespace, ct.Workload, ct.ContainerName, string(payload),
+			  AND namespace = $3`,
+			orgID, nt.ClusterUUID, nt.Namespace, string(payload),
 		)
 		if err != nil {
-			return 0, fmt.Errorf("update resolved_tags for %s/%s/%s: %w", ct.Namespace, ct.Workload, ct.ContainerName, err)
+			return 0, fmt.Errorf("update resolved_tags for %s/%s: %w", nt.ClusterUUID, nt.Namespace, err)
 		}
 		updated += int(tag.RowsAffected())
 	}

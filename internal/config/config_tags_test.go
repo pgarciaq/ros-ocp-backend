@@ -17,10 +17,12 @@ func TestTagsFeatureEnabled_DefaultFalse(t *testing.T) {
 func TestTagsFeatureEnabled_Enabled(t *testing.T) {
 	ResetTagsForTest()
 	t.Setenv("ROS_TAGS_ENABLED", "true")
-	t.Setenv("ROS_TAGS_INTERNAL_TOKEN", "test-token")
+	t.Setenv("ROS_TAGS_DEV_TOKEN", "test-token")
+	t.Setenv("ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS", "cost-onprem-koku-api")
 
 	cfg := GetConfig()
 	require.True(t, cfg.TagsEnabled)
-	assert.Equal(t, "test-token", cfg.TagsInternalToken)
+	assert.Equal(t, "test-token", cfg.TagsDevToken)
+	assert.Equal(t, "cost-onprem-koku-api", cfg.TagsAllowedServiceAccounts)
 	assert.True(t, TagsFeatureEnabled())
 }

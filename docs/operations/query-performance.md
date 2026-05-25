@@ -402,13 +402,15 @@ stable surface for future tag-based list filters.
 
 Refresh upserts active keys from `recommendation_sets WHERE stale = false` and deletes
 keys with no remaining active rows. `resolved_tags` is preserved on upsert (not overwritten
-by refresh) until Koku tag sync is implemented.
+by refresh) until Koku pushes an update via the tag sync API.
 
-### Future: tag filtering
+### Tag filtering
 
 Tag sync is implemented via `POST /api/cost-management/v1/internal/tags/sync` (gated by
-`ROS_TAGS_ENABLED`). Koku pushes resolved tags into `org_container_keys.resolved_tags`;
-the container list applies `?tag=key:value` filters on step 1 using the GIN index.
+`ROS_TAGS_ENABLED`, authenticated with a Kubernetes ServiceAccount bearer token). Koku pushes
+namespace-level tags into `org_container_keys.resolved_tags`; the container list applies
+`?filter[tag:key]=value1,value2` (Koku syntax) or legacy `?tag=key:value` on step 1 using
+the GIN index.
 
 **Filter by tag value** — GIN-indexed containment:
 
@@ -458,7 +460,7 @@ Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
 | Remaining `rh_accounts` offenders (quality, namespace list, history) | P0 | Open |
 | GPU triple fresh-node materialization | P2 | Open |
 | Fleet savings materialized summary | P2 | Open |
-| Koku tag sync → `org_container_keys.resolved_tags` | P2 | **DONE** (push API + list filter; Koku Celery sender pending) |
+| Koku tag sync → `org_container_keys.resolved_tags` | P2 | **DONE** (push API + list filter; Koku Celery sender) |
 
 ---
 

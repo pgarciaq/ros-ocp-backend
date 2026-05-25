@@ -58,12 +58,12 @@ type Config struct {
 
 	// pgxpool tuning (REST / GPU paths). ROS_DB_MAX_CONNS defaults to 10;
 	// ROS_DB_ACQUIRE_TIMEOUT_SECS sets ContextWithAcquireTimeout (0 = no limit).
-	DBMaxConns              int    `mapstructure:"ROS_DB_MAX_CONNS"`
-	DBMinConns              int    `mapstructure:"ROS_DB_MIN_CONNS"`
-	DBMaxConnLifetimeMins   int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
-	DBMaxConnIdleTimeMins   int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
-	DBStatementCacheMode    string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
-	DBAcquireTimeoutSecs    int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
+	DBMaxConns            int    `mapstructure:"ROS_DB_MAX_CONNS"`
+	DBMinConns            int    `mapstructure:"ROS_DB_MIN_CONNS"`
+	DBMaxConnLifetimeMins int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
+	DBMaxConnIdleTimeMins int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
+	DBStatementCacheMode  string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
+	DBAcquireTimeoutSecs  int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
 
 	// RBAC config
 	RBACHost     string
@@ -229,8 +229,9 @@ type Config struct {
 
 	// Tag sync (Koku → ROS resolved tags on org_container_keys).
 	// Disabled by default; enable with ROS_TAGS_ENABLED=true.
-	TagsEnabled       bool   `mapstructure:"ROS_TAGS_ENABLED"`
-	TagsInternalToken string `mapstructure:"ROS_TAGS_INTERNAL_TOKEN"`
+	TagsEnabled                bool   `mapstructure:"ROS_TAGS_ENABLED"`
+	TagsAllowedServiceAccounts string `mapstructure:"ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS"`
+	TagsDevToken               string `mapstructure:"ROS_TAGS_DEV_TOKEN"`
 
 	//Unleash config
 	UnleashClientAccessToken string

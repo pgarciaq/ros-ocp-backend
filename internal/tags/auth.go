@@ -1,0 +1,188 @@
+package tags
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+)
+
+const (
+	defaultSATokenPath       = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultTokenReviewURL    = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
+	kubernetesSATokenPathEnv = "KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH"
+	tokenReviewURLEnv        = "KUBERNETES_TOKEN_REVIEW_URL"
+)
+
+var log = logging.GetLogger()
+
+type tokenReviewRequest struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Spec       struct {
+		Token string `json:"token"`
+	} `json:"spec"`
+}
+
+type tokenReviewResponse struct {
+	Status struct {
+		Authenticated bool `json:"authenticated"`
+		User          struct {
+			Username string `json:"username"`
+		} `json:"user"`
+		Error string `json:"error"`
+	} `json:"status"`
+}
+
+// ValidateBearerToken authorizes internal tag sync requests.
+// When ROS_TAGS_DEV_TOKEN is set, matching tokens are accepted (dev-only).
+// Otherwise the token is validated via the Kubernetes TokenReview API.
+func ValidateBearerToken(ctx context.Context, bearerToken string) error {
+	bearerToken = strings.TrimSpace(bearerToken)
+	if bearerToken == "" {
+		return fmt.Errorf("missing bearer token")
+	}
+
+	cfg := config.GetConfig()
+	if devToken := strings.TrimSpace(cfg.TagsDevToken); devToken != "" && bearerToken == devToken {
+		log.Warn("tag sync auth: accepting ROS_TAGS_DEV_TOKEN (dev-only fallback)")
+		return nil
+	}
+
+	return validateSATokenViaTokenReview(ctx, bearerToken, cfg.TagsAllowedServiceAccounts)
+}
+
+func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAccounts string) error {
+	reviewerToken, err := readFileTrim(os.Getenv(kubernetesSATokenPathEnv))
+	if err != nil || reviewerToken == "" {
+		reviewerToken, err = readFileTrim(defaultSATokenPath)
+	}
+	if err != nil || reviewerToken == "" {
+		return fmt.Errorf("service account reviewer token unavailable: %w", err)
+	}
+
+	reviewURL := strings.TrimSpace(os.Getenv(tokenReviewURLEnv))
+	if reviewURL == "" {
+		reviewURL = defaultTokenReviewURL
+	}
+
+	body, err := json.Marshal(tokenReviewRequest{
+		APIVersion: "authentication.k8s.io/v1",
+		Kind:       "TokenReview",
+		Spec: struct {
+			Token string `json:"token"`
+		}{Token: token},
+	})
+	if err != nil {
+		return fmt.Errorf("marshal token review request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reviewURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create token review request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+reviewerToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("token review request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read token review response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("token review returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var review tokenReviewResponse
+	if err := json.Unmarshal(respBody, &review); err != nil {
+		return fmt.Errorf("decode token review response: %w", err)
+	}
+	if !review.Status.Authenticated {
+		if review.Status.Error != "" {
+			return fmt.Errorf("token not authenticated: %s", review.Status.Error)
+		}
+		return fmt.Errorf("token not authenticated")
+	}
+
+	username := review.Status.User.Username
+	if !strings.HasPrefix(username, "system:serviceaccount:") {
+		return fmt.Errorf("token user is not a service account: %q", username)
+	}
+
+	allowed := parseAllowedServiceAccounts(allowedAccounts)
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	saName := serviceAccountName(username)
+	for _, candidate := range allowed {
+		if candidate == saName || candidate == username {
+			return nil
+		}
+	}
+	return fmt.Errorf("service account %q is not allowed", saName)
+}
+
+func parseAllowedServiceAccounts(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func serviceAccountName(username string) string {
+	// system:serviceaccount:<namespace>:<name>
+	parts := strings.Split(username, ":")
+	if len(parts) == 0 {
+		return username
+	}
+	return parts[len(parts)-1]
+}
+
+func readFileTrim(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// BearerTokenFromHeader extracts the token from an Authorization: Bearer header.
+func BearerTokenFromHeader(header string) string {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return ""
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+}
