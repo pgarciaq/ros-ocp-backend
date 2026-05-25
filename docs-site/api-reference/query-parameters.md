@@ -42,8 +42,11 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 
 ## Tag filtering
 
-When `ROS_TAGS_ENABLED=true`, filter recommendations by OpenShift labels from Koku
-(`ROS_TAGS_SOURCE=db`, default) or from push-synced `resolved_tags` (`ROS_TAGS_SOURCE=api`):
+Tag filters narrow container recommendation lists by OpenShift labels tracked in Cost
+Management. The feature requires **`ROS_TAGS_ENABLED=true`** on the ROS API deployment.
+When disabled, `filter[tag:*]` parameters are ignored.
+
+### Syntax
 
 ```
 GET /api/cost-management/v1/recommendations/openshift
@@ -56,9 +59,32 @@ GET /api/cost-management/v1/recommendations/openshift
 | `filter[tag:environment]=production` | Exact value match |
 | `filter[tag:environment]=prod,staging` | OR across comma-separated values |
 | Multiple `filter[tag:*]` keys | AND across keys |
+| `filter[tag:environment]=*` | Tag key present (any value) |
 
-Tag filters apply to container list endpoints after Koku pushes resolved namespace tags
-to ROS. See [Tag Filtering](features/tag-filtering.md) for sync behavior and freshness.
+Value wildcards (e.g. `prod*`) are not supported in v1.
+
+### Deployment mode and tag availability
+
+Which tags are available depends on **`ROS_TAGS_SOURCE`** (see [Configuration → Tag Sync](../configuration.md#tag-sync)):
+
+| Mode | `ROS_TAGS_SOURCE` | Where tags come from | Freshness |
+|------|-------------------|----------------------|-----------|
+| On-prem (default) | `db` | ROS reads Koku PostgreSQL tables (`reporting_ocptags_values`) at query time | After last Koku OCP summarization |
+| SaaS | `api` | Koku pushes to `org_container_keys.resolved_tags` | After summarization + push; up to ~6h if push fails |
+
+**Prerequisites (both modes):**
+
+1. Tag keys enabled in Cost Management **Settings → Tags**.
+2. OCP reports ingested with namespace/pod labels from the cluster.
+3. `ROS_TAGS_ENABLED=true` on ROS.
+
+**SaaS only:** Koku must run with `ROS_TAGS_SOURCE=api` and successfully push tags before
+filters match push-synced data. Check
+`GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
+
+Tag filters apply to **container list** endpoints (workloads/containers/GPU lists that
+resolve through `org_container_keys`). See [Tag Filtering](features/tag-filtering.md)
+for operator configuration, troubleshooting, and lifecycle scenarios.
 
 ## Ordering
 

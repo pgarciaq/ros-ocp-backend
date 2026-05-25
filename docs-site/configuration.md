@@ -197,53 +197,90 @@ workload-specific tuning examples, see
 
 ## Tag Sync
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Enables tag list filters (and push API when source=api). When `false`, tag params are ignored. |
-| `ROS_TAGS_SOURCE` | `db` | `db` = read Koku tag tables directly (on-prem); `api` = push sync into `resolved_tags` (SaaS) |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags (api source only). |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
+Tag filtering requires `ROS_TAGS_ENABLED=true` on ROS. **How tags reach list queries**
+is controlled by `ROS_TAGS_SOURCE`:
+
+| Value | Deployment | Mechanism |
+|-------|------------|-----------|
+| `db` (default) | On-prem — shared PostgreSQL | ROS SQL-joins Koku tenant tag tables at query time |
+| `api` | SaaS — separate databases | Koku Celery pushes tags to ROS internal HTTP API |
+
+Use **`db`** when Koku and ROS share one PostgreSQL instance (cost-onprem chart). No
+Koku-side tag sync configuration is required — enable tags in Settings and set ROS env vars.
+
+Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery tasks,
+`ROS_OCP_BACKEND_URL`, and ServiceAccount (or dev token) authentication.
+
+### ROS environment variables
+
+| Variable | Default | On-Prem | SaaS | Description |
+|----------|---------|---------|------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Set `true` | Set `true` | Master switch: list filters; push API active only when source=`api` |
+| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags` |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Optional | Comma-separated SA names allowed to call push API; empty = any authenticated SA |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only | Static bearer token when projected SA token unavailable; must match Koku |
+
+### Koku environment variables (SaaS / `api` source only)
+
+When `ROS_TAGS_SOURCE=db`, these variables are **ignored** — Koku does not push tags.
+
+| Variable | Default | On-Prem | SaaS | Description |
+|----------|---------|---------|------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Ignored | Set `true` | Enables Celery tag push tasks |
+| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | Must be `api` for push sync to run |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Unused | Required | ROS API base URL (no trailing path) |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Unused | Dev only | Bearer token when SA mount missing; must match ROS |
+| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | Unused | Production | Path to projected SA token on Koku worker |
 
 ### On-prem (`ROS_TAGS_SOURCE=db`)
 
-ROS reads enabled keys from `{schema}.reporting_enabledtagkeys` and matches list filters against
-`{schema}.reporting_ocptags_values` at query time. No HTTP push, Celery sync, or ServiceAccount
-auth is required on either service.
+```mermaid
+flowchart LR
+    USER[API request] --> ROS[ROS API]
+    ROS --> JOIN["JOIN org_container_keys<br/>↔ org1234567.reporting_ocptags_values"]
+    JOIN --> PG[(Shared PostgreSQL)]
+    KOKU[Koku summarization] --> PG
+```
 
-### SaaS fallback (`ROS_TAGS_SOURCE=api`)
+ROS reads:
 
-Koku pushes resolved namespace tags to ROS via:
+- `{schema}.reporting_enabledtagkeys` — enabled OCP tag keys
+- `{schema}.reporting_ocptags_values` — key/value pairs with cluster and namespace arrays
 
-- `POST /api/cost-management/v1/internal/tags/sync` — full-replace sync per org
-- `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` — sync freshness (`synced_at`, tag key catalog)
+Schema name is `org` + bare `org_id` (e.g. `1234567` → `org1234567`).
 
-### Authentication
+**No HTTP push, Celery sync, or ServiceAccount auth** is required on either service.
+Push endpoints return 404 in this mode.
 
-**Current (production):** Kubernetes ServiceAccount token validation via the TokenReview API.
-Koku worker sends `Authorization: Bearer <service-account-token>`; ROS validates the caller
-is an authenticated in-cluster ServiceAccount.
+### SaaS (`ROS_TAGS_SOURCE=api`)
+
+Koku pushes resolved namespace tags after settings changes and OCP summarization:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/cost-management/v1/internal/tags/sync` | Full-replace sync for one org |
+| `GET` | `/api/cost-management/v1/internal/tags/status?org_id=` | Freshness (`synced_at`, tag key catalog) |
+
+Celery beat runs `sync_ros_ocp_tags_periodic` every **6 hours** as a safety-net.
+
+### Authentication (api source only)
+
+**On-prem (`db`):** No authentication between Koku and ROS for tags — direct database access.
+
+**SaaS (`api`):** Kubernetes ServiceAccount token validation via TokenReview. Koku worker
+sends `Authorization: Bearer <service-account-token>`; ROS validates the caller.
 
 **Development:** Set `ROS_TAGS_DEV_TOKEN` to the same static value on **both** Koku and ROS
 when projected SA tokens are unavailable (docker-compose).
 
-**Future: mTLS** — Planned upgrade for on-prem deployments. Mutual TLS between Koku and
-ros-ocp-backend pods (via cert-manager or a service-mesh sidecar) will provide
-bidirectional authentication and eliminate token rotation concerns. TokenReview auth
-will remain supported during migration behind a feature flag.
-
-### Koku-side variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Enables Celery tag push tasks (api source only) |
-| `ROS_TAGS_SOURCE` | `db` | `db` skips push sync; set `api` to enable HTTP push to ROS |
-| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | ROS API base URL for push (api source only) |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev bearer token (api source; must match ROS) |
+**Future: mTLS** — Planned for SaaS hardening. Mutual TLS between Koku and ROS (cert-manager
+or service mesh) with TokenReview retained during migration. See
+[`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md).
 
 ### Data flow and filtering
 
 See [Tag Filtering](features/tag-filtering.md) for lifecycle scenarios, freshness guarantees,
-and list API syntax (`?filter[tag:key]=value1,value2`).
+troubleshooting, and list API syntax (`?filter[tag:key]=value1,value2`).
 
 Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filtering.md),
 [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)

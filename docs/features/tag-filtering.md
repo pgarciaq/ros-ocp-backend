@@ -1,61 +1,162 @@
 # Tag Filtering
 
-Comprehensive reference for OpenShift tag synchronization from Koku to ROS and
-tag-based recommendation list filtering.
+Comprehensive reference for OpenShift tag synchronization, dual-path architecture,
+and tag-based recommendation list filtering.
 
 ---
 
 ## Overview
 
-**Tag filtering** lets operators filter ROS recommendations by OpenShift labels
-(tags) that Cost Management already tracks for billing. Tags originate on pods and
-namespaces in the cluster, flow through the koku-metrics-operator into Koku
-summaries, and are **pushed** to ROS so list APIs can filter by
-`?filter[tag:<key>]=value1,value2`.
+**Tag filtering** lets operators narrow ROS recommendations by OpenShift labels (tags)
+that Cost Management already tracks for billing. Tags originate on pods and namespaces
+in the cluster, flow through the koku-metrics-operator into Koku summaries, and become
+available to ROS list APIs via:
 
-**Why two paths?**
+```
+GET /api/cost-management/v1/recommendations/openshift?filter[tag:environment]=production
+```
 
-- **On-prem (`ROS_TAGS_SOURCE=db`):** ROS and Koku share one PostgreSQL instance. ROS reads
-  Koku tag summary tables at query time — no HTTP push, no sync lag, no ServiceAccount auth.
-- **SaaS (`ROS_TAGS_SOURCE=api`):** ROS has a separate database. Koku pushes namespace tags into
-  `org_container_keys.resolved_tags` so list queries filter locally without cross-service SQL.
+The feature is gated by `ROS_TAGS_ENABLED` on ROS. **How tags reach ROS list queries**
+depends on deployment topology, controlled by `ROS_TAGS_SOURCE`:
 
-Tag filtering is gated by `ROS_TAGS_ENABLED` on ROS (and on Koku only when using api source).
+| Mode | `ROS_TAGS_SOURCE` | Typical deployment |
+|------|-------------------|--------------------|
+| **On-prem (shared database)** | `db` (default) | cost-onprem Helm chart — Koku and ROS share one PostgreSQL |
+| **SaaS (push API)** | `api` | console.redhat.com — separate Koku and ROS databases |
+
+Both modes expose the **same public filter syntax** to clients. Only the internal
+data path, configuration, freshness guarantees, and failure modes differ.
 
 ---
 
-## Architecture (on-prem, default)
+## Architecture
+
+### On-Prem (Shared Database)
+
+On-prem deployments run Koku and ros-ocp-backend against the **same PostgreSQL
+instance**. ROS does not copy tag data into its own tables for filtering. Instead,
+list queries **JOIN** ROS container rows to Koku tenant tag summary tables at query time.
+
+```mermaid
+flowchart LR
+    subgraph cluster["OpenShift cluster"]
+        OP[Pod/namespace labels]
+        MO[koku-metrics-operator]
+        OP --> MO
+    end
+    subgraph koku["Koku (Celery pipeline)"]
+        ING[CSV ingestion]
+        SUM[OCP summarization]
+        TAGT["reporting_enabledtagkeys<br/>reporting_ocptags_values"]
+        ING --> SUM --> TAGT
+    end
+    subgraph ros["ROS API"]
+        REQ[User list request]
+        JOIN["SQL: org_container_keys<br/>↔ Koku tag tables"]
+        RESP[Filtered recommendations]
+        REQ --> JOIN --> RESP
+    end
+    MO -->|tar.gz upload| ING
+    TAGT -.->|same PostgreSQL| JOIN
+```
+
+**Request path:**
 
 ```
-OpenShift cluster
-  │  pod/namespace labels (Prometheus → operator CSVs)
-  ▼
-Koku ingestion → reporting_ocptags_values + reporting_enabledtagkeys
-  │
-  ▼
-ROS list query joins org_container_keys ↔ Koku tag tables (same PostgreSQL)
-  │
-  ▼
-GET /recommendations/openshift?filter[tag:environment]=production
+User Request
+  → ROS API (identity/RBAC)
+  → Parse filter[tag:key]=value
+  → Step 1: resolve matching containers from org_container_keys
+            WHERE EXISTS (
+              SELECT 1 FROM org{org_id}.reporting_ocptags_values tv,
+                   unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
+              WHERE tv.key = :key AND tv.value IN (:values)
+                AND t.cluster_id = ock.cluster_uuid::text
+                AND t.namespace = ock.namespace
+            )
+  → Step 2: fetch recommendations for those container keys
+  → Response
 ```
 
-## Architecture (SaaS / api source)
+**Schema convention:** Koku tenant schemas are named `org{org_id}` where `org_id` is
+the bare numeric ID from the identity header (e.g. `1234567` → schema `org1234567`).
+ROS derives this with the same rule — never pass `org1234567` as the org_id in API
+payloads or env vars.
+
+**Tables queried (Koku tenant schema):**
+
+| Table | Purpose |
+|-------|---------|
+| `reporting_enabledtagkeys` | Which OCP tag keys are enabled for filtering (`enabled=true`, `provider_type='OCP'`) |
+| `reporting_ocptags_values` | Distinct `(key, value)` pairs with parallel `cluster_ids[]` and `namespaces[]` arrays linking tags to cluster/namespace scope |
+
+**Implementation:** [`internal/tags/db_provider.go`](../../internal/tags/db_provider.go),
+[`internal/model/tag_filters.go`](../../internal/model/tag_filters.go) (`applyDBTagFiltersToKeys`).
+
+**Properties:**
+
+- **Zero sync latency** — tags are as fresh as the last Koku summarization; no HTTP push step.
+- **No inter-service auth** — ROS reads PostgreSQL directly; no ServiceAccount tokens or push endpoints.
+- **No Koku-side tag sync config** — Koku Celery push tasks are no-ops when `ROS_TAGS_SOURCE=db`.
+- **Single point of dependency** — ROS list latency includes JOIN cost against Koku tables (indexed; see query-performance doc).
+
+---
+
+### SaaS (Push API)
+
+In SaaS, Koku and ROS use **separate databases**. ROS cannot SQL-join across services,
+so Koku **pushes** resolved namespace tags into ROS after summarization and settings
+changes. List filters read from `org_container_keys.resolved_tags` (JSONB).
+
+```mermaid
+flowchart LR
+    subgraph cluster["OpenShift cluster"]
+        OP[Pod/namespace labels]
+        MO[koku-metrics-operator]
+        OP --> MO
+    end
+    subgraph koku["Koku"]
+        ING[CSV ingestion]
+        SUM[OCP summarization]
+        CEL["Celery: sync_ros_ocp_tags"]
+        ING --> SUM --> CEL
+    end
+    subgraph ros["ROS API"]
+        SYNC["POST /internal/tags/sync"]
+        STORE["org_container_keys.resolved_tags<br/>org_tag_sync_metadata"]
+        LIST[User list request]
+        CEL -->|Bearer SA token| SYNC --> STORE
+        STORE --> LIST
+    end
+    MO -->|tar.gz upload| ING
+```
+
+**Push path:**
 
 ```
-OpenShift cluster
-  │  pod/namespace labels (Prometheus → operator CSVs)
-  ▼
-Koku ingestion → OCPUsageLineItemDailySummary.all_labels
-  │  EnabledTagKeys (Settings API)
-  ▼
-Koku Celery: sync_ros_ocp_tags
-  │  POST /internal/tags/sync  (Bearer SA token)
-  ▼
-ROS org_container_keys.resolved_tags  +  org_tag_sync_metadata
-  │
-  ▼
-GET /recommendations/openshift?filter[tag:environment]=production
+Koku summarization completes (or Settings API mutates enabled tags)
+  → schedule_ros_tag_sync(schema) [api source only]
+  → Celery task sync_ros_ocp_tags
+  → build_namespace_tags_payload() from OCPUsageLineItemDailySummary.all_labels
+  → POST /api/cost-management/v1/internal/tags/sync
+       Authorization: Bearer <Kubernetes ServiceAccount token>
+  → ROS: TokenReview validation → full-replace transaction
+  → org_container_keys.resolved_tags updated per (cluster_uuid, namespace)
+  → org_tag_sync_metadata.synced_at + tag_keys catalog updated
 ```
+
+**Sync triggers (api source only):**
+
+| # | Trigger | When | Scope |
+|---|---------|------|-------|
+| 1 | Tag settings API | Enable/disable key, mapping change | Single tenant |
+| 2 | OCP summarization complete | After summary tables updated | Single tenant |
+| 3 | Periodic safety-net | Celery beat every **6 hours** (`:15` past the hour) | All tenants |
+
+The periodic task recovers from transient network failures or missed event hooks.
+Worst-case staleness is therefore **up to ~6 hours** if both event-driven syncs fail.
+
+**Implementation:**
 
 | Component | Location |
 |-----------|----------|
@@ -63,58 +164,85 @@ GET /recommendations/openshift?filter[tag:environment]=production
 | Sync service | [`internal/tags/sync.go`](../../internal/tags/sync.go) |
 | Auth | [`internal/tags/auth.go`](../../internal/tags/auth.go) |
 | HTTP handlers | [`internal/api/handlers_tags_sync.go`](../../internal/api/handlers_tags_sync.go), [`handlers_tags_status.go`](../../internal/api/handlers_tags_status.go) |
-| List filter parsing | [`internal/api/utils.go`](../../internal/api/utils.go) (`parseTagFiltersFromRequest`) |
+| List filter (api path) | [`internal/model/tag_filters.go`](../../internal/model/tag_filters.go) (`applyAPITagFiltersToKeys`) |
 
----
-
-## Authentication
-
-### Current: Kubernetes ServiceAccount TokenReview
-
-Koku worker/listener pods call ROS with:
+**Freshness monitoring (api source):**
 
 ```
-Authorization: Bearer <projected service-account token>
+GET /api/cost-management/v1/internal/tags/status?org_id=1234567
+Authorization: Bearer <token>
 ```
 
-ROS validates via the in-cluster **TokenReview API**:
+Response includes `synced_at` (ISO-8601 UTC) and the enabled-key catalog. Alert if
+`synced_at` is older than ~7 hours when the 6-hour safety-net is configured.
 
-1. ROS reads its own pod ServiceAccount token (reviewer identity).
-2. ROS POSTs `TokenReview` to `https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews`.
-3. The API confirms the caller token is authenticated and returns the ServiceAccount username (`system:serviceaccount:<ns>:<name>`).
-4. Optionally, `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` restricts which SA names are accepted (empty = any authenticated SA).
-
-**Dev mode:** When `ROS_TAGS_DEV_TOKEN` is set on ROS, matching bearer tokens are accepted with a warning log. Koku uses the same value via `ROS_TAGS_DEV_TOKEN` when the projected SA token path is unavailable (local docker-compose).
-
-See [tag-sync-auth.md](../operations/tag-sync-auth.md) for failure modes and monitoring.
-
-### Future: mTLS
-
-Planned for on-prem hardening:
-
-- **cert-manager** — per-service client/server certificates from a cluster CA.
-- **Service mesh sidecar** — Istio/Linkerd mutual TLS without application changes.
-
-mTLS provides bidirectional transport authentication and reduces reliance on token
-rotation. TokenReview will remain supported during migration behind a feature flag
-(e.g. `ROS_TAGS_MTLS_ENABLED`).
+With **db source**, the same endpoint reads live from Koku tables (no push metadata).
 
 ---
 
-## Sync Triggers (Event-Driven)
+## On-Prem vs SaaS Comparison
 
-| # | Trigger | When | Scope |
-|---|---------|------|-------|
-| 1 | Tag settings API mutations | Enable/disable tag key, mapping change | Single tenant (`schedule_ros_tag_sync`) |
-| 2 | OCP summarization complete | After summary tables updated for a provider | Single tenant |
-| 3 | Periodic safety-net | Celery beat every **6 hours** (`sync_ros_ocp_tags_periodic`) | All tenants |
-
-The periodic task exists to recover from transient network failures or missed
-event hooks. It does **not** replace event-driven sync for low-latency settings changes.
+| Dimension | On-Prem (`db`) | SaaS (`api`) |
+|-----------|----------------|--------------|
+| **Database topology** | Shared PostgreSQL | Separate Koku and ROS databases |
+| **Tag data location** | Koku `reporting_ocptags_values` | ROS `org_container_keys.resolved_tags` |
+| **Sync mechanism** | None (live SQL JOIN) | HTTP POST full-replace |
+| **Latency to new tags** | After next Koku summarization | After summarization + successful push |
+| **Worst-case staleness** | Summarization schedule only | Up to ~6h if pushes fail |
+| **Inter-service auth** | Not required | Kubernetes ServiceAccount TokenReview |
+| **Koku config required** | None for tag sync | `ROS_TAGS_ENABLED=true`, `ROS_TAGS_SOURCE=api`, `ROS_OCP_BACKEND_URL` |
+| **ROS push endpoints** | Return 404 (disabled) | Active when `ROS_TAGS_ENABLED=true` |
+| **Failure mode (Koku down)** | ROS cannot read fresh tags | Last successful sync retained |
+| **Failure mode (network)** | N/A | Eventual consistency; periodic retry |
+| **Operational complexity** | Lower (one DB) | Higher (auth, monitoring, Celery) |
+| **Pod restart impact** | None (stateless reads) | None (tags in PostgreSQL) |
 
 ---
 
-## Sync Payload Format
+## Configuration
+
+### ROS (ros-ocp-backend)
+
+| Variable | Default | On-Prem | SaaS | Description |
+|----------|---------|---------|------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Required `true` | Required `true` | Master switch: list filters + push API (api only) |
+| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = Koku table JOIN; `api` = `resolved_tags` |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | N/A | Optional | Comma-separated SA names allowed to push; empty = any authenticated SA |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | N/A | Dev only | Static bearer when SA token unavailable (must match Koku) |
+
+**On-prem example (cost-onprem chart):**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "db"
+```
+
+**SaaS example:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS: "cost-management-koku-worker"
+```
+
+### Koku
+
+| Variable | Default | On-Prem (`db`) | SaaS (`api`) | Description |
+|----------|---------|----------------|--------------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Ignored for push | `true` | Enables Celery push tasks |
+| `ROS_TAGS_SOURCE` | `db` | `db` (default) | `api` | `db` = no push; `api` = HTTP sync |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Unused | Required | ROS API base URL for push |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Unused | Dev only | Bearer token when SA mount missing |
+| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | Unused | Production | Projected SA token path on worker |
+
+When `ROS_TAGS_SOURCE=db`, **no Koku-side tag sync configuration is required**. Settings
+API hooks and post-summarization calls to `schedule_ros_tag_sync` are no-ops.
+
+---
+
+## Sync Payload Format (SaaS / api source only)
 
 ```json
 {
@@ -134,77 +262,22 @@ event hooks. It does **not** replace event-driven sync for low-latency settings 
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `org_id` | string | yes | Bare org ID (not `org1234567` schema prefix) |
-| `synced_at` | ISO-8601 UTC | yes | When Koku built the payload |
-| `tag_keys` | array | yes | All **enabled** OCP tag keys and distinct values observed in the latest billing period |
-| `namespace_tags` | array | yes | Per `(cluster_uuid, namespace)` resolved tag map applied to all containers in that namespace |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `org_id` | yes | Bare org ID (not `org1234567`) |
+| `synced_at` | yes | When Koku built the payload (UTC) |
+| `tag_keys` | yes | All **enabled** OCP keys and observed values |
+| `namespace_tags` | yes | Per `(cluster_uuid, namespace)` resolved tag map |
 
-**Value catalog rules:**
-
-- `tag_keys` lists every enabled key even when `values` is empty (key enabled but not observed on any pod).
-- Disabled keys are omitted entirely.
-- Values are collected from `OCPUsageLineItemDailySummary.all_labels` for the latest `usage_start` day with pod data.
-
----
-
-## Full-Replace Semantics
-
-Each sync is an **org-scoped full replace** inside a single transaction:
-
-1. `UPDATE org_container_keys SET resolved_tags = '{}'` for the org.
-2. For each `namespace_tags` entry, `UPDATE org_container_keys SET resolved_tags = …` where `(org_id, cluster_uuid, namespace)` match.
-3. Upsert `org_tag_sync_metadata` with `synced_at` and `tag_keys` catalog.
-
-Implications:
-
-- Namespaces **not** in the payload end up with empty `resolved_tags`.
-- Container rows inherit **namespace-level** tags (not pod-level overrides in v1).
-- A successful sync always reflects Koku's current enabled-key set — no incremental merge.
-
----
-
-## Storage
-
-| Table | Column | Purpose |
-|-------|--------|---------|
-| `org_container_keys` | `resolved_tags` (JSONB) | Tag map per container row; populated from namespace-level sync |
-| `org_tag_sync_metadata` | `synced_at`, `tag_keys` | Org-level freshness timestamp and enabled-key catalog |
-
-Migration: [`migrations/000082_create_org_tag_sync_metadata.up.sql`](../../migrations/000082_create_org_tag_sync_metadata.up.sql)
-
-**ROS pod restart:** Tags persist in PostgreSQL. No in-memory tag cache is lost on restart.
-
----
-
-## Freshness Monitoring
-
-```
-GET /api/cost-management/v1/internal/tags/status?org_id=1234567
-Authorization: Bearer <token>
-```
-
-Response:
-
-```json
-{
-  "org_id": "1234567",
-  "synced_at": "2026-05-25T18:00:00Z",
-  "tag_keys": [
-    {"key": "environment", "values": ["production", "staging"]}
-  ]
-}
-```
-
-Compare `synced_at` against last OCP summarization or settings change. Alert if
-stale beyond expected window (e.g. > 7 hours when periodic safety-net is 6h).
+**Full-replace semantics:** Each sync runs in one transaction — reset all
+`resolved_tags` for the org to `{}`, apply namespace maps, upsert metadata.
+Namespaces not in the payload end up with empty tags.
 
 ---
 
 ## API Filtering Syntax
 
-Container list endpoints accept Koku bracket notation only:
+Both modes accept Koku bracket notation:
 
 ```
 GET /api/cost-management/v1/recommendations/openshift
@@ -214,109 +287,108 @@ GET /api/cost-management/v1/recommendations/openshift
 
 | Pattern | Semantics |
 |---------|-----------|
-| `filter[tag:key]=value` | Exact match on resolved tag value |
+| `filter[tag:key]=value` | Exact match |
 | `filter[tag:key]=a,b` | OR within the same key |
 | Multiple `filter[tag:*]` keys | AND across keys |
-| Wildcard `*` | Not supported in v1 |
+| `filter[tag:key]=*` | Key present (any value) |
 
-Filtering requires `ROS_TAGS_ENABLED=true` and prior successful sync for the org.
+Requires `ROS_TAGS_ENABLED=true`. With `api` source, at least one successful push
+should have populated `resolved_tags` for the org.
 
-Implementation: two-step list query — step 1 resolves matching containers from
-`org_container_keys.resolved_tags`; step 2 fetches recommendations for those keys.
+Implementation uses a two-step list query: resolve matching containers first, then
+fetch recommendations. See [query-performance](../operations/query-performance.md).
 
 ---
 
 ## Tag Lifecycle Scenarios
 
-### New tag key enabled in Koku
+Behavior is **identical from the user's perspective** once data is visible to ROS.
+Differences are *when* ROS sees changes and *what happens on failure*.
 
-1. Operator enables key via Settings API (`enabled_tags`).
-2. Koku calls `schedule_ros_tag_sync` immediately.
-3. Payload includes the new key in `tag_keys` (possibly with empty `values`).
-4. ROS metadata updated; filters on the new key become available (values appear after data exists).
+### New tag key enabled in Koku Settings
 
-### Tag key disabled in Koku
+| Step | On-Prem (`db`) | SaaS (`api`) |
+|------|----------------|--------------|
+| 1 | Operator enables key via Settings API | Same |
+| 2 | Key appears in `reporting_enabledtagkeys` immediately | Same + `schedule_ros_tag_sync` queued |
+| 3 | Filters accept the key after values exist in `reporting_ocptags_values` | Push updates `tag_keys` catalog; filters use `resolved_tags` after sync |
+| 4 | Values appear after next OCP summarization ingests labeled pods | Same + push after summarization |
 
-1. Settings mutation triggers immediate sync.
-2. Key omitted from `tag_keys` and namespace maps.
-3. Full-replace clears the key from all `resolved_tags` rows.
-4. ROS logs removed keys (`tag sync: removed tag key …`).
+### Tag key disabled in Koku Settings
 
-### Tag mapping changed in Koku
+| On-Prem | SaaS |
+|---------|------|
+| Key removed from enabled table; JOIN excludes it immediately on next query | Immediate push omits key; full-replace clears from all `resolved_tags` |
 
-1. Settings mutation triggers immediate sync.
-2. Next payload reflects new key→label resolution from updated mappings.
-3. Full-replace overwrites all namespace tag maps.
+### Tag mapping changed
 
-### Tag key disappears from cluster (still enabled in Koku)
+| On-Prem | SaaS |
+|---------|------|
+| Next summarization rebuilds `reporting_ocptags_values` with new resolution | Settings mutation triggers immediate push with new maps |
 
-The operator stops reporting the label on pods, but the key remains enabled in Settings.
+### Tag key disappears from cluster (still enabled in Settings)
 
-1. Next OCP summarization processes line items without that label.
-2. Sync sends key in `tag_keys` with **fewer or empty** `values`.
-3. Namespace maps omit the key.
-4. ROS retains the key in metadata catalog with empty values until disabled manually.
-5. Filters using old values return zero results (correct behavior).
+| On-Prem | SaaS |
+|---------|------|
+| Next summarization updates tag value tables; fewer values in JOIN | Next summarization + push sends empty/fewer values; full-replace removes stale entries |
 
-### New tag values appear for existing key
+### New tag values appear
 
-1. New pods/namespaces labeled or relabeled.
-2. Next daily OCP summarization includes new values in `all_labels`.
-3. Post-summary sync adds values to `tag_keys` and namespace maps.
-4. ROS filters match the new values on next list request.
+| On-Prem | SaaS |
+|---------|------|
+| Visible after next daily summarization | Visible after summarization + successful push |
 
 ### Tag values disappear (pods deleted or relabeled)
 
-1. Next summarization reflects only current line items.
-2. Sync payload contains only current values.
-3. Full-replace removes stale values from `resolved_tags`.
-4. Old values no longer match filters.
+| On-Prem | SaaS |
+|---------|------|
+| Stale values drop from Koku tables on next summarization | Full-replace on next sync removes stale `resolved_tags` |
 
-### Network failure during sync
+### Network / sync failure
 
-1. Koku logs `ROS tag sync failed` and Celery retries per task policy.
-2. ROS retains previous `resolved_tags` until a sync succeeds.
-3. Periodic 6-hour safety-net re-queues all tenants.
-4. **Eventual consistency** — filters may be stale until recovery.
+| On-Prem | SaaS |
+|---------|------|
+| N/A — no HTTP sync | Koku logs `ROS tag sync failed`, Celery retries; previous tags retained; 6h safety-net |
 
 ### ROS pod restart
 
-No state loss. Tags live in `org_container_keys` and `org_tag_sync_metadata`.
-In-flight sync requests should be retried by Koku on failure.
+Both modes: **no state loss**. On-prem reads Koku tables; api mode persists tags in PostgreSQL.
 
 ---
 
-## Configuration
+## Authentication
 
-### ROS (ros-ocp-backend)
+### On-Prem (`db`): No authentication between services
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch: sync endpoints + list filters |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated SA names allowed to push |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only static bearer token |
+ROS connects to PostgreSQL with its own credentials and reads Koku tenant schemas.
+No ServiceAccount tokens, push endpoints, or mTLS are involved in tag filtering.
 
-### Koku
+### SaaS (`api`): Kubernetes ServiceAccount TokenReview
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Enables sync Celery tasks |
-| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | ROS API base URL |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev bearer token when SA token unavailable |
+See [tag-sync-auth.md](../operations/tag-sync-auth.md) for full auth documentation,
+failure modes, and monitoring.
+
+**Dev mode:** Set the same `ROS_TAGS_DEV_TOKEN` on Koku and ROS when projected SA
+tokens are unavailable (local docker-compose).
+
+### Future: mTLS (SaaS hardening)
+
+Planned mutual TLS between Koku worker and ROS API (cert-manager or service mesh).
+TokenReview will remain supported during migration behind a feature flag
+(e.g. `ROS_TAGS_MTLS_ENABLED`).
 
 ---
 
 ## Scalability Considerations
 
-| Dimension | Approach |
-|-----------|----------|
-| Thousands of orgs | Periodic task fans out one Celery task per tenant; no single giant payload |
-| ~200 enabled tags per org | `tag_keys` catalog is JSONB metadata; list filter uses indexed container key lookup |
-| Large namespace counts | Sync updates by `(org_id, cluster_uuid, namespace)` batch in one transaction |
-| List API | Tag filter narrows container keys **before** recommendation join (see query-performance doc) |
+| Dimension | On-Prem | SaaS |
+|-----------|---------|------|
+| Thousands of orgs | JOIN per request; Koku tables indexed | Periodic task fans out one Celery job per tenant |
+| ~200 enabled tags | EXISTS subquery per filter key | JSONB `@>` / `->>` on `resolved_tags` |
+| Large namespace counts | `reporting_ocptags_values` unnest join | Batch UPDATE by `(org_id, cluster_uuid, namespace)` in one transaction |
 
-Monitor sync duration and `updated` row counts in Koku logs. Consider alerting on
-repeated sync failures per org.
+Monitor SaaS sync duration and Koku `ROS tag sync failed` logs. Alert on stale
+`synced_at` beyond 7 hours.
 
 ---
 
@@ -324,19 +396,20 @@ repeated sync failures per org.
 
 | Enhancement | Description |
 |-------------|-------------|
-| mTLS authentication | cert-manager or mesh sidecar; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
+| mTLS authentication | Transport-layer mutual auth for SaaS push; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
 | `group_by[tag:key]=*` | Aggregate recommendations by tag dimension in API responses |
+| Tag value autocomplete API | UI typeahead from tag catalog (db: live query; api: `org_tag_sync_metadata`) |
 | Tag-based cost allocation | Correlate ROS savings with Koku tag breakdown reports |
-| Webhook instant sync | Replace or supplement 6-hour safety-net with push notifications |
-| Tag value autocomplete API | UI typeahead from `org_tag_sync_metadata.tag_keys` |
+| Webhook instant sync | Reduce reliance on 6-hour safety-net |
+| Pod-level tag overrides | Support pod labels distinct from namespace defaults (v1 uses namespace-level only) |
 | Cross-provider tag unification | Align AWS/Azure/GCP tag keys with OCP for hybrid dashboards |
-| Pod-level tag overrides | Support pod labels distinct from namespace defaults |
 
 ---
 
 ## Related Documentation
 
-- [Tag sync operations](../operations/tag-sync.md)
+- [Tag sync operations (api source)](../operations/tag-sync.md)
 - [Tag sync authentication](../operations/tag-sync-auth.md)
-- [API query parameters](../operations/api-query-parameters.md)
+- [Configuration](../operations/configuration.md)
+- [Public docs: Tag Filtering](../../docs-site/features/tag-filtering.md)
 - [Koku ROS integration](../../../koku/docs/architecture/ros-ocp-integration.md)

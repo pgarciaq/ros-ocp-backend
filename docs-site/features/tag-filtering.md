@@ -1,37 +1,220 @@
 # Tag Filtering
 
-ROS recommendation list APIs support OpenShift tag filters:
+Filter ROS recommendations by OpenShift labels (tags) that Cost Management already
+tracks for billing — for example, show only workloads in `environment=production`.
+
+Tag filtering uses the same bracket syntax as Koku Cost Management reports. The feature
+must be enabled with `ROS_TAGS_ENABLED=true` on the ROS API deployment.
+
+---
+
+## How tags reach ROS
+
+Tags flow from your cluster through Cost Management ingestion. **How ROS reads them**
+depends on your deployment:
+
+```mermaid
+flowchart TB
+    subgraph modes["Two deployment modes"]
+        direction TB
+        OP[OpenShift labels via metrics operator]
+        OP --> KOKU[Koku ingestion & summarization]
+        KOKU --> DB["On-prem: ROS reads Koku PostgreSQL tables directly"]
+        KOKU --> API["SaaS: Koku pushes tags to ROS over HTTP"]
+        DB --> FILTER[List API filter[tag:key]=value]
+        API --> FILTER
+    end
+```
+
+### On-prem (default): shared database
+
+In cost-onprem and similar deployments, Koku and ROS use the **same PostgreSQL
+database**. ROS reads enabled tag keys and values from Koku tenant tables at query
+time. There is no separate sync step, no push API, and no ServiceAccount authentication
+between services.
+
+**Operator checklist:**
+
+1. Enable tag keys in Cost Management **Settings → Tags** (same as for cost reports).
+2. Set `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=db` on ROS (default).
+3. Ensure ROS database credentials can read Koku tenant schemas (`org{org_id}`).
+
+Tags are as fresh as the last OCP cost summarization — typically within one daily
+processing cycle after new labels appear on pods.
+
+### SaaS: push sync
+
+On console.redhat.com, Koku and ROS run in separate data stores. After OCP
+summarization or tag settings changes, Koku pushes resolved namespace tags to ROS
+via an internal HTTP API. ROS stores tags in `org_container_keys.resolved_tags` for
+fast local filtering.
+
+**Operator checklist:**
+
+1. Enable tag keys in Cost Management Settings (same as on-prem).
+2. Set `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=api` on **both** Koku worker and ROS API.
+3. Configure `ROS_OCP_BACKEND_URL` on Koku to reach the ROS API.
+4. Ensure the Koku worker ServiceAccount can authenticate to ROS (TokenReview).
+
+**Freshness:** Event-driven sync runs after settings changes and summarization. A
+**6-hour safety-net** Celery job retries all tenants if a push fails. Worst-case
+staleness is therefore up to ~6 hours. Monitor
+`GET /internal/tags/status?org_id=<org_id>` and compare `synced_at` to your
+expectations.
+
+---
+
+## Configuration examples
+
+### On-prem (Helm / cost-onprem)
+
+**ROS API deployment:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "db"
+```
+
+No additional Koku environment variables are required for tag sync.
+
+### SaaS / separate databases
+
+**ROS API deployment:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  # Optional: restrict which ServiceAccounts may push
+  ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS: "cost-management-koku-worker"
+```
+
+**Koku worker deployment:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_OCP_BACKEND_URL: "https://ros-api.example.com"
+```
+
+**Local development (no projected SA token):** set the same static value on both
+services:
+
+```yaml
+ROS_TAGS_DEV_TOKEN: "dev-only-change-me"
+```
+
+See [Configuration → Tag Sync](../configuration.md#tag-sync) for the full variable table.
+
+---
+
+## API usage
+
+Tag filters apply to **container list** recommendation endpoints when
+`ROS_TAGS_ENABLED=true`.
+
+### Filter syntax
 
 ```
-?filter[tag:environment]=production,staging
+GET /api/cost-management/v1/recommendations/openshift
+  ?filter[tag:environment]=production
+  &filter[tag:team]=platform,cost
 ```
 
-Multiple tag keys **AND** together; comma-separated values **OR** within a key.
+| Syntax | Meaning |
+|--------|---------|
+| `filter[tag:environment]=production` | Exact value match |
+| `filter[tag:environment]=prod,staging` | OR across comma-separated values |
+| Multiple `filter[tag:*]` parameters | AND across different keys |
+| `filter[tag:environment]=*` | Tag key present (any value) |
 
-## On-prem (default): direct database reads
+**Example — production deployments only:**
 
-When `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=db` (default), ROS reads Koku tag
-data from the **same PostgreSQL** instance at query time:
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'https://ros.example.com/api/cost-management/v1/recommendations/openshift?filter[tag:environment]=production&limit=20'
+```
 
-| Koku table | Schema | Used for |
-|------------|--------|----------|
-| `reporting_enabledtagkeys` | `org{org_id}` | Which tag keys are enabled for OCP |
-| `reporting_ocptags_values` | `org{org_id}` | Distinct key/value pairs with cluster and namespace arrays |
+**Example — platform team in staging or production:**
 
-No HTTP push, Celery sync, or ServiceAccount auth is required. Tags are always fresh
-after Koku completes OCP summarization.
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'https://ros.example.com/api/cost-management/v1/recommendations/openshift?filter[tag:team]=platform&filter[tag:environment]=staging,production'
+```
 
-List queries join `org_container_keys` to `reporting_ocptags_values` on
-`(cluster_uuid, namespace)`.
+Wildcards on values (e.g. `prod*`) are **not** supported in v1.
 
-## SaaS fallback: push sync
+Full parameter reference: [Query Parameters → Tag filtering](../api-reference/query-parameters.md#tag-filtering).
 
-When `ROS_TAGS_SOURCE=api`, Koku pushes namespace-level tags into
-`org_container_keys.resolved_tags` via `POST /internal/tags/sync`. List filters use
-that JSONB column (same bracket syntax).
+---
 
-See also:
+## Freshness guarantees
 
-- Full reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filtering.md)
-- Configuration: [Configuration](configuration.md#tag-sync)
-- Push auth (api only): [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
+| Mode | When filters reflect new labels | Worst case |
+|------|----------------------------------|------------|
+| **On-prem (`db`)** | After Koku processes the next OCP report containing those labels | Summarization schedule (typically daily) |
+| **SaaS (`api`)** | After summarization **and** a successful push to ROS | ~6 hours if pushes fail repeatedly |
+
+**Settings changes** (enable/disable tag key):
+
+- **On-prem:** Effective on next list query for enabled keys; values follow summarization.
+- **SaaS:** Immediate push queued; filters update after successful sync.
+
+**Checking SaaS sync freshness:**
+
+```bash
+curl -s -H "Authorization: Bearer $SA_TOKEN" \
+  "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
+```
+
+Compare `synced_at` in the response to your last manifest completion time.
+
+---
+
+## Troubleshooting
+
+### Tag filter returns no results but labels exist on pods
+
+1. Confirm the tag key is **enabled** in Cost Management Settings → Tags.
+2. Verify `ROS_TAGS_ENABLED=true` on ROS.
+3. Wait for the next OCP report ingestion and summarization cycle.
+4. **SaaS only:** Check `/internal/tags/status` — stale `synced_at` indicates a failed push.
+5. Confirm you filter on **namespace-level** tags (v1 does not apply pod-only overrides).
+
+### Tag filter parameter ignored entirely
+
+- `ROS_TAGS_ENABLED=false` — tag query params are silently ignored.
+- Wrong syntax — only `filter[tag:key]=value` is supported (not flat `tag=` on public APIs).
+
+### SaaS: `401` / `403` on tag sync
+
+- Koku worker ServiceAccount token expired or not mounted — check projected volume.
+- SA name not in `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` (if restricted).
+- For local dev, set matching `ROS_TAGS_DEV_TOKEN` on Koku and ROS.
+
+### SaaS: tags stale for hours
+
+- Check Koku worker logs for `ROS tag sync failed`.
+- Verify `ROS_TAGS_SOURCE=api` and `ROS_TAGS_ENABLED=true` on Koku.
+- Wait for the 6-hour safety-net or trigger a tag settings save to force immediate sync.
+
+### On-prem: ROS cannot read tags
+
+- Confirm ROS and Koku use the same PostgreSQL instance and ROS credentials can `SELECT`
+  from `org{org_id}.reporting_ocptags_values`.
+- Verify org_id in identity matches schema (`1234567` → `org1234567`, not `orgorg1234567`).
+
+### Push endpoint returns 404
+
+Expected when `ROS_TAGS_SOURCE=db` — on-prem mode does not expose push sync.
+
+---
+
+## Related documentation
+
+- [Configuration → Tag Sync](../configuration.md#tag-sync)
+- [Query Parameters](../api-reference/query-parameters.md)
+- Internal architecture reference: [`docs/features/tag-filtering.md`](../../docs/features/tag-filtering.md)
+- Koku integration: [ros-ocp-integration.md](https://github.com/project-koku/koku/blob/main/docs/architecture/ros-ocp-integration.md)
