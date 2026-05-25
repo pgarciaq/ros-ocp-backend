@@ -372,19 +372,7 @@ func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn Ro
 		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest
 	)
 	if weightFn == nil {
-		cpuRequests := extractField(rows, func(r MetricRow) int64 { return r.CPURequestMC })
-		cpuUsages := extractField(rows, func(r MetricRow) int64 { return r.CPUUsageMC })
-		cpuThrottles := extractField(rows, func(r MetricRow) int64 { return r.CPUThrottleMC })
-		memRequests := extractField(rows, func(r MetricRow) int64 { return r.MemRequestKiB })
-		memUsages := extractField(rows, func(r MetricRow) int64 { return r.MemUsageKiB })
-		memRSS := extractField(rows, func(r MetricRow) int64 { return r.MemRSSKiB })
-
-		cpuReqD = ComputeDigest(cpuRequests)
-		cpuUseD = ComputeDigest(cpuUsages)
-		cpuThrD = ComputeDigest(cpuThrottles)
-		memReqD = ComputeDigest(memRequests)
-		memUseD = ComputeDigest(memUsages)
-		memRssD = ComputeDigest(memRSS)
+		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeUnweightedFieldDigests(rows)
 	} else {
 		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeAllWeightedFieldDigests(rows, weightFn)
 	}
@@ -625,11 +613,90 @@ func computeReplicaCounts(rows []MetricRow) (desired, available int64) {
 }
 
 func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {
-	vals := make([]int64, len(rows))
-	for i, r := range rows {
-		vals[i] = fn(r)
+	buf := fieldBufferPool.Get().([]int64)
+	buf = buf[:0]
+	if cap(buf) < len(rows) {
+		buf = make([]int64, len(rows))
+	} else {
+		buf = buf[:len(rows)]
 	}
-	return vals
+	for i, r := range rows {
+		buf[i] = fn(r)
+	}
+	// Caller owns the slice; pool only seeds capacity for extractField callers that copy.
+	out := make([]int64, len(buf))
+	copy(out, buf)
+	fieldBufferPool.Put(buf[:0])
+	return out
+}
+
+type fieldExtractBuffers struct {
+	cpuReq, cpuUse, cpuThr, memReq, memUse, memRss []int64
+}
+
+var fieldBufferPool = sync.Pool{
+	New: func() any {
+		s := make([]int64, 0, 128)
+		return s
+	},
+}
+
+var fieldExtractPool = sync.Pool{
+	New: func() any {
+		return &fieldExtractBuffers{
+			cpuReq: make([]int64, 0, 128),
+			cpuUse: make([]int64, 0, 128),
+			cpuThr: make([]int64, 0, 128),
+			memReq: make([]int64, 0, 128),
+			memUse: make([]int64, 0, 128),
+			memRss: make([]int64, 0, 128),
+		}
+	},
+}
+
+func computeUnweightedFieldDigests(rows []MetricRow) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
+	scratch := fieldExtractPool.Get().(*fieldExtractBuffers)
+	defer func() {
+		scratch.cpuReq = scratch.cpuReq[:0]
+		scratch.cpuUse = scratch.cpuUse[:0]
+		scratch.cpuThr = scratch.cpuThr[:0]
+		scratch.memReq = scratch.memReq[:0]
+		scratch.memUse = scratch.memUse[:0]
+		scratch.memRss = scratch.memRss[:0]
+		fieldExtractPool.Put(scratch)
+	}()
+
+	n := len(rows)
+	scratch.cpuReq = appendSliceInt64(scratch.cpuReq, n)
+	scratch.cpuUse = appendSliceInt64(scratch.cpuUse, n)
+	scratch.cpuThr = appendSliceInt64(scratch.cpuThr, n)
+	scratch.memReq = appendSliceInt64(scratch.memReq, n)
+	scratch.memUse = appendSliceInt64(scratch.memUse, n)
+	scratch.memRss = appendSliceInt64(scratch.memRss, n)
+
+	for i, r := range rows {
+		scratch.cpuReq[i] = r.CPURequestMC
+		scratch.cpuUse[i] = r.CPUUsageMC
+		scratch.cpuThr[i] = r.CPUThrottleMC
+		scratch.memReq[i] = r.MemRequestKiB
+		scratch.memUse[i] = r.MemUsageKiB
+		scratch.memRss[i] = r.MemRSSKiB
+	}
+
+	cpuReqD = ComputeDigest(scratch.cpuReq)
+	cpuUseD = ComputeDigest(scratch.cpuUse)
+	cpuThrD = ComputeDigest(scratch.cpuThr)
+	memReqD = ComputeDigest(scratch.memReq)
+	memUseD = ComputeDigest(scratch.memUse)
+	memRssD = ComputeDigest(scratch.memRss)
+	return cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD
+}
+
+func appendSliceInt64(s []int64, n int) []int64 {
+	if cap(s) >= n {
+		return s[:n]
+	}
+	return make([]int64, n)
 }
 
 func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldFn func(MetricRow) int64) Digest {
