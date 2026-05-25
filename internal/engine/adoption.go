@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -55,26 +54,37 @@ func MarkAdopted(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID str
 	}
 
 	now := time.Now().UTC()
-	var errs []error
-	for _, key := range keys {
-		tag, err := pool.Exec(ctx, `
-			UPDATE recommendation_sets
-			SET recommendation_applied_at = $1,
-				notification_codes = array_append(
-					array_remove(notification_codes, $5::smallint),
-					$5::smallint
-				)
-			WHERE org_id = $2 AND cluster_uuid = $3
-				AND namespace = $4 AND workload = $6 AND container_name = $7
-				AND recommendation_applied_at IS NULL`,
-			now, orgID, clusterUUID, key.Namespace, int16(NotifRecApplied), key.Workload, key.ContainerName,
-		)
-		if err != nil {
-			logging.ForOrg(orgID, clusterUUID).Warnf("adoption: marking %s/%s/%s: %v", key.Namespace, key.Workload, key.ContainerName, err)
-			errs = append(errs, fmt.Errorf("%s/%s/%s: %w", key.Namespace, key.Workload, key.ContainerName, err))
-		} else if tag.RowsAffected() > 0 {
-			logging.ForOrg(orgID, clusterUUID).Infof("adoption: detected for %s/%s/%s", key.Namespace, key.Workload, key.ContainerName)
-		}
+	notifCode := int16(NotifRecApplied)
+
+	namespaces := make([]string, len(keys))
+	workloads := make([]string, len(keys))
+	containers := make([]string, len(keys))
+	for i, key := range keys {
+		namespaces[i] = key.Namespace
+		workloads[i] = key.Workload
+		containers[i] = key.ContainerName
 	}
-	return errors.Join(errs...)
+
+	tag, err := pool.Exec(ctx, `
+		UPDATE recommendation_sets rs
+		SET recommendation_applied_at = $1,
+			notification_codes = array_append(
+				array_remove(notification_codes, $4::smallint),
+				$4::smallint
+			)
+		FROM unnest($5::text[], $6::text[], $7::text[]) AS t(namespace, workload, container_name)
+		WHERE rs.org_id = $2 AND rs.cluster_uuid = $3
+			AND rs.namespace = t.namespace
+			AND rs.workload = t.workload
+			AND rs.container_name = t.container_name
+			AND rs.recommendation_applied_at IS NULL`,
+		now, orgID, clusterUUID, notifCode, namespaces, workloads, containers,
+	)
+	if err != nil {
+		return fmt.Errorf("batch mark adopted: %w", err)
+	}
+	if tag.RowsAffected() > 0 {
+		logging.ForOrg(orgID, clusterUUID).Infof("adoption: marked %d container(s) adopted", tag.RowsAffected())
+	}
+	return nil
 }
