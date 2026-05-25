@@ -58,8 +58,12 @@ type Config struct {
 
 	// pgxpool tuning (REST / GPU paths). ROS_DB_MAX_CONNS defaults to 10;
 	// ROS_DB_ACQUIRE_TIMEOUT_SECS sets ContextWithAcquireTimeout (0 = no limit).
-	DBMaxConns           int `mapstructure:"ROS_DB_MAX_CONNS"`
-	DBAcquireTimeoutSecs int `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
+	DBMaxConns              int    `mapstructure:"ROS_DB_MAX_CONNS"`
+	DBMinConns              int    `mapstructure:"ROS_DB_MIN_CONNS"`
+	DBMaxConnLifetimeMins   int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
+	DBMaxConnIdleTimeMins   int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
+	DBStatementCacheMode    string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
+	DBAcquireTimeoutSecs    int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
 
 	// RBAC config
 	RBACHost     string
@@ -133,6 +137,10 @@ type Config struct {
 
 	// ReshipMaxRetries is the consecutive poller retry budget before ros_reship_failures_total increments (default 10).
 	ReshipMaxRetries int `mapstructure:"ROS_RESHIP_MAX_RETRIES"`
+
+	// ReshipConcurrency caps parallel masu reship_ros calls per org fan-out (default 2).
+	// Coordinate with masu rate limits when raising this value.
+	ReshipConcurrency int `mapstructure:"ROS_RESHIP_CONCURRENCY"`
 
 	// ReshipForwardOnlyFallback enables forward-only BH recommendations after max reship retries (default false).
 	ReshipForwardOnlyFallback bool `mapstructure:"ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK"`
@@ -396,6 +404,10 @@ func initConfig() {
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
 	viper.SetDefault("ROS_DB_MAX_CONNS", 10)
+	viper.SetDefault("ROS_DB_MIN_CONNS", 2)
+	viper.SetDefault("ROS_DB_MAX_CONN_LIFETIME", 30)
+	viper.SetDefault("ROS_DB_MAX_CONN_IDLE_TIME", 5)
+	viper.SetDefault("ROS_DB_STATEMENT_CACHE_MODE", "describe")
 	viper.SetDefault("ROS_DB_ACQUIRE_TIMEOUT_SECS", 5)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
@@ -407,6 +419,7 @@ func initConfig() {
 	viper.SetDefault("ROS_THRESHOLD_RECALC_CONCURRENCY", 3)
 	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
+	viper.SetDefault("ROS_RESHIP_CONCURRENCY", 2)
 	viper.SetDefault("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", false)
 	viper.SetDefault("ROS_CONTAINER_CPU_COST_PERCENTILE", 0.60)
 	viper.SetDefault("ROS_CONTAINER_CPU_PERF_PERCENTILE", 0.98)
@@ -532,9 +545,25 @@ func validateLoadedConfig(c *Config) {
 		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using 10", c.DBMaxConns)
 		c.DBMaxConns = 10
 	}
+	if c.DBMinConns < 0 {
+		log.Printf("config: ROS_DB_MIN_CONNS (%d) is invalid; using 2", c.DBMinConns)
+		c.DBMinConns = 2
+	}
+	if c.DBMaxConnLifetimeMins <= 0 {
+		c.DBMaxConnLifetimeMins = 30
+	}
+	if c.DBMaxConnIdleTimeMins <= 0 {
+		c.DBMaxConnIdleTimeMins = 5
+	}
+	if c.DBStatementCacheMode == "" {
+		c.DBStatementCacheMode = "describe"
+	}
 	if c.DBAcquireTimeoutSecs < 0 {
 		log.Printf("config: ROS_DB_ACQUIRE_TIMEOUT_SECS (%d) is invalid; using 5", c.DBAcquireTimeoutSecs)
 		c.DBAcquireTimeoutSecs = 5
+	}
+	if c.ReshipConcurrency <= 0 {
+		c.ReshipConcurrency = 2
 	}
 }
 

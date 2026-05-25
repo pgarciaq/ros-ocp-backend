@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -108,7 +109,13 @@ func initPool() {
 		maxConns = 10
 	}
 	poolCfg.MaxConns = maxConns
-	poolCfg.MaxConnIdleTime = 30 * time.Minute
+	minConns := int32(cfg.DBMinConns)
+	if minConns > 0 {
+		poolCfg.MinConns = minConns
+	}
+	poolCfg.MaxConnLifetime = time.Duration(cfg.DBMaxConnLifetimeMins) * time.Minute
+	poolCfg.MaxConnIdleTime = time.Duration(cfg.DBMaxConnIdleTimeMins) * time.Minute
+	poolCfg.ConnConfig.DefaultQueryExecMode = parseQueryExecMode(cfg.DBStatementCacheMode)
 
 	timeoutSecs := cfg.DBAcquireTimeoutSecs
 	if timeoutSecs < 0 {
@@ -131,6 +138,25 @@ func GetPool() *pgxpool.Pool {
 		initPool()
 	}
 	return Pool
+}
+
+// parseQueryExecMode maps ROS_DB_STATEMENT_CACHE_MODE to pgx DefaultQueryExecMode.
+// Accepts pgx names and shorthand "describe" (cache_describe).
+func parseQueryExecMode(mode string) pgx.QueryExecMode {
+	switch mode {
+	case "describe", "cache_describe":
+		return pgx.QueryExecModeCacheDescribe
+	case "cache_statement", "statement":
+		return pgx.QueryExecModeCacheStatement
+	case "describe_exec":
+		return pgx.QueryExecModeDescribeExec
+	case "exec":
+		return pgx.QueryExecModeExec
+	case "simple_protocol":
+		return pgx.QueryExecModeSimpleProtocol
+	default:
+		return pgx.QueryExecModeCacheDescribe
+	}
 }
 
 func CreateCACertFile(certString string) string {
