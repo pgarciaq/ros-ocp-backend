@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"net/http"
 
@@ -80,6 +81,14 @@ func aggregate_permissions(acls []types.RbacData) map[string][]string {
 
 func get_user_permissions_from_rbac(encodedIdentity string) map[string][]string {
 	cfg := config.GetConfig()
+	cacheTTL := time.Duration(cfg.RBACCacheTTLSecs) * time.Second
+	cacheKey := rbacIdentityCacheKey(encodedIdentity)
+	if cacheTTL > 0 {
+		if perms, ok := getCachedRBACPermissions(cacheKey); ok {
+			return perms
+		}
+	}
+
 	url := fmt.Sprintf(
 		"%s://%s:%s/api/rbac/v1/access/?application=cost-management&limit=100",
 		cfg.RBACProtocol, cfg.RBACHost, cfg.RBACPort,
@@ -88,6 +97,9 @@ func get_user_permissions_from_rbac(encodedIdentity string) map[string][]string 
 	if len(acls) > 0 {
 		permissions := aggregate_permissions(acls)
 		if len(permissions) > 0 {
+			if cacheTTL > 0 {
+				storeCachedRBACPermissions(cacheKey, permissions, cacheTTL)
+			}
 			return permissions
 		}
 		return nil
