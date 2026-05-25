@@ -19,42 +19,40 @@ type NodeDayKey struct {
 	BucketDate  time.Time
 }
 
-// NodeDayAccumulator collects per-interval samples for a single node-day,
+const nodeDayHours = 24
+
+// NodeDayAccumulator collects per-hour samples for a single node-day,
 // allowing computation of usage percentiles and request/capacity maximums.
 type NodeDayAccumulator struct {
-	CPUUsageSamples []int64
-	MemUsageSamples []int64
-	MaxCPURequestMC int64
-	MaxMemRequestKiB int64
-	MaxCPUCapacityMC int64
+	intervalCPUReqs   [nodeDayHours]int64
+	intervalMemReqs   [nodeDayHours]int64
+	intervalCPUUse    [nodeDayHours]int64
+	intervalMemUse    [nodeDayHours]int64
+	intervalPods      [nodeDayHours]int64
+	intervalSeen      [nodeDayHours]bool
+	MaxCPUCapacityMC  int64
 	MaxMemCapacityKiB int64
-	MaxPodCount      int64
-	// Per-interval request sums (used to track max across intervals)
-	intervalCPUReqs map[time.Time]int64
-	intervalMemReqs map[time.Time]int64
-	intervalCPUUse  map[time.Time]int64
-	intervalMemUse  map[time.Time]int64
-	intervalPods    map[time.Time]int64
 }
 
 func newNodeDayAccumulator() *NodeDayAccumulator {
-	return &NodeDayAccumulator{
-		intervalCPUReqs: make(map[time.Time]int64),
-		intervalMemReqs: make(map[time.Time]int64),
-		intervalCPUUse:  make(map[time.Time]int64),
-		intervalMemUse:  make(map[time.Time]int64),
-		intervalPods:    make(map[time.Time]int64),
-	}
+	return &NodeDayAccumulator{}
+}
+
+func hourIndex(t time.Time) int {
+	return t.UTC().Hour()
 }
 
 // AddRow accumulates a single container metric row into this node-day.
 func (a *NodeDayAccumulator) AddRow(r MetricRow) {
-	a.intervalCPUReqs[r.IntervalStart] += r.CPURequestMC
-	a.intervalMemReqs[r.IntervalStart] += r.MemRequestKiB
-	a.intervalCPUUse[r.IntervalStart] += r.CPUUsageMC
-	a.intervalMemUse[r.IntervalStart] += r.MemUsageKiB
-	a.intervalPods[r.IntervalStart]++
-
+	h := hourIndex(r.IntervalStart)
+	if !a.intervalSeen[h] {
+		a.intervalSeen[h] = true
+	}
+	a.intervalCPUReqs[h] += r.CPURequestMC
+	a.intervalMemReqs[h] += r.MemRequestKiB
+	a.intervalCPUUse[h] += r.CPUUsageMC
+	a.intervalMemUse[h] += r.MemUsageKiB
+	a.intervalPods[h]++
 	if r.NodeCapacityCPUMC > 0 && r.NodeCapacityCPUMC > a.MaxCPUCapacityMC {
 		a.MaxCPUCapacityMC = r.NodeCapacityCPUMC
 	}
@@ -65,40 +63,37 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 
 // Finalize computes the summary statistics from accumulated interval data.
 func (a *NodeDayAccumulator) Finalize() (cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq int64, maxPods int64, sampleCount int64) {
-	for _, v := range a.intervalCPUUse {
-		a.CPUUsageSamples = append(a.CPUUsageSamples, v)
-	}
-	for _, v := range a.intervalMemUse {
-		a.MemUsageSamples = append(a.MemUsageSamples, v)
-	}
-	for _, v := range a.intervalCPUReqs {
-		if v > maxCPUReq {
-			maxCPUReq = v
+	cpuUsageSamples := make([]int64, 0, nodeDayHours)
+	memUsageSamples := make([]int64, 0, nodeDayHours)
+	for h := 0; h < nodeDayHours; h++ {
+		if !a.intervalSeen[h] {
+			continue
 		}
-	}
-	for _, v := range a.intervalMemReqs {
-		if v > maxMemReq {
-			maxMemReq = v
+		cpuUsageSamples = append(cpuUsageSamples, a.intervalCPUUse[h])
+		memUsageSamples = append(memUsageSamples, a.intervalMemUse[h])
+		if a.intervalCPUReqs[h] > maxCPUReq {
+			maxCPUReq = a.intervalCPUReqs[h]
 		}
-	}
-	for _, v := range a.intervalPods {
-		if v > maxPods {
-			maxPods = v
+		if a.intervalMemReqs[h] > maxMemReq {
+			maxMemReq = a.intervalMemReqs[h]
+		}
+		if a.intervalPods[h] > maxPods {
+			maxPods = a.intervalPods[h]
 		}
 	}
 
-	sampleCount = int64(len(a.CPUUsageSamples))
+	sampleCount = int64(len(cpuUsageSamples))
 	if sampleCount == 0 {
 		return
 	}
 
-	slices.Sort(a.CPUUsageSamples)
-	slices.Sort(a.MemUsageSamples)
+	slices.Sort(cpuUsageSamples)
+	slices.Sort(memUsageSamples)
 
-	cpuP50 = percentileInt64(a.CPUUsageSamples, 0.50)
-	cpuP95 = percentileInt64(a.CPUUsageSamples, 0.95)
-	memP50 = percentileInt64(a.MemUsageSamples, 0.50)
-	memP95 = percentileInt64(a.MemUsageSamples, 0.95)
+	cpuP50 = percentileInt64(cpuUsageSamples, 0.50)
+	cpuP95 = percentileInt64(cpuUsageSamples, 0.95)
+	memP50 = percentileInt64(memUsageSamples, 0.50)
+	memP95 = percentileInt64(memUsageSamples, 0.95)
 	return
 }
 
@@ -140,6 +135,10 @@ func EnsureNodeDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys ma
 		monthStart := time.Date(k.BucketDate.Year(), k.BucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
 		months[monthStart] = struct{}{}
 	}
+	ensureNodeDigestPartitionsForMonths(ctx, pool, months)
+}
+
+func ensureNodeDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool, months map[time.Time]struct{}) {
 	for monthStart := range months {
 		monthEnd := monthStart.AddDate(0, 1, 0)
 		partName := fmt.Sprintf("daily_node_digests_%s", monthStart.Format("200601"))
