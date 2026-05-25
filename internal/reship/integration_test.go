@@ -38,8 +38,8 @@ func TestReshipPending_PollerClears(t *testing.T) {
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
 	poller := NewPoller(pool, PollerConfig{
-		MasuURL:  masu.URL,
-		Interval: 50 * time.Millisecond,
+		MasuURL:    masu.URL,
+		Interval:   50 * time.Millisecond,
 		MaxRetries: 5,
 	})
 	ctx, cancel := context.WithCancel(context.Background())

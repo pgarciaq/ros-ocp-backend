@@ -80,6 +80,9 @@ func LoadSchedules(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 			s := sched
 			cache.org = &s
 		case rowClusterUUID == clusterUUID && namespace == "":
+			if IsPendingMarkerStub(sched) {
+				continue
+			}
 			s := sched
 			cache.cluster = &s
 		case rowClusterUUID == clusterUUID && namespace != "":
@@ -157,6 +160,9 @@ func LoadSchedulesForClusters(ctx context.Context, pool *pgxpool.Pool, orgID str
 			s := sched
 			orgDefault = &s
 		case namespace == "":
+			if IsPendingMarkerStub(sched) {
+				continue
+			}
 			s := sched
 			clusterLevel[rowClusterUUID] = &s
 		default:

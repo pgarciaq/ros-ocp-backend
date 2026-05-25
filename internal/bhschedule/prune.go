@@ -40,3 +40,18 @@ func PruneNamespaceBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool,
 	}
 	return nil
 }
+
+// PruneOrgBusinessHoursDigests removes all business_hours digest rows for an org.
+func PruneOrgBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID string) error {
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM daily_container_digests
+		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID); err != nil {
+		return fmt.Errorf("prune org container business_hours digests: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM daily_namespace_digests
+		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID); err != nil {
+		return fmt.Errorf("prune org namespace business_hours digests: %w", err)
+	}
+	return nil
+}

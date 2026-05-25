@@ -401,8 +401,8 @@ func TestNamespacePlugin_DualStream(t *testing.T) {
 
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: testutil.TestClusterUUID, Namespace: "",
-		Timezone: "UTC",
-		Days:     []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
 		StartTime: "00:00", EndTime: "23:59", OffHoursWeight: 0.0, Enabled: true,
 	}))
 
@@ -487,7 +487,10 @@ func TestScheduleChange_RecomputesDigests(t *testing.T) {
 		day = day.AddDate(0, 0, -1)
 	}
 	csv := containerCSVHeader + "\n"
-	intervals := []struct{ hour, minute int; cpu string }{
+	intervals := []struct {
+		hour, minute int
+		cpu          string
+	}{
 		{8, 30, "0.90"},
 		{12, 0, "0.05"},
 	}
@@ -509,8 +512,8 @@ func TestScheduleChange_RecomputesDigests(t *testing.T) {
 
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
-		Timezone: "UTC",
-		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
 		StartTime: "00:00", EndTime: "23:59", OffHoursWeight: 0.0, Enabled: true,
 	}))
 

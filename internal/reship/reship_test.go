@@ -443,6 +443,51 @@ func TestReshipLock_TrailingReshipOnRelease(t *testing.T) {
 	assert.Equal(t, int32(2), calls.Load(), "trailing reship after schedule change")
 }
 
+func TestReshipLock_ConcurrentPUTs_ClearPendingAfterCoalesce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-concurrent-pending"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupReshipSchedules(t, pool, orgID) })
+	seedBHScheduleRow(t, pool, orgID, clusterID.String())
+
+	var calls atomic.Int32
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		if calls.Load() == 1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	defer masu.Close()
+
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL})
+	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		require.NoError(t, svc.TriggerReship(context.Background(), orgID, clusterID))
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	for i := 0; i < 3; i++ {
+		require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
+		go func() { _ = svc.TriggerReship(context.Background(), orgID, clusterID) }()
+	}
+
+	<-done
+	time.Sleep(50 * time.Millisecond)
+	assert.LessOrEqual(t, calls.Load(), int32(2))
+
+	pending, err := ReshipPendingSince(context.Background(), pool, orgID, clusterID)
+	require.NoError(t, err)
+	assert.Nil(t, pending, "pending must be cleared after coalesced reship completes")
+}
+
 func TestReshipLock_DifferentClusters(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

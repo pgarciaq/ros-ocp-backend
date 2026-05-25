@@ -22,18 +22,18 @@ type Service struct {
 	client *HTTPClient
 	lock   *LockCoordinator
 
-	maxRetries              int
-	forwardOnlyFallback     bool
-	retryMu                 sync.Mutex
-	retries                 map[lockKey]int
+	maxRetries          int
+	forwardOnlyFallback bool
+	retryMu             sync.Mutex
+	retries             map[lockKey]int
 }
 
 // ServiceConfig tunes reship behavior.
 type ServiceConfig struct {
-	MasuURL                 string
-	LockTTL                 time.Duration
-	MaxRetries              int
-	ForwardOnlyFallback     bool
+	MasuURL             string
+	LockTTL             time.Duration
+	MaxRetries          int
+	ForwardOnlyFallback bool
 }
 
 // NewService wires a reship Service. Returns nil when masu URL is empty.
@@ -76,6 +76,7 @@ func (s *Service) TriggerReship(ctx context.Context, orgID string, clusterUUID u
 	}
 	clusterID := clusterUUID.String()
 
+	var lastErr error
 	for pass := 0; pass < 2; pass++ {
 		release, acquired := s.lock.Acquire(orgID, clusterID)
 		if !acquired {
@@ -86,12 +87,14 @@ func (s *Service) TriggerReship(ctx context.Context, orgID string, clusterUUID u
 		err := s.doReship(ctx, orgID, clusterUUID)
 		release()
 
-		updatedAt, _ := MaxScheduleUpdatedAt(ctx, s.pool, orgID, clusterUUID)
+		lastErr = err
 		if err != nil {
 			return err
 		}
+
+		updatedAt, _ := MaxScheduleUpdatedAt(ctx, s.pool, orgID, clusterUUID)
 		if !updatedAt.After(scheduleAt) {
-			return nil
+			break
 		}
 		reshipLog.WithFields(map[string]interface{}{
 			"msg":          "trailing reship",
@@ -101,7 +104,15 @@ func (s *Service) TriggerReship(ctx context.Context, orgID string, clusterUUID u
 			"updated_at":   updatedAt,
 		}).Info("schedule changed during reship; running trailing reship")
 	}
-	return nil
+	if lastErr == nil {
+		// Concurrent schedule PUTs may re-mark pending while this reship runs.
+		// Trailing passes above absorb their schedule changes; clear stale pending
+		// so the poller does not launch a redundant third masu call.
+		if err := ClearReshipPending(ctx, s.pool, orgID, clusterUUID); err != nil {
+			return fmt.Errorf("clear reship pending: %w", err)
+		}
+	}
+	return lastErr
 }
 
 func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.UUID) error {
@@ -125,11 +136,11 @@ func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.U
 	}
 
 	reshipLog.WithFields(map[string]interface{}{
-		"msg":             "reship progress",
-		"org_id":          orgID,
-		"cluster_uuid":    clusterID,
-		"files_done":      result.FilesProcessed,
-		"files_total":     result.FilesTotal,
+		"msg":              "reship progress",
+		"org_id":           orgID,
+		"cluster_uuid":     clusterID,
+		"files_done":       result.FilesProcessed,
+		"files_total":      result.FilesTotal,
 		"duration_seconds": time.Since(start).Seconds(),
 	}).Info("reship completed")
 

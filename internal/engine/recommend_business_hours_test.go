@@ -137,7 +137,7 @@ func TestRecommendContainer_DualStream(t *testing.T) {
 			WorkloadType:     testutil.TestWorkloadType,
 			ContainerName:    testutil.TestContainer,
 			CPURequestP50MC:  400,
-			CPURequestP95MC: 450,
+			CPURequestP95MC:  450,
 			CPUUsageP50MC:    380,
 			CPUUsageP95MC:    400,
 			CPUUsageMaxMC:    420,
@@ -197,16 +197,16 @@ func TestRecommendContainer_AllHoursUnchanged(t *testing.T) {
 
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    200 + int64(i)*10,
-			MemUsageP95KiB:   524288,
-			ScheduleType:     "all_hours",
+			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:          orgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      testutil.TestNamespace,
+			Workload:       testutil.TestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  testutil.TestContainer,
+			CPUUsageP95MC:  200 + int64(i)*10,
+			MemUsageP95KiB: 524288,
+			ScheduleType:   "all_hours",
 		})
 	}
 
@@ -216,16 +216,16 @@ func TestRecommendContainer_AllHoursUnchanged(t *testing.T) {
 	// Add business_hours digests that must not affect all-hours stream.
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    10,
-			MemUsageP95KiB:   10000,
-			ScheduleType:     "business_hours",
+			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:          orgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      testutil.TestNamespace,
+			Workload:       testutil.TestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  testutil.TestContainer,
+			CPUUsageP95MC:  10,
+			MemUsageP95KiB: 10000,
+			ScheduleType:   "business_hours",
 		})
 	}
 
@@ -250,16 +250,16 @@ func TestRecommendContainer_BHNotConfigured_NoBHField(t *testing.T) {
 	orgID := "org-bh-no-sched-" + t.Name()
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    200 + int64(i)*10,
-			MemUsageP95KiB:   524288,
-			ScheduleType:     "all_hours",
+			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:          orgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      testutil.TestNamespace,
+			Workload:       testutil.TestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  testutil.TestContainer,
+			CPUUsageP95MC:  200 + int64(i)*10,
+			MemUsageP95KiB: 524288,
+			ScheduleType:   "all_hours",
 		})
 	}
 
@@ -285,28 +285,28 @@ func TestRecommendContainer_BHInsufficientData(t *testing.T) {
 	end := testutil.BaseDate.AddDate(0, 0, 6)
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:           orgID,
-			ClusterUUID:     testutil.TestClusterUUID,
-			Namespace:       testutil.TestNamespace,
-			Workload:        testutil.TestWorkload,
-			WorkloadType:    testutil.TestWorkloadType,
-			ContainerName:   testutil.TestContainer,
-			CPUUsageP95MC:   200,
-			ScheduleType:    "all_hours",
+			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: testutil.TestContainer,
+			CPUUsageP95MC: 200,
+			ScheduleType:  "all_hours",
 		})
 	}
 	for i := 0; i < 2; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:           orgID,
-			ClusterUUID:     testutil.TestClusterUUID,
-			Namespace:       testutil.TestNamespace,
-			Workload:        testutil.TestWorkload,
-			WorkloadType:    testutil.TestWorkloadType,
-			ContainerName:   testutil.TestContainer,
-			CPUUsageP95MC:   50,
-			ScheduleType:    "business_hours",
+			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: testutil.TestContainer,
+			CPUUsageP95MC: 50,
+			ScheduleType:  "business_hours",
 		})
 	}
 
@@ -330,16 +330,16 @@ func TestRecommendContainer_BHFieldShape(t *testing.T) {
 	seedWeekdayBHSchedule(t, pool, orgID)
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:         orgID,
-			ClusterUUID:   testutil.TestClusterUUID,
-			Namespace:     testutil.TestNamespace,
-			Workload:      testutil.TestWorkload,
-			WorkloadType:  testutil.TestWorkloadType,
-			ContainerName: testutil.TestContainer,
-			CPUUsageP95MC: 200 + int64(i)*10,
+			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:          orgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      testutil.TestNamespace,
+			Workload:       testutil.TestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  testutil.TestContainer,
+			CPUUsageP95MC:  200 + int64(i)*10,
 			MemUsageP95KiB: 524288,
-			ScheduleType:  "all_hours",
+			ScheduleType:   "all_hours",
 		})
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
 			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
@@ -383,16 +383,16 @@ func TestRecommendContainer_NoBHDigests_SkipsGracefully(t *testing.T) {
 	seedWeekdayBHSchedule(t, pool, orgID)
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    200 + int64(i)*10,
-			MemUsageP95KiB:   524288,
-			ScheduleType:     "all_hours",
+			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:          orgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      testutil.TestNamespace,
+			Workload:       testutil.TestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  testutil.TestContainer,
+			CPUUsageP95MC:  200 + int64(i)*10,
+			MemUsageP95KiB: 524288,
+			ScheduleType:   "all_hours",
 		})
 	}
 
@@ -623,12 +623,12 @@ func buildNativeFromRecs(recs []ContainerRec) []model.NativeContainerResult {
 	}
 	first := recs[0]
 	result := model.NativeContainerResult{
-		ID:           model.NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
-		ClusterUUID:  first.ClusterUUID,
-		Container:    first.ContainerName,
-		Project:      first.Namespace,
-		Workload:     first.Workload,
-		WorkloadType: first.WorkloadType,
+		ID:              model.NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
+		ClusterUUID:     first.ClusterUUID,
+		Container:       first.ContainerName,
+		Project:         first.Namespace,
+		Workload:        first.Workload,
+		WorkloadType:    first.WorkloadType,
 		Recommendations: make(map[string]model.TermRecommendation),
 	}
 	for _, r := range recs {

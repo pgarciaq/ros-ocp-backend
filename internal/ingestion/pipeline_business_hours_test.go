@@ -303,8 +303,8 @@ func TestProcessCSV_ReadsScheduleAtProcessTime(t *testing.T) {
 	// v2: full-day schedule — simulates a settings change before the next Kafka message is processed.
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
-		Timezone: "UTC",
-		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
 		StartTime: "00:00", EndTime: "23:59", OffHoursWeight: 0.0, Enabled: true,
 	}))
 
@@ -336,8 +336,8 @@ func TestParseAndDigestCSV_PruneBHDigestsWhenNoSchedule(t *testing.T) {
 
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
-		Timezone: "UTC",
-		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
 		StartTime: "00:00", EndTime: "23:59",
 		OffHoursWeight: 0.0, Enabled: true,
 	}))
@@ -434,6 +434,63 @@ func TestMixedNamespaces_DifferentBHPercentiles(t *testing.T) {
 		orgID, "ns-high").Scan(&highBH)
 	require.NoError(t, err)
 	assert.Greater(t, highBH, lowBH)
+}
+
+func TestNamespaceOverrideScheduleChange_ReducesBHSamples(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-ns-override-" + t.Name()
+	cluster := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+
+	// Cluster-wide 9h window (08:00–17:00 UTC on weekdays).
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "08:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	csv := generateWeekdaySpikeCSV(t)
+	csv = strings.ReplaceAll(csv, "bh-ns", "override-ns")
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+
+	var wideSamples float64
+	err = pool.QueryRow(ctx,
+		`SELECT sample_count FROM daily_container_digests
+		 WHERE org_id = $1 AND namespace = $2 AND schedule_type = 'business_hours'`,
+		orgID, "override-ns").Scan(&wideSamples)
+	require.NoError(t, err)
+	require.Greater(t, wideSamples, float64(4), "wide cluster window should include many in-window samples")
+
+	// Namespace override: narrow 1h window (12:00–13:00 UTC).
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "override-ns",
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "12:00", EndTime: "13:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+	require.NoError(t, bhschedule.PruneNamespaceBusinessHoursDigests(ctx, pool, orgID, cluster, "override-ns"))
+
+	_, err = ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
+	require.NoError(t, err)
+
+	var narrowSamples float64
+	err = pool.QueryRow(ctx,
+		`SELECT sample_count FROM daily_container_digests
+		 WHERE org_id = $1 AND namespace = $2 AND schedule_type = 'business_hours'`,
+		orgID, "override-ns").Scan(&narrowSamples)
+	require.NoError(t, err)
+	assert.Greater(t, narrowSamples, float64(0))
+	assert.Less(t, narrowSamples, wideSamples*0.85,
+		"namespace override should reduce in-window samples vs inherited cluster schedule")
 }
 
 func TestMain(m *testing.M) {

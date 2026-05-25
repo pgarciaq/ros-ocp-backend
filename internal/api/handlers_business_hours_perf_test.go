@@ -63,26 +63,26 @@ func TestGETRecommendation_PrecomputedBH_P99Latency(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       start.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    400,
-			ScheduleType:     "all_hours",
+			BucketDate:    start.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: testutil.TestContainer,
+			CPUUsageP95MC: 400,
+			ScheduleType:  "all_hours",
 		})
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       start.AddDate(0, 0, i),
-			OrgID:            orgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPUUsageP95MC:    80,
-			ScheduleType:     "business_hours",
+			BucketDate:    start.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: testutil.TestContainer,
+			CPUUsageP95MC: 80,
+			ScheduleType:  "business_hours",
 		})
 	}
 

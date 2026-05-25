@@ -38,19 +38,19 @@ type businessHoursScheduleBody struct {
 }
 
 type businessHoursPutRequest struct {
-	Timezone       string                     `json:"timezone"`
-	Schedule       businessHoursScheduleBody  `json:"schedule"`
-	OffHoursWeight *float64                   `json:"off_hours_weight"`
-	Enabled        *bool                      `json:"enabled"`
+	Timezone       string                    `json:"timezone"`
+	Schedule       businessHoursScheduleBody `json:"schedule"`
+	OffHoursWeight *float64                  `json:"off_hours_weight"`
+	Enabled        *bool                     `json:"enabled"`
 }
 
 type businessHoursSettingsResponse struct {
-	Timezone         string                     `json:"timezone,omitempty"`
-	Schedule         *businessHoursScheduleBody `json:"schedule,omitempty"`
-	OffHoursWeight   float64                    `json:"off_hours_weight,omitempty"`
-	Enabled          bool                       `json:"enabled"`
-	ReshipStatus     string                     `json:"reship_status,omitempty"`
-	ReshipStatusSince *time.Time                `json:"reship_status_since,omitempty"`
+	Timezone          string                     `json:"timezone,omitempty"`
+	Schedule          *businessHoursScheduleBody `json:"schedule,omitempty"`
+	OffHoursWeight    float64                    `json:"off_hours_weight,omitempty"`
+	Enabled           bool                       `json:"enabled"`
+	ReshipStatus      string                     `json:"reship_status,omitempty"`
+	ReshipStatusSince *time.Time                 `json:"reship_status_since,omitempty"`
 }
 
 type businessHoursPutResponse struct {
@@ -258,15 +258,23 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 		return serviceUnavailable(c, "unable to save business hours settings")
 	}
 
-	if config.BusinessHoursFeatureEnabled() && !sched.Enabled {
-		if namespace != "" {
+	if config.BusinessHoursFeatureEnabled() {
+		switch {
+		case namespace != "":
+			// Namespace schedule changes require recomputing business_hours digests for
+			// that namespace only (narrow vs inherited cluster window).
 			if err := engine.PruneNamespaceBusinessHoursDigests(ctx, pool, orgID, clusterUUID, namespace); err != nil {
 				hlog.Errorf("prune namespace business hours digests: %v", err)
 				return serviceUnavailable(c, "unable to prune business hours digests")
 			}
-		} else if clusterUUID != engine.OrgClusterSentinelUUID {
+		case !sched.Enabled && clusterUUID != engine.OrgClusterSentinelUUID:
 			if err := engine.PruneClusterBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
 				hlog.Errorf("prune cluster business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		case !sched.Enabled && orgLevel:
+			if err := engine.PruneOrgBusinessHoursDigests(ctx, pool, orgID); err != nil {
+				hlog.Errorf("prune org business hours digests: %v", err)
 				return serviceUnavailable(c, "unable to prune business hours digests")
 			}
 		}
@@ -329,6 +337,26 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 		}
 		hlog.Errorf("delete business hours schedule: %v", err)
 		return serviceUnavailable(c, "unable to delete business hours settings")
+	}
+
+	if config.BusinessHoursFeatureEnabled() {
+		switch {
+		case namespace != "":
+			if err := engine.PruneNamespaceBusinessHoursDigests(ctx, pool, orgID, clusterUUID, namespace); err != nil {
+				hlog.Errorf("prune namespace business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		case clusterUUID != engine.OrgClusterSentinelUUID:
+			if err := engine.PruneClusterBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
+				hlog.Errorf("prune cluster business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		case orgLevel:
+			if err := engine.PruneOrgBusinessHoursDigests(ctx, pool, orgID); err != nil {
+				hlog.Errorf("prune org business hours digests: %v", err)
+				return serviceUnavailable(c, "unable to prune business hours digests")
+			}
+		}
 	}
 
 	clusterIDs, err := h.reshipClusterIDs(ctx, pool, orgID, clusterUUID, orgLevel)

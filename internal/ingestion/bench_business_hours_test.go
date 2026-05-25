@@ -100,7 +100,7 @@ func BenchmarkWeightedPercentile_10kContainers96Samples(b *testing.B) {
 func BenchmarkScheduleResolution_CachedLookup(b *testing.B) {
 	org := &bhschedule.Schedule{
 		Enabled: true, Timezone: "UTC",
-		Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
 		StartTime: "09:00", EndTime: "17:00",
 	}
 	nsMap := make(map[string]bhschedule.Schedule, 100)

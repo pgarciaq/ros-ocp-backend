@@ -19,43 +19,28 @@ type PendingCluster struct {
 	PendingSince time.Time
 }
 
-// MarkReshipPending sets reship_pending_since for rows matching the cluster (and org default fallback).
+// MarkReshipPending sets reship_pending_since for the cluster-level row (namespace='').
+// When no override row exists yet, inserts a pending-marker stub that LoadSchedules ignores
+// for inheritance so DELETE still falls back to org defaults.
 func MarkReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) error {
-	tag, err := pool.Exec(ctx, `
-		UPDATE business_hours_schedules
-		SET reship_pending_since = NOW(),
-		    reship_forward_only_since = NULL
-		WHERE org_id = $1
-		  AND (
-		    cluster_uuid = $2::uuid
-		    OR (cluster_uuid = $3::uuid AND NOT EXISTS (
-		      SELECT 1 FROM business_hours_schedules
-		      WHERE org_id = $1 AND cluster_uuid = $2::uuid
-		    ))
-		  )`,
-		orgID, clusterUUID.String(), bhschedule.OrgClusterSentinelUUID,
+	_, err := pool.Exec(ctx, `
+		INSERT INTO business_hours_schedules (
+			org_id, cluster_uuid, namespace, timezone, days, start_time, end_time,
+			off_hours_weight, enabled, reship_pending_since, updated_at
+		) VALUES (
+			$1, $2::uuid, '', $3, $4, $5::time, $6::time,
+			0.0, false, NOW(), NOW()
+		)
+		ON CONFLICT (org_id, cluster_uuid, namespace)
+		DO UPDATE SET
+			reship_pending_since = NOW(),
+			reship_forward_only_since = NULL,
+			updated_at = NOW()`,
+		orgID, clusterUUID.String(),
+		bhschedule.PendingMarkerTimezone, bhschedule.PendingMarkerDays, bhschedule.PendingMarkerStart, bhschedule.PendingMarkerEnd,
 	)
 	if err != nil {
 		return fmt.Errorf("mark reship pending: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		_, err = pool.Exec(ctx, `
-			INSERT INTO business_hours_schedules (
-				org_id, cluster_uuid, namespace, timezone, days, start_time, end_time,
-				off_hours_weight, enabled, reship_pending_since, updated_at
-			) VALUES (
-				$1, $2::uuid, '', 'UTC', ARRAY['monday'], '00:00', '23:59',
-				0.0, false, NOW(), NOW()
-			)
-			ON CONFLICT (org_id, cluster_uuid, namespace)
-			DO UPDATE SET
-				reship_pending_since = NOW(),
-				reship_forward_only_since = NULL`,
-			orgID, clusterUUID.String(),
-		)
-		if err != nil {
-			return fmt.Errorf("insert reship pending marker: %w", err)
-		}
 	}
 	return nil
 }

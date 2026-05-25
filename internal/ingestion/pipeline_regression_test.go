@@ -141,7 +141,7 @@ func buildNodeContainerCSV(days int, cpuUsage string) string {
 func buildOversizedStorageCSV(days int) string {
 	var sb strings.Builder
 	sb.WriteString(`report_period_start,report_period_end,interval_start,interval_end,namespace,pod,node,persistentvolumeclaim,persistentvolume,storageclass,csi_driver,csi_volume_handle,persistentvolumeclaim_capacity_bytes,persistentvolumeclaim_capacity_byte_seconds,volume_request_storage_byte_seconds,persistentvolumeclaim_usage_byte_seconds,persistentvolume_labels,persistentvolumeclaim_labels` + "\n")
-	capacity := int64(100 << 30) // 100 GiB
+	capacity := int64(100 << 30)            // 100 GiB
 	usagePerHour := int64(3600 * (1 << 30)) // ~1 GiB average usage
 	start := testutil.RecentStart()
 	for d := 0; d < days; d++ {
@@ -166,9 +166,9 @@ func mockCostDataForSavings() *costdata.ClusterCostData {
 	return &costdata.ClusterCostData{
 		DistributionType: "cpu",
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
+			"cpu_core_usage_per_hour":      {Infrastructure: 0, Supplementary: 0.01},
+			"memory_gb_usage_per_hour":     {Infrastructure: 0, Supplementary: 0.02},
+			"node_cost_per_month":          {Infrastructure: 1000, Supplementary: 0},
 			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
 			"storage_gb_usage_per_month":   {Infrastructure: 0, Supplementary: 0.08},
 		},

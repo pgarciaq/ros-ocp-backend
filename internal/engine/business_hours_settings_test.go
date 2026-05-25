@@ -13,14 +13,14 @@ import (
 
 func TestResolveSchedule_OrgDefaultOnly(t *testing.T) {
 	cache := bhschedule.NewCacheForTest(ptrSchedule(BusinessHoursSchedule{
-			ClusterUUID: OrgClusterSentinelUUID,
-			Namespace:   "",
-			Timezone:    "America/New_York",
-			Days:        []string{"monday"},
-			StartTime:   "08:00",
-			EndTime:     "17:00",
-			Enabled:     true,
-		}), nil, nil)
+		ClusterUUID: OrgClusterSentinelUUID,
+		Namespace:   "",
+		Timezone:    "America/New_York",
+		Days:        []string{"monday"},
+		StartTime:   "08:00",
+		EndTime:     "17:00",
+		Enabled:     true,
+	}), nil, nil)
 
 	got := cache.Resolve("any-ns")
 	assert.Equal(t, "America/New_York", got.Timezone)

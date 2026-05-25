@@ -26,8 +26,8 @@ import (
 )
 
 type reshipCall struct {
-	OrgID         string
-	ClusterUUID   uuid.UUID
+	OrgID       string
+	ClusterUUID uuid.UUID
 }
 
 type recordingReshipTrigger struct { // implements reship.Triggerer

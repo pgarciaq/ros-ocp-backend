@@ -17,16 +17,16 @@ func benchDigestRows(days int) []DigestRow {
 	rows := make([]DigestRow, days)
 	for i := 0; i < days; i++ {
 		rows[i] = DigestRow{
-			BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
-			CPUUsageP95MC:  400 + int64(i*15),
-			CPUUsageP60MC:  300 + int64(i*10),
-			CPUUsageP50MC:  200 + int64(i*5),
-			CPUUsageMeanMC: 250,
-			MemUsageP95KiB: 524288,
-			MemUsageP60KiB: 400000,
-			MemUsageP50KiB: 300000,
+			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
+			CPUUsageP95MC:   400 + int64(i*15),
+			CPUUsageP60MC:   300 + int64(i*10),
+			CPUUsageP50MC:   200 + int64(i*5),
+			CPUUsageMeanMC:  250,
+			MemUsageP95KiB:  524288,
+			MemUsageP60KiB:  400000,
+			MemUsageP50KiB:  300000,
 			MemUsageMeanKiB: 350000,
-			SampleCount:    40,
+			SampleCount:     40,
 		}
 	}
 	return rows
