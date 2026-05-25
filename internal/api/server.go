@@ -133,6 +133,10 @@ func StartAPIServer(ctx context.Context) {
 	}()
 
 	app.Pre(middleware.RemoveTrailingSlash())
+	app.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level:     5,
+		MinLength: 1024,
+	}))
 	app.Use(middleware.RequestID())
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
