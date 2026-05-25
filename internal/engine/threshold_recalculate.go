@@ -227,9 +227,6 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 		oldRecs = nil
 	}
 
-	EnsureHistoryPartitions(ctx, pool)
-	EnsureQualityPartitions(ctx, pool)
-
 	totalWritten := 0
 	tRec := time.Now()
 	err = RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []ContainerRec) error {
