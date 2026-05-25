@@ -64,6 +64,116 @@ expectations.
 
 ---
 
+## Running in API Mode (SaaS)
+
+Use this section when Koku and ROS run against **separate databases** (for example
+console.redhat.com). Tag data is pushed from Koku to ROS over HTTP — ROS never sends
+tags back to Koku.
+
+### Data flow
+
+```
+Cost Management (Koku)  ──POST /internal/tags/sync──▶  ROS API
+     ▲                                                        │
+     │  source of truth                                       ▼
+  Settings API, OCP summarization              org_container_keys.resolved_tags
+```
+
+| Question | Answer |
+|----------|--------|
+| **Who pushes?** | Koku (`koku-worker` Celery process) |
+| **To whom?** | ROS internal API (`POST /api/cost-management/v1/internal/tags/sync`) |
+| **Direction** | One-way: Koku → ROS only |
+| **How often?** | Within seconds of settings changes or summarization; worst case every **6 hours** |
+| **What triggers it?** | Tag enable/disable, mapping changes, OCP summarization complete, plus Celery Beat every 6h |
+
+### Prerequisites
+
+Configure **both** services:
+
+**ROS API:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS: "system:serviceaccount:<namespace>:koku-worker"
+```
+
+**Koku worker:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_OCP_BACKEND_URL: "https://ros-api.internal.example.com"
+```
+
+Koku authenticates with a Kubernetes ServiceAccount token (TokenReview on the ROS side).
+For local/docker-compose without projected SA tokens, set the **same**
+`ROS_TAGS_DEV_TOKEN` on both Koku and ROS.
+
+### Manual sync
+
+If tags appear stale, operators can force a sync without waiting for the 6-hour safety-net.
+
+**Masu API** (when available in your environment):
+
+```bash
+curl -s "http://masu:5042/api/cost-management/v1/sync_ros_tags/?schema=org1234567"
+```
+
+**From a Koku worker pod — Django shell:**
+
+```python
+from masu.processor.ros_tag_sync import sync_ros_ocp_tags
+sync_ros_ocp_tags.delay("org1234567")
+```
+
+**From a Koku worker pod — Celery:**
+
+```bash
+celery -A koku call masu.processor.ros_tag_sync.sync_ros_ocp_tags --args='["org1234567"]'
+```
+
+Replace `org1234567` with the tenant schema name (`org` + bare numeric `org_id`).
+
+### Monitoring sync health
+
+1. **ROS freshness** — call the status endpoint with a bearer token (same auth as push):
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
+```
+
+Use the bare org ID (`1234567`), not the schema name. If `synced_at` is **more than
+~6 hours old**, investigate Koku worker logs and connectivity.
+
+2. **Koku worker logs** — search for sync activity:
+
+```bash
+kubectl logs -l app=koku-worker --tail=200 | grep -E "ROS tag sync (completed|failed)"
+```
+
+Successful runs log `ROS tag sync completed` with `namespace_count` and `updated` counts.
+Failures log `ROS tag sync failed` with the error message.
+
+### When sync fails
+
+| Symptom | Likely cause | Action |
+|---------|--------------|--------|
+| `401` / `403` on push | SA token or allowlist mismatch | Verify `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`; check SA mount on Koku worker |
+| `ROS tag sync failed` in Koku logs | ROS unreachable or HTTP error | Check `ROS_OCP_BACKEND_URL`; verify ROS pods healthy |
+| Stale `synced_at` for hours | Missed events + periodic not yet run | Manual trigger (above) or wait for next 6h beat cycle |
+| Filters empty but tags exist in Cost Management | No successful push yet | Confirm `ROS_TAGS_SOURCE=api` on **both** services; trigger manual sync |
+
+A failed sync does **not** corrupt existing tags — ROS rejects bad auth before writing,
+and full-replace runs in a transaction that rolls back on error. The last successful sync
+remains visible until the next successful push.
+
+---
+
 ## Configuration examples
 
 ### On-prem (Helm / cost-onprem)

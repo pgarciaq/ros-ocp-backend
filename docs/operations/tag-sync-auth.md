@@ -113,6 +113,45 @@ full-replace transaction begins.
 
 ---
 
+## Manual sync (api mode)
+
+Operators can force a tag push without waiting for the next summarization cycle or
+6-hour safety-net.
+
+### Masu API
+
+When the endpoint is exposed in your deployment:
+
+```bash
+curl -s "http://localhost:5042/api/cost-management/v1/sync_ros_tags/?schema=org1234567"
+```
+
+Use the full tenant schema name (`org1234567` for org_id `1234567`).
+
+### Django shell (Koku)
+
+```python
+from masu.processor.ros_tag_sync import sync_ros_ocp_tags
+
+# Single tenant
+sync_ros_ocp_tags.delay("org1234567")
+
+# All tenants (same fan-out as periodic safety-net)
+from masu.processor.ros_tag_sync import sync_ros_ocp_tags_periodic
+sync_ros_ocp_tags_periodic.delay()
+```
+
+### Celery CLI (Koku worker pod)
+
+```bash
+celery -A koku call masu.processor.ros_tag_sync.sync_ros_ocp_tags --args='["org1234567"]'
+```
+
+Requires `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=api` on the worker; otherwise the
+task exits immediately as a no-op.
+
+---
+
 ## Failure modes and recovery (api mode)
 
 ### TokenReview unavailable
@@ -163,25 +202,56 @@ sync remains visible (eventual consistency, not data loss).
 
 ---
 
-## Monitoring and alerting (api mode)
+## Monitoring (api mode)
 
-| Signal | Source | Suggested alert |
-|--------|--------|-----------------|
-| Sync failures | Koku log `ROS tag sync failed` | > N failures in 1h per org |
-| Stale `synced_at` | `GET /internal/tags/status` | `synced_at` older than 7h |
-| Auth failures | ROS API 401/403 on `/internal/tags/*` | Spike in unauthorized pushes |
-| Zero `updated` rows | Sync response `updated: 0` with non-empty payload | Investigate missing `org_container_keys` rows |
-| Removed keys | ROS log `tag sync: removed tag key` | Informational (expected on disable) |
+### Koku worker logs
 
-**Health check workflow:**
+The Celery task `masu.processor.ros_tag_sync.sync_ros_ocp_tags` runs inside `koku-worker`.
+Search worker logs for sync lifecycle messages:
 
 ```bash
-# From a pod with the Koku worker SA token:
+# Kubernetes
+kubectl logs -l app=koku-worker --tail=500 | grep -E "ROS tag sync"
+
+# Docker Compose
+docker compose logs koku-worker --tail=200 | grep -E "ROS tag sync"
+```
+
+| Log message | Meaning |
+|-------------|---------|
+| `ROS tag sync completed` | Push succeeded; context includes `namespace_count`, `updated`, `synced_at` |
+| `ROS tag sync failed` | Push failed; context includes `schema`, `org_id`, `error` |
+| `ROS periodic tag sync scheduled` | 6-hour safety-net queued tasks for all tenants |
+| `service account token unavailable for ROS tag sync` | Koku cannot read bearer token — fix SA mount or set `ROS_TAGS_DEV_TOKEN` |
+
+### ROS freshness endpoint
+
+```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
   "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
 ```
 
-Compare `synced_at` to last successful OCP manifest completion time.
+Use bare `org_id` (not `org1234567`). Response fields:
+
+| Field | Purpose |
+|-------|---------|
+| `synced_at` | ISO-8601 UTC timestamp of last successful push |
+| `tag_keys` | Enabled-key catalog from last sync |
+
+**Alert threshold:** `synced_at` older than **~6 hours** during normal operations indicates
+a stuck pipeline (event triggers and periodic safety-net both failing).
+
+Compare `synced_at` to the last OCP manifest completion time for the org.
+
+### Suggested alerts
+
+| Signal | Source | Suggested alert |
+|--------|--------|-----------------|
+| Sync failures | Koku log `ROS tag sync failed` | > N failures in 1h per org |
+| Stale `synced_at` | `GET /internal/tags/status` | `synced_at` older than 6–7h |
+| Auth failures | ROS API 401/403 on `/internal/tags/*` | Spike in unauthorized pushes |
+| Zero `updated` rows | Sync response `updated: 0` with non-empty payload | Investigate missing `org_container_keys` rows |
+| Removed keys | ROS log `tag sync: removed tag key` | Informational (expected on disable) |
 
 **On-prem (`db`):** Monitor Koku summarization completion instead — no `synced_at` push metadata.
 

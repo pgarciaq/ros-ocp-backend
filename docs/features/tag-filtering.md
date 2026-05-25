@@ -180,6 +180,155 @@ With **db source**, the same endpoint reads live from Koku tables (no push metad
 
 ---
 
+## SaaS Operations (`ROS_TAGS_SOURCE=api`)
+
+Operational reference for console.redhat.com and other deployments where Koku and ROS
+use separate databases. Tags flow **one way only**: Koku is the source of truth; ROS
+never pushes tag data back to Koku.
+
+### Who pushes to whom
+
+| Role | Action |
+|------|--------|
+| **Koku** (cost management backend) | Builds and pushes tag payloads |
+| **ROS** (resource optimization backend) | Receives and stores tags in `org_container_keys.resolved_tags` |
+
+Direction is always **Koku → ROS**. Koku owns enabled tag keys (`reporting_enabledtagkeys`)
+and observed namespace labels from OCP summarization (`OCPUsageLineItemDailySummary.all_labels`).
+
+### Sync mechanism
+
+| Component | Detail |
+|-----------|--------|
+| Celery task | `masu.processor.ros_tag_sync.sync_ros_ocp_tags` |
+| Worker process | `koku-worker` (same Celery workers as data ingestion) |
+| ROS endpoint | `POST /api/cost-management/v1/internal/tags/sync` |
+| Scheduler | `schedule_ros_tag_sync(schema)` → `sync_ros_ocp_tags.delay(schema_name)` |
+
+The task is a no-op when `ROS_TAGS_SOURCE=db` or `ROS_TAGS_ENABLED=false`.
+
+### Triggers (when sync runs)
+
+**Event-driven (seconds after the event):**
+
+| # | Event | Hook location |
+|---|-------|---------------|
+| 1 | User enables/disables a tag key (Settings API) | `api/settings/tags/view.py` |
+| 2 | User changes tag mappings (Settings API) | `api/settings/tags/mapping/view.py` |
+| 3 | OCP summarization completes for a provider | `masu/processor/tasks.py` |
+
+Each hook calls `schedule_ros_tag_sync(schema)`, which queues `sync_ros_ocp_tags.delay()`
+asynchronously.
+
+**Periodic safety-net (scheduled):**
+
+| Component | Detail |
+|-----------|--------|
+| Beat task | `masu.processor.ros_tag_sync.sync_ros_ocp_tags_periodic` |
+| Schedule | Every **6 hours** at `:15` past the hour (`crontab(minute="15", hour="*/6")`) |
+| Scope | All tenant schemas (excludes `public`) |
+| Purpose | Catch missed event-driven syncs (network blips, worker restarts, backlog) |
+
+### Frequency and freshness
+
+| Scenario | Expected latency |
+|----------|------------------|
+| Tag settings change | Seconds (event-driven Celery task) |
+| New OCP data ingested | After summarization completes + push |
+| All event triggers fail | Up to **~6 hours** (next periodic safety-net) |
+
+Alert if `synced_at` from the status endpoint is **older than ~6 hours** during normal
+operations.
+
+### Manual trigger
+
+**Masu API** (when exposed in your deployment):
+
+```bash
+curl -s "http://localhost:5042/api/cost-management/v1/sync_ros_tags/?schema=org1234567"
+```
+
+**Django shell** (Koku container):
+
+```python
+from masu.processor.ros_tag_sync import sync_ros_ocp_tags
+sync_ros_ocp_tags.delay("org1234567")
+```
+
+**Celery CLI** (Koku worker container):
+
+```bash
+celery -A koku call masu.processor.ros_tag_sync.sync_ros_ocp_tags --args='["org1234567"]'
+```
+
+To sync **all tenants** immediately (same as the periodic safety-net fan-out):
+
+```python
+from masu.processor.ros_tag_sync import sync_ros_ocp_tags_periodic
+sync_ros_ocp_tags_periodic.delay()
+```
+
+### Monitoring
+
+**Koku worker logs** — successful sync:
+
+```
+ROS tag sync completed  schema=org1234567  namespace_count=…  updated=…
+```
+
+**Koku worker logs** — failure:
+
+```
+ROS tag sync failed  schema=org1234567  error=…
+```
+
+**ROS freshness endpoint:**
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
+```
+
+Compare `synced_at` (ISO-8601 UTC) to the last OCP manifest completion time. Values
+**>6 hours old** indicate a stuck or failing sync pipeline.
+
+### Failure handling
+
+| Failure type | Behavior |
+|--------------|----------|
+| HTTP error / ROS unavailable | Task logs `ROS tag sync failed` and raises; Celery records the failure |
+| Single org failure | Other orgs continue syncing; failed org retried on next event or 6h cycle |
+| Auth failure (401/403) | ROS rejects before DB transaction — previous tags unchanged |
+| Mid-sync crash | Full-replace transaction rolls back; last successful sync remains visible |
+
+There is no inline automatic retry on `sync_ros_ocp_tags` itself — recovery depends on
+the next event trigger or the 6-hour periodic safety-net.
+
+### Required configuration
+
+**Koku worker:**
+
+```bash
+ROS_TAGS_ENABLED=true
+ROS_TAGS_SOURCE=api
+ROS_OCP_BACKEND_URL=http://ros-ocp-backend:8000   # internal ROS API URL
+ROS_TAGS_DEV_TOKEN=<token>                        # dev only; prod uses SA token
+ROS_TAGS_SA_TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
+```
+
+**ROS API:**
+
+```bash
+ROS_TAGS_ENABLED=true
+ROS_TAGS_SOURCE=api
+ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS=system:serviceaccount:cost-onprem:koku-worker
+ROS_TAGS_DEV_TOKEN=<same-token>                   # dev only
+```
+
+See [tag-sync-auth.md](../operations/tag-sync-auth.md) for TokenReview authentication details.
+
+---
+
 ## On-Prem vs SaaS Comparison
 
 | Dimension | On-Prem (`db`) | SaaS (`api`) |

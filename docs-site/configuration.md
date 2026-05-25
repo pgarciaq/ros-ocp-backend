@@ -254,14 +254,82 @@ Push endpoints return 404 in this mode.
 
 ### SaaS (`ROS_TAGS_SOURCE=api`)
 
-Koku pushes resolved namespace tags after settings changes and OCP summarization:
+Koku pushes resolved namespace tags after settings changes and OCP summarization.
+Direction is **one-way (Koku → ROS)**; Koku is the source of truth for enabled keys and
+observed tag values.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/api/cost-management/v1/internal/tags/sync` | Full-replace sync for one org |
 | `GET` | `/api/cost-management/v1/internal/tags/status?org_id=` | Freshness (`synced_at`, tag key catalog) |
 
-Celery beat runs `sync_ros_ocp_tags_periodic` every **6 hours** as a safety-net.
+#### Sync triggers and frequency
+
+| Trigger | Celery task | When |
+|---------|-------------|------|
+| Tag key enabled/disabled | `sync_ros_ocp_tags` | Immediately after Settings API mutation |
+| Tag mapping changed | `sync_ros_ocp_tags` | Immediately after Settings API mutation |
+| OCP summarization complete | `sync_ros_ocp_tags` | After summary tables updated for provider |
+| Periodic safety-net | `sync_ros_ocp_tags_periodic` | Celery Beat every **6 hours** at `:15` — all tenants |
+
+Normal operation: tags sync within **seconds** of any change. Worst case (all event
+triggers fail): **~6 hours** until the periodic task succeeds.
+
+Koku implementation: [`koku/masu/processor/ros_tag_sync.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_tag_sync.py).
+Beat schedule: [`koku/koku/celery.py`](https://github.com/project-koku/koku/blob/main/koku/koku/celery.py)
+(`crontab(minute="15", hour="*/6")`).
+
+#### Example SaaS configuration
+
+**Koku worker:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_OCP_BACKEND_URL: "http://ros-ocp-backend:8000"
+  # Dev only — omit in production; use projected SA token instead:
+  # ROS_TAGS_DEV_TOKEN: "dev-only-change-me"
+```
+
+**ROS API:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS: "system:serviceaccount:cost-onprem:koku-worker"
+  # ROS_TAGS_DEV_TOKEN must match Koku when using dev token auth
+```
+
+#### Manual sync and monitoring
+
+Force a sync for one tenant (Koku side):
+
+```bash
+# Masu API (when exposed)
+curl -s "http://localhost:5042/api/cost-management/v1/sync_ros_tags/?schema=org1234567"
+
+# Django shell
+python manage.py shell -c \
+  'from masu.processor.ros_tag_sync import sync_ros_ocp_tags; sync_ros_ocp_tags.delay("org1234567")'
+
+# Celery CLI
+celery -A koku call masu.processor.ros_tag_sync.sync_ros_ocp_tags --args='["org1234567"]'
+```
+
+Check freshness (ROS side):
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$ROS_URL/api/cost-management/v1/internal/tags/status?org_id=1234567"
+```
+
+Alert if `synced_at` is **>6 hours** old. Koku worker logs: grep for
+`ROS tag sync completed` or `ROS tag sync failed`.
+
+On failure, the failed org is retried on the next event or periodic cycle; other orgs
+are unaffected. See [Tag Filtering → Running in API Mode](features/tag-filtering.md#running-in-api-mode-saas).
 
 ### Authentication (api source only)
 
