@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
@@ -52,8 +54,10 @@ func GetNodeRecommendations(c echo.Context) error {
 		})
 	}
 
-	ctx := c.Request().Context()
 	now := time.Now().UTC()
+
+	ctx := c.Request().Context()
+	ctx = WithEnrichmentCache(ctx, orgIDStr)
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr, "node")
 	if err != nil {
@@ -88,47 +92,34 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	costProvider := getGPUCostProvider()
 
+	type clusterResult struct {
+		recs []model.NodeGPURecommendation
+		err  error
+	}
+	resultsByIdx := make([]clusterResult, len(clusterUUIDs))
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(5)
+	for i, clusterUUID := range clusterUUIDs {
+		i, clusterUUID := i, clusterUUID
+		eg.Go(func() error {
+			recs, err := collectNodeGPURecsForCluster(egCtx, pool, orgIDStr, clusterUUID, start, now, terms, costProvider)
+			resultsByIdx[i] = clusterResult{recs: recs, err: err}
+			return nil
+		})
+	}
+	_ = eg.Wait()
+
 	var allRecs []model.NodeGPURecommendation
 	var gpuClusterErrors []error
-	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, clusterUUID, start, now, terms, nil)
-		if err != nil {
-			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, err)
-			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
+	for i, clusterUUID := range clusterUUIDs {
+		cr := resultsByIdx[i]
+		if cr.err != nil {
+			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", clusterUUID, cr.err)
+			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, cr.err))
 			continue
 		}
-		if gpuRecs == nil {
-			continue
-		}
-
-		var costData *costdata.ClusterCostData
-		if costProvider != nil && orgIDStr != "" {
-			kokuOrgID := strings.TrimPrefix(orgIDStr, "org")
-			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, clusterUUID, start, now)
-			if err != nil {
-				hlog.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", clusterUUID, err)
-			} else {
-				costData = cd
-			}
-		}
-
-		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
-
-		var gpuRate *float32
-		if costData != nil {
-			if rate := engine.GPUMonthlyRate(costData); rate > 0 {
-				r := float32(rate)
-				gpuRate = &r
-			}
-		}
-
-		for _, group := range groups {
-			tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
-			if tsRec == nil {
-				continue
-			}
-			allRecs = append(allRecs, toNodeGPURecommendation(tsRec))
-		}
+		allRecs = append(allRecs, cr.recs...)
 	}
 
 	var warnings []string
@@ -218,11 +209,7 @@ func respondNodeGPURecommendationsTripleSQL(
 		}
 		var gpuRate *float32
 		if costProvider != nil && orgIDStr != "" {
-			kokuOrgID := strings.TrimPrefix(orgIDStr, "org")
-			cd, err := costProvider.GetEffectiveRates(ctx, kokuOrgID, t.ClusterUUID, start, now)
-			if err != nil {
-				hlog.Warnf("GetNodeRecommendations: cost data failed for cluster %s: %v", t.ClusterUUID, err)
-			} else if cd != nil {
+			if cd := GetCachedCostRates(ctx, orgIDStr, t.ClusterUUID, start, now); cd != nil {
 				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
 					r := float32(rate)
 					gpuRate = &r
@@ -320,6 +307,44 @@ func briefGPUEnrichmentErr(err error) string {
 		return s
 	}
 	return s[:maxGPUWarningErrLen] + "..."
+}
+
+func collectNodeGPURecsForCluster(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgIDStr, clusterUUID string,
+	start, now time.Time,
+	terms []engine.TermConfig,
+	costProvider costdata.CostDataProvider,
+) ([]model.NodeGPURecommendation, error) {
+	gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, clusterUUID, start, now, terms, nil)
+	if err != nil {
+		return nil, err
+	}
+	if gpuRecs == nil {
+		return nil, nil
+	}
+
+	var gpuRate *float32
+	if costProvider != nil && orgIDStr != "" {
+		if cd := GetCachedCostRates(ctx, orgIDStr, clusterUUID, start, now); cd != nil {
+			if rate := engine.GPUMonthlyRate(cd); rate > 0 {
+				r := float32(rate)
+				gpuRate = &r
+			}
+		}
+	}
+
+	groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
+	var recs []model.NodeGPURecommendation
+	for _, group := range groups {
+		tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
+		if tsRec == nil {
+			continue
+		}
+		recs = append(recs, toNodeGPURecommendation(tsRec))
+	}
+	return recs, nil
 }
 
 func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
