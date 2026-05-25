@@ -39,8 +39,8 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 				Cost: &EngineRecommendation{
 					CPURequestMillicores:   &cpuReq,
 					CPULimitMillicores:     &cpuLim,
-					MemRequestKiB:         &memReq,
-					MemLimitKiB:           &memLim,
+					MemRequestKiB:          &memReq,
+					MemLimitKiB:            &memLim,
 					CurrentCPURequestMC:    &curCPUReq,
 					CurrentCPULimitMC:      &curCPULim,
 					CurrentMemRequestKiB:   &curMemReq,
@@ -55,7 +55,7 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 				},
 				Performance: &EngineRecommendation{
 					CPURequestMillicores: &cpuReq,
-					MemRequestKiB:       &memReq,
+					MemRequestKiB:        &memReq,
 				},
 			},
 		},

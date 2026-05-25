@@ -593,13 +593,13 @@ func TestOOMMaxBumpClamp(t *testing.T) {
 	orgNoOOM := "org-no-oom-clamp"
 	for i := 0; i < 7; i++ {
 		base := testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPURequestP50MC:  200, CPURequestP95MC: 210,
+			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       testutil.TestNamespace,
+			Workload:        testutil.TestWorkload,
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   testutil.TestContainer,
+			CPURequestP50MC: 200, CPURequestP95MC: 210,
 			CPUUsageP50MC: 180, CPUUsageP95MC: 200, CPUUsageP98MC: 205,
 			CPUUsageP99MC: 208, CPUUsageMaxMC: 210,
 			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
@@ -655,14 +655,14 @@ func TestRecommendWorkloadsStreaming_EmitsBatches(t *testing.T) {
 	// Seed a second container
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            testutil.TestOrgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    "sidecar",
-			CPURequestP50MC:  50, CPURequestP95MC: 60,
+			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       testutil.TestNamespace,
+			Workload:        testutil.TestWorkload,
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   "sidecar",
+			CPURequestP50MC: 50, CPURequestP95MC: 60,
 			CPUUsageP50MC: 40, CPUUsageP95MC: 55,
 			CPUUsageP98MC: 58, CPUUsageP99MC: 59, CPUUsageMaxMC: 65,
 			CPUThrottleP95MC: 2, CPUThrottleMaxMC: 5,

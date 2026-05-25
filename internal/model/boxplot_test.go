@@ -480,7 +480,7 @@ func TestAssembleNamespaceBoxplots_LongTerm_Under5ms(t *testing.T) {
 
 	// Seed 1440 samples (15 days × 96 per day)
 	for d := 0; d < 15; d++ {
-		dayStart := now.AddDate(0, 0, -(15-d)).Truncate(24*time.Hour).Add(time.Hour)
+		dayStart := now.AddDate(0, 0, -(15 - d)).Truncate(24 * time.Hour).Add(time.Hour)
 		ensureNamespaceSamplePartition(t, pool, dayStart)
 		seedNamespaceSamples(t, pool, key.OrgID, key.ClusterUUID, key.Namespace, dayStart, 96, 200+int64(d)*5, 40000+int64(d)*200)
 	}

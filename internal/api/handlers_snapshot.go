@@ -12,21 +12,21 @@ import (
 
 // SnapshotRecommendationResponse is a single snapshot recommendation in the API response.
 type SnapshotRecommendationResponse struct {
-	ClusterUUID         string                                     `json:"cluster_uuid"`
-	Namespace           string                                     `json:"namespace"`
-	SnapshotName        string                                     `json:"snapshot_name"`
-	SourcePVCName       string                                     `json:"source_pvc_name"`
-	VolumeSnapshotClass string                                     `json:"volume_snapshot_class,omitempty"`
-	StorageClass        string                                     `json:"storageclass,omitempty"`
-	CreationTimestamp   string                                     `json:"creation_timestamp"`
-	RestoreSizeBytes    int64                                      `json:"restore_size_bytes"`
-	AgeDays             int                                        `json:"age_days"`
-	SourcePVCExists     bool                                       `json:"source_pvc_exists"`
-	RestoredPVCCount    int                                        `json:"restored_pvc_count"`
-	ManagedBy           string                                     `json:"managed_by,omitempty"`
-	RecommendationType  string                                     `json:"recommendation_type"`
-	EstimatedMonthlyCost *float32                                  `json:"estimated_monthly_cost_usd,omitempty"`
-	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	ClusterUUID          string                                     `json:"cluster_uuid"`
+	Namespace            string                                     `json:"namespace"`
+	SnapshotName         string                                     `json:"snapshot_name"`
+	SourcePVCName        string                                     `json:"source_pvc_name"`
+	VolumeSnapshotClass  string                                     `json:"volume_snapshot_class,omitempty"`
+	StorageClass         string                                     `json:"storageclass,omitempty"`
+	CreationTimestamp    string                                     `json:"creation_timestamp"`
+	RestoreSizeBytes     int64                                      `json:"restore_size_bytes"`
+	AgeDays              int                                        `json:"age_days"`
+	SourcePVCExists      bool                                       `json:"source_pvc_exists"`
+	RestoredPVCCount     int                                        `json:"restored_pvc_count"`
+	ManagedBy            string                                     `json:"managed_by,omitempty"`
+	RecommendationType   string                                     `json:"recommendation_type"`
+	EstimatedMonthlyCost *float32                                   `json:"estimated_monthly_cost_usd,omitempty"`
+	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
@@ -37,7 +37,7 @@ type SnapshotRecommendationListResponse struct {
 		Offset   int    `json:"offset"`
 		Currency string `json:"currency"`
 	} `json:"meta"`
-	Links Links                           `json:"links"`
+	Links Links                            `json:"links"`
 	Data  []SnapshotRecommendationResponse `json:"data"`
 }
 

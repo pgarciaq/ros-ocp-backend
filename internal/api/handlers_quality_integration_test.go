@@ -125,7 +125,7 @@ func TestGetRecommendationQuality_Integration(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.QualityRow `json:"data"`
+			Data []model.QualityRow  `json:"data"`
 			Meta struct{ Count int } `json:"meta"`
 		}
 		err := json.Unmarshal(rec.Body.Bytes(), &response)

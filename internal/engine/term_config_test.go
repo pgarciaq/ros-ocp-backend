@@ -162,7 +162,7 @@ func TestLoadEnvTerm(t *testing.T) {
 		tc, ok := loadEnvTerm("node", "medium", fallback)
 		assert.True(t, ok)
 		assert.Equal(t, 21, tc.WindowDays)
-		assert.Equal(t, 10, tc.MinDataDays) // auto-computed: 21/2 = 10
+		assert.Equal(t, 10, tc.MinDataDays)                    // auto-computed: 21/2 = 10
 		assert.InDelta(t, 168.0, tc.DecayHalfLifeHours, 0.001) // from fallback
 	})
 }

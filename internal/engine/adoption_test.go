@@ -13,7 +13,7 @@ func TestFindAdoptedContainers_WithinTolerance_Adopted(t *testing.T) {
 			Workload:             "api",
 			WorkloadType:         "Deployment",
 			ContainerName:        "web",
-			CurrentCPURequestMC:  102, // within 5% of 100
+			CurrentCPURequestMC:  102,  // within 5% of 100
 			CurrentMemRequestKiB: 2100, // within 5% of 2048
 		},
 	}
@@ -87,8 +87,7 @@ func TestFindAdoptedContainers_DeduplicatesKeys(t *testing.T) {
 
 func TestDetectAdoption_WithinFivePercent(t *testing.T) {
 	assert.True(t, DetectAdoption(100, 2048, 100, 2048))
-	assert.True(t, DetectAdoption(105, 2100, 100, 2048)) // 5% CPU, ~2.5% mem
+	assert.True(t, DetectAdoption(105, 2100, 100, 2048))  // 5% CPU, ~2.5% mem
 	assert.False(t, DetectAdoption(200, 2048, 100, 2048)) // 100% CPU diff
 	assert.True(t, DetectAdoption(0, 0, 0, 0))
 }
-

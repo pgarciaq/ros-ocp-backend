@@ -159,16 +159,16 @@ func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string
 	ensureDailyNodeDigestPartitions(t, pool, start, days)
 
 	type nodeProfile struct {
-		node            string
-		cpuUsageP50     int64
-		cpuUsageP95     int64
-		memUsageP50     int64
-		memUsageP95     int64
-		maxCPUAllocMC   int64
-		maxMemAllocKiB  int64
-		maxCPURequestMC int64
+		node             string
+		cpuUsageP50      int64
+		cpuUsageP95      int64
+		memUsageP50      int64
+		memUsageP95      int64
+		maxCPUAllocMC    int64
+		maxMemAllocKiB   int64
+		maxCPURequestMC  int64
 		maxMemRequestKiB int64
-		maxPodCount     int64
+		maxPodCount      int64
 	}
 
 	profiles := []nodeProfile{

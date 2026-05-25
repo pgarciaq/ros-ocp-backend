@@ -14,18 +14,18 @@ import (
 func TestToGPURecommendation_FullData(t *testing.T) {
 	savings := float32(123.45)
 	rec := &engine.GPURec{
-		GPUModelName:            "H100",
-		CurrentGPUProfile:       "mig-3g.40gb",
-		Classification:          engine.GPUClassMemoryBound,
-		RecommendedGPUProfile:   "full_gpu",
-		MemoryBoundDetected:     true,
-		Confidence:              0.91,
-		TensorPipeActiveAvg:     0.12,
-		DRAMActiveAvg:           0.67,
-		SMActiveAvg:             0.34,
-		FBUsageMaxMiB:           8192,
-		EstimatedGPUSavingsUSD:  &savings,
-		NotificationCodes:       []int16{10, 20},
+		GPUModelName:           "H100",
+		CurrentGPUProfile:      "mig-3g.40gb",
+		Classification:         engine.GPUClassMemoryBound,
+		RecommendedGPUProfile:  "full_gpu",
+		MemoryBoundDetected:    true,
+		Confidence:             0.91,
+		TensorPipeActiveAvg:    0.12,
+		DRAMActiveAvg:          0.67,
+		SMActiveAvg:            0.34,
+		FBUsageMaxMiB:          8192,
+		EstimatedGPUSavingsUSD: &savings,
+		NotificationCodes:      []int16{10, 20},
 	}
 
 	got := toGPURecommendation(rec)
@@ -49,18 +49,18 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 
 func TestToGPURecommendation_NoProfiles(t *testing.T) {
 	rec := &engine.GPURec{
-		GPUModelName:            "A100",
-		CurrentGPUProfile:       "",
-		Classification:          engine.GPUClassIdle,
-		RecommendedGPUProfile:   "",
-		MemoryBoundDetected:     false,
-		Confidence:              0.5,
-		TensorPipeActiveAvg:     0,
-		DRAMActiveAvg:           0,
-		SMActiveAvg:             0,
-		FBUsageMaxMiB:           0,
-		EstimatedGPUSavingsUSD:  nil,
-		NotificationCodes:       nil,
+		GPUModelName:           "A100",
+		CurrentGPUProfile:      "",
+		Classification:         engine.GPUClassIdle,
+		RecommendedGPUProfile:  "",
+		MemoryBoundDetected:    false,
+		Confidence:             0.5,
+		TensorPipeActiveAvg:    0,
+		DRAMActiveAvg:          0,
+		SMActiveAvg:            0,
+		FBUsageMaxMiB:          0,
+		EstimatedGPUSavingsUSD: nil,
+		NotificationCodes:      nil,
 	}
 
 	got := toGPURecommendation(rec)
@@ -71,12 +71,12 @@ func TestToGPURecommendation_NoProfiles(t *testing.T) {
 
 func TestToGPURecommendation_NoSavings(t *testing.T) {
 	rec := &engine.GPURec{
-		GPUModelName:            "L40S",
-		CurrentGPUProfile:       "full",
-		Classification:          engine.GPUClassWellUtilized,
-		RecommendedGPUProfile:   "full",
-		EstimatedGPUSavingsUSD:  nil,
-		NotificationCodes:       nil,
+		GPUModelName:           "L40S",
+		CurrentGPUProfile:      "full",
+		Classification:         engine.GPUClassWellUtilized,
+		RecommendedGPUProfile:  "full",
+		EstimatedGPUSavingsUSD: nil,
+		NotificationCodes:      nil,
 	}
 
 	got := toGPURecommendation(rec)

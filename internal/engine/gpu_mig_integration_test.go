@@ -136,9 +136,9 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 	type expectedResult struct {
 		key                string
 		classification     engine.GPUClassification
-		expectMIGSlice     bool   // non-empty profile that is NOT "full_gpu"
-		expectFullGPU      bool   // profile == "full_gpu" (MIG-capable but FB too large)
-		expectNoMIGProfile bool   // RecommendedGPUProfile == ""
+		expectMIGSlice     bool // non-empty profile that is NOT "full_gpu"
+		expectFullGPU      bool // profile == "full_gpu" (MIG-capable but FB too large)
+		expectNoMIGProfile bool // RecommendedGPUProfile == ""
 		hasProf            bool
 	}
 

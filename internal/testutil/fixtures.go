@@ -9,14 +9,14 @@ import (
 )
 
 func sevenDaysAgo() time.Time {
-	return time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -7)
+	return time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -7)
 }
 
 // Deterministic test constants used across all test suites.
 const (
-	TestOrgID         = "org7654321"
-	TestClusterUUID   = "11111111-1111-1111-1111-111111111111"
-	TestProviderUUID  = "22222222-2222-2222-2222-222222222222"
+	TestOrgID        = "org7654321"
+	TestClusterUUID  = "11111111-1111-1111-1111-111111111111"
+	TestProviderUUID = "22222222-2222-2222-2222-222222222222"
 	TestNamespace    = "test-ns"
 	TestWorkload     = "test-deploy"
 	TestWorkloadType = "deployment"

@@ -57,7 +57,7 @@ func newSnapshotHeaderIdx() snapshotHeaderIdx {
 		volumeSnapshotClass: -1,
 		storageclass:        -1,
 		creationTimestamp:   -1,
-		readyToUse:         -1,
+		readyToUse:          -1,
 		restoreSizeBytes:    -1,
 		sourcePVCExists:     -1,
 		restoredPVCCount:    -1,

@@ -25,7 +25,7 @@ type RecommendationSet struct {
 	Term          string `gorm:"column:term;primaryKey"`
 	Engine        string `gorm:"column:engine;primaryKey"`
 
-	WorkloadID   uint `gorm:"column:workload_id"`
+	WorkloadID   uint   `gorm:"column:workload_id"`
 	WorkloadType string `gorm:"column:workload_type"`
 
 	CPURequestCurrent    *float64 `gorm:"column:cpu_request_current;type:numeric(10,4)"`

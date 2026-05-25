@@ -389,10 +389,10 @@ func TestUpsertNamespaceUsageSamples_OnConflictUpdates(t *testing.T) {
 	ts := time.Now().UTC().Truncate(time.Hour)
 
 	rows := []NamespaceMetricRow{{
-		IntervalStart:    ts,
-		Namespace:        "default",
-		CPUUsageAvgMC:    100,
-		MemUsageAvgKiB:   2048,
+		IntervalStart:  ts,
+		Namespace:      "default",
+		CPUUsageAvgMC:  100,
+		MemUsageAvgKiB: 2048,
 	}}
 
 	// Ensure partition

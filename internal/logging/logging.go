@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	initOnce    sync.Once
-	logger      *logrus.Logger
-	rootEntry   *logrus.Entry
+	initOnce  sync.Once
+	logger    *logrus.Logger
+	rootEntry *logrus.Entry
 )
 
 func initLogger() {

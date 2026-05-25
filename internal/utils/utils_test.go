@@ -166,7 +166,6 @@ func TestConvertDateToISO8601(t *testing.T) {
 	}
 }
 
-
 func TestUnique(t *testing.T) {
 	arr := []int{1, 2, 3, 3, 4, 4, 5, 6, 6}
 	expected_result := []int{1, 2, 3, 4, 5, 6}

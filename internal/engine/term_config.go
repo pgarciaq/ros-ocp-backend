@@ -146,8 +146,8 @@ func loadDBTerms(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationT
 			return nil, err
 		}
 		tc := TermConfig{
-			Name:       termNames[ord-1],
-			WindowDays: windowDays,
+			Name:        termNames[ord-1],
+			WindowDays:  windowDays,
 			MinDataDays: minDataDays,
 		}
 		if decayHL.Valid {

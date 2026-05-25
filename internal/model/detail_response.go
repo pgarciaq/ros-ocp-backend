@@ -8,16 +8,16 @@ import (
 
 // GPURecommendation holds GPU-specific recommendation data.
 type GPURecommendation struct {
-	CurrentGPUModel               string   `json:"current_gpu_model"`
-	CurrentGPUProfile             *string  `json:"current_gpu_profile"`
-	GPUClassification             string   `json:"gpu_classification,omitempty"`
-	RecommendedGPUProfile         *string  `json:"recommended_gpu_profile,omitempty"`
-	MemoryBoundDetected           bool     `json:"memory_bound_detected"`
-	GPUConfidence                 float32  `json:"gpu_confidence"`
-	TensorPipeActiveAvg           float32  `json:"tensor_pipe_active_avg"`
-	DRAMActiveAvg                 float32  `json:"dram_active_avg"`
-	SMActiveAvg                   float32  `json:"sm_active_avg"`
-	FBUsageMaxMiB                 float32  `json:"fb_usage_max_mib"`
+	CurrentGPUModel                       string   `json:"current_gpu_model"`
+	CurrentGPUProfile                     *string  `json:"current_gpu_profile"`
+	GPUClassification                     string   `json:"gpu_classification,omitempty"`
+	RecommendedGPUProfile                 *string  `json:"recommended_gpu_profile,omitempty"`
+	MemoryBoundDetected                   bool     `json:"memory_bound_detected"`
+	GPUConfidence                         float32  `json:"gpu_confidence"`
+	TensorPipeActiveAvg                   float32  `json:"tensor_pipe_active_avg"`
+	DRAMActiveAvg                         float32  `json:"dram_active_avg"`
+	SMActiveAvg                           float32  `json:"sm_active_avg"`
+	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
 	EstimatedMonthlyGPUSavingsUSD         *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
 	EstimatedMonthlyTimeslicingSavingsUSD *float32 `json:"estimated_monthly_timeslicing_savings_usd,omitempty"`
 	Currency                              string   `json:"currency,omitempty"`
@@ -34,17 +34,17 @@ type GPURecommendation struct {
 //	recommendations.monitoring_end_time
 //	recommendations.current
 type DetailResponse struct {
-	ID              string                `json:"id"`
-	ClusterAlias    string                `json:"cluster_alias"`
-	ClusterUUID     string                `json:"cluster_uuid"`
-	Container       string                `json:"container"`
-	Project         string                `json:"project"`
-	Workload        string                `json:"workload"`
-	WorkloadType    string                `json:"workload_type"`
-	SourceID        string                `json:"source_id"`
-	LastReported    string                `json:"last_reported"`
-	Currency        string                `json:"currency,omitempty"`
-	Recommendations DetailRecommendations `json:"recommendations"`
+	ID              string                        `json:"id"`
+	ClusterAlias    string                        `json:"cluster_alias"`
+	ClusterUUID     string                        `json:"cluster_uuid"`
+	Container       string                        `json:"container"`
+	Project         string                        `json:"project"`
+	Workload        string                        `json:"workload"`
+	WorkloadType    string                        `json:"workload_type"`
+	SourceID        string                        `json:"source_id"`
+	LastReported    string                        `json:"last_reported"`
+	Currency        string                        `json:"currency,omitempty"`
+	Recommendations DetailRecommendations         `json:"recommendations"`
 	GPU             map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
@@ -331,12 +331,12 @@ func mergeNotifications(dst map[string]notifications.NotificationEntry, eng *Det
 // recommendations. It mirrors DetailResponse but without container-specific
 // fields (Container, Workload, WorkloadType, GPU).
 type NamespaceDetailResponse struct {
-	ID              string               `json:"id"`
-	ClusterAlias    string               `json:"cluster_alias"`
-	ClusterUUID     string               `json:"cluster_uuid"`
-	Project         string               `json:"project"`
-	SourceID        string               `json:"source_id"`
-	LastReported    string               `json:"last_reported"`
+	ID              string                `json:"id"`
+	ClusterAlias    string                `json:"cluster_alias"`
+	ClusterUUID     string                `json:"cluster_uuid"`
+	Project         string                `json:"project"`
+	SourceID        string                `json:"source_id"`
+	LastReported    string                `json:"last_reported"`
 	Recommendations DetailRecommendations `json:"recommendations"`
 }
 

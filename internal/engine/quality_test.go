@@ -38,12 +38,12 @@ func TestStabilityPct(t *testing.T) {
 
 func TestAdoptionDetection(t *testing.T) {
 	tests := []struct {
-		name       string
-		curCPU     int64
-		curMem     int64
-		recCPU     int64
-		recMem     int64
-		wantAdopt  bool
+		name      string
+		curCPU    int64
+		curMem    int64
+		recCPU    int64
+		recMem    int64
+		wantAdopt bool
 	}{
 		{"exact match", 1000, 2048, 1000, 2048, true},
 		{"within 5% CPU", 1040, 2048, 1000, 2048, true},
@@ -143,14 +143,14 @@ func TestWriteRecommendationQuality_StabilityAcrossCycles(t *testing.T) {
 	// Cycle 2: read old recs, then compute new recs with different data
 	for i := 0; i < 7; i++ {
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:       testutil.BaseDate.AddDate(0, 0, i),
-			OrgID:            testutil.TestOrgID,
-			ClusterUUID:      testutil.TestClusterUUID,
-			Namespace:        testutil.TestNamespace,
-			Workload:         testutil.TestWorkload,
-			WorkloadType:     testutil.TestWorkloadType,
-			ContainerName:    testutil.TestContainer,
-			CPURequestP50MC:  800, CPURequestP95MC: 850,
+			BucketDate:      testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       testutil.TestNamespace,
+			Workload:        testutil.TestWorkload,
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   testutil.TestContainer,
+			CPURequestP50MC: 800, CPURequestP95MC: 850,
 			CPUUsageP50MC: 750, CPUUsageP95MC: 800, CPUUsageP98MC: 820,
 			CPUUsageP99MC: 830, CPUUsageMaxMC: 850,
 			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
@@ -226,7 +226,7 @@ func TestWriteRecommendationQuality_MissingPartition(t *testing.T) {
 			OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
 			Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload,
 			ContainerName: testutil.TestContainer,
-			Term: "medium", Engine: "cost",
+			Term:          "medium", Engine: "cost",
 			RecCPURequestMC: 100, RecMemRequestKiB: 1024,
 		},
 	}

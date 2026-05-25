@@ -19,12 +19,12 @@ type NodeUtilizationMetrics struct {
 
 // NodeUtilizationEngineRec holds engine-specific sizing and savings for a node term.
 type NodeUtilizationEngineRec struct {
-	RecommendedCPUCores          float32                                    `json:"recommended_cpu_cores,omitempty"`
-	RecommendedMemoryGiB         float32                                    `json:"recommended_memory_gib,omitempty"`
-	NodeCountReduction           int                                        `json:"node_count_reduction"`
-	EstimatedMonthlySavingsUSD   *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
-	Notifications                map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	UpdatedAt                    string                                     `json:"updated_at,omitempty"`
+	RecommendedCPUCores        float32                                    `json:"recommended_cpu_cores,omitempty"`
+	RecommendedMemoryGiB       float32                                    `json:"recommended_memory_gib,omitempty"`
+	NodeCountReduction         int                                        `json:"node_count_reduction"`
+	EstimatedMonthlySavingsUSD *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	UpdatedAt                  string                                     `json:"updated_at,omitempty"`
 }
 
 // NodeUtilizationEngines groups cost and performance engine recommendations.
@@ -41,14 +41,14 @@ type NodeUtilizationTermRec struct {
 // NodeUtilizationRec is the API response DTO for a node CPU/memory utilization recommendation.
 // Each node appears once with nested recommendation_terms and recommendation_engines.
 type NodeUtilizationRec struct {
-	Node                string                           `json:"node"`
-	ClusterUUID         string                           `json:"cluster_uuid"`
-	RecommendationType  string                           `json:"recommendation_type"`
-	Classification      NodeUtilizationClassification    `json:"classification"`
-	Metrics             NodeUtilizationMetrics           `json:"metrics"`
-	PodCount            int64                            `json:"pod_count"`
-	CPUOvercommitRatio  float32                          `json:"cpu_overcommit_ratio"`
-	TrendSlope          float32                          `json:"trend_slope"`
+	Node                string                            `json:"node"`
+	ClusterUUID         string                            `json:"cluster_uuid"`
+	RecommendationType  string                            `json:"recommendation_type"`
+	Classification      NodeUtilizationClassification     `json:"classification"`
+	Metrics             NodeUtilizationMetrics            `json:"metrics"`
+	PodCount            int64                             `json:"pod_count"`
+	CPUOvercommitRatio  float32                           `json:"cpu_overcommit_ratio"`
+	TrendSlope          float32                           `json:"trend_slope"`
 	RecommendationTerms map[string]NodeUtilizationTermRec `json:"recommendation_terms"`
 }
 

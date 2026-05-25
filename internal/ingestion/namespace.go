@@ -79,23 +79,23 @@ type NamespaceDigestResult struct {
 }
 
 type nsColumnIndex struct {
-	intervalStart    int
-	intervalEnd      int
-	namespace        int
-	cpuRequestSum    int
-	cpuLimitSum      int
-	cpuUsageAvg      int
-	cpuUsageMax      int
-	cpuUsageMin      int
-	cpuThrottleAvg   int
-	cpuThrottleMax   int
-	memRequestSum    int
-	memLimitSum      int
-	memUsageAvg      int
-	memUsageMax      int
-	memUsageMin      int
-	memRSSUsageAvg   int
-	memRSSUsageMax   int
+	intervalStart  int
+	intervalEnd    int
+	namespace      int
+	cpuRequestSum  int
+	cpuLimitSum    int
+	cpuUsageAvg    int
+	cpuUsageMax    int
+	cpuUsageMin    int
+	cpuThrottleAvg int
+	cpuThrottleMax int
+	memRequestSum  int
+	memLimitSum    int
+	memUsageAvg    int
+	memUsageMax    int
+	memUsageMin    int
+	memRSSUsageAvg int
+	memRSSUsageMax int
 }
 
 func buildNSColumnIndex(header []string) (nsColumnIndex, error) {

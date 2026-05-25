@@ -22,7 +22,7 @@ func TestClassifySnapshot_Active(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "recent-snap",
 		SourcePVCName:     "my-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-24 * time.Hour), // 1 day old
+		CreationTimestamp: time.Now().UTC().Add(-24 * time.Hour), // 1 day old
 		SourcePVCExists:   true,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},
@@ -41,7 +41,7 @@ func TestClassifySnapshot_ActiveDueToRestores(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "old-but-used-snap",
 		SourcePVCName:     "my-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-120 * 24 * time.Hour), // 120 days old
+		CreationTimestamp: time.Now().UTC().Add(-120 * 24 * time.Hour), // 120 days old
 		SourcePVCExists:   true,
 		RestoredPVCCount:  2,
 		Labels:            map[string]string{},
@@ -62,7 +62,7 @@ func TestClassifySnapshot_Orphaned(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "orphaned-snap",
 		SourcePVCName:     "deleted-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-30 * 24 * time.Hour), // 30 days old
+		CreationTimestamp: time.Now().UTC().Add(-30 * 24 * time.Hour), // 30 days old
 		SourcePVCExists:   false,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},
@@ -82,7 +82,7 @@ func TestClassifySnapshot_OrphanedNotYoung(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "young-orphan",
 		SourcePVCName:     "deleted-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-3 * 24 * time.Hour), // 3 days old
+		CreationTimestamp: time.Now().UTC().Add(-3 * 24 * time.Hour), // 3 days old
 		SourcePVCExists:   false,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},
@@ -101,7 +101,7 @@ func TestClassifySnapshot_Managed(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "velero-daily-snap",
 		SourcePVCName:     "my-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-100 * 24 * time.Hour),
+		CreationTimestamp: time.Now().UTC().Add(-100 * 24 * time.Hour),
 		SourcePVCExists:   true,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{"velero.io/backup-name": "daily-schedule"},
@@ -120,7 +120,7 @@ func TestClassifySnapshot_Stale(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "very-old-snap",
 		SourcePVCName:     "my-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-120 * 24 * time.Hour),
+		CreationTimestamp: time.Now().UTC().Add(-120 * 24 * time.Hour),
 		SourcePVCExists:   true,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},
@@ -139,7 +139,7 @@ func TestClassifySnapshot_NeverRestored(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "forgotten-snap",
 		SourcePVCName:     "my-pvc",
-		CreationTimestamp:  time.Now().UTC().Add(-45 * 24 * time.Hour), // 45 days
+		CreationTimestamp: time.Now().UTC().Add(-45 * 24 * time.Hour), // 45 days
 		SourcePVCExists:   true,
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},
@@ -189,7 +189,7 @@ func TestClassifySnapshot_EmptySourcePVC_SkipsOrphanAndRedundant(t *testing.T) {
 		Namespace:         "production",
 		SnapshotName:      "pre-provisioned",
 		SourcePVCName:     "", // empty
-		CreationTimestamp:  time.Now().UTC().Add(-100 * 24 * time.Hour),
+		CreationTimestamp: time.Now().UTC().Add(-100 * 24 * time.Hour),
 		SourcePVCExists:   false, // even though false, empty source PVC skips orphan check
 		RestoredPVCCount:  0,
 		Labels:            map[string]string{},

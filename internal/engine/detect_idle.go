@@ -1,6 +1,6 @@
 package engine
 
-const DefaultIdleThresholdMC int64 = 10       // 10 millicores
+const DefaultIdleThresholdMC int64 = 10        // 10 millicores
 const DefaultIdleThresholdMemKiB int64 = 10240 // 10 MiB
 
 // DetectIdle returns true if the maximum CPU usage AND memory usage across all

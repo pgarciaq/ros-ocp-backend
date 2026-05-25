@@ -1022,16 +1022,16 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 				BucketDate: start.AddDate(0, 0, i),
 				OrgID:      orgID, ClusterUUID: clusterUUID,
 				Namespace: "ns-pag", Workload: "deploy-pag", WorkloadType: "deployment",
-				ContainerName:    cname,
-				CPURequestP50MC:  100, CPURequestP95MC: 120,
-				CPUUsageP50MC:    90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
-				CPUUsageP99MC:    118, CPUUsageMaxMC: 125,
+				ContainerName:   cname,
+				CPURequestP50MC: 100, CPURequestP95MC: 120,
+				CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+				CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
 				CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
 				MemRequestP50KiB: 524288, MemRequestP60KiB: 524500, MemRequestP95KiB: 524800,
 				MemRequestP98KiB: 525000, MemRequestP99KiB: 525100,
-				MemUsageP50KiB:   524000, MemUsageP60KiB: 524100, MemUsageP95KiB: 524288,
-				MemUsageP98KiB:   524500, MemUsageP99KiB: 524700,
-				MemUsageMaxKiB:   525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+				MemUsageP50KiB: 524000, MemUsageP60KiB: 524100, MemUsageP95KiB: 524288,
+				MemUsageP98KiB: 524500, MemUsageP99KiB: 524700,
+				MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
 				OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
 				SampleCount: 96,
 			})
@@ -1059,8 +1059,8 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 	}
 
 	type linksResponse struct {
-		Data  []interface{} `json:"data"`
-		Meta  struct {
+		Data []interface{} `json:"data"`
+		Meta struct {
 			Count  int `json:"count"`
 			Limit  int `json:"limit"`
 			Offset int `json:"offset"`
