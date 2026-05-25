@@ -127,12 +127,3 @@ func safeDiv(numerator, denominator float64) float64 {
 	}
 	return numerator / denominator
 }
-
-func appendUnique(codes []int16, code int16) []int16 {
-	for _, c := range codes {
-		if c == code {
-			return codes
-		}
-	}
-	return append(codes, code)
-}
