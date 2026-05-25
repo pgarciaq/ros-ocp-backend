@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -14,6 +15,11 @@ import (
 const (
 	digestScheduleAllHours      = "all_hours"
 	digestScheduleBusinessHours = "business_hours"
+)
+
+var (
+	queryContainerDigestsByScheduleForContainers  = QueryContainerDigestsByScheduleTypeForContainers
+	queryNamespaceDigestsByScheduleForNamespaces  = queryNamespaceDigestsByScheduleTypeForNamespaces
 )
 
 // BusinessHoursEngineResult holds a business-hours perspective for one engine, or a reason when data is insufficient.
@@ -88,6 +94,67 @@ func QueryContainerDigestsByScheduleType(
 	return byCluster[clusterUUID], nil
 }
 
+// PageContainerDigestKey identifies a container on a page for scoped digest lookups.
+type PageContainerDigestKey struct {
+	ClusterUUID   string
+	Namespace     string
+	Workload      string
+	ContainerName string
+}
+
+// PageNamespaceDigestKey identifies a namespace on a page for scoped digest lookups.
+type PageNamespaceDigestKey struct {
+	ClusterUUID string
+	Namespace   string
+}
+
+// QueryContainerDigestsByScheduleTypeForContainers loads digest rows for specific containers.
+func QueryContainerDigestsByScheduleTypeForContainers(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	keys []PageContainerDigestKey,
+	start, end time.Time,
+	scheduleType string,
+) (map[string]map[containerKey][]DigestRow, error) {
+	if len(keys) == 0 {
+		return map[string]map[containerKey][]DigestRow{}, nil
+	}
+
+	clusterUUIDs := make([]string, len(keys))
+	namespaces := make([]string, len(keys))
+	workloads := make([]string, len(keys))
+	containers := make([]string, len(keys))
+	uniqueClusters := make([]string, 0)
+	seenCluster := make(map[string]bool)
+	for i, key := range keys {
+		clusterUUIDs[i] = key.ClusterUUID
+		namespaces[i] = key.Namespace
+		workloads[i] = key.Workload
+		containers[i] = key.ContainerName
+		if !seenCluster[key.ClusterUUID] {
+			seenCluster[key.ClusterUUID] = true
+			uniqueClusters = append(uniqueClusters, key.ClusterUUID)
+		}
+	}
+
+	rows, err := pool.Query(ctx, containerDigestSelectMultiCluster+`
+		  AND (cluster_uuid, namespace, workload, container_name) IN (
+			SELECT u.c, u.n, u.w, u.cn
+			FROM unnest($6::uuid[], $7::text[], $8::text[], $9::text[]) AS u(c, n, w, cn)
+		  )
+		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`,
+		orgID, uniqueClusters, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
+		clusterUUIDs, namespaces, workloads, containers,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query container digests schedule_type=%s for containers: %w", scheduleType, err)
+	}
+	defer rows.Close()
+
+	return scanContainerDigestRows(rows)
+}
+
 // QueryContainerDigestsByScheduleTypeForClusters loads digest rows for multiple clusters in one query.
 func QueryContainerDigestsByScheduleTypeForClusters(
 	ctx context.Context,
@@ -110,6 +177,10 @@ func QueryContainerDigestsByScheduleTypeForClusters(
 	}
 	defer rows.Close()
 
+	return scanContainerDigestRows(rows)
+}
+
+func scanContainerDigestRows(rows pgx.Rows) (map[string]map[containerKey][]DigestRow, error) {
 	grouped := make(map[string]map[containerKey][]DigestRow)
 	for rows.Next() {
 		var d DigestRow
@@ -272,8 +343,18 @@ func EnrichNativeContainerResultsWithBusinessHours(
 	}
 	queryStart, queryEnd := mergeDigestQueryWindow(digestWindows)
 
-	bhDigestsByCluster, err := QueryContainerDigestsByScheduleTypeForClusters(
-		ctx, pool, orgID, clusterUUIDs, queryStart, queryEnd, digestScheduleBusinessHours,
+	pageKeys := make([]PageContainerDigestKey, len(results))
+	for i := range results {
+		pageKeys[i] = PageContainerDigestKey{
+			ClusterUUID:   results[i].ClusterUUID,
+			Namespace:     results[i].Project,
+			Workload:      results[i].Workload,
+			ContainerName: results[i].Container,
+		}
+	}
+
+	bhDigestsByCluster, err := queryContainerDigestsByScheduleForContainers(
+		ctx, pool, orgID, pageKeys, queryStart, queryEnd, digestScheduleBusinessHours,
 	)
 	if err != nil {
 		return err
@@ -496,6 +577,48 @@ func queryNamespaceDigestsByScheduleType(
 	return byCluster[clusterUUID], nil
 }
 
+func queryNamespaceDigestsByScheduleTypeForNamespaces(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	keys []PageNamespaceDigestKey,
+	start, end time.Time,
+	scheduleType string,
+) (map[string]map[namespaceKey][]DigestRow, error) {
+	if len(keys) == 0 {
+		return map[string]map[namespaceKey][]DigestRow{}, nil
+	}
+
+	clusterUUIDs := make([]string, len(keys))
+	namespaces := make([]string, len(keys))
+	uniqueClusters := make([]string, 0)
+	seenCluster := make(map[string]bool)
+	for i, key := range keys {
+		clusterUUIDs[i] = key.ClusterUUID
+		namespaces[i] = key.Namespace
+		if !seenCluster[key.ClusterUUID] {
+			seenCluster[key.ClusterUUID] = true
+			uniqueClusters = append(uniqueClusters, key.ClusterUUID)
+		}
+	}
+
+	rows, err := pool.Query(ctx, namespaceDigestSelectMultiCluster+`
+		  AND (cluster_uuid, namespace) IN (
+			SELECT u.c, u.n
+			FROM unnest($6::uuid[], $7::text[]) AS u(c, n)
+		  )
+		ORDER BY cluster_uuid, namespace, bucket_date`,
+		orgID, uniqueClusters, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
+		clusterUUIDs, namespaces,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query namespace digests schedule_type=%s for namespaces: %w", scheduleType, err)
+	}
+	defer rows.Close()
+
+	return scanNamespaceDigestRows(rows)
+}
+
 func queryNamespaceDigestsByScheduleTypeForClusters(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -516,6 +639,10 @@ func queryNamespaceDigestsByScheduleTypeForClusters(
 	}
 	defer rows.Close()
 
+	return scanNamespaceDigestRows(rows)
+}
+
+func scanNamespaceDigestRows(rows pgx.Rows) (map[string]map[namespaceKey][]DigestRow, error) {
 	grouped := make(map[string]map[namespaceKey][]DigestRow)
 	for rows.Next() {
 		var d DigestRow
@@ -652,8 +779,16 @@ func EnrichNativeNamespaceResultsWithBusinessHours(
 	}
 	queryStart, queryEnd := mergeDigestQueryWindow(digestWindows)
 
-	bhDigestsByCluster, err := queryNamespaceDigestsByScheduleTypeForClusters(
-		ctx, pool, orgID, clusterUUIDs, queryStart, queryEnd, digestScheduleBusinessHours,
+	pageKeys := make([]PageNamespaceDigestKey, len(results))
+	for i := range results {
+		pageKeys[i] = PageNamespaceDigestKey{
+			ClusterUUID: results[i].ClusterUUID,
+			Namespace:   results[i].Project,
+		}
+	}
+
+	bhDigestsByCluster, err := queryNamespaceDigestsByScheduleForNamespaces(
+		ctx, pool, orgID, pageKeys, queryStart, queryEnd, digestScheduleBusinessHours,
 	)
 	if err != nil {
 		return err

@@ -35,6 +35,123 @@ func seedWeekdayBHSchedule(t *testing.T, pool *pgxpool.Pool, orgID string) {
 	}))
 }
 
+func TestQueryContainerDigestsByScheduleTypeForContainers_FiltersByKeys(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-keys-" + t.Name()
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+
+	for i := 0; i < 3; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: testutil.TestContainer,
+			CPUUsageP95MC: 50,
+			ScheduleType:  "business_hours",
+		})
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
+			OrgID:         orgID,
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      "other-workload",
+			WorkloadType:  testutil.TestWorkloadType,
+			ContainerName: "other-container",
+			CPUUsageP95MC: 999,
+			ScheduleType:  "business_hours",
+		})
+	}
+
+	grouped, err := QueryContainerDigestsByScheduleTypeForContainers(ctx, pool, orgID, []PageContainerDigestKey{{
+		ClusterUUID:   testutil.TestClusterUUID,
+		Namespace:     testutil.TestNamespace,
+		Workload:      testutil.TestWorkload,
+		ContainerName: testutil.TestContainer,
+	}}, testutil.BaseDate, end, digestScheduleBusinessHours)
+	require.NoError(t, err)
+	require.Len(t, grouped[testutil.TestClusterUUID], 1)
+	for _, rows := range grouped[testutil.TestClusterUUID] {
+		for _, r := range rows {
+			assert.Equal(t, int64(50), r.CPUUsageP95MC)
+		}
+	}
+}
+
+func TestBHEnrichment_OnlyQueriesPageContainers(t *testing.T) {
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-page-keys-" + t.Name()
+	seedWeekdayBHSchedule(t, pool, orgID)
+
+	for i := 0; i < 7; i++ {
+		for _, spec := range []struct {
+			workload, container string
+			cpu                 int64
+		}{
+			{testutil.TestWorkload, testutil.TestContainer, 200},
+			{"other-workload", "other-container", 400},
+		} {
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate:     testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:          orgID,
+				ClusterUUID:    testutil.TestClusterUUID,
+				Namespace:      testutil.TestNamespace,
+				Workload:       spec.workload,
+				WorkloadType:     testutil.TestWorkloadType,
+				ContainerName:  spec.container,
+				CPUUsageP95MC:  spec.cpu,
+				MemUsageP95KiB: 524288,
+				ScheduleType:   "all_hours",
+			})
+			testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+				BucketDate:    testutil.BaseDate.AddDate(0, 0, i),
+				OrgID:         orgID,
+				ClusterUUID:   testutil.TestClusterUUID,
+				Namespace:     testutil.TestNamespace,
+				Workload:      spec.workload,
+				WorkloadType:  testutil.TestWorkloadType,
+				ContainerName: spec.container,
+				CPUUsageP95MC: spec.cpu / 4,
+				ScheduleType:  "business_hours",
+			})
+		}
+	}
+
+	var captured []PageContainerDigestKey
+	origQuery := queryContainerDigestsByScheduleForContainers
+	queryContainerDigestsByScheduleForContainers = func(
+		ctx context.Context,
+		pool *pgxpool.Pool,
+		orgID string,
+		keys []PageContainerDigestKey,
+		start, end time.Time,
+		scheduleType string,
+	) (map[string]map[containerKey][]DigestRow, error) {
+		captured = append([]PageContainerDigestKey(nil), keys...)
+		return origQuery(ctx, pool, orgID, keys, start, end, scheduleType)
+	}
+	t.Cleanup(func() { queryContainerDigestsByScheduleForContainers = origQuery })
+
+	page := []model.NativeContainerResult{{
+		ClusterUUID:     testutil.TestClusterUUID,
+		Project:         testutil.TestNamespace,
+		Workload:        testutil.TestWorkload,
+		WorkloadType:    testutil.TestWorkloadType,
+		Container:       testutil.TestContainer,
+		Recommendations: map[string]model.TermRecommendation{},
+	}}
+	require.NoError(t, EnrichNativeContainerResultsWithBusinessHours(ctx, pool, orgID, page))
+
+	require.Len(t, captured, 1)
+	assert.Equal(t, testutil.TestContainer, captured[0].ContainerName)
+	assert.Equal(t, testutil.TestWorkload, captured[0].Workload)
+}
+
 func TestDigestQuery_FilterAllHours(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
