@@ -78,6 +78,24 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Outbound HTTP client timeout. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values per repeated query param. |
 | `RECORD_LIMIT_CSV` | `1000` | CSV export row limit per batch. |
+
+### List pagination (`after` cursor)
+
+Container and namespace recommendation list endpoints support **keyset pagination**
+via the `after` query parameter. When `after` is present, the API uses an opaque
+base64-encoded cursor and ignores `offset`. Each JSON response includes
+`meta.has_next` and, when more pages exist, `meta.next_cursor` for the next
+request. Existing clients can continue using `offset` and `limit`; `meta.count`
+is served from pre-computed org stats when available.
+
+Example:
+
+```
+GET /recommendations/openshift?limit=100
+GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
+```
+
+---
 | `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |
 
 ---
