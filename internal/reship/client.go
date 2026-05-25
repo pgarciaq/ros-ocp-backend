@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 )
 
 // HTTPClient calls Koku masu reship_ros.
@@ -32,7 +33,7 @@ type ReshipResult struct {
 // baseURL is the Koku masu host only (e.g. "http://cost-onprem-masu:5042"), matching HTTPCostDataProvider.
 func NewHTTPClient(baseURL string, client *http.Client) *HTTPClient {
 	if client == nil {
-		client = &http.Client{Timeout: 60 * time.Second}
+		client = httpclient.NewClient(60 * time.Second)
 	}
 	return &HTTPClient{
 		baseURL:    strings.TrimRight(baseURL, "/"),

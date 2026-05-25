@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	rosdb "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/sirupsen/logrus"
@@ -25,11 +26,7 @@ import (
 var log *logrus.Entry = logging.GetLogger()
 var cfg *config.Config = config.GetConfig()
 
-var csvDownloadTransport = &http.Transport{
-	MaxIdleConns:        20,
-	MaxIdleConnsPerHost: 10,
-	IdleConnTimeout:     90 * time.Second,
-}
+var csvDownloadTransport = httpclient.SharedTransport()
 
 var csvDownloadHTTPClientSingleton *http.Client
 
@@ -140,7 +137,7 @@ func newHTTPClient(timeoutSecs int) *http.Client {
 		log.Warnf("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS=%d is below minimum; using %ds", timeoutSecs, minHTTPTimeoutSecs)
 		timeoutSecs = minHTTPTimeoutSecs
 	}
-	return &http.Client{Timeout: time.Duration(timeoutSecs) * time.Second}
+	return httpclient.NewClient(time.Duration(timeoutSecs) * time.Second)
 }
 
 func SetupKruizePerformanceProfile() {

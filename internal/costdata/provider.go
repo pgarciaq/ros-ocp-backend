@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 )
 
 const defaultCostDataCacheTTL = 5 * time.Minute
@@ -55,22 +57,9 @@ type costCacheEntry struct {
 }
 
 var (
-	sharedTransport     *http.Transport
-	sharedTransportOnce sync.Once
-	costDataCache       sync.Map // key: orgID+"\x00"+clusterID -> costCacheEntry
-	costDataCacheTTL    = defaultCostDataCacheTTL
+	costDataCache    sync.Map // key: orgID+"\x00"+clusterID -> costCacheEntry
+	costDataCacheTTL = defaultCostDataCacheTTL
 )
-
-func sharedHTTPTransport() *http.Transport {
-	sharedTransportOnce.Do(func() {
-		sharedTransport = &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
-		}
-	})
-	return sharedTransport
-}
 
 func costCacheKey(orgID, clusterID string) string {
 	return orgID + "\x00" + clusterID
@@ -101,11 +90,8 @@ type HTTPCostDataProvider struct {
 // NewHTTPCostDataProvider creates a new HTTP-based cost data provider with a shared transport.
 func NewHTTPCostDataProvider(baseURL string, timeout time.Duration) *HTTPCostDataProvider {
 	return &HTTPCostDataProvider{
-		BaseURL: baseURL,
-		HTTPClient: &http.Client{
-			Timeout:   timeout,
-			Transport: sharedHTTPTransport(),
-		},
+		BaseURL:    baseURL,
+		HTTPClient: httpclient.NewClient(timeout),
 	}
 }
 

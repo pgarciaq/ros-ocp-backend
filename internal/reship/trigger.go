@@ -9,7 +9,15 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
-const orgMaxConcurrent = 2
+const defaultOrgMaxConcurrent = 2
+
+// orgMaxConcurrent returns the masu reship fan-out cap for one org.
+func orgMaxConcurrent() int {
+	if cfg := config.GetConfig(); cfg != nil && cfg.ReshipConcurrency > 0 {
+		return cfg.ReshipConcurrency
+	}
+	return defaultOrgMaxConcurrent
+}
 
 // Triggerer triggers historical ROS CSV re-shipment via Koku masu (Phase 7).
 type Triggerer interface {
@@ -41,7 +49,7 @@ func TriggerAsync(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	}
 	go func() {
 		ctx := context.Background()
-		sem := make(chan struct{}, orgMaxConcurrent)
+		sem := make(chan struct{}, orgMaxConcurrent())
 		var wg sync.WaitGroup
 		for _, id := range clusterUUIDs {
 			wg.Add(1)
