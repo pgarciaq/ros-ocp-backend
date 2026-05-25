@@ -25,6 +25,14 @@ import (
 var log *logrus.Entry = logging.GetLogger()
 var cfg *config.Config = config.GetConfig()
 
+var csvDownloadTransport = &http.Transport{
+	MaxIdleConns:        20,
+	MaxIdleConnsPerHost: 10,
+	IdleConnTimeout:     90 * time.Second,
+}
+
+var csvDownloadHTTPClientSingleton *http.Client
+
 const (
 	envCSVDownloadTimeoutSecs = "ROS_CSV_DOWNLOAD_TIMEOUT_SECONDS"
 	envCSVMaxBodyBytes        = "ROS_CSV_MAX_BODY_BYTES"
@@ -50,22 +58,23 @@ func csvMaxBodyBytes() int64 {
 }
 
 func csvDownloadHTTPClient() *http.Client {
+	if csvDownloadHTTPClientSingleton != nil {
+		return csvDownloadHTTPClientSingleton
+	}
 	timeoutSecs := 60
 	if v := strings.TrimSpace(os.Getenv(envCSVDownloadTimeoutSecs)); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			timeoutSecs = n
 		}
 	}
-	tr := &http.Transport{
-		DisableKeepAlives: true,
-	}
-	return &http.Client{
+	csvDownloadHTTPClientSingleton = &http.Client{
 		Timeout:   time.Duration(timeoutSecs) * time.Second,
-		Transport: tr,
+		Transport: csvDownloadTransport,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return fmt.Errorf("CSV download redirects are disabled")
 		},
 	}
+	return csvDownloadHTTPClientSingleton
 }
 
 func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
@@ -324,7 +333,6 @@ func unique[T uniqueTypes](x []T) []T {
 	}
 	return list
 }
-
 
 func ConvertDateToISO8601(date string) (string, error) {
 	const date_format = "2006-01-02 15:04:05 -0700 MST"
