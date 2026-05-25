@@ -519,7 +519,7 @@ func TestReshipLock_MaxTwoPerOrg(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	time.Sleep(300 * time.Millisecond)
-	assert.LessOrEqual(t, peak.Load(), int32(orgMaxConcurrent))
+	assert.LessOrEqual(t, peak.Load(), int32(orgMaxConcurrent()))
 }
 func TestReshipLock_TTL_OneHour(t *testing.T) {
 	lc := NewLockCoordinator(time.Hour)

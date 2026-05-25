@@ -15,8 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
+
+func clearEffectiveRatesCache(t *testing.T) {
+	t.Helper()
+	costdata.ClearCostDataCacheForTest()
+}
 
 type staticProviderResolver struct {
 	providerUUID uuid.UUID
@@ -40,9 +46,9 @@ func testMasuServer(reshipHandler http.HandlerFunc) *httptest.Server {
 			w.Header().Set("Content-Type", "application/json")
 			clusterID := r.URL.Query().Get("cluster_id")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"cluster_id":          clusterID,
-				"provider_uuid":       testutil.TestProviderUUID,
-				"configured_rates":    map[string]interface{}{},
+				"cluster_id":           clusterID,
+				"provider_uuid":        testutil.TestProviderUUID,
+				"configured_rates":     map[string]interface{}{},
 				"namespace_aggregates": map[string]interface{}{},
 			})
 			return
@@ -52,6 +58,7 @@ func testMasuServer(reshipHandler http.HandlerFunc) *httptest.Server {
 }
 
 func TestHTTPEffectiveRatesResolver_ResolveProviderUUID(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	clusterID := testutil.TestClusterUUID
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/api/cost-management/v1/effective_rates/", r.URL.Path)
@@ -76,6 +83,7 @@ func TestHTTPEffectiveRatesResolver_ResolveProviderUUID(t *testing.T) {
 }
 
 func TestPostReship_UsesResolvedProviderUUID(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	var capturedURL string
 	masu := testMasuServer(func(w http.ResponseWriter, r *http.Request) {
 		capturedURL = r.URL.String()
@@ -109,6 +117,7 @@ func TestPostReship_ResolverFailure(t *testing.T) {
 }
 
 func TestHTTPEffectiveRatesResolver_HTTP404(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"not found"}`))
@@ -129,6 +138,7 @@ func TestHTTPEffectiveRatesResolver_HTTP404(t *testing.T) {
 }
 
 func TestHTTPEffectiveRatesResolver_HTTP503(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
@@ -148,6 +158,7 @@ func TestHTTPEffectiveRatesResolver_HTTP503(t *testing.T) {
 }
 
 func TestHTTPEffectiveRatesResolver_EmptyProviderUUID(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -171,6 +182,7 @@ func TestHTTPEffectiveRatesResolver_EmptyProviderUUID(t *testing.T) {
 }
 
 func TestPostReship_ResolutionFailureIncrementsMetric(t *testing.T) {
+	clearEffectiveRatesCache(t)
 	orgID := "org-resolver-metric"
 	clusterID := uuid.MustParse(testutil.TestClusterUUID)
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
