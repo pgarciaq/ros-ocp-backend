@@ -176,13 +176,13 @@ func seedNodeAtUtilization(t *testing.T, pool *pgxpool.Pool, orgID, nodeName str
 }
 
 func fleetNodesNeeded(recs []NodeRec) int {
-	if len(recs) == 0 || recs[0].CurrentCPUCores <= 0 {
+	if len(recs) == 0 || recs[0].CurrentCPUMC <= 0 {
 		return 0
 	}
-	nodeCapacity := recs[0].CurrentCPUCores
+	nodeCapacity := float64(recs[0].CurrentCPUMC) / 1000.0
 	var totalRecommended float64
 	for _, r := range recs {
-		totalRecommended += r.RecommendedCPUCores
+		totalRecommended += float64(r.RecommendedCPUMC) / 1000.0
 	}
 	return int(math.Ceil(totalRecommended / nodeCapacity))
 }

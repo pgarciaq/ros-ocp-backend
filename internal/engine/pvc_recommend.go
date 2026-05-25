@@ -36,24 +36,24 @@ type PVCDigestRow struct {
 
 // PVCRec is the output of the PVC recommendation engine.
 type PVCRec struct {
-	OrgID                      string
-	ClusterUUID                string
-	Namespace                  string
-	PVC                        string
-	PV                         string
-	StorageClass               string
-	CapacityBytes              int64
-	RequestBytes               int64
-	UsageBytesMax              int64
-	UsageRatio                 float64
-	RecommendationType         string
-	RecommendedBytes           *int64
-	DaysToFull                 *int
-	GrowthBytesPerDay          int64
-	EstimatedMonthlySavingsUSD float32
-	NotificationCodes          []int16
-	DataDays                   int
-	Term                       string
+	OrgID                        string
+	ClusterUUID                  string
+	Namespace                    string
+	PVC                          string
+	PV                           string
+	StorageClass                 string
+	CapacityBytes                int64
+	RequestBytes                 int64
+	UsageBytesMax                int64
+	UsageRatio                   float64
+	RecommendationType           string
+	RecommendedBytes             *int64
+	DaysToFull                   *int
+	GrowthBytesPerDay            int64
+	EstimatedMonthlySavingsCents int64
+	NotificationCodes            []int16
+	DataDays                     int
+	Term                         string
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
@@ -150,16 +150,16 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 
 	latest := digests[len(digests)-1]
 	rec := PVCRec{
-		OrgID:        orgID,
-		ClusterUUID:  clusterUUID,
-		Namespace:    latest.Namespace,
-		PVC:          latest.PVC,
-		PV:           latest.PV,
-		StorageClass: latest.StorageClass,
+		OrgID:         orgID,
+		ClusterUUID:   clusterUUID,
+		Namespace:     latest.Namespace,
+		PVC:           latest.PVC,
+		PV:            latest.PV,
+		StorageClass:  latest.StorageClass,
 		CapacityBytes: latest.CapacityBytes,
 		RequestBytes:  latest.RequestBytes,
 		DataDays:      len(digests),
-		Term:         tc.Name,
+		Term:          tc.Name,
 	}
 
 	var maxUsage int64
@@ -330,7 +330,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
 			rec.NotificationCodes, rec.DataDays, rec.Term,
-			rec.EstimatedMonthlySavingsUSD,
+			rec.EstimatedMonthlySavingsCents,
 		)
 		if err != nil {
 			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s [%s]: %v", rec.Namespace, rec.PVC, rec.Term, err)

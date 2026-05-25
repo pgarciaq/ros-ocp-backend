@@ -190,8 +190,8 @@ func RecommendWorkloadsStreaming(
 					PodCountAvg:          pcAvg,
 					DesiredReplicas:      desiredReplicas,
 					AvailableReplicas:    availableReplicas,
-					MonitoringStartTime: monStart,
-					MonitoringEndTime:   monEnd,
+					MonitoringStartTime:  monStart,
+					MonitoringEndTime:    monEnd,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
@@ -361,7 +361,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 				r.DesiredReplicas, r.AvailableReplicas,
-				r.EstimatedSavingsUSD,
+				r.EstimatedSavingsCents,
 				r.MonitoringStartTime, r.MonitoringEndTime,
 			)
 		}

@@ -219,18 +219,20 @@ func BenchmarkSavingsCalculation_1000Containers(b *testing.B) {
 }
 
 func benchNodeRecs(count int) []NodeRec {
+	const gibKiB = 1024 * 1024
 	recs := make([]NodeRec, count)
 	for i := range recs {
 		util := float32(0.3 + float64(i%70)/100.0)
-		currentCPU := 8.0 + float64(i%4)
-		currentMem := 32.0 + float64(i%16)
+		currentCPUmc := int64(8000 + (i%4)*1000)
+		currentMemKiB := int64((32 + i%16) * gibKiB)
+		scale := 0.5 + float64(util)
 		recs[i] = NodeRec{
-			Node:                 fmt.Sprintf("worker-%d", i),
-			CurrentCPUCores:      currentCPU,
-			RecommendedCPUCores:  currentCPU * (0.5 + float64(util)),
-			CurrentMemoryGiB:     currentMem,
-			RecommendedMemoryGiB: currentMem * (0.5 + float64(util)),
-			NodeCountReduction:   i % 2,
+			Node:               fmt.Sprintf("worker-%d", i),
+			CurrentCPUMC:       currentCPUmc,
+			RecommendedCPUMC:   int64(float64(currentCPUmc) * scale),
+			CurrentMemKiB:      currentMemKiB,
+			RecommendedMemKiB:  int64(float64(currentMemKiB) * scale),
+			NodeCountReduction: i % 2,
 		}
 	}
 	return recs

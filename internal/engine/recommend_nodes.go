@@ -50,26 +50,26 @@ type NodeRecConfig struct {
 
 // NodeRec holds the computed recommendation for a single node within a single term and engine.
 type NodeRec struct {
-	Node                       string
-	Term                       string
-	Engine                     string
-	CPUUtilP50                 float32
-	CPUUtilP95                 float32
-	MemUtilP50                 float32
-	MemUtilP95                 float32
-	CPUOvercommitRatio         float32
-	IsUnderutilized            bool
-	IsOvercommitted            bool
-	StrandedResource           *string
-	PodCount                   int64
-	TrendSlope                 float32
-	CurrentCPUCores            float64
-	CurrentMemoryGiB           float64
-	RecommendedCPUCores        float64
-	RecommendedMemoryGiB       float64
-	NodeCountReduction         int
-	EstimatedMonthlySavingsUSD float32
-	NotificationCodes          []int16
+	Node                         string
+	Term                         string
+	Engine                       string
+	CPUUtilP50                   float32
+	CPUUtilP95                   float32
+	MemUtilP50                   float32
+	MemUtilP95                   float32
+	CPUOvercommitRatio           float32
+	IsUnderutilized              bool
+	IsOvercommitted              bool
+	StrandedResource             *string
+	PodCount                     int64
+	TrendSlope                   float32
+	CurrentCPUMC                 int64
+	CurrentMemKiB                int64
+	RecommendedCPUMC             int64
+	RecommendedMemKiB            int64
+	NodeCountReduction           int
+	EstimatedMonthlySavingsCents int64
+	NotificationCodes            []int16
 }
 
 // nodeClassification holds shared utilization signals and flags computed once per (node, term).
@@ -86,8 +86,8 @@ type nodeClassification struct {
 	IsOvercommitted    bool
 	StrandedResource   *string
 	TrendSlope         float32
-	CurrentCPUCores    float64
-	CurrentMemoryGiB   float64
+	CurrentCPUMC       int64
+	CurrentMemKiB      int64
 	NotificationCodes  []int16
 	maxCPUUsageP95MC   int64
 	maxMemUsageP95KiB  int64
@@ -119,7 +119,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				rec := nodeRecFromClassification(class)
 				rec.Term = tc.Name
 				rec.Engine = eng.Name
-				rec.RecommendedCPUCores, rec.RecommendedMemoryGiB, rec.NodeCountReduction =
+				rec.RecommendedCPUMC, rec.RecommendedMemKiB, rec.NodeCountReduction =
 					sizeNodeForEngine(class, eng, nodeSettings)
 				results = append(results, rec)
 			}
@@ -141,8 +141,8 @@ func nodeRecFromClassification(class nodeClassification) NodeRec {
 		IsOvercommitted:    class.IsOvercommitted,
 		StrandedResource:   class.StrandedResource,
 		TrendSlope:         class.TrendSlope,
-		CurrentCPUCores:    class.CurrentCPUCores,
-		CurrentMemoryGiB:   class.CurrentMemoryGiB,
+		CurrentCPUMC:       class.CurrentCPUMC,
+		CurrentMemKiB:      class.CurrentMemKiB,
 		NotificationCodes:  append([]int16(nil), class.NotificationCodes...),
 	}
 }
@@ -289,10 +289,10 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, trendMin
 	allocCPU := resolveAllocatable(lastDay.MaxCPUAllocMC, lastDay.MaxCPURequestsMC, cfg.AllocatableFactor)
 	allocMem := resolveAllocatableMem(lastDay.MaxMemAllocKiB, lastDay.MaxMemRequestsKiB, cfg.AllocatableFactor)
 	if allocCPU > 0 {
-		class.CurrentCPUCores = float64(allocCPU) / 1000.0
+		class.CurrentCPUMC = allocCPU
 	}
 	if allocMem > 0 {
-		class.CurrentMemoryGiB = float64(allocMem) / (1024.0 * 1024.0)
+		class.CurrentMemKiB = allocMem
 	}
 
 	if allocCPU > 0 && maxRequests > 0 {
@@ -340,68 +340,80 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, trendMin
 }
 
 // sizeNodeForEngine derives engine-specific recommended capacity and consolidation flag.
-func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig, nodeSettings NodeThresholdSettings) (cpuCores, memGiB float64, nodeCountReduction int) {
-	cpuCores, memGiB = recommendedNodeCapacity(
+func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig, nodeSettings NodeThresholdSettings) (cpuMC, memKiB int64, nodeCountReduction int) {
+	cpuMC, memKiB = recommendedNodeCapacity(
 		class.maxCPUUsageP95MC, class.maxMemUsageP95KiB,
 		class.maxCPURequestsMC, class.maxMemRequestsKiB,
 		eng.TargetUtilization,
 	)
 
 	if !class.IsUnderutilized {
-		return cpuCores, memGiB, 0
+		return cpuMC, memKiB, 0
 	}
 
 	switch eng.Name {
 	case "cost":
-		// Cost engine: recommend consolidation when underutilized workloads fit at 80% target.
 		nodeCountReduction = 1
 	case "performance":
-		// Performance engine: only consolidate with extreme waste — workloads fit at target
-		// and current capacity has a full spare node worth of headroom.
-		if hasFullSpareNodeHeadroom(class.CurrentCPUCores, class.CurrentMemoryGiB, cpuCores, memGiB, nodeSettings.PerfConsolidationHeadroomMultiplier) {
+		if hasFullSpareNodeHeadroom(class.CurrentCPUMC, class.CurrentMemKiB, cpuMC, memKiB, nodeSettings.PerfConsolidationHeadroomMultiplier) {
 			nodeCountReduction = 1
 		}
 	}
-	return cpuCores, memGiB, nodeCountReduction
+	return cpuMC, memKiB, nodeCountReduction
 }
 
 // hasFullSpareNodeHeadroom reports whether freed capacity could fit another copy of the workload.
-func hasFullSpareNodeHeadroom(currentCPU, currentMem, recCPU, recMem, multiplier float64) bool {
-	if recCPU <= 0 || recMem <= 0 || currentCPU <= 0 || currentMem <= 0 || multiplier <= 0 {
+func hasFullSpareNodeHeadroom(currentCPUmc, currentMemKiB, recCPUmc, recMemKiB int64, multiplier float64) bool {
+	if recCPUmc <= 0 || recMemKiB <= 0 || currentCPUmc <= 0 || currentMemKiB <= 0 || multiplier <= 0 {
 		return false
 	}
-	return currentCPU >= multiplier*recCPU && currentMem >= multiplier*recMem
+	multScaled := int64(math.Round(multiplier * float64(MarginScale)))
+	return currentCPUmc*MarginScale >= recCPUmc*multScaled && currentMemKiB*MarginScale >= recMemKiB*multScaled
 }
 
-// recommendedNodeCapacity derives right-sized CPU cores and memory GiB from peak
+// recommendedNodeCapacity derives right-sized CPU millicores and memory KiB from peak
 // usage and request totals, targeting the given utilization headroom.
-func recommendedNodeCapacity(maxCPUUsageP95MC, maxMemUsageP95KiB, maxCPURequestsMC, maxMemRequestsKiB int64, targetUtilization float64) (cpuCores, memGiB float64) {
-	var recommendedCPUMC, recommendedMemKiB float64
+// Results are rounded up to whole cores / whole GiB (matching prior behavior).
+func recommendedNodeCapacity(maxCPUUsageP95MC, maxMemUsageP95KiB, maxCPURequestsMC, maxMemRequestsKiB int64, targetUtilization float64) (cpuMC, memKiB int64) {
+	targetScaled := int64(math.Round(targetUtilization * float64(MarginScale)))
+	if targetScaled <= 0 {
+		targetScaled = int64(0.8 * float64(MarginScale))
+	}
+
+	var recommendedCPUMC, recommendedMemKiB int64
 	if maxCPUUsageP95MC > 0 {
-		recommendedCPUMC = float64(maxCPUUsageP95MC) / targetUtilization
+		recommendedCPUMC = ceilDivInt64(maxCPUUsageP95MC*MarginScale, targetScaled)
 	}
 	if maxCPURequestsMC > 0 {
-		requestBased := float64(maxCPURequestsMC) / targetUtilization
+		requestBased := ceilDivInt64(maxCPURequestsMC*MarginScale, targetScaled)
 		if requestBased > recommendedCPUMC {
 			recommendedCPUMC = requestBased
 		}
 	}
 	if maxMemUsageP95KiB > 0 {
-		recommendedMemKiB = float64(maxMemUsageP95KiB) / targetUtilization
+		recommendedMemKiB = ceilDivInt64(maxMemUsageP95KiB*MarginScale, targetScaled)
 	}
 	if maxMemRequestsKiB > 0 {
-		requestBased := float64(maxMemRequestsKiB) / targetUtilization
+		requestBased := ceilDivInt64(maxMemRequestsKiB*MarginScale, targetScaled)
 		if requestBased > recommendedMemKiB {
 			recommendedMemKiB = requestBased
 		}
 	}
+	const mibPerGiB int64 = 1024 * 1024
 	if recommendedCPUMC > 0 {
-		cpuCores = math.Ceil(recommendedCPUMC / 1000.0)
+		cpuMC = ceilDivInt64(recommendedCPUMC, 1000) * 1000
 	}
 	if recommendedMemKiB > 0 {
-		memGiB = math.Ceil(recommendedMemKiB / (1024.0 * 1024.0))
+		memKiB = ceilDivInt64(recommendedMemKiB, mibPerGiB) * mibPerGiB
 	}
-	return cpuCores, memGiB
+	return cpuMC, memKiB
+}
+
+func ceilDivInt64(a, b int64) int64 {
+	if b <= 0 {
+		return 0
+	}
+	return (a + b - 1) / b
 }
 
 // resolveAllocatable returns the effective allocatable CPU in millicores.
@@ -526,6 +538,8 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 	}
 
 	for _, r := range recs {
+		recommendedCPUCores := float64(r.RecommendedCPUMC) / 1000.0
+		recommendedMemGiB := float64(r.RecommendedMemKiB) / (1024.0 * 1024.0)
 		_, err := tx.Exec(ctx, `
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
@@ -557,8 +571,8 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
 			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted,
 			r.StrandedResource, r.PodCount, r.TrendSlope, r.NotificationCodes,
-			r.RecommendedCPUCores, r.RecommendedMemoryGiB, r.NodeCountReduction,
-			r.EstimatedMonthlySavingsUSD,
+			recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
+			r.EstimatedMonthlySavingsCents,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)

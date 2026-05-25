@@ -75,8 +75,8 @@ func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 
 func TestRecommendNodes_Underutilized(t *testing.T) {
 	cfg := defaultNodeRecConfig()
-	allocCPU := ptr64(16000)  // 16 cores in millicores
-	allocMem := ptr64(65536)  // 64 GiB in KiB
+	allocCPU := ptr64(16000) // 16 cores in millicores
+	allocMem := ptr64(65536) // 64 GiB in KiB
 
 	digests := []NodeDigestRow{
 		makeDigestRow("node-idle", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
@@ -436,8 +436,8 @@ func TestRecommendNodes_CostEngineSmallerCapacityThanPerformance(t *testing.T) {
 	costRec := byEngine["node-size/cost"]
 	perfRec := byEngine["node-size/performance"]
 
-	assert.LessOrEqual(t, costRec.RecommendedCPUCores, perfRec.RecommendedCPUCores)
-	assert.LessOrEqual(t, costRec.RecommendedMemoryGiB, perfRec.RecommendedMemoryGiB)
+	assert.LessOrEqual(t, costRec.RecommendedCPUMC, perfRec.RecommendedCPUMC)
+	assert.LessOrEqual(t, costRec.RecommendedMemKiB, perfRec.RecommendedMemKiB)
 }
 
 func TestRecommendNodes_CostEngineMoreAggressiveConsolidation(t *testing.T) {
@@ -488,12 +488,6 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 	recs := []NodeRec{costRec, perfRec}
 	ApplyNodeSavings(recs, cd)
 
-	assert.Greater(t, recs[0].EstimatedMonthlySavingsUSD, recs[1].EstimatedMonthlySavingsUSD,
+	assert.Greater(t, recs[0].EstimatedMonthlySavingsCents, recs[1].EstimatedMonthlySavingsCents,
 		"cost engine should show higher savings than performance for underutilized node")
-}
-
-func TestHasFullSpareNodeHeadroom(t *testing.T) {
-	assert.True(t, hasFullSpareNodeHeadroom(16, 64, 4, 16, 2.0))
-	assert.False(t, hasFullSpareNodeHeadroom(16, 64, 9, 32, 2.0))
-	assert.False(t, hasFullSpareNodeHeadroom(0, 64, 4, 16, 2.0))
 }

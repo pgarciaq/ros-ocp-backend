@@ -11,22 +11,22 @@ import (
 
 func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 	updated := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
-	savingsCost := 450.0
-	savingsPerf := 120.0
+	savingsCostCents := int64(45000)
+	savingsPerfCents := int64(12000)
 
 	rows := []nodeUtilRow{
 		{
 			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost",
 			CPUUtilP50: 0.25, CPUUtilP95: 0.28, MemUtilP50: 0.30, MemUtilP95: 0.35,
 			IsUnderutilized: true, PodCount: 5,
-			RecommendedCPUCores:  sqlNullFloat(4), RecommendedMemoryGiB: sqlNullFloat(16),
-			NodeCountReduction: 1, EstimatedMonthlySavings: sqlNullFloat(savingsCost),
+			RecommendedCPUCores: sqlNullFloat(4), RecommendedMemoryGiB: sqlNullFloat(16),
+			NodeCountReduction: 1, EstimatedMonthlySavings: sqlNullInt64(savingsCostCents),
 			UpdatedAt: updated,
 		},
 		{
 			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "performance",
 			RecommendedCPUCores: sqlNullFloat(7), RecommendedMemoryGiB: sqlNullFloat(28),
-			NodeCountReduction: 0, EstimatedMonthlySavings: sqlNullFloat(savingsPerf),
+			NodeCountReduction: 0, EstimatedMonthlySavings: sqlNullInt64(savingsPerfCents),
 			UpdatedAt: updated,
 		},
 	}
@@ -65,4 +65,8 @@ func TestGroupNodeUtilizationRows_EngineFilter(t *testing.T) {
 
 func sqlNullFloat(v float64) sql.NullFloat64 {
 	return sql.NullFloat64{Valid: true, Float64: v}
+}
+
+func sqlNullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Valid: true, Int64: v}
 }

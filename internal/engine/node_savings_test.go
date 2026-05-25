@@ -4,15 +4,18 @@ import (
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const gibKiB = 1024 * 1024
 
 func TestApplyNodeSavings_NilCostData(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{{Node: "worker-1"}}
 	ApplyNodeSavings(recs, nil)
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -20,16 +23,16 @@ func TestApplyNodeSavings_ZeroRates(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{
 		{
-			CurrentCPUCores:      8,
-			RecommendedCPUCores:  4,
-			CurrentMemoryGiB:     32,
-			RecommendedMemoryGiB: 16,
-			NodeCountReduction:   1,
+			CurrentCPUMC:       8000,
+			RecommendedCPUMC:   4000,
+			CurrentMemKiB:      32 * gibKiB,
+			RecommendedMemKiB:  16 * gibKiB,
+			NodeCountReduction: 1,
 		},
 	}
 	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}
 	ApplyNodeSavings(recs, cd)
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.NotContains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -37,11 +40,11 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{
 		{
-			CurrentCPUCores:      8,
-			RecommendedCPUCores:  4,
-			CurrentMemoryGiB:     32,
-			RecommendedMemoryGiB: 16,
-			NodeCountReduction:   1,
+			CurrentCPUMC:       8000,
+			RecommendedCPUMC:   4000,
+			CurrentMemKiB:      32 * gibKiB,
+			RecommendedMemKiB:  16 * gibKiB,
+			NodeCountReduction: 1,
 		},
 	}
 	cd := &costdata.ClusterCostData{
@@ -53,21 +56,17 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 	}
 	ApplyNodeSavings(recs, cd)
 
-	// CPU: 4 cores * $0.01/hr * 730 = $29.20
-	// Mem: 16 GiB * $0.02/hr * 730 = $233.60
-	// Node: 1 * $1000 = $1000
-	// Total = $1262.80
-	require.InDelta(t, 1262.80, float64(recs[0].EstimatedMonthlySavingsUSD), 0.01)
+	require.InDelta(t, 1262.80, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
 func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{
 		{
-			CurrentCPUCores:      4,
-			RecommendedCPUCores:  8,
-			CurrentMemoryGiB:     16,
-			RecommendedMemoryGiB: 32,
+			CurrentCPUMC:      4000,
+			RecommendedCPUMC:  8000,
+			CurrentMemKiB:     16 * gibKiB,
+			RecommendedMemKiB: 32 * gibKiB,
 		},
 	}
 	cd := &costdata.ClusterCostData{
@@ -77,16 +76,16 @@ func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 		},
 	}
 	ApplyNodeSavings(recs, cd)
-	assert.Less(t, recs[0].EstimatedMonthlySavingsUSD, float32(0))
+	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0))
 }
 
 func TestRecommendedNodeCapacity(t *testing.T) {
 	t.Parallel()
-	cpu, mem := recommendedNodeCapacity(3500, 8*1024*1024, 0, 0, 0.80)
-	assert.Equal(t, float64(5), cpu)
-	assert.Equal(t, float64(10), mem)
+	cpu, mem := recommendedNodeCapacity(3500, 8*gibKiB, 0, 0, 0.80)
+	assert.Equal(t, int64(5000), cpu)
+	assert.Equal(t, int64(10*gibKiB), mem)
 
-	cpuPerf, memPerf := recommendedNodeCapacity(3500, 8*1024*1024, 0, 0, 0.55)
+	cpuPerf, memPerf := recommendedNodeCapacity(3500, 8*gibKiB, 0, 0, 0.55)
 	assert.Greater(t, cpuPerf, cpu)
 	assert.Greater(t, memPerf, mem)
 }
@@ -94,13 +93,17 @@ func TestRecommendedNodeCapacity(t *testing.T) {
 func TestComputeNodeSavings(t *testing.T) {
 	t.Parallel()
 	rec := &NodeRec{
-		CurrentCPUCores:      10,
-		RecommendedCPUCores:  6,
-		CurrentMemoryGiB:     40,
-		RecommendedMemoryGiB: 20,
+		CurrentCPUMC:      10000,
+		RecommendedCPUMC:  6000,
+		CurrentMemKiB:     40 * gibKiB,
+		RecommendedMemKiB: 20 * gibKiB,
 	}
 	savings := computeNodeSavings(rec, 0.007, 0.009, 0)
-	// CPU: 4 * 0.007 * 730 = 20.44
-	// Mem: 20 * 0.009 * 730 = 131.40
 	require.InDelta(t, 151.84, savings, 0.01)
+}
+
+func TestHasFullSpareNodeHeadroom(t *testing.T) {
+	assert.True(t, hasFullSpareNodeHeadroom(16000, 64*gibKiB, 4000, 16*gibKiB, 2.0))
+	assert.False(t, hasFullSpareNodeHeadroom(16000, 64*gibKiB, 9000, 32*gibKiB, 2.0))
+	assert.False(t, hasFullSpareNodeHeadroom(0, 64*gibKiB, 4000, 16*gibKiB, 2.0))
 }
