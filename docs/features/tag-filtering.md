@@ -40,20 +40,20 @@ list queries **JOIN** ROS container rows to Koku tenant tag summary tables at qu
 ```mermaid
 flowchart LR
     subgraph cluster["OpenShift cluster"]
-        OP[Pod/namespace labels]
-        MO[koku-metrics-operator]
+        OP["Pod and namespace labels"]
+        MO["koku-metrics-operator"]
         OP --> MO
     end
     subgraph koku["Koku Celery pipeline"]
-        ING[CSV ingestion]
-        SUM[OCP summarization]
+        ING["CSV ingestion"]
+        SUM["OCP summarization"]
         TAGT["reporting_enabledtagkeys<br/>reporting_ocptags_values"]
         ING --> SUM --> TAGT
     end
     subgraph ros["ROS API"]
-        REQ[User list request]
+        REQ["User list request"]
         JOIN["SQL JOIN org_container_keys<br/>to Koku tag tables"]
-        RESP[Filtered recommendations]
+        RESP["Filtered recommendations"]
         REQ --> JOIN --> RESP
     end
     MO -->|tar.gz upload| ING
@@ -111,21 +111,21 @@ changes. List filters read from `org_container_keys.resolved_tags` (JSONB).
 ```mermaid
 flowchart LR
     subgraph cluster["OpenShift cluster"]
-        OP[Pod/namespace labels]
-        MO[koku-metrics-operator]
+        OP["Pod and namespace labels"]
+        MO["koku-metrics-operator"]
         OP --> MO
     end
     subgraph koku["Koku"]
-        ING[CSV ingestion]
-        SUM[OCP summarization]
+        ING["CSV ingestion"]
+        SUM["OCP summarization"]
         CEL["Celery sync_ros_ocp_tags"]
         ING --> SUM --> CEL
     end
     subgraph ros["ROS API"]
-        SYNC["POST /internal/tags/sync"]
+        SYNC["POST internal tags sync"]
         STORE["org_container_keys.resolved_tags<br/>org_tag_sync_metadata"]
-        LIST[User list request]
-        CEL -->|"Bearer SA token"| SYNC
+        LIST["User list request"]
+        CEL -->|Bearer SA token| SYNC
         SYNC --> STORE
         STORE --> LIST
     end

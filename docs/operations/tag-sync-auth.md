@@ -59,11 +59,11 @@ sequenceDiagram
     participant KW as Koku worker
     participant ROS as ROS API
     participant K8s as Kubernetes API
-    KW->>ROS: POST /internal/tags/sync<br/>Bearer caller SA token
-    ROS->>K8s: TokenReview(caller token)
+    KW->>ROS: POST internal tags sync with Bearer token
+    ROS->>K8s: TokenReview for caller token
     K8s-->>ROS: authenticated SA username
     ROS->>ROS: optional SA allowlist check
-    ROS-->>KW: 200 + updated row count
+    ROS-->>KW: 200 OK with updated row count
 ```
 
 1. ROS reads its own pod ServiceAccount token (reviewer identity).

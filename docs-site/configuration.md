@@ -236,10 +236,10 @@ When `ROS_TAGS_SOURCE=db`, these variables are **ignored** — Koku does not pus
 
 ```mermaid
 flowchart LR
-    USER[API request] --> ROS[ROS API]
-    ROS --> JOIN["JOIN org_container_keys<br/>↔ org1234567.reporting_ocptags_values"]
-    JOIN --> PG[(Shared PostgreSQL)]
-    KOKU[Koku summarization] --> PG
+    USER["API request"] --> ROS["ROS API"]
+    ROS --> JOIN["JOIN org_container_keys<br/>to org1234567.reporting_ocptags_values"]
+    JOIN --> PG[("Shared PostgreSQL")]
+    KOKU["Koku summarization"] --> PG
 ```
 
 ROS reads:
