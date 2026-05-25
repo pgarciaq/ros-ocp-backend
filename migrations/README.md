@@ -49,3 +49,23 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ros_gpu_digest_cluster_interval
 ```
 
 Then run `./rosocp db migrate up` as usual; migration `000061` will skip creating indexes that already exist.
+
+### Migration 000079 (EXPLAIN audit query indexes)
+
+Indexes target savings aggregation, history time-ordered lists, and namespace list queries. For **large** deployments, run the following **as a pre-migration manual step**:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rs_savings_agg
+    ON recommendation_sets (org_id, cluster_uuid)
+    INCLUDE (estimated_monthly_savings_usd)
+    WHERE stale = false AND term = 'medium' AND engine = 'cost';
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rh_org_recorded
+    ON recommendation_history (org_id, recorded_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ns_org_updated
+    ON namespace_recommendation_sets (org_id, updated_at DESC)
+    WHERE term IS NOT NULL AND stale = false;
+```
+
+Then run `./rosocp db migrate up`; migration `000079` will skip creating indexes that already exist.
