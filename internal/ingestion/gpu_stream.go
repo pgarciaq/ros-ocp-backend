@@ -154,7 +154,17 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 		return fmt.Errorf("begin tx for GPU digests: %w", err)
 	}
 	defer txGPU.Rollback(ctx)
+	if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID); err != nil {
+		return err
+	}
+	if err := txGPU.Commit(ctx); err != nil {
+		return fmt.Errorf("commit GPU digests tx: %w", err)
+	}
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests", len(groups))
+	return nil
+}
 
+func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID string) error {
 	type gpuGroupEntry struct {
 		key gpuStreamKey
 		agg *gpuStreamAgg
@@ -204,13 +214,9 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 				g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
 			)
 		}
-		if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert GPU digest: %w", err)
 		}
 	}
-	if err := txGPU.Commit(ctx); err != nil {
-		return fmt.Errorf("commit GPU digests tx: %w", err)
-	}
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests", len(groups))
 	return nil
 }

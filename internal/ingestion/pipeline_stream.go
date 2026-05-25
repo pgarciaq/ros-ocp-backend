@@ -149,6 +149,8 @@ func parseAndDigestCSVStream(
 	groupedAll := make(map[DigestKey][]MetricRow, 256)
 	groupedBH := make(map[DigestKey][]MetricRow)
 	sampleBatch := make([]MetricRow, 0, streamSampleFlushRows)
+	var deferredSamples []MetricRow
+	useSingleIngestTx := false
 	var gpuAccum *gpuStreamAccumulator
 	var nodeAccum map[NodeDayKey]*NodeDayAccumulator
 	if opts.EnableGPU {
@@ -174,6 +176,10 @@ func parseAndDigestCSVStream(
 
 	flushSamples := func(batch []MetricRow) error {
 		if len(batch) == 0 {
+			return nil
+		}
+		if useSingleIngestTx {
+			deferredSamples = append(deferredSamples, batch...)
 			return nil
 		}
 		for _, row := range batch {
@@ -220,6 +226,8 @@ func parseAndDigestCSVStream(
 		return 0, nil
 	}
 
+	useSingleIngestTx = rowCount <= ingestSingleTxRowThreshold
+
 	if err := flushSamples(sampleBatch); err != nil {
 		return rowCount, err
 	}
@@ -231,6 +239,32 @@ func parseAndDigestCSVStream(
 	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
 		return rowCount, fmt.Errorf("digest partitions: %w", err)
 	}
+
+	if useSingleIngestTx {
+		for _, row := range deferredSamples {
+			monthStart := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+			if err := EnsureSamplePartitionMonth(ctx, pool, monthStart); err != nil {
+				return rowCount, fmt.Errorf("sample partitions: %w", err)
+			}
+		}
+		if gpuAccum != nil {
+			months := map[time.Time]struct{}{}
+			for k := range gpuAccum.groups {
+				monthStart := time.Date(k.date.Year(), k.date.Month(), 1, 0, 0, 0, 0, time.UTC)
+				months[monthStart] = struct{}{}
+			}
+			ensureGPUDigestPartitionsForMonths(ctx, pool, months)
+		}
+		if nodeAccum != nil && len(nodeAccum) > 0 {
+			EnsureNodeDigestPartitions(ctx, pool, nodeAccum)
+		}
+		if err := commitIngestInSingleTx(ctx, pool, deferredSamples, grouped, gpuAccum, nodeAccum, scheduleCache, orgID, clusterUUID); err != nil {
+			return rowCount, err
+		}
+		logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
+		return rowCount, nil
+	}
+
 	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
 		return rowCount, err
 	}

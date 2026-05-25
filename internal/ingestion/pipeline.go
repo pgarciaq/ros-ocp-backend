@@ -19,6 +19,9 @@ import (
 // maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
 const maxPgxBatchQueue = 500
 
+// ingestSingleTxRowThreshold above this row count uses separate transactions per phase.
+const ingestSingleTxRowThreshold = 50000
+
 // pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch (chunked batches must run on one tx).
 type pgxBatchSender interface {
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
@@ -77,6 +80,16 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 	}
 	defer tx.Rollback(ctx)
 
+	if err := upsertUsageSamplesOnSender(ctx, tx, rows, orgID, clusterUUID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit usage samples tx: %w", err)
+	}
+	return nil
+}
+
+func upsertUsageSamplesOnSender(ctx context.Context, sender pgxBatchSender, rows []MetricRow, orgID, clusterUUID string) error {
 	for start := 0; start < len(rows); start += maxPgxBatchQueue {
 		end := start + maxPgxBatchQueue
 		if end > len(rows) {
@@ -98,12 +111,9 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 				r.CPUUsageMC, r.MemUsageKiB,
 			)
 		}
-		if err := flushQueuedBatch(ctx, tx, batch, end-start); err != nil {
+		if err := flushQueuedBatch(ctx, sender, batch, end-start); err != nil {
 			return fmt.Errorf("upsert usage sample: %w", err)
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit usage samples tx: %w", err)
 	}
 	return nil
 }

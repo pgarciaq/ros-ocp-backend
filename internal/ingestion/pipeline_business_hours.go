@@ -70,16 +70,30 @@ func upsertContainerDigests(
 	grouped map[DigestKey][]MetricRow,
 	scheduleCache *bhschedule.Cache,
 ) error {
-	digestKeys := make([]DigestKey, 0, len(grouped))
-	for k := range grouped {
-		digestKeys = append(digestKeys, k)
-	}
-
 	txDigests, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx for container digests: %w", err)
 	}
 	defer txDigests.Rollback(ctx)
+	if err := upsertContainerDigestsOnSender(ctx, txDigests, grouped, scheduleCache); err != nil {
+		return err
+	}
+	if err := txDigests.Commit(ctx); err != nil {
+		return fmt.Errorf("commit container digests tx: %w", err)
+	}
+	return nil
+}
+
+func upsertContainerDigestsOnSender(
+	ctx context.Context,
+	sender pgxBatchSender,
+	grouped map[DigestKey][]MetricRow,
+	scheduleCache *bhschedule.Cache,
+) error {
+	digestKeys := make([]DigestKey, 0, len(grouped))
+	for k := range grouped {
+		digestKeys = append(digestKeys, k)
+	}
 
 	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += maxPgxBatchQueue {
 		chunkEnd := chunkStart + maxPgxBatchQueue
@@ -167,12 +181,9 @@ func upsertContainerDigests(
 				d.DesiredReplicas, d.AvailableReplicas,
 			)
 		}
-		if err := flushQueuedBatch(ctx, txDigests, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert digest: %w", err)
 		}
-	}
-	if err := txDigests.Commit(ctx); err != nil {
-		return fmt.Errorf("commit container digests tx: %w", err)
 	}
 	return nil
 }

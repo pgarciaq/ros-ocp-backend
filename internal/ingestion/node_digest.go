@@ -154,6 +154,11 @@ func ensureNodeDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool
 	}
 }
 
+type nodeDigestEntry struct {
+	key NodeDayKey
+	acc *NodeDayAccumulator
+}
+
 // FlushNodeDigests computes final statistics and upserts node digests to the database.
 func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[NodeDayKey]*NodeDayAccumulator, orgID, clusterUUID string, allocatableFactor float64) error {
 	if len(accumulators) == 0 {
@@ -162,10 +167,6 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 
 	EnsureNodeDigestPartitions(ctx, pool, accumulators)
 
-	type nodeDigestEntry struct {
-		key NodeDayKey
-		acc *NodeDayAccumulator
-	}
 	entries := make([]nodeDigestEntry, 0, len(accumulators))
 	for k, acc := range accumulators {
 		entries = append(entries, nodeDigestEntry{key: k, acc: acc})
@@ -177,6 +178,26 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 	}
 	defer tx.Rollback(ctx)
 
+	if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit node digests tx: %w", err)
+	}
+
+	logging.ForOrg(orgID, clusterUUID).Infof("FlushNodeDigests: upserted %d node digests",
+		len(accumulators))
+	return nil
+}
+
+func flushNodeDigestsOnSender(
+	ctx context.Context,
+	sender pgxBatchSender,
+	entries []nodeDigestEntry,
+	orgID, clusterUUID string,
+	allocatableFactor float64,
+) error {
 	for chunkStart := 0; chunkStart < len(entries); chunkStart += maxPgxBatchQueue {
 		chunkEnd := chunkStart + maxPgxBatchQueue
 		if chunkEnd > len(entries) {
@@ -224,16 +245,9 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 				maxCPUReq, maxMemReq, maxPods, sampleCount,
 			)
 		}
-		if err := flushQueuedBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert node digest: %w", err)
 		}
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit node digests tx: %w", err)
-	}
-
-	logging.ForOrg(orgID, clusterUUID).Infof("FlushNodeDigests: upserted %d node digests",
-		len(accumulators))
 	return nil
 }
