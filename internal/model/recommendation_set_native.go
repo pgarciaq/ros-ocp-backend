@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"fmt"
 	"strconv"
@@ -34,27 +35,57 @@ func (a *SmallintArray) Scan(src interface{}) error {
 		*a = nil
 		return nil
 	}
-	s, ok := src.(string)
-	if !ok {
-		if b, ok := src.([]byte); ok {
-			s = string(b)
-		} else {
-			return fmt.Errorf("SmallintArray.Scan: unsupported type %T", src)
-		}
+	switch v := src.(type) {
+	case []int16:
+		*a = append(SmallintArray(nil), v...)
+		return nil
+	case []byte:
+		return scanSmallintArrayText(a, v)
+	case string:
+		return scanSmallintArrayText(a, []byte(v))
+	default:
+		return fmt.Errorf("SmallintArray.Scan: unsupported type %T", src)
 	}
-	s = strings.Trim(s, "{}")
-	if s == "" {
+}
+
+func scanSmallintArrayText(a *SmallintArray, b []byte) error {
+	if len(b) == 0 {
 		*a = nil
 		return nil
 	}
-	parts := strings.Split(s, ",")
-	result := make(SmallintArray, 0, len(parts))
-	for _, p := range parts {
-		v, err := strconv.ParseInt(strings.TrimSpace(p), 10, 16)
-		if err != nil {
-			return fmt.Errorf("SmallintArray.Scan: parsing %q: %w", p, err)
+	if b[0] == '{' {
+		b = b[1:]
+	}
+	if len(b) > 0 && b[len(b)-1] == '}' {
+		b = b[:len(b)-1]
+	}
+	if len(b) == 0 {
+		*a = nil
+		return nil
+	}
+	result := make(SmallintArray, 0, bytes.Count(b, []byte{','})+1)
+	start := 0
+	for i := 0; i <= len(b); i++ {
+		if i < len(b) && b[i] != ',' {
+			continue
 		}
-		result = append(result, int16(v))
+		part := b[start:i]
+		for len(part) > 0 && (part[0] == ' ' || part[0] == '\t') {
+			part = part[1:]
+		}
+		for len(part) > 0 && (part[len(part)-1] == ' ' || part[len(part)-1] == '\t') {
+			part = part[:len(part)-1]
+		}
+		if len(part) == 0 {
+			start = i + 1
+			continue
+		}
+		n, err := strconv.ParseInt(string(part), 10, 16)
+		if err != nil {
+			return fmt.Errorf("SmallintArray.Scan: parsing %q: %w", part, err)
+		}
+		result = append(result, int16(n))
+		start = i + 1
 	}
 	*a = result
 	return nil
@@ -355,7 +386,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 	}
 
 	// Fallback for pre-migration rows where container_id is NULL.
-	// Scan a bounded window of distinct container keys and match by UUID v5.
+	// TODO: remove getNativeRecommendationByIDFallback after container_id backfill verified in production.
 	return getNativeRecommendationByIDFallback(db, orgID, id, userPerms)
 }
 
