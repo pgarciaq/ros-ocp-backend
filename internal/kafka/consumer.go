@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -12,6 +13,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
+
+const kafkaMessageSampleInterval = 100
 
 // ConsumerCloseGracePeriod is the maximum time to wait for consumer.Close() during shutdown.
 const ConsumerCloseGracePeriod = 30 * time.Second
@@ -37,6 +40,8 @@ func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, cons
 }
 
 func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaReader, consumer *kafka.Consumer, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), log *logrus.Entry) {
+	var msgCount uint64
+	batchStart := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -47,7 +52,7 @@ func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaRe
 
 		msg, err := reader.ReadMessage(time.Second)
 		if err == nil {
-			log.Infof("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
+			logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
 			log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
 			handler(msg, consumer)
 			continue
@@ -71,6 +76,8 @@ func consumeMessagesParallelUntilCancelled(
 	jobs := make(chan *kafka.Message, workers*2)
 	var wg sync.WaitGroup
 	var partitionLocks sync.Map
+	var msgCount uint64
+	batchStart := time.Now()
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -81,7 +88,7 @@ func consumeMessagesParallelUntilCancelled(
 				muIface, _ := partitionLocks.LoadOrStore(lockKey, &sync.Mutex{})
 				mu := muIface.(*sync.Mutex)
 				mu.Lock()
-				log.Infof("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
+				logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
 				log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
 				handler(msg, consumer)
 				mu.Unlock()
@@ -189,4 +196,14 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 	}()
 
 	consumeMessagesUntilCancelled(ctx, consumer, consumer, handler, log)
+}
+
+func logKafkaMessageReceived(log *logrus.Entry, msgCount *uint64, batchStart *time.Time, msg *kafka.Message) {
+	log.Debugf("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
+	n := atomic.AddUint64(msgCount, 1)
+	if n%kafkaMessageSampleInterval == 0 {
+		elapsed := time.Since(*batchStart)
+		log.Infof("Processed %d kafka messages in %s", kafkaMessageSampleInterval, elapsed.Round(time.Millisecond))
+		*batchStart = time.Now()
+	}
 }
