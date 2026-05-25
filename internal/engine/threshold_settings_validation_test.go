@@ -23,6 +23,34 @@ func TestValidateSizingThresholdUpdate_ValidInput(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateThresholdSettingsUpdate_RejectsUnknownField(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-unknown-field"
+
+	err := ValidateThresholdSettingsUpdate(ctx, pool, orgID, "container",
+		json.RawMessage(`{"not_a_valid_threshold_field": 0.99}`))
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "unknown field")
+}
+
+func TestValidateThresholdSettingsUpdate_RejectsLockedFieldsKey(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-locked-key"
+
+	err := ValidateThresholdSettingsUpdate(ctx, pool, orgID, "container",
+		json.RawMessage(`{"locked_fields": ["cpu_cost_percentile"]}`))
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "unknown field")
+}
+
 func TestValidateSizingThresholdUpdate_OutOfRange(t *testing.T) {
 	current := DefaultContainerSizingThresholds()
 	err := validateSizingThresholdUpdate(SizingThresholdSettingsUpdate{
@@ -187,5 +215,5 @@ func TestValidateNodeThresholds_OvercommitBelowUtilization(t *testing.T) {
 }
 
 func ptrFloat64(v float64) *float64 { return &v }
-func ptrInt64(v int64) *int64     { return &v }
-func ptrInt(v int) *int           { return &v }
+func ptrInt64(v int64) *int64       { return &v }
+func ptrInt(v int) *int             { return &v }

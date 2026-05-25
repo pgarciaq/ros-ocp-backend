@@ -53,16 +53,16 @@ type SnapshotSettingsUpdate struct {
 
 // envLockMap maps env variable names to JSON field names.
 var envLockMap = map[string]string{
-	"ROS_SNAPSHOT_ORPHAN_AGE_DAYS":      "orphan_age_days",
-	"ROS_SNAPSHOT_NEVER_RESTORED_DAYS":  "never_restored_days",
-	"ROS_SNAPSHOT_STALE_DAYS":           "stale_days",
-	"ROS_SNAPSHOT_REDUNDANT_THRESHOLD":  "redundant_threshold",
-	"ROS_SNAPSHOT_COST_PER_GIB_MONTH":   "cost_per_gib_month_usd",
+	"ROS_SNAPSHOT_ORPHAN_AGE_DAYS":     "orphan_age_days",
+	"ROS_SNAPSHOT_NEVER_RESTORED_DAYS": "never_restored_days",
+	"ROS_SNAPSHOT_STALE_DAYS":          "stale_days",
+	"ROS_SNAPSHOT_REDUNDANT_THRESHOLD": "redundant_threshold",
+	"ROS_SNAPSHOT_COST_PER_GIB_MONTH":  "cost_per_gib_month_usd",
 }
 
 // GetLockedFields returns the list of fields locked by environment variables.
 func GetLockedFields() []string {
-	var locked []string
+	locked := make([]string, 0)
 	for envKey, fieldName := range envLockMap {
 		if _, ok := os.LookupEnv(envKey); ok {
 			locked = append(locked, fieldName)
@@ -284,4 +284,3 @@ func lockedFieldsInUpdate(update SnapshotSettingsUpdate) []string {
 	}
 	return locked
 }
-

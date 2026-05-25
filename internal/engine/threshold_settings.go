@@ -749,7 +749,7 @@ func pvcEnvLockMap() map[string]string {
 }
 
 func lockedFieldsFromEnvMap(lockMap map[string]string) []string {
-	var locked []string
+	locked := make([]string, 0)
 	for envKey, fieldName := range lockMap {
 		if _, ok := os.LookupEnv(envKey); ok {
 			locked = append(locked, fieldName)

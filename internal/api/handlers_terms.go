@@ -24,7 +24,7 @@ type termSettingsItem struct {
 
 type termSettingsResponse struct {
 	RecommendationType string                     `json:"recommendation_type"`
-	Terms              []termSettingsResponseItem  `json:"terms"`
+	Terms              []termSettingsResponseItem `json:"terms"`
 }
 
 type termSettingsResponseItem struct {

@@ -61,6 +61,99 @@ func (v *fieldValidator) result() error {
 	return &ThresholdValidationError{Errors: v.errs}
 }
 
+var thresholdAllowedFields = map[string]map[string]struct{}{
+	"container": sizingThresholdAllowedFields(),
+	"namespace": sizingThresholdAllowedFields(),
+	"node":      nodeThresholdAllowedFields(),
+	"gpu":       gpuThresholdAllowedFields(),
+	"pvc":       pvcThresholdAllowedFields(),
+}
+
+func sizingThresholdAllowedFields() map[string]struct{} {
+	return map[string]struct{}{
+		"cpu_cost_percentile":       {},
+		"cpu_perf_percentile":       {},
+		"mem_cost_percentile":       {},
+		"mem_perf_percentile":       {},
+		"min_margin":                {},
+		"max_margin":                {},
+		"limit_multiplier":          {},
+		"cpu_floor_mc":              {},
+		"idle_cpu_threshold_mc":     {},
+		"idle_mem_threshold_kib":    {},
+		"mem_trend_slope_threshold": {},
+		"low_confidence_threshold":  {},
+	}
+}
+
+func nodeThresholdAllowedFields() map[string]struct{} {
+	return map[string]struct{}{
+		"underutil_threshold":                    {},
+		"overcommit_threshold":                   {},
+		"allocatable_factor":                     {},
+		"stranded_imbalance_threshold":           {},
+		"ema_alpha":                              {},
+		"cost_target_utilization":                {},
+		"perf_target_utilization":                {},
+		"perf_consolidation_headroom_multiplier": {},
+		"trend_min_days":                         {},
+	}
+}
+
+func gpuThresholdAllowedFields() map[string]struct{} {
+	return map[string]struct{}{
+		"idle_threshold":                   {},
+		"underutilized_sm_threshold":       {},
+		"underutilized_tensor_threshold":   {},
+		"membound_dram_threshold":          {},
+		"membound_tensor_threshold":          {},
+		"fb_headroom_factor":               {},
+		"compute_bound_dram_threshold":     {},
+		"mig_fb_percentile":                {},
+		"confidence_days_tier1":            {},
+		"confidence_days_tier2":            {},
+		"confidence_days_tier3":            {},
+		"spike_ratio_threshold":            {},
+		"spike_confidence_penalty":         {},
+		"no_profiling_confidence_factor":   {},
+		"timeslicing_majority_threshold":   {},
+		"timeslicing_min_replicas":         {},
+		"timeslicing_max_replicas":         {},
+		"timeslicing_base_penalty":         {},
+		"timeslicing_impacted_weight":      {},
+		"node_freshness_days":              {},
+	}
+}
+
+func pvcThresholdAllowedFields() map[string]struct{} {
+	return map[string]struct{}{
+		"oversized_threshold":         {},
+		"near_full_threshold":         {},
+		"min_trend_days":              {},
+		"recommended_size_multiplier": {},
+		"min_recommended_gib":         {},
+		"days_to_full_alert":          {},
+	}
+}
+
+func validateThresholdUpdateKeys(recType string, rawUpdate json.RawMessage) error {
+	allowed, ok := thresholdAllowedFields[recType]
+	if !ok {
+		return fmt.Errorf("unsupported recommendation_type %q", recType)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(rawUpdate, &keys); err != nil {
+		return fmt.Errorf("invalid request body: %w", err)
+	}
+	v := fieldValidator{}
+	for key := range keys {
+		if _, ok := allowed[key]; !ok {
+			v.errs = append(v.errs, fmt.Sprintf("unknown field %q", key))
+		}
+	}
+	return v.result()
+}
+
 // ValidateThresholdSettingsUpdate checks incoming PUT fields against allowed ranges
 // and cross-field constraints before locked-field enforcement.
 func ValidateThresholdSettingsUpdate(
@@ -69,6 +162,9 @@ func ValidateThresholdSettingsUpdate(
 	orgID, recType string,
 	rawUpdate json.RawMessage,
 ) error {
+	if err := validateThresholdUpdateKeys(recType, rawUpdate); err != nil {
+		return err
+	}
 	switch recType {
 	case "container", "namespace":
 		var update SizingThresholdSettingsUpdate
