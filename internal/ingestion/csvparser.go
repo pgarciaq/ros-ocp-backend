@@ -48,54 +48,62 @@ func BytesToKiB(s string) (int64, error) {
 // ValidateMetricRow checks that all numeric fields in a MetricRow are
 // non-negative. Returns an error describing the first invalid field found.
 func ValidateMetricRow(row MetricRow) error {
-	checks := []struct {
-		name string
-		val  int64
-	}{
-		{"CPURequestMC", row.CPURequestMC},
-		{"CPULimitMC", row.CPULimitMC},
-		{"CPUUsageMC", row.CPUUsageMC},
-		{"CPUThrottleMC", row.CPUThrottleMC},
-		{"MemRequestKiB", row.MemRequestKiB},
-		{"MemLimitKiB", row.MemLimitKiB},
-		{"MemUsageKiB", row.MemUsageKiB},
-		{"MemRSSKiB", row.MemRSSKiB},
-		{"OOMCount", row.OOMCount},
+	if row.CPURequestMC < 0 {
+		return fmt.Errorf("ValidateMetricRow: CPURequestMC is negative (%d)", row.CPURequestMC)
 	}
-	for _, c := range checks {
-		if c.val < 0 {
-			return fmt.Errorf("ValidateMetricRow: %s is negative (%d)", c.name, c.val)
-		}
+	if row.CPULimitMC < 0 {
+		return fmt.Errorf("ValidateMetricRow: CPULimitMC is negative (%d)", row.CPULimitMC)
+	}
+	if row.CPUUsageMC < 0 {
+		return fmt.Errorf("ValidateMetricRow: CPUUsageMC is negative (%d)", row.CPUUsageMC)
+	}
+	if row.CPUThrottleMC < 0 {
+		return fmt.Errorf("ValidateMetricRow: CPUThrottleMC is negative (%d)", row.CPUThrottleMC)
+	}
+	if row.MemRequestKiB < 0 {
+		return fmt.Errorf("ValidateMetricRow: MemRequestKiB is negative (%d)", row.MemRequestKiB)
+	}
+	if row.MemLimitKiB < 0 {
+		return fmt.Errorf("ValidateMetricRow: MemLimitKiB is negative (%d)", row.MemLimitKiB)
+	}
+	if row.MemUsageKiB < 0 {
+		return fmt.Errorf("ValidateMetricRow: MemUsageKiB is negative (%d)", row.MemUsageKiB)
+	}
+	if row.MemRSSKiB < 0 {
+		return fmt.Errorf("ValidateMetricRow: MemRSSKiB is negative (%d)", row.MemRSSKiB)
+	}
+	if row.OOMCount < 0 {
+		return fmt.Errorf("ValidateMetricRow: OOMCount is negative (%d)", row.OOMCount)
 	}
 	return nil
 }
 
 // csvColumnIndex maps expected CSV header names to their column indices.
 type csvColumnIndex struct {
-	intervalStart    int
-	intervalEnd      int
-	namespace        int
-	workloadName     int
-	workloadType     int
-	containerName    int
-	pod              int
-	cpuRequest       int
-	cpuLimit         int
-	cpuUsage         int
-	cpuThrottle      int
-	memRequest       int
-	memLimit         int
-	memUsage         int
-	memRSS           int
-	oomCount         int
+	intervalStart     int
+	intervalEnd       int
+	namespace         int
+	workloadName      int
+	workloadType      int
+	containerName     int
+	pod               int
+	cpuRequest        int
+	cpuLimit          int
+	cpuUsage          int
+	cpuThrottle       int
+	memRequest        int
+	memLimit          int
+	memUsage          int
+	memRSS            int
+	oomCount          int
 	workloadPodCount  int
 	desiredReplicas   int
 	availableReplicas int
 	// Node column (optional; -1 when header absent).
 	node int
 	// Node capacity columns (optional; from cost management pod CSV).
-	nodeCapacityCPUCores  int
-	nodeCapacityMemBytes  int
+	nodeCapacityCPUCores int
+	nodeCapacityMemBytes int
 	// GPU columns (optional; -1 when header absent).
 	acceleratorModelName           int
 	acceleratorProfileName         int
@@ -282,6 +290,51 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 	}
 
 	return rows, nil
+}
+
+// forEachCSVRow parses CSV rows one at a time without retaining a full-slice copy.
+func forEachCSVRow(r io.Reader, fn func(MetricRow) error) (int, error) {
+	reader := csv.NewReader(r)
+	header, err := reader.Read()
+	if err != nil {
+		if err == io.EOF {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("ParseCSVRows: reading header: %w", err)
+	}
+
+	idx, err := buildColumnIndex(header)
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	lineNum := 1
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return count, fmt.Errorf("ParseCSVRows: reading line %d: %w", lineNum+1, err)
+		}
+		lineNum++
+
+		row, parseErr := parseRecord(record, idx)
+		if parseErr != nil {
+			logging.GetLogger().Debugf("ParseCSVRows: skipping line %d: %v", lineNum, parseErr)
+			continue
+		}
+		if valErr := ValidateMetricRow(row); valErr != nil {
+			logging.GetLogger().Debugf("ParseCSVRows: skipping line %d: %v", lineNum, valErr)
+			continue
+		}
+		if err := fn(row); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
 }
 
 // optionalParseFloat parses an optional GPU metric cell. Missing column index,

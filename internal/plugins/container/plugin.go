@@ -64,7 +64,10 @@ func (p *ContainerPlugin) SupportedCSVTypes() []string {
 }
 
 func (p *ContainerPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]ingestion.MetricRow, error) {
-	return ingestion.ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
+	return ingestion.ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID, ingestion.ParseDigestOptions{
+		EnableGPU:  plugin.EnabledFor("gpu"),
+		EnableNode: plugin.EnabledFor("node"),
+	})
 }
 
 func (p *ContainerPlugin) RetentionTables() []string {

@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
@@ -136,89 +135,29 @@ func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []Dige
 	return nil
 }
 
-// ParseAndDigestCSV parses container CSV rows with [ParseCSVRows] (which validates each row),
-// groups by container and day, upserts usage samples and daily_container_digests,
-// and returns the parsed rows for downstream ingest hooks.
-//
-// It does not run GPU or node digest upserts; callers that need the full legacy
-// pipeline should use [ProcessCSVToDigests], which wraps this function.
-func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]MetricRow, error) {
-	rows, err := ParseCSVRows(r)
+// ParseAndDigestCSV parses container CSV in a single streaming pass, groups by
+// container-day, upserts usage samples (flushed every 1000 rows) and digests.
+func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string, opts ...ParseDigestOptions) ([]MetricRow, error) {
+	var o ParseDigestOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	_, err := parseAndDigestCSVStream(ctx, pool, r, orgID, clusterUUID, o)
 	if err != nil {
-		return nil, fmt.Errorf("parse CSV: %w", err)
-	}
-	if len(rows) == 0 {
-		logging.ForOrg(orgID, clusterUUID).Info("ProcessCSVToDigests: no rows parsed")
-		return nil, nil
-	}
-
-	// Persist raw samples for boxplot computation at query time.
-	if err := EnsureSamplePartitions(ctx, pool, rows); err != nil {
-		return nil, fmt.Errorf("sample partitions: %w", err)
-	}
-	if err := upsertUsageSamples(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return nil, fmt.Errorf("upsert usage samples: %w", err)
-	}
-
-	groupedAll := GroupCSVRows(rows, orgID, clusterUUID)
-
-	var scheduleCache *bhschedule.Cache
-	if BusinessHoursAggregationEnabled() {
-		var loadErr error
-		scheduleCache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
-		if loadErr != nil {
-			return nil, fmt.Errorf("load business hours schedules: %w", err)
-		}
-		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
-			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
-				return nil, err
-			}
-		}
-	}
-	groupedBH := buildBusinessHoursGroups(rows, orgID, clusterUUID, scheduleCache)
-	grouped := mergeDigestGroups(groupedAll, groupedBH)
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d all_hours groups, %d business_hours groups",
-		len(rows), len(groupedAll), len(groupedBH))
-
-	digestKeys := make([]DigestKey, 0, len(grouped))
-	for k := range grouped {
-		digestKeys = append(digestKeys, k)
-	}
-	if err := EnsureDigestPartitions(ctx, pool, digestKeys); err != nil {
-		return nil, fmt.Errorf("digest partitions: %w", err)
-	}
-
-	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
 		return nil, err
 	}
-
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d digests",
-		len(grouped))
-
-	return rows, nil
+	return nil, nil
 }
 
 // ProcessCSVToDigests parses container CSV and upserts container digests, then always runs GPU and node
 // digest upserts. Used by CLI/tools and tests; the Kafka native path uses services.processContainerDigestFallback
 // instead so ROS_ENABLED_PLUGINS can disable GPU/node upserts when the container ingestor falls back.
 func ProcessCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
-	if err != nil {
-		return err
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-
-	if err := UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("GPU digest upsert: %w", err)
-	}
-
-	if err := UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("node digest upsert: %w", err)
-	}
-
-	return nil
+	_, err := ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID, ParseDigestOptions{
+		EnableGPU:  true,
+		EnableNode: true,
+	})
+	return err
 }
 
 // UpsertNodeDigests aggregates container rows by node and day, then writes

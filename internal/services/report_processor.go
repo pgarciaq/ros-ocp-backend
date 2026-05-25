@@ -52,24 +52,11 @@ func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Rea
 // processContainerDigestFallback mirrors container CSV ingestion when no CSVIngestor handles "container":
 // parse digests, then upsert GPU/node digest tables only for plugins enabled in ROS_ENABLED_PLUGINS / defaults.
 func processContainerDigestFallback(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ingestion.ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID)
-	if err != nil {
-		return err
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	if plugin.EnabledFor("gpu") {
-		if err := ingestion.UpsertGPUDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-			return fmt.Errorf("GPU digest upsert: %w", err)
-		}
-	}
-	if plugin.EnabledFor("node") {
-		if err := ingestion.UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
-			return fmt.Errorf("node digest upsert: %w", err)
-		}
-	}
-	return nil
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, r, orgID, clusterUUID, ingestion.ParseDigestOptions{
+		EnableGPU:  plugin.EnabledFor("gpu"),
+		EnableNode: plugin.EnabledFor("node"),
+	})
+	return err
 }
 
 func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
@@ -551,8 +538,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		oldRecs = nil
 	}
 
-	engine.EnsureHistoryPartitions(ctx, pool)
-	engine.EnsureQualityPartitions(ctx, pool)
+	engine.EnsureRecommendationPartitionsAtStartup(ctx, pool)
 
 	pipelineDegraded := false
 	totalWritten := 0
