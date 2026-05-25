@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // WriteRecommendationHistory batch-inserts recommendation snapshots into
@@ -22,10 +21,17 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 	// multiplying history rows (#62).
 	nowClock := time.Now().UTC()
 	recordedAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
-	batch := &pgx.Batch{}
 
-	for _, r := range recs {
-		batch.Queue(`
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+
+		for _, r := range chunk {
+			batch.Queue(`
 			INSERT INTO recommendation_history (
 				recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				term, engine,
@@ -44,21 +50,24 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 				confidence_level = EXCLUDED.confidence_level,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				source_binary = EXCLUDED.source_binary`,
-			recordedAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-			r.Term, r.Engine,
-			r.RecCPURequestMC, r.RecCPULimitMC,
-			r.RecMemRequestKiB, r.RecMemLimitKiB,
-			r.NotificationCodes, r.ConfidenceLevel,
-			r.EstimatedSavingsCents, sourceBinary,
-		)
-	}
+				recordedAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+				r.Term, r.Engine,
+				r.RecCPURequestMC, r.RecCPULimitMC,
+				r.RecMemRequestKiB, r.RecMemLimitKiB,
+				r.NotificationCodes, r.ConfidenceLevel,
+				r.EstimatedSavingsCents, sourceBinary,
+			)
+		}
 
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range recs {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("WriteRecommendationHistory batch exec: %w", err)
+		br := pool.SendBatch(ctx, batch)
+		for range chunk {
+			if _, err := br.Exec(); err != nil {
+				br.Close()
+				return fmt.Errorf("WriteRecommendationHistory batch exec: %w", err)
+			}
+		}
+		if err := br.Close(); err != nil {
+			return fmt.Errorf("WriteRecommendationHistory batch close: %w", err)
 		}
 	}
 	return nil
@@ -67,20 +76,5 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 // EnsureHistoryPartitions creates monthly partitions for recommendation_history
 // covering the current month plus the next 2 months. Idempotent via IF NOT EXISTS.
 func EnsureHistoryPartitions(ctx context.Context, pool *pgxpool.Pool) {
-	now := time.Now().UTC()
-	for i := 0; i < 3; i++ {
-		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
-		monthEnd := monthStart.AddDate(0, 1, 0)
-		partName := fmt.Sprintf("recommendation_history_%s", monthStart.Format("200601"))
-
-		sql := fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS %s PARTITION OF recommendation_history FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
-			monthStart.Format("2006-01-02"),
-			monthEnd.Format("2006-01-02"),
-		)
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			logging.GetLogger().Warnf("EnsureHistoryPartitions: %s: %v (non-fatal)", partName, err)
-		}
-	}
+	ensureHistoryPartitions(ctx, pool)
 }
