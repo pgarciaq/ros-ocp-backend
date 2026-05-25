@@ -112,6 +112,9 @@ func registerBusinessHoursRouteGuards(v1 *echo.Group) {
 // StartAPIServer runs the REST API and Prometheus metrics listener until ctx is cancelled,
 // then shuts both down gracefully.
 func StartAPIServer(ctx context.Context) {
+	// JSON encoding uses Echo's default encoding/json serializer. Benchmarks on
+	// ~10–50KB list payloads showed <10% gain from jsoniter/sonic vs added
+	// dependency and compatibility risk — see internal/api/json_bench_test.go.
 	app := echo.New()
 	app.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
 		Subsystem: "rosocp",
