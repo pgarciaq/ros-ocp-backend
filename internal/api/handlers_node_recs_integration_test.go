@@ -286,6 +286,7 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 
 	var response model.NodeRecommendationListResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.NotEmpty(t, response.Data, "expected node recommendations in response data")
 	require.Greater(t, response.Meta.Count, 0, "should have at least one node recommendation")
 
 	nodeRec := response.Data[0]

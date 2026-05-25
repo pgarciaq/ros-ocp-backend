@@ -2,10 +2,13 @@ package testutil
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 )
 
 func sevenDaysAgo() time.Time {
@@ -262,7 +265,18 @@ func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace s
 	}
 }
 
+// gpuDigestMiB rounds frame-buffer sizes to integer MiB for gpu_container_digests.
+func gpuDigestMiB(v float64) int32 {
+	return int32(math.Round(v))
+}
+
+// gpuDigestBasisPoints converts 0.0-1.0 utilization fractions to basis points (0-10000).
+func gpuDigestBasisPoints(v float64) int32 {
+	return fixedpoint.FloatToBasisPoints(v)
+}
+
 // GPUDigestRow holds the fields for a single gpu_container_digests row.
+// Utilization metrics (tensor/DRAM/SM) are 0.0-1.0 fractions; SeedGPUDigest stores them as basis points.
 type GPUDigestRow struct {
 	IntervalStart       time.Time
 	ClusterUUID         string
@@ -311,10 +325,10 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 		DO UPDATE SET node_name = EXCLUDED.node_name`,
 		row.IntervalStart, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		row.GPUModelName, row.GPUProfileName, row.NodeName,
-		row.FBUsageMinMiB, row.FBUsageMaxMiB, row.FBUsageAvgMiB,
-		row.TensorPipeActiveMin, row.TensorPipeActiveMax, row.TensorPipeActiveAvg,
-		row.DRAMActiveMin, row.DRAMActiveMax, row.DRAMActiveAvg,
-		row.SMActiveMin, row.SMActiveMax, row.SMActiveAvg,
+		gpuDigestMiB(row.FBUsageMinMiB), gpuDigestMiB(row.FBUsageMaxMiB), gpuDigestMiB(row.FBUsageAvgMiB),
+		gpuDigestBasisPoints(row.TensorPipeActiveMin), gpuDigestBasisPoints(row.TensorPipeActiveMax), gpuDigestBasisPoints(row.TensorPipeActiveAvg),
+		gpuDigestBasisPoints(row.DRAMActiveMin), gpuDigestBasisPoints(row.DRAMActiveMax), gpuDigestBasisPoints(row.DRAMActiveAvg),
+		gpuDigestBasisPoints(row.SMActiveMin), gpuDigestBasisPoints(row.SMActiveMax), gpuDigestBasisPoints(row.SMActiveAvg),
 	)
 	if err != nil {
 		t.Fatalf("SeedGPUDigest: %v", err)
