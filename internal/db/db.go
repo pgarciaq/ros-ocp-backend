@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 
@@ -19,6 +21,11 @@ import (
 
 var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
+
+func setStatementTimeout(ctx context.Context, conn *pgconn.PgConn) error {
+	_, err := conn.Exec(ctx, "SET statement_timeout = '25s'").ReadAll()
+	return err
+}
 
 // poolAcquireTimeout bounds how long Pool.Acquire may wait when using contexts
 // produced by ContextWithAcquireTimeout. Zero disables the helper timeout.
@@ -68,7 +75,15 @@ func initDB() {
 
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	pgxCfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pgxCfg.AfterConnect = setStatementTimeout
+
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: stdlib.OpenDB(*pgxCfg),
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
@@ -116,6 +131,7 @@ func initPool() {
 	poolCfg.MaxConnLifetime = time.Duration(cfg.DBMaxConnLifetimeMins) * time.Minute
 	poolCfg.MaxConnIdleTime = time.Duration(cfg.DBMaxConnIdleTimeMins) * time.Minute
 	poolCfg.ConnConfig.DefaultQueryExecMode = parseQueryExecMode(cfg.DBStatementCacheMode)
+	poolCfg.ConnConfig.AfterConnect = setStatementTimeout
 
 	timeoutSecs := cfg.DBAcquireTimeoutSecs
 	if timeoutSecs < 0 {
