@@ -7,7 +7,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
 - Savings summary: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go)
@@ -107,6 +107,14 @@ to direct `org_id` filters where the column exists:
 | [`internal/model/recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` |
 | [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) (namespace list SQL in audit) | Namespace list subqueries |
 | History list queries in audit | `recommendation_history` (index added; query rewrite pending) |
+| [`internal/engine/recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | Multi-cluster BH digest enrichment when page spans all clusters |
+
+**Fixed in this audit:**
+
+| File | Change |
+|------|--------|
+| [`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go) | Org filter via `node_recommendations.org_id` |
+| [`node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
 
 ---
 
@@ -211,6 +219,118 @@ Source: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summ
 
 ---
 
+## Plugin-Specific Audit Results (2026-05-25)
+
+Expanded audit coverage for GPU, snapshot, business hours, term filters, and node
+utilization at `org-large` scale (200k containers, ~95k GPU digest rows, 12k
+snapshot recommendations). Times below are from `EXPLAIN ANALYZE` after seed +
+`ANALYZE` on a warm cache.
+
+### GPU MIG (`QueryGPURecommendations`)
+
+**Path:** [`internal/engine/gpu_query.go`](../../internal/engine/gpu_query.go) →
+[`GetGPUMIGRecommendations`](../../internal/api/handlers_gpu_mig.go)
+
+| Query | Time | Scan | Verdict |
+|-------|------|------|---------|
+| Per-cluster digest lookback (30 days) | ~21 ms | Seq scan on single GPU partition (~32k rows) | **Healthy** — cluster-scoped; MIG scoring runs in Go after fetch |
+
+The handler loads digests per cluster (RBAC-resolved UUIDs), then computes MIG
+profiles in memory. No `rh_accounts` join on the digest table.
+
+### GPU time-slicing (`CountNodeGPUTriples` / `ListNodeGPUTriplesPage`)
+
+**Path:** [`internal/engine/node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) →
+[`GetNodeRecommendations`](../../internal/api/handlers_node_recs.go)
+
+| Query | Time | Scan | Verdict |
+|-------|------|------|---------|
+| Count distinct (cluster, node, model) triples | ~115–157 ms | Seq scan on GPU partitions + fresh-node subquery | **Borderline** — acceptable at current seed scale; monitor at millions of GPU digest rows |
+| List triples page (LIMIT 10) | ~116–168 ms | Same | **Borderline** |
+
+**Fix applied:** Removed redundant `clusters → rh_accounts` joins from triple
+pagination SQL. Org scoping is enforced upstream via `getClustersForOrg()` +
+RBAC; the query filters `cluster_uuid = ANY($clusters)`.
+
+**Index added (000080):** `idx_gpu_digest_cluster_interval_node` on
+`(cluster_uuid, interval_start DESC, node_name)` — supports the freshness
+`HAVING MAX(interval_start)` subquery.
+
+**Future work:** The fresh-node subquery scans GPU digests twice (once for
+freshness, once for grouping). A materialized “latest node seen” table refreshed
+on ingestion would cut this to a single probe.
+
+### Snapshot staleness
+
+**Paths:** [`handlers_snapshot.go`](../../internal/api/handlers_snapshot.go) (list),
+[`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) (classify + reconcile)
+
+| Query | Time | Scan | Verdict |
+|-------|------|------|---------|
+| List org (`ORDER BY age_days DESC`) | ~0.1 ms | Index scan `idx_snapshot_recs_org_age` | **Healthy** |
+| Count org | ~1 ms | Seq scan (small table at 12k rows) | **Healthy** |
+| Classify inventory (`DISTINCT ON` fresh window) | ~0 ms | Index scan on `ingested_at` | **Healthy** |
+| Reconcile freshness gate (two `COUNT` subqueries) | ~0.3 ms | Index scan | **Healthy** |
+
+All snapshot paths already filter on denormalized `org_id`. Migration 000080 adds
+`idx_snapshot_recs_org_age` and `idx_snapshot_inventory_org_cluster_ingested`.
+
+### Business hours dual-stream
+
+**Paths:** [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go)
+(digest enrichment), container list (`dual_list_all_terms` on `recommendation_sets`)
+
+| Query | Time | Scan | Verdict |
+|-------|------|------|---------|
+| Single-cluster BH digest lookback | ~220–297 ms | Bitmap/index on lookback index | **Acceptable** — matches one cluster on a list page |
+| All-cluster BH digest (5 clusters) | ~5.6 s | Parallel seq scan on 3M digest rows | **Needs attention** — worst-case when list page spans every cluster |
+| Schedule lookup | ~0 ms | Bitmap on `business_hours_schedules` | **Healthy** |
+| Dual term rows per container (`all_hours` in `recommendation_sets`) | ~0 ms | Index scan `idx_rs_keyset_page` | **Healthy** |
+
+The enrichment query [`QueryContainerDigestsByScheduleTypeForClusters`](../../internal/engine/recommend_business_hours.go)
+loads **all** BH digest rows for every cluster present on the current list page.
+Typical pages hit 1–2 clusters (~220 ms). A page spanning all clusters in a
+large org triggers a multi-million-row scan.
+
+**Future work:** Restrict BH digest fetch to container keys on the page (namespace/
+workload/container tuple filter), or run per-cluster queries in parallel with
+smaller limits.
+
+### Term / engine filter performance
+
+Container list applies `term` and `engine` as post-`DISTINCT` filters on
+`recommendation_sets`. The keyset index
+`(org_id, namespace, workload, container_name) WHERE stale = false` does **not**
+include `term` or `engine` because pagination keys are container-level, not
+term-level.
+
+| Filter | Time | Verdict |
+|--------|------|---------|
+| `term = short/medium/long` | ~1.2–1.4 s | **Same cost as unfiltered list** — dominated by `DISTINCT` sort |
+| `engine = cost/performance` | ~1.0–1.5 s | **Same** |
+| `term = short AND engine = performance` | ~1.2 s | **Same** |
+
+Adding partial indexes per term/engine would shrink index size but would **not**
+help the list API unless the query pattern changes to filter before `DISTINCT`.
+No migration needed today; document as architectural constraint.
+
+### Node utilization (CPU/memory metrics)
+
+**Path:** [`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go)
+— distinct from GPU time-slicing and node **sizing** recommendations.
+
+| Query | Time | Scan | Verdict |
+|-------|------|------|---------|
+| Count distinct nodes | ~0.7 ms | Index-friendly after rewrite | **Healthy** |
+| List page (LIMIT 10, nested terms/engines) | ~1.9 ms | Seq scan on `node_recommendations` (4020 rows/org) | **Healthy** |
+
+**Fix applied:** Replaced `node_recommendations → clusters → rh_accounts` org
+filter with direct `WHERE nr.org_id = $1`. Migration 000080 adds
+`idx_nr_org_cluster_node (org_id, cluster_uuid, node)`.
+
+---
+
+
 ## When to Add Indexes vs Rewrite Queries
 
 | Symptom in EXPLAIN | Fix | Priority |
@@ -253,6 +373,12 @@ The audit script covers:
 - Savings summary (by plugin, by cluster)
 - History, quality, thresholds
 - MarkAdopted batch update
+- GPU MIG digest lookback (`QueryGPURecommendations`)
+- GPU time-slicing triple pagination (`CountNodeGPUTriples`, `ListNodeGPUTriplesPage`)
+- Snapshot list, classify, reconcile freshness gate
+- Business hours digest enrichment (single- and multi-cluster)
+- Term/engine filter variants on container list
+- Node utilization list (distinct from node sizing recommendations)
 
 ### 3. Red flags
 

@@ -10,7 +10,7 @@ DECLARE
     part_name   TEXT;
     parent      TEXT;
 BEGIN
-    FOREACH parent IN ARRAY ARRAY['daily_container_digests', 'daily_namespace_digests', 'daily_node_digests', 'recommendation_history', 'recommendation_quality']
+    FOREACH parent IN ARRAY ARRAY['daily_container_digests', 'daily_namespace_digests', 'daily_node_digests', 'gpu_container_digests', 'recommendation_history', 'recommendation_quality']
     LOOP
         FOR i IN -1..2 LOOP
             month_start := date_trunc('month', DATE '2026-05-01') + (i || ' months')::interval;
@@ -34,6 +34,10 @@ TRUNCATE TABLE
     daily_container_digests,
     daily_namespace_digests,
     daily_node_digests,
+    gpu_container_digests,
+    snapshot_recommendation_sets,
+    snapshot_inventory,
+    business_hours_schedules,
     recommendation_history,
     recommendation_quality,
     org_recommendation_stats,
@@ -349,11 +353,168 @@ FROM recommendation_sets
 WHERE stale = false
 GROUP BY org_id;
 
+-- GPU workloads: ~2.5%% of containers per org, 15 days of hourly-ish digests on GPU nodes
+CREATE TEMP TABLE gpu_containers AS
+SELECT DISTINCT ON (rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name)
+    rs.org_id,
+    rs.cluster_uuid,
+    rs.namespace,
+    rs.workload,
+    rs.workload_type,
+    rs.container_name,
+    ('gpu-node-' || lpad(((abs(hashtext(rs.namespace || rs.workload)) % 40) + 1)::text, 3, '0')) AS node_name,
+    CASE WHEN abs(hashtext(rs.container_name)) % 3 = 0
+        THEN 'NVIDIA A100-SXM4-40GB'
+        ELSE 'NVIDIA T4'
+    END AS gpu_model,
+    CASE WHEN abs(hashtext(rs.workload)) % 4 = 0 THEN '1g.5gb'
+         WHEN abs(hashtext(rs.workload)) % 4 = 1 THEN '2g.10gb'
+         WHEN abs(hashtext(rs.workload)) % 4 = 2 THEN '3g.20gb'
+         ELSE 'full_gpu'
+    END AS gpu_profile
+FROM recommendation_sets rs
+JOIN org_scale os ON os.org_id = rs.org_id
+WHERE rs.term = 'medium' AND rs.engine = 'cost'
+  AND (abs(hashtext(rs.namespace || rs.workload || rs.container_name)) % 40) = 0;
+
+INSERT INTO gpu_container_digests (
+    interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+    gpu_model_name, gpu_profile_name, node_name,
+    fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
+    tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
+    dram_active_min, dram_active_max, dram_active_avg,
+    sm_active_min, sm_active_max, sm_active_avg
+)
+SELECT
+    (d.dt + TIME '12:00') AT TIME ZONE 'UTC',
+    gc.cluster_uuid,
+    gc.namespace,
+    gc.workload,
+    gc.workload_type,
+    gc.container_name,
+    gc.gpu_model,
+    gc.gpu_profile,
+    gc.node_name,
+    512 + (abs(hashtext(gc.container_name || d.dt::text)) % 2048),
+    1024 + (abs(hashtext(gc.workload || d.dt::text)) % 4096),
+    768 + (abs(hashtext(gc.namespace || d.dt::text)) % 3072),
+    0.05 + (abs(hashtext(gc.container_name)) % 20) / 100.0,
+    0.15 + (abs(hashtext(gc.workload)) % 25) / 100.0,
+    0.10 + (abs(hashtext(gc.namespace)) % 15) / 100.0,
+    0.08 + (abs(hashtext(gc.container_name || 'd')) % 12) / 100.0,
+    0.20 + (abs(hashtext(gc.workload || 'd')) % 18) / 100.0,
+    0.12 + (abs(hashtext(gc.namespace || 'd')) % 10) / 100.0,
+    0.04 + (abs(hashtext(gc.container_name || 's')) % 15) / 100.0,
+    0.18 + (abs(hashtext(gc.workload || 's')) % 20) / 100.0,
+    0.09 + (abs(hashtext(gc.namespace || 's')) % 12) / 100.0
+FROM gpu_containers gc
+CROSS JOIN generate_series(DATE '2026-05-10', DATE '2026-05-24', '1 day') d(dt);
+
+UPDATE recommendation_sets rs
+SET has_gpu = TRUE,
+    gpu_model_name = gc.gpu_model,
+    gpu_classification = CASE
+        WHEN gc.gpu_profile = 'full_gpu' THEN 'underutilized'
+        ELSE 'mig_candidate'
+    END
+FROM gpu_containers gc
+WHERE rs.org_id = gc.org_id
+  AND rs.cluster_uuid = gc.cluster_uuid
+  AND rs.namespace = gc.namespace
+  AND rs.workload = gc.workload
+  AND rs.container_name = gc.container_name;
+
+-- Snapshot recommendations and matching fresh inventory
+INSERT INTO snapshot_recommendation_sets (
+    org_id, cluster_uuid, namespace, snapshot_name, source_pvc_name,
+    volume_snapshot_class, storageclass, creation_timestamp,
+    restore_size_bytes, age_days, source_pvc_exists, restored_pvc_count,
+    managed_by, recommendation_type, estimated_monthly_cost_usd, notification_codes, updated_at
+)
+SELECT
+    os.org_id,
+    cm.cluster_uuid,
+    'ns-' || lpad(((s.n - 1) % os.namespaces + 1)::text, 4, '0'),
+    'snap-' || lpad(s.n::text, 6, '0'),
+    'pvc-' || lpad(((s.n - 1) % 500 + 1)::text, 5, '0'),
+    'csi-snapclass',
+    'gp3',
+    TIMESTAMPTZ '2026-05-24 12:00:00+00' - ((s.n % 180) || ' days')::interval,
+    (10 + (s.n % 500))::bigint * 1073741824,
+    1 + (s.n % 180),
+    (s.n % 5 != 0),
+    (s.n % 7),
+    CASE WHEN s.n % 10 = 0 THEN 'Velero' ELSE '' END,
+    (ARRAY['active', 'stale', 'orphaned', 'redundant', 'never_restored'])[1 + (s.n % 5)],
+    0.05 * (10 + (s.n % 500)),
+    ARRAY[(31 + (s.n % 5))::smallint],
+    TIMESTAMPTZ '2026-05-24 12:00:00+00'
+FROM org_scale os
+JOIN generate_series(1, CASE os.org_id WHEN 'org-small' THEN 200 WHEN 'org-medium' THEN 2000 ELSE 10000 END) s(n) ON TRUE
+JOIN cluster_map cm ON cm.org_id = os.org_id AND (s.n - 1) % cm.cluster_count = cm.cluster_idx;
+
+INSERT INTO snapshot_inventory (
+    ingested_at, org_id, cluster_uuid, namespace, snapshot_name,
+    source_pvc_name, volume_snapshot_class, storageclass,
+    creation_timestamp, restore_size_bytes, source_pvc_exists, restored_pvc_count, labels
+)
+SELECT
+    TIMESTAMPTZ '2026-05-24 11:00:00+00',
+    srs.org_id,
+    srs.cluster_uuid,
+    srs.namespace,
+    srs.snapshot_name,
+    srs.source_pvc_name,
+    srs.volume_snapshot_class,
+    srs.storageclass,
+    srs.creation_timestamp,
+    srs.restore_size_bytes,
+    srs.source_pvc_exists,
+    srs.restored_pvc_count,
+    '{}'::jsonb
+FROM snapshot_recommendation_sets srs
+WHERE srs.org_id = 'org-large'
+  AND (abs(hashtext(srs.snapshot_name)) % 20) != 0;
+
+-- Business hours schedules (org default + per-cluster overrides for org-large)
+INSERT INTO business_hours_schedules (
+    org_id, cluster_uuid, namespace, enabled, timezone,
+    start_time, end_time, days, off_hours_weight, updated_at
+)
+SELECT
+    'org-large',
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    '',
+    TRUE,
+    'America/New_York',
+    TIME '09:00',
+    TIME '17:00',
+    ARRAY['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    0.0,
+    TIMESTAMPTZ '2026-05-24 12:00:00+00'
+UNION ALL
+SELECT
+    'org-large',
+    cm.cluster_uuid,
+    '',
+    TRUE,
+    'America/New_York',
+    TIME '08:00',
+    TIME '18:00',
+    ARRAY['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    0.0,
+    TIMESTAMPTZ '2026-05-24 12:00:00+00'
+FROM cluster_map cm
+WHERE cm.org_id = 'org-large';
+
 ANALYZE recommendation_sets;
 ANALYZE namespace_recommendation_sets;
 ANALYZE node_recommendations;
 ANALYZE pvc_recommendation_sets;
 ANALYZE daily_container_digests;
 ANALYZE daily_namespace_digests;
+ANALYZE gpu_container_digests;
+ANALYZE snapshot_recommendation_sets;
+ANALYZE snapshot_inventory;
 ANALYZE recommendation_history;
 ANALYZE org_recommendation_stats;

@@ -215,9 +215,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 	cases = append(cases, queryCase{"node", "list_nodes_for_cluster", orgLarge, `
 		WITH filtered AS (
 			SELECT nr.* FROM node_recommendations nr
-			JOIN clusters c ON nr.cluster_uuid::text = c.cluster_uuid::text
-			JOIN rh_accounts a ON c.tenant_id = a.id
-			WHERE a.org_id = $1 AND nr.cluster_uuid::text = ANY($2) AND nr.cluster_uuid = $3
+			WHERE nr.org_id = $1 AND nr.cluster_uuid::text = ANY($2) AND nr.cluster_uuid = $3
 		),
 		node_page AS (
 			SELECT f.cluster_uuid, f.node,
@@ -303,8 +301,114 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 			[]any{orgLarge, largeCluster, time.Now().UTC(), int16(3), nsArr, wlArr, cnArr}})
 	}
 
-	// --- GORM native list (actual code path) ---
-	_ = db // used below via model package
+	gpuStart := "2026-04-25"
+	gpuEnd := "2026-05-24"
+	gpuCutoff := time.Now().UTC().Add(-7 * 24 * time.Hour)
+
+	// --- GPU MIG (QueryGPURecommendations per cluster) ---
+	cases = append(cases, queryCase{"gpu_mig", "digest_lookback_cluster", orgLarge, `
+		SELECT interval_start, namespace, workload, container_name,
+			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
+			COALESCE(node_name, ''),
+			COALESCE(fb_usage_min_mib, 0), COALESCE(fb_usage_max_mib, 0), COALESCE(fb_usage_avg_mib, 0),
+			COALESCE(tensor_pipe_active_min, 0), COALESCE(tensor_pipe_active_max, 0), COALESCE(tensor_pipe_active_avg, 0),
+			COALESCE(dram_active_min, 0), COALESCE(dram_active_max, 0), COALESCE(dram_active_avg, 0),
+			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0)
+		FROM gpu_container_digests
+		WHERE cluster_uuid = $1
+		  AND interval_start >= $2 AND interval_start <= $3
+		ORDER BY namespace, workload, container_name, interval_start`,
+		[]any{largeCluster, gpuStart, gpuEnd}})
+
+	// --- GPU time-slicing triple pagination ---
+	cases = append(cases, queryCase{"gpu_timeslicing", "count_triples", orgLarge, gpuTripleCountSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff}})
+	cases = append(cases, queryCase{"gpu_timeslicing", "list_triples_page", orgLarge, gpuTripleListSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff, 10, 0}})
+
+	// --- Snapshot staleness ---
+	cases = append(cases, queryCase{"snapshot", "list_org", orgLarge, `
+		SELECT cluster_uuid, namespace, snapshot_name, recommendation_type, age_days
+		FROM snapshot_recommendation_sets
+		WHERE org_id = $1
+		ORDER BY age_days DESC LIMIT 20 OFFSET 0`, []any{orgLarge}})
+	cases = append(cases, queryCase{"snapshot", "count_org", orgLarge, `
+		SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1`, []any{orgLarge}})
+	cases = append(cases, queryCase{"snapshot", "classify_inventory", orgLarge, `
+		SELECT DISTINCT ON (namespace, snapshot_name)
+			namespace, snapshot_name, source_pvc_name,
+			volume_snapshot_class, storageclass, creation_timestamp,
+			restore_size_bytes, source_pvc_exists, restored_pvc_count, labels
+		FROM snapshot_inventory
+		WHERE org_id = $1 AND cluster_uuid = $2
+			AND ingested_at >= NOW() - (6 * INTERVAL '1 hour')
+		ORDER BY namespace, snapshot_name, ingested_at DESC`, []any{orgLarge, largeCluster}})
+	cases = append(cases, queryCase{"snapshot", "reconcile_freshness_gate", orgLarge, `
+		SELECT
+			(SELECT COUNT(*) FROM snapshot_inventory
+			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
+			   AND ingested_at >= NOW() - (6 * INTERVAL '1 hour')),
+			(SELECT COUNT(*) FROM snapshot_inventory
+			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
+			   AND ingested_at >= NOW() - (48 * INTERVAL '1 hour'))`, []any{orgLarge, largeCluster}})
+
+	// --- Business hours dual-stream ---
+	cases = append(cases, queryCase{"business_hours", "digest_single_cluster_bh", orgLarge, `
+		SELECT bucket_date, namespace, workload, container_name
+		FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid
+		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = 'business_hours'
+		ORDER BY namespace, workload, workload_type, container_name, bucket_date`,
+		[]any{orgLarge, largeCluster, startDate, endDate}})
+	cases = append(cases, queryCase{"business_hours", "digest_multi_cluster_bh", orgLarge, `
+		SELECT bucket_date, cluster_uuid::text, namespace, workload, container_name
+		FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
+		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = 'business_hours'
+		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`,
+		[]any{orgLarge, clustersLarge, startDate, endDate}})
+	cases = append(cases, queryCase{"business_hours", "schedule_lookup", orgLarge, `
+		SELECT org_id, cluster_uuid, namespace, enabled, timezone, start_time, end_time
+		FROM business_hours_schedules
+		WHERE org_id = $1`, []any{orgLarge}})
+	cases = append(cases, queryCase{"business_hours", "dual_list_all_terms", orgLarge, `
+		SELECT rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine
+		FROM recommendation_sets rs
+		WHERE rs.org_id = $1 AND rs.stale = false
+		  AND rs.namespace = $2 AND rs.workload = $3 AND rs.container_name = $4
+		ORDER BY rs.term, rs.engine`, func() []any {
+		if len(sampleContainers) == 0 {
+			return []any{orgLarge, "", "", ""}
+		}
+		return []any{orgLarge, sampleContainers[0][0], sampleContainers[0][1], sampleContainers[0][2]}
+	}()})
+
+	// --- Term / engine filters ---
+	for _, tc := range []struct {
+		name   string
+		filter string
+	}{
+		{"term_short", "rs.term = 'short'"},
+		{"term_medium", "rs.term = 'medium'"},
+		{"term_long", "rs.term = 'long'"},
+		{"engine_cost", "rs.engine = 'cost'"},
+		{"engine_performance", "rs.engine = 'performance'"},
+		{"term_short_engine_performance", "rs.term = 'short' AND rs.engine = 'performance'"},
+	} {
+		sql, args := nativeListSQL(orgLarge, limit, 0, "", "", tc.filter, true, "", "", "")
+		cases = append(cases, queryCase{"term_filter", tc.name, orgLarge, sql, args})
+	}
+
+	// --- Node utilization (CPU/memory metrics, not sizing recs) ---
+	cases = append(cases, queryCase{"node_utilization", "count_distinct_nodes", orgLarge, `
+		SELECT COUNT(*) FROM (
+			SELECT DISTINCT nr.cluster_uuid, nr.node
+			FROM node_recommendations nr
+			WHERE nr.org_id = $1 AND nr.cluster_uuid::text = ANY($2)
+		) node_keys`, []any{orgLarge, clustersLarge}})
+	cases = append(cases, queryCase{"node_utilization", "list_page", orgLarge, nodeUtilListSQL(), []any{orgLarge, clustersLarge, "medium", "cost", 10, 0}})
+
+	_ = db // GORM path available via model package
 
 	return cases
 }
@@ -344,9 +448,7 @@ func nativeListSQL(orgID string, lim, offset int, clusterFilter, nsFilter, wtFil
 			FROM (
 				SELECT DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name
 				FROM recommendation_sets rs
-				JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid
-				JOIN rh_accounts ra ON ra.id = c.tenant_id
-				WHERE ra.org_id = $1%s%s
+				WHERE rs.org_id = $1%s%s
 			) dc
 			ORDER BY dc.namespace, dc.workload, dc.container_name%s
 		) page ON page.cluster_uuid = rs.cluster_uuid
@@ -422,6 +524,69 @@ func fleetByClusterSQL() string {
 		ORDER BY 2 DESC`
 }
 
+func gpuTripleCountSQL() string {
+	return `
+SELECT COUNT(*) FROM (
+  SELECT g.cluster_uuid, g.node_name, g.gpu_model_name
+  FROM gpu_container_digests g
+  INNER JOIN (
+    SELECT g3.cluster_uuid, g3.node_name
+    FROM gpu_container_digests g3
+    WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+      AND g3.cluster_uuid::text = ANY($3::text[])
+    GROUP BY g3.cluster_uuid, g3.node_name
+    HAVING MAX(g3.interval_start) >= $6::timestamptz
+  ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
+  WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+    AND g.cluster_uuid::text = ANY($3::text[])
+    AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
+    AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
+  GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
+) sub`
+}
+
+func gpuTripleListSQL() string {
+	return `
+SELECT g.cluster_uuid::text, g.node_name, g.gpu_model_name
+FROM gpu_container_digests g
+INNER JOIN (
+  SELECT g3.cluster_uuid, g3.node_name
+  FROM gpu_container_digests g3
+  WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+    AND g3.cluster_uuid::text = ANY($3::text[])
+  GROUP BY g3.cluster_uuid, g3.node_name
+  HAVING MAX(g3.interval_start) >= $6::timestamptz
+) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
+WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+  AND g.cluster_uuid::text = ANY($3::text[])
+  AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
+  AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
+GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
+ORDER BY g.node_name ASC NULLS LAST, g.cluster_uuid::text ASC, g.gpu_model_name ASC
+LIMIT $7 OFFSET $8`
+}
+
+func nodeUtilListSQL() string {
+	return `
+		WITH filtered AS (
+			SELECT nr.* FROM node_recommendations nr
+			WHERE nr.org_id = $1 AND nr.cluster_uuid::text = ANY($2)
+		),
+		node_page AS (
+			SELECT f.cluster_uuid, f.node,
+				MAX(CASE WHEN f.term = $3 AND f.engine = $4
+					THEN f.estimated_monthly_savings_usd END) AS sort_savings
+			FROM filtered f
+			GROUP BY f.cluster_uuid, f.node
+			ORDER BY sort_savings DESC NULLS LAST, f.node ASC
+			LIMIT $5 OFFSET $6
+		)
+		SELECT f.node, f.cluster_uuid, f.term, f.engine
+		FROM filtered f
+		INNER JOIN node_page np ON f.cluster_uuid = np.cluster_uuid AND f.node = np.node
+		ORDER BY np.sort_savings DESC NULLS LAST, f.node, f.term, f.engine`
+}
+
 func runExplain(ctx context.Context, pool *pgxpool.Pool, qc queryCase) queryResult {
 	r := queryResult{queryCase: qc}
 	rows, err := pool.Query(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) "+qc.SQL, qc.Args...)
@@ -485,7 +650,8 @@ func analyzeIssues(r *queryResult, plan string) {
 
 func isLargeTable(name string) bool {
 	large := []string{"recommendation_sets", "daily_container_digests", "recommendation_history",
-		"namespace_recommendation_sets", "daily_namespace_digests", "node_recommendations", "pvc_recommendation_sets"}
+		"namespace_recommendation_sets", "daily_namespace_digests", "node_recommendations", "pvc_recommendation_sets",
+		"gpu_container_digests", "snapshot_recommendation_sets", "snapshot_inventory"}
 	for _, t := range large {
 		if strings.HasPrefix(name, t) {
 			return true
@@ -625,6 +791,7 @@ func printCounts(ctx context.Context, pool *pgxpool.Pool) {
 	tables := []string{
 		"recommendation_sets", "namespace_recommendation_sets", "node_recommendations",
 		"pvc_recommendation_sets", "daily_container_digests", "daily_namespace_digests",
+		"gpu_container_digests", "snapshot_recommendation_sets", "snapshot_inventory",
 		"recommendation_history", "org_recommendation_stats",
 	}
 	fmt.Println("\nTable row counts:")

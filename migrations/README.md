@@ -69,3 +69,23 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ns_org_updated
 ```
 
 Then run `./rosocp db migrate up`; migration `000079` will skip creating indexes that already exist.
+
+### Migration 000080 (plugin query indexes)
+
+Indexes for GPU time-slicing, snapshot list/classify, and node utilization paths. For **large** deployments, run as a pre-migration manual step:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gpu_digest_cluster_interval_node
+    ON gpu_container_digests (cluster_uuid, interval_start DESC, node_name);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_snapshot_recs_org_age
+    ON snapshot_recommendation_sets (org_id, age_days DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_snapshot_inventory_org_cluster_ingested
+    ON snapshot_inventory (org_id, cluster_uuid, ingested_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_nr_org_cluster_node
+    ON node_recommendations (org_id, cluster_uuid, node);
+```
+
+Then run `./rosocp db migrate up`; migration `000080` will skip creating indexes that already exist.

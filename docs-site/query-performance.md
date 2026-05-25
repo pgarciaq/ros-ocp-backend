@@ -99,6 +99,29 @@ eliminate the DISTINCT sort entirely.
 
 ---
 
+## Plugin Query Paths (2026 audit expansion)
+
+The explain-audit script now covers GPU MIG, GPU time-slicing, snapshot
+staleness, business-hours enrichment, term/engine filters, and node utilization.
+See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
+for full plans and timings.
+
+| Plugin | Typical latency (org-large) | Status |
+|--------|----------------------------|--------|
+| GPU MIG digest fetch | ~21 ms | Healthy |
+| GPU time-slicing triple pagination | ~115–170 ms | Borderline — index added in migration 000080 |
+| Snapshot list / classify / reconcile | < 3 ms | Healthy — migration 000080 |
+| BH digest (single cluster) | ~220 ms | Acceptable |
+| BH digest (all clusters on page) | ~5 s worst case | Restrict to page container keys (future) |
+| Term/engine list filters | ~1.2 s | DISTINCT-bound; keyset index omits term/engine by design |
+| Node utilization list | ~2 ms | Healthy — `org_id` rewrite + migration 000080 |
+
+**Query rewrites in this pass:** node utilization and GPU triple pagination no
+longer join through `rh_accounts` when `org_id` or a pre-scoped cluster list is
+available.
+
+---
+
 ## Savings Aggregation
 
 The fleet savings summary runs four correlated subqueries (containers, nodes,

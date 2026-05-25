@@ -175,9 +175,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	baseFrom := `
 		FROM node_recommendations nr
-		JOIN clusters c ON nr.cluster_uuid::text = c.cluster_uuid::text
-		JOIN rh_accounts a ON c.tenant_id = a.id
-		WHERE a.org_id = $1 AND nr.cluster_uuid::text = ANY($2)`
+		WHERE nr.org_id = $1 AND nr.cluster_uuid::text = ANY($2)`
 
 	args := []interface{}{orgID, allowedClusters}
 	argIdx := 3
