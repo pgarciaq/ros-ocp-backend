@@ -20,6 +20,14 @@ import (
 
 const thresholdRecalcMaxConcurrent = 3
 
+func thresholdRecalcConcurrency() int {
+	n := config.GetConfig().ThresholdRecalcConcurrency
+	if n <= 0 {
+		return thresholdRecalcMaxConcurrent
+	}
+	return n
+}
+
 var (
 	thresholdRecalculationTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -104,15 +112,39 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 		return
 	}
 
-	sem := make(chan struct{}, thresholdRecalcMaxConcurrent)
+	sem := make(chan struct{}, thresholdRecalcConcurrency())
 	var wg sync.WaitGroup
 	var processed int
+	var skipped int
 	var mu sync.Mutex
+
+	currentHash, hashErr := computeThresholdSettingsHash(ctx, pool, orgID, recType)
+	if hashErr != nil {
+		log.WithFields(map[string]interface{}{
+			"msg":                 "threshold recalculation hash failed",
+			"recommendation_type": recType,
+			"error":               hashErr.Error(),
+		}).Warn("unable to compute threshold hash; recalculating all clusters")
+		currentHash = ""
+	}
 
 	for _, clusterUUID := range clusters {
 		wg.Add(1)
 		go func(clusterID string) {
 			defer wg.Done()
+			if currentHash != "" {
+				skip, err := shouldSkipClusterThresholdRecalc(ctx, pool, orgID, clusterID, recType, currentHash)
+				if err != nil {
+					logging.ForOrg(orgID, clusterID).Warnf("threshold recalc skip check failed: %v", err)
+				} else if skip {
+					mu.Lock()
+					skipped++
+					mu.Unlock()
+					thresholdRecalculationTotal.WithLabelValues(orgID, recType, "skipped").Inc()
+					return
+				}
+			}
+
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -128,6 +160,11 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 			mu.Lock()
 			processed++
 			mu.Unlock()
+			if currentHash != "" {
+				if err := setClusterRecalcHash(ctx, pool, orgID, clusterID, recType, currentHash); err != nil {
+					logging.ForOrg(orgID, clusterID).Warnf("threshold recalc hash persist failed: %v", err)
+				}
+			}
 			thresholdRecalculationTotal.WithLabelValues(orgID, recType, "success").Inc()
 		}(clusterUUID)
 	}
@@ -137,6 +174,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 		"msg":                 "threshold recalculation completed",
 		"recommendation_type": recType,
 		"clusters_processed":  processed,
+		"clusters_skipped":    skipped,
 		"duration_ms":         time.Since(started).Milliseconds(),
 	}).Info("threshold recalculation completed")
 }
