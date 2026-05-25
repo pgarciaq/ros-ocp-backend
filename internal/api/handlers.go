@@ -90,10 +90,10 @@ func GetRecommendationSetList(c echo.Context) error {
 				if r := recover(); r != nil {
 					generationErr = fmt.Errorf("panic in CSV generation goroutine: %v", r)
 				}
-			if generationErr != nil {
-				_ = pipeWriter.CloseWithError(generationErr)
-				hlog.Errorf("error during CSV generation: %v", generationErr)
-			} else {
+				if generationErr != nil {
+					_ = pipeWriter.CloseWithError(generationErr)
+					hlog.Errorf("error during CSV generation: %v", generationErr)
+				} else {
 					_ = pipeWriter.Close() // graceful closure
 				}
 			}()
@@ -820,14 +820,15 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	var met time.Time
 
 	if pool != nil {
+		termNames := make([]string, 0, len(result.Recommendations))
 		for termKey := range result.Recommendations {
-			p, err := model.AssembleBoxplots(ctx, pool, key, termKey, orgID)
-			if err != nil {
-				log.Warnf("boxplot assembly failed for container %s/%s term %s: %v", key.Namespace, key.ContainerName, termKey, err)
-			}
-			if p != nil {
-				plots[termKey] = p
-			}
+			termNames = append(termNames, termKey)
+		}
+		batchPlots, err := model.AssembleAllTermBoxplots(ctx, pool, key, termNames, orgID)
+		if err != nil {
+			log.Warnf("boxplot assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
+		} else {
+			plots = batchPlots
 		}
 		met, _ = model.MonitoringEndTime(ctx, pool, key)
 	}
@@ -855,17 +856,18 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 			Namespace:   result.Project,
 		}
 
+		termNames := make([]string, 0, len(result.Recommendations))
 		for termKey := range result.Recommendations {
 			if termKey == "monitoring_end_time" {
 				continue
 			}
-			p, err := model.AssembleNamespaceBoxplots(ctx, pool, key, termKey, orgID)
-			if err != nil {
-				log.Warnf("namespace boxplot assembly failed for %s/%s term %s: %v", key.ClusterUUID, key.Namespace, termKey, err)
-			}
-			if p != nil {
-				plots[termKey] = p
-			}
+			termNames = append(termNames, termKey)
+		}
+		batchPlots, err := model.AssembleAllTermNamespaceBoxplots(ctx, pool, key, termNames, orgID)
+		if err != nil {
+			log.Warnf("namespace boxplot assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
+		} else {
+			plots = batchPlots
 		}
 
 		met, _ = model.NamespaceMonitoringEndTime(ctx, pool, key)

@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -231,6 +232,111 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	}, nil
 }
 
+// AssembleAllTermBoxplots computes boxplots for multiple terms in a single query (UNION ALL).
+func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+	if pool == nil || len(termNames) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+
+	end := time.Now().UTC()
+	var unionParts []string
+	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.ContainerName, end}
+	argN := 7
+
+	for _, termName := range termNames {
+		tw, ok := windows[termName]
+		if !ok {
+			continue
+		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+		unionParts = append(unionParts, fmt.Sprintf(`
+			SELECT '%s' AS term_name,
+				%s AS bucket,
+				MIN(cpu_usage_mc)::float8,
+				percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				MAX(cpu_usage_mc)::float8,
+				MIN(mem_usage_kib)::float8,
+				percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				MAX(mem_usage_kib)::float8
+			FROM container_usage_samples
+			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
+			  AND workload = $4 AND container_name = $5
+			  AND sample_time >= $%d AND sample_time < $6
+			GROUP BY bucket`, termName, tw.Bucket.sql(), argN))
+		args = append(args, start)
+		argN++
+	}
+
+	if len(unionParts) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket"
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("AssembleAllTermBoxplots query: %w", err)
+	}
+	defer rows.Close()
+
+	termBucketKeys := make(map[string]string)
+	for _, termName := range termNames {
+		if tw, ok := windows[termName]; ok {
+			termBucketKeys[termName] = tw.BucketKey
+		}
+	}
+
+	out := make(map[string]*NativePlot)
+	plotsByTerm := make(map[string]map[string]NativePlotsData)
+	for rows.Next() {
+		var termName string
+		var bucket time.Time
+		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
+		var memMin, memQ1, memMed, memQ3, memMax float64
+		if err := rows.Scan(&termName, &bucket,
+			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
+			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			return nil, fmt.Errorf("AssembleAllTermBoxplots scan: %w", err)
+		}
+		bucketKeyFmt, ok := termBucketKeys[termName]
+		if !ok {
+			continue
+		}
+		if plotsByTerm[termName] == nil {
+			plotsByTerm[termName] = map[string]NativePlotsData{}
+		}
+		bucketKey := bucket.UTC().Format(bucketKeyFmt)
+		plotsByTerm[termName][bucketKey] = NativePlotsData{
+			CPUUsage: &BoxPlotDetails{
+				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
+				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
+			},
+			MemoryUsage: &BoxPlotDetails{
+				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
+				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
+			},
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("AssembleAllTermBoxplots rows: %w", err)
+	}
+
+	for termName, plotsData := range plotsByTerm {
+		if len(plotsData) == 0 {
+			continue
+		}
+		out[termName] = &NativePlot{DataPoints: len(plotsData), PlotsData: plotsData}
+	}
+	return out, nil
+}
+
 // NamespaceKey identifies a unique namespace for boxplot queries.
 type NamespaceKey struct {
 	OrgID       string
@@ -319,6 +425,107 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		DataPoints: len(plotsData),
 		PlotsData:  plotsData,
 	}, nil
+}
+
+// AssembleAllTermNamespaceBoxplots computes namespace boxplots for multiple terms in one query.
+func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+	if pool == nil || len(termNames) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+
+	end := time.Now().UTC()
+	var unionParts []string
+	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, end}
+	argN := 5
+
+	for _, termName := range termNames {
+		tw, ok := windows[termName]
+		if !ok {
+			continue
+		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+		unionParts = append(unionParts, fmt.Sprintf(`
+			SELECT '%s' AS term_name,
+				%s AS bucket,
+				MIN(cpu_usage_mc)::float8,
+				percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
+				MAX(cpu_usage_mc)::float8,
+				MIN(mem_usage_kib)::float8,
+				percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
+				MAX(mem_usage_kib)::float8
+			FROM namespace_usage_samples
+			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
+			  AND sample_time >= $%d AND sample_time < $4
+			GROUP BY bucket`, termName, tw.Bucket.sql(), argN))
+		args = append(args, start)
+		argN++
+	}
+
+	if len(unionParts) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket"
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots query: %w", err)
+	}
+	defer rows.Close()
+
+	termBucketKeys := make(map[string]string)
+	for _, termName := range termNames {
+		if tw, ok := windows[termName]; ok {
+			termBucketKeys[termName] = tw.BucketKey
+		}
+	}
+
+	out := make(map[string]*NativePlot)
+	plotsByTerm := make(map[string]map[string]NativePlotsData)
+	for rows.Next() {
+		var termName string
+		var bucket time.Time
+		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
+		var memMin, memQ1, memMed, memQ3, memMax float64
+		if err := rows.Scan(&termName, &bucket,
+			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
+			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots scan: %w", err)
+		}
+		bucketKeyFmt := termBucketKeys[termName]
+		if plotsByTerm[termName] == nil {
+			plotsByTerm[termName] = map[string]NativePlotsData{}
+		}
+		bucketKey := bucket.UTC().Format(bucketKeyFmt)
+		plotsByTerm[termName][bucketKey] = NativePlotsData{
+			CPUUsage: &BoxPlotDetails{
+				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
+				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
+			},
+			MemoryUsage: &BoxPlotDetails{
+				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
+				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
+			},
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots rows: %w", err)
+	}
+
+	for termName, plotsData := range plotsByTerm {
+		if len(plotsData) == 0 {
+			continue
+		}
+		out[termName] = &NativePlot{DataPoints: len(plotsData), PlotsData: plotsData}
+	}
+	return out, nil
 }
 
 // NamespaceMonitoringEndTime returns the most recent bucket_date from
