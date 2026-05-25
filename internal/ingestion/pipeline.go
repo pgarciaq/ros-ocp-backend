@@ -228,7 +228,7 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		smAvgSum     int64
 	}
 
-	groups := map[gpuKey]*gpuAgg{}
+	groups := make(map[gpuKey]*gpuAgg, 64)
 	for _, r := range rows {
 		if !r.HasGPU() {
 			continue

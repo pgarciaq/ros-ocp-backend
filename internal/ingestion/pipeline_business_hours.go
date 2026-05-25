@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,20 +19,31 @@ func buildBusinessHoursGroups(
 	if cache == nil {
 		return nil
 	}
-	byNS := make(map[string][]MetricRow)
+	out := make(map[DigestKey][]MetricRow, len(rows)/24+1)
 	for _, row := range rows {
-		byNS[row.Namespace] = append(byNS[row.Namespace], row)
-	}
-	out := make(map[DigestKey][]MetricRow)
-	for ns, nsRows := range byNS {
-		sched := cache.Resolve(ns)
+		sched := cache.Resolve(row.Namespace)
 		if !sched.Enabled {
 			continue
 		}
 		weightFn := BusinessHoursRowWeightFn(sched)
-		for k, g := range GroupCSVRowsForStream(nsRows, orgID, clusterUUID, ScheduleTypeBusinessHours, weightFn) {
-			out[k] = g
+		if weightFn != nil && weightFn(row) <= 0 {
+			continue
 		}
+		bucketDate := time.Date(
+			row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(),
+			0, 0, 0, 0, time.UTC,
+		)
+		key := DigestKey{
+			OrgID:         orgID,
+			ClusterUUID:   clusterUUID,
+			Namespace:     row.Namespace,
+			Workload:      row.WorkloadName,
+			WorkloadType:  row.WorkloadType,
+			ContainerName: row.ContainerName,
+			BucketDate:    bucketDate,
+			ScheduleType:  ScheduleTypeBusinessHours,
+		}
+		out[key] = append(out[key], row)
 	}
 	return out
 }
