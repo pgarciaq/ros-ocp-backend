@@ -55,8 +55,7 @@ mkdir -p "$DOCS_DIR/operations"
 # Feature docs
 mkdir -p "$DOCS_DIR/features"
 [ -f "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" ] && cp "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" "$DOCS_DIR/features/pvc-rightsizing.md"
-[ -f "$ROOT_DIR/docs/gpu-time-slicing-plan.md" ] && cp "$ROOT_DIR/docs/gpu-time-slicing-plan.md" "$DOCS_DIR/features/gpu-time-slicing.md"
-[ -f "$ROOT_DIR/docs/features-f-snapshot-staleness.md" ] && cp "$ROOT_DIR/docs/features-f-snapshot-staleness.md" "$DOCS_DIR/features/snapshot-staleness.md"
+# gpu-time-slicing and snapshot-staleness are maintained in docs-site/features/ (not copied from docs/)
 [ -f "$ROOT_DIR/docs/business-hours-admin-guide.md" ] && cp "$ROOT_DIR/docs/business-hours-admin-guide.md" "$DOCS_DIR/features/business-hours.md"
 
 # Top-level docs
