@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
@@ -110,7 +111,7 @@ type NativeRecommendationRow struct {
 	DesiredReplicas   *int `gorm:"column:desired_replicas"`
 	AvailableReplicas *int `gorm:"column:available_replicas"`
 
-	EstimatedSavingsUSD *float32 `gorm:"column:estimated_monthly_savings_usd"`
+	EstimatedSavingsCents *int64 `gorm:"column:estimated_monthly_savings_usd"`
 
 	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
 
@@ -480,7 +481,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			SourceID:                first.SourceID,
 			LastReported:            first.LastReported.Format(time.RFC3339),
 			Replicas:                replicas,
-			EstimatedMonthlySavings: first.EstimatedSavingsUSD,
+			EstimatedMonthlySavings: money.CentsToUSDPtr(first.EstimatedSavingsCents),
 			MonitoringEndTime:       maxMonEnd,
 			Recommendations:         make(map[string]TermRecommendation),
 		}

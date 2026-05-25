@@ -49,7 +49,7 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 			r.RecCPURequestMC, r.RecCPULimitMC,
 			r.RecMemRequestKiB, r.RecMemLimitKiB,
 			r.NotificationCodes, r.ConfidenceLevel,
-			r.EstimatedSavingsUSD, sourceBinary,
+			r.EstimatedSavingsCents, sourceBinary,
 		)
 	}
 

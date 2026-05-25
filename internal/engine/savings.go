@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const hoursPerMonth = 730.0
@@ -19,7 +20,7 @@ func replicaCountForSavings(rec *ContainerRec) float64 {
 	return float64(rec.PodCountAvg)
 }
 
-// ApplySavingsEstimates computes EstimatedSavingsUSD for each recommendation
+// ApplySavingsEstimates computes EstimatedSavingsCents for each recommendation
 // using cost data from Koku. If costData is nil (Koku unavailable or not
 // configured), all savings remain 0 and NotifNoCostData is appended.
 //
@@ -48,12 +49,12 @@ func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostDa
 
 		// Idle or abandoned workloads: 100% of current resource cost is recoverable
 		if recs[i].IsIdle || recs[i].IsAbandoned {
-			recs[i].EstimatedSavingsUSD = float32(computeIdleSavings(&recs[i], &ns, distType))
+			recs[i].EstimatedSavingsCents = money.USDToCents(computeIdleSavings(&recs[i], &ns, distType))
 			continue
 		}
 
 		savings := computeSavings(&recs[i], &ns, distType)
-		recs[i].EstimatedSavingsUSD = float32(savings)
+		recs[i].EstimatedSavingsCents = money.USDToCents(savings)
 	}
 }
 

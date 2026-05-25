@@ -6,37 +6,37 @@ import "time"
 // read from the database into Go for recommendation computation.
 // All numeric fields are int64 matching the BIGINT schema.
 type DigestRow struct {
-	BucketDate       time.Time
-	CPURequestP50MC  int64
-	CPURequestP60MC  int64
-	CPURequestP95MC  int64
-	CPURequestP98MC  int64
-	CPURequestP99MC  int64
-	CPUUsageP50MC    int64
-	CPUUsageP60MC    int64
-	CPUUsageP95MC    int64
-	CPUUsageP98MC    int64
-	CPUUsageP99MC    int64
-	CPUUsageMaxMC    int64
-	CPUThrottleP95MC int64
-	CPUThrottleMaxMC int64
-	MemRequestP50KiB int64
-	MemRequestP60KiB int64
-	MemRequestP95KiB int64
-	MemRequestP98KiB int64
-	MemRequestP99KiB int64
-	MemUsageP50KiB   int64
-	MemUsageP60KiB   int64
-	MemUsageP95KiB   int64
-	MemUsageP98KiB   int64
-	MemUsageP99KiB   int64
-	MemUsageMaxKiB   int64
-	MemRSSP95KiB     int64
-	MemRSSMaxKiB     int64
-	OOMCountSum      int64
-	CPUUsageMeanMC   int64
-	MemUsageMeanKiB  int64
-	SampleCount      int64
+	BucketDate        time.Time
+	CPURequestP50MC   int64
+	CPURequestP60MC   int64
+	CPURequestP95MC   int64
+	CPURequestP98MC   int64
+	CPURequestP99MC   int64
+	CPUUsageP50MC     int64
+	CPUUsageP60MC     int64
+	CPUUsageP95MC     int64
+	CPUUsageP98MC     int64
+	CPUUsageP99MC     int64
+	CPUUsageMaxMC     int64
+	CPUThrottleP95MC  int64
+	CPUThrottleMaxMC  int64
+	MemRequestP50KiB  int64
+	MemRequestP60KiB  int64
+	MemRequestP95KiB  int64
+	MemRequestP98KiB  int64
+	MemRequestP99KiB  int64
+	MemUsageP50KiB    int64
+	MemUsageP60KiB    int64
+	MemUsageP95KiB    int64
+	MemUsageP98KiB    int64
+	MemUsageP99KiB    int64
+	MemUsageMaxKiB    int64
+	MemRSSP95KiB      int64
+	MemRSSMaxKiB      int64
+	OOMCountSum       int64
+	CPUUsageMeanMC    int64
+	MemUsageMeanKiB   int64
+	SampleCount       int64
 	PodCountMin       int64
 	PodCountMax       int64
 	PodCountAvg       int64
@@ -90,7 +90,7 @@ type ContainerRec struct {
 	VariationMemRequestPct int32
 	VariationMemLimitPct   int32
 	ConfidenceLevel        float32
-	EstimatedSavingsUSD    float32
+	EstimatedSavingsCents  int64
 	NotificationCodes      []int16
 	CPUTrendSlope          float64
 	MemTrendSlope          float64
@@ -119,16 +119,16 @@ type TermConfig struct {
 
 // CPUConfig holds parameters for CPU recommendation computation.
 type CPUConfig struct {
-	CostPercentile     float64
-	PerfPercentile     float64
-	MinMargin          float64
-	MaxMargin          float64
-	LimitMultiplier    float64
+	CostPercentile      float64
+	PerfPercentile      float64
+	MinMargin           float64
+	MaxMargin           float64
+	LimitMultiplier     float64
 	FloorMC             int64
 	IdleThresholdMC     int64
 	IdleThresholdMemKiB int64
 	DecayHalfLifeHours  float64
-	Now                time.Time
+	Now                 time.Time
 }
 
 // MemoryConfig holds parameters for memory recommendation computation.

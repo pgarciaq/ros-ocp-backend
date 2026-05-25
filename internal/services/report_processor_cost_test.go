@@ -57,7 +57,7 @@ func TestNativeEngineCostFetch_SavingsEstimatesDisabled_SkipsMasu(t *testing.T) 
 
 	recs := []engine.ContainerRec{{Namespace: "app", ContainerName: "web"}}
 	engine.ApplySavingsEstimates(recs, costData)
-	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, engine.NotifNoCostData)
 }
 

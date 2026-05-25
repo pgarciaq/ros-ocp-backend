@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -219,18 +220,18 @@ func TestSavings_CurrencyFromCostData_PassedToNodeSavings(t *testing.T) {
 	}
 
 	recs := []engine.NodeRec{{
-		Node:                 "worker-gbp",
-		CurrentCPUCores:      8,
-		RecommendedCPUCores:  4,
-		CurrentMemoryGiB:     32,
-		RecommendedMemoryGiB: 16,
-		NodeCountReduction:   1,
+		Node:               "worker-gbp",
+		CurrentCPUMC:       8,
+		RecommendedCPUMC:   4,
+		CurrentMemKiB:      32,
+		RecommendedMemKiB:  16,
+		NodeCountReduction: 1,
 	}}
 	engine.ApplyNodeSavings(recs, cd)
 
 	assert.Equal(t, "GBP", costdata.ResolveCurrency(cd),
 		"node savings output should carry the cluster currency from cost data")
-	require.Greater(t, recs[0].EstimatedMonthlySavingsUSD, float32(0),
+	require.Greater(t, recs[0].EstimatedMonthlySavingsCents, int64(0),
 		"savings amount should be computed when currency is GBP")
 	assert.NotContains(t, recs[0].NotificationCodes, engine.NotifNoCostData)
 }
@@ -256,7 +257,7 @@ func TestSavings_CurrencyFromCostData_PassedToPVCSavings(t *testing.T) {
 
 	assert.Equal(t, "GBP", costdata.ResolveCurrency(cd),
 		"PVC savings output should carry the cluster currency from cost data")
-	require.InDelta(t, 9.0, float64(recs[0].EstimatedMonthlySavingsUSD), 0.01)
+	require.InDelta(t, 9.0, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
 func TestSavings_NoCostData_DefaultsUSD(t *testing.T) {

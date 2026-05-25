@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 var HistoryAllowedOrderBy = listoptions.OrderByMap{
@@ -174,7 +175,7 @@ func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRo
 			optInt64Str(r.RecMemRequestKiB),
 			optInt64Str(r.RecMemLimitKiB),
 			optFloat32Str(r.ConfidenceLevel),
-			optFloat32Str(r.EstimatedSavingsUSD),
+			optCentsUSDStr(r.EstimatedSavingsCents),
 			smallintArrayStr(r.NotificationCodes),
 		}
 		if err := writer.Write(record); err != nil {
@@ -190,6 +191,13 @@ func optInt64Str(v *int64) string {
 		return ""
 	}
 	return strconv.FormatInt(*v, 10)
+}
+
+func optCentsUSDStr(cents *int64) string {
+	if cents == nil {
+		return ""
+	}
+	return strconv.FormatFloat(money.CentsToUSD(*cents), 'f', 2, 64)
 }
 
 func optFloat32Str(v *float32) string {

@@ -4,11 +4,12 @@ import (
 	"math"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const bytesPerGiB = 1024.0 * 1024.0 * 1024.0
 
-// ApplyPVCSavings computes EstimatedMonthlySavingsUSD for each PVC recommendation
+// ApplyPVCSavings computes EstimatedMonthlySavingsCents for each PVC recommendation
 // using configured storage rates from Koku. If costData is nil, savings remain 0
 // and NotifNoCostData is appended.
 func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
@@ -23,7 +24,7 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 
 	for i := range recs {
 		savings := computePVCSavings(&recs[i], storageRate)
-		recs[i].EstimatedMonthlySavingsUSD = float32(savings)
+		recs[i].EstimatedMonthlySavingsCents = money.USDToCents(savings)
 	}
 }
 

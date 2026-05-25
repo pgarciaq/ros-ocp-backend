@@ -7,28 +7,29 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // PVCRecommendationResponse is a single PVC recommendation in the API response.
 type PVCRecommendationResponse struct {
-	ClusterUUID           string                                     `json:"cluster_uuid"`
-	Namespace             string                                     `json:"namespace"`
-	PersistentVolumeClaim string                                     `json:"persistentvolumeclaim"`
-	PersistentVolume      string                                     `json:"persistentvolume,omitempty"`
-	StorageClass          string                                     `json:"storageclass,omitempty"`
-	CapacityBytes         int64                                      `json:"capacity_bytes"`
-	UsageBytesMax         int64                                      `json:"usage_bytes_max"`
-	UsageRatio            float64                                    `json:"usage_ratio"`
-	RecommendationType    string                                     `json:"recommendation_type"`
-	RecommendedBytes      *int64                                     `json:"recommended_bytes,omitempty"`
-	DaysToFull            *int                                       `json:"days_to_full,omitempty"`
+	ClusterUUID                string                                     `json:"cluster_uuid"`
+	Namespace                  string                                     `json:"namespace"`
+	PersistentVolumeClaim      string                                     `json:"persistentvolumeclaim"`
+	PersistentVolume           string                                     `json:"persistentvolume,omitempty"`
+	StorageClass               string                                     `json:"storageclass,omitempty"`
+	CapacityBytes              int64                                      `json:"capacity_bytes"`
+	UsageBytesMax              int64                                      `json:"usage_bytes_max"`
+	UsageRatio                 float64                                    `json:"usage_ratio"`
+	RecommendationType         string                                     `json:"recommendation_type"`
+	RecommendedBytes           *int64                                     `json:"recommended_bytes,omitempty"`
+	DaysToFull                 *int                                       `json:"days_to_full,omitempty"`
 	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`
 	EstimatedMonthlySavingsUSD *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
 	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	DataDays              int                                        `json:"data_days"`
-	Term                  string                                     `json:"term"`
-	ResizeNote            string                                     `json:"resize_note,omitempty"`
+	DataDays                   int                                        `json:"data_days"`
+	Term                       string                                     `json:"term"`
+	ResizeNote                 string                                     `json:"resize_note,omitempty"`
 }
 
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
@@ -39,7 +40,7 @@ type PVCRecommendationListResponse struct {
 		Offset   int    `json:"offset"`
 		Currency string `json:"currency"`
 	} `json:"meta"`
-	Links Links                      `json:"links"`
+	Links Links                       `json:"links"`
 	Data  []PVCRecommendationResponse `json:"data"`
 }
 
@@ -142,7 +143,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		var r PVCRecommendationResponse
 		var codes []int16
 		var growth sql.NullInt64
-		var savings sql.NullFloat64
+		var savings sql.NullInt64
 		if err := rows.Scan(
 			&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.PersistentVolume,
 			&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
@@ -161,8 +162,7 @@ func GetPVCRecommendations(c echo.Context) error {
 			r.GrowthBytesPerDay = &v
 		}
 		if savings.Valid {
-			v := float32(savings.Float64)
-			r.EstimatedMonthlySavingsUSD = &v
+			r.EstimatedMonthlySavingsUSD = money.CentsToUSDPtr(&savings.Int64)
 		}
 		r.Notifications = notifications.MapToKruizeFormat(codes)
 		switch r.RecommendationType {

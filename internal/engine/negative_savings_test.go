@@ -21,23 +21,25 @@ func nodeCostDataForNegativeTests() *costdata.ClusterCostData {
 	}
 }
 
+const negTestGibKiB = 1024 * 1024
+
 // TestNodeSavings_Negative_WhenScaleUpNeeded covers overloaded nodes (95% util vs 80% target)
 // where the recommendation is to add capacity — savings should be negative.
 func TestNodeSavings_Negative_WhenScaleUpNeeded(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{
 		{
-			Node:                 "overloaded-worker",
-			CurrentCPUCores:      4,
-			RecommendedCPUCores:  8,
-			CurrentMemoryGiB:     16,
-			RecommendedMemoryGiB: 32,
-			IsOvercommitted:      true,
+			Node:              "overloaded-worker",
+			CurrentCPUMC:      4000,
+			RecommendedCPUMC:  8000,
+			CurrentMemKiB:     16 * negTestGibKiB,
+			RecommendedMemKiB: 32 * negTestGibKiB,
+			IsOvercommitted:   true,
 		},
 	}
 	ApplyNodeSavings(recs, nodeCostDataForNegativeTests())
 
-	assert.Less(t, recs[0].EstimatedMonthlySavingsUSD, float32(0),
+	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0),
 		"scale-up recommendation should show negative savings (additional cost)")
 }
 
@@ -61,7 +63,7 @@ func TestPVCSavings_Negative_WhenGrowthProjected(t *testing.T) {
 	}
 	ApplyPVCSavings(recs, cd)
 
-	assert.Less(t, recs[0].EstimatedMonthlySavingsUSD, float32(0),
+	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0),
 		"PVC growth recommendation should show negative savings")
 }
 
@@ -93,18 +95,18 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 	}
 	ApplySavingsEstimates(recs, cd)
 
-	assert.Less(t, recs[0].EstimatedSavingsUSD, float32(0),
+	assert.Less(t, recs[0].EstimatedSavingsCents, int64(0),
 		"under-provisioned container with scale-up recommendation should show negative savings")
 }
 
 func queryPluginSavingsTotals(ctx context.Context, pool *pgxpool.Pool, orgID string) (container, node, pvc, total float64, err error) {
 	err = pool.QueryRow(ctx, `
 		SELECT
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd) FROM recommendation_sets
+			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM recommendation_sets
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost' AND stale = false), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd) FROM node_recommendations
+			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM node_recommendations
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd) FROM pvc_recommendation_sets
+			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = 'medium'), 0)`,
 		orgID,
 	).Scan(&container, &node, &pvc)
@@ -131,13 +133,13 @@ func TestSavingsSummary_AllowsNegativeTotal(t *testing.T) {
 	// Small container savings cannot offset a large node scale-up cost.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 50.00, now())`,
+		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 5000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -500.00, now())`,
+		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -50000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -165,19 +167,19 @@ func TestSavingsSummary_ByPlugin_CanBeNegative(t *testing.T) {
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 500.00, now())`,
+		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 50000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -200.00, now())`,
+		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -20000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'ns1', 'grow-vol', 'medium', '{}', -50.00, now())`,
+		VALUES ($1, $2, 'ns1', 'grow-vol', 'medium', '{}', -5000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -198,16 +200,16 @@ func TestNodeSavings_Zero_WhenOptimallySized(t *testing.T) {
 	t.Parallel()
 	recs := []NodeRec{
 		{
-			Node:                 "right-sized-worker",
-			CurrentCPUCores:      8,
-			RecommendedCPUCores:  8,
-			CurrentMemoryGiB:     32,
-			RecommendedMemoryGiB: 32,
-			NodeCountReduction:   0,
+			Node:               "right-sized-worker",
+			CurrentCPUMC:       8000,
+			RecommendedCPUMC:   8000,
+			CurrentMemKiB:      32 * negTestGibKiB,
+			RecommendedMemKiB:  32 * negTestGibKiB,
+			NodeCountReduction: 0,
 		},
 	}
 	ApplyNodeSavings(recs, nodeCostDataForNegativeTests())
 
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD,
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents,
 		"optimally sized node should have zero savings, not null or omitted")
 }

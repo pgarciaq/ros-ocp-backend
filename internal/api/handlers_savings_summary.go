@@ -144,17 +144,17 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	err := pool.QueryRow(ctx, `
 		SELECT
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)
+				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM recommendation_sets
 				WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)
+				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM node_recommendations
 				WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)
+				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
 			), 0),
@@ -201,21 +201,21 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		),
 		container_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0) AS savings
+			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		node_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0) AS savings
+			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM node_recommendations
 			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		pvc_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0) AS savings
+			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM pvc_recommendation_sets
 			WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
 			GROUP BY cluster_uuid

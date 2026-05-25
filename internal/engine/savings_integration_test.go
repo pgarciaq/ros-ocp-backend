@@ -60,7 +60,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 
 	// Capture pre-savings state
 	for _, r := range recs {
-		require.Equal(t, float32(0), r.EstimatedSavingsUSD, "savings should be zero before ApplySavingsEstimates")
+		require.Equal(t, float32(0), r.EstimatedSavingsCents, "savings should be zero before ApplySavingsEstimates")
 	}
 
 	t.Run("with cost data from mock Koku", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// Verify savings were computed (non-zero for at least one rec)
 		hasNonZero := false
 		for _, r := range recs {
-			if r.EstimatedSavingsUSD != 0 {
+			if r.EstimatedSavingsCents != 0 {
 				hasNonZero = true
 				break
 			}
@@ -137,7 +137,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, nil)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsUSD,
+			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
 				"savings should be zero when cost data is nil")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when cost data is nil")
@@ -169,7 +169,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// instead of CPU delta. The total savings should differ from CPU distribution.
 		hasNonZero := false
 		for _, r := range freshRecs {
-			if r.EstimatedSavingsUSD != 0 {
+			if r.EstimatedSavingsCents != 0 {
 				hasNonZero = true
 				break
 			}
@@ -196,7 +196,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsUSD,
+			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
 				"savings should be zero when namespace not in cost data")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when namespace not found")
@@ -225,7 +225,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsUSD,
+			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
 				"savings should be zero when all cost rates are zero")
 			for _, code := range r.NotificationCodes {
 				assert.NotEqual(t, engine.NotifNoCostData, code,

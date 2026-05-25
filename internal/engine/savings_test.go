@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ func TestApplySavingsEstimates_NilCostData(t *testing.T) {
 
 	ApplySavingsEstimates(recs, nil)
 
-	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -49,7 +50,7 @@ func TestApplySavingsEstimates_NamespaceNotFound(t *testing.T) {
 
 	ApplySavingsEstimates(recs, cd)
 
-	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -58,7 +59,7 @@ func TestApplySavingsEstimates_CostModelOnly(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0,  // $1/core-hour effective
+				CostModelCPUCost: 730.0, // $1/core-hour effective
 				CostModelMemCost: 0,
 				InfraCost:        0,
 				CPURequestHours:  730.0,
@@ -68,19 +69,19 @@ func TestApplySavingsEstimates_CostModelOnly(t *testing.T) {
 	}
 	recs := []ContainerRec{
 		{
-			Namespace:           "ns1",
-			CurrentCPURequestMC: 500,  // 0.5 cores
-			RecCPURequestMC:     200,  // 0.2 cores
+			Namespace:            "ns1",
+			CurrentCPURequestMC:  500, // 0.5 cores
+			RecCPURequestMC:      200, // 0.2 cores
 			CurrentMemRequestKiB: 1048576,
 			RecMemRequestKiB:     1048576,
-			PodCountAvg:         1,
+			PodCountAvg:          1,
 		},
 	}
 
 	ApplySavingsEstimates(recs, cd)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
-	assert.InDelta(t, 219.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 219.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_WithInfraCosts_CPUDistribution(t *testing.T) {
@@ -90,7 +91,7 @@ func TestApplySavingsEstimates_WithInfraCosts_CPUDistribution(t *testing.T) {
 			"ns1": {
 				CostModelCPUCost: 0,
 				CostModelMemCost: 0,
-				InfraCost:        730.0,  // $1/core-hour of infra
+				InfraCost:        730.0, // $1/core-hour of infra
 				CPURequestHours:  730.0,
 				MemRequestHours:  730.0,
 			},
@@ -98,19 +99,19 @@ func TestApplySavingsEstimates_WithInfraCosts_CPUDistribution(t *testing.T) {
 	}
 	recs := []ContainerRec{
 		{
-			Namespace:           "ns1",
-			CurrentCPURequestMC: 1000,  // 1 core
-			RecCPURequestMC:     500,   // 0.5 cores
+			Namespace:            "ns1",
+			CurrentCPURequestMC:  1000, // 1 core
+			RecCPURequestMC:      500,  // 0.5 cores
 			CurrentMemRequestKiB: 1048576,
 			RecMemRequestKiB:     1048576,
-			PodCountAvg:         2,
+			PodCountAvg:          2,
 		},
 	}
 
 	ApplySavingsEstimates(recs, cd)
 
 	// Infra savings: 0.5 cores * $1/core-hour * 730 hours * 2 replicas = $730
-	assert.InDelta(t, 730.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 730.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_WithInfraCosts_MemoryDistribution(t *testing.T) {
@@ -132,7 +133,7 @@ func TestApplySavingsEstimates_WithInfraCosts_MemoryDistribution(t *testing.T) {
 			CurrentCPURequestMC:  1000,
 			RecCPURequestMC:      1000,
 			CurrentMemRequestKiB: 2 * 1024 * 1024, // 2 GiB
-			RecMemRequestKiB:     1 * 1024 * 1024,  // 1 GiB
+			RecMemRequestKiB:     1 * 1024 * 1024, // 1 GiB
 			PodCountAvg:          1,
 		},
 	}
@@ -140,7 +141,7 @@ func TestApplySavingsEstimates_WithInfraCosts_MemoryDistribution(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// Infra savings (memory dist): 1 GiB * $1/GiB-hour * 730 hours * 1 replica = $730
-	assert.InDelta(t, 730.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 730.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_ZeroPodCount_DefaultsToOne(t *testing.T) {
@@ -166,7 +167,7 @@ func TestApplySavingsEstimates_ZeroPodCount_DefaultsToOne(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
-	assert.InDelta(t, 219.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 219.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_NegativeSavings_Underprovisioned(t *testing.T) {
@@ -192,7 +193,7 @@ func TestApplySavingsEstimates_NegativeSavings_Underprovisioned(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// Negative: recommendation costs more (under-provisioned)
-	assert.True(t, recs[0].EstimatedSavingsUSD < 0)
+	assert.Less(t, recs[0].EstimatedSavingsCents, int64(0))
 }
 
 func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testing.T) {
@@ -200,10 +201,10 @@ func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testin
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0,  // $1/core-hour cost model
-				CostModelMemCost: 365.0,  // $0.5/GiB-hour cost model
-				InfraCost:        365.0,  // $0.5/core-hour infra (cpu distribution)
-				DistributedCost:  365.0,  // $0.5/core-hour distributed platform overhead
+				CostModelCPUCost: 730.0, // $1/core-hour cost model
+				CostModelMemCost: 365.0, // $0.5/GiB-hour cost model
+				InfraCost:        365.0, // $0.5/core-hour infra (cpu distribution)
+				DistributedCost:  365.0, // $0.5/core-hour distributed platform overhead
 				CPURequestHours:  730.0,
 				MemRequestHours:  730.0,
 			},
@@ -212,10 +213,10 @@ func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testin
 	recs := []ContainerRec{
 		{
 			Namespace:            "ns1",
-			CurrentCPURequestMC:  1000, // 1 core
-			RecCPURequestMC:      500,  // 0.5 cores
+			CurrentCPURequestMC:  1000,            // 1 core
+			RecCPURequestMC:      500,             // 0.5 cores
 			CurrentMemRequestKiB: 2 * 1024 * 1024, // 2 GiB
-			RecMemRequestKiB:     1 * 1024 * 1024,  // 1 GiB
+			RecMemRequestKiB:     1 * 1024 * 1024, // 1 GiB
 			PodCountAvg:          2,
 		},
 	}
@@ -229,7 +230,7 @@ func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testin
 	//   (365+365)/730 = $1/core-hr
 	//   0.5 cores * $1/core-hr * 730 hrs * 2 pods = $730
 	// Total = 730 + 730 + 730 = $2190
-	assert.InDelta(t, 2190.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 2190.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_DistributedCostOnly(t *testing.T) {
@@ -258,7 +259,7 @@ func TestApplySavingsEstimates_DistributedCostOnly(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
-	assert.InDelta(t, 219.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 219.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) {
@@ -281,7 +282,7 @@ func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) 
 			CurrentCPURequestMC:  500,
 			RecCPURequestMC:      500,
 			CurrentMemRequestKiB: 2 * 1024 * 1024, // 2 GiB
-			RecMemRequestKiB:     1 * 1024 * 1024,  // 1 GiB
+			RecMemRequestKiB:     1 * 1024 * 1024, // 1 GiB
 			PodCountAvg:          1,
 		},
 	}
@@ -289,7 +290,7 @@ func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) 
 	ApplySavingsEstimates(recs, cd)
 
 	// memory distribution: 1 GiB * $1/GiB-hr * 730 hrs * 1 pod = $730
-	assert.InDelta(t, 730.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 730.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestReplicaCountForSavings_PrefersDesiredOverPodCount(t *testing.T) {
@@ -309,7 +310,7 @@ func TestReplicaCountForSavings_PrefersDesiredOverPodCount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := &ContainerRec{
 				DesiredReplicas: tt.desiredReplicas,
-				PodCountAvg:    tt.podCountAvg,
+				PodCountAvg:     tt.podCountAvg,
 			}
 			got := replicaCountForSavings(rec)
 			assert.Equal(t, tt.want, got)
@@ -341,7 +342,7 @@ func TestApplySavingsEstimates_UsesDesiredReplicas(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 5 replicas = $1095
-	assert.InDelta(t, 1095.0, float64(recs[0].EstimatedSavingsUSD), 1.0)
+	assert.InDelta(t, 1095.0, money.CentsToUSD(recs[0].EstimatedSavingsCents), 1.0)
 }
 
 func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
@@ -370,7 +371,7 @@ func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// Negative rates are clamped to 0, so savings should be $0
-	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 }
 
 func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
@@ -396,5 +397,5 @@ func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 	ApplySavingsEstimates(recs, cd)
 
 	// safeDiv returns 0 when denominator is 0
-	assert.Equal(t, float32(0), recs[0].EstimatedSavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 }

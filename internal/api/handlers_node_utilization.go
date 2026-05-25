@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
@@ -23,7 +24,7 @@ const defaultNodeUtilLimit = 10
 const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cost-management/v1/recommendations/openshift/nodes for node CPU/memory utilization recommendations.`
 
 var nodeUtilAllowedOrderBy = map[string]string{
-	"node":                        "f.node",
+	"node":                          "f.node",
 	"estimated_monthly_savings_usd": "sort_savings",
 }
 
@@ -35,26 +36,26 @@ const (
 )
 
 type nodeUtilRow struct {
-	Node                     string
-	ClusterUUID              string
-	Term                     string
-	Engine                   string
-	CPUUtilP50               float32
-	CPUUtilP95               float32
-	MemUtilP50               float32
-	MemUtilP95               float32
-	CPUOvercommitRatio       float32
-	IsUnderutilized          bool
-	IsOvercommitted          bool
-	StrandedResource         *string
-	PodCount                 int64
-	TrendSlope               float32
-	RecommendedCPUCores      sql.NullFloat64
-	RecommendedMemoryGiB     sql.NullFloat64
-	NodeCountReduction       int
-	EstimatedMonthlySavings  sql.NullFloat64
-	NotificationCodes        []int16
-	UpdatedAt                time.Time
+	Node                    string
+	ClusterUUID             string
+	Term                    string
+	Engine                  string
+	CPUUtilP50              float32
+	CPUUtilP95              float32
+	MemUtilP50              float32
+	MemUtilP95              float32
+	CPUOvercommitRatio      float32
+	IsUnderutilized         bool
+	IsOvercommitted         bool
+	StrandedResource        *string
+	PodCount                int64
+	TrendSlope              float32
+	RecommendedCPUCores     sql.NullFloat64
+	RecommendedMemoryGiB    sql.NullFloat64
+	NodeCountReduction      int
+	EstimatedMonthlySavings sql.NullInt64
+	NotificationCodes       []int16
+	UpdatedAt               time.Time
 }
 
 type nodeUtilKey struct {
@@ -444,8 +445,7 @@ func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
 		rec.RecommendedMemoryGiB = float32(row.RecommendedMemoryGiB.Float64)
 	}
 	if row.EstimatedMonthlySavings.Valid {
-		v := float32(row.EstimatedMonthlySavings.Float64)
-		rec.EstimatedMonthlySavingsUSD = &v
+		rec.EstimatedMonthlySavingsUSD = money.CentsToUSDPtr(&row.EstimatedMonthlySavings.Int64)
 	}
 	return rec
 }

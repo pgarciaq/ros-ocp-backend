@@ -4,9 +4,10 @@ import (
 	"math"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
-// ApplyNodeSavings computes EstimatedMonthlySavingsUSD for each node recommendation
+// ApplyNodeSavings computes EstimatedMonthlySavingsCents for each node recommendation
 // using configured rates from Koku. If costData is nil, savings remain 0 and
 // NotifNoCostData is appended.
 func ApplyNodeSavings(recs []NodeRec, costData *costdata.ClusterCostData) {
@@ -23,13 +24,13 @@ func ApplyNodeSavings(recs []NodeRec, costData *costdata.ClusterCostData) {
 
 	for i := range recs {
 		savings := computeNodeSavings(&recs[i], cpuRate, memRate, nodeRate)
-		recs[i].EstimatedMonthlySavingsUSD = float32(savings)
+		recs[i].EstimatedMonthlySavingsCents = money.USDToCents(savings)
 	}
 }
 
 func computeNodeSavings(rec *NodeRec, cpuRate, memRate, nodeRate float64) float64 {
-	cpuDelta := rec.CurrentCPUCores - rec.RecommendedCPUCores
-	memDelta := rec.CurrentMemoryGiB - rec.RecommendedMemoryGiB
+	cpuDelta := float64(rec.CurrentCPUMC-rec.RecommendedCPUMC) / 1000.0
+	memDelta := float64(rec.CurrentMemKiB-rec.RecommendedMemKiB) / (1024.0 * 1024.0)
 
 	cpuSavings := cpuDelta * cpuRate * hoursPerMonth
 	memSavings := memDelta * memRate * hoursPerMonth

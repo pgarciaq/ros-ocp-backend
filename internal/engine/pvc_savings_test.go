@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -12,7 +13,7 @@ func TestApplyPVCSavings_NilCostData(t *testing.T) {
 	t.Parallel()
 	recs := []PVCRec{{Namespace: "app", PVC: "data"}}
 	ApplyPVCSavings(recs, nil)
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -27,7 +28,7 @@ func TestApplyPVCSavings_ZeroRates(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}
 	ApplyPVCSavings(recs, cd)
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.NotContains(t, recs[0].NotificationCodes, NotifNoCostData)
 }
 
@@ -47,7 +48,7 @@ func TestApplyPVCSavings_Downsizing(t *testing.T) {
 	}
 	ApplyPVCSavings(recs, cd)
 	// 90 GiB * $0.10 = $9.00
-	require.InDelta(t, 9.0, float64(recs[0].EstimatedMonthlySavingsUSD), 0.01)
+	require.InDelta(t, 9.0, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
 func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
@@ -66,7 +67,7 @@ func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
 	}
 	ApplyPVCSavings(recs, cd)
 	// 15 GiB * $0.05 = $0.75
-	require.InDelta(t, 0.75, float64(recs[0].EstimatedMonthlySavingsUSD), 0.01)
+	require.InDelta(t, 0.75, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
 func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
@@ -84,7 +85,7 @@ func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
 		},
 	}
 	ApplyPVCSavings(recs, cd)
-	assert.Less(t, recs[0].EstimatedMonthlySavingsUSD, float32(0))
+	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0))
 }
 
 func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
@@ -100,7 +101,7 @@ func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
 		},
 	}
 	ApplyPVCSavings(recs, cd)
-	assert.Equal(t, float32(0), recs[0].EstimatedMonthlySavingsUSD)
+	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 }
 
 func TestStorageRequestPerMonth(t *testing.T) {
