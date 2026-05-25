@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"math"
 	"math/rand"
 	"slices"
 	"testing"
@@ -373,16 +374,31 @@ func computeWeightedDigestBaseline(values []int64, weights []float64) Digest {
 	}
 
 	var sum int64
-	var weightedSum float64
-	var totalWeight float64
+	var weightedSum int64
+	var totalWeight int64
 	for i, v := range sortedVals {
 		sum += v
-		weightedSum += float64(v) * sortedWeights[i]
-		totalWeight += sortedWeights[i]
+		scaledW := int64(math.Round(sortedWeights[i] * float64(weightScale)))
+		if scaledW <= 0 {
+			continue
+		}
+		weightedSum += v * scaledW
+		totalWeight += scaledW
 	}
 	mean := int64(0)
 	if totalWeight > 0 {
-		mean = int64(weightedSum / totalWeight)
+		allOnes := true
+		for _, w := range sortedWeights {
+			if w != 1.0 {
+				allOnes = false
+				break
+			}
+		}
+		if allOnes {
+			mean = sum / int64(len(sortedVals))
+		} else {
+			mean = (weightedSum + totalWeight/2) / totalWeight
+		}
 	}
 
 	return Digest{
@@ -410,14 +426,40 @@ func TestComputeWeightedDigest_MatchesBaseline(t *testing.T) {
 			weights: []float64{1, 1, 1, 1, 1, 1, 0.2, 0.2, 0.2, 0.2, 0.2},
 		},
 		{
-			name:    "all_ones_96",
-			values:  func() []int64 { v := make([]int64, 96); for i := range v { v[i] = int64(i + 1) }; return v }(),
-			weights: func() []float64 { w := make([]float64, 96); for i := range w { w[i] = 1.0 }; return w }(),
+			name: "all_ones_96",
+			values: func() []int64 {
+				v := make([]int64, 96)
+				for i := range v {
+					v[i] = int64(i + 1)
+				}
+				return v
+			}(),
+			weights: func() []float64 {
+				w := make([]float64, 96)
+				for i := range w {
+					w[i] = 1.0
+				}
+				return w
+			}(),
 		},
 		{
-			name:    "bimodal_bh",
-			values:  func() []int64 { v := make([]int64, 96); for i := range v { v[i] = 100 }; v[95] = 10_000; return v }(),
-			weights: func() []float64 { w := make([]float64, 96); for i := range w { w[i] = 1.0 }; w[95] = 0.2; return w }(),
+			name: "bimodal_bh",
+			values: func() []int64 {
+				v := make([]int64, 96)
+				for i := range v {
+					v[i] = 100
+				}
+				v[95] = 10_000
+				return v
+			}(),
+			weights: func() []float64 {
+				w := make([]float64, 96)
+				for i := range w {
+					w[i] = 1.0
+				}
+				w[95] = 0.2
+				return w
+			}(),
 		},
 		{
 			name:    "single_sample",
@@ -556,4 +598,3 @@ func TestOffHoursWeight0_NoSortOverhead(t *testing.T) {
 	row := MetricRow{IntervalStart: off}
 	assert.Equal(t, 0.0, weightFn(row))
 }
-

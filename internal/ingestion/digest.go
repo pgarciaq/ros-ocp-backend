@@ -61,15 +61,17 @@ func percentileFromSorted(sorted []int64, pct float64) int64 {
 
 type weightedPair struct {
 	v int64
-	w float64
+	w int64 // weight scaled by weightScale (10000 = 1.0)
 }
+
+const weightScale int64 = 10000
 
 const weightedCountingSortMaxSpan = 4096
 
 type weightedDigestScratch struct {
-	pairs   []weightedPair
-	counts  []int
-	sorted  []weightedPair
+	pairs  []weightedPair
+	counts []int
+	sorted []weightedPair
 }
 
 var weightedDigestScratchPool = sync.Pool{
@@ -96,7 +98,10 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 	}
 	for i := range values {
 		if weights[i] > 0 {
-			pairs = append(pairs, weightedPair{values[i], weights[i]})
+			scaledW := int64(math.Round(weights[i] * float64(weightScale)))
+			if scaledW > 0 {
+				pairs = append(pairs, weightedPair{values[i], scaledW})
+			}
 		}
 	}
 	pn := len(pairs)
@@ -109,21 +114,25 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 	sortWeightedPairs(scratch, pairs)
 
 	var sum int64
-	var weightedSum float64
-	var totalWeight float64
+	var weightedSum int64
+	var totalWeight int64
 	allOnes := true
 	for _, p := range pairs {
 		sum += p.v
-		weightedSum += float64(p.v) * p.w
+		weightedSum += p.v * p.w
 		totalWeight += p.w
-		if p.w != 1.0 {
+		if p.w != weightScale {
 			allOnes = false
 		}
 	}
 
 	mean := int64(0)
 	if totalWeight > 0 {
-		mean = int64(weightedSum / totalWeight)
+		if allOnes {
+			mean = sum / int64(pn)
+		} else {
+			mean = (weightedSum + totalWeight/2) / totalWeight
+		}
 	}
 
 	var p50, p60, p95, p98, p99 int64
@@ -225,8 +234,8 @@ func percentileFromWeightedPairs(pairs []weightedPair, pct float64) int64 {
 }
 
 // weightedPercentilesFromPairs returns p50, p60, p95, p98, p99 in one cumulative-weight pass.
-func weightedPercentilesFromPairs(pairs []weightedPair, total float64) (p50, p60, p95, p98, p99 int64) {
-	if total <= 0 {
+func weightedPercentilesFromPairs(pairs []weightedPair, totalWeight int64) (p50, p60, p95, p98, p99 int64) {
+	if totalWeight <= 0 {
 		return 0, 0, 0, 0, 0
 	}
 	n := len(pairs)
@@ -235,17 +244,17 @@ func weightedPercentilesFromPairs(pairs []weightedPair, total float64) (p50, p60
 		return v, v, v, v, v
 	}
 
-	targets := [5]float64{
-		0.50 * total,
-		0.60 * total,
-		0.95 * total,
-		0.98 * total,
-		0.99 * total,
+	targets := [5]int64{
+		(50 * totalWeight) / 100,
+		(60 * totalWeight) / 100,
+		(95 * totalWeight) / 100,
+		(98 * totalWeight) / 100,
+		(99 * totalWeight) / 100,
 	}
 	results := [5]int64{}
 	last := pairs[n-1].v
 	next := 0
-	cum := 0.0
+	cum := int64(0)
 	for i := range pairs {
 		cum += pairs[i].w
 		for next < 5 && cum >= targets[next] {
@@ -389,37 +398,37 @@ func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn Ro
 	desiredReplicas, availableReplicas := computeReplicaCounts(rows)
 
 	return ContainerDigestResult{
-		Key:              key,
-		CPURequestP50MC:  cpuReqD.P50,
-		CPURequestP60MC:  cpuReqD.P60,
-		CPURequestP95MC:  cpuReqD.P95,
-		CPURequestP98MC:  cpuReqD.P98,
-		CPURequestP99MC:  cpuReqD.P99,
-		CPUUsageP50MC:    cpuUseD.P50,
-		CPUUsageP60MC:    cpuUseD.P60,
-		CPUUsageP95MC:    cpuUseD.P95,
-		CPUUsageP98MC:    cpuUseD.P98,
-		CPUUsageP99MC:    cpuUseD.P99,
-		CPUUsageMaxMC:    cpuUseD.Max,
-		CPUThrottleP95MC: cpuThrD.P95,
-		CPUThrottleMaxMC: cpuThrD.Max,
-		MemRequestP50KiB: memReqD.P50,
-		MemRequestP60KiB: memReqD.P60,
-		MemRequestP95KiB: memReqD.P95,
-		MemRequestP98KiB: memReqD.P98,
-		MemRequestP99KiB: memReqD.P99,
-		MemUsageP50KiB:   memUseD.P50,
-		MemUsageP60KiB:   memUseD.P60,
-		MemUsageP95KiB:   memUseD.P95,
-		MemUsageP98KiB:   memUseD.P98,
-		MemUsageP99KiB:   memUseD.P99,
-		MemUsageMaxKiB:   memUseD.Max,
-		MemRSSP95KiB:     memRssD.P95,
-		MemRSSMaxKiB:     memRssD.Max,
-		OOMCountSum:      oomTotal,
-		CPUUsageMeanMC:   cpuUseD.Mean,
-		MemUsageMeanKiB:  memUseD.Mean,
-		SampleCount:      cpuUseD.Count,
+		Key:               key,
+		CPURequestP50MC:   cpuReqD.P50,
+		CPURequestP60MC:   cpuReqD.P60,
+		CPURequestP95MC:   cpuReqD.P95,
+		CPURequestP98MC:   cpuReqD.P98,
+		CPURequestP99MC:   cpuReqD.P99,
+		CPUUsageP50MC:     cpuUseD.P50,
+		CPUUsageP60MC:     cpuUseD.P60,
+		CPUUsageP95MC:     cpuUseD.P95,
+		CPUUsageP98MC:     cpuUseD.P98,
+		CPUUsageP99MC:     cpuUseD.P99,
+		CPUUsageMaxMC:     cpuUseD.Max,
+		CPUThrottleP95MC:  cpuThrD.P95,
+		CPUThrottleMaxMC:  cpuThrD.Max,
+		MemRequestP50KiB:  memReqD.P50,
+		MemRequestP60KiB:  memReqD.P60,
+		MemRequestP95KiB:  memReqD.P95,
+		MemRequestP98KiB:  memReqD.P98,
+		MemRequestP99KiB:  memReqD.P99,
+		MemUsageP50KiB:    memUseD.P50,
+		MemUsageP60KiB:    memUseD.P60,
+		MemUsageP95KiB:    memUseD.P95,
+		MemUsageP98KiB:    memUseD.P98,
+		MemUsageP99KiB:    memUseD.P99,
+		MemUsageMaxKiB:    memUseD.Max,
+		MemRSSP95KiB:      memRssD.P95,
+		MemRSSMaxKiB:      memRssD.Max,
+		OOMCountSum:       oomTotal,
+		CPUUsageMeanMC:    cpuUseD.Mean,
+		MemUsageMeanKiB:   memUseD.Mean,
+		SampleCount:       cpuUseD.Count,
 		PodCountMin:       podCountMin,
 		PodCountMax:       podCountMax,
 		PodCountAvg:       podCountAvg,
@@ -431,37 +440,37 @@ func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn Ro
 // ContainerDigestResult holds all computed digest columns for a single
 // (container, day) ready for database upsert.
 type ContainerDigestResult struct {
-	Key              DigestKey
-	CPURequestP50MC  int64
-	CPURequestP60MC  int64
-	CPURequestP95MC  int64
-	CPURequestP98MC  int64
-	CPURequestP99MC  int64
-	CPUUsageP50MC    int64
-	CPUUsageP60MC    int64
-	CPUUsageP95MC    int64
-	CPUUsageP98MC    int64
-	CPUUsageP99MC    int64
-	CPUUsageMaxMC    int64
-	CPUThrottleP95MC int64
-	CPUThrottleMaxMC int64
-	MemRequestP50KiB int64
-	MemRequestP60KiB int64
-	MemRequestP95KiB int64
-	MemRequestP98KiB int64
-	MemRequestP99KiB int64
-	MemUsageP50KiB   int64
-	MemUsageP60KiB   int64
-	MemUsageP95KiB   int64
-	MemUsageP98KiB   int64
-	MemUsageP99KiB   int64
-	MemUsageMaxKiB   int64
-	MemRSSP95KiB     int64
-	MemRSSMaxKiB     int64
-	OOMCountSum      int64
-	CPUUsageMeanMC   int64
-	MemUsageMeanKiB  int64
-	SampleCount      int64
+	Key               DigestKey
+	CPURequestP50MC   int64
+	CPURequestP60MC   int64
+	CPURequestP95MC   int64
+	CPURequestP98MC   int64
+	CPURequestP99MC   int64
+	CPUUsageP50MC     int64
+	CPUUsageP60MC     int64
+	CPUUsageP95MC     int64
+	CPUUsageP98MC     int64
+	CPUUsageP99MC     int64
+	CPUUsageMaxMC     int64
+	CPUThrottleP95MC  int64
+	CPUThrottleMaxMC  int64
+	MemRequestP50KiB  int64
+	MemRequestP60KiB  int64
+	MemRequestP95KiB  int64
+	MemRequestP98KiB  int64
+	MemRequestP99KiB  int64
+	MemUsageP50KiB    int64
+	MemUsageP60KiB    int64
+	MemUsageP95KiB    int64
+	MemUsageP98KiB    int64
+	MemUsageP99KiB    int64
+	MemUsageMaxKiB    int64
+	MemRSSP95KiB      int64
+	MemRSSMaxKiB      int64
+	OOMCountSum       int64
+	CPUUsageMeanMC    int64
+	MemUsageMeanKiB   int64
+	SampleCount       int64
 	PodCountMin       int64
 	PodCountMax       int64
 	PodCountAvg       int64
@@ -638,13 +647,13 @@ func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldF
 }
 
 type weightedMetricSample struct {
-	weight          float64
-	cpuReq          int64
-	cpuUse          int64
-	cpuThr          int64
-	memReq          int64
-	memUse          int64
-	memRss          int64
+	weight float64
+	cpuReq int64
+	cpuUse int64
+	cpuThr int64
+	memReq int64
+	memUse int64
+	memRss int64
 }
 
 // computeAllWeightedFieldDigests evaluates row weights once and reuses them for all metric fields.
