@@ -71,7 +71,7 @@ Run `EXPLAIN ANALYZE` and look for:
 
 4. **Keyset pagination index must match `ORDER BY` exactly** — The container
    list sorts by `(namespace, workload, container_name)`. The supporting index
-   must use the same column order after `org_id`.
+   on `org_container_keys` uses the same column order after `org_id`.
 
 !!! tip "Production deployments"
     On large databases, create indexes with `CREATE INDEX CONCURRENTLY` before
@@ -80,45 +80,68 @@ Run `EXPLAIN ANALYZE` and look for:
 
 ---
 
-## DISTINCT Is Expensive at Scale
+## Pagination Architecture — `org_container_keys`
 
-Container recommendations store six rows per container. The list API needs
-distinct containers. At 200k containers (1.2M rows), `DISTINCT` requires
-sorting the entire org partition even when an index exists.
+The container list API uses a **2-step query** instead of `SELECT DISTINCT` over
+`recommendation_sets`:
 
-### Mitigations
+1. **Page keys** — Query `org_container_keys` (one row per active container)
+   with keyset or offset pagination. Index: `idx_ock_org_sorted`.
+2. **Fetch detail** — Join `recommendation_sets` for containers on the page only;
+   apply `term`, `engine`, and other detail filters here (at most 6 rows × page limit).
 
-| Technique | Effect |
-|-----------|--------|
-| **Keyset pagination** | First page ~0.4 ms (index scan + limit) |
-| **Pre-computed `org_recommendation_stats`** | Avoids `COUNT(DISTINCT ...)` on every list request |
-| **Avoid deep OFFSET** | Page 500 with OFFSET still ~1 s due to sort |
+The `org_container_keys` table is refreshed after recommendation writes and after
+adoption marks, keeping pagination keys in sync with active containers.
 
-**Future:** A materialized container-key table (one row per container) would
-eliminate the DISTINCT sort entirely.
+### Why this matters
+
+At 200k containers (1.2M recommendation rows), runtime `DISTINCT` required
+sorting the entire org partition — ~1.2 s for term/engine filters and deep pages.
+The key table reduces list latency to **under 5 ms at any page depth**.
+
+### Schema (summary)
+
+| Column | Purpose |
+|--------|---------|
+| `org_id`, `namespace`, `workload`, `container_name` | Primary key; pagination sort order |
+| `cluster_uuid`, `workload_type`, `last_reported` | Denormalized metadata |
+| `resolved_tags` (JSONB) | Reserved for Koku tag sync; GIN-indexed |
+
+### Future: tag filtering
+
+When tags are synced from Koku into `resolved_tags`, list filters can use
+GIN-indexed JSON containment (`resolved_tags @> '{"key": "value"}'`) on the key
+table before joining recommendation detail — no DISTINCT, no full-table scan.
+
+See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
+for full schema, refresh triggers, and example SQL.
 
 ---
 
-## Plugin Query Paths (2026 audit expansion)
+## Plugin Query Paths (2026 audit + fixes)
 
-The explain-audit script now covers GPU MIG, GPU time-slicing, snapshot
-staleness, business-hours enrichment, term/engine filters, and node utilization.
-See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
-for full plans and timings.
+The explain-audit script covers GPU MIG, GPU time-slicing, snapshot staleness,
+business-hours enrichment, term/engine filters, and node utilization.
 
 | Plugin | Typical latency (org-large) | Status |
 |--------|----------------------------|--------|
+| Container list (key table + keyset) | **< 5 ms** any page | **Fixed** — `org_container_keys` |
+| Term/engine list filters | **< 5 ms** | **Fixed** — detail join only |
 | GPU MIG digest fetch | ~21 ms | Healthy |
 | GPU time-slicing triple pagination | ~115–170 ms | Borderline — index added in migration 000080 |
 | Snapshot list / classify / reconcile | < 3 ms | Healthy — migration 000080 |
 | BH digest (single cluster) | ~220 ms | Acceptable |
-| BH digest (all clusters on page) | ~5 s worst case | Restrict to page container keys (future) |
-| Term/engine list filters | ~1.2 s | DISTINCT-bound; keyset index omits term/engine by design |
+| BH digest (multi-cluster page) | **< 5 ms** | **Fixed** — page container-key filter |
 | Node utilization list | ~2 ms | Healthy — `org_id` rewrite + migration 000080 |
 
-**Query rewrites in this pass:** node utilization and GPU triple pagination no
-longer join through `rh_accounts` when `org_id` or a pre-scoped cluster list is
-available.
+**Recent fixes:**
+
+- **BH enrichment** — Digest queries filter by `(cluster_uuid, namespace, workload,
+  container_name)` tuples on the current page, not entire clusters.
+- **Container list** — Paginates `org_container_keys` instead of `DISTINCT` on
+  `recommendation_sets`.
+- **Node utilization / GPU triples** — No longer join through `rh_accounts` when
+  `org_id` or a pre-scoped cluster list is available.
 
 ---
 
@@ -142,13 +165,27 @@ term/engine/stale).
 | Index scan but slow sort | Add index with matching `ORDER BY` |
 | Heap fetches dominate | Add `INCLUDE` columns for covering index |
 | Filter on non-indexed predicate | Add partial index matching `WHERE` clause |
-| `DISTINCT` over millions of rows | Architectural change (materialized view or key table) |
+| `DISTINCT` over millions of rows | Materialized key table (`org_container_keys`) — **done** |
 
 Fix in priority order:
 
 1. **P0 — Query rewrites** (free, no migration)
 2. **P1 — New indexes** (cheap migration)
 3. **P2 — Architecture** (materialized views, denormalization)
+
+---
+
+## Outstanding Items
+
+| Item | Status |
+|------|--------|
+| `org_container_keys` pagination (eliminate DISTINCT) | **Done** |
+| BH enrichment container-key filter | **Done** |
+| Keyset pagination + partial indexes (000078–000080) | **Done** |
+| Remaining `rh_accounts` join offenders (quality, namespace list, history) | Open |
+| GPU triple fresh-node materialization | Open |
+| Fleet savings materialized summary | Open |
+| Koku tag sync → `resolved_tags` | Future |
 
 ---
 
@@ -204,3 +241,4 @@ prints a report with timing, scan types, and recommendations.
 - [Configuration](configuration.md) — database pool and performance env vars
 - [Monitoring](monitoring.md) — API latency and error metrics
 - [Migrations README](../migrations/README.md) — concurrent index procedures
+- [Internal query performance guide](../docs/operations/query-performance.md) — full EXPLAIN plans and checklists

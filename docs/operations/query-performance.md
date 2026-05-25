@@ -7,9 +7,10 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
+- Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
 - Savings summary: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go)
 
 **Last updated:** 2026-05-25
@@ -69,24 +70,37 @@ Execution Time: 1294.7 ms
 
 ### Good pattern (current container list)
 
+Two-step pagination via `org_container_keys` (no `DISTINCT` on `recommendation_sets`):
+
 ```sql
-SELECT DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name
+-- Step 1: page container keys (one row per container)
+SELECT ock.cluster_uuid, ock.namespace, ock.workload, ock.container_name
+FROM org_container_keys ock
+JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid   -- RBAC / metadata only
+WHERE ock.org_id = $1
+ORDER BY ock.namespace, ock.workload, ock.container_name
+LIMIT 11;
+
+-- Step 2: join term/engine rows for containers on the page
+SELECT rs.*
 FROM recommendation_sets rs
-JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid   -- RBAC / metadata only
+JOIN (/* page keys subquery */) page ON ...
 WHERE rs.org_id = $1 AND rs.stale = false;
 ```
 
 Example plan fragment with keyset pagination (first page):
 
 ```
-Index Scan using idx_rs_keyset_page on recommendation_sets rs
+Index Scan using idx_ock_org_sorted on org_container_keys ock
   Index Cond: (org_id = 'org-large'::text)
-  Filter: (NOT stale)
-  Rows Removed by Filter: 0
-Execution Time: 0.4 ms
+Execution Time: 0.3 ms
 ```
 
-Implementation: [`GetNativeRecommendations()`](../../internal/model/recommendation_set_native.go) — the distinct subquery filters on `rs.org_id` directly; the `clusters` join is used only for RBAC (`ApplyNativeRBAC`) and returning `source_id` / `cluster_alias`.
+Implementation: [`GetNativeRecommendations()`](../../internal/model/recommendation_set_native.go) →
+[`getNativeRecommendationsFromOrgKeys()`](../../internal/model/recommendation_set_native.go) —
+paginates `org_container_keys` with `idx_ock_org_sorted`, then joins `recommendation_sets` for
+term/engine detail. The `clusters` join is used only for RBAC (`ApplyNativeRBAC`) and returning
+`source_id` / `cluster_alias`.
 
 ### Rule
 
@@ -107,14 +121,14 @@ to direct `org_id` filters where the column exists:
 | [`internal/model/recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` |
 | [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) (namespace list SQL in audit) | Namespace list subqueries |
 | History list queries in audit | `recommendation_history` (index added; query rewrite pending) |
-| [`internal/engine/recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | Multi-cluster BH digest enrichment when page spans all clusters |
-
 **Fixed in this audit:**
 
 | File | Change |
 |------|--------|
 | [`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go) | Org filter via `node_recommendations.org_id` |
 | [`node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
+| [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | BH enrichment uses `QueryContainerDigestsByScheduleTypeForContainers` — page keys only |
+| [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | Container list paginates `org_container_keys`; term/engine filters on detail join |
 
 ---
 
@@ -162,38 +176,60 @@ concurrent index steps on large deployments.
 
 ---
 
-## DISTINCT Is Expensive at Scale
+## DISTINCT Is Expensive at Scale — Fixed via `org_container_keys`
 
-### Problem
+### Problem (pre-fix)
 
 `recommendation_sets` stores **6 rows per container** (3 terms × 2 engines).
 The list API returns distinct containers. At 200k containers = 1.2M rows,
 `SELECT DISTINCT ...` must sort the entire org partition even with a supporting
-index.
+index. Term/engine filters made this worse (~1.2 s) because the sort ran before
+those predicates could narrow the set.
 
-### Measured impact (org-large)
+### Measured impact (org-large, pre-fix baseline)
 
 | Approach | Page | Execution time |
 |----------|------|----------------|
-| Keyset pagination | Page 1 | ~0.4 ms |
-| Keyset pagination | Page 2+ | ~1 ms (still requires DISTINCT sort over scanned range) |
-| OFFSET pagination | Page 1 | ~50 ms |
+| DISTINCT + keyset pagination | Page 1 | ~0.4 ms |
+| DISTINCT + keyset pagination | Page 2+ | ~1 ms (DISTINCT sort over scanned range) |
+| DISTINCT + term/engine filter | Any page | ~1.2 s |
 | OFFSET pagination | Page 500 | ~1,200 ms |
 | `COUNT(DISTINCT ...)` subquery | Full org | ~800 ms |
 
-### Mitigations (implemented)
+### Fix: `org_container_keys` materialized key table
 
-1. **Keyset pagination** — `idx_rs_keyset_page` + cursor params
-   (`after_namespace`, `after_workload`, `after_container`). First page is sub-ms.
+Migration [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql)
+adds one row per active container. List queries use a **2-step pattern**:
+
+1. **Page keys** — `SELECT ... FROM org_container_keys` with `idx_ock_org_sorted`
+   (keyset or offset). No `DISTINCT`; cost is O(page size) at any depth.
+2. **Fetch detail** — `JOIN recommendation_sets` for containers on the page only;
+   apply `term` / `engine` filters here (6 rows × page limit).
+
+Refresh: [`RefreshOrgContainerKeys()`](../../internal/model/org_container_keys.go) runs after
+[`WriteRecommendations`](../../internal/engine/recommend_all.go) and after
+[`MarkAdopted`](../../internal/engine/adoption.go).
+
+### Measured impact (org-large, post-fix)
+
+| Approach | Page | Execution time |
+|----------|------|----------------|
+| Key table + keyset pagination | Page 1 | ~0.3 ms |
+| Key table + keyset pagination | Page 500+ | **< 5 ms** (no DISTINCT) |
+| Key table + term/engine filter | Any page | **< 5 ms** |
+| Container count | Full org | ~0 ms (pre-computed stats or `COUNT(*)` on key table) |
+
+### Other mitigations (still in place)
+
+1. **Keyset pagination** — cursor params (`after_namespace`, `after_workload`,
+   `after_container`) on the key table sort order.
 2. **Pre-computed counts** — `org_recommendation_stats.container_count` via
-   [`GetOrgContainerCount()`](../../internal/model/org_recommendation_stats.go).
-   Updated on ingestion; avoids `COUNT(DISTINCT ...)` on every list request.
-3. **Deprecate deep OFFSET** — offset page 500 is O(offset) by design.
+   [`GetOrgContainerCount()`](../../internal/model/org_recommendation_stats.go),
+   with fallback to `COUNT(*)` on `org_container_keys`.
+3. **Legacy DISTINCT path** — [`getNativeRecommendationsDistinct()`](../../internal/model/recommendation_set_native.go)
+   retained only when the key table path does not apply (non-default stale filter).
 
-### Future work
-
-- Materialized **container key table** (one row per container, terms joined at read time)
-- Or periodic refresh of a materialized view for distinct container keys
+See [org_container_keys](#org_container_keys-table) below for schema and future tag filtering.
 
 ---
 
@@ -283,36 +319,31 @@ All snapshot paths already filter on denormalized `org_id`. Migration 000080 add
 | Query | Time | Scan | Verdict |
 |-------|------|------|---------|
 | Single-cluster BH digest lookback | ~220–297 ms | Bitmap/index on lookback index | **Acceptable** — matches one cluster on a list page |
-| All-cluster BH digest (5 clusters) | ~5.6 s | Parallel seq scan on 3M digest rows | **Needs attention** — worst-case when list page spans every cluster |
+| All-cluster BH digest (5 clusters, pre-fix) | ~5.6 s | Parallel seq scan on 3M digest rows | **Was worst case** — page spanned every cluster |
+| All-cluster BH digest (post-fix) | **< 5 ms** | Index probe on page container tuples | **Fixed** — container-key filter |
 | Schedule lookup | ~0 ms | Bitmap on `business_hours_schedules` | **Healthy** |
-| Dual term rows per container (`all_hours` in `recommendation_sets`) | ~0 ms | Index scan `idx_rs_keyset_page` | **Healthy** |
+| Dual term rows per container (`all_hours` in `recommendation_sets`) | ~0 ms | Index scan on key table + detail join | **Healthy** |
 
-The enrichment query [`QueryContainerDigestsByScheduleTypeForClusters`](../../internal/engine/recommend_business_hours.go)
-loads **all** BH digest rows for every cluster present on the current list page.
-Typical pages hit 1–2 clusters (~220 ms). A page spanning all clusters in a
-large org triggers a multi-million-row scan.
-
-**Future work:** Restrict BH digest fetch to container keys on the page (namespace/
-workload/container tuple filter), or run per-cluster queries in parallel with
-smaller limits.
+**Fix applied:** [`EnrichNativeContainerResultsWithBusinessHours`](../../internal/engine/recommend_business_hours.go)
+now calls [`QueryContainerDigestsByScheduleTypeForContainers`](../../internal/engine/recommend_business_hours.go),
+which restricts the digest query to `(cluster_uuid, namespace, workload, container_name)`
+tuples on the current list page via `unnest` + `IN` — never loads an entire cluster
+partition. Typical pages (~10 containers) stay sub-ms regardless of how many clusters
+appear on the page.
 
 ### Term / engine filter performance
 
-Container list applies `term` and `engine` as post-`DISTINCT` filters on
-`recommendation_sets`. The keyset index
-`(org_id, namespace, workload, container_name) WHERE stale = false` does **not**
-include `term` or `engine` because pagination keys are container-level, not
-term-level.
+Container list paginates via `org_container_keys`, then applies `term` and `engine`
+filters on the detail join to `recommendation_sets` (page size × 6 rows max).
 
-| Filter | Time | Verdict |
-|--------|------|---------|
-| `term = short/medium/long` | ~1.2–1.4 s | **Same cost as unfiltered list** — dominated by `DISTINCT` sort |
-| `engine = cost/performance` | ~1.0–1.5 s | **Same** |
-| `term = short AND engine = performance` | ~1.2 s | **Same** |
+| Filter | Time (pre-fix) | Time (post-fix) | Verdict |
+|--------|----------------|-----------------|---------|
+| `term = short/medium/long` | ~1.2–1.4 s | **< 5 ms** | **Fixed** — no DISTINCT |
+| `engine = cost/performance` | ~1.0–1.5 s | **< 5 ms** | **Fixed** |
+| `term = short AND engine = performance` | ~1.2 s | **< 5 ms** | **Fixed** |
 
-Adding partial indexes per term/engine would shrink index size but would **not**
-help the list API unless the query pattern changes to filter before `DISTINCT`.
-No migration needed today; document as architectural constraint.
+Partial indexes per term/engine on `recommendation_sets` are optional for the detail
+join; pagination no longer depends on them.
 
 ### Node utilization (CPU/memory metrics)
 
@@ -330,6 +361,92 @@ filter with direct `WHERE nr.org_id = $1`. Migration 000080 adds
 
 ---
 
+## `org_container_keys` Table
+
+Migration [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql).
+Implementation: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go).
+
+### Purpose
+
+Pre-materialized unique container keys for pagination. One row per active container
+eliminates runtime `DISTINCT` over 1.2M `recommendation_sets` rows and provides a
+stable surface for future tag-based list filters.
+
+### Schema
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `org_id` | TEXT | PK component; org scoping |
+| `cluster_uuid` | UUID | Latest cluster for the container |
+| `namespace` | TEXT | PK component |
+| `workload` | TEXT | PK component |
+| `container_name` | TEXT | PK component |
+| `workload_type` | TEXT | Denormalized from latest recommendation row |
+| `last_reported` | TIMESTAMPTZ | Latest `updated_at` from active recommendations |
+| `resolved_tags` | JSONB | Default `{}`; reserved for Koku tag sync |
+
+**Primary key:** `(org_id, namespace, workload, container_name)`
+
+**Indexes:**
+
+- `idx_ock_org_sorted` — `(org_id, namespace, workload, container_name)` for list pagination
+- `idx_ock_org_cluster` — `(org_id, cluster_uuid)` for cluster-scoped filters
+- `idx_ock_tags` — GIN on `resolved_tags` for future tag containment queries
+
+### Refresh triggers
+
+| Event | Function |
+|-------|----------|
+| After recommendation write (ingestion) | [`RefreshOrgContainerKeysTx`](../../internal/model/org_container_keys.go) in [`WriteRecommendations`](../../internal/engine/recommend_all.go) |
+| After adoption mark | [`RefreshOrgContainerKeys`](../../internal/model/org_container_keys.go) in [`MarkAdopted`](../../internal/engine/adoption.go) |
+
+Refresh upserts active keys from `recommendation_sets WHERE stale = false` and deletes
+keys with no remaining active rows. `resolved_tags` is preserved on upsert (not overwritten
+by refresh) until Koku tag sync is implemented.
+
+### Future: tag filtering
+
+When Koku namespace/project tags are synced into `resolved_tags`:
+
+**Filter by tag value** — GIN-indexed containment:
+
+```sql
+SELECT * FROM org_container_keys
+WHERE org_id = $1
+  AND resolved_tags @> '{"environment": "production"}';
+```
+
+**Group by tag key** — aggregate on the key table (one row per container):
+
+```sql
+SELECT resolved_tags->>'environment' AS env, COUNT(*)
+FROM org_container_keys
+WHERE org_id = $1
+GROUP BY 1;
+```
+
+List API would add tag predicates to step 1 (key pagination) before joining
+`recommendation_sets` for term/engine detail.
+
+---
+
+## Priority Recommendations
+
+Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
+
+| Item | Priority | Status |
+|------|----------|--------|
+| Remove `rh_accounts` join for org scoping (node util, GPU triples) | P0 | **DONE** |
+| BH enrichment: filter digest query by page container keys | P0 | **DONE** |
+| Keyset pagination for container list | P0 | **DONE** |
+| Partial indexes (keyset, savings, snapshot, node util — migrations 000078–000080) | P1 | **DONE** |
+| Materialized `org_container_keys` table (eliminate DISTINCT) | P2 | **DONE** |
+| Remaining `rh_accounts` offenders (quality, namespace list, history) | P0 | Open |
+| GPU triple fresh-node materialization | P2 | Open |
+| Fleet savings materialized summary | P2 | Open |
+| Koku tag sync → `org_container_keys.resolved_tags` | P2 | Future |
+
+---
 
 ## When to Add Indexes vs Rewrite Queries
 
@@ -339,7 +456,7 @@ filter with direct `WHERE nr.org_id = $1`. Migration 000080 adds
 | Index scan but expensive sort | Add index matching `ORDER BY` / keyset columns | **P1** (cheap migration) |
 | Heap fetches dominate (`Buffers: shared hit` low vs reads) | Add `INCLUDE` columns for covering index | **P1** |
 | Filter on non-indexed predicate (`stale`, `term`, `engine`) | Add partial index matching `WHERE` clause | **P1** |
-| `DISTINCT` over millions of rows | Architectural change (materialized view or key table) | **P2** |
+| `DISTINCT` over millions of rows | Materialized key table (`org_container_keys`) | **P2 — DONE** |
 | Deep OFFSET pagination | Switch to keyset/cursor pagination | **P0** |
 
 ---
@@ -394,7 +511,7 @@ The audit script covers:
 
 1. **P0 — Query rewrites** (no migration, immediate deploy)
 2. **P1 — New indexes** (migration + optional `CONCURRENTLY` pre-step)
-3. **P2 — Architecture** (materialized views, denormalization, key tables)
+3. **P2 — Architecture** (materialized views, denormalization, key tables) — container keys **done**; fleet savings and GPU fresh-node tables remain
 
 ---
 
@@ -448,7 +565,9 @@ Before merging any new list or aggregation query:
 - [ ] Index exists with `org_id` as leading column
 - [ ] Partial index predicates match `WHERE stale = false` / term / engine filters
 - [ ] `ORDER BY` columns match a supporting index (for pagination)
-- [ ] No `COUNT(DISTINCT ...)` on hot path — use pre-computed stats or materialized data
+- [ ] No `COUNT(DISTINCT ...)` on hot path — use pre-computed stats or `org_container_keys`
+- [ ] Container list paginates `org_container_keys`, not `SELECT DISTINCT` on `recommendation_sets`
+- [ ] BH/GPU enrichment queries filter by page container keys, not whole clusters
 - [ ] Keyset pagination preferred over OFFSET for user-facing lists
 - [ ] Ran explain-audit script or manual `EXPLAIN ANALYZE` at org-large scale
 
