@@ -67,8 +67,8 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 	defer rows.Close()
 
-	grouped := make(map[string][]GPUDigestRow, 32)
-	lastNode := make(map[string]string, 32)
+	grouped := make(map[containerID][]GPUDigestRow, 32)
+	lastNode := make(map[containerID]string, 32)
 	nodeLastSeen := make(map[string]time.Time, 8)
 	for rows.Next() {
 		var d GPUDigestRow
@@ -85,7 +85,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("scan GPU digest row: %w", err)
 		}
-		key := fmt.Sprintf("%s/%s/%s", ns, wl, cn)
+		key := containerID{Namespace: ns, Workload: wl, ContainerName: cn}
 		grouped[key] = append(grouped[key], d)
 		if d.NodeName != "" {
 			lastNode[key] = d.NodeName
@@ -103,7 +103,10 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 
 	result := make(map[string][]*GPURec, len(grouped))
+	nodeMapStr := make(map[string]string, len(lastNode))
 	for key, allDigests := range grouped {
+		strKey := gpuContainerKeyString(key)
+		nodeMapStr[strKey] = lastNode[key]
 		latest := latestGPUDigest(allDigests)
 		for _, tc := range terms {
 			windowDigests := filterGPUByWindow(allDigests, latest.IntervalStart, tc.WindowDays)
@@ -113,7 +116,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			rec := RecommendGPUWithSettings(windowDigests, gpuSettings)
 			if rec != nil {
 				rec.Term = tc.Name
-				result[key] = append(result[key], rec)
+				result[strKey] = append(result[strKey], rec)
 			}
 		}
 	}
@@ -121,7 +124,11 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof(
 		"QueryGPURecommendations: %d containers with GPU data, %d container-term recommendations",
 		len(grouped), countGPURecs(result))
-	return result, lastNode, nodeLastSeen, nil
+	return result, nodeMapStr, nodeLastSeen, nil
+}
+
+func gpuContainerKeyString(key containerID) string {
+	return key.Namespace + "/" + key.Workload + "/" + key.ContainerName
 }
 
 // filterGPUByWindow returns GPU digest rows within the last windowDays
