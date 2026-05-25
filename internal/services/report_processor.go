@@ -7,6 +7,8 @@ import (
 	"io"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-playground/validator/v10"
@@ -599,25 +601,34 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		log.Warn("native engine: analytics pipeline incomplete (history and/or quality) — container recommendations were written")
 	}
 
+	eg, egCtx := errgroup.WithContext(ctx)
+
 	if plugin.EnabledFor("gpu") {
-		tGPU := time.Now()
-		if err := engine.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
-			log.Warnf("native engine: marking GPU containers failed: %v", err)
-		}
-		gpuTerms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID, "gpu")
-		if termErr != nil {
-			log.Warnf("native engine: load term config for GPU classification failed: %v", termErr)
-			gpuTerms = engine.DefaultTermsForPlugin("gpu")
-		}
-		if err := engine.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
-			log.Warnf("native engine: storing GPU classifications failed: %v", err)
-		}
-		metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
+		eg.Go(func() error {
+			tGPU := time.Now()
+			if err := engine.MarkContainersWithGPU(egCtx, pool, orgID, clusterUUID); err != nil {
+				log.Warnf("native engine: marking GPU containers failed: %v", err)
+			}
+			gpuTerms, termErr := engine.LoadTermConfigCached(egCtx, pool, orgID, "gpu")
+			if termErr != nil {
+				log.Warnf("native engine: load term config for GPU classification failed: %v", termErr)
+				gpuTerms = engine.DefaultTermsForPlugin("gpu")
+			}
+			if err := engine.StoreGPUClassifications(egCtx, pool, orgID, clusterUUID, gpuTerms); err != nil {
+				log.Warnf("native engine: storing GPU classifications failed: %v", err)
+			}
+			metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
+			return nil
+		})
 	}
 
-	if err := runNodeRecommendations(ctx, pool, orgID, clusterUUID, start, now, appCfg, costData); err != nil {
-		log.Warnf("native engine: node recommendations incomplete: %v", err)
-		return fmt.Errorf("node recommendations: %w", err)
+	eg.Go(func() error {
+		return runNodeRecommendations(egCtx, pool, orgID, clusterUUID, start, now, appCfg, costData)
+	})
+
+	if err := eg.Wait(); err != nil {
+		log.Warnf("native engine: post-container recommendations incomplete: %v", err)
+		return fmt.Errorf("post-container recommendations: %w", err)
 	}
 	return nil
 }
