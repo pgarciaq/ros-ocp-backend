@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -262,8 +262,6 @@ func respondNodeGPURecommendationsTripleSQL(
 		allRecs = []model.NodeGPURecommendation{}
 	}
 
-	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
-
 	var totalSavings *float32
 	var sum float32
 	hasSavings := false
@@ -480,30 +478,51 @@ func filterNodeRecs(recs []model.NodeGPURecommendation, nodeName, gpuModel, term
 }
 
 // sortNodeRecs sorts recommendations in-place by the given column and direction.
+// Uses unstable sort; SQL ORDER BY provides base ordering for paginated triple-SQL paths.
 func sortNodeRecs(recs []model.NodeGPURecommendation, orderBy, orderHow string) {
 	if len(recs) <= 1 {
 		return
 	}
 	desc := orderHow == listoptions.OrderDesc
-	sort.SliceStable(recs, func(i, j int) bool {
+	slices.SortFunc(recs, func(a, b model.NodeGPURecommendation) int {
 		if desc {
-			i, j = j, i
+			a, b = b, a
 		}
 		switch orderBy {
 		case "cluster_uuid":
-			return recs[i].ClusterUUID < recs[j].ClusterUUID
+			return strings.Compare(a.ClusterUUID, b.ClusterUUID)
 		case "gpu_model", "gpu_model_name":
-			return recs[i].GPUModel < recs[j].GPUModel
+			return strings.Compare(a.GPUModel, b.GPUModel)
 		case "recommended_replicas":
-			return recs[i].RecommendedReplicas < recs[j].RecommendedReplicas
+			return cmpInt(a.RecommendedReplicas, b.RecommendedReplicas)
 		case "confidence":
-			return recs[i].Confidence < recs[j].Confidence
+			return cmpFloat32(a.Confidence, b.Confidence)
 		case "total_node_savings_usd":
-			return derefFloat32(recs[i].TotalNodeSavingsUSD) < derefFloat32(recs[j].TotalNodeSavingsUSD)
+			return cmpFloat32(derefFloat32(a.TotalNodeSavingsUSD), derefFloat32(b.TotalNodeSavingsUSD))
 		default: // node_name
-			return recs[i].NodeName < recs[j].NodeName
+			return strings.Compare(a.NodeName, b.NodeName)
 		}
 	})
+}
+
+func cmpInt(a, b int) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func cmpFloat32(a, b float32) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
 }
 
 func derefFloat32(p *float32) float32 {
