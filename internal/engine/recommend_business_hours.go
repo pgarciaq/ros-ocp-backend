@@ -49,6 +49,30 @@ const containerDigestSelect = `
 		  AND bucket_date >= $3 AND bucket_date <= $4
 		  AND schedule_type = $5`
 
+const containerDigestSelectMultiCluster = `
+		SELECT bucket_date,
+			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
+			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
+			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
+			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
+			COALESCE(cpu_usage_max_mc, 0),
+			COALESCE(cpu_throttle_p95_mc, 0), COALESCE(cpu_throttle_max_mc, 0),
+			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
+			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
+			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
+			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
+			COALESCE(memory_usage_max_kib, 0),
+			COALESCE(memory_rss_p95_kib, 0), COALESCE(memory_rss_max_kib, 0),
+			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
+			COALESCE(sample_count, 0),
+			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
+			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
+			cluster_uuid::text, namespace, workload, workload_type, container_name
+		FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
+		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5`
+
 // QueryContainerDigestsByScheduleType loads digest rows for a cluster and schedule stream.
 func QueryContainerDigestsByScheduleType(
 	ctx context.Context,
@@ -57,19 +81,39 @@ func QueryContainerDigestsByScheduleType(
 	start, end time.Time,
 	scheduleType string,
 ) (map[containerKey][]DigestRow, error) {
-	rows, err := pool.Query(ctx, containerDigestSelect+`
-		ORDER BY namespace, workload, workload_type, container_name, bucket_date`,
-		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
+	byCluster, err := QueryContainerDigestsByScheduleTypeForClusters(ctx, pool, orgID, []string{clusterUUID}, start, end, scheduleType)
+	if err != nil {
+		return nil, err
+	}
+	return byCluster[clusterUUID], nil
+}
+
+// QueryContainerDigestsByScheduleTypeForClusters loads digest rows for multiple clusters in one query.
+func QueryContainerDigestsByScheduleTypeForClusters(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	clusterUUIDs []string,
+	start, end time.Time,
+	scheduleType string,
+) (map[string]map[containerKey][]DigestRow, error) {
+	if len(clusterUUIDs) == 0 {
+		return map[string]map[containerKey][]DigestRow{}, nil
+	}
+
+	rows, err := pool.Query(ctx, containerDigestSelectMultiCluster+`
+		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`,
+		orgID, clusterUUIDs, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query container digests schedule_type=%s: %w", scheduleType, err)
 	}
 	defer rows.Close()
 
-	grouped := make(map[containerKey][]DigestRow)
+	grouped := make(map[string]map[containerKey][]DigestRow)
 	for rows.Next() {
 		var d DigestRow
-		var ns, wl, wlType, cn string
+		var clusterUUID, ns, wl, wlType, cn string
 		if err := rows.Scan(
 			&d.BucketDate,
 			&d.CPURequestP50MC, &d.CPURequestP60MC,
@@ -86,12 +130,15 @@ func QueryContainerDigestsByScheduleType(
 			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
 			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
 			&d.DesiredReplicas, &d.AvailableReplicas,
-			&ns, &wl, &wlType, &cn,
+			&clusterUUID, &ns, &wl, &wlType, &cn,
 		); err != nil {
 			return nil, fmt.Errorf("scan container digest: %w", err)
 		}
 		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
-		grouped[key] = append(grouped[key], d)
+		if grouped[clusterUUID] == nil {
+			grouped[clusterUUID] = make(map[containerKey][]DigestRow)
+		}
+		grouped[clusterUUID][key] = append(grouped[clusterUUID][key], d)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate container digests: %w", err)
@@ -190,8 +237,15 @@ func EnrichNativeContainerResultsWithBusinessHours(
 	}
 
 	byCluster := make(map[string][]int)
+	clusterUUIDs := make([]string, 0)
+	seenCluster := make(map[string]bool)
 	for i := range results {
-		byCluster[results[i].ClusterUUID] = append(byCluster[results[i].ClusterUUID], i)
+		cu := results[i].ClusterUUID
+		byCluster[cu] = append(byCluster[cu], i)
+		if !seenCluster[cu] {
+			seenCluster[cu] = true
+			clusterUUIDs = append(clusterUUIDs, cu)
+		}
 	}
 
 	terms, err := LoadTermConfigCached(ctx, pool, orgID, "container")
@@ -205,24 +259,32 @@ func EnrichNativeContainerResultsWithBusinessHours(
 	}
 
 	oomCfg := OOMConfig{}
+	windowDays := maxTermWindowDays(terms)
+
+	scheduleCaches, err := LoadSchedulesForClusters(ctx, pool, orgID, clusterUUIDs)
+	if err != nil {
+		return fmt.Errorf("load business hours schedules: %w", err)
+	}
+
+	digestWindows, err := digestWindowsForClusters(ctx, pool, orgID, "daily_container_digests", clusterUUIDs, windowDays)
+	if err != nil {
+		return err
+	}
+	queryStart, queryEnd := mergeDigestQueryWindow(digestWindows)
+
+	bhDigestsByCluster, err := QueryContainerDigestsByScheduleTypeForClusters(
+		ctx, pool, orgID, clusterUUIDs, queryStart, queryEnd, digestScheduleBusinessHours,
+	)
+	if err != nil {
+		return err
+	}
 
 	for clusterUUID, indices := range byCluster {
-		start, end, err := digestWindowForCluster(ctx, pool, orgID, clusterUUID, "daily_container_digests", maxTermWindowDays(terms))
-		if err != nil {
-			return err
-		}
-		cache, err := LoadSchedules(ctx, pool, orgID, clusterUUID)
-		if err != nil {
-			return fmt.Errorf("load business hours schedules: %w", err)
-		}
-		if !cache.HasAnyEnabled() {
+		cache := scheduleCaches[clusterUUID]
+		if cache == nil || !cache.HasAnyEnabled() {
 			continue
 		}
-
-		bhDigests, err := QueryContainerDigestsByScheduleType(ctx, pool, orgID, clusterUUID, start, end, digestScheduleBusinessHours)
-		if err != nil {
-			return err
-		}
+		bhDigests := bhDigestsByCluster[clusterUUID]
 
 		for _, idx := range indices {
 			r := &results[idx]
@@ -298,17 +360,86 @@ func digestWindowForCluster(
 	orgID, clusterUUID, table string,
 	windowDays int,
 ) (start, end time.Time, err error) {
-	var maxDate time.Time
-	q := fmt.Sprintf(`
-		SELECT COALESCE(MAX(bucket_date), CURRENT_DATE)
-		FROM %s
-		WHERE org_id = $1 AND cluster_uuid = $2`, table)
-	if err := pool.QueryRow(ctx, q, orgID, clusterUUID).Scan(&maxDate); err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("max digest date for %s: %w", table, err)
+	windows, err := digestWindowsForClusters(ctx, pool, orgID, table, []string{clusterUUID}, windowDays)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
 	}
-	end = maxDate.Truncate(24 * time.Hour)
-	start = end.AddDate(0, 0, -(windowDays - 1))
-	return start, end, nil
+	w := windows[clusterUUID]
+	return w.start, w.end, nil
+}
+
+type digestWindow struct {
+	start time.Time
+	end   time.Time
+}
+
+func digestWindowsForClusters(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, table string,
+	clusterUUIDs []string,
+	windowDays int,
+) (map[string]digestWindow, error) {
+	out := make(map[string]digestWindow, len(clusterUUIDs))
+	if len(clusterUUIDs) == 0 {
+		return out, nil
+	}
+	q := fmt.Sprintf(`
+		SELECT cluster_uuid::text, COALESCE(MAX(bucket_date), CURRENT_DATE)
+		FROM %s
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
+		GROUP BY cluster_uuid`, table)
+	rows, err := pool.Query(ctx, q, orgID, clusterUUIDs)
+	if err != nil {
+		return nil, fmt.Errorf("max digest dates for %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	seen := make(map[string]bool, len(clusterUUIDs))
+	for rows.Next() {
+		var clusterUUID string
+		var maxDate time.Time
+		if err := rows.Scan(&clusterUUID, &maxDate); err != nil {
+			return nil, fmt.Errorf("scan max digest date: %w", err)
+		}
+		end := maxDate.Truncate(24 * time.Hour)
+		start := end.AddDate(0, 0, -(windowDays - 1))
+		out[clusterUUID] = digestWindow{start: start, end: end}
+		seen[clusterUUID] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Clusters with no digest rows still get a window anchored on today.
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	for _, clusterUUID := range clusterUUIDs {
+		if seen[clusterUUID] {
+			continue
+		}
+		out[clusterUUID] = digestWindow{
+			start: now.AddDate(0, 0, -(windowDays - 1)),
+			end:   now,
+		}
+	}
+	return out, nil
+}
+
+func mergeDigestQueryWindow(windows map[string]digestWindow) (start, end time.Time) {
+	first := true
+	for _, w := range windows {
+		if first {
+			start, end = w.start, w.end
+			first = false
+			continue
+		}
+		if w.start.Before(start) {
+			start = w.start
+		}
+		if w.end.After(end) {
+			end = w.end
+		}
+	}
+	return start, end
 }
 
 const namespaceDigestSelect = `
@@ -331,6 +462,26 @@ const namespaceDigestSelect = `
 		  AND bucket_date >= $3 AND bucket_date <= $4
 		  AND schedule_type = $5`
 
+const namespaceDigestSelectMultiCluster = `
+		SELECT bucket_date,
+			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
+			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
+			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
+			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
+			COALESCE(cpu_usage_max_mc, 0),
+			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
+			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
+			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
+			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
+			COALESCE(memory_usage_max_kib, 0),
+			COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
+			COALESCE(sample_count, 0),
+			cluster_uuid::text, namespace
+		FROM daily_namespace_digests
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
+		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5`
+
 func queryNamespaceDigestsByScheduleType(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -338,19 +489,37 @@ func queryNamespaceDigestsByScheduleType(
 	start, end time.Time,
 	scheduleType string,
 ) (map[namespaceKey][]DigestRow, error) {
-	rows, err := pool.Query(ctx, namespaceDigestSelect+`
-		ORDER BY namespace, bucket_date`,
-		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
+	byCluster, err := queryNamespaceDigestsByScheduleTypeForClusters(ctx, pool, orgID, []string{clusterUUID}, start, end, scheduleType)
+	if err != nil {
+		return nil, err
+	}
+	return byCluster[clusterUUID], nil
+}
+
+func queryNamespaceDigestsByScheduleTypeForClusters(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	clusterUUIDs []string,
+	start, end time.Time,
+	scheduleType string,
+) (map[string]map[namespaceKey][]DigestRow, error) {
+	if len(clusterUUIDs) == 0 {
+		return map[string]map[namespaceKey][]DigestRow{}, nil
+	}
+	rows, err := pool.Query(ctx, namespaceDigestSelectMultiCluster+`
+		ORDER BY cluster_uuid, namespace, bucket_date`,
+		orgID, clusterUUIDs, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query namespace digests schedule_type=%s: %w", scheduleType, err)
 	}
 	defer rows.Close()
 
-	grouped := make(map[namespaceKey][]DigestRow)
+	grouped := make(map[string]map[namespaceKey][]DigestRow)
 	for rows.Next() {
 		var d DigestRow
-		var ns string
+		var clusterUUID, ns string
 		if err := rows.Scan(
 			&d.BucketDate,
 			&d.CPURequestP50MC, &d.CPURequestP60MC,
@@ -364,12 +533,15 @@ func queryNamespaceDigestsByScheduleType(
 			&d.MemUsageMaxKiB,
 			&d.CPUUsageMeanMC, &d.MemUsageMeanKiB,
 			&d.SampleCount,
-			&ns,
+			&clusterUUID, &ns,
 		); err != nil {
 			return nil, fmt.Errorf("scan namespace digest: %w", err)
 		}
 		key := namespaceKey{Namespace: ns}
-		grouped[key] = append(grouped[key], d)
+		if grouped[clusterUUID] == nil {
+			grouped[clusterUUID] = make(map[namespaceKey][]DigestRow)
+		}
+		grouped[clusterUUID][key] = append(grouped[clusterUUID][key], d)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate namespace digests: %w", err)
@@ -447,8 +619,15 @@ func EnrichNativeNamespaceResultsWithBusinessHours(
 	}
 
 	byCluster := make(map[string][]int)
+	clusterUUIDs := make([]string, 0)
+	seenCluster := make(map[string]bool)
 	for i := range results {
-		byCluster[results[i].ClusterUUID] = append(byCluster[results[i].ClusterUUID], i)
+		cu := results[i].ClusterUUID
+		byCluster[cu] = append(byCluster[cu], i)
+		if !seenCluster[cu] {
+			seenCluster[cu] = true
+			clusterUUIDs = append(clusterUUIDs, cu)
+		}
 	}
 
 	terms, err := LoadTermConfigCached(ctx, pool, orgID, "namespace")
@@ -461,23 +640,31 @@ func EnrichNativeNamespaceResultsWithBusinessHours(
 		return fmt.Errorf("load namespace thresholds for business hours: %w", err)
 	}
 
+	windowDays := maxTermWindowDays(terms)
+	scheduleCaches, err := LoadSchedulesForClusters(ctx, pool, orgID, clusterUUIDs)
+	if err != nil {
+		return fmt.Errorf("load business hours schedules: %w", err)
+	}
+
+	digestWindows, err := digestWindowsForClusters(ctx, pool, orgID, "daily_namespace_digests", clusterUUIDs, windowDays)
+	if err != nil {
+		return err
+	}
+	queryStart, queryEnd := mergeDigestQueryWindow(digestWindows)
+
+	bhDigestsByCluster, err := queryNamespaceDigestsByScheduleTypeForClusters(
+		ctx, pool, orgID, clusterUUIDs, queryStart, queryEnd, digestScheduleBusinessHours,
+	)
+	if err != nil {
+		return err
+	}
+
 	for clusterUUID, indices := range byCluster {
-		start, end, err := digestWindowForCluster(ctx, pool, orgID, clusterUUID, "daily_namespace_digests", maxTermWindowDays(terms))
-		if err != nil {
-			return err
-		}
-		cache, err := LoadSchedules(ctx, pool, orgID, clusterUUID)
-		if err != nil {
-			return fmt.Errorf("load business hours schedules: %w", err)
-		}
-		if !cache.HasAnyEnabled() {
+		cache := scheduleCaches[clusterUUID]
+		if cache == nil || !cache.HasAnyEnabled() {
 			continue
 		}
-
-		bhDigests, err := queryNamespaceDigestsByScheduleType(ctx, pool, orgID, clusterUUID, start, end, digestScheduleBusinessHours)
-		if err != nil {
-			return err
-		}
+		bhDigests := bhDigestsByCluster[clusterUUID]
 
 		for _, idx := range indices {
 			r := &results[idx]

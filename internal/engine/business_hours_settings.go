@@ -24,7 +24,16 @@ type ScheduleCache = bhschedule.Cache
 
 // LoadSchedules loads all schedule rows for orgID and clusterUUID (including org default).
 func LoadSchedules(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (*ScheduleCache, error) {
-	return bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
+	caches, err := LoadSchedulesForClusters(ctx, pool, orgID, []string{clusterUUID})
+	if err != nil {
+		return nil, err
+	}
+	return caches[clusterUUID], nil
+}
+
+// LoadSchedulesForClusters loads schedules for multiple clusters in one query.
+func LoadSchedulesForClusters(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) (map[string]*ScheduleCache, error) {
+	return bhschedule.LoadSchedulesForClusters(ctx, pool, orgID, clusterUUIDs)
 }
 
 // UpsertBusinessHoursSchedule inserts or updates a schedule row at the given scope.

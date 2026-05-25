@@ -93,6 +93,106 @@ func LoadSchedules(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 	return cache, nil
 }
 
+// LoadSchedulesForClusters loads schedules for multiple clusters in one query.
+// Returns a map keyed by cluster UUID; clusters with no applicable rows still get a Cache with org defaults.
+func LoadSchedulesForClusters(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) (map[string]*Cache, error) {
+	if len(clusterUUIDs) == 0 {
+		return map[string]*Cache{}, nil
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT cluster_uuid::text, namespace, timezone, days,
+			to_char(start_time, 'HH24:MI') AS start_time,
+			to_char(end_time, 'HH24:MI') AS end_time,
+			off_hours_weight, enabled
+		FROM business_hours_schedules
+		WHERE org_id = $1
+		  AND (cluster_uuid = ANY($2::uuid[]) OR cluster_uuid = $3::uuid)`,
+		orgID, clusterUUIDs, OrgClusterSentinelUUID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("loading business hours schedules for clusters: %w", err)
+	}
+	defer rows.Close()
+
+	var orgDefault *Schedule
+	byClusterNS := make(map[string]map[string]Schedule)
+	clusterLevel := make(map[string]*Schedule)
+
+	for rows.Next() {
+		var (
+			rowClusterUUID string
+			namespace      string
+			timezone       string
+			days           []string
+			startTime      string
+			endTime        string
+			offHoursWeight float32
+			enabled        bool
+		)
+		if err := rows.Scan(
+			&rowClusterUUID, &namespace, &timezone, &days,
+			&startTime, &endTime, &offHoursWeight, &enabled,
+		); err != nil {
+			return nil, fmt.Errorf("scanning business hours schedule: %w", err)
+		}
+
+		sched := Schedule{
+			OrgID:          orgID,
+			ClusterUUID:    rowClusterUUID,
+			Namespace:      namespace,
+			Timezone:       timezone,
+			Days:           normalizeDays(days),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			OffHoursWeight: float64(offHoursWeight),
+			Enabled:        enabled,
+		}
+		if err := initScheduleLocation(&sched); err != nil {
+			return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
+		}
+
+		switch {
+		case rowClusterUUID == OrgClusterSentinelUUID && namespace == "":
+			s := sched
+			orgDefault = &s
+		case namespace == "":
+			s := sched
+			clusterLevel[rowClusterUUID] = &s
+		default:
+			if byClusterNS[rowClusterUUID] == nil {
+				byClusterNS[rowClusterUUID] = make(map[string]Schedule)
+			}
+			byClusterNS[rowClusterUUID][namespace] = sched
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating business hours schedules: %w", err)
+	}
+
+	out := make(map[string]*Cache, len(clusterUUIDs))
+	for _, clusterUUID := range clusterUUIDs {
+		cache := &Cache{
+			orgID:       orgID,
+			clusterUUID: clusterUUID,
+			namespace:   make(map[string]Schedule),
+		}
+		if orgDefault != nil {
+			s := *orgDefault
+			cache.org = &s
+		}
+		if cl := clusterLevel[clusterUUID]; cl != nil {
+			s := *cl
+			cache.cluster = &s
+		}
+		for ns, sched := range byClusterNS[clusterUUID] {
+			cache.namespace[ns] = sched
+		}
+		out[clusterUUID] = cache
+	}
+	return out, nil
+}
+
 // HasAnyEnabled reports whether any org, cluster, or namespace schedule row is enabled.
 func (c *Cache) HasAnyEnabled() bool {
 	if c == nil {
