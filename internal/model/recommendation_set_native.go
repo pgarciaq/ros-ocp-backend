@@ -236,8 +236,7 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
+		Where("rs.org_id = ?", orgID).
 		Where("rs.stale = false")
 	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
 	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)

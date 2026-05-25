@@ -63,8 +63,7 @@ func GetRecommendationHistory(
 			h.notification_codes, h.confidence_level,
 			h.estimated_monthly_savings_usd`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
+		Where("h.org_id = ?", orgID)
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "h.namespace")
 	baseQuery = ApplyQueryParams(baseQuery, queryParams)
@@ -73,8 +72,7 @@ func GetRecommendationHistory(
 	countQuery := db.Table("recommendation_history h").
 		Select("COUNT(*)").
 		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
+		Where("h.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "h.namespace")
 	countQuery = ApplyQueryParams(countQuery, queryParams)
 

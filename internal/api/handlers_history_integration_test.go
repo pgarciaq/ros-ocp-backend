@@ -118,7 +118,7 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.HistoryRow `json:"data"`
+			Data []model.HistoryRow  `json:"data"`
 			Meta struct{ Count int } `json:"meta"`
 		}
 		err := json.Unmarshal(rec.Body.Bytes(), &response)
@@ -138,7 +138,7 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.HistoryRow `json:"data"`
+			Data []model.HistoryRow  `json:"data"`
 			Meta struct{ Count int } `json:"meta"`
 		}
 		err := json.Unmarshal(rec.Body.Bytes(), &response)
@@ -159,7 +159,7 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response struct {
-			Data []model.HistoryRow `json:"data"`
+			Data []model.HistoryRow  `json:"data"`
 			Meta struct{ Count int } `json:"meta"`
 		}
 		err := json.Unmarshal(rec.Body.Bytes(), &response)

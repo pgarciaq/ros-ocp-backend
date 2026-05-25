@@ -46,18 +46,18 @@ func echoCtxGET(query url.Values) echo.Context {
 func TestNativeQueryAllowlist_MapNativeQueryParameters(t *testing.T) {
 	u := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	query := url.Values{
-		"cluster":                   {u.String(), "prod-alias"},
-		"project":                   {"ns-alpha", "ns-beta"},
-		"workload":                  {"cart-svc", "pay-svc"},
-		"workload_type":             {"deployment"},
-		"container":                 {"web", "api"},
-		"exclude[project]":          {"kube-system"},
-		"filter[exact:container]":   {"exact-c"},
-		"filter[exact:workload]":    {"wl-ex"},
-		"exclude[workload_type]":    {"daemonset"},
-		"stale":                     {"only"},
-		"start_date":                {"2025-01-15"},
-		"end_date":                  {"2025-01-20"},
+		"cluster":                 {u.String(), "prod-alias"},
+		"project":                 {"ns-alpha", "ns-beta"},
+		"workload":                {"cart-svc", "pay-svc"},
+		"workload_type":           {"deployment"},
+		"container":               {"web", "api"},
+		"exclude[project]":        {"kube-system"},
+		"filter[exact:container]": {"exact-c"},
+		"filter[exact:workload]":  {"wl-ex"},
+		"exclude[workload_type]":  {"daemonset"},
+		"stale":                   {"only"},
+		"start_date":              {"2025-01-15"},
+		"end_date":                {"2025-01-20"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapNativeQueryParameters(c)
@@ -76,12 +76,12 @@ func TestNativeQueryAllowlist_MapNativeQueryParameters(t *testing.T) {
 func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 	clusterUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	query := url.Values{
-		"cluster":                   {"edge-cluster", clusterUUID.String()},
-		"project":                   {"team-a", "team-b"},
-		"exclude[project]":          {"kube-public"},
-		"filter[exact:project]":     {"exact-ns"},
-		"start_date":                {"2025-02-01"},
-		"end_date":                  {"2025-02-10"},
+		"cluster":               {"edge-cluster", clusterUUID.String()},
+		"project":               {"team-a", "team-b"},
+		"exclude[project]":      {"kube-public"},
+		"filter[exact:project]": {"exact-ns"},
+		"start_date":            {"2025-02-01"},
+		"end_date":              {"2025-02-10"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapNativeNamespaceQueryParameters(c)
@@ -96,12 +96,12 @@ func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 
 func TestNativeQueryAllowlist_MapQualityQueryParameters(t *testing.T) {
 	query := url.Values{
-		"start_date":  {"2025-03-01"},
-		"end_date":    {"2025-03-05"},
-		"cluster":     {"c1", "c2"},
-		"project":     {"p1"},
-		"workload":    {"w1"},
-		"container":   {"ctr1"},
+		"start_date": {"2025-03-01"},
+		"end_date":   {"2025-03-05"},
+		"cluster":    {"c1", "c2"},
+		"project":    {"p1"},
+		"workload":   {"w1"},
+		"container":  {"ctr1"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapQualityQueryParameters(c)
@@ -111,14 +111,14 @@ func TestNativeQueryAllowlist_MapQualityQueryParameters(t *testing.T) {
 
 func TestNativeQueryAllowlist_MapHistoryQueryParameters(t *testing.T) {
 	query := url.Values{
-		"start_date":  {"2025-04-01"},
-		"end_date":    {"2025-04-07"},
-		"cluster":     {"hist-cluster"},
-		"project":     {"hp"},
-		"workload":    {"hw"},
-		"container":   {"hc"},
-		"term":        {"short", "medium"},
-		"engine":      {"cost"},
+		"start_date": {"2025-04-01"},
+		"end_date":   {"2025-04-07"},
+		"cluster":    {"hist-cluster"},
+		"project":    {"hp"},
+		"workload":   {"hw"},
+		"container":  {"hc"},
+		"term":       {"short", "medium"},
+		"engine":     {"cost"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapHistoryQueryParameters(c)

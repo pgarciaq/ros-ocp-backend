@@ -94,8 +94,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
+		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
 		Where("ns.stale = false")
 
@@ -115,8 +114,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 		distinctNS := db.Table("namespace_recommendation_sets ns").
 			Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-			Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-			Where("ra.org_id = ?", orgID).
+			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
@@ -144,8 +142,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 				sortExpr,
 			)).
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-			Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-			Where("ra.org_id = ?", orgID).
+			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)

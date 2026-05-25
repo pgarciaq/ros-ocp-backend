@@ -5,10 +5,10 @@ import "strings"
 // Keys produced by MapNativeQueryParameters (handlers.go) for recommendation_sets / rs alias queries,
 // plus quality (q.*) and history (h.*) date-range and filter keys that also pass through ApplyQueryParams.
 var nativeRecFixedQueryKeys = map[string]struct{}{
-	"rs.updated_at >= ?":        {},
-	"rs.updated_at < ?":         {},
-	"rs.stale = ?":              {},
-	"rs.has_gpu = ?":            {},
+	"rs.updated_at >= ?":         {},
+	"rs.updated_at < ?":          {},
+	"rs.stale = ?":               {},
+	"rs.has_gpu = ?":             {},
 	"rs.gpu_classification IN ?": {},
 
 	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
@@ -33,23 +33,23 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 
 // Filter fragments from buildNativeModeClause for native container listings (c.* / rs.* columns).
 var nativeRecFilterAtoms = map[string]struct{}{
-	"c.cluster_uuid = ?":         {},
-	"c.cluster_uuid != ?":        {},
-	"c.cluster_alias ILIKE ?":    {},
-	"c.cluster_alias != ?":       {},
-	"rs.namespace ILIKE ?":       {},
-	"rs.namespace = ?":           {},
-	"rs.namespace != ?":          {},
-	"rs.workload ILIKE ?":        {},
-	"rs.workload = ?":            {},
-	"rs.workload != ?":           {},
-	"rs.workload_type ILIKE ?":   {},
-	"rs.workload_type = ?":       {},
-	"rs.workload_type != ?":      {},
-	"rs.container_name ILIKE ?":  {},
-	"rs.container_name = ?":      {},
-	"rs.container_name != ?":     {},
-	"rs.gpu_model_name ILIKE ?":  {},
+	"c.cluster_uuid = ?":        {},
+	"c.cluster_uuid != ?":       {},
+	"c.cluster_alias ILIKE ?":   {},
+	"c.cluster_alias != ?":      {},
+	"rs.namespace ILIKE ?":      {},
+	"rs.namespace = ?":          {},
+	"rs.namespace != ?":         {},
+	"rs.workload ILIKE ?":       {},
+	"rs.workload = ?":           {},
+	"rs.workload != ?":          {},
+	"rs.workload_type ILIKE ?":  {},
+	"rs.workload_type = ?":      {},
+	"rs.workload_type != ?":     {},
+	"rs.container_name ILIKE ?": {},
+	"rs.container_name = ?":     {},
+	"rs.container_name != ?":    {},
+	"rs.gpu_model_name ILIKE ?": {},
 }
 
 // Keys from MapNativeNamespaceQueryParameters for namespace_recommendation_sets (ns alias).
@@ -59,13 +59,13 @@ var nativeNSFixedQueryKeys = map[string]struct{}{
 }
 
 var nativeNSFilterAtoms = map[string]struct{}{
-	"c.cluster_uuid = ?":      {},
-	"c.cluster_uuid != ?":     {},
-	"c.cluster_alias ILIKE ?": {},
-	"c.cluster_alias != ?":    {},
+	"c.cluster_uuid = ?":        {},
+	"c.cluster_uuid != ?":       {},
+	"c.cluster_alias ILIKE ?":   {},
+	"c.cluster_alias != ?":      {},
 	"ns.namespace_name ILIKE ?": {},
 	"ns.namespace_name = ?":     {},
-	"ns.namespace_name != ?":  {},
+	"ns.namespace_name != ?":    {},
 }
 
 func splitAtTopLevelSep(s, sep string) []string {
