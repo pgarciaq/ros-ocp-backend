@@ -230,29 +230,37 @@ type EngineRecommendation struct {
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
-func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]NativeContainerResult, int, error) {
+func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
 	db := database.GetDB()
 
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
+		Where("ra.org_id = ?", orgID).
+		Where("rs.stale = false")
 	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
 	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
 
-	pageSubquery := db.Table("(?) AS dc", distinctSubquery).
-		Select(`dc.cluster_uuid, dc.namespace, dc.workload, dc.container_name,
-			COUNT(*) OVER() AS total_containers`).
-		Order("dc.namespace, dc.workload, dc.container_name").
-		Offset(opts.Offset).Limit(opts.Limit)
-
-	type nativeRowWithTotal struct {
-		NativeRecommendationRow
-		TotalContainers int64 `gorm:"column:total_containers"`
+	if opts.HasCursor {
+		distinctSubquery = distinctSubquery.Where(
+			"(rs.namespace, rs.workload, rs.container_name) > (?, ?, ?)",
+			opts.AfterNamespace, opts.AfterWorkload, opts.AfterContainer,
+		)
 	}
 
-	var rows []nativeRowWithTotal
+	pageLimit := opts.Limit + 1
+	pageSubquery := db.Table("(?) AS dc", distinctSubquery).
+		Select(`dc.cluster_uuid, dc.namespace, dc.workload, dc.container_name`).
+		Order("dc.namespace, dc.workload, dc.container_name")
+
+	if opts.HasCursor {
+		pageSubquery = pageSubquery.Limit(pageLimit)
+	} else {
+		pageSubquery = pageSubquery.Offset(opts.Offset).Limit(pageLimit)
+	}
+
+	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
 	err := db.Table("recommendation_sets rs").
 		Select(`rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
@@ -268,31 +276,53 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.estimated_monthly_savings_usd,
 			rs.monitoring_end_time,
 			rs.updated_at,
-			c.source_id, c.cluster_alias, c.last_reported_at,
-			page.total_containers`).
+			c.source_id, c.cluster_alias, c.last_reported_at`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
 			AND page.container_name = rs.container_name`, pageSubquery).
+		Where("rs.stale = false").
 		Order("rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine").
 		Find(&rows).Error
 	if err != nil {
-		return nil, 0, err
+		return NativeListPage{}, err
 	}
 
-	var totalContainers int64
-	nativeRows := make([]NativeRecommendationRow, len(rows))
-	for i, row := range rows {
-		nativeRows[i] = row.NativeRecommendationRow
-		if i == 0 {
-			totalContainers = row.TotalContainers
-		}
+	results := assembleNativeResults(rows)
+
+	hasNext := len(results) > opts.Limit
+	if hasNext {
+		results = results[:opts.Limit]
 	}
+
+	totalContainers, err := resolveOrgContainerCount(orgID, db, distinctSubquery)
+	if err != nil {
+		return NativeListPage{}, err
+	}
+
 	log.Infof("native list query: %dms (%d containers, %d rows)", time.Since(t0).Milliseconds(), totalContainers, len(rows))
 
-	results := assembleNativeResults(nativeRows)
-	return results, int(totalContainers), nil
+	return NativeListPage{
+		Results: results,
+		Count:   int(totalContainers),
+		HasNext: hasNext,
+	}, nil
+}
+
+func resolveOrgContainerCount(orgID string, db *gorm.DB, filteredDistinct *gorm.DB) (int64, error) {
+	if count, ok, err := GetOrgContainerCount(orgID); err != nil {
+		return 0, err
+	} else if ok {
+		return count, nil
+	}
+
+	var total int64
+	if err := db.Table("(?) AS dc", filteredDistinct).
+		Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // ApplyNativeRBAC adds RBAC-based WHERE clauses using the native schema's column names.

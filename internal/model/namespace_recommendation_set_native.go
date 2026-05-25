@@ -88,7 +88,7 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 
 // GetNativeNamespaceRecommendations queries the native relational columns from
 // namespace_recommendation_sets.
-func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]NativeNamespaceResult, int, error) {
+func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeNamespaceListPage, error) {
 	db := database.GetDB()
 
 	query := db.Table("namespace_recommendation_sets ns").
@@ -102,69 +102,112 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	query = applyNativeNamespaceRBAC(query, userPerms)
 	query = applyNSQueryParams(query, queryParams)
 
-	var totalNamespaces int64
-	countQuery := db.Table("namespace_recommendation_sets ns").
-		Select("COUNT(DISTINCT (ns.cluster_uuid, ns.namespace_name))").
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("ns.term IS NOT NULL").
-		Where("ns.stale = false")
-	countQuery = applyNativeNamespaceRBAC(countQuery, userPerms)
-	countQuery = applyNSQueryParams(countQuery, queryParams)
-
-	t0 := time.Now().UTC()
-	if err := countQuery.Scan(&totalNamespaces).Error; err != nil {
-		return nil, 0, err
-	}
-	log.Infof("native namespace list count query: %dms (%d namespaces)", time.Since(t0).Milliseconds(), totalNamespaces)
-
-	var rows []NativeNamespaceRow
 	limit := opts.Limit
 	if opts.Format == "csv" {
 		limit = config.GetConfig().RecordLimitCSV
 	}
+	pageLimit := limit + 1
 
-	// Paginate by distinct (cluster_uuid, namespace): pick a representative sort key per
-	// namespace using PostgreSQL DISTINCT ON (same tie-break as legacy: term, engine).
-	sortExpr := remapNativeNSOrderBy(opts.OrderBy)
-	distinctOnOrder := fmt.Sprintf(
-		"ns.cluster_uuid, ns.namespace_name, %s %s, ns.term ASC, ns.engine ASC",
-		sortExpr, opts.OrderHow,
-	)
+	var pageSubquery *gorm.DB
+	var countDistinct *gorm.DB
 
-	distinctNS := db.Table("namespace_recommendation_sets ns").
-		Select(fmt.Sprintf(
-			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, %s AS ros_ns_page_sort",
-			sortExpr,
-		)).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("ns.term IS NOT NULL").
-		Where("ns.stale = false")
-	distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
-	distinctNS = applyNSQueryParams(distinctNS, queryParams)
-	distinctNS = distinctNS.Order(distinctOnOrder)
+	if opts.HasCursor {
+		distinctNS := db.Table("namespace_recommendation_sets ns").
+			Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
+			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+			Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+			Where("ra.org_id = ?", orgID).
+			Where("ns.term IS NOT NULL").
+			Where("ns.stale = false")
+		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
+		distinctNS = applyNSQueryParams(distinctNS, queryParams)
+		distinctNS = distinctNS.Where(
+			"(ns.namespace_name, ns.cluster_uuid) > (?, ?)",
+			opts.AfterNamespaceName, opts.AfterNSClusterUUID,
+		)
+		countDistinct = distinctNS
 
-	pageSubquery := db.Table("(?) AS page", distinctNS).
-		Order(fmt.Sprintf("page.ros_ns_page_sort %s, page.cluster_uuid, page.namespace_name", opts.OrderHow)).
-		Offset(opts.Offset).
-		Limit(limit)
+		pageSubquery = db.Table("(?) AS page", distinctNS).
+			Select("page.cluster_uuid, page.namespace_name").
+			Order("page.namespace_name, page.cluster_uuid").
+			Limit(pageLimit)
+	} else {
+		sortExpr := remapNativeNSOrderBy(opts.OrderBy)
+		distinctOnOrder := fmt.Sprintf(
+			"ns.cluster_uuid, ns.namespace_name, %s %s, ns.term ASC, ns.engine ASC",
+			sortExpr, opts.OrderHow,
+		)
 
-	primaryOrder := sortExpr + " " + opts.OrderHow
-	orderClause := primaryOrder + ", ns.term, ns.engine"
+		distinctNS := db.Table("namespace_recommendation_sets ns").
+			Select(fmt.Sprintf(
+				"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, %s AS ros_ns_page_sort",
+				sortExpr,
+			)).
+			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+			Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+			Where("ra.org_id = ?", orgID).
+			Where("ns.term IS NOT NULL").
+			Where("ns.stale = false")
+		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
+		distinctNS = applyNSQueryParams(distinctNS, queryParams)
+		distinctNS = distinctNS.Order(distinctOnOrder)
+		countDistinct = db.Table("(?) AS dn", distinctNS).
+			Select("dn.cluster_uuid, dn.namespace_name")
+
+		pageSubquery = db.Table("(?) AS page", distinctNS).
+			Order(fmt.Sprintf("page.ros_ns_page_sort %s, page.cluster_uuid, page.namespace_name", opts.OrderHow)).
+			Offset(opts.Offset).
+			Limit(pageLimit)
+	}
+
+	var rows []NativeNamespaceRow
+	t0 := time.Now().UTC()
+	orderClause := "ns.namespace_name, ns.cluster_uuid, ns.term, ns.engine"
+	if !opts.HasCursor {
+		sortExpr := remapNativeNSOrderBy(opts.OrderBy)
+		orderClause = sortExpr + " " + opts.OrderHow + ", ns.term, ns.engine"
+	}
 
 	err := query.
 		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
 		Order(orderClause).
 		Find(&rows).Error
 	if err != nil {
-		return nil, 0, err
+		return NativeNamespaceListPage{}, err
 	}
 
 	results := assembleNativeNamespaceResults(rows)
-	return results, int(totalNamespaces), nil
+
+	hasNext := len(results) > limit
+	if hasNext {
+		results = results[:limit]
+	}
+
+	totalNamespaces, err := resolveOrgNamespaceCount(orgID, db, countDistinct)
+	if err != nil {
+		return NativeNamespaceListPage{}, err
+	}
+	log.Infof("native namespace list query: %dms (%d namespaces)", time.Since(t0).Milliseconds(), totalNamespaces)
+
+	return NativeNamespaceListPage{
+		Results: results,
+		Count:   int(totalNamespaces),
+		HasNext: hasNext,
+	}, nil
+}
+
+func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.DB) (int64, error) {
+	if count, ok, err := GetOrgNamespaceCount(orgID); err != nil {
+		return 0, err
+	} else if ok {
+		return count, nil
+	}
+
+	var total int64
+	if err := db.Table("(?) AS dn", filteredDistinct).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // GetNativeNamespaceRecommendationByID fetches a single namespace's
