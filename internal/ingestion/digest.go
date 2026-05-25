@@ -534,7 +534,7 @@ func minMaxAvgOfMap(m map[hourKey]int64) (int64, int64, int64) {
 		return 0, 0, 0
 	}
 	var minV, maxV int64
-	var sum float64
+	var sum int64
 	first := true
 	for _, v := range m {
 		if first || v < minV {
@@ -543,10 +543,11 @@ func minMaxAvgOfMap(m map[hourKey]int64) (int64, int64, int64) {
 		if first || v > maxV {
 			maxV = v
 		}
-		sum += float64(v)
+		sum += v
 		first = false
 	}
-	avg := int64(math.Round(sum / float64(len(m))))
+	n := int64(len(m))
+	avg := (sum + n/2) / n
 	return minV, maxV, avg
 }
 
@@ -623,11 +624,11 @@ func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {
 	for i, r := range rows {
 		buf[i] = fn(r)
 	}
-	// Caller owns the slice; pool only seeds capacity for extractField callers that copy.
-	out := make([]int64, len(buf))
-	copy(out, buf)
+	return buf
+}
+
+func releaseFieldBuffer(buf []int64) {
 	fieldBufferPool.Put(buf[:0])
-	return out
 }
 
 type fieldExtractBuffers struct {
@@ -637,6 +638,13 @@ type fieldExtractBuffers struct {
 var fieldBufferPool = sync.Pool{
 	New: func() any {
 		s := make([]int64, 0, 128)
+		return s
+	},
+}
+
+var weightBufferPool = sync.Pool{
+	New: func() any {
+		s := make([]float64, 0, 128)
 		return s
 	},
 }
@@ -700,8 +708,11 @@ func appendSliceInt64(s []int64, n int) []int64 {
 }
 
 func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldFn func(MetricRow) int64) Digest {
-	vals := make([]int64, 0, len(rows))
-	weights := make([]float64, 0, len(rows))
+	vals := fieldBufferPool.Get().([]int64)
+	vals = vals[:0]
+	weights := weightBufferPool.Get().([]float64)
+	weights = weights[:0]
+
 	for _, r := range rows {
 		w := weightFn(r)
 		if w <= 0 {
@@ -710,7 +721,10 @@ func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldF
 		vals = append(vals, fieldFn(r))
 		weights = append(weights, w)
 	}
-	return ComputeWeightedDigest(vals, weights)
+	d := ComputeWeightedDigest(vals, weights)
+	fieldBufferPool.Put(vals[:0])
+	weightBufferPool.Put(weights[:0])
+	return d
 }
 
 type weightedMetricSample struct {

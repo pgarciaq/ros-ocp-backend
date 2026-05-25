@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -17,13 +18,13 @@ import (
 func CoreToMillicores(s string) (int64, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, fmt.Errorf("CoreToMillicores: %w", err)
+		return 0, err
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return 0, fmt.Errorf("CoreToMillicores: invalid value %s", s)
+		return 0, errInvalidCoreValue
 	}
 	if f < 0 {
-		return 0, fmt.Errorf("CoreToMillicores: negative value %s", s)
+		return 0, errNegativeCoreValue
 	}
 	return int64(math.Round(f * 1000)), nil
 }
@@ -34,13 +35,13 @@ func CoreToMillicores(s string) (int64, error) {
 func BytesToKiB(s string) (int64, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, fmt.Errorf("BytesToKiB: %w", err)
+		return 0, err
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return 0, fmt.Errorf("BytesToKiB: invalid value %s", s)
+		return 0, errInvalidByteValue
 	}
 	if f < 0 {
-		return 0, fmt.Errorf("BytesToKiB: negative value %s", s)
+		return 0, errNegativeByteValue
 	}
 	return int64(math.Round(f / 1024)), nil
 }
@@ -238,7 +239,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 	}
 	for _, r := range required {
 		if r.val < 0 {
-			return idx, fmt.Errorf("ParseCSVRows: missing required column %q", r.name)
+			return idx, fmt.Errorf("%w: %q", errMissingRequiredColumn, r.name)
 		}
 	}
 	return idx, nil
@@ -339,7 +340,7 @@ func forEachCSVRow(r io.Reader, fn func(MetricRow) error) (int, error) {
 
 // optionalParseFloat parses an optional GPU metric cell. Missing column index,
 // short records, or empty/whitespace cells yield 0 with no error.
-func optionalParseFloat(record []string, col int, field string) (float64, error) {
+func optionalParseFloat(record []string, col int) (float64, error) {
 	if col < 0 || col >= len(record) {
 		return 0, nil
 	}
@@ -349,10 +350,10 @@ func optionalParseFloat(record []string, col int, field string) (float64, error)
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", field, err)
+		return 0, err
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return 0, fmt.Errorf("%s: invalid value %s", field, s)
+		return 0, errInvalidFloatValue
 	}
 	return f, nil
 }
@@ -370,11 +371,11 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 
 	row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
 	if err != nil {
-		return row, fmt.Errorf("interval_start: %w", err)
+		return row, errors.Join(errInvalidIntervalStart, err)
 	}
 	row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
 	if err != nil {
-		return row, fmt.Errorf("interval_end: %w", err)
+		return row, errors.Join(errInvalidIntervalEnd, err)
 	}
 
 	row.Namespace = record[idx.namespace]
@@ -431,7 +432,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	if idx.oomCount >= 0 && idx.oomCount < len(record) && record[idx.oomCount] != "" {
 		v, err := strconv.ParseFloat(record[idx.oomCount], 64)
 		if err != nil {
-			return row, fmt.Errorf("oom_count: %w", err)
+			return row, err
 		}
 		row.OOMCount = int64(math.Round(v))
 	}
@@ -439,7 +440,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	if idx.workloadPodCount >= 0 && idx.workloadPodCount < len(record) && record[idx.workloadPodCount] != "" {
 		v, err := strconv.ParseFloat(record[idx.workloadPodCount], 64)
 		if err != nil {
-			return row, fmt.Errorf("workload_pod_count: %w", err)
+			return row, err
 		}
 		row.WorkloadPodCount = int64(math.Round(v))
 	}
@@ -447,14 +448,14 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	if idx.desiredReplicas >= 0 && idx.desiredReplicas < len(record) && record[idx.desiredReplicas] != "" {
 		v, err := strconv.ParseFloat(record[idx.desiredReplicas], 64)
 		if err != nil {
-			return row, fmt.Errorf("desired_replicas: %w", err)
+			return row, err
 		}
 		row.DesiredReplicas = int64(math.Round(v))
 	}
 	if idx.availableReplicas >= 0 && idx.availableReplicas < len(record) && record[idx.availableReplicas] != "" {
 		v, err := strconv.ParseFloat(record[idx.availableReplicas], 64)
 		if err != nil {
-			return row, fmt.Errorf("available_replicas: %w", err)
+			return row, err
 		}
 		row.AvailableReplicas = int64(math.Round(v))
 	}
@@ -475,40 +476,40 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
 	row.AcceleratorProfileName = optionalStringField(record, idx.acceleratorProfileName)
 
-	if row.AcceleratorFBUsageMin, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMin, "accelerator_frame_buffer_usage_min"); err != nil {
+	if row.AcceleratorFBUsageMin, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMin); err != nil {
 		return row, err
 	}
-	if row.AcceleratorFBUsageMax, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMax, "accelerator_frame_buffer_usage_max"); err != nil {
+	if row.AcceleratorFBUsageMax, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMax); err != nil {
 		return row, err
 	}
-	if row.AcceleratorFBUsageAvg, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageAvg, "accelerator_frame_buffer_usage_avg"); err != nil {
+	if row.AcceleratorFBUsageAvg, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageAvg); err != nil {
 		return row, err
 	}
-	if row.TensorPipeActiveMin, err = optionalParseFloat(record, idx.tensorPipeActiveMin, "tensor_pipe_active_min"); err != nil {
+	if row.TensorPipeActiveMin, err = optionalParseFloat(record, idx.tensorPipeActiveMin); err != nil {
 		return row, err
 	}
-	if row.TensorPipeActiveMax, err = optionalParseFloat(record, idx.tensorPipeActiveMax, "tensor_pipe_active_max"); err != nil {
+	if row.TensorPipeActiveMax, err = optionalParseFloat(record, idx.tensorPipeActiveMax); err != nil {
 		return row, err
 	}
-	if row.TensorPipeActiveAvg, err = optionalParseFloat(record, idx.tensorPipeActiveAvg, "tensor_pipe_active_avg"); err != nil {
+	if row.TensorPipeActiveAvg, err = optionalParseFloat(record, idx.tensorPipeActiveAvg); err != nil {
 		return row, err
 	}
-	if row.DRAMActiveMin, err = optionalParseFloat(record, idx.dramActiveMin, "dram_active_min"); err != nil {
+	if row.DRAMActiveMin, err = optionalParseFloat(record, idx.dramActiveMin); err != nil {
 		return row, err
 	}
-	if row.DRAMActiveMax, err = optionalParseFloat(record, idx.dramActiveMax, "dram_active_max"); err != nil {
+	if row.DRAMActiveMax, err = optionalParseFloat(record, idx.dramActiveMax); err != nil {
 		return row, err
 	}
-	if row.DRAMActiveAvg, err = optionalParseFloat(record, idx.dramActiveAvg, "dram_active_avg"); err != nil {
+	if row.DRAMActiveAvg, err = optionalParseFloat(record, idx.dramActiveAvg); err != nil {
 		return row, err
 	}
-	if row.SMActiveMin, err = optionalParseFloat(record, idx.smActiveMin, "sm_active_min"); err != nil {
+	if row.SMActiveMin, err = optionalParseFloat(record, idx.smActiveMin); err != nil {
 		return row, err
 	}
-	if row.SMActiveMax, err = optionalParseFloat(record, idx.smActiveMax, "sm_active_max"); err != nil {
+	if row.SMActiveMax, err = optionalParseFloat(record, idx.smActiveMax); err != nil {
 		return row, err
 	}
-	if row.SMActiveAvg, err = optionalParseFloat(record, idx.smActiveAvg, "sm_active_avg"); err != nil {
+	if row.SMActiveAvg, err = optionalParseFloat(record, idx.smActiveAvg); err != nil {
 		return row, err
 	}
 
