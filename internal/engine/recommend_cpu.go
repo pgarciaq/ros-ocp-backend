@@ -1,8 +1,5 @@
 package engine
 
-import "math"
-
-
 // RecommendCPU computes both cost and performance CPU recommendations
 // from a set of daily digest rows. Single-path algorithm (no 1-core
 // discontinuity). Applies decay weighting, adaptive margin, floor, and
@@ -25,13 +22,14 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 	avgMean := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
 		func(r DigestRow) int64 { return r.CPUUsageMeanMC })
 
-	margin := ComputeAdaptiveMargin(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
+	marginScaled := ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
 
-	costRequest := applyFloor(int64(math.Round(float64(costPctVal)*margin)), cfg.FloorMC)
-	perfRequest := applyFloor(int64(math.Round(float64(perfPctVal)*margin)), cfg.FloorMC)
+	costRequest := applyFloor(ApplyScaledMargin(costPctVal, marginScaled), cfg.FloorMC)
+	perfRequest := applyFloor(ApplyScaledMargin(perfPctVal, marginScaled), cfg.FloorMC)
 
-	costLimit := int64(math.Round(float64(costRequest) * cfg.LimitMultiplier))
-	perfLimit := int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
+	limitMultScaled := ScaleLimitMultiplier(cfg.LimitMultiplier)
+	costLimit := ApplyScaledMargin(costRequest, limitMultScaled)
+	perfLimit := ApplyScaledMargin(perfRequest, limitMultScaled)
 
 	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.CPUUsageP98MC })
 	isIdle := DetectIdle(rows, cfg.IdleThresholdMC, cfg.IdleThresholdMemKiB)

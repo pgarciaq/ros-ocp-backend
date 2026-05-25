@@ -1,7 +1,5 @@
 package engine
 
-import "math"
-
 // RecommendMemory computes both cost and performance memory recommendations
 // from a set of daily digest rows.
 // Cost model uses the configured percentile (default p95), performance model
@@ -24,19 +22,19 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 	avgMean := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
 		func(r DigestRow) int64 { return r.MemUsageMeanKiB })
 
-	margin := ComputeAdaptiveMargin(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
+	marginScaled := ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
 
-	costRequest := int64(math.Round(float64(costPctVal) * margin))
-	perfRequest := int64(math.Round(float64(perfPctVal) * margin))
+	costRequest := ApplyScaledMargin(costPctVal, marginScaled)
+	perfRequest := ApplyScaledMargin(perfPctVal, marginScaled)
 
 	if cfg.OOMCountSum > 0 {
-		bump := math.Min(cfg.OOMMaxBump, 1.0+cfg.OOMBaseBump*math.Log2(1+float64(cfg.OOMCountSum)))
-		costRequest = int64(math.Round(float64(costRequest) * bump))
-		perfRequest = int64(math.Round(float64(perfRequest) * bump))
+		costRequest = ApplyOOMBumpScaled(costRequest, cfg.OOMCountSum, cfg.OOMBaseBump, cfg.OOMMaxBump)
+		perfRequest = ApplyOOMBumpScaled(perfRequest, cfg.OOMCountSum, cfg.OOMBaseBump, cfg.OOMMaxBump)
 	}
 
-	costLimit := int64(math.Round(float64(costRequest) * cfg.LimitMultiplier))
-	perfLimit := int64(math.Round(float64(perfRequest) * cfg.LimitMultiplier))
+	limitMultScaled := ScaleLimitMultiplier(cfg.LimitMultiplier)
+	costLimit := ApplyScaledMargin(costRequest, limitMultScaled)
+	perfLimit := ApplyScaledMargin(perfRequest, limitMultScaled)
 
 	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.MemUsageP95KiB })
 
