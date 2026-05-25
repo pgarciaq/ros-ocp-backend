@@ -107,6 +107,7 @@ nav:
   - Operations:
       - Monitoring: monitoring.md
       - Configuration: configuration.md
+      - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Issues: known-issues.md
   - UI Integration:
