@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 )
 
 const (
@@ -159,8 +161,22 @@ func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy Order
 		return ListOptions{}, err
 	}
 	offset := parseOffset(c.QueryParam("offset"))
-	orderBy := c.QueryParam("order_by")
-	orderHow := strings.ToLower(c.QueryParam("order_how"))
+
+	defaultAPIField := ""
+	for apiField, dbCol := range allowedOrderBy {
+		if dbCol == defaultDBColumn {
+			defaultAPIField = apiField
+			break
+		}
+	}
+	orderByCol, orderHow, err := queryparams.ParseOrderBy(c, allowedOrderBy, defaultAPIField, OrderDesc)
+	if err != nil {
+		return ListOptions{}, err
+	}
+	orderBy := orderByCol
+	if orderBy == "" {
+		orderBy = defaultDBColumn
+	}
 
 	// Format handling
 	acceptHeader := c.Request().Header.Get("Accept")
@@ -173,24 +189,6 @@ func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy Order
 
 	if offset < 0 {
 		offset = DefaultOffset
-	}
-
-	if orderHow == "" {
-		orderHow = OrderDesc
-	}
-	if orderHow != OrderAsc && orderHow != OrderDesc {
-		return ListOptions{}, fmt.Errorf("invalid order_how value: %s", orderHow)
-	}
-
-	if orderBy != "" {
-		dbColumn, ok := allowedOrderBy[orderBy]
-		if !ok {
-			return ListOptions{}, fmt.Errorf("invalid order_by value: %s", orderBy)
-		}
-		orderBy = dbColumn
-	} else {
-		// default orderBY
-		orderBy = defaultDBColumn
 	}
 
 	return ListOptions{

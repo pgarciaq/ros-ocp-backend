@@ -11,6 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -58,16 +59,16 @@ func MapQualityQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		queryParams["q.measured_at < ?"] = t.Add(24 * time.Hour)
 	}
 
-	if clusters := c.QueryParams()["cluster"]; len(clusters) > 0 {
+	if clusters := queryparams.IncludeValues(c, "cluster"); len(clusters) > 0 {
 		queryParams["c.cluster_alias IN ?"] = clusters
 	}
-	if projects := c.QueryParams()["project"]; len(projects) > 0 {
+	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
 		queryParams["q.namespace IN ?"] = projects
 	}
-	if workloads := c.QueryParams()["workload"]; len(workloads) > 0 {
+	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
 		queryParams["q.workload IN ?"] = workloads
 	}
-	if containers := c.QueryParams()["container"]; len(containers) > 0 {
+	if containers := queryparams.IncludeValues(c, "container"); len(containers) > 0 {
 		queryParams["q.container_name IN ?"] = containers
 	}
 

@@ -1,0 +1,108 @@
+package queryparams
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func newEchoContext(rawQuery string) echo.Context {
+	e := echo.New()
+	target := "/"
+	if rawQuery != "" {
+		target = "/?" + rawQuery
+	}
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	return e.NewContext(req, rec)
+}
+
+func TestSplitCommaValues(t *testing.T) {
+	assert.Nil(t, SplitCommaValues(nil))
+	assert.Equal(t, []string{"a", "b", "c"}, SplitCommaValues([]string{"a,b", "c"}))
+}
+
+func TestIncludeValues(t *testing.T) {
+	t.Run("legacy repeated keys", func(t *testing.T) {
+		c := newEchoContext("project=alpha&project=beta")
+		assert.Equal(t, []string{"alpha", "beta"}, IncludeValues(c, "project"))
+	})
+
+	t.Run("koku bracket comma separated", func(t *testing.T) {
+		c := newEchoContext("filter%5Bproject%5D=payments,frontend")
+		assert.Equal(t, []string{"payments", "frontend"}, IncludeValues(c, "project"))
+	})
+
+	t.Run("legacy and koku merged", func(t *testing.T) {
+		c := newEchoContext("project=legacy&filter%5Bproject%5D=koku")
+		assert.Equal(t, []string{"legacy", "koku"}, IncludeValues(c, "project"))
+	})
+}
+
+func TestExcludeAndExactValues(t *testing.T) {
+	c := newEchoContext("exclude%5Bproject%5D=kube-system&filter%5Bexact%3Acontainer%5D=web")
+	assert.Equal(t, []string{"kube-system"}, ExcludeValues(c, "project"))
+	assert.Equal(t, []string{"web"}, ExactValues(c, "container"))
+}
+
+func TestFirstFilter(t *testing.T) {
+	t.Run("koku cluster filter", func(t *testing.T) {
+		c := newEchoContext("filter%5Bcluster%5D=550e8400-e29b-41d4-a716-446655440000")
+		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster", "cluster_uuid"))
+	})
+
+	t.Run("legacy cluster_uuid alias", func(t *testing.T) {
+		c := newEchoContext("cluster_uuid=legacy-uuid")
+		assert.Equal(t, "legacy-uuid", FirstFilter(c, "cluster", "cluster_uuid"))
+	})
+}
+
+func TestParseOrderBy(t *testing.T) {
+	allowed := map[string]string{
+		"project":       "ns.namespace",
+		"last_reported": "clusters.last_reported_at",
+	}
+
+	t.Run("koku bracket syntax", func(t *testing.T) {
+		c := newEchoContext("order_by%5Bproject%5D=asc")
+		col, dir, err := ParseOrderBy(c, allowed, "last_reported", "desc")
+		require.NoError(t, err)
+		assert.Equal(t, "ns.namespace", col)
+		assert.Equal(t, "asc", dir)
+	})
+
+	t.Run("legacy syntax", func(t *testing.T) {
+		c := newEchoContext("order_by=project&order_how=asc")
+		col, dir, err := ParseOrderBy(c, allowed, "last_reported", "desc")
+		require.NoError(t, err)
+		assert.Equal(t, "ns.namespace", col)
+		assert.Equal(t, "asc", dir)
+	})
+
+	t.Run("default when unset", func(t *testing.T) {
+		c := newEchoContext("")
+		col, dir, err := ParseOrderBy(c, allowed, "last_reported", "desc")
+		require.NoError(t, err)
+		assert.Equal(t, "clusters.last_reported_at", col)
+		assert.Equal(t, "desc", dir)
+	})
+
+	t.Run("invalid bracket field", func(t *testing.T) {
+		c := newEchoContext("order_by%5Bunknown%5D=desc")
+		_, _, err := ParseOrderBy(c, allowed, "last_reported", "desc")
+		require.Error(t, err)
+	})
+}
+
+func TestParseOrderByAPIKey(t *testing.T) {
+	allowed := map[string]string{"node": "f.node", "estimated_monthly_savings_usd": "sort_savings"}
+	c := newEchoContext("order_by%5Bestimated_monthly_savings_usd%5D=desc")
+	field, dir, err := ParseOrderByAPIKey(c, allowed, "estimated_monthly_savings_usd", "desc")
+	require.NoError(t, err)
+	assert.Equal(t, "estimated_monthly_savings_usd", field)
+	assert.Equal(t, "desc", dir)
+}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -305,11 +305,7 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams["rs.updated_at < ?"] = endTimestamp
 
 	var filterErrs []error
-	workloadTypeVals := slices.Concat(
-		c.QueryParams()["workload_type"],
-		c.QueryParams()["filter[exact:workload_type]"],
-		c.QueryParams()["exclude[workload_type]"],
-	)
+	workloadTypeVals := queryparams.AllFilterValues(c, "workload_type")
 	if err := validateWorkloadTypeValues(workloadTypeVals); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
@@ -342,9 +338,9 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		}
 	}
 
-	// Stale filter: by default, exclude stale. If ?stale=true, include all.
-	// If ?stale=false (explicit), exclude stale. If ?stale=only, show only stale.
-	staleParam := c.QueryParam("stale")
+	// Stale filter: by default, exclude stale. If ?stale=true or ?filter[stale]=true, include all.
+	// If ?stale=false (explicit), exclude stale. If ?stale=only or ?filter[stale]=only, show only stale.
+	staleParam := queryparams.FirstFilter(c, "stale", "stale")
 	switch staleParam {
 	case "true":
 		// No filter — return both stale and non-stale
@@ -356,12 +352,12 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	// GPU presence filter: pushed to SQL for correct pagination.
-	if v := c.QueryParam("has_gpu"); v != "" {
+	if v := queryparams.FirstFilter(c, "has_gpu", "has_gpu"); v != "" {
 		queryParams["rs.has_gpu = ?"] = (v == "true" || v == "1")
 	}
 
 	// GPU model filter: substring match pushed to SQL via ILIKE.
-	if models := c.QueryParams()["gpu_model"]; len(models) > 0 {
+	if models := queryparams.IncludeValues(c, "gpu_model"); len(models) > 0 {
 		clauses := make([]string, 0, len(models))
 		vals := make([]string, 0, len(models))
 		for _, m := range models {
@@ -377,7 +373,7 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	// GPU classification filter: exact match pushed to SQL.
-	if classes := c.QueryParams()["gpu_classification"]; len(classes) > 0 {
+	if classes := queryparams.IncludeValues(c, "gpu_classification"); len(classes) > 0 {
 		var vals []string
 		for _, cl := range classes {
 			if cl != "" {

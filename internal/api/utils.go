@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -169,11 +170,7 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if err := applyParamFilter(c, queryParams, "workload", "workloads.workload_name", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
 	}
-	workloadTypeVals := slices.Concat(
-		c.QueryParams()["workload_type"],
-		c.QueryParams()["filter[exact:workload_type]"],
-		c.QueryParams()["exclude[workload_type]"],
-	)
+	workloadTypeVals := queryparams.AllFilterValues(c, "workload_type")
 	if err := validateWorkloadTypeValues(workloadTypeVals); err != nil {
 		errs = append(errs, err)
 	} else if err := applyParamFilter(c, queryParams, "workload_type", "workloads.workload_type", model.NamespaceMaxLen, false, SkipSanitizationForContainer, true); err != nil {
@@ -426,38 +423,23 @@ func applyParamFilter(
 	treatIncludeAsExact ...bool,
 ) error {
 	cfg := config.GetConfig()
-	excludeKey := "exclude[" + param + "]"
-	exactKey := "filter[exact:" + param + "]"
 	useExactForInclude := len(treatIncludeAsExact) > 0 && treatIncludeAsExact[0]
 	var includeVals, excludeVals, exactVals []string
-	for _, v := range c.QueryParams()[param] {
-		if v != "" {
-			if useExactForInclude {
-				exactVals = append(exactVals, v)
-			} else {
-				includeVals = append(includeVals, v)
-			}
-		}
+	excludeVals = queryparams.ExcludeValues(c, param)
+	exactFromBracket := queryparams.ExactValues(c, param)
+	if useExactForInclude {
+		exactVals = append(queryparams.IncludeValues(c, param), exactFromBracket...)
+	} else {
+		includeVals = queryparams.IncludeValues(c, param)
+		exactVals = exactFromBracket
 	}
 
 	if len(includeVals) > cfg.MaxCountPerQueryParam {
 		return namespaceAPIErrf(EnableUserAPIErr, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
 	}
 
-	for _, v := range c.QueryParams()[excludeKey] {
-		if v != "" {
-			excludeVals = append(excludeVals, v)
-		}
-	}
-
 	if len(excludeVals) > cfg.MaxCountPerQueryParam {
 		return namespaceAPIErrf(EnableUserAPIErr, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
-	}
-
-	for _, v := range c.QueryParams()[exactKey] {
-		if v != "" {
-			exactVals = append(exactVals, v)
-		}
 	}
 
 	if len(exactVals) > cfg.MaxCountPerQueryParam {
@@ -666,29 +648,14 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 
 func applyNativeParamFilter(c echo.Context, queryParams map[string]any, param, column string, maxLen int, allowDot bool) error {
 	cfg := config.GetConfig()
-	excludeKey := "exclude[" + param + "]"
-	exactKey := "filter[exact:" + param + "]"
-	var includeVals, excludeVals, exactVals []string
-	for _, v := range c.QueryParams()[param] {
-		if v != "" {
-			includeVals = append(includeVals, v)
-		}
-	}
+	includeVals := queryparams.IncludeValues(c, param)
+	excludeVals := queryparams.ExcludeValues(c, param)
+	exactVals := queryparams.ExactValues(c, param)
 	if len(includeVals) > cfg.MaxCountPerQueryParam {
 		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
 	}
-	for _, v := range c.QueryParams()[excludeKey] {
-		if v != "" {
-			excludeVals = append(excludeVals, v)
-		}
-	}
 	if len(excludeVals) > cfg.MaxCountPerQueryParam {
 		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)
-	}
-	for _, v := range c.QueryParams()[exactKey] {
-		if v != "" {
-			exactVals = append(exactVals, v)
-		}
 	}
 	if len(exactVals) > cfg.MaxCountPerQueryParam {
 		return namespaceAPIErrf(true, "too many %s parameters, a maximum of %d is allowed", param, cfg.MaxCountPerQueryParam)

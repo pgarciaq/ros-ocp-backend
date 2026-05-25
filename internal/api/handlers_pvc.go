@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -75,11 +76,11 @@ func GetPVCRecommendations(c echo.Context) error {
 		}
 	}
 
-	// Optional filters
-	clusterFilter := c.QueryParam("cluster_uuid")
-	namespaceFilter := c.QueryParam("namespace")
-	typeFilter := c.QueryParam("recommendation_type")
-	termFilter := c.QueryParam("term")
+	// Optional filters (Koku: filter[cluster], filter[project]; legacy: cluster_uuid, namespace)
+	clusterFilter := queryparams.FirstFilter(c, "cluster", "cluster_uuid")
+	namespaceFilter := queryparams.FirstFilter(c, "project", "namespace")
+	typeFilter := queryparams.FirstFilter(c, "recommendation_type", "recommendation_type")
+	termFilter := queryparams.FirstFilter(c, "term", "term")
 	if termFilter == "" {
 		termFilter = "medium"
 	}

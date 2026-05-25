@@ -6,11 +6,11 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
@@ -58,7 +58,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	userPerms := get_user_permissions(c)
 	hlog := requestLogger(c, orgID)
 
-	engineProfile := strings.TrimSpace(c.QueryParam("engine"))
+	engineProfile := queryparams.FirstFilter(c, "engine", "engine")
 	if engineProfile == "" {
 		engineProfile = "cost"
 	}

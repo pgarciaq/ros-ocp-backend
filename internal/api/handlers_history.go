@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -60,22 +61,22 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		queryParams["h.recorded_at < ?"] = t.Add(24 * time.Hour)
 	}
 
-	if clusters := c.QueryParams()["cluster"]; len(clusters) > 0 {
+	if clusters := queryparams.IncludeValues(c, "cluster"); len(clusters) > 0 {
 		queryParams["c.cluster_alias IN ?"] = clusters
 	}
-	if projects := c.QueryParams()["project"]; len(projects) > 0 {
+	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
 		queryParams["h.namespace IN ?"] = projects
 	}
-	if workloads := c.QueryParams()["workload"]; len(workloads) > 0 {
+	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
 		queryParams["h.workload IN ?"] = workloads
 	}
-	if containers := c.QueryParams()["container"]; len(containers) > 0 {
+	if containers := queryparams.IncludeValues(c, "container"); len(containers) > 0 {
 		queryParams["h.container_name IN ?"] = containers
 	}
-	if terms := c.QueryParams()["term"]; len(terms) > 0 {
+	if terms := queryparams.IncludeValues(c, "term"); len(terms) > 0 {
 		queryParams["h.term IN ?"] = terms
 	}
-	if engines := c.QueryParams()["engine"]; len(engines) > 0 {
+	if engines := queryparams.IncludeValues(c, "engine"); len(engines) > 0 {
 		queryParams["h.engine IN ?"] = engines
 	}
 

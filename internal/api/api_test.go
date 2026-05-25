@@ -83,6 +83,30 @@ func TestMapQueryParameters(t *testing.T) {
 	}
 }
 
+func TestMapQueryParametersKokuFilterSyntax(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?filter%5Bproject%5D=alpha&filter%5Bexact%3Aworkload_type%5D=deployment", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	result, err := MapQueryParameters(c)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"%alpha%"}, result["workloads.namespace ILIKE ?"])
+	assert.Equal(t, []string{"deployment"}, result["workloads.workload_type = ?"])
+}
+
+func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?filter%5Bcluster%5D=550e8400-e29b-41d4-a716-446655440000&filter%5Bproject%5D=payments", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	result, err := MapNativeQueryParameters(c)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"550e8400-e29b-41d4-a716-446655440000"}, result["c.cluster_uuid = ?"])
+	assert.Equal(t, []string{"%payments%"}, result["rs.namespace ILIKE ?"])
+}
+
 func TestMapQueryParametersFilterClauses(t *testing.T) {
 	containerCol := "recommendation_sets.container_name"
 	workloadCol := "workloads.workload_name"
@@ -189,6 +213,21 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"exclude[container]": {"web"}, "filter[exact:container]": {"web"}},
 			wantErr:     true,
 			errContains: "exclude and exact cannot share values",
+		},
+		{
+			name:        "project koku filter bracket syntax",
+			queryParams: map[string][]string{"filter[project]": {"payments,frontend"}},
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				key := projectContainerCol + " ILIKE ? OR " + projectContainerCol + " ILIKE ?"
+				assert.Equal(t, []string{"%payments%", "%frontend%"}, result[key])
+			},
+		},
+		{
+			name:        "container koku filter with legacy exact still works",
+			queryParams: map[string][]string{"filter[container]": {"web-server"}},
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ?"])
+			},
 		},
 		{
 			name:        "container partial match multiple values",

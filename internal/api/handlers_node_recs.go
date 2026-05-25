@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -77,9 +78,9 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
-	nodeNameFilter := strings.TrimSpace(c.QueryParam("node_name"))
-	gpuModelFilter := strings.TrimSpace(c.QueryParam("gpu_model"))
-	termFilter := strings.TrimSpace(c.QueryParam("term"))
+	nodeNameFilter := queryparams.FirstFilter(c, "node", "node_name")
+	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model", "gpu_model")
+	termFilter := queryparams.FirstFilter(c, "term", "term")
 
 	useTripleSQL := termFilter == "" &&
 		opts.Format != listoptions.ResponseFormatCSV &&

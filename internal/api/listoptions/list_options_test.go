@@ -100,3 +100,15 @@ func TestListAPIOptions_LimitValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestListAPIOptions_KokuOrderBySyntax(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?order_by%5Bcontainer%5D=asc", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	opts, err := ListAPIOptions(c, DefaultContainerRecsDBColumn, ContainerAllowedOrderBy)
+	require.NoError(t, err)
+	assert.Equal(t, ContainerAllowedOrderBy["container"], opts.OrderBy)
+	assert.Equal(t, OrderAsc, opts.OrderHow)
+}

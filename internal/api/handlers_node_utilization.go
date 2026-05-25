@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -114,25 +115,14 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		offset = o
 	}
 
-	orderBy := strings.TrimSpace(c.QueryParam("order_by"))
-	if orderBy == "" {
-		orderBy = nodeUtilDefaultOrderBy
-	}
-	orderCol, ok := nodeUtilAllowedOrderBy[orderBy]
-	if !ok {
+	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, nodeUtilAllowedOrderBy, nodeUtilDefaultOrderBy, nodeUtilDefaultOrderHow)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "error",
-			"message": fmt.Sprintf("invalid order_by: %s", orderBy),
+			"message": err.Error(),
 		})
 	}
-
-	orderHow := strings.TrimSpace(c.QueryParam("order_how"))
-	if orderHow == "" {
-		orderHow = nodeUtilDefaultOrderHow
-	}
-	if orderHow != listoptions.OrderAsc && orderHow != listoptions.OrderDesc {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid order_how"})
-	}
+	orderCol := nodeUtilAllowedOrderBy[orderByKey]
 
 	pool := database.GetPool()
 	if pool == nil {
@@ -162,12 +152,12 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	clusterFilter := c.QueryParam("cluster_uuid")
-	nodeFilter := c.QueryParam("node")
-	termFilter := c.QueryParam("term")
-	engineFilter := c.QueryParam("engine")
-	underutilFilter := c.QueryParam("is_underutilized")
-	overcommitFilter := c.QueryParam("is_overcommitted")
+	clusterFilter := queryparams.FirstFilter(c, "cluster", "cluster_uuid")
+	nodeFilter := queryparams.FirstFilter(c, "node", "node")
+	termFilter := queryparams.FirstFilter(c, "term", "term")
+	engineFilter := queryparams.FirstFilter(c, "engine", "engine")
+	underutilFilter := queryparams.FirstFilter(c, "is_underutilized", "is_underutilized")
+	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted", "is_overcommitted")
 
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})

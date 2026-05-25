@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -72,10 +73,10 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		}
 	}
 
-	// Optional filters
-	clusterFilter := c.QueryParam("cluster_uuid")
-	namespaceFilter := c.QueryParam("namespace")
-	typeFilter := c.QueryParam("recommendation_type")
+	// Optional filters (Koku: filter[cluster], filter[project]; legacy: cluster_uuid, namespace)
+	clusterFilter := queryparams.FirstFilter(c, "cluster", "cluster_uuid")
+	namespaceFilter := queryparams.FirstFilter(c, "project", "namespace")
+	typeFilter := queryparams.FirstFilter(c, "recommendation_type", "recommendation_type")
 
 	ctx := c.Request().Context()
 
