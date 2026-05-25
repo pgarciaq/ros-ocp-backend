@@ -31,6 +31,14 @@ type ListOptions struct {
 	OrderBy  string
 	OrderHow string
 	Format   string
+
+	// Keyset pagination (after query param). When HasCursor is true, Offset is ignored.
+	HasCursor            bool
+	AfterNamespace       string
+	AfterWorkload        string
+	AfterContainer       string
+	AfterNSClusterUUID   string
+	AfterNamespaceName   string
 }
 
 // OrderByMap maps allowed JSON keys to DB columns.
