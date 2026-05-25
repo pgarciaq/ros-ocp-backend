@@ -5,8 +5,7 @@ at fleet scale (200k+ containers per organization).
 
 This page summarizes lessons from a PostgreSQL `EXPLAIN ANALYZE` audit of hot
 query paths. For the full audit script and reproduction steps, see the
-[explain-audit tool](https://github.com/redhatinsights/ros-ocp-backend/tree/main/scripts/explain-audit)
-in the repository.
+[explain-audit tool](../scripts/explain-audit/) in the repository.
 
 **Last updated:** 2026-05-25
 
@@ -76,8 +75,7 @@ Run `EXPLAIN ANALYZE` and look for:
 
 !!! tip "Production deployments"
     On large databases, create indexes with `CREATE INDEX CONCURRENTLY` before
-    running migrations. See
-    [`migrations/README.md`](https://github.com/redhatinsights/ros-ocp-backend/blob/main/migrations/README.md)
+    running migrations. See [`migrations/README.md`](../migrations/README.md)
     for pre-migration steps.
 
 ---
@@ -182,4 +180,4 @@ prints a report with timing, scan types, and recommendations.
 
 - [Configuration](configuration.md) — database pool and performance env vars
 - [Monitoring](monitoring.md) — API latency and error metrics
-- [Migrations README](https://github.com/redhatinsights/ros-ocp-backend/blob/main/migrations/README.md) — concurrent index procedures
+- [Migrations README](../migrations/README.md) — concurrent index procedures

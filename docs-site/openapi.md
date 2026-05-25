@@ -4,12 +4,12 @@ The ROS-OCP Backend API is documented using the OpenAPI 3.0 specification.
 
 ## Viewing the Specification
 
-The authoritative spec is [`openapi.json`](https://github.com/pgarciaq/ros-ocp-backend/blob/main/openapi.json) at the repository root.
+The authoritative spec is [`openapi.json`](../openapi.json) at the repository root.
 
 You can view it interactively using:
 
 - **Swagger UI**: Paste the raw URL into [editor.swagger.io](https://editor.swagger.io)
-- **Redoc**: Use [redocly.github.io/redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pgarciaq/ros-ocp-backend/main/openapi.json)
+- **Redoc**: Use [redocly.github.io/redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pgarciaq/ros-ocp-backend/pgarciaq-rosocp-superpowers-phase9/openapi.json)
 - **Local**: `npx @redocly/cli preview-docs openapi.json`
 
 ## Key Endpoints
