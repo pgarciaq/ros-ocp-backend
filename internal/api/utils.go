@@ -76,6 +76,16 @@ func CollectionResponse(collection []interface{}, req *http.Request, count, limi
 	}
 }
 
+// PaginatedCollectionResponse builds a list response with has_next and optional cursor metadata.
+func PaginatedCollectionResponse(collection []interface{}, req *http.Request, count, limit, offset int, hasNext bool, nextCursor string) *Collection {
+	resp := CollectionResponse(collection, req, count, limit, offset)
+	resp.Meta.HasNext = hasNext
+	if nextCursor != "" {
+		resp.Meta.NextCursor = nextCursor
+	}
+	return resp
+}
+
 func buildLinks(req *http.Request, count, limit, offset int) Links {
 	q := req.URL.Query()
 	q.Set("limit", strconv.Itoa(limit))

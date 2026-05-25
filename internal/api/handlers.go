@@ -396,13 +396,16 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	if err := applyContainerListCursor(c, &apiListOptions); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	queryParams, err := MapNativeQueryParameters(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	results, count, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -411,10 +414,15 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		})
 	}
 
+	results := page.Results
+	count := page.Count
+
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	gpuModels, gpuClassifications := parseGPUFilters(c)
 	results, count = filterGPUResults(results, count, gpuModels, gpuClassifications)
+	page.Results = results
+	page.Count = count
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -443,7 +451,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		for i := range results {
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
-		response := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		response := buildContainerListMeta(c, page, apiListOptions)
+		response.Data = interfaceSlice
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -499,13 +508,16 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	if err := applyContainerListCursor(c, &apiListOptions); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	queryParams, err := MapNativeQueryParameters(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	results, totalCount, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -514,12 +526,15 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
+	results := page.Results
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
 
 	gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count := filterGPUResults(results, totalCount, gpuModels, gpuClassifications)
+	results, count := filterGPUResults(results, page.Count, gpuModels, gpuClassifications)
+	page.Results = results
+	page.Count = count
 
-	return serveNativeList(c, results, count, apiListOptions)
+	return serveNativeList(c, page, apiListOptions)
 }
 
 // GetRecommendationSetWithFallback tries the native detail lookup first.
@@ -558,7 +573,8 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 	return serveLegacyDetail(c, OrgID, idStr, userPerms)
 }
 
-func serveNativeList(c echo.Context, results []model.NativeContainerResult, count int, opts listoptions.ListOptions) error {
+func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions.ListOptions) error {
+	results := page.Results
 	switch opts.Format {
 	case listoptions.ResponseFormatCSV:
 		filename := "recommendations-" + time.Now().Format("20060102")
@@ -586,7 +602,8 @@ func serveNativeList(c echo.Context, results []model.NativeContainerResult, coun
 		for i := range results {
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, results[i].MonitoringEndTime)
 		}
-		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		response := buildContainerListMeta(c, page, opts)
+		response.Data = interfaceSlice
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -706,6 +723,9 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	if err := applyNamespaceListCursor(c, &apiListOptions); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	queryParams, err := MapNativeNamespaceQueryParameters(c)
 	if err != nil {
@@ -717,7 +737,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "unable to parse query parameters"})
 	}
 
-	results, count, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	page, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native namespace recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -726,16 +746,17 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		})
 	}
 
-	if count > 0 {
-		EnrichNativeNamespaceResults(c.Request().Context(), OrgID, results)
-		return serveNativeNamespaceList(c, results, int(count), apiListOptions)
+	if page.Count > 0 {
+		EnrichNativeNamespaceResults(c.Request().Context(), OrgID, page.Results)
+		return serveNativeNamespaceList(c, page, apiListOptions)
 	}
 
 	hlog.Info("native namespace engine returned 0 results, falling back to Kruize path")
 	return GetNamespaceRecommendationSetList(c)
 }
 
-func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceResult, count int, opts listoptions.ListOptions) error {
+func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions) error {
+	results := page.Results
 	switch opts.Format {
 	case listoptions.ResponseFormatCSV:
 		filename := "namespace-recommendations-" + time.Now().Format("20060102")
@@ -763,7 +784,8 @@ func serveNativeNamespaceList(c echo.Context, results []model.NativeNamespaceRes
 		for i := range results {
 			interfaceSlice[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
 		}
-		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		response := buildNamespaceListMeta(c, page, opts)
+		response.Data = interfaceSlice
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}

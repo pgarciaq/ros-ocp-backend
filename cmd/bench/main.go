@@ -394,7 +394,7 @@ func benchmarkList(nContainers int) []float64 {
 	latencies := make([]float64, 0, iterations)
 	for i := 0; i < iterations; i++ {
 		t0 := time.Now()
-		_, _, err := model.GetNativeRecommendations(benchOrgID, opts, qp, emptyPerms)
+		_, err := model.GetNativeRecommendations(benchOrgID, opts, qp, emptyPerms)
 		elapsed := time.Since(t0).Seconds() * 1000
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  WARNING list query error: %v\n", err)
