@@ -22,23 +22,25 @@ const (
 )
 
 // GPUDigestRow holds one daily GPU digest row for a single container.
+// Utilization metrics are stored as basis points (0-10000 = 0%-100%).
+// Frame buffer metrics are stored as MiB integers.
 type GPUDigestRow struct {
 	IntervalStart       time.Time
 	NodeName            string
 	GPUModelName        string
 	GPUProfileName      string
-	FBUsageMinMiB       float32
-	FBUsageMaxMiB       float32
-	FBUsageAvgMiB       float32
-	TensorPipeActiveMin float32
-	TensorPipeActiveMax float32
-	TensorPipeActiveAvg float32
-	DRAMActiveMin       float32
-	DRAMActiveMax       float32
-	DRAMActiveAvg       float32
-	SMActiveMin         float32
-	SMActiveMax         float32
-	SMActiveAvg         float32
+	FBUsageMinMiB       int32
+	FBUsageMaxMiB       int32
+	FBUsageAvgMiB       int32
+	TensorPipeActiveMin int32
+	TensorPipeActiveMax int32
+	TensorPipeActiveAvg int32
+	DRAMActiveMin       int32
+	DRAMActiveMax       int32
+	DRAMActiveAvg       int32
+	SMActiveMin         int32
+	SMActiveMax         int32
+	SMActiveAvg         int32
 }
 
 // GPURec holds the GPU recommendation for a single container within a single term.
@@ -116,43 +118,58 @@ func InitGPUEngine(cfg *config.Config) {
 	defaultThresholds = defaultGPUThresholdSettings.GPUThresholds
 }
 
+func avgGPUBasisPoints(digests []GPUDigestRow, pick func(GPUDigestRow) int32) int32 {
+	if len(digests) == 0 {
+		return 0
+	}
+	var sum int64
+	for _, d := range digests {
+		sum += int64(pick(d))
+	}
+	return int32(sum / int64(len(digests)))
+}
+
+func gpuHasProfilingData(digests []GPUDigestRow) bool {
+	for _, d := range digests {
+		if d.TensorPipeActiveAvg > 0 || d.DRAMActiveAvg > 0 || d.SMActiveAvg > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyFromAverages(avgTensor, avgDRAM, avgSM int32, th GPUThresholds, computeBoundDRAM float64) GPUClassification {
+	idleBP := ThresholdToBasisPoints(th.IdleThreshold)
+	memBoundDRAMBP := ThresholdToBasisPoints(th.MemBoundDRAM)
+	memBoundTensorBP := ThresholdToBasisPoints(th.MemBoundTensor)
+	underTensorBP := ThresholdToBasisPoints(th.UnderutilizedTensor)
+	underSMBP := ThresholdToBasisPoints(th.UnderutilizedSM)
+	computeBoundDRAMBP := ThresholdToBasisPoints(computeBoundDRAM)
+
+	switch {
+	case avgSM < idleBP:
+		return GPUClassIdle
+	case avgDRAM > memBoundDRAMBP && avgTensor < memBoundTensorBP:
+		return GPUClassMemoryBound
+	case avgTensor < underTensorBP && avgSM < underSMBP:
+		return GPUClassUnderutilized
+	case avgTensor < underSMBP && avgDRAM < computeBoundDRAMBP:
+		return GPUClassComputeBoundUnderutil
+	default:
+		return GPUClassWellUtilized
+	}
+}
+
 // Classify determines the GPU utilization classification from daily digests.
 // Returns empty classification and false HasProfilingData if all PROF_ metrics are zero/absent.
 func (th *GPUThresholds) Classify(digests []GPUDigestRow) (GPUClassification, bool) {
-	hasProf := false
-	for _, d := range digests {
-		if d.TensorPipeActiveAvg > 0 || d.DRAMActiveAvg > 0 || d.SMActiveAvg > 0 {
-			hasProf = true
-			break
-		}
-	}
-	if !hasProf {
+	if !gpuHasProfilingData(digests) {
 		return "", false
 	}
-
-	var sumTensor, sumDRAM, sumSM float64
-	for _, d := range digests {
-		sumTensor += float64(d.TensorPipeActiveAvg)
-		sumDRAM += float64(d.DRAMActiveAvg)
-		sumSM += float64(d.SMActiveAvg)
-	}
-	n := float64(len(digests))
-	avgTensor := sumTensor / n
-	avgDRAM := sumDRAM / n
-	avgSM := sumSM / n
-
-	switch {
-	case avgSM < th.IdleThreshold:
-		return GPUClassIdle, true
-	case avgDRAM > th.MemBoundDRAM && avgTensor < th.MemBoundTensor:
-		return GPUClassMemoryBound, true
-	case avgTensor < th.UnderutilizedTensor && avgSM < th.UnderutilizedSM:
-		return GPUClassUnderutilized, true
-	case avgTensor < th.UnderutilizedSM && avgDRAM < 0.30:
-		return GPUClassComputeBoundUnderutil, true
-	default:
-		return GPUClassWellUtilized, true
-	}
+	avgTensor := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.TensorPipeActiveAvg })
+	avgDRAM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.DRAMActiveAvg })
+	avgSM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.SMActiveAvg })
+	return classifyFromAverages(avgTensor, avgDRAM, avgSM, *th, 0.30), true
 }
 
 // SelectMIGProfile recommends the smallest MIG profile that fits the workload's
@@ -176,41 +193,13 @@ func (th *GPUThresholds) SelectMIGProfile(spec *GPUModelSpec, digests []GPUDiges
 
 // ClassifyWithSettings classifies GPU workloads using extended threshold settings.
 func (s GPUThresholdSettings) ClassifyWithSettings(digests []GPUDigestRow) (GPUClassification, bool) {
-	hasProf := false
-	for _, d := range digests {
-		if d.TensorPipeActiveAvg > 0 || d.DRAMActiveAvg > 0 || d.SMActiveAvg > 0 {
-			hasProf = true
-			break
-		}
-	}
-	if !hasProf {
+	if !gpuHasProfilingData(digests) {
 		return "", false
 	}
-
-	var sumTensor, sumDRAM, sumSM float64
-	for _, d := range digests {
-		sumTensor += float64(d.TensorPipeActiveAvg)
-		sumDRAM += float64(d.DRAMActiveAvg)
-		sumSM += float64(d.SMActiveAvg)
-	}
-	n := float64(len(digests))
-	avgTensor := sumTensor / n
-	avgDRAM := sumDRAM / n
-	avgSM := sumSM / n
-	th := s.GPUThresholds
-
-	switch {
-	case avgSM < th.IdleThreshold:
-		return GPUClassIdle, true
-	case avgDRAM > th.MemBoundDRAM && avgTensor < th.MemBoundTensor:
-		return GPUClassMemoryBound, true
-	case avgTensor < th.UnderutilizedTensor && avgSM < th.UnderutilizedSM:
-		return GPUClassUnderutilized, true
-	case avgTensor < th.UnderutilizedSM && avgDRAM < s.ComputeBoundDRAMThreshold:
-		return GPUClassComputeBoundUnderutil, true
-	default:
-		return GPUClassWellUtilized, true
-	}
+	avgTensor := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.TensorPipeActiveAvg })
+	avgDRAM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.DRAMActiveAvg })
+	avgSM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.SMActiveAvg })
+	return classifyFromAverages(avgTensor, avgDRAM, avgSM, s.GPUThresholds, s.ComputeBoundDRAMThreshold), true
 }
 
 // SelectMIGProfileWithSettings recommends a MIG profile using extended settings.
@@ -237,11 +226,11 @@ func SelectMIGProfile(spec *GPUModelSpec, digests []GPUDigestRow) string {
 }
 
 func percentileFB(digests []GPUDigestRow, pct float64) float64 {
-	vals := make([]float64, 0, len(digests))
+	vals := make([]int32, 0, len(digests))
 	for _, d := range digests {
-		vals = append(vals, float64(d.FBUsageMaxMiB))
+		vals = append(vals, d.FBUsageMaxMiB)
 	}
-	sort.Float64s(vals)
+	sort.Slice(vals, func(i, j int) bool { return vals[i] < vals[j] })
 	if len(vals) == 0 {
 		return 0
 	}
@@ -252,7 +241,7 @@ func percentileFB(digests []GPUDigestRow, pct float64) float64 {
 	if idx >= len(vals) {
 		idx = len(vals) - 1
 	}
-	return vals[idx]
+	return float64(vals[idx])
 }
 
 func percentile98FB(digests []GPUDigestRow) float64 {
@@ -279,15 +268,17 @@ func GPUConfidenceWithSettings(digests []GPUDigestRow, settings GPUThresholdSett
 		base = 1.0
 	}
 
-	var maxSM, sumSMAvg float64
+	var maxSM int32
+	var sumSMAvg int64
 	for _, d := range digests {
-		if float64(d.SMActiveMax) > maxSM {
-			maxSM = float64(d.SMActiveMax)
+		if d.SMActiveMax > maxSM {
+			maxSM = d.SMActiveMax
 		}
-		sumSMAvg += float64(d.SMActiveAvg)
+		sumSMAvg += int64(d.SMActiveAvg)
 	}
-	avgSM := sumSMAvg / float64(days)
-	if days > 0 && avgSM > 0 && maxSM/avgSM > settings.SpikeRatioThreshold {
+	avgSM := BasisPointsToFloat(int32(sumSMAvg / int64(days)))
+	maxSMFloat := BasisPointsToFloat(maxSM)
+	if days > 0 && avgSM > 0 && maxSMFloat/avgSM > settings.SpikeRatioThreshold {
 		base *= float32(settings.SpikeConfidencePenalty)
 	}
 
@@ -319,19 +310,20 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 		HasProfilingData:  hasProf,
 	}
 
-	var sumTensor, sumDRAM, sumSM, maxFB float64
+	var sumTensor, sumDRAM, sumSM int64
+	var maxFB int32
 	for _, d := range digests {
-		sumTensor += float64(d.TensorPipeActiveAvg)
-		sumDRAM += float64(d.DRAMActiveAvg)
-		sumSM += float64(d.SMActiveAvg)
-		if float64(d.FBUsageMaxMiB) > maxFB {
-			maxFB = float64(d.FBUsageMaxMiB)
+		sumTensor += int64(d.TensorPipeActiveAvg)
+		sumDRAM += int64(d.DRAMActiveAvg)
+		sumSM += int64(d.SMActiveAvg)
+		if d.FBUsageMaxMiB > maxFB {
+			maxFB = d.FBUsageMaxMiB
 		}
 	}
-	n := float64(len(digests))
-	rec.TensorPipeActiveAvg = float32(sumTensor / n)
-	rec.DRAMActiveAvg = float32(sumDRAM / n)
-	rec.SMActiveAvg = float32(sumSM / n)
+	n := int64(len(digests))
+	rec.TensorPipeActiveAvg = BasisPointsToFloat32(int32(sumTensor / n))
+	rec.DRAMActiveAvg = BasisPointsToFloat32(int32(sumDRAM / n))
+	rec.SMActiveAvg = BasisPointsToFloat32(int32(sumSM / n))
 	rec.FBUsageMaxMiB = float32(maxFB)
 
 	if !hasProf {

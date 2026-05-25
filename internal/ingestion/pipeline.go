@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
@@ -263,18 +265,18 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		profileName  string
 		nodeName     string // last-seen node for this container-day
 		count        int
-		fbMinVal     float64
-		fbMaxVal     float64
-		fbAvgSum     float64
-		tensorMinVal float64
-		tensorMaxVal float64
-		tensorAvgSum float64
-		dramMinVal   float64
-		dramMaxVal   float64
-		dramAvgSum   float64
-		smMinVal     float64
-		smMaxVal     float64
-		smAvgSum     float64
+		fbMinVal     int32
+		fbMaxVal     int32
+		fbAvgSum     int64
+		tensorMinVal int32
+		tensorMaxVal int32
+		tensorAvgSum int64
+		dramMinVal   int32
+		dramMaxVal   int32
+		dramAvgSum   int64
+		smMinVal     int32
+		smMaxVal     int32
+		smAvgSum     int64
 	}
 
 	groups := map[gpuKey]*gpuAgg{}
@@ -284,56 +286,69 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		}
 		day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
 		k := gpuKey{date: day, namespace: r.Namespace, workload: r.WorkloadName, container: r.ContainerName}
+		fbMin := int32(math.Round(r.AcceleratorFBUsageMin))
+		fbMax := int32(math.Round(r.AcceleratorFBUsageMax))
+		fbAvg := int32(math.Round(r.AcceleratorFBUsageAvg))
+		tensorMin := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveMin)
+		tensorMax := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveMax)
+		tensorAvg := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveAvg)
+		dramMin := fixedpoint.FloatToBasisPoints(r.DRAMActiveMin)
+		dramMax := fixedpoint.FloatToBasisPoints(r.DRAMActiveMax)
+		dramAvg := fixedpoint.FloatToBasisPoints(r.DRAMActiveAvg)
+		smMin := fixedpoint.FloatToBasisPoints(r.SMActiveMin)
+		smMax := fixedpoint.FloatToBasisPoints(r.SMActiveMax)
+		smAvg := fixedpoint.FloatToBasisPoints(r.SMActiveAvg)
+
 		g, ok := groups[k]
 		if !ok {
 			g = &gpuAgg{
 				workloadType: r.WorkloadType,
 				modelName:    r.AcceleratorModelName,
 				profileName:  r.AcceleratorProfileName,
-				fbMinVal:     r.AcceleratorFBUsageMin,
-				fbMaxVal:     r.AcceleratorFBUsageMax,
-				tensorMinVal: r.TensorPipeActiveMin,
-				tensorMaxVal: r.TensorPipeActiveMax,
-				dramMinVal:   r.DRAMActiveMin,
-				dramMaxVal:   r.DRAMActiveMax,
-				smMinVal:     r.SMActiveMin,
-				smMaxVal:     r.SMActiveMax,
+				fbMinVal:     fbMin,
+				fbMaxVal:     fbMax,
+				tensorMinVal: tensorMin,
+				tensorMaxVal: tensorMax,
+				dramMinVal:   dramMin,
+				dramMaxVal:   dramMax,
+				smMinVal:     smMin,
+				smMaxVal:     smMax,
 			}
 			groups[k] = g
 		} else {
-			if r.AcceleratorFBUsageMin < g.fbMinVal {
-				g.fbMinVal = r.AcceleratorFBUsageMin
+			if fbMin < g.fbMinVal {
+				g.fbMinVal = fbMin
 			}
-			if r.AcceleratorFBUsageMax > g.fbMaxVal {
-				g.fbMaxVal = r.AcceleratorFBUsageMax
+			if fbMax > g.fbMaxVal {
+				g.fbMaxVal = fbMax
 			}
-			if r.TensorPipeActiveMin < g.tensorMinVal {
-				g.tensorMinVal = r.TensorPipeActiveMin
+			if tensorMin < g.tensorMinVal {
+				g.tensorMinVal = tensorMin
 			}
-			if r.TensorPipeActiveMax > g.tensorMaxVal {
-				g.tensorMaxVal = r.TensorPipeActiveMax
+			if tensorMax > g.tensorMaxVal {
+				g.tensorMaxVal = tensorMax
 			}
-			if r.DRAMActiveMin < g.dramMinVal {
-				g.dramMinVal = r.DRAMActiveMin
+			if dramMin < g.dramMinVal {
+				g.dramMinVal = dramMin
 			}
-			if r.DRAMActiveMax > g.dramMaxVal {
-				g.dramMaxVal = r.DRAMActiveMax
+			if dramMax > g.dramMaxVal {
+				g.dramMaxVal = dramMax
 			}
-			if r.SMActiveMin < g.smMinVal {
-				g.smMinVal = r.SMActiveMin
+			if smMin < g.smMinVal {
+				g.smMinVal = smMin
 			}
-			if r.SMActiveMax > g.smMaxVal {
-				g.smMaxVal = r.SMActiveMax
+			if smMax > g.smMaxVal {
+				g.smMaxVal = smMax
 			}
 		}
 		if r.Node != "" {
 			g.nodeName = r.Node
 		}
 		g.count++
-		g.fbAvgSum += r.AcceleratorFBUsageAvg
-		g.tensorAvgSum += r.TensorPipeActiveAvg
-		g.dramAvgSum += r.DRAMActiveAvg
-		g.smAvgSum += r.SMActiveAvg
+		g.fbAvgSum += int64(fbAvg)
+		g.tensorAvgSum += int64(tensorAvg)
+		g.dramAvgSum += int64(dramAvg)
+		g.smAvgSum += int64(smAvg)
 	}
 
 	if len(groups) == 0 {
@@ -396,10 +411,10 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 				sm_active_avg = EXCLUDED.sm_active_avg`,
 				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
 				g.modelName, g.profileName, g.nodeName,
-				g.fbMinVal, g.fbMaxVal, safeMean(g.fbAvgSum, g.count),
-				g.tensorMinVal, g.tensorMaxVal, safeMean(g.tensorAvgSum, g.count),
-				g.dramMinVal, g.dramMaxVal, safeMean(g.dramAvgSum, g.count),
-				g.smMinVal, g.smMaxVal, safeMean(g.smAvgSum, g.count),
+				g.fbMinVal, g.fbMaxVal, safeMeanInt32(g.fbAvgSum, g.count),
+				g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),
+				g.dramMinVal, g.dramMaxVal, safeMeanInt32(g.dramAvgSum, g.count),
+				g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
 			)
 		}
 		if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
@@ -415,10 +430,9 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 	return nil
 }
 
-
-func safeMean(sum float64, count int) float64 {
+func safeMeanInt32(sum int64, count int) int32 {
 	if count <= 0 {
 		return 0
 	}
-	return sum / float64(count)
+	return int32((sum + int64(count)/2) / int64(count))
 }

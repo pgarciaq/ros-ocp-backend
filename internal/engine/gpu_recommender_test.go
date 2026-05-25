@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -9,13 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func bp(v float32) int32 { return FloatToBasisPoints(float64(v)) }
+
 func digestRow(tensor, dram, sm, fbMax float32) GPUDigestRow {
 	return GPUDigestRow{
 		IntervalStart:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		TensorPipeActiveAvg: tensor,
-		DRAMActiveAvg:       dram,
-		SMActiveAvg:         sm,
-		FBUsageMaxMiB:       fbMax,
+		TensorPipeActiveAvg: FloatToBasisPoints(float64(tensor)),
+		DRAMActiveAvg:       FloatToBasisPoints(float64(dram)),
+		SMActiveAvg:         FloatToBasisPoints(float64(sm)),
+		FBUsageMaxMiB:       int32(math.Round(float64(fbMax))),
 	}
 }
 
@@ -110,7 +113,7 @@ func TestGPUConfidence_FewDays(t *testing.T) {
 	var digests []GPUDigestRow
 	for i := 0; i < 2; i++ {
 		digests = append(digests, GPUDigestRow{
-			SMActiveAvg: 0.5, SMActiveMax: 0.6,
+			SMActiveAvg: bp(0.5), SMActiveMax: bp(0.6),
 		})
 	}
 	c := GPUConfidence(digests)
@@ -122,8 +125,8 @@ func TestGPUConfidence_14Days(t *testing.T) {
 	var digests []GPUDigestRow
 	for i := 0; i < 14; i++ {
 		digests = append(digests, GPUDigestRow{
-			SMActiveAvg: 0.5,
-			SMActiveMax: 1.5,
+			SMActiveAvg: bp(0.5),
+			SMActiveMax: bp(1.5),
 		})
 	}
 	c := GPUConfidence(digests)
@@ -134,9 +137,9 @@ func TestGPUConfidence_Bursty(t *testing.T) {
 	t.Parallel()
 	var digests []GPUDigestRow
 	for i := 0; i < 14; i++ {
-		digests = append(digests, GPUDigestRow{SMActiveAvg: 0.1, SMActiveMax: 0.11})
+		digests = append(digests, GPUDigestRow{SMActiveAvg: bp(0.1), SMActiveMax: bp(0.11)})
 	}
-	digests[0].SMActiveMax = 1.0
+	digests[0].SMActiveMax = bp(1.0)
 
 	c := GPUConfidence(digests)
 	assert.InDelta(t, float32(0.7), c, 0.001)
@@ -150,10 +153,10 @@ func TestRecommendGPU_IdleA100(t *testing.T) {
 			IntervalStart:       base.AddDate(0, 0, i),
 			GPUModelName:        "NVIDIA A100-SXM4-80GB",
 			GPUProfileName:      "",
-			TensorPipeActiveAvg: 0.05,
-			DRAMActiveAvg:       0.1,
-			SMActiveAvg:         0.01,
-			SMActiveMax:         0.02,
+			TensorPipeActiveAvg: bp(0.05),
+			DRAMActiveAvg:       bp(0.1),
+			SMActiveAvg:         bp(0.01),
+			SMActiveMax:         bp(0.02),
 			FBUsageMaxMiB:       4096,
 		})
 	}
@@ -277,11 +280,11 @@ func TestClassify_MemBoundThresholdOverride(t *testing.T) {
 func TestFilterGPUByWindow(t *testing.T) {
 	t.Parallel()
 	rows := []GPUDigestRow{
-		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.1},
-		{IntervalStart: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.2},
-		{IntervalStart: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.3},
-		{IntervalStart: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.4},
-		{IntervalStart: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), SMActiveAvg: 0.5},
+		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.1)},
+		{IntervalStart: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.2)},
+		{IntervalStart: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.3)},
+		{IntervalStart: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.4)},
+		{IntervalStart: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.5)},
 	}
 
 	endDate := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
