@@ -7,8 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
+
+const defaultCostDataCacheTTL = 5 * time.Minute
 
 // ClusterCostData holds the cost model rates and namespace-level cost/usage
 // aggregates returned by the Koku effective-rates endpoint.
@@ -46,24 +49,93 @@ type CostDataProvider interface {
 		start, end time.Time) (*ClusterCostData, error)
 }
 
+type costCacheEntry struct {
+	data      *ClusterCostData
+	expiresAt time.Time
+}
+
+var (
+	sharedTransport     *http.Transport
+	sharedTransportOnce sync.Once
+	costDataCache       sync.Map // key: orgID+"\x00"+clusterID -> costCacheEntry
+	costDataCacheTTL    = defaultCostDataCacheTTL
+)
+
+func sharedHTTPTransport() *http.Transport {
+	sharedTransportOnce.Do(func() {
+		sharedTransport = &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		}
+	})
+	return sharedTransport
+}
+
+func costCacheKey(orgID, clusterID string) string {
+	return orgID + "\x00" + clusterID
+}
+
+// InvalidateCostDataCache clears cached effective rates for an org/cluster pair.
+// Pass empty clusterID to invalidate all clusters for the org.
+func InvalidateCostDataCache(orgID, clusterID string) {
+	if clusterID == "" {
+		prefix := orgID + "\x00"
+		costDataCache.Range(func(k, _ any) bool {
+			if key, ok := k.(string); ok && len(key) >= len(prefix) && key[:len(prefix)] == prefix {
+				costDataCache.Delete(k)
+			}
+			return true
+		})
+		return
+	}
+	costDataCache.Delete(costCacheKey(orgID, clusterID))
+}
+
 // HTTPCostDataProvider fetches cost data from the Koku masu API over HTTP.
 type HTTPCostDataProvider struct {
 	BaseURL    string
 	HTTPClient *http.Client
 }
 
-// NewHTTPCostDataProvider creates a new HTTP-based cost data provider.
-// baseURL is the Koku masu API base URL, e.g. "http://cost-onprem-masu:5042".
+// NewHTTPCostDataProvider creates a new HTTP-based cost data provider with a shared transport.
 func NewHTTPCostDataProvider(baseURL string, timeout time.Duration) *HTTPCostDataProvider {
 	return &HTTPCostDataProvider{
 		BaseURL: baseURL,
 		HTTPClient: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: sharedHTTPTransport(),
 		},
 	}
 }
 
 func (p *HTTPCostDataProvider) GetEffectiveRates(
+	ctx context.Context,
+	orgID, clusterID string,
+	start, end time.Time,
+) (*ClusterCostData, error) {
+	key := costCacheKey(orgID, clusterID)
+	if v, ok := costDataCache.Load(key); ok {
+		entry := v.(costCacheEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.data, nil
+		}
+		costDataCache.Delete(key)
+	}
+
+	data, err := p.fetchEffectiveRates(ctx, orgID, clusterID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	costDataCache.Store(key, costCacheEntry{
+		data:      data,
+		expiresAt: time.Now().Add(costDataCacheTTL),
+	})
+	return data, nil
+}
+
+func (p *HTTPCostDataProvider) fetchEffectiveRates(
 	ctx context.Context,
 	orgID, clusterID string,
 	start, end time.Time,
@@ -101,8 +173,6 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 }
 
 // NilCostDataProvider returns zero-value cost data. Used when no Koku URL is configured.
-// Returns an empty (but non-nil) ClusterCostData so callers can safely dereference
-// without nil checks — all numeric fields default to zero, maps are empty.
 type NilCostDataProvider struct{}
 
 func (n *NilCostDataProvider) GetEffectiveRates(
@@ -116,4 +186,19 @@ func (n *NilCostDataProvider) GetEffectiveRates(
 		ConfiguredRates: map[string]RatePair{},
 		Namespaces:      map[string]NamespaceCosts{},
 	}, nil
+}
+
+// SetCostDataCacheTTLForTest overrides the TTL used by HTTPCostDataProvider (tests only).
+func SetCostDataCacheTTLForTest(ttl time.Duration) func() {
+	prev := costDataCacheTTL
+	costDataCacheTTL = ttl
+	return func() { costDataCacheTTL = prev }
+}
+
+// ClearCostDataCacheForTest removes all cached entries (tests only).
+func ClearCostDataCacheForTest() {
+	costDataCache.Range(func(k, _ any) bool {
+		costDataCache.Delete(k)
+		return true
+	})
 }

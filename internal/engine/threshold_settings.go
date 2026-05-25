@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 )
 
 const thresholdSettingsCacheTTL = 60 * time.Second
@@ -55,6 +56,7 @@ func InvalidateThresholdCache(orgID, recommendationType string) {
 	delete(thresholdSettingsCache, thresholdSettingsCacheKey{orgID: orgID, recommendationType: recommendationType})
 	thresholdSettingsMu.Unlock()
 	updateThresholdCacheEntriesGauge()
+	costdata.InvalidateCostDataCache(orgID, "")
 }
 
 func resolveThresholdCached[T any](
@@ -108,18 +110,18 @@ var validThresholdRecommendationTypes = map[string]struct{}{
 // SizingThresholdSettings holds CPU/memory sizing and notification thresholds
 // for container and namespace recommendation plugins.
 type SizingThresholdSettings struct {
-	CPUCostPercentile        float64 `json:"cpu_cost_percentile"`
-	CPUPerfPercentile        float64 `json:"cpu_perf_percentile"`
-	MemCostPercentile        float64 `json:"mem_cost_percentile"`
-	MemPerfPercentile        float64 `json:"mem_perf_percentile"`
-	MinMargin                float64 `json:"min_margin"`
-	MaxMargin                float64 `json:"max_margin"`
-	LimitMultiplier          float64 `json:"limit_multiplier"`
-	CPUFloorMC               int64   `json:"cpu_floor_mc"`
-	IdleCPUThresholdMC       int64   `json:"idle_cpu_threshold_mc"`
-	IdleMemThresholdKiB      int64   `json:"idle_mem_threshold_kib"`
-	MemTrendSlopeThreshold   float64 `json:"mem_trend_slope_threshold"`
-	LowConfidenceThreshold   float32 `json:"low_confidence_threshold"`
+	CPUCostPercentile      float64 `json:"cpu_cost_percentile"`
+	CPUPerfPercentile      float64 `json:"cpu_perf_percentile"`
+	MemCostPercentile      float64 `json:"mem_cost_percentile"`
+	MemPerfPercentile      float64 `json:"mem_perf_percentile"`
+	MinMargin              float64 `json:"min_margin"`
+	MaxMargin              float64 `json:"max_margin"`
+	LimitMultiplier        float64 `json:"limit_multiplier"`
+	CPUFloorMC             int64   `json:"cpu_floor_mc"`
+	IdleCPUThresholdMC     int64   `json:"idle_cpu_threshold_mc"`
+	IdleMemThresholdKiB    int64   `json:"idle_mem_threshold_kib"`
+	MemTrendSlopeThreshold float64 `json:"mem_trend_slope_threshold"`
+	LowConfidenceThreshold float32 `json:"low_confidence_threshold"`
 }
 
 // SizingThresholdSettingsResponse is the API GET response for container/namespace.
@@ -179,20 +181,20 @@ type NodeThresholdSettingsUpdate struct {
 // GPUThresholdSettings holds GPU classification, confidence, and time-slicing parameters.
 type GPUThresholdSettings struct {
 	GPUThresholds
-	ComputeBoundDRAMThreshold     float64 `json:"compute_bound_dram_threshold"`
-	MIGFBPercentile               float64 `json:"mig_fb_percentile"`
-	ConfidenceDaysTier1           int     `json:"confidence_days_tier1"`
-	ConfidenceDaysTier2           int     `json:"confidence_days_tier2"`
-	ConfidenceDaysTier3           int     `json:"confidence_days_tier3"`
-	SpikeRatioThreshold           float64 `json:"spike_ratio_threshold"`
-	SpikeConfidencePenalty        float64 `json:"spike_confidence_penalty"`
-	NoProfilingConfidenceFactor   float64 `json:"no_profiling_confidence_factor"`
-	TimeslicingMajorityThreshold  float64 `json:"timeslicing_majority_threshold"`
-	TimeslicingMinReplicas        int     `json:"timeslicing_min_replicas"`
-	TimeslicingMaxReplicas        int     `json:"timeslicing_max_replicas"`
-	TimeslicingBasePenalty        float64 `json:"timeslicing_base_penalty"`
-	TimeslicingImpactedWeight     float64 `json:"timeslicing_impacted_weight"`
-	NodeFreshnessDays             int     `json:"node_freshness_days"`
+	ComputeBoundDRAMThreshold    float64 `json:"compute_bound_dram_threshold"`
+	MIGFBPercentile              float64 `json:"mig_fb_percentile"`
+	ConfidenceDaysTier1          int     `json:"confidence_days_tier1"`
+	ConfidenceDaysTier2          int     `json:"confidence_days_tier2"`
+	ConfidenceDaysTier3          int     `json:"confidence_days_tier3"`
+	SpikeRatioThreshold          float64 `json:"spike_ratio_threshold"`
+	SpikeConfidencePenalty       float64 `json:"spike_confidence_penalty"`
+	NoProfilingConfidenceFactor  float64 `json:"no_profiling_confidence_factor"`
+	TimeslicingMajorityThreshold float64 `json:"timeslicing_majority_threshold"`
+	TimeslicingMinReplicas       int     `json:"timeslicing_min_replicas"`
+	TimeslicingMaxReplicas       int     `json:"timeslicing_max_replicas"`
+	TimeslicingBasePenalty       float64 `json:"timeslicing_base_penalty"`
+	TimeslicingImpactedWeight    float64 `json:"timeslicing_impacted_weight"`
+	NodeFreshnessDays            int     `json:"node_freshness_days"`
 }
 
 // GPUThresholdSettingsResponse is the API GET response for GPU thresholds.
@@ -203,36 +205,36 @@ type GPUThresholdSettingsResponse struct {
 
 // GPUThresholdSettingsUpdate is the API PUT body for GPU thresholds.
 type GPUThresholdSettingsUpdate struct {
-	IdleThreshold                   *float64 `json:"idle_threshold,omitempty"`
-	UnderutilizedSMThreshold        *float64 `json:"underutilized_sm_threshold,omitempty"`
-	UnderutilizedTensorThreshold    *float64 `json:"underutilized_tensor_threshold,omitempty"`
-	MemBoundDRAMThreshold           *float64 `json:"membound_dram_threshold,omitempty"`
-	MemBoundTensorThreshold         *float64 `json:"membound_tensor_threshold,omitempty"`
-	FBHeadroomFactor                *float64 `json:"fb_headroom_factor,omitempty"`
-	ComputeBoundDRAMThreshold       *float64 `json:"compute_bound_dram_threshold,omitempty"`
-	MIGFBPercentile                 *float64 `json:"mig_fb_percentile,omitempty"`
-	ConfidenceDaysTier1             *int     `json:"confidence_days_tier1,omitempty"`
-	ConfidenceDaysTier2             *int     `json:"confidence_days_tier2,omitempty"`
-	ConfidenceDaysTier3             *int     `json:"confidence_days_tier3,omitempty"`
-	SpikeRatioThreshold             *float64 `json:"spike_ratio_threshold,omitempty"`
-	SpikeConfidencePenalty          *float64 `json:"spike_confidence_penalty,omitempty"`
-	NoProfilingConfidenceFactor     *float64 `json:"no_profiling_confidence_factor,omitempty"`
-	TimeslicingMajorityThreshold    *float64 `json:"timeslicing_majority_threshold,omitempty"`
-	TimeslicingMinReplicas          *int     `json:"timeslicing_min_replicas,omitempty"`
-	TimeslicingMaxReplicas          *int     `json:"timeslicing_max_replicas,omitempty"`
-	TimeslicingBasePenalty          *float64 `json:"timeslicing_base_penalty,omitempty"`
-	TimeslicingImpactedWeight       *float64 `json:"timeslicing_impacted_weight,omitempty"`
-	NodeFreshnessDays               *int     `json:"node_freshness_days,omitempty"`
+	IdleThreshold                *float64 `json:"idle_threshold,omitempty"`
+	UnderutilizedSMThreshold     *float64 `json:"underutilized_sm_threshold,omitempty"`
+	UnderutilizedTensorThreshold *float64 `json:"underutilized_tensor_threshold,omitempty"`
+	MemBoundDRAMThreshold        *float64 `json:"membound_dram_threshold,omitempty"`
+	MemBoundTensorThreshold      *float64 `json:"membound_tensor_threshold,omitempty"`
+	FBHeadroomFactor             *float64 `json:"fb_headroom_factor,omitempty"`
+	ComputeBoundDRAMThreshold    *float64 `json:"compute_bound_dram_threshold,omitempty"`
+	MIGFBPercentile              *float64 `json:"mig_fb_percentile,omitempty"`
+	ConfidenceDaysTier1          *int     `json:"confidence_days_tier1,omitempty"`
+	ConfidenceDaysTier2          *int     `json:"confidence_days_tier2,omitempty"`
+	ConfidenceDaysTier3          *int     `json:"confidence_days_tier3,omitempty"`
+	SpikeRatioThreshold          *float64 `json:"spike_ratio_threshold,omitempty"`
+	SpikeConfidencePenalty       *float64 `json:"spike_confidence_penalty,omitempty"`
+	NoProfilingConfidenceFactor  *float64 `json:"no_profiling_confidence_factor,omitempty"`
+	TimeslicingMajorityThreshold *float64 `json:"timeslicing_majority_threshold,omitempty"`
+	TimeslicingMinReplicas       *int     `json:"timeslicing_min_replicas,omitempty"`
+	TimeslicingMaxReplicas       *int     `json:"timeslicing_max_replicas,omitempty"`
+	TimeslicingBasePenalty       *float64 `json:"timeslicing_base_penalty,omitempty"`
+	TimeslicingImpactedWeight    *float64 `json:"timeslicing_impacted_weight,omitempty"`
+	NodeFreshnessDays            *int     `json:"node_freshness_days,omitempty"`
 }
 
 // PVCThresholdSettings holds PVC right-sizing classification parameters.
 type PVCThresholdSettings struct {
-	OversizedThreshold          float64 `json:"oversized_threshold"`
-	NearFullThreshold           float64 `json:"near_full_threshold"`
-	MinTrendDays                int     `json:"min_trend_days"`
-	RecommendedSizeMultiplier   int     `json:"recommended_size_multiplier"`
-	MinRecommendedGiB           int     `json:"min_recommended_gib"`
-	DaysToFullAlert             int     `json:"days_to_full_alert"`
+	OversizedThreshold        float64 `json:"oversized_threshold"`
+	NearFullThreshold         float64 `json:"near_full_threshold"`
+	MinTrendDays              int     `json:"min_trend_days"`
+	RecommendedSizeMultiplier int     `json:"recommended_size_multiplier"`
+	MinRecommendedGiB         int     `json:"min_recommended_gib"`
+	DaysToFullAlert           int     `json:"days_to_full_alert"`
 }
 
 // PVCThresholdSettingsResponse is the API GET response for PVC thresholds.
@@ -295,21 +297,21 @@ func DefaultNodeThresholdSettings() NodeThresholdSettings {
 // DefaultGPUThresholdSettings returns compiled defaults for GPU recommendations.
 func DefaultGPUThresholdSettings() GPUThresholdSettings {
 	return GPUThresholdSettings{
-		GPUThresholds:                 DefaultGPUThresholds(),
-		ComputeBoundDRAMThreshold:       0.30,
-		MIGFBPercentile:                 0.98,
-		ConfidenceDaysTier1:             3,
-		ConfidenceDaysTier2:             7,
-		ConfidenceDaysTier3:             14,
-		SpikeRatioThreshold:             5.0,
-		SpikeConfidencePenalty:          0.70,
-		NoProfilingConfidenceFactor:     0.50,
-		TimeslicingMajorityThreshold:    0.50,
-		TimeslicingMinReplicas:          2,
-		TimeslicingMaxReplicas:          8,
-		TimeslicingBasePenalty:          0.70,
-		TimeslicingImpactedWeight:         0.30,
-		NodeFreshnessDays:               7,
+		GPUThresholds:                DefaultGPUThresholds(),
+		ComputeBoundDRAMThreshold:    0.30,
+		MIGFBPercentile:              0.98,
+		ConfidenceDaysTier1:          3,
+		ConfidenceDaysTier2:          7,
+		ConfidenceDaysTier3:          14,
+		SpikeRatioThreshold:          5.0,
+		SpikeConfidencePenalty:       0.70,
+		NoProfilingConfidenceFactor:  0.50,
+		TimeslicingMajorityThreshold: 0.50,
+		TimeslicingMinReplicas:       2,
+		TimeslicingMaxReplicas:       8,
+		TimeslicingBasePenalty:       0.70,
+		TimeslicingImpactedWeight:    0.30,
+		NodeFreshnessDays:            7,
 	}
 }
 
@@ -344,7 +346,7 @@ var (
 	defaultNamespaceSizingThresholds = DefaultNamespaceSizingThresholds()
 	defaultNodeThresholdSettings     = DefaultNodeThresholdSettings()
 	defaultGPUThresholdSettings      = DefaultGPUThresholdSettings()
-	defaultPVCThresholdSettings    = DefaultPVCThresholdSettings()
+	defaultPVCThresholdSettings      = DefaultPVCThresholdSettings()
 )
 
 // InitThresholdDefaults copies admin env configuration into process-wide engine defaults.
@@ -664,85 +666,85 @@ func overlayThresholdJSON(ctx context.Context, pool *pgxpool.Pool, orgID, recTyp
 
 func containerEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_CONTAINER_CPU_COST_PERCENTILE":         "cpu_cost_percentile",
-		"ROS_CONTAINER_CPU_PERF_PERCENTILE":         "cpu_perf_percentile",
-		"ROS_CONTAINER_MEM_COST_PERCENTILE":         "mem_cost_percentile",
-		"ROS_CONTAINER_MEM_PERF_PERCENTILE":         "mem_perf_percentile",
-		"ROS_CONTAINER_MIN_MARGIN":                  "min_margin",
-		"ROS_CONTAINER_MAX_MARGIN":                  "max_margin",
-		"ROS_CONTAINER_LIMIT_MULTIPLIER":            "limit_multiplier",
-		"ROS_CONTAINER_CPU_FLOOR_MC":                "cpu_floor_mc",
-		"ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC":       "idle_cpu_threshold_mc",
-		"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB":      "idle_mem_threshold_kib",
-		"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD":   "mem_trend_slope_threshold",
-		"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD":    "low_confidence_threshold",
+		"ROS_CONTAINER_CPU_COST_PERCENTILE":       "cpu_cost_percentile",
+		"ROS_CONTAINER_CPU_PERF_PERCENTILE":       "cpu_perf_percentile",
+		"ROS_CONTAINER_MEM_COST_PERCENTILE":       "mem_cost_percentile",
+		"ROS_CONTAINER_MEM_PERF_PERCENTILE":       "mem_perf_percentile",
+		"ROS_CONTAINER_MIN_MARGIN":                "min_margin",
+		"ROS_CONTAINER_MAX_MARGIN":                "max_margin",
+		"ROS_CONTAINER_LIMIT_MULTIPLIER":          "limit_multiplier",
+		"ROS_CONTAINER_CPU_FLOOR_MC":              "cpu_floor_mc",
+		"ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC":     "idle_cpu_threshold_mc",
+		"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
+		"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
+		"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD":  "low_confidence_threshold",
 	}
 }
 
 func namespaceEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_NAMESPACE_CPU_COST_PERCENTILE":         "cpu_cost_percentile",
-		"ROS_NAMESPACE_CPU_PERF_PERCENTILE":         "cpu_perf_percentile",
-		"ROS_NAMESPACE_MEM_COST_PERCENTILE":         "mem_cost_percentile",
-		"ROS_NAMESPACE_MEM_PERF_PERCENTILE":         "mem_perf_percentile",
-		"ROS_NAMESPACE_MIN_MARGIN":                  "min_margin",
-		"ROS_NAMESPACE_MAX_MARGIN":                  "max_margin",
-		"ROS_NAMESPACE_LIMIT_MULTIPLIER":            "limit_multiplier",
-		"ROS_NAMESPACE_CPU_FLOOR_MC":                "cpu_floor_mc",
-		"ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC":       "idle_cpu_threshold_mc",
-		"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB":      "idle_mem_threshold_kib",
-		"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD":   "mem_trend_slope_threshold",
-		"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD":    "low_confidence_threshold",
+		"ROS_NAMESPACE_CPU_COST_PERCENTILE":       "cpu_cost_percentile",
+		"ROS_NAMESPACE_CPU_PERF_PERCENTILE":       "cpu_perf_percentile",
+		"ROS_NAMESPACE_MEM_COST_PERCENTILE":       "mem_cost_percentile",
+		"ROS_NAMESPACE_MEM_PERF_PERCENTILE":       "mem_perf_percentile",
+		"ROS_NAMESPACE_MIN_MARGIN":                "min_margin",
+		"ROS_NAMESPACE_MAX_MARGIN":                "max_margin",
+		"ROS_NAMESPACE_LIMIT_MULTIPLIER":          "limit_multiplier",
+		"ROS_NAMESPACE_CPU_FLOOR_MC":              "cpu_floor_mc",
+		"ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC":     "idle_cpu_threshold_mc",
+		"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
+		"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
+		"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD":  "low_confidence_threshold",
 	}
 }
 
 func nodeEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_NODE_UNDERUTIL_THRESHOLD":                      "underutil_threshold",
-		"ROS_NODE_OVERCOMMIT_THRESHOLD":                     "overcommit_threshold",
-		"ROS_NODE_ALLOCATABLE_FACTOR":                      "allocatable_factor",
-		"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD":             "stranded_imbalance_threshold",
-		"ROS_NODE_EMA_ALPHA":                                "ema_alpha",
-		"ROS_NODE_COST_TARGET_UTILIZATION":                  "cost_target_utilization",
-		"ROS_NODE_PERF_TARGET_UTILIZATION":                  "perf_target_utilization",
-		"ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER":   "perf_consolidation_headroom_multiplier",
-		"ROS_NODE_TREND_MIN_DAYS":                           "trend_min_days",
+		"ROS_NODE_UNDERUTIL_THRESHOLD":                    "underutil_threshold",
+		"ROS_NODE_OVERCOMMIT_THRESHOLD":                   "overcommit_threshold",
+		"ROS_NODE_ALLOCATABLE_FACTOR":                     "allocatable_factor",
+		"ROS_NODE_STRANDED_IMBALANCE_THRESHOLD":           "stranded_imbalance_threshold",
+		"ROS_NODE_EMA_ALPHA":                              "ema_alpha",
+		"ROS_NODE_COST_TARGET_UTILIZATION":                "cost_target_utilization",
+		"ROS_NODE_PERF_TARGET_UTILIZATION":                "perf_target_utilization",
+		"ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER": "perf_consolidation_headroom_multiplier",
+		"ROS_NODE_TREND_MIN_DAYS":                         "trend_min_days",
 	}
 }
 
 func gpuEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_GPU_IDLE_THRESHOLD":                      "idle_threshold",
-		"ROS_GPU_UNDERUTILIZED_SM_THRESHOLD":          "underutilized_sm_threshold",
-		"ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD":      "underutilized_tensor_threshold",
-		"ROS_GPU_MEMBOUND_DRAM_THRESHOLD":             "membound_dram_threshold",
-		"ROS_GPU_MEMBOUND_TENSOR_THRESHOLD":           "membound_tensor_threshold",
-		"ROS_GPU_FB_HEADROOM_FACTOR":                  "fb_headroom_factor",
-		"ROS_GPU_COMPUTE_BOUND_DRAM_THRESHOLD":        "compute_bound_dram_threshold",
-		"ROS_GPU_MIG_FB_PERCENTILE":                   "mig_fb_percentile",
-		"ROS_GPU_CONFIDENCE_DAYS_TIER1":               "confidence_days_tier1",
-		"ROS_GPU_CONFIDENCE_DAYS_TIER2":               "confidence_days_tier2",
-		"ROS_GPU_CONFIDENCE_DAYS_TIER3":               "confidence_days_tier3",
-		"ROS_GPU_SPIKE_RATIO_THRESHOLD":               "spike_ratio_threshold",
-		"ROS_GPU_SPIKE_CONFIDENCE_PENALTY":            "spike_confidence_penalty",
-		"ROS_GPU_NO_PROFILING_CONFIDENCE_FACTOR":      "no_profiling_confidence_factor",
-		"ROS_GPU_TIMESLICING_MAJORITY_THRESHOLD":      "timeslicing_majority_threshold",
-		"ROS_GPU_TIMESLICING_MIN_REPLICAS":            "timeslicing_min_replicas",
-		"ROS_GPU_TIMESLICING_MAX_REPLICAS":            "timeslicing_max_replicas",
-		"ROS_GPU_TIMESLICING_BASE_PENALTY":            "timeslicing_base_penalty",
-		"ROS_GPU_TIMESLICING_IMPACTED_WEIGHT":         "timeslicing_impacted_weight",
-		"ROS_GPU_NODE_FRESHNESS_DAYS":                 "node_freshness_days",
+		"ROS_GPU_IDLE_THRESHOLD":                 "idle_threshold",
+		"ROS_GPU_UNDERUTILIZED_SM_THRESHOLD":     "underutilized_sm_threshold",
+		"ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD": "underutilized_tensor_threshold",
+		"ROS_GPU_MEMBOUND_DRAM_THRESHOLD":        "membound_dram_threshold",
+		"ROS_GPU_MEMBOUND_TENSOR_THRESHOLD":      "membound_tensor_threshold",
+		"ROS_GPU_FB_HEADROOM_FACTOR":             "fb_headroom_factor",
+		"ROS_GPU_COMPUTE_BOUND_DRAM_THRESHOLD":   "compute_bound_dram_threshold",
+		"ROS_GPU_MIG_FB_PERCENTILE":              "mig_fb_percentile",
+		"ROS_GPU_CONFIDENCE_DAYS_TIER1":          "confidence_days_tier1",
+		"ROS_GPU_CONFIDENCE_DAYS_TIER2":          "confidence_days_tier2",
+		"ROS_GPU_CONFIDENCE_DAYS_TIER3":          "confidence_days_tier3",
+		"ROS_GPU_SPIKE_RATIO_THRESHOLD":          "spike_ratio_threshold",
+		"ROS_GPU_SPIKE_CONFIDENCE_PENALTY":       "spike_confidence_penalty",
+		"ROS_GPU_NO_PROFILING_CONFIDENCE_FACTOR": "no_profiling_confidence_factor",
+		"ROS_GPU_TIMESLICING_MAJORITY_THRESHOLD": "timeslicing_majority_threshold",
+		"ROS_GPU_TIMESLICING_MIN_REPLICAS":       "timeslicing_min_replicas",
+		"ROS_GPU_TIMESLICING_MAX_REPLICAS":       "timeslicing_max_replicas",
+		"ROS_GPU_TIMESLICING_BASE_PENALTY":       "timeslicing_base_penalty",
+		"ROS_GPU_TIMESLICING_IMPACTED_WEIGHT":    "timeslicing_impacted_weight",
+		"ROS_GPU_NODE_FRESHNESS_DAYS":            "node_freshness_days",
 	}
 }
 
 func pvcEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_PVC_OVERSIZED_THRESHOLD":           "oversized_threshold",
-		"ROS_PVC_NEAR_FULL_THRESHOLD":           "near_full_threshold",
-		"ROS_PVC_MIN_TREND_DAYS":                "min_trend_days",
-		"ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER":   "recommended_size_multiplier",
-		"ROS_PVC_MIN_RECOMMENDED_GIB":           "min_recommended_gib",
-		"ROS_PVC_DAYS_TO_FULL_ALERT":            "days_to_full_alert",
+		"ROS_PVC_OVERSIZED_THRESHOLD":         "oversized_threshold",
+		"ROS_PVC_NEAR_FULL_THRESHOLD":         "near_full_threshold",
+		"ROS_PVC_MIN_TREND_DAYS":              "min_trend_days",
+		"ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER": "recommended_size_multiplier",
+		"ROS_PVC_MIN_RECOMMENDED_GIB":         "min_recommended_gib",
+		"ROS_PVC_DAYS_TO_FULL_ALERT":          "days_to_full_alert",
 	}
 }
 
