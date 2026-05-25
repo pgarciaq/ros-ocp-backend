@@ -202,34 +202,27 @@ type EngineRecommendation struct {
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]NativeContainerResult, int, error) {
 	db := database.GetDB()
 
-	// Total count of distinct containers (for pagination metadata).
-	var totalContainers int64
-	countQuery := db.Table("recommendation_sets rs").
-		Select("COUNT(DISTINCT (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name))").
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
-	countQuery = ApplyNativeRBAC(countQuery, userPerms)
-	countQuery = ApplyQueryParams(countQuery, queryParams)
-	t0 := time.Now().UTC()
-	if err := countQuery.Scan(&totalContainers).Error; err != nil {
-		return nil, 0, err
-	}
-	log.Infof("native list count query: %dms (%d containers)", time.Since(t0).Milliseconds(), totalContainers)
-
-	// Subquery: paginate by distinct containers, then fetch all term/engine rows
-	// for the selected page. This is independent of how many rows per container exist.
-	pageSubquery := db.Table("recommendation_sets rs").
+	distinctSubquery := db.Table("recommendation_sets rs").
 		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
 		Where("ra.org_id = ?", orgID)
-	pageSubquery = ApplyNativeRBAC(pageSubquery, userPerms)
-	pageSubquery = ApplyQueryParams(pageSubquery, queryParams)
-	pageSubquery = pageSubquery.Order("rs.namespace, rs.workload, rs.container_name").
+	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
+	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
+
+	pageSubquery := db.Table("(?) AS dc", distinctSubquery).
+		Select(`dc.cluster_uuid, dc.namespace, dc.workload, dc.container_name,
+			COUNT(*) OVER() AS total_containers`).
+		Order("dc.namespace, dc.workload, dc.container_name").
 		Offset(opts.Offset).Limit(opts.Limit)
 
-	var rows []NativeRecommendationRow
+	type nativeRowWithTotal struct {
+		NativeRecommendationRow
+		TotalContainers int64 `gorm:"column:total_containers"`
+	}
+
+	var rows []nativeRowWithTotal
+	t0 := time.Now().UTC()
 	err := db.Table("recommendation_sets rs").
 		Select(`rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type,
 			rs.container_name, rs.term, rs.engine,
@@ -244,7 +237,8 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 			rs.estimated_monthly_savings_usd,
 			rs.monitoring_end_time,
 			rs.updated_at,
-			c.source_id, c.cluster_alias, c.last_reported_at`).
+			c.source_id, c.cluster_alias, c.last_reported_at,
+			page.total_containers`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
@@ -256,7 +250,17 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 		return nil, 0, err
 	}
 
-	results := assembleNativeResults(rows)
+	var totalContainers int64
+	nativeRows := make([]NativeRecommendationRow, len(rows))
+	for i, row := range rows {
+		nativeRows[i] = row.NativeRecommendationRow
+		if i == 0 {
+			totalContainers = row.TotalContainers
+		}
+	}
+	log.Infof("native list query: %dms (%d containers, %d rows)", time.Since(t0).Milliseconds(), totalContainers, len(rows))
+
+	results := assembleNativeResults(nativeRows)
 	return results, int(totalContainers), nil
 }
 
