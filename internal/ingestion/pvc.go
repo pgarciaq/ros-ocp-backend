@@ -13,6 +13,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
+const hourlyIntervalSeconds int64 = 3600
+
 // PVCRow represents a single parsed row from the storage CSV.
 type PVCRow struct {
 	IntervalStart         time.Time
@@ -27,16 +29,16 @@ type PVCRow struct {
 }
 
 type pvcHeaderIdx struct {
-	intervalStart              int
-	intervalEnd                int
-	namespace                  int
-	persistentvolumeclaim      int
-	persistentvolume           int
-	storageclass               int
-	capacityBytes              int
-	capacityByteSeconds        int
-	requestByteSeconds         int
-	usageByteSeconds           int
+	intervalStart         int
+	intervalEnd           int
+	namespace             int
+	persistentvolumeclaim int
+	persistentvolume      int
+	storageclass          int
+	capacityBytes         int
+	capacityByteSeconds   int
+	requestByteSeconds    int
+	usageByteSeconds      int
 }
 
 func newPVCHeaderIdx() pvcHeaderIdx {
@@ -234,19 +236,18 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 		date := r.IntervalStart.UTC().Truncate(24 * time.Hour)
 		key := pvcDigestKey{Date: date, Namespace: r.Namespace, PVC: r.PersistentVolumeClaim}
 
-		intervalSeconds := r.IntervalEnd.Sub(r.IntervalStart).Seconds()
+		intervalSeconds := int64(r.IntervalEnd.Sub(r.IntervalStart).Seconds())
 		if intervalSeconds <= 0 {
-			intervalSeconds = 3600
+			intervalSeconds = hourlyIntervalSeconds
 		}
 
-		// Convert byte-seconds to bytes for capacity and usage
+		// Convert byte-seconds to bytes for capacity and usage (integer division with rounding).
 		capacityBytes := r.CapacityBytes
 		if r.UsageByteSeconds > 0 && capacityBytes > 1e12 {
-			// If capacity looks like byte-seconds, convert
-			capacityBytes = int64(float64(capacityBytes) / intervalSeconds)
+			capacityBytes = (capacityBytes + intervalSeconds/2) / intervalSeconds
 		}
-		usageBytes := int64(float64(r.UsageByteSeconds) / intervalSeconds)
-		requestBytes := int64(float64(r.RequestByteSeconds) / intervalSeconds)
+		usageBytes := (r.UsageByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
+		requestBytes := (r.RequestByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
 
 		acc, ok := groups[key]
 		if !ok {
