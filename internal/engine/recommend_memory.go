@@ -9,7 +9,7 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 		return MemoryRec{}
 	}
 
-	costPctVal, perfPctVal, avgP95, avgP50, avgMean := multiMemWeightedPercentiles(rows, cfg)
+	costPctVal, perfPctVal, avgP95, avgP50, avgMean, trendSlope := multiMemWeightedPercentiles(rows, cfg)
 
 	marginScaled := ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
 
@@ -25,8 +25,6 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 	costLimit := ApplyScaledMargin(costRequest, limitMultScaled)
 	perfLimit := ApplyScaledMargin(perfRequest, limitMultScaled)
 
-	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.MemUsageP95KiB })
-
 	return MemoryRec{
 		CostRequestKiB: costRequest,
 		CostLimitKiB:   costLimit,
@@ -36,8 +34,11 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 	}
 }
 
-func multiMemWeightedPercentiles(rows []DigestRow, cfg MemoryConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64) {
-	vals := MultiWeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
+func multiMemWeightedPercentiles(rows []DigestRow, cfg MemoryConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64, trendSlope float64) {
+	vals, extras := MultiWeightedPercentileWithExtras(rows, cfg.Now, cfg.DecayHalfLifeHours,
+		&WindowExtraOpts{
+			TrendMetric: func(r DigestRow) int64 { return r.MemUsageP95KiB },
+		},
 		func(r DigestRow) int64 { return SelectMemUsagePercentile(r, cfg.CostPercentile) },
 		func(r DigestRow) int64 { return SelectMemUsagePercentile(r, cfg.PerfPercentile) },
 		func(r DigestRow) int64 { return r.MemUsageP95KiB },
@@ -47,5 +48,5 @@ func multiMemWeightedPercentiles(rows []DigestRow, cfg MemoryConfig) (costPctVal
 	if len(vals) != 5 {
 		return
 	}
-	return vals[0], vals[1], vals[2], vals[3], vals[4]
+	return vals[0], vals[1], vals[2], vals[3], vals[4], extras.TrendSlope
 }

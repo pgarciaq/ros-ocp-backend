@@ -9,7 +9,7 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 		return CPURec{}
 	}
 
-	costPctVal, perfPctVal, avgP95, avgP50, avgMean := multiCPUWeightedPercentiles(rows, cfg)
+	costPctVal, perfPctVal, avgP95, avgP50, avgMean, trendSlope, isIdle := multiCPUWeightedPercentiles(rows, cfg)
 
 	marginScaled := ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
 
@@ -19,9 +19,6 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 	limitMultScaled := ScaleLimitMultiplier(cfg.LimitMultiplier)
 	costLimit := ApplyScaledMargin(costRequest, limitMultScaled)
 	perfLimit := ApplyScaledMargin(perfRequest, limitMultScaled)
-
-	trendSlope := ComputeTrendSlope(rows, func(r DigestRow) int64 { return r.CPUUsageP98MC })
-	isIdle := DetectIdle(rows, cfg.IdleThresholdMC, cfg.IdleThresholdMemKiB)
 
 	return CPURec{
 		CostRequestMC: costRequest,
@@ -40,8 +37,14 @@ func applyFloor(val, floor int64) int64 {
 	return val
 }
 
-func multiCPUWeightedPercentiles(rows []DigestRow, cfg CPUConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64) {
-	vals := MultiWeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
+func multiCPUWeightedPercentiles(rows []DigestRow, cfg CPUConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64, trendSlope float64, isIdle bool) {
+	vals, extras := MultiWeightedPercentileWithExtras(rows, cfg.Now, cfg.DecayHalfLifeHours,
+		&WindowExtraOpts{
+			TrendMetric:      func(r DigestRow) int64 { return r.CPUUsageP98MC },
+			IdleThresholdMC:  cfg.IdleThresholdMC,
+			IdleThresholdMem: cfg.IdleThresholdMemKiB,
+			DetectIdle:       true,
+		},
 		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.CostPercentile) },
 		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.PerfPercentile) },
 		func(r DigestRow) int64 { return r.CPUUsageP95MC },
@@ -51,5 +54,5 @@ func multiCPUWeightedPercentiles(rows []DigestRow, cfg CPUConfig) (costPctVal, p
 	if len(vals) != 5 {
 		return
 	}
-	return vals[0], vals[1], vals[2], vals[3], vals[4]
+	return vals[0], vals[1], vals[2], vals[3], vals[4], extras.TrendSlope, extras.IsIdle
 }

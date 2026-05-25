@@ -32,17 +32,68 @@ func WeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours float64, 
 	return results[0]
 }
 
+// WindowExtraOpts configures idle detection and trend slope computed in the
+// same pass as MultiWeightedPercentile.
+type WindowExtraOpts struct {
+	TrendMetric      func(DigestRow) int64
+	IdleThresholdMC  int64
+	IdleThresholdMem int64
+	DetectIdle       bool
+}
+
+// WindowExtras holds side computations from a fused digest window pass.
+type WindowExtras struct {
+	TrendSlope float64
+	IsIdle     bool
+}
+
 // MultiWeightedPercentile computes several decay-weighted averages in one pass
 // over rows, reusing decay weights for each extractor.
 func MultiWeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours float64, extractors ...func(DigestRow) int64) []int64 {
+	out, _ := MultiWeightedPercentileWithExtras(rows, now, halfLifeHours, nil, extractors...)
+	return out
+}
+
+// MultiWeightedPercentileWithExtras computes weighted percentiles plus optional
+// idle flag and trend slope in a single row walk.
+func MultiWeightedPercentileWithExtras(
+	rows []DigestRow,
+	now time.Time,
+	halfLifeHours float64,
+	opts *WindowExtraOpts,
+	extractors ...func(DigestRow) int64,
+) ([]int64, WindowExtras) {
 	nOut := len(extractors)
+	extras := WindowExtras{}
 	if len(rows) == 0 || nOut == 0 {
-		return make([]int64, nOut)
+		return make([]int64, nOut), extras
+	}
+
+	if opts != nil && opts.DetectIdle {
+		extras.IsIdle = true
 	}
 
 	weightedSums := make([]float64, nOut)
 	var totalWeight float64
-	for _, row := range rows {
+	var sumX, sumY, sumXY, sumX2 float64
+	trackTrend := opts != nil && opts.TrendMetric != nil
+	n := len(rows)
+
+	for i, row := range rows {
+		if opts != nil && opts.DetectIdle {
+			if row.CPUUsageMaxMC >= opts.IdleThresholdMC || row.MemUsageMaxKiB >= opts.IdleThresholdMem {
+				extras.IsIdle = false
+			}
+		}
+		if trackTrend {
+			x := float64(i)
+			y := float64(opts.TrendMetric(row))
+			sumX += x
+			sumY += y
+			sumXY += x * y
+			sumX2 += x * x
+		}
+
 		ageHours := now.Sub(row.BucketDate).Hours()
 		if ageHours < 0 {
 			ageHours = 0
@@ -52,17 +103,25 @@ func MultiWeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours floa
 			continue
 		}
 		totalWeight += w
-		for i, extract := range extractors {
-			weightedSums[i] += float64(extract(row)) * w
+		for j, extract := range extractors {
+			weightedSums[j] += float64(extract(row)) * w
+		}
+	}
+
+	if trackTrend && n >= 2 {
+		nf := float64(n)
+		denom := nf*sumX2 - sumX*sumX
+		if denom != 0 {
+			extras.TrendSlope = (nf*sumXY - sumX*sumY) / denom
 		}
 	}
 
 	out := make([]int64, nOut)
 	if totalWeight == 0 {
-		return out
+		return out, extras
 	}
 	for i := range out {
 		out[i] = int64(math.Round(weightedSums[i] / totalWeight))
 	}
-	return out
+	return out, extras
 }

@@ -98,6 +98,8 @@ func RecommendWorkloadsStreaming(
 
 	var currentKey containerKey
 	var currentDigests []DigestRow
+	var latestDigestRow DigestRow
+	var hasLatestDigest bool
 	batch := make([]ContainerRec, 0, streamBatchSize*6)
 	containerCount := 0
 	firstRow := true
@@ -113,8 +115,7 @@ func RecommendWorkloadsStreaming(
 		return nil
 	}
 
-	processContainer := func(key containerKey, digests []DigestRow) {
-		latest := latestDigest(digests)
+	processContainer := func(key containerKey, digests []DigestRow, latest DigestRow) {
 		currentCPUReqMC := latest.CPURequestP50MC
 		currentCPULimMC := latest.CPURequestP95MC
 		currentMemReqKiB := latest.MemRequestP50KiB
@@ -230,9 +231,10 @@ func RecommendWorkloadsStreaming(
 		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
 
 		if !firstRow && key != currentKey {
-			processContainer(currentKey, currentDigests)
+			processContainer(currentKey, currentDigests, latestDigestRow)
 			containerCount++
 			currentDigests = currentDigests[:0]
+			hasLatestDigest = false
 
 			if containerCount%streamBatchSize == 0 {
 				if err := flush(); err != nil {
@@ -244,13 +246,17 @@ func RecommendWorkloadsStreaming(
 		firstRow = false
 		currentKey = key
 		currentDigests = append(currentDigests, d)
+		if !hasLatestDigest || d.BucketDate.After(latestDigestRow.BucketDate) {
+			latestDigestRow = d
+			hasLatestDigest = true
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate digest rows: %w", err)
 	}
 
 	if len(currentDigests) > 0 {
-		processContainer(currentKey, currentDigests)
+		processContainer(currentKey, currentDigests, latestDigestRow)
 	}
 	return flush()
 }
@@ -386,17 +392,16 @@ func filterByWindow(rows []DigestRow, endDate time.Time, windowDays int) []Diges
 	hi := len(rows)
 	for lo < hi {
 		mid := (lo + hi) / 2
-		if rows[mid].BucketDate.Truncate(24 * time.Hour).Before(cutoffDay) {
+		if rows[mid].BucketDate.Before(cutoffDay) {
 			lo = mid + 1
 		} else {
 			hi = mid
 		}
 	}
 
-	// Collect from lo to the end of the window.
 	result := make([]DigestRow, 0, len(rows)-lo)
 	for i := lo; i < len(rows); i++ {
-		d := rows[i].BucketDate.Truncate(24 * time.Hour)
+		d := rows[i].BucketDate
 		if d.After(endDay) {
 			break
 		}
@@ -451,7 +456,7 @@ func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {
 		return 0, 0, 0
 	}
 	first := true
-	var sumAvg float64
+	var sumAvg int64
 	var count int
 	for _, r := range rows {
 		if r.PodCountMax == 0 && r.PodCountMin == 0 && r.PodCountAvg == 0 {
@@ -463,12 +468,12 @@ func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {
 		if first || r.PodCountMax > pcMax {
 			pcMax = r.PodCountMax
 		}
-		sumAvg += float64(r.PodCountAvg)
+		sumAvg += r.PodCountAvg
 		count++
 		first = false
 	}
 	if count > 0 {
-		pcAvg = int64(math.Round(sumAvg / float64(count)))
+		pcAvg = (sumAvg + int64(count)/2) / int64(count)
 	}
 	return
 }
