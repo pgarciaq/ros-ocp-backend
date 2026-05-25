@@ -105,6 +105,7 @@ nav:
   - API Specification:
       - OpenAPI: openapi.md
   - Operations:
+      - Monitoring: monitoring.md
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Issues: known-issues.md
   - UI Integration:
