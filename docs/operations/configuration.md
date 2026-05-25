@@ -208,9 +208,10 @@ exposed for list filtering when tag sync is enabled.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch for tag sync push API and tag list filters. When `false`, the push endpoint returns 404 and tag query params are ignored. |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API. Empty accepts any authenticated cluster SA. |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback; logged as a warning when used. |
+| `ROS_TAGS_ENABLED` | `false` | Master switch for tag list filters (and push API when source=api). |
+| `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
 using `Authorization: Bearer <service-account-token>`. Sync freshness is available at

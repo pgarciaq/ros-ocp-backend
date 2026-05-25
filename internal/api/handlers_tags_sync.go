@@ -11,13 +11,19 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 )
 
-// PostTagsSync receives resolved namespace tags from Koku.
-// Gated by ROS_TAGS_ENABLED; returns 404 when disabled.
+// PostTagsSync receives resolved namespace tags from Koku (SaaS / ROS_TAGS_SOURCE=api only).
+// Gated by ROS_TAGS_ENABLED; returns 404 when disabled or when source=db.
 func PostTagsSync(c echo.Context) error {
 	if !config.TagsFeatureEnabled() {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "not_found",
 			"message": "tag sync is not enabled",
+		})
+	}
+	if !config.TagsUsePushSync() {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "tag push sync is disabled; ROS reads Koku tag tables directly (ROS_TAGS_SOURCE=db)",
 		})
 	}
 

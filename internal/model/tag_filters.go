@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"gorm.io/gorm"
 )
 
@@ -131,8 +133,16 @@ func TagFiltersFromParams(queryParams map[string]interface{}) []TagFilter {
 	return filters
 }
 
-// ApplyTagFiltersToKeys adds JSONB predicates on org_container_keys.resolved_tags.
-func ApplyTagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
+// ApplyTagFiltersToKeys adds tag predicates on org_container_keys.
+// API source filters resolved_tags (push sync); DB source joins Koku tag summary tables at query time.
+func ApplyTagFiltersToKeys(query *gorm.DB, orgID string, filters []TagFilter) *gorm.DB {
+	if config.TagsSource() == "api" {
+		return applyAPITagFiltersToKeys(query, filters)
+	}
+	return applyDBTagFiltersToKeys(query, orgID, filters)
+}
+
+func applyAPITagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
@@ -151,6 +161,39 @@ func ApplyTagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 			continue
 		}
 		query = query.Where("ock.resolved_tags->>? IN ?", f.Key, f.Values)
+	}
+	return query
+}
+
+func applyDBTagFiltersToKeys(query *gorm.DB, orgID string, filters []TagFilter) *gorm.DB {
+	schema, err := tags.TenantSchema(orgID)
+	if err != nil {
+		log.Warnf("ApplyTagFiltersToKeys: invalid org_id %q: %v", orgID, err)
+		return query
+	}
+	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
+
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		var matchClause string
+		args := []interface{}{f.Key}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			matchClause = "tv.key = ?"
+		} else {
+			matchClause = "tv.key = ? AND tv.value IN ?"
+			args = append(args, f.Values)
+		}
+		existsSQL := fmt.Sprintf(`EXISTS (
+			SELECT 1
+			FROM %s tv,
+			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
+			WHERE %s
+			  AND t.cluster_id = ock.cluster_uuid::text
+			  AND t.namespace = ock.namespace
+		)`, tagValuesTable, matchClause)
+		query = query.Where(existsSQL, args...)
 	}
 	return query
 }

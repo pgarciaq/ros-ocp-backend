@@ -1,8 +1,13 @@
 # Tag Sync Authentication
 
+Push authentication applies only when `ROS_TAGS_SOURCE=api`. With the default on-prem
+configuration (`ROS_TAGS_SOURCE=db`), ROS reads Koku tag tables directly and the push
+endpoints return 404 — no ServiceAccount auth is required for tag filtering.
+
 Internal tag sync endpoints (`POST /api/cost-management/v1/internal/tags/sync`,
 `GET /api/cost-management/v1/internal/tags/status`) are not exposed through the
-public ROS API identity/RBAC middleware. Access is restricted to in-cluster callers.
+public ROS API identity/RBAC middleware. When push sync is enabled, access is restricted
+to in-cluster callers.
 
 ---
 

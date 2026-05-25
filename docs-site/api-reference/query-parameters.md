@@ -42,7 +42,8 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 
 ## Tag filtering
 
-When `ROS_TAGS_ENABLED=true`, filter recommendations by OpenShift labels synced from Koku:
+When `ROS_TAGS_ENABLED=true`, filter recommendations by OpenShift labels from Koku
+(`ROS_TAGS_SOURCE=db`, default) or from push-synced `resolved_tags` (`ROS_TAGS_SOURCE=api`):
 
 ```
 GET /api/cost-management/v1/recommendations/openshift

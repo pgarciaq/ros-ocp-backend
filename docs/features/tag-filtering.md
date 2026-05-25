@@ -13,19 +13,33 @@ namespaces in the cluster, flow through the koku-metrics-operator into Koku
 summaries, and are **pushed** to ROS so list APIs can filter by
 `?filter[tag:<key>]=value1,value2`.
 
-**Why push-based sync?**
+**Why two paths?**
 
-- ROS maintains its own PostgreSQL database separate from Koku tenant schemas.
-- List queries must filter on `org_container_keys.resolved_tags` without cross-service
-  SQL joins at request time.
-- Koku already owns tag enable/disable settings and namespace label resolution from
-  OCP line items — it is the source of truth for which keys and values are valid.
+- **On-prem (`ROS_TAGS_SOURCE=db`):** ROS and Koku share one PostgreSQL instance. ROS reads
+  Koku tag summary tables at query time — no HTTP push, no sync lag, no ServiceAccount auth.
+- **SaaS (`ROS_TAGS_SOURCE=api`):** ROS has a separate database. Koku pushes namespace tags into
+  `org_container_keys.resolved_tags` so list queries filter locally without cross-service SQL.
 
-Tag filtering is gated by `ROS_TAGS_ENABLED` on both Koku and ROS.
+Tag filtering is gated by `ROS_TAGS_ENABLED` on ROS (and on Koku only when using api source).
 
 ---
 
-## Architecture
+## Architecture (on-prem, default)
+
+```
+OpenShift cluster
+  │  pod/namespace labels (Prometheus → operator CSVs)
+  ▼
+Koku ingestion → reporting_ocptags_values + reporting_enabledtagkeys
+  │
+  ▼
+ROS list query joins org_container_keys ↔ Koku tag tables (same PostgreSQL)
+  │
+  ▼
+GET /recommendations/openshift?filter[tag:environment]=production
+```
+
+## Architecture (SaaS / api source)
 
 ```
 OpenShift cluster

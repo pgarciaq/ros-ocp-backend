@@ -55,7 +55,9 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 
 	t.Run("enabled without token returns 401", func(t *testing.T) {
 		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
 		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "api")
 
 		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -66,7 +68,9 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 
 	t.Run("enabled with dev token updates rows", func(t *testing.T) {
 		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
 		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "api")
 		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
 
 		_, err := pool.Exec(t.Context(), `
@@ -88,5 +92,20 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 		var resp tags.SyncResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		assert.Equal(t, 1, resp.Updated)
+	})
+
+	t.Run("db source returns 404 for push", func(t *testing.T) {
+		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
+		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "db")
+		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
+
+		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer dev-token")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }

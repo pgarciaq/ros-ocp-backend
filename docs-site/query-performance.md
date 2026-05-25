@@ -105,7 +105,7 @@ The key table reduces list latency to **under 5 ms at any page depth**.
 |--------|---------|
 | `org_id`, `namespace`, `workload`, `container_name` | Primary key; pagination sort order |
 | `cluster_uuid`, `workload_type`, `last_reported` | Denormalized metadata |
-| `resolved_tags` (JSONB) | Koku resolved tags (via push sync); GIN-indexed for `?tag=` filters |
+| `resolved_tags` (JSONB) | Push-synced tags when `ROS_TAGS_SOURCE=api`; unused for filtering when `source=db` |
 
 ### Tag filtering (implemented)
 
@@ -192,7 +192,7 @@ Fix in priority order:
 | Remaining `rh_accounts` join offenders (quality, namespace list, history) | Open |
 | GPU triple fresh-node materialization | Open |
 | Fleet savings materialized summary | Open |
-| Koku tag sync → `resolved_tags` | Future |
+| Koku tag tables / push sync | `source=db`: join `reporting_ocptags_values`; `source=api`: `resolved_tags` GIN |
 
 ---
 

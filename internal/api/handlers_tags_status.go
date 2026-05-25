@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -11,8 +12,9 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 )
 
-// GetTagsStatus returns per-org tag sync freshness metadata.
+// GetTagsStatus returns per-org tag catalog metadata.
 // Gated by ROS_TAGS_ENABLED; returns 404 when disabled.
+// DB source reads Koku tables directly; API source reads org_tag_sync_metadata.
 func GetTagsStatus(c echo.Context) error {
 	if !config.TagsFeatureEnabled() {
 		return c.JSON(http.StatusNotFound, echo.Map{
@@ -21,12 +23,14 @@ func GetTagsStatus(c echo.Context) error {
 		})
 	}
 
-	bearerToken := tags.BearerTokenFromHeader(c.Request().Header.Get(echo.HeaderAuthorization))
-	if err := tags.ValidateBearerToken(c.Request().Context(), bearerToken); err != nil {
-		return c.JSON(http.StatusUnauthorized, echo.Map{
-			"status":  "unauthorized",
-			"message": "invalid or missing service account token",
-		})
+	if config.TagsUsePushSync() {
+		bearerToken := tags.BearerTokenFromHeader(c.Request().Header.Get(echo.HeaderAuthorization))
+		if err := tags.ValidateBearerToken(c.Request().Context(), bearerToken); err != nil {
+			return c.JSON(http.StatusUnauthorized, echo.Map{
+				"status":  "unauthorized",
+				"message": "invalid or missing service account token",
+			})
+		}
 	}
 
 	orgID := strings.TrimSpace(c.QueryParam("org_id"))
@@ -37,15 +41,36 @@ func GetTagsStatus(c echo.Context) error {
 		})
 	}
 
-	svc := tags.NewSyncService(database.GetPool())
-	status, err := svc.GetSyncStatus(c.Request().Context(), orgID)
+	provider := tags.GetProvider()
+	catalog, err := provider.TagCatalog(c.Request().Context(), orgID)
 	if err != nil {
 		hlog := requestLogger(c, orgID)
-		hlog.Errorf("tag sync status failed: %v", err)
+		hlog.Errorf("tag status failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"status":  "error",
-			"message": "failed to read tag sync status",
+			"message": "failed to read tag status",
 		})
+	}
+
+	status := tags.SyncStatus{
+		OrgID:   orgID,
+		TagKeys: catalog,
+	}
+	if config.TagsUsePushSync() {
+		svc := tags.NewSyncService(database.GetPool())
+		syncStatus, err := svc.GetSyncStatus(c.Request().Context(), orgID)
+		if err != nil {
+			hlog := requestLogger(c, orgID)
+			hlog.Errorf("tag sync status failed: %v", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{
+				"status":  "error",
+				"message": "failed to read tag sync status",
+			})
+		}
+		status.SyncedAt = syncStatus.SyncedAt
+	} else {
+		now := time.Now().UTC()
+		status.SyncedAt = &now
 	}
 
 	return c.JSON(http.StatusOK, status)

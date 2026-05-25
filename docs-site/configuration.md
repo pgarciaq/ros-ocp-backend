@@ -199,11 +199,20 @@ workload-specific tuning examples, see
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Enables tag push API and tag list filters. When `false`, push returns 404 and tag params are ignored. |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags. Empty accepts any authenticated cluster SA. |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for local testing (set the same value on Koku). |
+| `ROS_TAGS_ENABLED` | `false` | Enables tag list filters (and push API when source=api). When `false`, tag params are ignored. |
+| `ROS_TAGS_SOURCE` | `db` | `db` = read Koku tag tables directly (on-prem); `api` = push sync into `resolved_tags` (SaaS) |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags (api source only). |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
 
-Koku pushes resolved container tags to ROS via:
+### On-prem (`ROS_TAGS_SOURCE=db`)
+
+ROS reads enabled keys from `{schema}.reporting_enabledtagkeys` and matches list filters against
+`{schema}.reporting_ocptags_values` at query time. No HTTP push, Celery sync, or ServiceAccount
+auth is required on either service.
+
+### SaaS fallback (`ROS_TAGS_SOURCE=api`)
+
+Koku pushes resolved namespace tags to ROS via:
 
 - `POST /api/cost-management/v1/internal/tags/sync` — full-replace sync per org
 - `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` — sync freshness (`synced_at`, tag key catalog)
@@ -226,9 +235,10 @@ will remain supported during migration behind a feature flag.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Enables Celery tag sync tasks |
-| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | ROS API base URL for push |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev bearer token (must match ROS) |
+| `ROS_TAGS_ENABLED` | `false` | Enables Celery tag push tasks (api source only) |
+| `ROS_TAGS_SOURCE` | `db` | `db` skips push sync; set `api` to enable HTTP push to ROS |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | ROS API base URL for push (api source only) |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev bearer token (api source; must match ROS) |
 
 ### Data flow and filtering
 
