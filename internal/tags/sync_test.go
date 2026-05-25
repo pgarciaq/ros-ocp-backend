@@ -3,6 +3,7 @@ package tags_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,13 +30,21 @@ func TestSyncOrgTags_UpdatesMatchingRows(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := tags.NewSyncService(pool)
-	updated, err := svc.SyncOrgTags(ctx, orgID, []tags.NamespaceTags{
-		{
-			ClusterUUID: clusterUUID,
-			Namespace:   "payments",
-			Tags: map[string]string{
-				"environment": "production",
-				"team":        "payments",
+	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID:    orgID,
+		SyncedAt: time.Now().UTC().Format(time.RFC3339),
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{"production"}},
+			{Key: "team", Values: []string{"payments"}},
+		},
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags: map[string]string{
+					"environment": "production",
+					"team":        "payments",
+				},
 			},
 		},
 	})
@@ -72,11 +81,17 @@ func TestSyncOrgTags_FullReplaceClearsRemovedTags(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := tags.NewSyncService(pool)
-	updated, err := svc.SyncOrgTags(ctx, orgID, []tags.NamespaceTags{
-		{
-			ClusterUUID: clusterUUID,
-			Namespace:   "payments",
-			Tags:        map[string]string{"environment": "production"},
+	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: orgID,
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{"production"}},
+		},
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags:        map[string]string{"environment": "production"},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -109,15 +124,132 @@ func TestSyncOrgTags_AppliesNamespaceTagsToAllContainers(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := tags.NewSyncService(pool)
-	updated, err := svc.SyncOrgTags(ctx, orgID, []tags.NamespaceTags{
-		{
-			ClusterUUID: clusterUUID,
-			Namespace:   "payments",
-			Tags:        map[string]string{"environment": "production"},
+	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: orgID,
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags:        map[string]string{"environment": "production"},
+			},
 		},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 2, updated)
+}
+
+func TestSyncOrgTags_EmptyTagKeyValues(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "tag-sync-empty-values-org"
+	clusterUUID := testutil.TestClusterUUID
+	syncedAt := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO org_container_keys (
+			org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags
+		) VALUES ($1, $2, 'payments', 'api-server', 'Deployment', 'api', '{}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name) DO UPDATE
+		SET cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID,
+	)
+	require.NoError(t, err)
+
+	svc := tags.NewSyncService(pool)
+	_, err = svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID:    orgID,
+		SyncedAt: syncedAt.Format(time.RFC3339),
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{}},
+		},
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags:        map[string]string{},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	status, err := svc.GetSyncStatus(ctx, orgID)
+	require.NoError(t, err)
+	require.NotNil(t, status.SyncedAt)
+	assert.Equal(t, syncedAt, status.SyncedAt.UTC())
+	require.Len(t, status.TagKeys, 1)
+	assert.Equal(t, "environment", status.TagKeys[0].Key)
+	assert.Empty(t, status.TagKeys[0].Values)
+
+	var tagsJSON string
+	err = pool.QueryRow(ctx, `
+		SELECT resolved_tags::text FROM org_container_keys
+		WHERE org_id = $1 AND namespace = 'payments'`, orgID).Scan(&tagsJSON)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, tagsJSON)
+}
+
+func TestSyncOrgTags_RemovedTagKeyClearsMetadataCatalog(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "tag-sync-key-removal-org"
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO org_container_keys (
+			org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags
+		) VALUES ($1, $2, 'payments', 'api-server', 'Deployment', 'api', '{}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name) DO UPDATE
+		SET cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID,
+	)
+	require.NoError(t, err)
+
+	svc := tags.NewSyncService(pool)
+	_, err = svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: orgID,
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{"production"}},
+			{Key: "team", Values: []string{"payments"}},
+		},
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags: map[string]string{
+					"environment": "production",
+					"team":        "payments",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: orgID,
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{"production"}},
+		},
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: clusterUUID,
+				Namespace:   "payments",
+				Tags:        map[string]string{"environment": "production"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	status, err := svc.GetSyncStatus(ctx, orgID)
+	require.NoError(t, err)
+	require.Len(t, status.TagKeys, 1)
+	assert.Equal(t, "environment", status.TagKeys[0].Key)
+
+	var tagsJSON string
+	err = pool.QueryRow(ctx, `
+		SELECT resolved_tags::text FROM org_container_keys
+		WHERE org_id = $1 AND namespace = 'payments'`, orgID).Scan(&tagsJSON)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"environment":"production"}`, tagsJSON)
 }
 
 func TestParseTagFilters(t *testing.T) {

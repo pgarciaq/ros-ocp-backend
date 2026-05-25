@@ -27,7 +27,11 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 	e.POST("/internal/tags/sync", api.PostTagsSync)
 
 	body, err := json.Marshal(tags.SyncRequest{
-		OrgID: testutil.TestOrgID,
+		OrgID:    testutil.TestOrgID,
+		SyncedAt: "2026-05-25T12:00:00Z",
+		TagKeys: []tags.TagKeyCatalog{
+			{Key: "environment", Values: []string{"prod"}},
+		},
 		NamespaceTags: []tags.NamespaceTags{
 			{
 				ClusterUUID: testutil.TestClusterUUID,

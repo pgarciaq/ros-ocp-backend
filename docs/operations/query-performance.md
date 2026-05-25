@@ -407,8 +407,9 @@ by refresh) until Koku pushes an update via the tag sync API.
 ### Tag filtering
 
 Tag sync is implemented via `POST /api/cost-management/v1/internal/tags/sync` (gated by
-`ROS_TAGS_ENABLED`, authenticated with a Kubernetes ServiceAccount bearer token). Koku pushes
-namespace-level tags into `org_container_keys.resolved_tags`; the container list applies
+`ROS_TAGS_ENABLED`, authenticated with a Kubernetes ServiceAccount bearer token). Sync
+freshness is exposed at `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
+Koku pushes namespace-level tags into `org_container_keys.resolved_tags`; the container list applies
 `?filter[tag:key]=value1,value2` (Koku syntax) or legacy `?tag=key:value` on step 1 using
 the GIN index.
 
@@ -443,6 +444,9 @@ planned for a follow-up release.
 
 Implementation: [`internal/model/tag_filters.go`](../../internal/model/tag_filters.go),
 [`internal/tags/sync.go`](../../internal/tags/sync.go).
+
+Auth details and planned mTLS upgrade: [tag-sync-auth.md](tag-sync-auth.md).
+Tag lifecycle and full-replace semantics: [tag-sync.md](tag-sync.md).
 
 ---
 

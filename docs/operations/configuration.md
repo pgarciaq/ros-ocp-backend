@@ -213,8 +213,16 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback; logged as a warning when used. |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
-using `Authorization: Bearer <service-account-token>`. List filtering supports Koku syntax
-`?filter[tag:key]=value1,value2` (OR within a key, AND across keys) and legacy `?tag=key:value`.
+using `Authorization: Bearer <service-account-token>`. Sync freshness is available at
+`GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
+
+**Authentication:** Kubernetes ServiceAccount token validation via TokenReview API.
+See [tag-sync-auth.md](tag-sync-auth.md) for current auth and the planned **mTLS** upgrade.
+
+**Data flow and lifecycle:** [tag-sync.md](tag-sync.md)
+
+List filtering supports Koku syntax `?filter[tag:key]=value1,value2` (OR within a key,
+AND across keys) and legacy `?tag=key:value`.
 
 ---
 

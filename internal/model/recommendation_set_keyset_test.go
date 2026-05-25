@@ -296,16 +296,19 @@ func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
 
 	svc := tags.NewSyncService(pool)
-	updated, err := svc.SyncOrgTags(ctx, testutil.TestOrgID, []tags.NamespaceTags{
-		{
-			ClusterUUID: testutil.TestClusterUUID,
-			Namespace:   testutil.TestNamespace,
-			Tags:          map[string]string{"environment": "production"},
-		},
-		{
-			ClusterUUID: testutil.TestClusterUUID,
-			Namespace:   "other-namespace",
-			Tags:          map[string]string{"environment": "staging"},
+	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: testutil.TestOrgID,
+		NamespaceTags: []tags.NamespaceTags{
+			{
+				ClusterUUID: testutil.TestClusterUUID,
+				Namespace:   testutil.TestNamespace,
+				Tags:        map[string]string{"environment": "production"},
+			},
+			{
+				ClusterUUID: testutil.TestClusterUUID,
+				Namespace:   "other-namespace",
+				Tags:        map[string]string{"environment": "staging"},
+			},
 		},
 	})
 	require.NoError(t, err)

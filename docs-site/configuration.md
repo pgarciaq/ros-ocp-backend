@@ -203,7 +203,24 @@ workload-specific tuning examples, see
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated ServiceAccount names allowed to push tags. Empty accepts any authenticated cluster SA. |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for local testing. |
 
-Koku pushes resolved container tags to ROS via the internal sync endpoint.
+Koku pushes resolved container tags to ROS via:
+
+- `POST /api/cost-management/v1/internal/tags/sync` — full-replace sync per org
+- `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` — sync freshness
+
+### Authentication
+
+**Current:** Kubernetes ServiceAccount token validation via the TokenReview API.
+Koku sends `Authorization: Bearer <service-account-token>`; ROS validates the caller
+is an authenticated in-cluster ServiceAccount. `ROS_TAGS_DEV_TOKEN` is a dev-only fallback.
+
+**Future: mTLS** — Planned upgrade for on-prem deployments. Mutual TLS between Koku and
+ros-ocp-backend pods (via cert-manager or a service-mesh sidecar) will provide
+bidirectional authentication and eliminate token rotation concerns. TokenReview auth
+will remain supported during migration.
+
+Internal reference: [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
+
 Group-by tag dimensions are planned for a follow-up release.
 
 ---

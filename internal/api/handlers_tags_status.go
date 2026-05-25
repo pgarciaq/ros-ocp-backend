@@ -11,9 +11,9 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 )
 
-// PostTagsSync receives resolved namespace tags from Koku.
+// GetTagsStatus returns per-org tag sync freshness metadata.
 // Gated by ROS_TAGS_ENABLED; returns 404 when disabled.
-func PostTagsSync(c echo.Context) error {
+func GetTagsStatus(c echo.Context) error {
 	if !config.TagsFeatureEnabled() {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "not_found",
@@ -29,30 +29,24 @@ func PostTagsSync(c echo.Context) error {
 		})
 	}
 
-	var req tags.SyncRequest
-	if err := c.Bind(&req); err != nil {
+	orgID := strings.TrimSpace(c.QueryParam("org_id"))
+	if orgID == "" {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "bad_request",
-			"message": "invalid request body",
-		})
-	}
-	if strings.TrimSpace(req.OrgID) == "" {
-		return c.JSON(http.StatusBadRequest, echo.Map{
-			"status":  "bad_request",
-			"message": "org_id is required",
+			"message": "org_id query parameter is required",
 		})
 	}
 
 	svc := tags.NewSyncService(database.GetPool())
-	updated, err := svc.SyncOrgTags(c.Request().Context(), req)
+	status, err := svc.GetSyncStatus(c.Request().Context(), orgID)
 	if err != nil {
-		hlog := requestLogger(c, req.OrgID)
-		hlog.Errorf("tag sync failed: %v", err)
+		hlog := requestLogger(c, orgID)
+		hlog.Errorf("tag sync status failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"status":  "error",
-			"message": "failed to sync tags",
+			"message": "failed to read tag sync status",
 		})
 	}
 
-	return c.JSON(http.StatusOK, tags.SyncResponse{Updated: updated})
+	return c.JSON(http.StatusOK, status)
 }
