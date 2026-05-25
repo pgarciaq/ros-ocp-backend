@@ -227,6 +227,11 @@ type Config struct {
 	// before treating the cluster as abandoned for snapshot_recommendation_sets cleanup.
 	SnapshotStaleGraceHours int `mapstructure:"ROS_SNAPSHOT_STALE_GRACE_HOURS"`
 
+	// Tag sync (Koku → ROS resolved tags on org_container_keys).
+	// Disabled by default; enable with ROS_TAGS_ENABLED=true.
+	TagsEnabled       bool   `mapstructure:"ROS_TAGS_ENABLED"`
+	TagsInternalToken string `mapstructure:"ROS_TAGS_INTERNAL_TOKEN"`
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -488,6 +493,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_FRESH_HOURS", 6)
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
+	viper.SetDefault("ROS_TAGS_ENABLED", false)
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")

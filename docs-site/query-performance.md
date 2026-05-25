@@ -105,13 +105,15 @@ The key table reduces list latency to **under 5 ms at any page depth**.
 |--------|---------|
 | `org_id`, `namespace`, `workload`, `container_name` | Primary key; pagination sort order |
 | `cluster_uuid`, `workload_type`, `last_reported` | Denormalized metadata |
-| `resolved_tags` (JSONB) | Reserved for Koku tag sync; GIN-indexed |
+| `resolved_tags` (JSONB) | Koku resolved tags (via push sync); GIN-indexed for `?tag=` filters |
 
-### Future: tag filtering
+### Tag filtering (implemented)
 
-When tags are synced from Koku into `resolved_tags`, list filters can use
-GIN-indexed JSON containment (`resolved_tags @> '{"key": "value"}'`) on the key
-table before joining recommendation detail — no DISTINCT, no full-table scan.
+Tag sync writes resolved tags via `POST /api/cost-management/v1/internal/tags/sync`
+(`ROS_TAGS_ENABLED`, `X-ROS-Internal-Token`). List API supports `?tag=key:value`
+(and `?tag=key:*` for key existence) on `org_container_keys` using `idx_ock_tags`.
+
+Group-by tag dimensions (`?group_by=tag:environment`) are planned for a follow-up.
 
 See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
 for full schema, refresh triggers, and example SQL.

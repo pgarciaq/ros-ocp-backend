@@ -201,6 +201,22 @@ Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 
 ---
 
+## Tag Sync
+
+Resolved OpenShift tags from Koku are stored on `org_container_keys.resolved_tags` and
+exposed for list filtering when tag sync is enabled.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_TAGS_ENABLED` | `false` | Master switch for tag sync push API and `?tag=` list filters. When `false`, the push endpoint returns 404 and tag query params are ignored. |
+| `ROS_TAGS_INTERNAL_TOKEN` | (empty) | Shared secret for `X-ROS-Internal-Token` on `POST /api/cost-management/v1/internal/tags/sync`. Required when tag sync is enabled. |
+
+Koku (SaaS Celery task or on-prem script) pushes resolved tags via the internal sync
+endpoint. Group-by tag dimensions (`?group_by=tag:environment`) are planned for a
+follow-up release.
+
+---
+
 ## OOM Feedback
 
 | Variable | Default | Purpose |

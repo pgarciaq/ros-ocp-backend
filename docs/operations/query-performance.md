@@ -406,7 +406,9 @@ by refresh) until Koku tag sync is implemented.
 
 ### Future: tag filtering
 
-When Koku namespace/project tags are synced into `resolved_tags`:
+Tag sync is implemented via `POST /api/cost-management/v1/internal/tags/sync` (gated by
+`ROS_TAGS_ENABLED`). Koku pushes resolved tags into `org_container_keys.resolved_tags`;
+the container list applies `?tag=key:value` filters on step 1 using the GIN index.
 
 **Filter by tag value** — GIN-indexed containment:
 
@@ -414,6 +416,14 @@ When Koku namespace/project tags are synced into `resolved_tags`:
 SELECT * FROM org_container_keys
 WHERE org_id = $1
   AND resolved_tags @> '{"environment": "production"}';
+```
+
+**Filter by tag key (any value)** — key existence:
+
+```sql
+SELECT * FROM org_container_keys
+WHERE org_id = $1
+  AND resolved_tags ? 'environment';
 ```
 
 **Group by tag key** — aggregate on the key table (one row per container):
@@ -425,8 +435,12 @@ WHERE org_id = $1
 GROUP BY 1;
 ```
 
-List API would add tag predicates to step 1 (key pagination) before joining
-`recommendation_sets` for term/engine detail.
+List API adds tag predicates to step 1 (key pagination) before joining
+`recommendation_sets` for term/engine detail. `?group_by=tag:<key>` grouping is
+planned for a follow-up release.
+
+Implementation: [`internal/model/tag_filters.go`](../../internal/model/tag_filters.go),
+[`internal/tags/sync.go`](../../internal/tags/sync.go).
 
 ---
 
@@ -444,7 +458,7 @@ Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
 | Remaining `rh_accounts` offenders (quality, namespace list, history) | P0 | Open |
 | GPU triple fresh-node materialization | P2 | Open |
 | Fleet savings materialized summary | P2 | Open |
-| Koku tag sync → `org_container_keys.resolved_tags` | P2 | Future |
+| Koku tag sync → `org_container_keys.resolved_tags` | P2 | **DONE** (push API + list filter; Koku Celery sender pending) |
 
 ---
 

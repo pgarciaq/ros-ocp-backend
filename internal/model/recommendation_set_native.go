@@ -247,6 +247,9 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 		Where("ock.org_id = ?", orgID)
 	keysQuery = ApplyNativeRBAC(keysQuery, userPerms, "ock.namespace")
 	keysQuery = ApplyQueryParamsToKeys(keysQuery, keysParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		keysQuery = ApplyTagFiltersToKeys(keysQuery, tagFilters)
+	}
 
 	if opts.HasCursor {
 		keysQuery = keysQuery.Where(

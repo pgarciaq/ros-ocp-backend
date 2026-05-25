@@ -150,6 +150,10 @@ func StartAPIServer(ctx context.Context) {
 	app.GET("/readyz", GetReadyz)
 	app.GET("/api/cost-management/v1/recommendations/openshift/openapi.json", ServeFilteredOpenAPI)
 
+	// Internal routes (no identity/RBAC middleware). Tag sync is gated by ROS_TAGS_ENABLED in handler.
+	internal := app.Group("/api/cost-management/v1/internal")
+	internal.POST("/tags/sync", PostTagsSync)
+
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
 	if cfg.RBACEnabled {

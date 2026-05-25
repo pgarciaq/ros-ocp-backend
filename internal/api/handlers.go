@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -329,6 +330,16 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 	if len(filterErrs) > 0 {
 		return queryParams, errors.Join(filterErrs...)
+	}
+
+	if config.TagsFeatureEnabled() {
+		if tagValues := c.QueryParams()["tag"]; len(tagValues) > 0 {
+			tagFilters, err := model.ParseTagFilters(tagValues)
+			if err != nil {
+				return queryParams, err
+			}
+			queryParams[model.TagFiltersQueryKey] = tagFilters
+		}
 	}
 
 	// Stale filter: by default, exclude stale. If ?stale=true, include all.

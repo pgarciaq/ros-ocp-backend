@@ -195,6 +195,18 @@ workload-specific tuning examples, see
 
 ---
 
+## Tag Sync
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | Enables tag push API and `?tag=` list filters. When `false`, push returns 404 and tag params are ignored. |
+| `ROS_TAGS_INTERNAL_TOKEN` | (empty) | Shared secret for `X-ROS-Internal-Token` on `POST /api/cost-management/v1/internal/tags/sync`. |
+
+Koku pushes resolved container tags to ROS via the internal sync endpoint.
+Group-by tag dimensions are planned for a follow-up release.
+
+---
+
 ## Sources API
 
 | Variable | Default | Description |

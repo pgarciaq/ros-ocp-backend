@@ -16,6 +16,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -258,4 +259,99 @@ func TestRefreshOrgRecommendationStats(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, int64(1), count)
+}
+
+func TestGetNativeRecommendations_TagFilter(t *testing.T) {
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	require.True(t, config.TagsFeatureEnabled())
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate:       start,
+		OrgID:            testutil.TestOrgID,
+		ClusterUUID:      testutil.TestClusterUUID,
+		Namespace:        "other-namespace",
+		Workload:         "workload-b",
+		WorkloadType:     testutil.TestWorkloadType,
+		ContainerName:    "container-b",
+		CPURequestP50MC:  180,
+		CPURequestP95MC:  210,
+		CPUUsageP50MC:    170,
+		CPUUsageP95MC:    200,
+		MemRequestP50KiB: 512000,
+		MemRequestP95KiB: 524288,
+		MemUsageP50KiB:   500000,
+		MemUsageP95KiB:   520000,
+	})
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	svc := tags.NewSyncService(pool)
+	updated, err := svc.SyncOrgTags(ctx, testutil.TestOrgID, []tags.ContainerTags{
+		{
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     testutil.TestNamespace,
+			Workload:      testutil.TestWorkload,
+			ContainerName: testutil.TestContainer,
+			Tags:          map[string]string{"environment": "production"},
+		},
+		{
+			ClusterUUID:   testutil.TestClusterUUID,
+			Namespace:     "other-namespace",
+			Workload:      "workload-b",
+			ContainerName: "container-b",
+			Tags:          map[string]string{"environment": "staging"},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, updated)
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":           false,
+		model.TagFiltersQueryKey: []model.TagFilter{{Key: "environment", Value: "production"}},
+	}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, testutil.TestNamespace, page.Results[0].Project)
+}
+
+func TestGetNativeRecommendations_TagFilterIgnoredWhenDisabled(t *testing.T) {
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "false")
+	require.False(t, config.TagsFeatureEnabled())
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	_, err = pool.Exec(ctx, `
+		UPDATE org_container_keys SET resolved_tags = '{"environment":"production"}'::jsonb
+		WHERE org_id = $1`, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":           false,
+		model.TagFiltersQueryKey: []model.TagFilter{{Key: "environment", Value: "production"}},
+	}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
 }
