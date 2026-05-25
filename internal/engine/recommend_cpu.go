@@ -9,18 +9,7 @@ func RecommendCPU(rows []DigestRow, cfg CPUConfig) CPURec {
 		return CPURec{}
 	}
 
-	costPctVal := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.CostPercentile) })
-
-	perfPctVal := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.PerfPercentile) })
-
-	avgP95 := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		func(r DigestRow) int64 { return r.CPUUsageP95MC })
-	avgP50 := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		func(r DigestRow) int64 { return r.CPUUsageP50MC })
-	avgMean := WeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		func(r DigestRow) int64 { return r.CPUUsageMeanMC })
+	costPctVal, perfPctVal, avgP95, avgP50, avgMean := multiCPUWeightedPercentiles(rows, cfg)
 
 	marginScaled := ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
 
@@ -49,4 +38,18 @@ func applyFloor(val, floor int64) int64 {
 		return floor
 	}
 	return val
+}
+
+func multiCPUWeightedPercentiles(rows []DigestRow, cfg CPUConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64) {
+	vals := MultiWeightedPercentile(rows, cfg.Now, cfg.DecayHalfLifeHours,
+		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.CostPercentile) },
+		func(r DigestRow) int64 { return SelectCPUUsagePercentile(r, cfg.PerfPercentile) },
+		func(r DigestRow) int64 { return r.CPUUsageP95MC },
+		func(r DigestRow) int64 { return r.CPUUsageP50MC },
+		func(r DigestRow) int64 { return r.CPUUsageMeanMC },
+	)
+	if len(vals) != 5 {
+		return
+	}
+	return vals[0], vals[1], vals[2], vals[3], vals[4]
 }

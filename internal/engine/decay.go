@@ -25,24 +25,44 @@ func DecayWeight(ageHours, halfLifeHours float64) float64 {
 // If halfLifeHours is 0, all rows have equal weight (simple average).
 // Age is measured in continuous hours (see DecayWeight for rationale).
 func WeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours float64, pctFunc func(DigestRow) int64) int64 {
-	if len(rows) == 0 {
+	results := MultiWeightedPercentile(rows, now, halfLifeHours, pctFunc)
+	if len(results) == 0 {
 		return 0
 	}
+	return results[0]
+}
 
-	var weightedSum, totalWeight float64
+// MultiWeightedPercentile computes several decay-weighted averages in one pass
+// over rows, reusing decay weights for each extractor.
+func MultiWeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours float64, extractors ...func(DigestRow) int64) []int64 {
+	nOut := len(extractors)
+	if len(rows) == 0 || nOut == 0 {
+		return make([]int64, nOut)
+	}
+
+	weightedSums := make([]float64, nOut)
+	var totalWeight float64
 	for _, row := range rows {
 		ageHours := now.Sub(row.BucketDate).Hours()
 		if ageHours < 0 {
 			ageHours = 0
 		}
 		w := DecayWeight(ageHours, halfLifeHours)
-		val := float64(pctFunc(row))
-		weightedSum += val * w
+		if w == 0 {
+			continue
+		}
 		totalWeight += w
+		for i, extract := range extractors {
+			weightedSums[i] += float64(extract(row)) * w
+		}
 	}
 
+	out := make([]int64, nOut)
 	if totalWeight == 0 {
-		return 0
+		return out
 	}
-	return int64(math.Round(weightedSum / totalWeight))
+	for i := range out {
+		out[i] = int64(math.Round(weightedSums[i] / totalWeight))
+	}
+	return out
 }
