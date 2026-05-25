@@ -18,10 +18,10 @@ flowchart TB
     subgraph modes["Two deployment modes"]
         direction TB
         OP[OpenShift labels via metrics operator]
-        OP --> KOKU[Koku ingestion & summarization]
+        OP --> KOKU["Koku ingestion & summarization"]
         KOKU --> DB["On-prem: ROS reads Koku PostgreSQL tables directly"]
         KOKU --> API["SaaS: Koku pushes tags to ROS over HTTP"]
-        DB --> FILTER[List API filter[tag:key]=value]
+        DB --> FILTER["List API filter[tag:key]=value"]
         API --> FILTER
     end
 ```

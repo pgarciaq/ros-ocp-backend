@@ -44,7 +44,7 @@ flowchart LR
         MO[koku-metrics-operator]
         OP --> MO
     end
-    subgraph koku["Koku (Celery pipeline)"]
+    subgraph koku["Koku Celery pipeline"]
         ING[CSV ingestion]
         SUM[OCP summarization]
         TAGT["reporting_enabledtagkeys<br/>reporting_ocptags_values"]
@@ -52,7 +52,7 @@ flowchart LR
     end
     subgraph ros["ROS API"]
         REQ[User list request]
-        JOIN["SQL: org_container_keys<br/>↔ Koku tag tables"]
+        JOIN["SQL JOIN org_container_keys<br/>to Koku tag tables"]
         RESP[Filtered recommendations]
         REQ --> JOIN --> RESP
     end
@@ -118,14 +118,15 @@ flowchart LR
     subgraph koku["Koku"]
         ING[CSV ingestion]
         SUM[OCP summarization]
-        CEL["Celery: sync_ros_ocp_tags"]
+        CEL["Celery sync_ros_ocp_tags"]
         ING --> SUM --> CEL
     end
     subgraph ros["ROS API"]
         SYNC["POST /internal/tags/sync"]
         STORE["org_container_keys.resolved_tags<br/>org_tag_sync_metadata"]
         LIST[User list request]
-        CEL -->|Bearer SA token| SYNC --> STORE
+        CEL -->|"Bearer SA token"| SYNC
+        SYNC --> STORE
         STORE --> LIST
     end
     MO -->|tar.gz upload| ING
