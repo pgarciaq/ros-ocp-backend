@@ -2,7 +2,8 @@ package kafka
 
 import (
 	"context"
-
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -20,9 +21,22 @@ type kafkaReader interface {
 	ReadMessage(timeout time.Duration) (*kafka.Message, error)
 }
 
+func partitionLockKey(tp kafka.TopicPartition) string {
+	return fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)
+}
+
 // consumeMessagesUntilCancelled polls until ctx is cancelled. reader is typically the same *kafka.Consumer
 // passed as consumer for handler callbacks.
 func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, consumer *kafka.Consumer, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), log *logrus.Entry) {
+	cfg := config.GetConfig()
+	if cfg.KafkaParallel && cfg.KafkaWorkers > 1 {
+		consumeMessagesParallelUntilCancelled(ctx, reader, consumer, handler, log, cfg.KafkaWorkers)
+		return
+	}
+	consumeMessagesSequentialUntilCancelled(ctx, reader, consumer, handler, log)
+}
+
+func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaReader, consumer *kafka.Consumer, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), log *logrus.Entry) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -44,6 +58,68 @@ func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, cons
 			log.Errorf("Consumer unexpected error type: %T: %v", err, err)
 		}
 	}
+}
+
+func consumeMessagesParallelUntilCancelled(
+	ctx context.Context,
+	reader kafkaReader,
+	consumer *kafka.Consumer,
+	handler func(msg *kafka.Message, consumer_object *kafka.Consumer),
+	log *logrus.Entry,
+	workers int,
+) {
+	jobs := make(chan *kafka.Message, workers*2)
+	var wg sync.WaitGroup
+	var partitionLocks sync.Map
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for msg := range jobs {
+				lockKey := partitionLockKey(msg.TopicPartition)
+				muIface, _ := partitionLocks.LoadOrStore(lockKey, &sync.Mutex{})
+				mu := muIface.(*sync.Mutex)
+				mu.Lock()
+				log.Infof("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
+				log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
+				handler(msg, consumer)
+				mu.Unlock()
+			}
+		}()
+	}
+
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		defer close(jobs)
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("Kafka consumer shutting down: %v", ctx.Err())
+				return
+			default:
+			}
+
+			msg, err := reader.ReadMessage(time.Second)
+			if err == nil {
+				select {
+				case jobs <- msg:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+			if kerr, ok := err.(kafka.Error); ok && !kerr.IsTimeout() {
+				log.Errorf("Consumer error: %v (%v)", err, msg)
+			} else if !ok {
+				log.Errorf("Consumer unexpected error type: %T: %v", err, err)
+			}
+		}
+	}()
+
+	<-readDone
+	wg.Wait()
 }
 
 // StartConsumer polls kafka_topic until ctx is cancelled, then closes the consumer with a deadline.
