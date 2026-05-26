@@ -158,7 +158,8 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated blocklist (applied after allowlist). |
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours routes, ingestion dual-stream, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Async recalc when tenant threshold settings change. |
-| `DISABLE_NAMESPACE_RECOMMENDATION` | `false` | Legacy flag to disable namespace recommendations. |
+
+Namespace recommendations can be disabled with `ROS_DISABLED_PLUGINS=namespace` (see plugin list above).
 
 Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 

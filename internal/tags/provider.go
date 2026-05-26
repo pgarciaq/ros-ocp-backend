@@ -17,11 +17,23 @@ type TagProvider interface {
 	GetEnabledTagKeys(ctx context.Context, orgID string) ([]string, error)
 	// GetTagValues returns current values for a specific tag key in the org.
 	GetTagValues(ctx context.Context, orgID string, key string) ([]string, error)
-	// FilterByTag returns org_container_keys container_name scope rows matching the tag filter.
-	// Each entry is namespace/workload/container_name (unique per org).
-	FilterByTag(ctx context.Context, orgID string, key string, values []string) ([]string, error)
-	// TagCatalog returns enabled keys with observed values (for status/metadata endpoints).
-	TagCatalog(ctx context.Context, orgID string) ([]TagKeyCatalog, error)
+}
+
+// BuildTagCatalog returns enabled keys with observed values using GetEnabledTagKeys and GetTagValues.
+func BuildTagCatalog(ctx context.Context, provider TagProvider, orgID string) ([]TagKeyCatalog, error) {
+	enabledKeys, err := provider.GetEnabledTagKeys(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	catalog := make([]TagKeyCatalog, 0, len(enabledKeys))
+	for _, key := range enabledKeys {
+		values, err := provider.GetTagValues(ctx, orgID, key)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, TagKeyCatalog{Key: key, Values: values})
+	}
+	return catalog, nil
 }
 
 var (

@@ -261,16 +261,6 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 	return c.JSON(http.StatusOK, nsRecommendationSet)
 }
 
-// parseGPUFilters extracts GPU-specific query parameters that require post-query
-// filtering. Note: has_gpu is now pushed to SQL via MapNativeQueryParameters for
-// correct pagination; only gpu_model and gpu_classification remain as post-filters.
-// parseGPUFilters is retained for backward compatibility but all GPU filters
-// (has_gpu, gpu_model, gpu_classification) are now pushed to SQL in
-// MapNativeQueryParameters. This function is a no-op.
-func parseGPUFilters(_ echo.Context) (gpuModels, gpuClassifications []string) {
-	return nil, nil
-}
-
 // MapNativeQueryParameters parses query params using the native schema's column names.
 func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
@@ -422,14 +412,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 	}
 
 	results := page.Results
-	count := page.Count
 
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
-
-	gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count = filterGPUResults(results, count, gpuModels, gpuClassifications)
-	page.Results = results
-	page.Count = count
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -535,11 +519,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 
 	results := page.Results
 	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
-
-	gpuModels, gpuClassifications := parseGPUFilters(c)
-	results, count := filterGPUResults(results, page.Count, gpuModels, gpuClassifications)
 	page.Results = results
-	page.Count = count
 
 	return serveNativeList(c, page, apiListOptions)
 }

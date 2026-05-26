@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -42,7 +41,7 @@ func GetTagsStatus(c echo.Context) error {
 	}
 
 	provider := tags.GetProvider()
-	catalog, err := provider.TagCatalog(c.Request().Context(), orgID)
+	catalog, err := tags.BuildTagCatalog(c.Request().Context(), provider, orgID)
 	if err != nil {
 		hlog := requestLogger(c, orgID)
 		hlog.Errorf("tag status failed: %v", err)
@@ -57,6 +56,7 @@ func GetTagsStatus(c echo.Context) error {
 		TagKeys: catalog,
 	}
 	if config.TagsUsePushSync() {
+		status.Source = "api"
 		svc := tags.NewSyncService(database.GetPool())
 		syncStatus, err := svc.GetSyncStatus(c.Request().Context(), orgID)
 		if err != nil {
@@ -69,8 +69,8 @@ func GetTagsStatus(c echo.Context) error {
 		}
 		status.SyncedAt = syncStatus.SyncedAt
 	} else {
-		now := time.Now().UTC()
-		status.SyncedAt = &now
+		status.Source = "db"
+		status.Note = "Tags are read live from Koku PostgreSQL at query time; there is no push sync delay."
 	}
 
 	return c.JSON(http.StatusOK, status)

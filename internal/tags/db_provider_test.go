@@ -72,44 +72,6 @@ func TestDBTagProvider_GetEnabledTagKeysAndValues(t *testing.T) {
 	assert.Equal(t, []string{"production"}, values)
 }
 
-func TestDBTagProvider_FilterByTag(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	schema := setupKokuTagSchema(t, pool, testutil.TestOrgID)
-
-	_, err := pool.Exec(context.Background(), `
-		INSERT INTO org_container_keys (
-			org_id, cluster_uuid, namespace, workload, workload_type, container_name
-		) VALUES ($1, $2, 'billing-ns', 'billing', 'Deployment', 'app')
-		ON CONFLICT DO NOTHING`,
-		testutil.TestOrgID, testutil.TestClusterUUID,
-	)
-	require.NoError(t, err)
-	_, err = pool.Exec(context.Background(), `
-		INSERT INTO org_container_keys (
-			org_id, cluster_uuid, namespace, workload, workload_type, container_name
-		) VALUES ($1, $2, 'other-ns', 'other', 'Deployment', 'app')
-		ON CONFLICT DO NOTHING`,
-		testutil.TestOrgID, testutil.TestClusterUUID,
-	)
-	require.NoError(t, err)
-
-	_, err = pool.Exec(context.Background(), `
-		INSERT INTO `+schema+`.reporting_ocptags_values (
-			uuid, key, value, cluster_ids, cluster_aliases, namespaces
-		) VALUES
-			($1, 'environment', 'production', ARRAY[$2], ARRAY['alias'], ARRAY['billing-ns']),
-			($3, 'environment', 'staging', ARRAY[$2], ARRAY['alias'], ARRAY['other-ns'])
-		ON CONFLICT DO NOTHING`,
-		uuid.New(), testutil.TestClusterUUID, uuid.New(),
-	)
-	require.NoError(t, err)
-
-	provider := NewDBTagProvider(pool)
-	matches, err := provider.FilterByTag(context.Background(), testutil.TestOrgID, "environment", []string{"production"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"billing-ns/billing/app"}, matches)
-}
-
 func TestNewProviderFromConfig_SelectsSource(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 

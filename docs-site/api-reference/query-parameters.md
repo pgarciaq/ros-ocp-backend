@@ -52,6 +52,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
 | Staleness | `stale` | `filter[stale]` | Staleness filter (`true`, `false`, `only`) |
 | Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node underutilization filter |
+| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node CPU overcommit filter |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |
 | Tag | `tag=key:value` (repeatable) | `filter[tag:<key>]` | Tag key filter (when tags feature enabled) |
 | Exact match | — | `filter[exact:<field>]` | Exact match instead of partial |
@@ -114,7 +115,7 @@ filters match push-synced data. Check
 `GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
 
 Tag filters apply to **container list** endpoints (workloads/containers/GPU lists that
-resolve through `org_container_keys`). See [Tag Filtering](features/tag-filtering.md)
+resolve through `org_container_keys`). See [Tag Filtering](../features/tag-filtering.md)
 for operator configuration, troubleshooting, and lifecycle scenarios.
 
 ## Ordering

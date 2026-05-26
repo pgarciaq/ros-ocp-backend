@@ -78,6 +78,7 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Outbound HTTP client timeout. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values per repeated query param. |
 | `RECORD_LIMIT_CSV` | `1000` | CSV export row limit per batch. |
+| `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |
 
 ### List pagination (`after` cursor)
 
@@ -94,9 +95,6 @@ Example:
 GET /recommendations/openshift?limit=100
 GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 ```
-
----
-| `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |
 
 ---
 
@@ -116,7 +114,7 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_ENABLED_PLUGINS` | (all) | Comma-separated allowlist: `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`. |
+| `ROS_ENABLED_PLUGINS` | (all) | Comma-separated allowlist: `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`. |
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated blocklist. |
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours feature, dual-stream ingestion, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Recalculate recommendations when tenant thresholds change. |

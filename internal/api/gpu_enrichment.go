@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -144,23 +143,6 @@ func ResetGPUCostProviderForTest() {
 	defer gpuCostProviderMu.Unlock()
 	gpuCostProvider = nil
 	gpuCostProviderBase = ""
-}
-
-// filterGPUResults is a no-op: all GPU filters (has_gpu, gpu_model,
-// gpu_classification) are now pushed to SQL via MapNativeQueryParameters
-// for correct pagination and total counts.
-func filterGPUResults(results []model.NativeContainerResult, totalCount int, _, _ []string) ([]model.NativeContainerResult, int) {
-	return results, totalCount
-}
-
-func matchesAny(value string, candidates []string) bool {
-	lower := strings.ToLower(value)
-	for _, c := range candidates {
-		if strings.Contains(lower, strings.ToLower(c)) {
-			return true
-		}
-	}
-	return false
 }
 
 func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {

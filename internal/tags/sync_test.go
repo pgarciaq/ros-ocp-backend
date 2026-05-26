@@ -279,5 +279,10 @@ func TestParseKokuTagFilterParams(t *testing.T) {
 
 	merged := model.MergeTagFilters(filters)
 	require.Len(t, merged, 2)
-	assert.Equal(t, []string{"production", "staging"}, merged[0].Values)
+	byKey := make(map[string][]string, len(merged))
+	for _, f := range merged {
+		byKey[f.Key] = f.Values
+	}
+	assert.Equal(t, []string{"production", "staging"}, byKey["environment"])
+	assert.Equal(t, []string{"payments"}, byKey["team"])
 }

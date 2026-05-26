@@ -38,9 +38,11 @@ type SyncResponse struct {
 	Updated int `json:"updated"`
 }
 
-// SyncStatus reports org-level tag sync freshness.
+// SyncStatus reports org-level tag catalog and freshness.
 type SyncStatus struct {
 	OrgID    string          `json:"org_id"`
+	Source   string          `json:"source,omitempty"`
+	Note     string          `json:"note,omitempty"`
 	SyncedAt *time.Time      `json:"synced_at,omitempty"`
 	TagKeys  []TagKeyCatalog `json:"tag_keys"`
 }
