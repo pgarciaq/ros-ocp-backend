@@ -1047,7 +1047,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).
 - Show `off_hours_weight` with slider or **NumberInput** (0.0–1.0) and explain its effect on off-hours sample weighting.
 - Provide `enabled` toggle per scope; disabling stops business-hours digest generation for that scope.
-- Link to [Business Hours feature doc](features-business-hours.md) for reship flow details.
+- Link to [Business Hours feature doc](features/business-hours.md) for reship flow details.
 - On recommendation detail, default to all-hours view; switch to business-hours tab when user opts in.
 
 ---
