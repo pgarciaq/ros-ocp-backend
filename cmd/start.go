@@ -9,11 +9,13 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	_ "go.uber.org/automaxprocs"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -39,6 +41,15 @@ func logEnabledPlugins() {
 
 var startCmd = &cobra.Command{Use: "start", Short: "Use to start ros-ocp-backend services"}
 
+func ensureStartupPartitions(ctx context.Context) {
+	pool := db.GetPool()
+	if pool == nil {
+		return
+	}
+	ingestion.EnsureIngestPartitionsAtStartup(ctx, pool)
+	engine.EnsureRecommendationPartitionsAtStartup(ctx, pool)
+}
+
 var processorCmd = &cobra.Command{
 	Use:   "processor",
 	Short: "starts ros-ocp processor",
@@ -60,6 +71,7 @@ var processorCmd = &cobra.Command{
 		if !plugin.EnabledFor(plugin.KruizePluginName) {
 			pool := db.GetPool()
 			if pool != nil {
+				ensureStartupPartitions(ctx)
 				go engine.StartRetentionTicker(ctx, pool, cfg.RetentionMonths)
 			}
 		} else {
@@ -98,6 +110,9 @@ var apiCmd = &cobra.Command{
 		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		if pool := db.GetPool(); pool != nil {
+			ensureStartupPartitions(ctx)
+		}
 		api.StartAPIServer(ctx)
 	},
 }
