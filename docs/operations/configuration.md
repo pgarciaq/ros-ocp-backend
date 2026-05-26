@@ -142,7 +142,9 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `KRUIZE_URL` | `http://localhost:8080` | Kruize HTTP endpoint. |
+| `KRUIZE_URL` | `http://localhost:8080` | Kruize HTTP endpoint (defaults from host/port when unset). |
+| `KRUIZE_HOST` | `localhost` | Kruize hostname (used to build default `KRUIZE_URL`). |
+| `KRUIZE_PORT` | `8080` | Kruize port (used to build default `KRUIZE_URL`). |
 | `KRUIZE_WAIT_TIME` | `30` | Seconds to wait for Kruize experiment results. |
 | `KRUIZE_MAX_BULK_CHUNK_SIZE` | `100` | Max experiments per bulk API call. |
 | `KRUIZE_PERFORMANCE_PROFILE_VERSION` | `v2.0` | Performance profile version sent to Kruize. |
@@ -152,14 +154,37 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 
 ## Feature Flags and Plugins
 
+Recommendation domains are toggled at runtime via two environment variables read in
+[`internal/plugin/registry.go`](../../internal/plugin/registry.go) (not fields on the
+central `Config` struct). See [Environment variables outside Config](#environment-variables-outside-config).
+
+### Plugin enablement
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_ENABLED_PLUGINS` | (empty = all) | Comma-separated allowlist: `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`. |
-| `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated blocklist (applied after allowlist). |
+| `ROS_ENABLED_PLUGINS` | (empty) | Comma-separated **allowlist**. When empty, all native plugins run. When non-empty, **only** listed plugins run. |
+| `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Applied only when the allowlist is **empty**: subtracts plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
+| `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated.** Use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
+
+**Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
+
+- **`kruize`** is mutually exclusive with native plugins. When enabled, only Kruize runs.
+- With both allowlist and denylist unset, **`kruize` is off** unless explicitly allowlisted.
+
+**Disable namespace recommendations** (either approach):
+
+```bash
+# Denylist (default allowlist = all native plugins)
+ROS_DISABLED_PLUGINS=namespace
+
+# Allowlist (omit namespace)
+ROS_ENABLED_PLUGINS=container,gpu,node,pvc,snapshot
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours routes, ingestion dual-stream, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Async recalc when tenant threshold settings change. |
-
-Namespace recommendations can be disabled with `ROS_DISABLED_PLUGINS=namespace` (see plugin list above).
 
 Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 
@@ -289,11 +314,34 @@ override behavior: [configurability.md](../architecture/configurability.md).
 
 ### Term windows (per plugin)
 
-Format: `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` where `<TERM>` is `SHORT`, `MEDIUM`,
-or `LONG` and `<FIELD>` is `WINDOW_DAYS`, `MIN_DATA_DAYS`, or
-`DECAY_HALFLIFE_HOURS`. Example: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45`.
+Read in [`internal/engine/term_config.go`](../../internal/engine/term_config.go) (not the
+`Config` struct). Format: `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` where `<PLUGIN>` is the
+recommendation type (`CONTAINER`, `NAMESPACE`, `NODE`, `GPU`, `PVC`, `SNAPSHOT`),
+`<TERM>` is `SHORT`, `MEDIUM`, or `LONG`, and `<FIELD>` is one of:
 
-Implemented in [`term_config.go`](../../internal/engine/term_config.go).
+| Field suffix | Type | Example |
+|--------------|------|---------|
+| `WINDOW_DAYS` | int | `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` |
+| `MIN_DATA_DAYS` | int | `ROS_TERMS_CONTAINER_MEDIUM_MIN_DATA_DAYS=3` |
+| `DECAY_HALFLIFE_HOURS` | float | `ROS_TERMS_CONTAINER_MEDIUM_DECAY_HALFLIFE_HOURS=168` |
+
+When set, the env var **locks** that term field platform-wide (tenant Settings API cannot override).
+
+---
+
+## Environment variables outside Config
+
+Most platform settings load through [`internal/config/config.go`](../../internal/config/config.go)
+into the `Config` struct. The variables below are still valid deployment knobs but are read
+directly from the process environment in other packages:
+
+| Variable(s) | Read in | Notes |
+|-------------|---------|-------|
+| `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `internal/plugin/registry.go` | Plugin allowlist/denylist — see [Plugin enablement](#plugin-enablement) |
+| `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `internal/engine/term_config.go` | Per-plugin term windows — see [Term windows](#term-windows-per-plugin) |
+| `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | `internal/config/config.go` (Viper) | Kruize connectivity; URL defaults from host + port |
+
+Document these in Helm values / `.env` even though they do not appear as `Config` struct fields.
 
 ---
 

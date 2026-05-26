@@ -83,7 +83,13 @@ Equivalent flat parameters:
 | `gpu_classification` | `gpu_classification` | `filter[gpu_classification]` |
 | `stale` | `stale` | `filter[stale]` |
 | `is_underutilized` | `is_underutilized` | `filter[is_underutilized]` |
+| `is_overcommitted` | `is_overcommitted` | `filter[is_overcommitted]` |
 | `recommendation_type` | `recommendation_type` | `filter[recommendation_type]` |
+
+**Node utilization filters** (`GET .../recommendations/openshift/nodes`):
+
+- `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.
+- `is_overcommitted` — `true` / `false` / omit. When `true`, only nodes where pod CPU requests exceed the overcommit threshold × allocatable (default threshold 1.5).
 
 **Exact and exclude modes** (bracket only — container/namespace list endpoints):
 

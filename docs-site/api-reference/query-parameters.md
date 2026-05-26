@@ -51,8 +51,8 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match |
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
 | Staleness | `stale` | `filter[stale]` | Staleness filter (`true`, `false`, `only`) |
-| Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node underutilization filter |
-| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node CPU overcommit filter |
+| Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node underutilization filter ([details](#node-utilization-filters)) |
+| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node CPU overcommit filter ([details](#node-utilization-filters)) |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |
 | Tag | `tag=key:value` (repeatable) | `filter[tag:<key>]` | Tag key filter (when tags feature enabled) |
 | Exact match | — | `filter[exact:<field>]` | Exact match instead of partial |
@@ -63,6 +63,25 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
+
+## Node utilization filters
+
+These boolean filters apply to **`GET /api/cost-management/v1/recommendations/openshift/nodes`**
+(node consolidation / utilization listings). Accepted values: `true`, `false`, or omit (no filter).
+
+| Parameter | Flat | Bracket | When `true` |
+|-----------|------|---------|-------------|
+| Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node is classified underutilized: CPU P95 **and** memory P95 are below the underutil threshold (default 30% of allocatable). |
+| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node is classified overcommitted: sum of pod CPU requests divided by allocatable CPU exceeds the overcommit threshold (default **1.5** via `ROS_NODE_OVERCOMMIT_THRESHOLD`). |
+
+```
+GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=true
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[is_overcommitted]=true
+GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=false&is_overcommitted=false
+```
+
+Response objects include `is_underutilized` and `is_overcommitted` booleans (and `cpu_overcommit_ratio`)
+matching the stored classification. See [UI integration — node utilization](../ui-integration-guide.md#node-utilization-and-consolidation).
 
 ## Tag filtering
 

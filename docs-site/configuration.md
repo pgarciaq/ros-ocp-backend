@@ -112,14 +112,50 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 
 ## Feature Flags and Plugins
 
+Plugin toggles are read in `internal/plugin/registry.go` (not the central `Config` struct).
+See [Environment variables outside Config](#environment-variables-outside-config).
+
+### Plugin enablement
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_ENABLED_PLUGINS` | (all) | Comma-separated allowlist: `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`. |
-| `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated blocklist. |
+| `ROS_ENABLED_PLUGINS` | (empty) | Comma-separated **allowlist**. Empty = all native plugins enabled. Non-empty = **only** listed plugins run. |
+| `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Used only when the allowlist is empty; removes plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
+| `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated** — use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
+
+**Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
+
+- **`kruize`** is mutually exclusive with native plugins (Kruize-only when enabled).
+- With both lists unset, **`kruize` is off** unless explicitly allowlisted.
+
+**Disable namespace recommendations:**
+
+```bash
+ROS_DISABLED_PLUGINS=namespace
+# or
+ROS_ENABLED_PLUGINS=container,gpu,node,pvc,snapshot
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours feature, dual-stream ingestion, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Recalculate recommendations when tenant thresholds change. |
 | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch dollar savings from Koku masu. |
-| `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated** — use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize mode. |
+
+---
+
+## Environment variables outside Config
+
+Most settings load into the `Config` struct via Viper. These are still set on Deployments
+but read elsewhere:
+
+| Variable(s) | Read in | Purpose |
+|-------------|---------|---------|
+| `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `internal/plugin/registry.go` | Plugin allowlist/denylist |
+| `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `internal/engine/term_config.go` | Term window overrides (`WINDOW_DAYS`, `MIN_DATA_DAYS`, `DECAY_HALFLIFE_HOURS`) |
+| `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | Viper in `internal/config/config.go` | Kruize HTTP endpoint (URL defaults from host + port) |
+
+Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the container long-term window.
 
 ---
 
@@ -162,11 +198,13 @@ See [Monitoring](monitoring.md) for metrics tied to these settings.
 
 ## Legacy Kruize
 
-Only relevant when running the Kruize recommendation poller.
+Only relevant when running the Kruize recommendation poller or `ROS_ENABLED_PLUGINS=kruize`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KRUIZE_URL` | `http://localhost:8080` | Kruize HTTP endpoint. |
+| `KRUIZE_URL` | `http://localhost:8080` | Kruize HTTP endpoint (built from host/port when unset). |
+| `KRUIZE_HOST` | `localhost` | Kruize hostname. |
+| `KRUIZE_PORT` | `8080` | Kruize port. |
 | `KRUIZE_WAIT_TIME` | `30` | Wait time for experiment results (seconds). |
 | `KRUIZE_MAX_BULK_CHUNK_SIZE` | `100` | Bulk experiment chunk size. |
 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | `24` | Poller interval (hours). |
