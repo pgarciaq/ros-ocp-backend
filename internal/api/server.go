@@ -152,6 +152,7 @@ func StartAPIServer(ctx context.Context) {
 
 	// Internal routes (no identity/RBAC middleware). Tag sync is gated by ROS_TAGS_ENABLED in handler.
 	internal := app.Group("/api/cost-management/v1/internal")
+	internal.Use(middleware.BodyLimit(cfg.TagsSyncBodyLimit()))
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
 

@@ -94,6 +94,60 @@ func TestPostTagsSync_FeatureGateAndAuth(t *testing.T) {
 		assert.Equal(t, 1, resp.Updated)
 	})
 
+	t.Run("malformed JSON returns 400", func(t *testing.T) {
+		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
+		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "api")
+		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
+
+		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader([]byte("{not json")))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer dev-token")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("empty org_id returns 400", func(t *testing.T) {
+		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
+		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "api")
+		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
+
+		payload, err := json.Marshal(tags.SyncRequest{OrgID: "  ", SyncedAt: "2026-05-25T12:00:00Z"})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(payload))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer dev-token")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("invalid synced_at returns 400", func(t *testing.T) {
+		config.ResetTagsForTest()
+		tags.ResetProviderForTest()
+		t.Setenv("ROS_TAGS_ENABLED", "true")
+		t.Setenv("ROS_TAGS_SOURCE", "api")
+		t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
+
+		payload, err := json.Marshal(tags.SyncRequest{
+			OrgID:    testutil.TestOrgID,
+			SyncedAt: "yesterday",
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/internal/tags/sync", bytes.NewReader(payload))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer dev-token")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
 	t.Run("db source returns 404 for push", func(t *testing.T) {
 		config.ResetTagsForTest()
 		tags.ResetProviderForTest()

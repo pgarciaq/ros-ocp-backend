@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -39,13 +38,13 @@ func PostTagsSync(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "bad_request",
-			"message": "invalid request body",
+			"message": "invalid JSON request body",
 		})
 	}
-	if strings.TrimSpace(req.OrgID) == "" {
+	if err := tags.ValidateSyncRequest(req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "bad_request",
-			"message": "org_id is required",
+			"message": err.Error(),
 		})
 	}
 
