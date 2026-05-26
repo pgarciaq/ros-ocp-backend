@@ -100,6 +100,26 @@ payloads or env vars.
 - **No Koku-side tag sync config** — Koku Celery push tasks are no-ops when `ROS_TAGS_SOURCE=db`.
 - **Single point of dependency** — ROS list latency includes JOIN cost against Koku tables (indexed; see query-performance doc).
 
+#### Caveats and operational risks
+
+ROS list queries embed SQL against Koku-owned tables. A Koku migration that renames tables,
+changes column names, or alters the meaning of `cluster_ids[]` / `namespaces[]` on
+`reporting_ocptags_values` can break tag filtering without any ROS code change.
+
+| Check | What it covers | What it does *not* cover |
+|-------|----------------|---------------------------|
+| Startup `VerifyDBAccess` | Table `reporting_enabledtagkeys` exists and is queryable in a sample tenant schema | Column renames, JOIN logic mismatch, partial schema upgrades |
+| Runtime SQL errors | Obvious breakage after deploy | Silent wrong filters (unlikely but possible if semantics change) |
+
+**Operator guidance:**
+
+- Treat Koku and ROS as a **coupled release** for on-prem: upgrade and validate together.
+- Review Koku `reporting` migrations for changes to `reporting_enabledtagkeys` or
+  `reporting_ocptags_values` before production Koku upgrades.
+- The health probe in [`internal/tags/verify.go`](../../internal/tags/verify.go) uses
+  `SELECT 1 … LIMIT 1` only — schema drift requires integration tests or manual filter smoke
+  tests after Koku version bumps.
+
 ---
 
 ### SaaS (Push API)

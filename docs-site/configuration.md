@@ -290,6 +290,12 @@ Schema name is `org` + bare `org_id` (e.g. `1234567` → `org1234567`).
 **No HTTP push, Celery sync, or ServiceAccount auth** is required on either service.
 Push endpoints return 404 in this mode.
 
+**Operational risk:** ROS depends on Koku table layout (`reporting_enabledtagkeys`,
+`reporting_ocptags_values`). Koku schema changes can break tag filters; the startup DB probe
+only verifies table reachability, not column compatibility. Pin compatible Koku/ROS versions
+and validate tag filters after Koku upgrades. Details:
+[Tag Filtering → Caveats and operational risks](../features/tag-filtering.md#on-prem-default-shared-database).
+
 ### SaaS (`ROS_TAGS_SOURCE=api`)
 
 Koku pushes resolved namespace tags after settings changes and OCP summarization.

@@ -1,5 +1,8 @@
 // Package queryparams parses HTTP query parameters using Koku-aligned bracket
 // notation (filter[field], order_by[field]) and legacy flat ROS params (?project=).
+//
+// TODO(GA): Before GA, decide whether to deprecate flat query syntax or keep both permanently.
+// Supporting both doubles the parameter parsing surface and test matrix.
 package queryparams
 
 import (

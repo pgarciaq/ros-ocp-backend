@@ -42,6 +42,40 @@ between services.
 Tags are as fresh as the last OCP cost summarization — typically within one daily
 processing cycle after new labels appear on pods.
 
+#### Caveats and operational risks (`ROS_TAGS_SOURCE=db`)
+
+When ROS reads tags directly from Koku PostgreSQL tables, list filtering depends on
+**stable Koku schema and table names** in each tenant schema (`org{org_id}`):
+
+| Koku table | ROS usage |
+|------------|-----------|
+| `reporting_enabledtagkeys` | Which OCP tag keys are enabled for filtering |
+| `reporting_ocptags_values` | Distinct tag key/value pairs scoped to cluster and namespace |
+
+**Coupling risk:** If a Koku upgrade renames, splits, or restructures these tables (or changes
+column semantics ROS JOINs on), tag filtering can fail at query time even when ROS itself is
+healthy.
+
+**Startup health check limits:** With `ROS_TAGS_SOURCE=db`, ROS probes
+`reporting_enabledtagkeys` at startup ([`internal/tags/verify.go`](../../internal/tags/verify.go)).
+That confirms the table is reachable (or empty). It does **not** detect schema drift — for
+example renamed columns, moved data, or incompatible type changes that still allow
+`SELECT 1 … LIMIT 1` to succeed.
+
+**Recommendations for operators:**
+
+1. Pin ROS and Koku to a **known compatible version pair** in on-prem releases (same Helm chart
+   revision or documented matrix).
+2. **Monitor Koku migrations** that touch `reporting_enabledtagkeys` or
+   `reporting_ocptags_values` before upgrading production.
+3. After Koku upgrades, smoke-test tag filters on a non-production tenant before wide rollout.
+4. Prefer SaaS push mode (`ROS_TAGS_SOURCE=api`) when databases are separate — ROS stores a
+   copy in `org_container_keys.resolved_tags` and is insulated from Koku table layout (still
+   depends on Koku push payload shape).
+
+See also [Configuration → Tag Sync](../configuration.md#tag-sync) and the internal reference
+[`docs/features/tag-filtering.md`](../../docs/features/tag-filtering.md).
+
 ### SaaS: push sync
 
 On console.redhat.com, Koku and ROS run in separate data stores. After OCP

@@ -8,8 +8,17 @@ Management ecosystem:
 | **Flat (ROS legacy)** | koku-ui-ros, IQE plugins | `?project=payments&order_by=project&order_how=asc` |
 | **Bracket (Koku-aligned)** | Koku cost report APIs | `?filter[project]=payments&order_by[project]=asc` |
 
-Both are fully supported simultaneously. Clients may use either or mix them in one request.
-For `order_by`, bracket syntax takes precedence when both forms are present.
+Both are fully supported simultaneously for backward compatibility. Clients may use either
+or mix them in one request. For `order_by`, bracket syntax takes precedence when both forms
+are present.
+
+**Preferred going forward:** bracket syntax (`filter[…]`, `order_by[…]`, `filter[tag:…]`),
+aligned with Koku Cost Management report APIs. Flat syntax remains supported for koku-ui-ros,
+IQE plugins, and other legacy clients.
+
+> **TODO (GA):** Decide whether to deprecate flat query syntax or keep both permanently.
+> Supporting both doubles the parameter parsing surface and test matrix. See
+> [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
 
 ## Filter syntax (bracket)
 

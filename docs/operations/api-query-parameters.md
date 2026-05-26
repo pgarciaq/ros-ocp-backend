@@ -5,8 +5,17 @@ ROS-OCP Backend list and filter endpoints accept **two equivalent query paramete
 1. **Historical ROS syntax (flat)** — used by koku-ui-ros and IQE plugins today
 2. **Koku-aligned syntax (bracket)** — matches Cost Management report API conventions
 
-Both are fully supported simultaneously. Clients may use either syntax or mix them in the
-same request. Bracket syntax takes precedence for `order_by` when both forms are present.
+Both are fully supported simultaneously for backward compatibility. Clients may use either
+syntax or mix them in the same request. Bracket syntax takes precedence for `order_by` when
+both forms are present.
+
+**Preferred going forward:** bracket syntax (`filter[…]`, `order_by[…]`, `filter[tag:…]`),
+aligned with Koku Cost Management report APIs. Flat syntax remains supported for koku-ui-ros,
+IQE plugins, and other legacy clients.
+
+> **TODO (GA):** Decide whether to deprecate flat query syntax or keep both permanently.
+> Supporting both doubles the parameter parsing surface and test matrix. See
+> [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
 
 Authentication uses the `x-rh-identity` header today. **Mutual TLS (mTLS)** is the planned
 upgrade path for on-prem service-to-service calls; query syntax is unchanged under mTLS.
