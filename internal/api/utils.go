@@ -875,6 +875,7 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					pcMax,
 					pcAvg,
 					optionalSavingsStr(r.EstimatedMonthlySavings),
+					optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),
@@ -976,6 +977,19 @@ func optionalSavingsStr(v *money.SavingsObject) string {
 		return ""
 	}
 	return v.Value
+}
+
+func optionalSavingsCurrencyStr(v *money.SavingsObject, rowCurrency string) string {
+	if v == nil {
+		return ""
+	}
+	if v.Units != "" {
+		return v.Units
+	}
+	if rowCurrency != "" {
+		return rowCurrency
+	}
+	return money.DefaultCurrency
 }
 
 func optionalInt32Str(v *int32) string {
