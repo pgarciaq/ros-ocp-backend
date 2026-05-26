@@ -4928,7 +4928,7 @@ Response:
 | `RECOMMENDATION_TOPIC`                                    | `rosocp.kruize.recommendations` | Internal recommendation trigger topic |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | (Clowder or env)                | PostgreSQL connection                 |
 | `RBAC_ENABLE`                                             | (config)                        | Enable RBAC middleware                |
-| `DISABLE_NAMESPACE_RECOMMENDATION`                        | (config)                        | Feature toggle for namespace recs     |
+| `ROS_DISABLED_PLUGINS`                                    | (empty)                         | Denylist plugins (e.g. `namespace`)   |
 
 
 ### E.10 Operator Configuration (CRD spec)
