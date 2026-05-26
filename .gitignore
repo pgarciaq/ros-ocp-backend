@@ -35,3 +35,4 @@ docs-site/contributing.md
 docs-site/known-issues.md
 # mkdocs build output
 _site/
+site/

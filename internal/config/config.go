@@ -233,8 +233,8 @@ type Config struct {
 	TagsSource                 string `mapstructure:"ROS_TAGS_SOURCE"`
 	TagsAllowedServiceAccounts string `mapstructure:"ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS"`
 	TagsDevToken               string `mapstructure:"ROS_TAGS_DEV_TOKEN"`
-	// TagsSyncMaxBodyBytes caps POST /internal/tags/sync request bodies (default 10 MiB).
-	TagsSyncMaxBodyBytes int64 `mapstructure:"ROS_TAGS_SYNC_MAX_BODY_BYTES"`
+	// TagsSyncMaxBodyMiB caps POST /internal/tags/sync request bodies in MiB (default 10).
+	TagsSyncMaxBodyMiB int64 `mapstructure:"ROS_TAGS_SYNC_MAX_BODY_MIB"`
 
 	// Plugin configuration (see internal/plugin/registry.go).
 	EnabledPlugins  string `mapstructure:"ROS_ENABLED_PLUGINS"`
@@ -516,7 +516,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 	viper.SetDefault("ROS_TAGS_ENABLED", false)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
-	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_BYTES", 10485760)
+	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_MIB", 10)
 	viper.SetDefault("ROS_ENABLED_PLUGINS", "")
 	viper.SetDefault("ROS_DISABLED_PLUGINS", "")
 	viper.SetDefault("KUBERNETES_SA_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token")
@@ -616,17 +616,17 @@ func validateLoadedConfig(c *Config) {
 	if c.CSVDownloadTimeoutSecs <= 0 {
 		c.CSVDownloadTimeoutSecs = 120
 	}
-	if c.TagsSyncMaxBodyBytes <= 0 {
-		c.TagsSyncMaxBodyBytes = 10485760
+	if c.TagsSyncMaxBodyMiB <= 0 {
+		c.TagsSyncMaxBodyMiB = 10
 	}
 }
 
 // TagsSyncBodyLimit returns an Echo BodyLimit middleware size string for tag sync routes.
 func (c *Config) TagsSyncBodyLimit() string {
-	if c == nil || c.TagsSyncMaxBodyBytes <= 0 {
+	if c == nil || c.TagsSyncMaxBodyMiB <= 0 {
 		return "10M"
 	}
-	return fmt.Sprintf("%d", c.TagsSyncMaxBodyBytes)
+	return fmt.Sprintf("%dM", c.TagsSyncMaxBodyMiB)
 }
 
 func GetConfig() *Config {
