@@ -155,6 +155,30 @@ for operator configuration, troubleshooting, and lifecycle scenarios.
 
 When both are present, bracket syntax wins.
 
+## Savings response format
+
+Dollar savings fields use a structured object (not a bare float). The value is a
+**string** with six decimal places; `units` carries the ISO currency code from the
+cost model (typically `USD`).
+
+```json
+{
+  "estimated_monthly_savings": {
+    "value": "12.340000",
+    "units": "USD"
+  }
+}
+```
+
+| Endpoint / context | JSON field |
+|--------------------|------------|
+| Container list/detail (`recommendations`) | `recommendations.estimated_monthly_savings` |
+| History rows | `estimated_monthly_savings` |
+| Fleet savings summary (total and per cluster) | `estimated_monthly_savings` |
+
+Plugin breakdown totals inside `by_plugin` remain numeric floats for aggregation;
+the fleet-level total uses the structured object above.
+
 ## Authentication
 
 All endpoints require the `x-rh-identity` header. On-prem deployments may adopt **mTLS**

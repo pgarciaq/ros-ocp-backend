@@ -63,7 +63,8 @@ func TestGetSavingsSummary_ValidAuth_ReturnsStructure(t *testing.T) {
 	assert.Equal(t, "USD", summary.Currency)
 	assert.NotNil(t, summary.ByCluster)
 	assert.NotNil(t, summary.ByPlugin)
-	assert.Equal(t, 0.0, summary.TotalEstimatedMonthlySavings)
+	assert.Equal(t, "0.000000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 }
 
 func TestGetSavingsSummary_EngineFilterCost_Accepted(t *testing.T) {
@@ -117,7 +118,8 @@ func TestGetSavingsSummary_EmptyFleet_ReturnsZeros(t *testing.T) {
 	var summary FleetSavingsSummaryResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &summary))
 
-	assert.Equal(t, 0.0, summary.TotalEstimatedMonthlySavings)
+	assert.Equal(t, "0.000000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.Empty(t, summary.ByCluster)
 	assert.Equal(t, 0.0, summary.ByPlugin.Container)
 	assert.Equal(t, 0.0, summary.ByPlugin.GPU)

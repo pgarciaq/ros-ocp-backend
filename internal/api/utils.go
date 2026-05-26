@@ -24,6 +24,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
@@ -872,7 +873,7 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					pcMin,
 					pcMax,
 					pcAvg,
-					optionalFloat32Str(r.EstimatedMonthlySavings),
+					optionalSavingsStr(r.EstimatedMonthlySavings),
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),
@@ -967,6 +968,13 @@ func optionalFloat32Str(v *float32) string {
 		return ""
 	}
 	return strconv.FormatFloat(float64(*v), 'f', 3, 32)
+}
+
+func optionalSavingsStr(v *money.SavingsObject) string {
+	if v == nil {
+		return ""
+	}
+	return v.Value
 }
 
 func optionalInt32Str(v *int32) string {

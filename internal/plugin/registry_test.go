@@ -133,7 +133,7 @@ func TestEnabled_kruizeDefaultOff(t *testing.T) {
 	assert.Equal(t, "container", enabled[0].Name())
 }
 
-func TestEnabled_kruizeExclusivity(t *testing.T) {
+func TestValidateKruizePluginExclusivity_errorWhenBothEnabled(t *testing.T) {
 	resetRegistry(t)
 	t.Setenv(envEnabledPlugins, "kruize,container")
 	t.Setenv(envDisabledPlugins, "")
@@ -141,9 +141,21 @@ func TestEnabled_kruizeExclusivity(t *testing.T) {
 	Register(&stubPlugin{name: "kruize"})
 	Register(&stubPlugin{name: "container"})
 
-	enabled := Enabled()
-	require.Len(t, enabled, 1)
-	assert.Equal(t, "kruize", enabled[0].Name())
+	err := validateKruizePluginExclusivity()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mutually exclusive")
+	assert.Contains(t, err.Error(), "container")
+}
+
+func TestValidateKruizePluginExclusivity_okKruizeOnly(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "kruize")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "kruize"})
+	Register(&stubPlugin{name: "container"})
+
+	require.NoError(t, validateKruizePluginExclusivity())
 }
 
 func TestEnabled_kruizeAllowlistOnly(t *testing.T) {

@@ -97,7 +97,8 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "USD", summary.Currency)
-	assert.InDelta(t, 1034.56, summary.TotalEstimatedMonthlySavings, 0.01)
+	assert.Equal(t, "1034.560000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.NotEmpty(t, summary.GPUSavingsNote)
 
 	assert.InDelta(t, 800.00, summary.ByPlugin.Container, 0.01)
@@ -116,13 +117,13 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	prod, ok := byUUID[testutil.TestClusterUUID]
 	require.True(t, ok)
 	assert.Equal(t, "prod-1", prod.ClusterAlias)
-	assert.InDelta(t, 1034.56, prod.Savings, 0.01)
+	assert.Equal(t, "1034.560000", prod.EstimatedMonthlySavings.Value)
 	assert.True(t, prod.HasCostData)
 
 	dev, ok := byUUID[savingsSummaryCluster2]
 	require.True(t, ok)
 	assert.Equal(t, "dev-1", dev.ClusterAlias)
-	assert.Equal(t, 0.00, dev.Savings)
+	assert.Equal(t, "0.000000", dev.EstimatedMonthlySavings.Value)
 	assert.False(t, dev.HasCostData)
 }
 
@@ -170,5 +171,5 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &summary)
 	require.NoError(t, err)
 	assert.InDelta(t, 200.00, summary.ByPlugin.Node, 0.01)
-	assert.InDelta(t, 200.00, summary.TotalEstimatedMonthlySavings, 0.01)
+	assert.Equal(t, "200.000000", summary.EstimatedMonthlySavings.Value)
 }

@@ -28,18 +28,17 @@ type HistoryRow struct {
 	EstimatedSavingsCents *int64        `gorm:"column:estimated_monthly_savings_usd" json:"-"`
 }
 
-// MarshalJSON exposes savings as USD float in API responses while storing cents internally.
+// MarshalJSON exposes savings as a structured object in API responses while storing cents internally.
 func (h HistoryRow) MarshalJSON() ([]byte, error) {
 	type historyRowAlias HistoryRow
 	aux := struct {
 		historyRowAlias
-		EstimatedMonthlySavingsUSD *float64 `json:"estimated_monthly_savings_usd,omitempty"`
+		EstimatedMonthlySavings *money.SavingsObject `json:"estimated_monthly_savings,omitempty"`
 	}{
 		historyRowAlias: historyRowAlias(h),
 	}
 	if h.EstimatedSavingsCents != nil {
-		usd := money.CentsToUSD(*h.EstimatedSavingsCents)
-		aux.EstimatedMonthlySavingsUSD = &usd
+		aux.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(h.EstimatedSavingsCents, money.DefaultCurrency)
 	}
 	return json.Marshal(aux)
 }

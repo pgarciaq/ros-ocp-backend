@@ -171,7 +171,7 @@ type NativeContainerResult struct {
 	SourceID                string                        `json:"source_id"`
 	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *float32                      `json:"estimated_monthly_savings_usd,omitempty"`
+	EstimatedMonthlySavings *money.SavingsObject          `json:"estimated_monthly_savings,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
@@ -618,7 +618,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			SourceID:                first.SourceID,
 			LastReported:            first.LastReported.Format(time.RFC3339),
 			Replicas:                replicas,
-			EstimatedMonthlySavings: money.CentsToUSDPtr(first.EstimatedSavingsCents),
+			EstimatedMonthlySavings: money.FormatCentsToSavingsPtr(first.EstimatedSavingsCents, money.DefaultCurrency),
 			MonitoringEndTime:       maxMonEnd,
 			Recommendations:         make(map[string]TermRecommendation),
 		}

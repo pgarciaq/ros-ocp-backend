@@ -56,9 +56,12 @@ func TestSavingsSummary_DisplaysNegativeCorrectly(t *testing.T) {
 	var raw map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
 
-	total, ok := raw["total_estimated_monthly_savings_usd"].(float64)
-	require.True(t, ok, "total_estimated_monthly_savings_usd should be present")
-	assert.InDelta(t, -123.45, total, 0.01, "total should not be clamped to zero")
+	savings, ok := raw["estimated_monthly_savings"].(map[string]interface{})
+	require.True(t, ok, "estimated_monthly_savings should be present")
+	value, ok := savings["value"].(string)
+	require.True(t, ok)
+	assert.Equal(t, "-123.450000", value, "total should not be clamped to zero")
+	assert.Equal(t, "USD", savings["units"])
 
 	byPlugin, ok := raw["by_plugin"].(map[string]interface{})
 	require.True(t, ok)

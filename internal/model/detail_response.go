@@ -3,6 +3,7 @@ package model
 import (
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
@@ -63,7 +64,7 @@ type ReplicaInfo struct {
 type DetailRecommendations struct {
 	Current                 *DetailResourceConfig                      `json:"current,omitempty"`
 	Replicas                *ReplicaInfo                               `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
 	MonitoringEndTime       string                                     `json:"monitoring_end_time"`
 	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	RecommendationTerms     map[string]DetailTerm                      `json:"recommendation_terms"`

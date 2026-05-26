@@ -22,15 +22,23 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services"
 	"github.com/redhatinsights/ros-ocp-backend/internal/services/housekeeper"
+	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
 var startCmdLog = logging.GetLogger()
 
+// runServiceStartup runs plugin registry init, tag DB health check, and startup logging.
+func runServiceStartup(ctx context.Context) {
+	plugin.Init()
+	_ = db.GetPool()
+	tags.RunStartupHealthCheck(ctx)
+	logEnabledPlugins()
+}
+
 // logEnabledPlugins emits the enabled-plugin allowlist after registry filtering.
 // Tested indirectly via E2E; startup log verified on SNO cluster.
 func logEnabledPlugins() {
-	plugin.Init()
 	enabled := plugin.Enabled()
 	names := make([]string, 0, len(enabled))
 	for _, p := range enabled {
@@ -55,14 +63,14 @@ var processorCmd = &cobra.Command{
 	Short: "starts ros-ocp processor",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp processor")
-		logEnabledPlugins()
-		cfg := config.GetConfig()
-		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		go utils.Start_prometheus_server()
 		utils.SetupKruizePerformanceProfile()
 		if !cfg.UseNativeEngine {
+		runServiceStartup(ctx)
+		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		go func() {
 			if err := utils.Start_prometheus_server(); err != nil {
 				startCmdLog.Errorf("prometheus metrics server: %v", err)
@@ -86,11 +94,11 @@ var recommendationPollerCmd = &cobra.Command{
 	Short: "starts ros-ocp recommendation-poller",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp recommendation-poller")
-		logEnabledPlugins()
-		cfg := config.GetConfig()
-		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		runServiceStartup(ctx)
+		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		go func() {
 			if err := utils.Start_prometheus_server(); err != nil {
 				startCmdLog.Errorf("prometheus metrics server: %v", err)
@@ -105,11 +113,11 @@ var apiCmd = &cobra.Command{
 	Short: "starts ros-ocp api server",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting ros-ocp API server")
-		logEnabledPlugins()
-		cfg := config.GetConfig()
-		engine.InitGPUEngine(cfg)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		runServiceStartup(ctx)
+		cfg := config.GetConfig()
+		engine.InitGPUEngine(cfg)
 		if pool := db.GetPool(); pool != nil {
 			ensureStartupPartitions(ctx)
 		}

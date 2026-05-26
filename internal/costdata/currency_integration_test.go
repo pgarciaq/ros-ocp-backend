@@ -172,8 +172,9 @@ func TestSavings_NonUSD_Currency_Propagates(t *testing.T) {
 
 	assert.Equal(t, "EUR", summary.Currency,
 		"fleet savings summary currency should propagate from Koku effective_rates, not default USD")
-	assert.InDelta(t, 250.50, summary.TotalEstimatedMonthlySavings, 0.01,
-		"total_estimated_monthly_savings_usd holds numeric savings regardless of currency label")
+	assert.Equal(t, "250.500000", summary.EstimatedMonthlySavings.Value,
+		"estimated_monthly_savings.value holds savings regardless of currency label")
+	assert.Equal(t, "EUR", summary.EstimatedMonthlySavings.Units)
 	assert.InDelta(t, 250.50, summary.ByPlugin.Container, 0.01,
 		"by_plugin.container should reflect persisted savings in the cost model currency")
 }
@@ -216,7 +217,7 @@ func TestSavingsSummary_CurrencyMismatch_MultiCluster(t *testing.T) {
 	expectedCurrency := currencyByCluster[firstCluster]
 	assert.Equal(t, expectedCurrency, summary.Currency,
 		"multi-cluster fleet summary should pick the first cluster's currency when clusters disagree (no crash)")
-	assert.InDelta(t, 300.0, summary.TotalEstimatedMonthlySavings, 0.01,
+	assert.Equal(t, "300.000000", summary.EstimatedMonthlySavings.Value,
 		"savings amounts should still aggregate numerically across mixed-currency clusters")
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const gpuSavingsFleetSummaryNote = "GPU savings are computed at API read time and are not included in this fleet summary. Query container GPU recommendations or node GPU endpoints for per-workload dollar estimates."
@@ -29,19 +30,19 @@ type FleetSavingsByPlugin struct {
 
 // FleetClusterSavings aggregates savings for a single cluster.
 type FleetClusterSavings struct {
-	ClusterUUID  string  `json:"cluster_uuid"`
-	ClusterAlias string  `json:"cluster_alias"`
-	Savings      float64 `json:"savings"`
-	HasCostData  bool    `json:"has_cost_data"`
+	ClusterUUID             string             `json:"cluster_uuid"`
+	ClusterAlias            string             `json:"cluster_alias"`
+	EstimatedMonthlySavings money.SavingsObject `json:"estimated_monthly_savings"`
+	HasCostData             bool               `json:"has_cost_data"`
 }
 
 // FleetSavingsSummaryResponse is the JSON payload for GET /recommendations/openshift/savings-summary.
 type FleetSavingsSummaryResponse struct {
-	Currency                     string                `json:"currency"`
-	TotalEstimatedMonthlySavings float64               `json:"total_estimated_monthly_savings_usd"`
-	ByCluster                    []FleetClusterSavings `json:"by_cluster"`
-	ByPlugin                     FleetSavingsByPlugin  `json:"by_plugin"`
-	GPUSavingsNote               string                `json:"gpu_savings_note,omitempty"`
+	Currency                string                `json:"currency"`
+	EstimatedMonthlySavings money.SavingsObject   `json:"estimated_monthly_savings"`
+	ByCluster               []FleetClusterSavings `json:"by_cluster"`
+	ByPlugin                FleetSavingsByPlugin  `json:"by_plugin"`
+	GPUSavingsNote          string                `json:"gpu_savings_note,omitempty"`
 }
 
 func roundUSD(v float64) float64 {
@@ -89,10 +90,11 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		clusterUUIDs = filterClustersByRBAC(allClusters, userPerms)
 		if len(clusterUUIDs) == 0 {
 			return c.JSON(http.StatusOK, FleetSavingsSummaryResponse{
-				Currency:       costdata.DefaultCurrency,
-				ByCluster:      []FleetClusterSavings{},
-				ByPlugin:       FleetSavingsByPlugin{},
-				GPUSavingsNote: gpuSavingsFleetSummaryNote,
+				Currency:                costdata.DefaultCurrency,
+				EstimatedMonthlySavings: money.FormatUSDToSavings(0, costdata.DefaultCurrency),
+				ByCluster:               []FleetClusterSavings{},
+				ByPlugin:                FleetSavingsByPlugin{},
+				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
 	}
@@ -124,9 +126,10 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 		return resp, err
 	}
 	resp.ByPlugin = byPlugin
-	resp.TotalEstimatedMonthlySavings = roundUSD(
+	totalUSD := roundUSD(
 		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot,
 	)
+	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, resp.Currency)
 
 	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile)
 	if err != nil {
@@ -270,10 +273,11 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 	var result []FleetClusterSavings
 	for rows.Next() {
 		var row FleetClusterSavings
-		if err := rows.Scan(&row.ClusterUUID, &row.ClusterAlias, &row.Savings, &row.HasCostData); err != nil {
+		var savingsUSD float64
+		if err := rows.Scan(&row.ClusterUUID, &row.ClusterAlias, &savingsUSD, &row.HasCostData); err != nil {
 			return nil, err
 		}
-		row.Savings = roundUSD(row.Savings)
+		row.EstimatedMonthlySavings = money.FormatUSDToSavings(roundUSD(savingsUSD), costdata.DefaultCurrency)
 		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {

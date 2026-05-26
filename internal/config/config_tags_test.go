@@ -29,3 +29,11 @@ func TestTagsFeatureEnabled_Enabled(t *testing.T) {
 	assert.True(t, TagsFeatureEnabled())
 	assert.False(t, TagsUsePushSync())
 }
+
+func TestDisableTagsFeature_RuntimeOverride(t *testing.T) {
+	ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	require.True(t, TagsFeatureEnabled())
+	DisableTagsFeature()
+	assert.False(t, TagsFeatureEnabled())
+}

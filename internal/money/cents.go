@@ -2,6 +2,9 @@ package money
 
 import "math"
 
+// DefaultCurrency is used when no cost-model currency is available.
+const DefaultCurrency = "USD"
+
 // USDToCents converts a USD float amount to integer cents (rounded half away from zero).
 func USDToCents(usd float64) int64 {
 	return int64(math.Round(usd * 100))

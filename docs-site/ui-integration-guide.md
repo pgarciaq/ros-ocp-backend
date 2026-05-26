@@ -157,9 +157,8 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
   "source_id": "12345",
   "last_reported": "2026-05-20T12:00:00Z",
   "replicas": { "min": 2, "max": 3, "avg": 2, "desired": 3, "available": 3, "source": "kube_state_metrics" },
-  "estimated_monthly_savings_usd": 12.50,
-  "currency": "USD",
   "recommendations": {
+    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
     "short_term": {
       "cost": { /* EngineRecommendation */ },
       "performance": { /* EngineRecommendation */ }
@@ -193,7 +192,7 @@ Detail endpoints transform flat native fields into the nested structure the exis
       "limits": { }
     },
     "monitoring_end_time": "2026-05-20T12:00:00Z",
-    "estimated_monthly_savings_usd": 12.50,
+    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
     "recommendation_terms": {
       "medium_term": {
         "duration_in_hours": 168,
@@ -690,12 +689,12 @@ Fleet-wide aggregated savings for dashboard hero metrics.
 ```json
 {
   "currency": "USD",
-  "total_estimated_monthly_savings_usd": 12500.75,
+  "estimated_monthly_savings": { "value": "12500.750000", "units": "USD" },
   "by_cluster": [
     {
       "cluster_uuid": "...",
       "cluster_alias": "prod-east",
-      "savings": 8200.50,
+      "estimated_monthly_savings": { "value": "8200.500000", "units": "USD" },
       "has_cost_data": true
     }
   ],
@@ -726,7 +725,7 @@ See [Section 15 — Fleet Summary](#15-fleet-summary) for idle/abandoned contain
 
 ### UI Integration Recommendations
 
-- Show a dashboard **Card** hero metric: "Estimated monthly savings: {amount}" using `total_estimated_monthly_savings_usd` and `currency` from the response.
+- Show a dashboard **Card** hero metric: "Estimated monthly savings: {amount}" using `estimated_monthly_savings.value` and `estimated_monthly_savings.units` (or top-level `currency`) from the response.
 - Break down savings by plugin in a pie chart or bar chart using `by_plugin` (container, node, pvc, snapshot).
 - Display per-cluster savings in a **Table** within the fleet view using `by_cluster` rows.
 - Wire engine toggle to `?engine=cost|performance`; all totals and breakdowns update on fetch.

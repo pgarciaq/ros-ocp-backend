@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -17,10 +18,9 @@ const (
 )
 
 var (
-	regMu      sync.RWMutex
-	registry   []Plugin
-	bootOnce   sync.Once
-	kruizeOnce sync.Once
+	regMu    sync.RWMutex
+	registry []Plugin
+	bootOnce sync.Once
 )
 
 // Register appends a plugin to the process-wide registry. Call from plugin init().
@@ -75,14 +75,7 @@ func Enabled() []Plugin {
 		}
 	}
 
-	if len(kruizePlugins) > 0 {
-		if len(others) > 0 {
-			kruizeOnce.Do(func() {
-				logging.GetLogger().Warn(
-					"plugin registry: kruize is enabled; skipping other plugins to avoid duplicate or conflicting recommendations",
-				)
-			})
-		}
+	if len(kruizePlugins) > 0 && len(others) > 0 {
 		return kruizePlugins
 	}
 
@@ -201,15 +194,44 @@ func parsePluginSet(raw string) map[string]bool {
 }
 
 // Boot runs one-time plugin registry startup logic. Safe to call multiple times.
-// It validates that no two enabled CSVIngestors claim the same CSV type and
+// It validates plugin configuration (kruize exclusivity, CSV type claims) and
 // warns if the Kruize plugin is enabled without native plugins.
 func Boot() {
 	bootOnce.Do(func() {
 		logging.GetLogger().WithField("registered_plugin_count", len(All())).Info("plugin registry bootstrapped")
 
+		if err := validateKruizePluginExclusivity(); err != nil {
+			logging.GetLogger().Fatal(err.Error())
+		}
 		validateCSVTypeClaims()
 		warnKruizeEnabled()
 	})
+}
+
+// validateKruizePluginExclusivity returns an error when kruize and native plugins
+// are both enabled via ROS_ENABLED_PLUGINS / ROS_DISABLED_PLUGINS.
+func validateKruizePluginExclusivity() error {
+	if !EnabledFor(KruizePluginName) {
+		return nil
+	}
+	var native []string
+	for _, p := range All() {
+		name := p.Name()
+		if name == KruizePluginName {
+			continue
+		}
+		if EnabledFor(name) {
+			native = append(native, name)
+		}
+	}
+	if len(native) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"FATAL: kruize and native plugins are mutually exclusive. ROS_ENABLED_PLUGINS contains both 'kruize' and native plugins (%s). "+
+			"Set it to either 'kruize' OR native plugins (container, namespace, node, gpu, pvc, snapshot), not both.",
+		strings.Join(native, ", "),
+	)
 }
 
 // Init is an alias for [Boot].
