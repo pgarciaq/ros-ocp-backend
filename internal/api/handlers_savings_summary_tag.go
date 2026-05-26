@@ -27,20 +27,35 @@ type FleetSavingsByTagResponse struct {
 	Data []FleetTagSavingsRow  `json:"data"`
 }
 
+// fleetSavingsByTagQuery holds parameters for tag-grouped fleet savings SQL.
+type fleetSavingsByTagQuery struct {
+	OrgID           string
+	ClusterUUIDs    []string
+	NamespaceFilter string
+	EngineProfile   string
+	TagKey          string
+}
+
 func queryFleetSavingsByTag(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID string,
-	clusterUUIDs []string,
-	engineProfile string,
-	tagKey string,
+	q fleetSavingsByTagQuery,
 ) (FleetSavingsByTagResponse, error) {
 	resp := FleetSavingsByTagResponse{Data: []FleetTagSavingsRow{}}
 
-	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
+	clusterFilter, args, engineParam := savingsSummaryQueryArgsForColumn(q.OrgID, q.ClusterUUIDs, q.EngineProfile, "ock.cluster_uuid")
 	engineRef := fmt.Sprintf("$%d", engineParam)
-	tagKeyParam := len(args) + 1
-	args = append(args, tagKey)
+	argIdx := len(args) + 1
+
+	namespaceFilter := ""
+	if q.NamespaceFilter != "" {
+		namespaceFilter = fmt.Sprintf(" AND ock.namespace = $%d", argIdx)
+		args = append(args, q.NamespaceFilter)
+		argIdx++
+	}
+
+	tagKeyParam := argIdx
+	args = append(args, q.TagKey)
 
 	rows, err := pool.Query(ctx, `
 		SELECT ock.resolved_tags->>$`+fmt.Sprintf("%d", tagKeyParam)+` AS tag_value,
@@ -55,7 +70,7 @@ func queryFleetSavingsByTag(
 			AND rs.term = 'medium'
 			AND rs.engine = `+engineRef+`
 			AND rs.stale = false
-		WHERE ock.org_id = $1`+clusterFilter+`
+		WHERE ock.org_id = $1`+clusterFilter+namespaceFilter+`
 		GROUP BY 1
 		ORDER BY savings_usd DESC NULLS LAST`,
 		args...,
@@ -65,7 +80,7 @@ func queryFleetSavingsByTag(
 	}
 	defer rows.Close()
 
-	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
+	currency := resolveFleetCurrency(ctx, q.OrgID, q.ClusterUUIDs)
 	for rows.Next() {
 		var tagValue sql.NullString
 		var savingsUSD float64

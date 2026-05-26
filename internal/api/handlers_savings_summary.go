@@ -102,7 +102,34 @@ func GetFleetSavingsSummary(c echo.Context) error {
 
 	groupByTagKey := queryparams.GroupByTagKey(c)
 	if groupByTagKey != "" && config.TagsFeatureEnabled() {
-		byTag, qerr := queryFleetSavingsByTag(ctx, pool, orgID, clusterUUIDs, engineProfile, groupByTagKey)
+		clusterQueryFilter := queryparams.FirstFilter(c, "cluster")
+		if clusterQueryFilter != "" {
+			if len(clusterUUIDs) > 0 {
+				allowed := false
+				for _, cu := range clusterUUIDs {
+					if cu == clusterQueryFilter {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					setRecommendationNoStore(c)
+					return c.JSON(http.StatusOK, FleetSavingsByTagResponse{
+						Data: []FleetTagSavingsRow{},
+						Meta: FleetSavingsByTagMeta{Count: 0},
+					})
+				}
+			}
+			clusterUUIDs = []string{clusterQueryFilter}
+		}
+		namespaceFilter := queryparams.FirstFilter(c, "project")
+		byTag, qerr := queryFleetSavingsByTag(ctx, pool, fleetSavingsByTagQuery{
+			OrgID:           orgID,
+			ClusterUUIDs:    clusterUUIDs,
+			NamespaceFilter: namespaceFilter,
+			EngineProfile:   engineProfile,
+			TagKey:          groupByTagKey,
+		})
 		if qerr != nil {
 			hlog.Errorf("fleet savings by tag query failed: %v", qerr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -313,16 +340,25 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 }
 
 func savingsSummaryClusterArgs(orgID string, clusterUUIDs []string) (filterSQL string, args []interface{}) {
+	return savingsSummaryClusterArgsForColumn(orgID, clusterUUIDs, "cluster_uuid")
+}
+
+// savingsSummaryClusterArgsForColumn builds a cluster UUID filter on column (optionally qualified, e.g. "ock.cluster_uuid").
+func savingsSummaryClusterArgsForColumn(orgID string, clusterUUIDs []string, column string) (filterSQL string, args []interface{}) {
 	args = []interface{}{orgID}
 	if len(clusterUUIDs) == 0 {
 		return "", args
 	}
 	args = append(args, clusterUUIDs)
-	return ` AND cluster_uuid::text = ANY($2::text[])`, args
+	return ` AND ` + column + `::text = ANY($2::text[])`, args
 }
 
 func savingsSummaryQueryArgs(orgID string, clusterUUIDs []string, engineProfile string) (filterSQL string, args []interface{}, engineParam int) {
-	filterSQL, args = savingsSummaryClusterArgs(orgID, clusterUUIDs)
+	return savingsSummaryQueryArgsForColumn(orgID, clusterUUIDs, engineProfile, "cluster_uuid")
+}
+
+func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engineProfile string, clusterColumn string) (filterSQL string, args []interface{}, engineParam int) {
+	filterSQL, args = savingsSummaryClusterArgsForColumn(orgID, clusterUUIDs, clusterColumn)
 	engineParam = len(args) + 1
 	args = append(args, engineProfile)
 	return filterSQL, args, engineParam

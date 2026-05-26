@@ -76,6 +76,7 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
 	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
 
 	return app, makeIdentityHeader(testutil.TestOrgID), ctx, cleanup
 }
