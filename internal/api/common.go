@@ -78,11 +78,12 @@ type Collection struct {
 }
 
 type Metadata struct {
-	Count      int    `json:"count"`
-	Limit      int    `json:"limit"`
-	Offset     int    `json:"offset,omitempty"`
-	HasNext    bool   `json:"has_next"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Count      int      `json:"count"`
+	Limit      int      `json:"limit"`
+	Offset     int      `json:"offset,omitempty"`
+	HasNext    bool     `json:"has_next"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 type Links struct {

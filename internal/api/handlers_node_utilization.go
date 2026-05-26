@@ -332,11 +332,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		if scanErrors == 1 {
 			rowWord = "row"
 		}
-		resp.Warnings = append(resp.Warnings, fmt.Sprintf("%d %s could not be read", scanErrors, rowWord))
+		resp.Meta.Warnings = append(resp.Meta.Warnings, fmt.Sprintf("%d %s could not be read", scanErrors, rowWord))
 	}
 	if deprecated {
-		resp.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Warnings...)
+		resp.Meta.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Meta.Warnings...)
 	}
+	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs))
+	resp.Warnings = resp.Meta.Warnings
 
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, resp)

@@ -23,6 +23,10 @@ const (
 	OrderByPrefix = "order_by["
 	// TagFilterPrefix is the Koku tag filter prefix, e.g. filter[tag:team].
 	TagFilterPrefix = "filter[tag:"
+	// GroupByPrefix is the Koku group_by bracket prefix, e.g. group_by[cluster].
+	GroupByPrefix = "group_by["
+	// GroupByTagPrefix is tag grouping, e.g. group_by[tag:environment].
+	GroupByTagPrefix = "group_by[tag:"
 )
 
 // SplitCommaValues expands repeated query values and comma-separated lists.
@@ -121,6 +125,33 @@ func FirstValue(c echo.Context, names ...string) string {
 // FirstFilter is shorthand for FirstValue with a single logical filter name.
 func FirstFilter(c echo.Context, name string) string {
 	return FirstValue(c, name)
+}
+
+// GroupByTagKey returns the tag key from group_by[tag:key] or flat group_by=tag:key.
+// The bracket value (e.g. *) is ignored; only the key name matters.
+func GroupByTagKey(c echo.Context) string {
+	for key := range c.QueryParams() {
+		if !strings.HasPrefix(key, GroupByTagPrefix) || !strings.HasSuffix(key, "]") {
+			continue
+		}
+		tagKey := strings.TrimSpace(key[len(GroupByTagPrefix) : len(key)-1])
+		if tagKey != "" {
+			return tagKey
+		}
+	}
+	for _, raw := range c.QueryParams()["group_by"] {
+		for _, part := range SplitCommaValues([]string{raw}) {
+			part = strings.TrimSpace(part)
+			if !strings.HasPrefix(part, "tag:") {
+				continue
+			}
+			tagKey := strings.TrimSpace(strings.TrimPrefix(part, "tag:"))
+			if tagKey != "" {
+				return tagKey
+			}
+		}
+	}
+	return ""
 }
 
 // ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc or legacy order_by/order_how.

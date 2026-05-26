@@ -148,15 +148,18 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	paged := applyGPUMIGPagination(entries, opts.Offset, opts.Limit)
 
 	setRecommendationNoStore(c)
-	return c.JSON(http.StatusOK, model.GPUMIGListResponse{
+	gpuResp := model.GPUMIGListResponse{
 		Meta: model.GPUMIGListMeta{
-			Count:  totalCount,
-			Limit:  opts.Limit,
-			Offset: opts.Offset,
+			Count:    totalCount,
+			Limit:    opts.Limit,
+			Offset:   opts.Offset,
+			Warnings: warnings,
 		},
-		Data:     paged,
-		Warnings: warnings,
-	})
+		Data: paged,
+	}
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(paged))
+	gpuResp.Warnings = gpuResp.Meta.Warnings
+	return c.JSON(http.StatusOK, gpuResp)
 }
 
 // gpuMIGEntryRBACVisible reports whether a row scoped to nodeName is visible under openshift.node permissions.

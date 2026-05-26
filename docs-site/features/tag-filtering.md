@@ -300,6 +300,38 @@ Wildcards on values (e.g. `prod*`) are **not** supported in v1.
 
 Full parameter reference: [Query Parameters → Tag filtering](../api-reference/query-parameters.md#tag-filtering).
 
+### Group savings by tag (fleet summary)
+
+`GET /recommendations/openshift/savings-summary` supports **Approach C** — tag grouping
+at read time for container savings only (not node/PVC/snapshot plugins in the grouped
+response):
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'https://ros.example.com/api/cost-management/v1/recommendations/openshift/savings-summary?group_by[tag:environment]=*'
+```
+
+Implementation joins `org_container_keys` to `recommendation_sets` on
+`(org_id, cluster_uuid, namespace, workload, container_name)` and aggregates
+`estimated_monthly_savings_usd` per distinct tag value. Requires `ROS_TAGS_ENABLED=true`.
+
+List endpoints do **not** support `group_by[tag:key]` yet; tag values already present on
+enriched list payloads are unchanged. Exposing tags on all list responses without extra
+queries is documented as a future enhancement.
+
+### Empty filter results (`meta.warnings`)
+
+When a tag filter returns zero rows, list responses may include `meta.warnings` explaining
+whether the requested key is missing from the known catalog or push sync has not run
+(SaaS). Example:
+
+```json
+{
+  "meta": { "count": 0, "warnings": ["Tag filtering is active but no data matches. The requested tag key 'cost_center' is not in the known tag catalog. Verify tag sync status via GET /api/cost-management/v1/internal/tags/status"] },
+  "data": []
+}
+```
+
 ---
 
 ## Freshness guarantees
@@ -363,6 +395,15 @@ Compare `synced_at` in the response to your last manifest completion time.
 ### Push endpoint returns 404
 
 Expected when `ROS_TAGS_SOURCE=db` — on-prem mode does not expose push sync.
+
+---
+
+## Future enhancements
+
+| Approach | Description | Status |
+|----------|-------------|--------|
+| **B — Full SQL grouping** | `GROUP BY` tag value in list endpoint SQL (container, namespace, node, PVC, GPU, history) instead of post-filter narrowing | Not implemented; consider if Approach C plus list `meta.warnings` is insufficient |
+| **List tag columns** | Return `resolved_tags` (or selected keys) on list rows without an extra query per request | Not implemented unless already present from enrichment |
 
 ---
 

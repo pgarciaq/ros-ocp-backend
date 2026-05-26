@@ -444,6 +444,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		}
 		response := buildContainerListMeta(c, page, apiListOptions)
 		response.Data = interfaceSlice
+		attachTagWarningsToCollection(response, c, OrgID, len(results))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -591,6 +592,9 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		}
 		response := buildContainerListMeta(c, page, opts)
 		response.Data = interfaceSlice
+		if xrhid, err := requireXRHID(c); err == nil {
+			attachTagWarningsToCollection(response, c, xrhid.Identity.OrgID, len(results))
+		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -773,6 +777,9 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}
 		response := buildNamespaceListMeta(c, page, opts)
 		response.Data = interfaceSlice
+		if xrhid, err := requireXRHID(c); err == nil {
+			attachTagWarningsToCollection(response, c, xrhid.Identity.OrgID, len(results))
+		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}

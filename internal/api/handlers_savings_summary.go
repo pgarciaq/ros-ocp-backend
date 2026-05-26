@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
@@ -97,6 +98,20 @@ func GetFleetSavingsSummary(c echo.Context) error {
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
+	}
+
+	groupByTagKey := queryparams.GroupByTagKey(c)
+	if groupByTagKey != "" && config.TagsFeatureEnabled() {
+		byTag, qerr := queryFleetSavingsByTag(ctx, pool, orgID, clusterUUIDs, engineProfile, groupByTagKey)
+		if qerr != nil {
+			hlog.Errorf("fleet savings by tag query failed: %v", qerr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to fetch fleet savings summary",
+			})
+		}
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, byTag)
 	}
 
 	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile)

@@ -54,6 +54,17 @@ func TestExcludeAndExactValues(t *testing.T) {
 	assert.Equal(t, []string{"web"}, ExactValues(c, "container"))
 }
 
+func TestGroupByTagKey(t *testing.T) {
+	c := newEchoContext("group_by%5Btag%3Aenvironment%5D=*")
+	assert.Equal(t, "environment", GroupByTagKey(c))
+
+	c = newEchoContext("group_by=tag:team")
+	assert.Equal(t, "team", GroupByTagKey(c))
+
+	c = newEchoContext("engine=cost")
+	assert.Empty(t, GroupByTagKey(c))
+}
+
 func TestFirstFilter(t *testing.T) {
 	t.Run("koku cluster filter", func(t *testing.T) {
 		c := newEchoContext("filter%5Bcluster%5D=550e8400-e29b-41d4-a716-446655440000")

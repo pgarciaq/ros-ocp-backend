@@ -146,6 +146,35 @@ Tag filters apply to **container list** endpoints (workloads/containers/GPU list
 resolve through `org_container_keys`). See [Tag Filtering](../features/tag-filtering.md)
 for operator configuration, troubleshooting, and lifecycle scenarios.
 
+### Group by tag (savings summary)
+
+When `ROS_TAGS_ENABLED=true`, fleet savings summary supports grouping container savings
+by a single tag key via SQL `GROUP BY` on `org_container_keys.resolved_tags`:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary
+  ?group_by[tag:environment]=*
+
+# Flat form
+GET .../savings-summary?group_by=tag:environment
+```
+
+The bracket value (`*`) is ignored; only the key name matters. The response shape is
+`{ "meta": { "count": N }, "data": [ { "tag_value": "production", "estimated_monthly_savings": {...} }, ... ] }`.
+`tag_value` is `null` for containers that do not have the requested key.
+
+When tag filtering is disabled, `group_by[tag:key]` is ignored and the default fleet
+summary response is returned.
+
+### Empty results and `meta.warnings`
+
+List endpoints that support tag filters may include `meta.warnings` (string array) when
+all of the following are true: `ROS_TAGS_ENABLED=true`, a tag filter was applied, and
+the result count is zero. Warnings explain likely causes (unknown tag key in the catalog,
+or push sync never completed / stale in SaaS `api` mode). Check
+`GET /internal/tags/status?org_id=<org_id>` for `synced_at` and the enabled-key catalog.
+Warnings are omitted when results are non-empty or tag filtering is disabled.
+
 ## Ordering
 
 **Bracket syntax** (Koku-aligned):

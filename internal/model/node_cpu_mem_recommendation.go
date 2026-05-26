@@ -73,10 +73,11 @@ type NodeUtilizationListResponse struct {
 
 // NodeUtilizationMeta holds pagination metadata for node utilization responses.
 type NodeUtilizationMeta struct {
-	Count    int    `json:"count"`
-	Limit    int    `json:"limit"`
-	Offset   int    `json:"offset"`
-	Currency string `json:"currency"`
+	Count    int      `json:"count"`
+	Limit    int      `json:"limit"`
+	Offset   int      `json:"offset"`
+	Currency string   `json:"currency"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // NodeUtilTermAPIKey returns the API term key (e.g. "medium_term") for a DB term name.

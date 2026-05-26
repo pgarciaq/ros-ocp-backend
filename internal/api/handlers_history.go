@@ -145,6 +145,7 @@ func GetRecommendationHistory(c echo.Context) error {
 			interfaceSlice[i] = rows[i]
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		attachTagWarningsToCollection(response, c, orgID, len(rows))
 		return c.JSON(http.StatusOK, response)
 	}
 }

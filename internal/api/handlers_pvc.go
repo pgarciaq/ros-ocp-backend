@@ -38,10 +38,11 @@ type PVCRecommendationResponse struct {
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
 type PVCRecommendationListResponse struct {
 	Meta struct {
-		Count    int    `json:"count"`
-		Limit    int    `json:"limit"`
-		Offset   int    `json:"offset"`
-		Currency string `json:"currency"`
+		Count    int      `json:"count"`
+		Limit    int      `json:"limit"`
+		Offset   int      `json:"offset"`
+		Currency string   `json:"currency"`
+		Warnings []string `json:"warnings,omitempty"`
 	} `json:"meta"`
 	Links Links                       `json:"links"`
 	Data  []PVCRecommendationResponse `json:"data"`
@@ -211,5 +212,6 @@ func GetPVCRecommendations(c echo.Context) error {
 		resp.Data = []PVCRecommendationResponse{}
 	}
 
+	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data))
 	return c.JSON(http.StatusOK, resp)
 }
