@@ -1,10 +1,10 @@
 package plugin
 
 import (
-	"os"
 	"strings"
 	"sync"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -130,8 +130,9 @@ func APIProviders() []APIProvider {
 //   - Otherwise: all plugins are enabled by default except "kruize", then
 //     ROS_DISABLED_PLUGINS is applied as a blocklist.
 func EnabledFor(name string) bool {
-	allow := parsePluginSet(os.Getenv(envEnabledPlugins))
-	deny := parsePluginSet(os.Getenv(envDisabledPlugins))
+	cfg := config.GetConfig()
+	allow := parsePluginSet(cfg.EnabledPlugins)
+	deny := parsePluginSet(cfg.DisabledPlugins)
 
 	if len(allow) > 0 {
 		return allow[name]
@@ -153,16 +154,14 @@ func EnabledFor(name string) bool {
 // (kruize cannot run alongside native plugins); logs a warning when stripping.
 func ApplyLegacyUseNativeEngineEnv(useNativeEngine bool) {
 	log := logging.GetLogger()
+	cfg := config.GetConfig()
 	if !useNativeEngine {
-		if err := os.Setenv(envEnabledPlugins, KruizePluginName); err != nil {
-			log.Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
-			return
-		}
+		cfg.EnabledPlugins = KruizePluginName
 		log.Warn("ROS_USE_NATIVE_ENGINE=false is deprecated; forcing ROS_ENABLED_PLUGINS=kruize")
 		return
 	}
 
-	raw := strings.TrimSpace(os.Getenv(envEnabledPlugins))
+	raw := strings.TrimSpace(cfg.EnabledPlugins)
 	if raw == "" {
 		return
 	}
@@ -171,15 +170,7 @@ func ApplyLegacyUseNativeEngineEnv(useNativeEngine bool) {
 		return
 	}
 	log.Warn("ROS_ENABLED_PLUGINS listed kruize while the native engine is enabled; removing kruize from the allowlist (mutually exclusive)")
-	if newVal == "" {
-		if err := os.Unsetenv(envEnabledPlugins); err != nil {
-			log.Warnf("plugin registry: could not unset %s: %v", envEnabledPlugins, err)
-		}
-		return
-	}
-	if err := os.Setenv(envEnabledPlugins, newVal); err != nil {
-		log.Warnf("plugin registry: could not set %s: %v", envEnabledPlugins, err)
-	}
+	cfg.EnabledPlugins = newVal
 }
 
 func stripPluginNameFromAllowlist(raw, name string) (newList string, removed bool) {

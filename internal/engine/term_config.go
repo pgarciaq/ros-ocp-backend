@@ -3,15 +3,13 @@ package engine
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
@@ -162,7 +160,7 @@ func loadDBTerms(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationT
 // Env var format: ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS, etc.
 // Returns (TermConfig, true) if any env var is set for this term.
 func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (TermConfig, bool) {
-	prefix := fmt.Sprintf("ROS_TERMS_%s_%s_", strings.ToUpper(recommendationType), strings.ToUpper(termName))
+	prefix := config.TermEnvPrefix(recommendationType, termName)
 	tc := fallback
 	tc.Name = termName
 	anySet := false
@@ -170,7 +168,7 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 	minDataExplicit := false
 	maxWin := PluginMaxWindowDays(recommendationType)
 
-	if v := os.Getenv(prefix + "WINDOW_DAYS"); v != "" {
+	if v := config.EnvString(prefix + "WINDOW_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= maxWin {
 			tc.WindowDays = n
 			anySet = true
@@ -179,7 +177,7 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 			logging.GetLogger().Warnf("term_config: invalid env %sWINDOW_DAYS=%q (must be 1-%d), ignoring", prefix, v, maxWin)
 		}
 	}
-	if v := os.Getenv(prefix + "MIN_DATA_DAYS"); v != "" {
+	if v := config.EnvString(prefix + "MIN_DATA_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
 			tc.MinDataDays = n
 			anySet = true
@@ -188,7 +186,7 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 			logging.GetLogger().Warnf("term_config: invalid env %sMIN_DATA_DAYS=%q, ignoring", prefix, v)
 		}
 	}
-	if v := os.Getenv(prefix + "DECAY_HALFLIFE_HOURS"); v != "" {
+	if v := config.EnvString(prefix + "DECAY_HALFLIFE_HOURS"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
 			tc.DecayHalfLifeHours = f
 			anySet = true
@@ -215,10 +213,10 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 // IsTermLocked reports whether a specific term for a recommendation type is
 // locked by admin environment variables (tenant cannot modify).
 func IsTermLocked(recommendationType, termName string) bool {
-	prefix := fmt.Sprintf("ROS_TERMS_%s_%s_", strings.ToUpper(recommendationType), strings.ToUpper(termName))
-	return os.Getenv(prefix+"WINDOW_DAYS") != "" ||
-		os.Getenv(prefix+"MIN_DATA_DAYS") != "" ||
-		os.Getenv(prefix+"DECAY_HALFLIFE_HOURS") != ""
+	prefix := config.TermEnvPrefix(recommendationType, termName)
+	return config.EnvString(prefix+"WINDOW_DAYS") != "" ||
+		config.EnvString(prefix+"MIN_DATA_DAYS") != "" ||
+		config.EnvString(prefix+"DECAY_HALFLIFE_HOURS") != ""
 }
 
 // MaxWindowDays returns the largest WindowDays across the given terms,

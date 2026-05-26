@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 func TestValidateCSVDownloadURLHTTPS(t *testing.T) {
@@ -30,7 +32,9 @@ func TestValidateCSVDownloadURLRejectsFTP(t *testing.T) {
 }
 
 func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
-	t.Setenv(envCSVAllowedHosts, "good.example,other.example")
+	config.ResetForTest()
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "good.example,other.example")
+	_ = config.GetConfig()
 
 	_, err := validateCSVDownloadURL("https://bad.example/a.csv")
 	if err == nil || !strings.Contains(err.Error(), "not allowed") {
@@ -43,6 +47,10 @@ func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
 }
 
 func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	_ = config.GetConfig()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://evil.example/x", http.StatusFound)
 	}))
@@ -55,7 +63,10 @@ func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
 }
 
 func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
-	t.Setenv(envCSVMaxBodyBytes, "16")
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("ROS_CSV_MAX_BODY_BYTES", "16")
+	_ = config.GetConfig()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
@@ -177,6 +188,10 @@ func TestUnique(t *testing.T) {
 }
 
 func TestReadCSVFromUrl(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	_ = config.GetConfig()
+
 	testdata := "container_name,cpu_request_avg_container\nros,23\ntest_container,24"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, testdata)

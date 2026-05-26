@@ -112,8 +112,8 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 
 ## Feature Flags and Plugins
 
-Plugin toggles are read in `internal/plugin/registry.go` (not the central `Config` struct).
-See [Environment variables outside Config](#environment-variables-outside-config).
+Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
+`internal/config/config.go` and are applied in `internal/plugin/registry.go`.
 
 ### Plugin enablement
 
@@ -144,16 +144,18 @@ ROS_ENABLED_PLUGINS=container,gpu,node,pvc,snapshot
 
 ---
 
-## Environment variables outside Config
+## Centralized configuration
 
-Most settings load into the `Config` struct via Viper. These are still set on Deployments
-but read elsewhere:
+All production environment variables load through `internal/config/config.go` (Viper +
+`Config` struct). Per-plugin term overrides use dynamic keys
+`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` read via `config.EnvString` in `internal/config/env.go`.
 
-| Variable(s) | Read in | Purpose |
-|-------------|---------|---------|
-| `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `internal/plugin/registry.go` | Plugin allowlist/denylist |
-| `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `internal/engine/term_config.go` | Term window overrides (`WINDOW_DAYS`, `MIN_DATA_DAYS`, `DECAY_HALFLIFE_HOURS`) |
-| `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | Viper in `internal/config/config.go` | Kruize HTTP endpoint (URL defaults from host + port) |
+| Variable(s) | Config field / accessor | Purpose |
+|-------------|-------------------------|---------|
+| `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `EnabledPlugins`, `DisabledPlugins` | Plugin allowlist/denylist |
+| `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `config.EnvString` | Term window overrides (`WINDOW_DAYS`, `MIN_DATA_DAYS`, `DECAY_HALFLIFE_HOURS`) |
+| `ROS_CSV_*`, `KUBERNETES_*` | `CSV*`, `Kubernetes*` fields | CSV download limits; tag sync TokenReview |
+| `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | Viper defaults | Kruize HTTP endpoint (URL defaults from host + port) |
 
 Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the container long-term window.
 

@@ -16,10 +16,8 @@ import (
 )
 
 const (
-	defaultSATokenPath       = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	defaultTokenReviewURL    = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
-	kubernetesSATokenPathEnv = "KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH"
-	tokenReviewURLEnv        = "KUBERNETES_TOKEN_REVIEW_URL"
+	defaultSATokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultTokenReviewURL = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
 )
 
 var log = logging.GetLogger()
@@ -61,7 +59,12 @@ func ValidateBearerToken(ctx context.Context, bearerToken string) error {
 }
 
 func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAccounts string) error {
-	reviewerToken, err := readFileTrim(os.Getenv(kubernetesSATokenPathEnv))
+	cfg := config.GetConfig()
+	tokenPath := strings.TrimSpace(cfg.KubernetesSATokenPath)
+	if tokenPath == "" {
+		tokenPath = defaultSATokenPath
+	}
+	reviewerToken, err := readFileTrim(tokenPath)
 	if err != nil || reviewerToken == "" {
 		reviewerToken, err = readFileTrim(defaultSATokenPath)
 	}
@@ -69,7 +72,7 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 		return fmt.Errorf("service account reviewer token unavailable: %w", err)
 	}
 
-	reviewURL := strings.TrimSpace(os.Getenv(tokenReviewURLEnv))
+	reviewURL := strings.TrimSpace(cfg.KubernetesTokenReviewURL)
 	if reviewURL == "" {
 		reviewURL = defaultTokenReviewURL
 	}

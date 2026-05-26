@@ -2,9 +2,9 @@ package engine
 
 import (
 	"context"
-	"os"
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -110,10 +110,12 @@ func TestLoadTermConfig_EnvVarOverridesDBAndLocks(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
+	config.ResetForTest()
 	// Set env var for container long term.
 	t.Setenv("ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS", "45")
 	t.Setenv("ROS_TERMS_CONTAINER_LONG_MIN_DATA_DAYS", "20")
 	t.Setenv("ROS_TERMS_CONTAINER_LONG_DECAY_HALFLIFE_HOURS", "500")
+	_ = config.GetConfig()
 
 	// Insert DB override for long term (should be ignored since env wins).
 	_, err := pool.Exec(ctx,
@@ -137,6 +139,8 @@ func TestLoadTermConfig_EnvVarOverridesDBAndLocks(t *testing.T) {
 }
 
 func TestIsTermLocked(t *testing.T) {
+	config.ResetForTest()
+	_ = config.GetConfig()
 	// Clean state — nothing locked.
 	assert.False(t, IsTermLocked("pvc", "short"))
 
@@ -150,15 +154,16 @@ func TestLoadEnvTerm(t *testing.T) {
 	fallback := TermConfig{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}
 
 	t.Run("no env vars returns not set", func(t *testing.T) {
-		os.Unsetenv("ROS_TERMS_NODE_MEDIUM_WINDOW_DAYS")
-		os.Unsetenv("ROS_TERMS_NODE_MEDIUM_MIN_DATA_DAYS")
-		os.Unsetenv("ROS_TERMS_NODE_MEDIUM_DECAY_HALFLIFE_HOURS")
+		config.ResetForTest()
+		_ = config.GetConfig()
 		_, ok := loadEnvTerm("node", "medium", fallback)
 		assert.False(t, ok)
 	})
 
 	t.Run("partial env var sets only specified fields", func(t *testing.T) {
+		config.ResetForTest()
 		t.Setenv("ROS_TERMS_NODE_MEDIUM_WINDOW_DAYS", "21")
+		_ = config.GetConfig()
 		tc, ok := loadEnvTerm("node", "medium", fallback)
 		assert.True(t, ok)
 		assert.Equal(t, 21, tc.WindowDays)

@@ -3,13 +3,13 @@ package plugin
 import (
 	"context"
 	"io"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 )
 
@@ -43,6 +43,7 @@ func (c *csvIngestorStub) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r i
 
 func resetRegistry(t *testing.T) {
 	t.Helper()
+	config.ResetForTest()
 	regMu.Lock()
 	t.Cleanup(func() {
 		regMu.Lock()
@@ -171,39 +172,51 @@ func TestByTrait_CSVIngestor(t *testing.T) {
 }
 
 func TestApplyLegacyUseNativeEngineEnv_setsKruizeWhenUnset(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(false)
-	assert.Equal(t, KruizePluginName, os.Getenv(envEnabledPlugins))
+	assert.Equal(t, KruizePluginName, config.GetConfig().EnabledPlugins)
 }
 
 func TestApplyLegacyUseNativeEngineEnv_noopWhenNative(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "", os.Getenv(envEnabledPlugins))
+	assert.Equal(t, "", config.GetConfig().EnabledPlugins)
 }
 
 func TestApplyLegacyUseNativeEngineEnv_forceKruizeOverwritesAllowlist(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "container,gpu")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(false)
-	assert.Equal(t, KruizePluginName, os.Getenv(envEnabledPlugins))
+	assert.Equal(t, KruizePluginName, config.GetConfig().EnabledPlugins)
 }
 
 func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeFromAllowlist(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "kruize,container")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "container", os.Getenv(envEnabledPlugins))
+	assert.Equal(t, "container", config.GetConfig().EnabledPlugins)
 }
 
 func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeOnlyClearsAllowlist(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "kruize")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "", os.Getenv(envEnabledPlugins))
+	assert.Equal(t, "", config.GetConfig().EnabledPlugins)
 }
 
 func TestApplyLegacyUseNativeEngineEnv_nativeNoopWhenAllowlistDoesNotIncludeKruize(t *testing.T) {
+	config.ResetForTest()
 	t.Setenv(envEnabledPlugins, "container,namespace")
+	_ = config.GetConfig()
 	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "container,namespace", os.Getenv(envEnabledPlugins))
+	assert.Equal(t, "container,namespace", config.GetConfig().EnabledPlugins)
 }
 
 // --- #491: CSV type collision detection ---

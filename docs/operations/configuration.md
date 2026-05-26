@@ -314,8 +314,9 @@ override behavior: [configurability.md](../architecture/configurability.md).
 
 ### Term windows (per plugin)
 
-Read in [`internal/engine/term_config.go`](../../internal/engine/term_config.go) (not the
-`Config` struct). Format: `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` where `<PLUGIN>` is the
+Read via viper in [`internal/config/env.go`](../../internal/config/env.go) and applied in
+[`internal/engine/term_config.go`](../../internal/engine/term_config.go). Format:
+`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` where `<PLUGIN>` is the
 recommendation type (`CONTAINER`, `NAMESPACE`, `NODE`, `GPU`, `PVC`, `SNAPSHOT`),
 `<TERM>` is `SHORT`, `MEDIUM`, or `LONG`, and `<FIELD>` is one of:
 
@@ -329,19 +330,18 @@ When set, the env var **locks** that term field platform-wide (tenant Settings A
 
 ---
 
-## Environment variables outside Config
+## Centralized configuration
 
-Most platform settings load through [`internal/config/config.go`](../../internal/config/config.go)
-into the `Config` struct. The variables below are still valid deployment knobs but are read
-directly from the process environment in other packages:
+All production environment variables are loaded through
+[`internal/config/config.go`](../../internal/config/config.go) (viper + `Config` struct).
+Per-plugin term overrides use dynamic keys (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`) read via
+[`config.EnvString`](../../internal/config/env.go) — see [Term windows](#term-windows-per-plugin).
 
-| Variable(s) | Read in | Notes |
-|-------------|---------|-------|
-| `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `internal/plugin/registry.go` | Plugin allowlist/denylist — see [Plugin enablement](#plugin-enablement) |
-| `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `internal/engine/term_config.go` | Per-plugin term windows — see [Term windows](#term-windows-per-plugin) |
-| `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | `internal/config/config.go` (Viper) | Kruize connectivity; URL defaults from host + port |
+Plugin fields: `EnabledPlugins` (`ROS_ENABLED_PLUGINS`), `DisabledPlugins` (`ROS_DISABLED_PLUGINS`).
+CSV download: `CSVMaxBodyBytes`, `CSVDownloadTimeoutSecs`, `CSVAllowedHosts`.
+Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 
-Document these in Helm values / `.env` even though they do not appear as `Config` struct fields.
+`KRUIZE_HOST` and `KRUIZE_PORT` are viper-only keys used to build the default `KRUIZE_URL`.
 
 ---
 

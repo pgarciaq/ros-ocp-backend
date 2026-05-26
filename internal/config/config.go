@@ -234,6 +234,23 @@ type Config struct {
 	TagsAllowedServiceAccounts string `mapstructure:"ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS"`
 	TagsDevToken               string `mapstructure:"ROS_TAGS_DEV_TOKEN"`
 
+	// Plugin configuration (see internal/plugin/registry.go).
+	EnabledPlugins  string `mapstructure:"ROS_ENABLED_PLUGINS"`
+	DisabledPlugins string `mapstructure:"ROS_DISABLED_PLUGINS"`
+
+	// Kubernetes auth for tag sync API mode (TokenReview).
+	KubernetesSATokenPath    string `mapstructure:"KUBERNETES_SA_TOKEN_PATH"`
+	KubernetesTokenReviewURL string `mapstructure:"KUBERNETES_TOKEN_REVIEW_URL"`
+
+	// CSV download limits for Kafka-triggered URL ingestion (internal/utils).
+	CSVMaxBodyBytes        int64  `mapstructure:"ROS_CSV_MAX_BODY_BYTES"`
+	CSVDownloadTimeoutSecs int    `mapstructure:"ROS_CSV_DOWNLOAD_TIMEOUT_SECS"`
+	CSVAllowedHosts        string `mapstructure:"ROS_CSV_ALLOWED_HOSTS"`
+
+	// Per-plugin term overrides use dynamic env keys (not struct fields):
+	// ROS_TERMS_<PLUGIN>_<TERM>_{WINDOW_DAYS,MIN_DATA_DAYS,DECAY_HALFLIFE_HOURS}
+	// e.g. ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS. Read via [TermEnvPrefix] and [EnvString].
+
 	//Unleash config
 	UnleashClientAccessToken string
 	UnleashHostname          string
@@ -497,6 +514,13 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 	viper.SetDefault("ROS_TAGS_ENABLED", false)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
+	viper.SetDefault("ROS_ENABLED_PLUGINS", "")
+	viper.SetDefault("ROS_DISABLED_PLUGINS", "")
+	viper.SetDefault("KUBERNETES_SA_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token")
+	viper.SetDefault("KUBERNETES_TOKEN_REVIEW_URL", "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews")
+	viper.SetDefault("ROS_CSV_MAX_BODY_BYTES", 524288000)
+	viper.SetDefault("ROS_CSV_DOWNLOAD_TIMEOUT_SECS", 120)
+	viper.SetDefault("ROS_CSV_ALLOWED_HOSTS", "")
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")
@@ -523,6 +547,9 @@ func initConfig() {
 			log.Printf("config: viper.BindEnv(%s): %v", k, bindErr)
 		}
 	}
+	// Legacy env names kept for backward compatibility.
+	_ = viper.BindEnv("KubernetesSATokenPath", "KUBERNETES_SA_TOKEN_PATH", "KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH")
+	_ = viper.BindEnv("CSVDownloadTimeoutSecs", "ROS_CSV_DOWNLOAD_TIMEOUT_SECS", "ROS_CSV_DOWNLOAD_TIMEOUT_SECONDS")
 
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf("config: cannot unmarshal configuration: %v", err)
@@ -573,6 +600,18 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.ReshipConcurrency <= 0 {
 		c.ReshipConcurrency = 2
+	}
+	if c.KubernetesSATokenPath == "" {
+		c.KubernetesSATokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	}
+	if c.KubernetesTokenReviewURL == "" {
+		c.KubernetesTokenReviewURL = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
+	}
+	if c.CSVMaxBodyBytes <= 0 {
+		c.CSVMaxBodyBytes = 524288000
+	}
+	if c.CSVDownloadTimeoutSecs <= 0 {
+		c.CSVDownloadTimeoutSecs = 120
 	}
 }
 

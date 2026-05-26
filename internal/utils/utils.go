@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -30,26 +29,10 @@ var csvDownloadTransport = httpclient.SharedTransport()
 
 var csvDownloadHTTPClientSingleton *http.Client
 
-const (
-	envCSVDownloadTimeoutSecs = "ROS_CSV_DOWNLOAD_TIMEOUT_SECONDS"
-	envCSVMaxBodyBytes        = "ROS_CSV_MAX_BODY_BYTES"
-	envCSVAllowedHosts        = "ROS_CSV_ALLOWED_HOSTS"
-	// Default max download size for Kafka-triggered CSV URLs. Native ingestion streams
-	// from this bounded reader (See ReadCSVBodyFromUrl); legacy ReadCSVFromUrl still
-	// loads the full parsed [][]string into memory and often duplicates into a dataframe,
-	// so this cap is the main OOM defense for hostile or oversized payloads.
-	// 512 MiB fits large daily cluster exports while bounding worst-case RSS.
-	defaultCSVMaxBodyBytes = 512 * 1024 * 1024
-)
-
 func csvMaxBodyBytes() int64 {
-	v := strings.TrimSpace(os.Getenv(envCSVMaxBodyBytes))
-	if v == "" {
-		return defaultCSVMaxBodyBytes
-	}
-	n, err := strconv.ParseInt(v, 10, 64)
-	if err != nil || n <= 0 {
-		return defaultCSVMaxBodyBytes
+	n := config.GetConfig().CSVMaxBodyBytes
+	if n <= 0 {
+		return 512 * 1024 * 1024
 	}
 	return n
 }
@@ -58,11 +41,9 @@ func csvDownloadHTTPClient() *http.Client {
 	if csvDownloadHTTPClientSingleton != nil {
 		return csvDownloadHTTPClientSingleton
 	}
-	timeoutSecs := 60
-	if v := strings.TrimSpace(os.Getenv(envCSVDownloadTimeoutSecs)); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			timeoutSecs = n
-		}
+	timeoutSecs := config.GetConfig().CSVDownloadTimeoutSecs
+	if timeoutSecs <= 0 {
+		timeoutSecs = 120
 	}
 	csvDownloadHTTPClientSingleton = &http.Client{
 		Timeout:   time.Duration(timeoutSecs) * time.Second,
@@ -86,7 +67,7 @@ func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
 	if host == "" {
 		return nil, fmt.Errorf("CSV URL must include a host")
 	}
-	if allowed := strings.TrimSpace(os.Getenv(envCSVAllowedHosts)); allowed != "" {
+	if allowed := strings.TrimSpace(config.GetConfig().CSVAllowedHosts); allowed != "" {
 		ok := false
 		for _, h := range strings.Split(allowed, ",") {
 			if strings.EqualFold(strings.TrimSpace(h), host) {
