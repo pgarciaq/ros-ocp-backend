@@ -264,6 +264,7 @@ func TestRefreshOrgRecommendationStats(t *testing.T) {
 func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 	config.ResetTagsForTest()
 	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
 	require.True(t, config.TagsFeatureEnabled())
 
 	pool := testutil.SetupTestDB(t)

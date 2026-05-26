@@ -1,5 +1,5 @@
 // Package queryparams parses HTTP query parameters using Koku-aligned bracket
-// notation (filter[field], order_by[field]).
+// notation (filter[field], order_by[field]) and legacy flat ROS params (?project=).
 package queryparams
 
 import (
@@ -45,9 +45,47 @@ func BracketKey(name string) string {
 	return FilterPrefix + name + "]"
 }
 
-// IncludeValues returns include-filter values from Koku bracket syntax (?filter[field]=a,b).
+// filterParamNames returns flat and bracket param names for a logical filter.
+func filterParamNames(name string) []string {
+	switch name {
+	case "cluster":
+		return []string{"cluster", "cluster_uuid"}
+	case "project":
+		return []string{"project", "namespace"}
+	case "node":
+		return []string{"node", "node_name"}
+	default:
+		return []string{name}
+	}
+}
+
+func mergeQueryValues(c echo.Context, names []string, useBracket bool) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	appendVals := func(vals []string) {
+		for _, v := range vals {
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+	for _, name := range names {
+		appendVals(SplitCommaValues(c.QueryParams()[name]))
+		if useBracket {
+			appendVals(SplitCommaValues(c.QueryParams()[BracketKey(name)]))
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// IncludeValues returns include-filter values from flat params and Koku bracket syntax.
 func IncludeValues(c echo.Context, name string) []string {
-	return SplitCommaValues(c.QueryParams()[BracketKey(name)])
+	return mergeQueryValues(c, filterParamNames(name), true)
 }
 
 // ExcludeValues returns exclude-filter values from exclude[name] bracket syntax.
@@ -56,7 +94,7 @@ func ExcludeValues(c echo.Context, name string) []string {
 	return SplitCommaValues(c.QueryParams()[key])
 }
 
-// ExactValues returns exact-match values from filter[exact:name] syntax.
+// ExactValues returns exact-match values from filter[exact:name] syntax and flat exact:field.
 func ExactValues(c echo.Context, name string) []string {
 	key := FilterExactPrefix + name + "]"
 	return SplitCommaValues(c.QueryParams()[key])
@@ -77,16 +115,22 @@ func FirstValue(c echo.Context, names ...string) string {
 	return ""
 }
 
-// FirstFilter is shorthand for FirstValue with a single Koku filter name.
+// FirstFilter is shorthand for FirstValue with a single logical filter name.
 func FirstFilter(c echo.Context, name string) string {
 	return FirstValue(c, name)
 }
 
-// ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc syntax.
+// ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc or legacy order_by/order_how.
 func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField, defaultDirection string) (dbColumn, direction string, err error) {
 	if dbCol, dir, bracketErr := bracketOrderBy(c, allowedFields); bracketErr != nil {
 		return "", "", bracketErr
 	} else if dbCol != "" {
+		return dbCol, dir, nil
+	}
+
+	if dbCol, dir, ok, flatErr := flatOrderBy(c, allowedFields); flatErr != nil {
+		return "", "", flatErr
+	} else if ok {
 		return dbCol, dir, nil
 	}
 
@@ -98,6 +142,27 @@ func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField,
 		return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
 	}
 	return dbCol, defaultDirection, nil
+}
+
+func flatOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, direction string, ok bool, err error) {
+	field := strings.TrimSpace(c.QueryParam("order_by"))
+	if field == "" {
+		return "", "", false, nil
+	}
+	dbCol, allowed := allowedFields[field]
+	if !allowed {
+		return "", "", false, fmt.Errorf("invalid order_by value: %s", field)
+	}
+	dir := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
+	if dir == "" {
+		dir = "desc"
+	}
+	switch dir {
+	case "asc", "desc":
+	default:
+		return "", "", false, fmt.Errorf("invalid order direction for %s: %s", field, dir)
+	}
+	return dbCol, dir, true, nil
 }
 
 // bracketOrderBy returns dbColumn when bracket order_by is present; empty dbColumn when absent.
@@ -138,6 +203,12 @@ func ParseOrderByAPIKey(c echo.Context, allowedFields map[string]string, default
 		return field, dir, nil
 	}
 
+	if field, dir, ok, flatErr := flatOrderByAPIKey(c, allowedFields); flatErr != nil {
+		return "", "", flatErr
+	} else if ok {
+		return field, dir, nil
+	}
+
 	if defaultField == "" {
 		return defaultField, defaultDirection, nil
 	}
@@ -145,6 +216,26 @@ func ParseOrderByAPIKey(c echo.Context, allowedFields map[string]string, default
 		return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
 	}
 	return defaultField, defaultDirection, nil
+}
+
+func flatOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, ok bool, err error) {
+	field := strings.TrimSpace(c.QueryParam("order_by"))
+	if field == "" {
+		return "", "", false, nil
+	}
+	if _, allowed := allowedFields[field]; !allowed {
+		return "", "", false, fmt.Errorf("invalid order_by value: %s", field)
+	}
+	dir := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
+	if dir == "" {
+		dir = "desc"
+	}
+	switch dir {
+	case "asc", "desc":
+	default:
+		return "", "", false, fmt.Errorf("invalid order direction for %s: %s", field, dir)
+	}
+	return field, dir, true, nil
 }
 
 func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, err error) {

@@ -227,17 +227,25 @@ Tag filters apply to **container list** recommendation endpoints when
 
 ### Filter syntax
 
+ROS accepts **both** Koku bracket notation and legacy flat `tag=` parameters:
+
 ```
+# Koku-aligned
 GET /api/cost-management/v1/recommendations/openshift
   ?filter[tag:environment]=production
   &filter[tag:team]=platform,cost
+
+# ROS legacy (used by koku-ui-ros and IQE)
+GET /api/cost-management/v1/recommendations/openshift
+  ?tag=environment:production&tag=team:platform
 ```
 
 | Syntax | Meaning |
 |--------|---------|
 | `filter[tag:environment]=production` | Exact value match |
 | `filter[tag:environment]=prod,staging` | OR across comma-separated values |
-| Multiple `filter[tag:*]` parameters | AND across different keys |
+| `tag=environment:production` | Legacy exact match (repeat for multiple keys) |
+| Multiple tag keys | AND across keys |
 | `filter[tag:environment]=*` | Tag key present (any value) |
 
 **Example — production deployments only:**
@@ -296,7 +304,9 @@ Compare `synced_at` in the response to your last manifest completion time.
 ### Tag filter parameter ignored entirely
 
 - `ROS_TAGS_ENABLED=false` — tag query params are silently ignored.
-- Wrong syntax — only `filter[tag:key]=value` is supported (not flat `tag=` on public APIs).
+- Unsupported syntax — use `filter[tag:key]=value` (Koku) or `tag=key:value` (ROS legacy).
+  Other flat filter names like `?project=` are supported; see
+  [Query Parameters](../api-reference/query-parameters.md).
 
 ### SaaS: `401` / `403` on tag sync
 

@@ -69,7 +69,7 @@ func TestPluginLifecycle_ContainerCSVToDigests(t *testing.T) {
 
 	rows, err := matched.IngestCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID)
 	require.NoError(t, err)
-	assert.Greater(t, len(rows), 0, "IngestCSV should return parsed MetricRow slice")
+	_ = rows // streaming ingest persists directly; row slice may be empty
 
 	var containerDigests int
 	err = pool.QueryRow(ctx,
@@ -107,32 +107,15 @@ func TestPluginLifecycle_GPUIngestHookWritesDigests(t *testing.T) {
 	}
 	require.NotNil(t, matched)
 
-	rows, err := matched.IngestCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID)
+	_, err := matched.IngestCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID)
 	require.NoError(t, err)
-	require.Greater(t, len(rows), 0)
-
-	hooks := plugin.ByTrait[plugin.IngestHook]()
-	var gpuHookRan bool
-	for _, hook := range hooks {
-		for _, ht := range hook.HookAfterCSVTypes() {
-			if ht == "container" {
-				hookErr := hook.AfterIngest(ctx, pool, rows, orgID, clusterUUID)
-				require.NoError(t, hookErr, "IngestHook %s should not error", hook.Name())
-				if hook.Name() == "gpu" {
-					gpuHookRan = true
-				}
-				break
-			}
-		}
-	}
-	assert.True(t, gpuHookRan, "GPU IngestHook should be registered and run for 'container' CSV")
 
 	var gpuDigests int
 	err = pool.QueryRow(ctx,
 		`SELECT count(*) FROM gpu_container_digests WHERE cluster_uuid = $1`,
 		clusterUUID).Scan(&gpuDigests)
 	require.NoError(t, err)
-	assert.Greater(t, gpuDigests, 0, "GPU IngestHook should persist gpu_container_digests rows")
+	assert.Greater(t, gpuDigests, 0, "container ingest stream should persist gpu_container_digests when GPU plugin is enabled")
 }
 
 // TestPluginLifecycle_NamespaceCSVToDigests verifies the namespace plugin's
@@ -190,11 +173,10 @@ func TestPluginLifecycle_EndToEnd_FullDispatch(t *testing.T) {
 	orgID := "org-plugin-lifecycle-e2e"
 	clusterUUID := "e2e2e2e2-1111-2222-3333-444444444444"
 
-	handled, rows, hookErrs, err := plugin.DispatchCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID, "container")
+	handled, _, hookErrs, err := plugin.DispatchCSV(ctx, pool, strings.NewReader(containerCSVWithGPU), orgID, clusterUUID, "container")
 	require.NoError(t, err)
 	assert.True(t, handled, "container CSVIngestor should claim the type")
 	assert.Empty(t, hookErrs, "no hook errors expected for valid GPU data")
-	require.Greater(t, len(rows), 0)
 
 	var containerCount int
 	err = pool.QueryRow(ctx,
@@ -210,8 +192,11 @@ func TestPluginLifecycle_EndToEnd_FullDispatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Greater(t, gpuCount, 0)
 
-	assert.True(t, rows[0].HasGPU(), "row with GPU columns should report HasGPU()=true")
-	verifyRowShape(t, rows[0])
+	parsedRows, err := ingestion.ParseCSVRows(strings.NewReader(containerCSVWithGPU))
+	require.NoError(t, err)
+	require.NotEmpty(t, parsedRows)
+	assert.True(t, parsedRows[0].HasGPU(), "row with GPU columns should report HasGPU()=true")
+	verifyRowShape(t, parsedRows[0])
 }
 
 func verifyRowShape(t *testing.T, row ingestion.MetricRow) {

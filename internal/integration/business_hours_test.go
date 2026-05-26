@@ -597,6 +597,17 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 	enableBusinessHoursForTest(t)
 	var captured bool
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/effective_rates/") {
+			w.Header().Set("Content-Type", "application/json")
+			clusterID := r.URL.Query().Get("cluster_id")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"cluster_id":           clusterID,
+				"provider_uuid":        testutil.TestProviderUUID,
+				"configured_rates":     map[string]interface{}{},
+				"namespace_aggregates": map[string]interface{}{},
+			})
+			return
+		}
 		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "reship_ros") {
 			captured = true
 		}
@@ -604,6 +615,7 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 	}))
 	defer masu.Close()
 	t.Setenv("KOKU_MASU_URL", masu.URL)
+	config.ResetForTest()
 
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-bh-int-reship"

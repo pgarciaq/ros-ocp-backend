@@ -60,7 +60,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 
 	// Capture pre-savings state
 	for _, r := range recs {
-		require.Equal(t, float32(0), r.EstimatedSavingsCents, "savings should be zero before ApplySavingsEstimates")
+		require.Equal(t, int64(0), r.EstimatedSavingsCents, "savings should be zero before ApplySavingsEstimates")
 	}
 
 	t.Run("with cost data from mock Koku", func(t *testing.T) {
@@ -117,7 +117,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Read back and verify savings persisted
-		var savedSavings float32
+		var savedSavings int64
 		err = pool.QueryRow(ctx,
 			`SELECT estimated_monthly_savings_usd FROM recommendation_sets
 			 WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND container_name = $4
@@ -125,7 +125,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestContainer,
 		).Scan(&savedSavings)
 		require.NoError(t, err)
-		assert.NotEqual(t, float32(0), savedSavings, "persisted savings should be non-zero")
+		assert.NotEqual(t, int64(0), savedSavings, "persisted savings should be non-zero")
 	})
 
 	t.Run("without cost data (nil provider)", func(t *testing.T) {
@@ -137,7 +137,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, nil)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
+			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
 				"savings should be zero when cost data is nil")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when cost data is nil")
@@ -196,7 +196,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
+			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
 				"savings should be zero when namespace not in cost data")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when namespace not found")
@@ -225,7 +225,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, float32(0), r.EstimatedSavingsCents,
+			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
 				"savings should be zero when all cost rates are zero")
 			for _, code := range r.NotificationCodes {
 				assert.NotEqual(t, engine.NotifNoCostData, code,
@@ -235,6 +235,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 	})
 
 	t.Run("HTTPCostDataProvider error handling", func(t *testing.T) {
+		costdata.ClearCostDataCacheForTest()
 		// Server that returns 500
 		errSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -248,6 +249,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 	})
 
 	t.Run("HTTPCostDataProvider invalid JSON", func(t *testing.T) {
+		costdata.ClearCostDataCacheForTest()
 		badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("not json"))

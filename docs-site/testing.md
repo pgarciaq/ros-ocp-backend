@@ -76,8 +76,11 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 # Unit + integration (requires Docker for testcontainers)
 go test ./internal/... -v
 
-# With race detector
-go test -race ./internal/...
+# Full suite via Makefile (serial packages, 30m timeout — avoids testcontainers starvation)
+make test
+
+# With race detector (same as CI)
+go test -race -count=1 -timeout=30m -p=1 ./...
 
 # Benchmarks only
 go test -bench=. -run='^$' ./internal/engine/

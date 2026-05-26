@@ -27,9 +27,14 @@ func TestSplitCommaValues(t *testing.T) {
 }
 
 func TestIncludeValues(t *testing.T) {
-	t.Run("flat keys are ignored", func(t *testing.T) {
+	t.Run("flat keys are merged", func(t *testing.T) {
 		c := newEchoContext("project=alpha&project=beta")
-		assert.Nil(t, IncludeValues(c, "project"))
+		assert.Equal(t, []string{"alpha", "beta"}, IncludeValues(c, "project"))
+	})
+
+	t.Run("flat namespace alias for project", func(t *testing.T) {
+		c := newEchoContext("namespace=payments")
+		assert.Equal(t, []string{"payments"}, IncludeValues(c, "project"))
 	})
 
 	t.Run("koku bracket comma separated", func(t *testing.T) {
@@ -55,9 +60,9 @@ func TestFirstFilter(t *testing.T) {
 		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster"))
 	})
 
-	t.Run("flat cluster param ignored", func(t *testing.T) {
-		c := newEchoContext("cluster_uuid=legacy-uuid")
-		assert.Equal(t, "", FirstFilter(c, "cluster"))
+	t.Run("flat cluster_uuid alias", func(t *testing.T) {
+		c := newEchoContext("cluster_uuid=550e8400-e29b-41d4-a716-446655440000")
+		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster"))
 	})
 }
 
@@ -75,12 +80,12 @@ func TestParseOrderBy(t *testing.T) {
 		assert.Equal(t, "asc", dir)
 	})
 
-	t.Run("legacy flat order_by ignored", func(t *testing.T) {
+	t.Run("legacy flat order_by", func(t *testing.T) {
 		c := newEchoContext("order_by=project&order_how=asc")
 		col, dir, err := ParseOrderBy(c, allowed, "last_reported", "desc")
 		require.NoError(t, err)
-		assert.Equal(t, "clusters.last_reported_at", col)
-		assert.Equal(t, "desc", dir)
+		assert.Equal(t, "ns.namespace", col)
+		assert.Equal(t, "asc", dir)
 	})
 
 	t.Run("default when unset", func(t *testing.T) {

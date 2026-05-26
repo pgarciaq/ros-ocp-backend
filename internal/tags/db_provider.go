@@ -106,7 +106,7 @@ func (p *DBTagProvider) FilterByTag(ctx context.Context, orgID string, key strin
 	if key == "" {
 		return nil, fmt.Errorf("tag key is required")
 	}
-	orgID = trimOrgID(orgID)
+	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
 		return nil, fmt.Errorf("org_id is required")
 	}

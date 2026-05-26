@@ -1013,13 +1013,17 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	return nil
 }
 
-// parseTagFiltersFromRequest parses Koku ?filter[tag:key]=v1,v2 syntax.
+// parseTagFiltersFromRequest parses legacy ?tag=key:value and Koku ?filter[tag:key]=v1,v2 syntax.
 func parseTagFiltersFromRequest(c echo.Context) ([]model.TagFilter, error) {
-	filters, err := model.ParseKokuTagFilterParams(c.QueryParams())
+	kokuFilters, err := model.ParseKokuTagFilterParams(c.QueryParams())
 	if err != nil {
 		return nil, err
 	}
-	return model.MergeTagFilters(filters), nil
+	legacyFilters, err := model.ParseTagFilters(c.QueryParams()["tag"])
+	if err != nil {
+		return nil, err
+	}
+	return model.MergeTagFilters(append(kokuFilters, legacyFilters...)), nil
 }
 
 // apiErrResponse is the single gate for user-facing error responses.

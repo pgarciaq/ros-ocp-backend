@@ -1,12 +1,40 @@
 # API Query Parameters
 
-ROS-OCP Backend list and filter endpoints accept **Koku-aligned bracket notation** for
-query parameters.
+ROS-OCP Backend list and filter endpoints accept **two equivalent query parameter syntaxes**:
+
+1. **Historical ROS syntax (flat)** — used by koku-ui-ros and IQE plugins today
+2. **Koku-aligned syntax (bracket)** — matches Cost Management report API conventions
+
+Both are fully supported simultaneously. Clients may use either syntax or mix them in the
+same request. Bracket syntax takes precedence for `order_by` when both forms are present.
 
 Authentication uses the `x-rh-identity` header today. **Mutual TLS (mTLS)** is the planned
-upgrade path for on-prem service-to-service calls; bracket syntax is unchanged under mTLS.
+upgrade path for on-prem service-to-service calls; query syntax is unchanged under mTLS.
 
-## Filtering
+## Dual syntax overview
+
+| Concern | Flat (ROS legacy) | Bracket (Koku-aligned) |
+|---------|-------------------|------------------------|
+| Project filter | `?project=payments` or `?namespace=payments` | `?filter[project]=payments` |
+| Cluster filter | `?cluster=<uuid>` or `?cluster_uuid=<uuid>` | `?filter[cluster]=<uuid>` |
+| Workload filter | `?workload=api-server` | `?filter[workload]=api-server` |
+| Container filter | `?container=web` | `?filter[container]=web` |
+| Node filter | `?node=worker-1` or `?node_name=worker-1` | `?filter[node]=worker-1` |
+| Sort field | `?order_by=project&order_how=asc` | `?order_by[project]=asc` |
+| Tag filter | `?tag=environment:production` | `?filter[tag:environment]=production` |
+| Exact match | — (bracket only) | `?filter[exact:project]=kube-system` |
+| Exclude | — (bracket only) | `?exclude[project]=openshift-*` |
+
+Repeated values and comma-separated lists work in both forms:
+
+```
+?project=alpha&project=beta
+?filter[project]=alpha,beta
+```
+
+Implementation: [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
+
+## Filtering (bracket syntax)
 
 Use `filter[field]` with comma-separated values (OR within the same field):
 
@@ -23,36 +51,50 @@ Use `filter[field]` with comma-separated values (OR within the same field):
 ?filter[stale]=only
 ```
 
+## Filtering (flat syntax)
+
+Equivalent flat parameters:
+
+```
+?cluster=550e8400-e29b-41d4-a716-446655440000
+?project=payments,frontend
+?workload=api-server
+?workload_type=deployment
+?container=web
+?term=medium
+?engine=cost
+?tag=environment:production
+?has_gpu=true
+```
+
 **Field mapping**
 
-| Koku `filter[…]` | ROS internal column / meaning |
-|------------------|-------------------------------|
-| `project` | Kubernetes namespace |
-| `cluster` | Cluster UUID (or alias when partial match applies) |
-| `workload` | Workload name |
-| `workload_type` | Deployment, StatefulSet, etc. |
-| `container` | Container name |
-| `node` | Node name (node/GPU endpoints) |
-| `tag:<key>` | Resolved cost-management tag (feature-flagged) |
-| `has_gpu` | GPU presence (`true` / `false`) |
-| `gpu_model` | GPU model substring match |
-| `gpu_classification` | GPU classification exact match |
-| `stale` | Staleness filter (`true`, `false`, `only`) |
-| `is_underutilized` | Node utilization filter |
-| `recommendation_type` | Recommendation category (PVC/snapshot endpoints) |
+| Logical field | Flat aliases | Koku `filter[…]` |
+|---------------|--------------|------------------|
+| `project` | `project`, `namespace` | `filter[project]` |
+| `cluster` | `cluster`, `cluster_uuid` | `filter[cluster]` |
+| `workload` | `workload` | `filter[workload]` |
+| `workload_type` | `workload_type` | `filter[workload_type]` |
+| `container` | `container` | `filter[container]` |
+| `node` | `node`, `node_name` | `filter[node]` |
+| Tags | `tag=key:value` (repeatable) | `filter[tag:<key>]` |
+| `has_gpu` | `has_gpu` | `filter[has_gpu]` |
+| `gpu_model` | `gpu_model` | `filter[gpu_model]` |
+| `gpu_classification` | `gpu_classification` | `filter[gpu_classification]` |
+| `stale` | `stale` | `filter[stale]` |
+| `is_underutilized` | `is_underutilized` | `filter[is_underutilized]` |
+| `recommendation_type` | `recommendation_type` | `filter[recommendation_type]` |
 
-**Exact and exclude modes** (container/namespace list endpoints):
+**Exact and exclude modes** (bracket only — container/namespace list endpoints):
 
 ```
 ?filter[exact:project]=kube-system
 ?exclude[project]=openshift-*
 ```
 
-Flat parameter names (e.g. `?project=…`, `?cluster_uuid=…`) are **not** supported.
-
 ## Ordering
 
-Sort direction is embedded in the bracket value:
+**Bracket syntax** (Koku-aligned):
 
 ```
 ?order_by[last_reported]=desc
@@ -60,9 +102,30 @@ Sort direction is embedded in the bracket value:
 ?order_by[cpu_variation_short_cost]=desc
 ```
 
-The legacy `?order_by=field&order_how=asc|desc` pair is **not** supported.
+**Flat syntax** (ROS legacy):
 
-Allowed `order_by` keys vary by endpoint; see `internal/api/listoptions/list_options.go`.
+```
+?order_by=project&order_how=asc
+?order_by=last_reported&order_how=desc
+```
+
+When both are present, bracket syntax wins. Allowed `order_by` keys vary by endpoint;
+see `internal/api/listoptions/list_options.go`.
+
+## Tag filtering
+
+Both legacy and Koku tag syntax are accepted when `ROS_TAGS_ENABLED=true`:
+
+```
+# ROS legacy (repeatable)
+?tag=environment:production&tag=team:platform
+
+# Koku-aligned
+?filter[tag:environment]=production,staging
+?filter[tag:team]=platform
+```
+
+See [Tag Filtering](../features/tag-filtering.md) for deployment modes and prerequisites.
 
 ## Pagination
 
@@ -93,4 +156,6 @@ Accept: text/csv
 ## Implementation
 
 Parsing lives in [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
-Handlers read filters via `IncludeValues`, `ExactValues`, and `ExcludeValues` on bracket keys only.
+Handlers read filters via `IncludeValues`, `ExactValues`, and `ExcludeValues`.
+Tag filters are merged from `parseTagFiltersFromRequest` in
+[`internal/api/utils.go`](../../internal/api/utils.go).

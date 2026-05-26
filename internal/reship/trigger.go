@@ -44,9 +44,6 @@ func TriggerAsync(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	if trigger == nil || len(clusterUUIDs) == 0 {
 		return
 	}
-	if cfg := config.GetConfig(); cfg.KokuMasuURL == "" {
-		return
-	}
 	go func() {
 		ctx := context.Background()
 		sem := make(chan struct{}, orgMaxConcurrent())

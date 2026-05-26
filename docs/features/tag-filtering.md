@@ -427,13 +427,27 @@ Namespaces not in the payload end up with empty tags.
 
 ## API Filtering Syntax
 
-Both modes accept Koku bracket notation:
+Both deployment modes accept **two equivalent tag filter syntaxes** (and the same dual
+syntax applies to all list filters — see
+[API Query Parameters](../operations/api-query-parameters.md)):
+
+**Koku bracket notation:**
 
 ```
 GET /api/cost-management/v1/recommendations/openshift
   ?filter[tag:environment]=production,staging
   &filter[tag:team]=platform
 ```
+
+**ROS legacy flat notation:**
+
+```
+GET /api/cost-management/v1/recommendations/openshift
+  ?tag=environment:production&tag=team:platform
+```
+
+Clients may use either syntax or mix them. koku-ui-ros and IQE plugins typically use
+the flat `?tag=key:value` form; Koku-aligned clients use `filter[tag:key]=value`.
 
 | Pattern | Semantics |
 |---------|-----------|

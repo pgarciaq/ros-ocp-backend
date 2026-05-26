@@ -45,10 +45,10 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
 		VALUES
-			($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 10.5, now()),
-			($1, $2, 'ns1', 'w2', 'Deployment', 'c2', 'medium', 'cost', false, '{5}', 20.0, now()),
-			($1, $2, 'ns2', 'w3', 'Deployment', 'c3', 'medium', 'cost', false, '{8}', 50.0, now()),
-			($1, $2, 'ns2', 'w4', 'Deployment', 'c4', 'medium', 'cost', true, '{}', 5.0, now())
+			($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 1050, now()),
+			($1, $2, 'ns1', 'w2', 'Deployment', 'c2', 'medium', 'cost', false, '{5}', 2000, now()),
+			($1, $2, 'ns2', 'w3', 'Deployment', 'c3', 'medium', 'cost', false, '{8}', 5000, now()),
+			($1, $2, 'ns2', 'w4', 'Deployment', 'c4', 'medium', 'cost', true, '{}', 500, now())
 	`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

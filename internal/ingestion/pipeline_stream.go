@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -39,15 +38,8 @@ func EnsureIngestPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
-var ensuredSampleMonths sync.Map
-var ensuredDigestMonths sync.Map
-
 // EnsureSamplePartitionMonth creates a container_usage_samples partition for one month.
 func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
-	key := monthStart.Format("200601")
-	if _, loaded := ensuredSampleMonths.LoadOrStore(key, struct{}{}); loaded {
-		return nil
-	}
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	partName := fmt.Sprintf("container_usage_samples_%s", monthStart.Format("200601"))
 	sql := fmt.Sprintf(
@@ -57,7 +49,6 @@ func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthSt
 		monthEnd.Format("2006-01-02"),
 	)
 	if _, err := pool.Exec(ctx, sql); err != nil {
-		ensuredSampleMonths.Delete(key)
 		return fmt.Errorf("EnsureSamplePartitionMonth %s: %w", partName, err)
 	}
 	return nil
@@ -65,10 +56,6 @@ func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthSt
 
 // EnsureDigestPartitionMonth creates a daily_container_digests partition for one month.
 func EnsureDigestPartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
-	key := monthStart.Format("200601")
-	if _, loaded := ensuredDigestMonths.LoadOrStore(key, struct{}{}); loaded {
-		return nil
-	}
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	partName := fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
 	sql := fmt.Sprintf(
@@ -78,7 +65,6 @@ func EnsureDigestPartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthSt
 		monthEnd.Format("2006-01-02"),
 	)
 	if _, err := pool.Exec(ctx, sql); err != nil {
-		ensuredDigestMonths.Delete(key)
 		return fmt.Errorf("EnsureDigestPartitionMonth %s: %w", partName, err)
 	}
 	return nil

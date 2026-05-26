@@ -136,6 +136,16 @@ func getGPUCostProvider() costdata.CostDataProvider {
 	return gpuCostProvider
 }
 
+// ResetGPUCostProviderForTest clears the process-wide HTTP cost provider singleton.
+// Tests that mock KokuMasuURL must call this in cleanup because t.Setenv is
+// process-global and must not be used from parallel tests.
+func ResetGPUCostProviderForTest() {
+	gpuCostProviderMu.Lock()
+	defer gpuCostProviderMu.Unlock()
+	gpuCostProvider = nil
+	gpuCostProviderBase = ""
+}
+
 // filterGPUResults is a no-op: all GPU filters (has_gpu, gpu_model,
 // gpu_classification) are now pushed to SQL via MapNativeQueryParameters
 // for correct pagination and total counts.

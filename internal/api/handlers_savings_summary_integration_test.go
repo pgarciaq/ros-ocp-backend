@@ -48,22 +48,22 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 		ON CONFLICT DO NOTHING`, testutil.TestClusterUUID, savingsSummaryCluster2)
 	require.NoError(t, err)
 
-	// prod-1: container + node + pvc + snapshot savings
+	// prod-1: container + node + pvc + snapshot savings (stored as integer cents)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 800.00, now())`,
+		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 80000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'node-a', 'medium', 'cost', '{}', 150.00, now())`,
+		VALUES ($1, $2, 'node-a', 'medium', 'cost', '{}', 15000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'ns1', 'data-vol', 'medium', '{}', 84.56, now())`,
+		VALUES ($1, $2, 'ns1', 'data-vol', 'medium', '{}', 8456, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -150,7 +150,7 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
-		VALUES ($1, $2, 'node-perf', 'medium', 'performance', '{}', 200.00, now())`,
+		VALUES ($1, $2, 'node-perf', 'medium', 'performance', '{}', 20000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

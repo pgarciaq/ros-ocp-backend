@@ -909,9 +909,9 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 			estimated_monthly_savings_usd
 		) VALUES
 			($1, $2::uuid, 'worker-2', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 450),
+			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 45000),
 			($1, $2::uuid, 'worker-2', 'medium', 'performance',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 7, 28, 0, 120)`,
+			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 7, 28, 0, 12000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

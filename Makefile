@@ -81,7 +81,9 @@ lint: golangci-lint
 
 .PHONY: test
 test:
-	go test -v -race -count=1 ./...
+	# -p=1 avoids testcontainers starvation when many integration tests spin up PostgreSQL in parallel.
+	# -timeout=30m covers the full integration suite (~25m serial on typical CI runners).
+	go test -v -race -count=1 -timeout=30m -p=1 ./...
 
 MCCILINT := $(LOCALBIN)/mc
 .PHONY: archive-to-minio

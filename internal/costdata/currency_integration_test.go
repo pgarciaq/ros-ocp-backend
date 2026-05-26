@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +33,10 @@ const (
 	currencyClusterEUR = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
 	currencyClusterUSD = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"
 )
+
+// savingsIntegrationMu serializes tests that call t.Setenv (process-global) and share
+// api.getGPUCostProvider's singleton cache across mock Koku servers.
+var savingsIntegrationMu sync.Mutex
 
 func enableKokuMockForSavings(t *testing.T, baseURL string) {
 	t.Helper()
@@ -70,6 +75,14 @@ func effectiveRatesResponse(currency, clusterID string) string {
 
 func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*echo.Echo, context.Context, *pgxpool.Pool) {
 	t.Helper()
+	savingsIntegrationMu.Lock()
+	t.Cleanup(func() {
+		api.ResetGPUCostProviderForTest()
+		costdata.ClearCostDataCacheForTest()
+		config.ResetForTest()
+		savingsIntegrationMu.Unlock()
+	})
+
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -119,7 +132,7 @@ func savingsSummaryIdentity(orgID string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-func seedSavingsSummaryCluster(t *testing.T, ctx context.Context, pool *pgxpool.Pool, clusterUUID, alias string, containerSavings float64) {
+func seedSavingsSummaryCluster(t *testing.T, ctx context.Context, pool *pgxpool.Pool, clusterUUID, alias string, containerSavingsUSD float64) {
 	t.Helper()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
@@ -130,7 +143,7 @@ func seedSavingsSummaryCluster(t *testing.T, ctx context.Context, pool *pgxpool.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', $3, now())`,
-		testutil.TestOrgID, clusterUUID, containerSavings)
+		testutil.TestOrgID, clusterUUID, money.USDToCents(containerSavingsUSD))
 	require.NoError(t, err)
 }
 
@@ -266,7 +279,6 @@ func TestSavings_NoCostData_DefaultsUSD(t *testing.T) {
 	start := now.AddDate(0, 0, -30)
 
 	t.Run("NilCostDataProvider", func(t *testing.T) {
-		t.Parallel()
 		provider := &costdata.NilCostDataProvider{}
 		cd, err := provider.GetEffectiveRates(ctx, "1234567", testutil.TestClusterUUID, start, now)
 		require.NoError(t, err)
