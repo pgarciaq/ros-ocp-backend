@@ -422,15 +422,15 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   `gpu_recommender.go`): reads `configured_rates["gpu_cost_per_month"]` from
   the Koku `effective_rates` endpoint. Idle GPU = full monthly rate; MIG
   right-sizing = fractional savings based on slice ratio. Wired into
-  `enrichWithGPU` and mapped to `estimated_monthly_gpu_savings_usd` in API.
+  `enrichWithGPU` and mapped to `estimated_monthly_gpu_savings` in API.
 - Node-level time-slicing savings via `ComputeNodeTimeslicingRec` with
   per-GPU and total-node dollar estimates on **`GET /recommendations/openshift/gpu/timeslicing`**
   (canonical path for GPU time-slicing; previously `/recommendations/openshift/nodes`).
 - Container-level time-slicing cross-reference (`time_slicing_node`,
   `time_slicing_replicas`) on container GPU blocks.
-- API query filters (`has_gpu`, `gpu_model`, `gpu_classification`) — parsed in
-  `parseGPUFilters` (`handlers.go`), applied by `filterGPUResults`
-  (`gpu_enrichment.go`). Documented in `openapi.json`.
+- API query filters (`has_gpu`, `gpu_model`, `gpu_classification`) — pushed to SQL
+  on `recommendation_sets` (`has_gpu`, `gpu_model_name`, `gpu_classification` columns).
+  Documented in `openapi.json`.
 - GPU daily digest aggregation pipeline — `upsertGPUDigests` in `pipeline.go`
   aggregates hourly CSV rows into daily `gpu_container_digests` rows during
   ingestion. Partition creation, upsert-on-conflict, and retention sweep all

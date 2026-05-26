@@ -118,6 +118,26 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	entries = filterGPUMIGEntriesByRBAC(entries, userPerms)
+
+	tagFilters, tagErr := parseTagFiltersFromRequest(c)
+	if tagErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+	}
+	if len(tagFilters) > 0 {
+		allowedKeys, keysErr := model.MatchingContainerKeys(ctx, pool, orgIDStr, tagFilters)
+		if keysErr != nil {
+			hlog.Errorf("GetGPUMIGRecommendations: tag filter keys failed: %v", keysErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to apply tag filters"})
+		}
+		filtered := entries[:0]
+		for _, e := range entries {
+			if allowedKeys.Contains(e.ClusterUUID, e.Namespace, e.Workload, e.Container) {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+	}
+
 	if entries == nil {
 		entries = []model.GPUMIGRecommendationEntry{}
 	}

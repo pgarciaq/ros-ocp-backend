@@ -2,14 +2,25 @@ package api
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func mustSavingsFloat(t *testing.T, s *money.SavingsObject) float64 {
+	t.Helper()
+	require.NotNil(t, s)
+	v, err := strconv.ParseFloat(s.Value, 64)
+	require.NoError(t, err)
+	return v
+}
 
 func TestToGPURecommendation_FullData(t *testing.T) {
 	savings := float32(123.45)
@@ -42,8 +53,8 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 	assert.InDelta(t, float64(0.67), float64(got.DRAMActiveAvg), 1e-6)
 	assert.InDelta(t, float64(0.34), float64(got.SMActiveAvg), 1e-6)
 	assert.InDelta(t, float64(8192), float64(got.FBUsageMaxMiB), 1e-6)
-	assert.NotNil(t, got.EstimatedMonthlyGPUSavingsUSD)
-	assert.InDelta(t, float64(savings), float64(*got.EstimatedMonthlyGPUSavingsUSD), 1e-6)
+	require.NotNil(t, got.EstimatedMonthlyGPUSavings)
+	assert.InDelta(t, float64(savings), mustSavingsFloat(t, got.EstimatedMonthlyGPUSavings), 1e-6)
 	assert.Equal(t, []int16{10, 20}, got.Notifications)
 }
 
@@ -81,7 +92,7 @@ func TestToGPURecommendation_NoSavings(t *testing.T) {
 
 	got := toGPURecommendation(rec)
 	assert.NotNil(t, got)
-	assert.Nil(t, got.EstimatedMonthlyGPUSavingsUSD)
+	assert.Nil(t, got.EstimatedMonthlyGPUSavings)
 }
 
 func TestToGPURecommendation_WithNotifications(t *testing.T) {
@@ -134,8 +145,8 @@ func TestToGPURecommendation_WithTimeslicingSavings(t *testing.T) {
 
 	got := toGPURecommendation(rec)
 	assert.NotNil(t, got)
-	assert.NotNil(t, got.EstimatedMonthlyTimeslicingSavingsUSD)
-	assert.InDelta(t, 225.0, *got.EstimatedMonthlyTimeslicingSavingsUSD, 0.01)
+	require.NotNil(t, got.EstimatedMonthlyTimeslicingSavings)
+	assert.InDelta(t, 225.0, mustSavingsFloat(t, got.EstimatedMonthlyTimeslicingSavings), 0.01)
 }
 
 func TestToGPURecommendation_NoTimeslicingSavings(t *testing.T) {
@@ -149,7 +160,7 @@ func TestToGPURecommendation_NoTimeslicingSavings(t *testing.T) {
 
 	got := toGPURecommendation(rec)
 	assert.NotNil(t, got)
-	assert.Nil(t, got.EstimatedMonthlyTimeslicingSavingsUSD)
+	assert.Nil(t, got.EstimatedMonthlyTimeslicingSavings)
 }
 
 func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {

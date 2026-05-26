@@ -19,8 +19,8 @@ type GPURecommendation struct {
 	DRAMActiveAvg                         float32  `json:"dram_active_avg"`
 	SMActiveAvg                           float32  `json:"sm_active_avg"`
 	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
-	EstimatedMonthlyGPUSavingsUSD         *float32 `json:"estimated_monthly_gpu_savings_usd,omitempty"`
-	EstimatedMonthlyTimeslicingSavingsUSD *float32 `json:"estimated_monthly_timeslicing_savings_usd,omitempty"`
+	EstimatedMonthlyGPUSavings         *money.SavingsObject `json:"estimated_monthly_gpu_savings,omitempty"`
+	EstimatedMonthlyTimeslicingSavings *money.SavingsObject `json:"estimated_monthly_timeslicing_savings,omitempty"`
 	Currency                              string   `json:"currency,omitempty"`
 	Notifications                         []int16  `json:"notifications,omitempty"`
 	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`

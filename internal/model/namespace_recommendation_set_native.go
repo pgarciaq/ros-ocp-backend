@@ -100,6 +100,9 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 
 	query = applyNativeNamespaceRBAC(query, userPerms)
 	query = applyNSQueryParams(query, queryParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		query = ApplyTagFiltersToClusterNamespace(query, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
+	}
 
 	limit := opts.Limit
 	if opts.Format == "csv" {
@@ -119,6 +122,9 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
+		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+			distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
+		}
 		distinctNS = distinctNS.Where(
 			"(ns.namespace_name, ns.cluster_uuid) > (?, ?)",
 			opts.AfterNamespaceName, opts.AfterNSClusterUUID,
@@ -147,6 +153,9 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
+		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+			distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
+		}
 		distinctNS = distinctNS.Order(distinctOnOrder)
 		countDistinct = db.Table("(?) AS dn", distinctNS).
 			Select("dn.cluster_uuid, dn.namespace_name")

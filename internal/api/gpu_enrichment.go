@@ -10,6 +10,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 var (
@@ -168,8 +169,8 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		DRAMActiveAvg:                         rec.DRAMActiveAvg,
 		SMActiveAvg:                           rec.SMActiveAvg,
 		FBUsageMaxMiB:                         rec.FBUsageMaxMiB,
-		EstimatedMonthlyGPUSavingsUSD:         rec.EstimatedGPUSavingsUSD,
-		EstimatedMonthlyTimeslicingSavingsUSD: rec.EstimatedTimeslicingSavingsUSD,
+		EstimatedMonthlyGPUSavings:         money.FormatUSDPtrToSavingsPtr(rec.EstimatedGPUSavingsUSD, money.DefaultCurrency),
+		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToSavingsPtr(rec.EstimatedTimeslicingSavingsUSD, money.DefaultCurrency),
 		Notifications:                         rec.NotificationCodes,
 	}
 	if rec.TimeSlicingNode != "" {

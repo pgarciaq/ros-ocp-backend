@@ -4,12 +4,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFormatCentsToSavings(t *testing.T) {
 	obj := FormatCentsToSavings(123456, "USD")
 	assert.Equal(t, "1234.560000", obj.Value)
 	assert.Equal(t, "USD", obj.Units)
+}
+
+func TestFormatUSDPtrToSavingsPtr(t *testing.T) {
+	v := float32(12.5)
+	obj := FormatUSDPtrToSavingsPtr(&v, "USD")
+	require.NotNil(t, obj)
+	assert.Equal(t, "12.500000", obj.Value)
+	assert.Equal(t, "USD", obj.Units)
+	assert.Nil(t, FormatUSDPtrToSavingsPtr(nil, "USD"))
 }
 
 func TestFormatCentsToSavings_zeroCents(t *testing.T) {

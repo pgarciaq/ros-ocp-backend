@@ -79,6 +79,9 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if engines := queryparams.IncludeValues(c, "engine"); len(engines) > 0 {
 		queryParams["h.engine IN ?"] = engines
 	}
+	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {
+		return queryParams, err
+	}
 
 	return queryParams, nil
 }

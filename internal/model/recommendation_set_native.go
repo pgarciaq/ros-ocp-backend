@@ -231,7 +231,9 @@ type EngineRecommendation struct {
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
-	if usesOrgContainerKeys(queryParams) {
+	// Tag filters require org_container_keys (resolved_tags / Koku tag joins). The legacy DISTINCT
+	// path on recommendation_sets alone cannot apply tag predicates.
+	if usesOrgContainerKeys(queryParams) || len(TagFiltersFromParams(queryParams)) > 0 {
 		return getNativeRecommendationsFromOrgKeys(orgID, opts, queryParams, userPerms)
 	}
 	return getNativeRecommendationsDistinct(orgID, opts, queryParams, userPerms)

@@ -66,6 +66,9 @@ func GetRecommendationHistory(
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "h.namespace")
 	baseQuery = ApplyQueryParams(baseQuery, queryParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		baseQuery = ApplyTagFiltersToClusterNamespace(baseQuery, orgID, tagFilters, "h.cluster_uuid", "h.namespace")
+	}
 
 	var totalCount int64
 	countQuery := db.Table("recommendation_history h").
@@ -74,6 +77,9 @@ func GetRecommendationHistory(
 		Where("h.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "h.namespace")
 	countQuery = ApplyQueryParams(countQuery, queryParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		countQuery = ApplyTagFiltersToClusterNamespace(countQuery, orgID, tagFilters, "h.cluster_uuid", "h.namespace")
+	}
 
 	if err := countQuery.Scan(&totalCount).Error; err != nil {
 		return nil, 0, err

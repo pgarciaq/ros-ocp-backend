@@ -138,6 +138,12 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	allRecs = filterNodeRecs(allRecs, nodeNameFilter, gpuModelFilter, termFilter)
 
+	var tagFilterErr error
+	allRecs, tagFilterErr = applyNodeGPURecTagFilters(ctx, c, pool, orgIDStr, allRecs)
+	if tagFilterErr != nil {
+		return tagFilterErr
+	}
+
 	if allRecs == nil {
 		allRecs = []model.NodeGPURecommendation{}
 	}
@@ -259,6 +265,13 @@ func respondNodeGPURecommendationsTripleSQL(
 	}
 
 	allRecs = filterNodeRecsByRBAC(allRecs, userPerms)
+
+	var tagFilterErr error
+	allRecs, tagFilterErr = applyNodeGPURecTagFilters(ctx, c, pool, orgIDStr, allRecs)
+	if tagFilterErr != nil {
+		return tagFilterErr
+	}
+
 	if allRecs == nil {
 		allRecs = []model.NodeGPURecommendation{}
 	}
@@ -531,6 +544,37 @@ func derefFloat32(p *float32) float32 {
 		return 0
 	}
 	return *p
+}
+
+// applyNodeGPURecTagFilters keeps node GPU recs with at least one candidate container matching tag filters.
+func applyNodeGPURecTagFilters(
+	ctx context.Context,
+	c echo.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	recs []model.NodeGPURecommendation,
+) ([]model.NodeGPURecommendation, error) {
+	tagFilters, err := parseTagFiltersFromRequest(c)
+	if err != nil {
+		return recs, c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+	if len(tagFilters) == 0 {
+		return recs, nil
+	}
+	allowedKeys, keysErr := model.MatchingContainerKeys(ctx, pool, orgID, tagFilters)
+	if keysErr != nil {
+		return recs, c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to apply tag filters"})
+	}
+	filtered := recs[:0]
+	for _, r := range recs {
+		for _, cand := range r.CandidateContainers {
+			if allowedKeys.Contains(r.ClusterUUID, cand.Namespace, cand.Workload, cand.Container) {
+				filtered = append(filtered, r)
+				break
+			}
+		}
+	}
+	return filtered, nil
 }
 
 // applyNodePagination returns the slice corresponding to the given offset and limit.

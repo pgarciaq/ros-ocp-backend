@@ -930,6 +930,8 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 	require.NotNil(t, medium.RecommendationEngines)
 	require.NotNil(t, medium.RecommendationEngines.Cost)
 	require.NotNil(t, medium.RecommendationEngines.Performance)
-	assert.InDelta(t, 450, float64(*medium.RecommendationEngines.Cost.EstimatedMonthlySavingsUSD), 0.01)
-	assert.InDelta(t, 120, float64(*medium.RecommendationEngines.Performance.EstimatedMonthlySavingsUSD), 0.01)
+	require.NotNil(t, medium.RecommendationEngines.Cost.EstimatedMonthlySavings)
+	assert.Equal(t, "450.000000", medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value)
+	require.NotNil(t, medium.RecommendationEngines.Performance.EstimatedMonthlySavings)
+	assert.Equal(t, "120.000000", medium.RecommendationEngines.Performance.EstimatedMonthlySavings.Value)
 }

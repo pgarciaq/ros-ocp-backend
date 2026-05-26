@@ -2,7 +2,7 @@
 
 !!! info "Quick Facts"
     **Fleet API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  
-    **Per-rec field:** `estimated_monthly_savings_usd`  
+    **Per-rec field:** `estimated_monthly_savings` (`{"value": "12.340000", "units": "USD"}`)  
     **Plugins with savings:** container, node, PVC, snapshot (GPU: API read only)  
     **Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED` (default `true`)
 
@@ -13,7 +13,8 @@ dollar impact** using rates from the tenant's Koku cost model. This helps FinOps
 teams prioritize optimization work and populate dashboard hero metrics.
 
 Currency comes from Koku's `effective_rates` response (ISO 4217, default `USD`).
-JSON field names retain the `_usd` suffix for backward compatibility.
+API responses use a structured savings object with six-decimal string `value` and
+`units` (typically `USD`).
 
 ## How it works
 
@@ -62,12 +63,16 @@ See [Cost Integration — Negative savings](../architecture/cost-integration.md#
 
 ```json
 {
-  "estimated_monthly_savings_usd": 12.50,
+  "estimated_monthly_savings": {
+    "value": "12.500000",
+    "units": "USD"
+  },
   "currency": "USD"
 }
 ```
 
-Present on container list items, node engine rows, and PVC recommendations.
+Present on container list items, node engine rows, PVC recommendations, and GPU
+blocks (`estimated_monthly_gpu_savings`, `estimated_monthly_timeslicing_savings`).
 Idle/abandoned containers use 100% of current allocation as recoverable savings.
 
 ### Fleet savings summary
@@ -79,7 +84,10 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
 ```json
 {
   "currency": "USD",
-  "total_estimated_monthly_savings_usd": 12500.75,
+  "estimated_monthly_savings": {
+    "value": "12500.750000",
+    "units": "USD"
+  },
   "by_plugin": {
     "container": 5000.0,
     "node": 3000.0,
@@ -88,7 +96,14 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
     "gpu": 0.0
   },
   "by_cluster": [
-    { "cluster_alias": "prod-east", "savings": 8200.50, "has_cost_data": true }
+    {
+      "cluster_alias": "prod-east",
+      "estimated_monthly_savings": {
+        "value": "8200.500000",
+        "units": "USD"
+      },
+      "has_cost_data": true
+    }
   ],
   "gpu_savings_note": "GPU savings are computed at API read time..."
 }
@@ -102,6 +117,18 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
 
 ```http
 GET /api/cost-management/v1/recommendations/openshift/fleet-summary
+```
+
+```json
+{
+  "total_containers": 120,
+  "active_containers": 100,
+  "total_monthly_savings": {
+    "value": "4532.170000",
+    "units": "USD"
+  },
+  "currency": "USD"
+}
 ```
 
 Org-wide container counts (idle, abandoned, stale) plus total savings — useful
@@ -124,7 +151,7 @@ Prerequisites: `KOKU_MASU_URL` set, cost model assigned to the cluster source,
 
 | Scenario | Behavior |
 |----------|----------|
-| Masu unreachable | Savings fields `$0` / null; recommendations still generated |
+| Masu unreachable | Savings fields omitted or zero; recommendations still generated |
 | No cost model | Empty rates → zero savings |
 | Namespace missing from aggregates | Container savings `$0` + notification **25** (`NotifNoCostData`) |
 | Kill-switch off | No Masu calls; code **25** on container, node, PVC |

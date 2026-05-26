@@ -1,6 +1,9 @@
 package model
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+)
 
 // NodeUtilizationClassification holds shared utilization flags for a node.
 type NodeUtilizationClassification struct {
@@ -22,7 +25,7 @@ type NodeUtilizationEngineRec struct {
 	RecommendedCPUCores        float32                                    `json:"recommended_cpu_cores,omitempty"`
 	RecommendedMemoryGiB       float32                                    `json:"recommended_memory_gib,omitempty"`
 	NodeCountReduction         int                                        `json:"node_count_reduction"`
-	EstimatedMonthlySavingsUSD *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
 	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	UpdatedAt                  string                                     `json:"updated_at,omitempty"`
 }

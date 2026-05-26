@@ -46,7 +46,8 @@ func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 	require.NotNil(t, medium.RecommendationEngines.Cost)
 	require.NotNil(t, medium.RecommendationEngines.Performance)
 	assert.InDelta(t, 4, float64(medium.RecommendationEngines.Cost.RecommendedCPUCores), 0.001)
-	assert.InDelta(t, 450, float64(*medium.RecommendationEngines.Cost.EstimatedMonthlySavingsUSD), 0.01)
+	require.NotNil(t, medium.RecommendationEngines.Cost.EstimatedMonthlySavings)
+	assert.Equal(t, "450.000000", medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value)
 	assert.InDelta(t, 7, float64(medium.RecommendationEngines.Performance.RecommendedCPUCores), 0.001)
 }
 

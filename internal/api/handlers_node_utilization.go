@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -25,12 +26,13 @@ const defaultNodeUtilLimit = 10
 const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cost-management/v1/recommendations/openshift/nodes for node CPU/memory utilization recommendations.`
 
 var nodeUtilAllowedOrderBy = map[string]string{
-	"node":                          "f.node",
-	"estimated_monthly_savings_usd": "sort_savings",
+	"node":                        "f.node",
+	"estimated_monthly_savings":   "sort_savings",
+	"estimated_monthly_savings_usd": "sort_savings", // deprecated alias
 }
 
 const (
-	nodeUtilDefaultOrderBy  = "estimated_monthly_savings_usd"
+	nodeUtilDefaultOrderBy  = "estimated_monthly_savings"
 	nodeUtilDefaultOrderHow = listoptions.OrderDesc
 	nodeUtilPrimaryTerm     = "medium"
 	nodeUtilPrimaryEngine   = "cost"
@@ -199,6 +201,22 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		baseFrom += " AND nr.is_overcommitted = true"
 	} else if overcommitFilter == "false" {
 		baseFrom += " AND nr.is_overcommitted = false"
+	}
+
+	if config.TagsFeatureEnabled() {
+		tagFilters, tagErr := parseTagFiltersFromRequest(c)
+		if tagErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+		}
+		if len(tagFilters) > 0 {
+			// Nodes are included when any workload namespace on the cluster matches the tag filter.
+			tagClause, tagArgs, nextIdx := model.TagFilterExistsClause(orgID, "nr.cluster_uuid", "ock.namespace", tagFilters, argIdx)
+			if tagClause != "" {
+				baseFrom += " AND " + tagClause
+				args = append(args, tagArgs...)
+				argIdx = nextIdx
+			}
+		}
 	}
 
 	countSQL := `
@@ -433,7 +451,7 @@ func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
 		rec.RecommendedMemoryGiB = float32(row.RecommendedMemoryGiB.Float64)
 	}
 	if row.EstimatedMonthlySavings.Valid {
-		rec.EstimatedMonthlySavingsUSD = money.CentsToUSDPtr(&row.EstimatedMonthlySavings.Int64)
+		rec.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&row.EstimatedMonthlySavings.Int64, money.DefaultCurrency)
 	}
 	return rec
 }

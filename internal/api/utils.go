@@ -714,6 +714,9 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 	if err := applyNativeParamFilter(c, queryParams, "project", "ns.namespace_name", model.NamespaceMaxLen, false); err != nil {
 		errs = append(errs, err)
 	}
+	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {
+		errs = append(errs, err)
+	}
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}
@@ -1015,6 +1018,21 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	writer.Flush()
 	if err := writer.Error(); err != nil {
 		return fmt.Errorf("flush error: %w", err)
+	}
+	return nil
+}
+
+// attachTagFiltersToQueryParams parses tag filters from the request when enabled and stores them on queryParams.
+func attachTagFiltersToQueryParams(c echo.Context, queryParams map[string]interface{}) error {
+	if !config.TagsFeatureEnabled() {
+		return nil
+	}
+	tagFilters, err := parseTagFiltersFromRequest(c)
+	if err != nil {
+		return err
+	}
+	if len(tagFilters) > 0 {
+		queryParams[model.TagFiltersQueryKey] = tagFilters
 	}
 	return nil
 }

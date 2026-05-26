@@ -7,7 +7,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -26,7 +28,7 @@ type PVCRecommendationResponse struct {
 	RecommendedBytes           *int64                                     `json:"recommended_bytes,omitempty"`
 	DaysToFull                 *int                                       `json:"days_to_full,omitempty"`
 	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`
-	EstimatedMonthlySavingsUSD *float32                                   `json:"estimated_monthly_savings_usd,omitempty"`
+	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
 	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	DataDays                   int                                        `json:"data_days"`
 	Term                       string                                     `json:"term"`
@@ -107,6 +109,22 @@ func GetPVCRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
+	if config.TagsFeatureEnabled() {
+		tagFilters, tagErr := parseTagFiltersFromRequest(c)
+		if tagErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+		}
+		if len(tagFilters) > 0 {
+			tagClause, tagArgs, nextIdx := model.TagFilterExistsClause(
+				orgID, "pvc_recommendation_sets.cluster_uuid", "pvc_recommendation_sets.namespace", tagFilters, argIdx)
+			if tagClause != "" {
+				filterSQL += " AND " + tagClause
+				args = append(args, tagArgs...)
+				argIdx = nextIdx
+			}
+		}
+	}
+
 	countQuery := `SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -163,7 +181,7 @@ func GetPVCRecommendations(c echo.Context) error {
 			r.GrowthBytesPerDay = &v
 		}
 		if savings.Valid {
-			r.EstimatedMonthlySavingsUSD = money.CentsToUSDPtr(&savings.Int64)
+			r.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&savings.Int64, money.DefaultCurrency)
 		}
 		r.Notifications = notifications.MapToKruizeFormat(codes)
 		switch r.RecommendationType {

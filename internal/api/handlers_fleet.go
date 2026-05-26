@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -17,7 +18,7 @@ type FleetSummaryResponse struct {
 	ActiveContainers       int     `json:"active_containers"`
 	IdleContainers         int     `json:"idle_containers"`
 	AbandonedContainers    int     `json:"abandoned_containers"`
-	TotalMonthlySavingsUSD float64 `json:"total_monthly_savings_usd"`
+	TotalMonthlySavings money.SavingsObject `json:"total_monthly_savings"`
 	ClusterCount           int     `json:"cluster_count"`
 	Currency               string  `json:"currency"`
 }
@@ -59,6 +60,7 @@ func GetFleetSummary(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	var summary FleetSummaryResponse
+	var totalSavingsUSD float64
 
 	if fleetSummaryNeedsClusterFilter(userPerms) {
 		clusterUUIDs, qerr := getClustersForOrg(ctx, orgID)
@@ -72,6 +74,7 @@ func GetFleetSummary(c echo.Context) error {
 		allowed := filterClustersByRBAC(clusterUUIDs, userPerms)
 		if len(allowed) == 0 {
 			summary.Currency = costdata.DefaultCurrency
+			summary.TotalMonthlySavings = money.FormatUSDToSavings(0, summary.Currency)
 			return c.JSON(http.StatusOK, summary)
 		}
 		err = pool.QueryRow(ctx, `
@@ -91,7 +94,7 @@ func GetFleetSummary(c echo.Context) error {
 			&summary.ActiveContainers,
 			&summary.IdleContainers,
 			&summary.AbandonedContainers,
-			&summary.TotalMonthlySavingsUSD,
+			&totalSavingsUSD,
 			&summary.ClusterCount,
 		)
 	} else {
@@ -111,7 +114,7 @@ func GetFleetSummary(c echo.Context) error {
 			&summary.ActiveContainers,
 			&summary.IdleContainers,
 			&summary.AbandonedContainers,
-			&summary.TotalMonthlySavingsUSD,
+			&totalSavingsUSD,
 			&summary.ClusterCount,
 		)
 	}
@@ -127,6 +130,7 @@ func GetFleetSummary(c echo.Context) error {
 	if clusterUUIDs, qerr := getClustersForOrg(ctx, orgID); qerr == nil && len(clusterUUIDs) > 0 {
 		summary.Currency = fetchClusterCurrency(ctx, orgID, clusterUUIDs[0])
 	}
+	summary.TotalMonthlySavings = money.FormatUSDToSavings(totalSavingsUSD, summary.Currency)
 
 	return c.JSON(http.StatusOK, summary)
 }

@@ -39,3 +39,12 @@ func FormatUSDToSavings(usd float64, currency string) SavingsObject {
 		Units: currency,
 	}
 }
+
+// FormatUSDPtrToSavingsPtr converts nullable float32 USD to a SavingsObject pointer.
+func FormatUSDPtrToSavingsPtr(usd *float32, currency string) *SavingsObject {
+	if usd == nil {
+		return nil
+	}
+	s := FormatUSDToSavings(float64(*usd), currency)
+	return &s
+}

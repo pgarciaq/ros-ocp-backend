@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"gorm.io/gorm"
 )
@@ -196,4 +197,130 @@ func applyDBTagFiltersToKeys(query *gorm.DB, orgID string, filters []TagFilter) 
 		query = query.Where(existsSQL, args...)
 	}
 	return query
+}
+
+// ApplyTagFiltersToClusterNamespace restricts rows to cluster/namespace pairs that match tag predicates.
+// clusterColumn and namespaceColumn must be safe SQL identifiers (e.g. "nr.cluster_uuid", "pvc.namespace").
+func ApplyTagFiltersToClusterNamespace(query *gorm.DB, orgID string, filters []TagFilter, clusterColumn, namespaceColumn string) *gorm.DB {
+	if len(filters) == 0 {
+		return query
+	}
+	subq := database.GetDB().Table("org_container_keys ock").
+		Select("1").
+		Where("ock.org_id = ?", orgID).
+		Where(clusterColumn + " = ock.cluster_uuid").
+		Where(namespaceColumn + " = ock.namespace")
+	if config.TagsSource() == "api" {
+		subq = applyAPITagFiltersToKeys(subq, filters)
+	} else {
+		subq = applyDBTagFiltersToKeys(subq, orgID, filters)
+	}
+	return query.Where("EXISTS (?)", subq)
+}
+
+// TagFilterExistsClause builds a parameterized EXISTS subquery for pgx handlers.
+// nextArg is the next $N index (1-based). Returns empty clause when filters are disabled or empty.
+func TagFilterExistsClause(orgID, clusterExpr, namespaceExpr string, filters []TagFilter, nextArg int) (clause string, args []interface{}, next int) {
+	if len(filters) == 0 || !config.TagsFeatureEnabled() {
+		return "", nil, nextArg
+	}
+	if config.TagsSource() == "api" {
+		return tagFilterAPIExistsClause(orgID, clusterExpr, namespaceExpr, filters, nextArg)
+	}
+	return tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr, filters, nextArg)
+}
+
+func tagFilterAPIExistsClause(orgID, clusterExpr, namespaceExpr string, filters []TagFilter, nextArg int) (string, []interface{}, int) {
+	args := []interface{}{orgID}
+	idx := nextArg + 1
+	inner := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM org_container_keys ock
+		WHERE ock.org_id = $%d
+		  AND %s = ock.cluster_uuid
+		  AND %s = ock.namespace`, nextArg, clusterExpr, namespaceExpr)
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			inner += fmt.Sprintf(" AND ock.resolved_tags ? $%d", idx)
+			args = append(args, f.Key)
+			idx++
+			continue
+		}
+		if len(f.Values) == 1 {
+			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
+			if err != nil {
+				continue
+			}
+			inner += fmt.Sprintf(" AND ock.resolved_tags @> $%d::jsonb", idx)
+			args = append(args, string(payload))
+			idx++
+			continue
+		}
+		inner += fmt.Sprintf(" AND ock.resolved_tags->>$%d IN (", idx)
+		args = append(args, f.Key)
+		idx++
+		placeholders := make([]string, len(f.Values))
+		for i := range f.Values {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, f.Values[i])
+			idx++
+		}
+		inner += strings.Join(placeholders, ", ") + ")"
+	}
+	inner += ")"
+	return inner, args, idx
+}
+
+func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters []TagFilter, nextArg int) (string, []interface{}, int) {
+	schema, err := tags.TenantSchema(orgID)
+	if err != nil {
+		log.Warnf("TagFilterExistsClause: invalid org_id %q: %v", orgID, err)
+		return "", nil, nextArg
+	}
+	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
+	args := []interface{}{}
+	idx := nextArg
+	inner := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM org_container_keys ock
+		WHERE ock.org_id = $%d
+		  AND %s = ock.cluster_uuid
+		  AND %s = ock.namespace
+		  AND EXISTS (
+			SELECT 1 FROM %s tv,
+			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
+			WHERE t.cluster_id = ock.cluster_uuid::text
+			  AND t.namespace = ock.namespace`, idx, clusterExpr, namespaceExpr, tagValuesTable)
+	args = append(args, orgID)
+	idx++
+
+	tagPredicates := make([]string, 0, len(filters))
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d", idx))
+			args = append(args, f.Key)
+			idx++
+			continue
+		}
+		tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d AND tv.value IN (", idx))
+		args = append(args, f.Key)
+		idx++
+		placeholders := make([]string, len(f.Values))
+		for i := range f.Values {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, f.Values[i])
+			idx++
+		}
+		tagPredicates[len(tagPredicates)-1] += strings.Join(placeholders, ", ") + ")"
+	}
+	if len(tagPredicates) == 0 {
+		return "", nil, nextArg
+	}
+	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
+	inner += ")))"
+	return inner, args, idx
 }
