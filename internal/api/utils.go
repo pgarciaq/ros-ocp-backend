@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -27,7 +26,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
-	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
 func CollectionResponse(collection []interface{}, req *http.Request, count, limit, offset int) *Collection {
@@ -794,11 +792,11 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				recommendationSet.WorkloadType,
 				recommendationSet.LastReported,
 				recommendationSet.SourceID,
-				formatPrecisionValuesToStr(kruizeplugin.ConvertCPUUnit("cores", recommendationObj.Current.Limits.Cpu.Amount)),
+				f(kruizeplugin.ConvertCPUUnit("cores", recommendationObj.Current.Limits.Cpu.Amount)),
 				recommendationObj.Current.Limits.Cpu.Format,
 				f(recommendationObj.Current.Limits.Memory.Amount),
 				recommendationObj.Current.Limits.Memory.Format,
-				formatPrecisionValuesToStr(kruizeplugin.ConvertCPUUnit("cores", recommendationObj.Current.Requests.Cpu.Amount)),
+				f(kruizeplugin.ConvertCPUUnit("cores", recommendationObj.Current.Requests.Cpu.Amount)),
 				recommendationObj.Current.Requests.Cpu.Format,
 				f(recommendationObj.Current.Requests.Memory.Amount),
 				recommendationObj.Current.Requests.Memory.Format,
@@ -807,11 +805,11 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				fmt.Sprint(recommendationTerm.DurationInHours),
 				recommendationTerm.MonitoringStartTime.Format(time.RFC3339),
 				recommendationType,
-				formatPrecisionValuesToStr(kruizeplugin.ConvertCPUUnit("cores", recommendationEngine.Config.Limits.Cpu.Amount)),
+				f(kruizeplugin.ConvertCPUUnit("cores", recommendationEngine.Config.Limits.Cpu.Amount)),
 				recommendationEngine.Config.Limits.Cpu.Format,
 				f(recommendationEngine.Config.Limits.Memory.Amount),
 				recommendationEngine.Config.Limits.Memory.Format,
-				formatPrecisionValuesToStr(kruizeplugin.ConvertCPUUnit("cores", recommendationEngine.Config.Requests.Cpu.Amount)),
+				f(kruizeplugin.ConvertCPUUnit("cores", recommendationEngine.Config.Requests.Cpu.Amount)),
 				recommendationEngine.Config.Requests.Cpu.Format,
 				f(recommendationEngine.Config.Requests.Memory.Amount),
 				recommendationEngine.Config.Requests.Memory.Format,
