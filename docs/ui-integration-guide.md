@@ -123,7 +123,8 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 
 > **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
 > list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
-> which engine to display. CSV export expands to one row per term × engine.
+> which engine to display. CSV export expands to one row per term × engine and includes
+> `estimated_monthly_savings` (string `value`) and `currency` columns (from the list row's cost model).
 
 Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `order_how`,
 `offset`, `limit`, and `format=csv`.
@@ -157,9 +158,8 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
   "source_id": "12345",
   "last_reported": "2026-05-20T12:00:00Z",
   "replicas": { "min": 2, "max": 3, "avg": 2, "desired": 3, "available": 3, "source": "kube_state_metrics" },
-  "estimated_monthly_savings_usd": 12.50,
-  "currency": "USD",
   "recommendations": {
+    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
     "short_term": {
       "cost": { /* EngineRecommendation */ },
       "performance": { /* EngineRecommendation */ }
@@ -172,7 +172,7 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
       "gpu_classification": "underutilized",
       "recommended_gpu_profile": "1g.5gb",
       "gpu_confidence": 0.8,
-      "estimated_monthly_gpu_savings_usd": 45.0,
+      "estimated_monthly_gpu_savings": { "value": "45.000000", "units": "USD" },
       "currency": "USD"
     }
   }
@@ -193,7 +193,7 @@ Detail endpoints transform flat native fields into the nested structure the exis
       "limits": { }
     },
     "monitoring_end_time": "2026-05-20T12:00:00Z",
-    "estimated_monthly_savings_usd": 12.50,
+    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
     "recommendation_terms": {
       "medium_term": {
         "duration_in_hours": 168,
@@ -255,10 +255,10 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings_usd` | Container/namespace row | Based on **cost** engine, **medium** term by default in aggregation |
-| `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`) |
-| GPU: `estimated_monthly_gpu_savings_usd` | `gpu.{term}` | MIG/profile savings |
-| GPU: `estimated_monthly_timeslicing_savings_usd` | `gpu.{term}` | Per-container time-slicing savings |
+| `estimated_monthly_savings` | Container/namespace row | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation |
+| `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
+| GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
+| GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
 
 When Koku has no cost model rates, notification code **25** (`no cost data`) is emitted and
 savings fields may be absent.
@@ -340,7 +340,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - Highlight namespaces with memory growth trends using a trend arrow icon when notification code 9 is present.
 - Link each namespace row to a filtered container list (`?project=`) for container-level drill-down.
 - Use the same engine/term defaults as the container view for consistency.
-- Show `estimated_monthly_savings_usd` at namespace level; when code 25 is present, show "—" instead of `$0.00`.
+- Show `estimated_monthly_savings.value` / `units` at namespace level; when code 25 is present, show "—" instead of `$0.00`.
 - Support CSV export and the same stale filter behavior as container recommendations.
 
 **Dual engine (cost vs performance)**
@@ -375,7 +375,7 @@ Deprecated alias: `GET /recommendations/openshift/nodes/utilization` (returns `D
 | `engine` | `cost` or `performance` — filters engine rows |
 | `is_underutilized` | `true` / `false` |
 | `is_overcommitted` | `true` / `false` |
-| `order_by` | `node` or `estimated_monthly_savings_usd` (default) |
+| `order_by` | `node` or `estimated_monthly_savings` (default; alias `estimated_monthly_savings_usd`) |
 | `order_how` | `asc` or `desc` (default `desc`) |
 | `offset`, `limit` | Pagination (default limit 10, max 1000) |
 
@@ -412,7 +412,7 @@ One object per node with nested terms and engines:
               "recommended_cpu_cores": 8.0,
               "recommended_memory_gib": 64.0,
               "node_count_reduction": 1,
-              "estimated_monthly_savings_usd": 500.0,
+              "estimated_monthly_savings": { "value": "500.000000", "units": "USD" },
               "notifications": { },
               "updated_at": "2026-05-20T10:00:00Z"
             },
@@ -440,7 +440,7 @@ Notification codes **11** (underutilized), **12** (overcommitted), **13** (stran
 
 #### Savings fields
 
-`estimated_monthly_savings_usd` on each engine reflects consolidation / right-sizing opportunity
+`estimated_monthly_savings` on each engine reflects consolidation / right-sizing opportunity
 for that engine profile. `node_count_reduction` suggests how many nodes could be removed (cost engine).
 
 ### GPU time-slicing (separate endpoint)
@@ -490,7 +490,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Add a dashboard widget showing fleet health: X underutilized, Y overcommitted, Z well-utilized (derive from classification flags).
 - Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings.
 - Display `node_count_reduction` prominently: "You could save N nodes" on cost-engine rows.
-- Include per-node `estimated_monthly_savings_usd` and cluster-level consolidation summary in a **Card** header.
+- Include per-node `estimated_monthly_savings` and cluster-level consolidation summary in a **Card** header.
 - Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
@@ -546,7 +546,7 @@ GET /recommendations/openshift/pvcs
       "recommended_bytes": 21474836480,
       "days_to_full": null,
       "growth_bytes_per_day": 1048576,
-      "estimated_monthly_savings_usd": 8.50,
+      "estimated_monthly_savings": { "value": "8.500000", "units": "USD" },
       "notifications": { "29": { "type": "INFO", "message": "...", "code": 29 } },
       "data_days": 14,
       "term": "medium",
@@ -567,8 +567,8 @@ GET /recommendations/openshift/pvcs
 
 ### Savings fields
 
-`estimated_monthly_savings_usd` = savings from reducing provisioned capacity to `recommended_bytes`
-(using Koku storage rates or fallback).
+`estimated_monthly_savings` = savings from reducing provisioned capacity to `recommended_bytes`
+(using Koku storage rates or fallback; structured `value` + `units`).
 
 ### Growth trend and days-to-full
 
@@ -690,12 +690,12 @@ Fleet-wide aggregated savings for dashboard hero metrics.
 ```json
 {
   "currency": "USD",
-  "total_estimated_monthly_savings_usd": 12500.75,
+  "estimated_monthly_savings": { "value": "12500.750000", "units": "USD" },
   "by_cluster": [
     {
       "cluster_uuid": "...",
       "cluster_alias": "prod-east",
-      "savings": 8200.50,
+      "estimated_monthly_savings": { "value": "8200.500000", "units": "USD" },
       "has_cost_data": true
     }
   ],
@@ -726,7 +726,7 @@ See [Section 15 — Fleet Summary](#15-fleet-summary) for idle/abandoned contain
 
 ### UI Integration Recommendations
 
-- Show a dashboard **Card** hero metric: "Estimated monthly savings: {amount}" using `total_estimated_monthly_savings_usd` and `currency` from the response.
+- Show a dashboard **Card** hero metric: "Estimated monthly savings: {amount}" using `estimated_monthly_savings.value` and `estimated_monthly_savings.units` (or top-level `currency`) from the response.
 - Break down savings by plugin in a pie chart or bar chart using `by_plugin` (container, node, pvc, snapshot).
 - Display per-cluster savings in a **Table** within the fleet view using `by_cluster` rows.
 - Wire engine toggle to `?engine=cost|performance`; all totals and breakdowns update on fetch.
@@ -1168,7 +1168,7 @@ Container list rows also embed GPU data under `gpu.{term}` when the GPU plugin i
 - Link MIG rows to container detail views and node context via `node_name`.
 - Show `confidence` as a badge; reduce prominence when code 28 (no profiling data) is present.
 - Filter by `gpu_classification` and `term`; default to medium term.
-- Surface `estimated_monthly_gpu_savings_usd` from container list `gpu` objects when dollar amounts are needed.
+- Surface `estimated_monthly_gpu_savings` from container list `gpu` objects when dollar amounts are needed.
 - Cross-link to time-slicing view (Section 3) when notification code 36 is present.
 - Never rely on color alone — pair badge colors with classification text for accessibility.
 
@@ -1257,7 +1257,7 @@ Org-wide aggregate counts for dashboard hero metrics alongside savings summary.
   "active_containers": 420,
   "idle_containers": 15,
   "abandoned_containers": 8,
-  "total_monthly_savings_usd": 12500.75,
+  "total_monthly_savings": { "value": "12500.750000", "units": "USD" },
   "cluster_count": 5,
   "currency": "USD"
 }
@@ -1269,7 +1269,7 @@ Complements `GET /recommendations/openshift/savings-summary` (Section 6) with wo
 
 - Show fleet summary as dashboard **Card** tiles: total containers, active, idle, abandoned.
 - Use **Badge** counts for idle (code 5) and abandoned (code 8) with links to filtered recommendation lists.
-- Display `total_monthly_savings_usd` alongside savings-summary for a complete fleet overview.
+- Display `total_monthly_savings` alongside savings-summary for a complete fleet overview.
 - Show `cluster_count` and `currency` in the dashboard header.
 - Wire idle/abandoned tile clicks to container list with appropriate notification code filters.
 - Differentiate idle vs abandoned visually (yellow vs red badges) with text labels.

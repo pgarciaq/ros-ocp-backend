@@ -4,7 +4,7 @@
     **API:** `GET /api/cost-management/v1/recommendations/openshift/nodes`  
     **Configurable:** Yes  
     **Engines:** cost, performance (filter with `?engine=cost` or `?engine=performance`)  
-    **Savings:** Yes — `estimated_monthly_savings_usd` per engine row
+    **Savings:** Yes — `estimated_monthly_savings` (`value` + `units`) per engine row
 
 ## Overview
 
@@ -68,7 +68,7 @@ Filter list results: `?engine=cost` (default for sorting) or `?engine=performanc
 | `recommended_cpu_cores` | Target CPU capacity for the node (or cluster slice) |
 | `recommended_memory_gib` | Target memory capacity (GiB) |
 | `node_count_reduction` | Suggested nodes to remove (0 or 1 today) |
-| `estimated_monthly_savings_usd` | Dollar delta vs current allocation |
+| `estimated_monthly_savings` | Dollar delta vs current allocation (`value` + `units`) |
 
 ## Term support
 
@@ -83,7 +83,7 @@ GET /api/cost-management/v1/recommendations/openshift/nodes
 ```
 
 Query parameters include `cluster`, `engine`, `term`, `order_by`
-(default `estimated_monthly_savings_usd`), and pagination.
+(default `estimated_monthly_savings`; alias `estimated_monthly_savings_usd`), and pagination.
 
 ### Example (abbreviated)
 
@@ -101,13 +101,19 @@ Query parameters include `cluster`, `engine`, `term`, `order_by`
             "recommended_cpu_cores": 8,
             "recommended_memory_gib": 32,
             "node_count_reduction": 1,
-            "estimated_monthly_savings_usd": 850.00
+            "estimated_monthly_savings": {
+              "value": "850.000000",
+              "units": "USD"
+            }
           },
           "performance": {
             "recommended_cpu_cores": 12,
             "recommended_memory_gib": 48,
             "node_count_reduction": 0,
-            "estimated_monthly_savings_usd": 200.00
+            "estimated_monthly_savings": {
+              "value": "200.000000",
+              "units": "USD"
+            }
           }
         }
       }

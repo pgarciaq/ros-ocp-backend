@@ -27,7 +27,8 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 - All CRUD operations for settings (thresholds, terms, business hours, snapshots)
 - RBAC enforcement (read-only users blocked from PUT/DELETE)
 - OpenAPI spec/route parity (no spec drift)
-- Pagination, filtering, engine selection, CSV export
+- Pagination, filtering, engine selection, CSV export (including `currency` column)
+- Tag filtering (`filter[tag:key]`, `meta.warnings`, savings-summary `group_by[tag:key]`)
 - Input validation with detailed error responses
 
 ### Data Pipeline

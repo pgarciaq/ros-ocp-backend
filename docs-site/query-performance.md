@@ -118,7 +118,9 @@ See [Tag Filtering](features/tag-filtering.md).
 **Auth:** ServiceAccount token via TokenReview API today; **mTLS** planned for on-prem.
 See [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md).
 
-Group-by tag dimensions (`?group_by=tag:environment`) are planned for a follow-up.
+**Group by tag (savings summary):** `GET .../savings-summary?group_by[tag:environment]=*`
+groups container savings per tag value via `org_container_keys` (requires
+`ROS_TAGS_ENABLED=true`). List endpoints use tag filters on step 1 only — not `group_by`.
 
 See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
 for full schema, refresh triggers, and example SQL.

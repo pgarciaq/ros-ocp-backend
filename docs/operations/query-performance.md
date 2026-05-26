@@ -439,8 +439,12 @@ GROUP BY 1;
 ```
 
 List API adds tag predicates to step 1 (key pagination) before joining
-`recommendation_sets` for term/engine detail. `?group_by=tag:<key>` grouping is
-planned for a follow-up release.
+`recommendation_sets` for term/engine detail.
+
+**Savings summary group-by:** `GET .../savings-summary?group_by[tag:<key>]=*` (flat:
+`group_by=tag:<key>`) aggregates container savings per distinct tag value using
+`org_container_keys.resolved_tags` (or db-mode tag resolution). Requires
+`ROS_TAGS_ENABLED=true`. Node/PVC/GPU totals are not split in the grouped response.
 
 Implementation: [`internal/model/tag_filters.go`](../../internal/model/tag_filters.go),
 [`internal/tags/sync.go`](../../internal/tags/sync.go).

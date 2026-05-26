@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+
+- Tag filtering on container lists (`filter[tag:key]`, legacy `tag=key:value`) with `meta.warnings` on empty results
+- Fleet savings summary `group_by[tag:key]` for per-tag-value container savings
+- Structured `estimated_monthly_savings` API field (`value` + `units`) for container, node, PVC, and fleet endpoints
+- CSV export `currency` column alongside `estimated_monthly_savings`
+- `ROS_TAGS_SYNC_MAX_BODY_MIB` env var (replaces undocumented `ROS_TAGS_SYNC_MAX_BODY_BYTES`)
 - Per-phase Prometheus histograms for pipeline observability (`rosocp_pipeline_phase_duration_seconds`)
 - `rosocp_recommendations_written_total` counter with per-type labels
 - `rosocp_ingestion_errors_total` counter with stage labels
@@ -17,10 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Node recommendation term-based windowing (short/medium/long terms)
 
 ### Changed
+
+- Plugin registry fatals when `kruize` and native plugins are both enabled in `ROS_ENABLED_PLUGINS`
 - Recommendation pipeline refactored to streaming architecture (reduced peak memory)
 - All engine/ingestion packages now use centralized `internal/logging` package
 - API handlers use consistent `hlog` pattern with org_id + request_id context
-- GPU filters pushed to SQL for correct pagination (denormalized columns in recommendation_sets)
+- GPU filters pushed to SQL for correct pagination (removed in-memory `filterGPUResults` / `parseGPUFilters`)
 
 ### Fixed
 - GPU pagination returning incomplete pages when filters applied post-query (#496)

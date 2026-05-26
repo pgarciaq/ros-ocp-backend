@@ -126,6 +126,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 **Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
 
 - **`kruize`** is mutually exclusive with native plugins (Kruize-only when enabled).
+- Listing **`kruize` together with native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** — the process exits before serving traffic.
 - With both lists unset, **`kruize` is off** unless explicitly allowlisted.
 
 **Disable namespace recommendations:**
@@ -257,6 +258,7 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 | `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags` |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Optional | Comma-separated SA names allowed to call push API; empty = any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only | Static bearer token when projected SA token unavailable; must match Koku |
+| `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | — | SaaS (`api`) | Max request body size (MiB) for `POST /internal/tags/sync` |
 
 ### Koku environment variables (SaaS / `api` source only)
 
@@ -397,7 +399,11 @@ troubleshooting, and list API syntax (`?filter[tag:key]=value1,value2`).
 Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filtering.md),
 [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
 
-Group-by tag dimensions (`group_by[tag:key]=*`) are planned for a follow-up release.
+**Group by tag:** `GET /recommendations/openshift/savings-summary?group_by[tag:key]=*` (or flat
+`group_by=tag:key`) aggregates container savings per tag value when `ROS_TAGS_ENABLED=true`.
+List endpoints support tag **filters** and `meta.warnings` on empty results; they do not support
+`group_by[tag:key]` yet. With `ROS_TAGS_SOURCE=db`, startup probes `reporting_enabledtagkeys`
+reachability (see [Tag Filtering](features/tag-filtering.md#on-prem-default-shared-database)).
 
 ---
 

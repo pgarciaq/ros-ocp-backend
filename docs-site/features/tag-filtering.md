@@ -402,7 +402,7 @@ Expected when `ROS_TAGS_SOURCE=db` — on-prem mode does not expose push sync.
 
 | Approach | Description | Status |
 |----------|-------------|--------|
-| **B — Full SQL grouping** | `GROUP BY` tag value in list endpoint SQL (container, namespace, node, PVC, GPU, history) instead of post-filter narrowing | Not implemented; consider if Approach C plus list `meta.warnings` is insufficient |
+| **B — Full SQL grouping** | `GROUP BY` tag value on list/history endpoints (savings-summary tag grouping is implemented) | Not implemented for lists |
 | **List tag columns** | Return `resolved_tags` (or selected keys) on list rows without an extra query per request | Not implemented unless already present from enrichment |
 
 ---

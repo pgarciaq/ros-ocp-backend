@@ -384,7 +384,8 @@ object per node with shared classification/metrics and nested
 `recommendation_terms.<term>.recommendation_engines.{cost,performance}`.
 Optional `?engine=cost|performance` filters which engine blocks are returned.
 Pagination counts distinct nodes; default sort is medium-term
-`estimated_monthly_savings_usd` (cost engine unless filtered). `meta.currency`
+`estimated_monthly_savings` (structured object; cost engine unless filtered).
+`order_by=estimated_monthly_savings_usd` remains a deprecated alias. `meta.currency`
 reflects the Koku cost model unit. Deprecated alias:
 `GET .../nodes/utilization`.
 
@@ -438,8 +439,8 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 
 - Container-level time-slicing dollar savings — `EstimatedTimeslicingSavingsUSD`
   on `GPURec`, populated by `ComputeNodeTimeslicingRec` with the per-candidate
-  share of `SavingsPerGPU`. Exposed as `estimated_monthly_timeslicing_savings_usd`
-  in the container API response.
+  share of `SavingsPerGPU`. Exposed as `estimated_monthly_timeslicing_savings`
+  (structured object) in the container API response.
 
 **Not yet implemented in UI:**
 
@@ -526,7 +527,7 @@ default still apply). See [architecture/cost-integration.md](./architecture/cost
 | PVC | Yes (ingestion) |
 | Snapshot | Yes — recoverable monthly cost (ingestion) |
 
-**API status:** `estimated_monthly_savings_usd` on container detail, nested node
+**API status:** `estimated_monthly_savings` (structured `{value, units}`) on container detail, nested node
 engine blocks, and PVC list responses. `GET .../savings-summary` aggregates
 persisted container, node, PVC, and snapshot totals (GPU excluded — read-time only).
 Responses include top-level or `meta.currency` (ISO 4217 from Koku). When no cost
@@ -610,7 +611,7 @@ days-to-full for capacity planning.
 
 **API status:** `GET /recommendations/openshift/pvcs` with filters for
 `cluster_uuid`, `namespace`, `recommendation_type`, pagination. Responses include
-`estimated_monthly_savings_usd` when Masu storage rates are available.
+`estimated_monthly_savings` when Masu storage rates are available.
 
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).

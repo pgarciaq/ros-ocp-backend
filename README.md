@@ -74,7 +74,8 @@ ROS_USE_NATIVE_ENGINE=false
 - **GPU time-slicing analysis** — node-level time-slicing recommendations for
   non-MIG GPUs with per-container cross-references
 - **Cost savings estimation** — integrates with Koku `effective_rates` endpoint
-  for CPU/memory/GPU dollar savings
+  for CPU/memory/GPU dollar savings (API fields use structured `estimated_monthly_savings`)
+- **Tag filtering** — filter container lists by OpenShift labels (`filter[tag:key]`); optional savings grouping by tag
 - **Namespace-level recommendations** — aggregated project-level recommendations
   with boxplot visualizations
 - **Recommendation history and quality tracking** — historical snapshots,
@@ -89,7 +90,8 @@ All endpoints are under `/api/cost-management/v1/`:
 |----------|-------------|
 | `GET /recommendations/openshift` | List container recommendations |
 | `GET /recommendations/openshift/:recommendation-id` | Container recommendation detail |
-| `GET /recommendations/openshift/fleet-summary` | Organization-wide aggregates: total/active/idle/abandoned container counts, summed monthly savings (USD), distinct cluster count (RBAC cluster filter when enabled) |
+| `GET /recommendations/openshift/fleet-summary` | Organization-wide aggregates: total/active/idle/abandoned container counts, summed monthly savings, distinct cluster count (RBAC cluster filter when enabled) |
+| `GET /recommendations/openshift/savings-summary` | Fleet savings by plugin/cluster; optional `group_by[tag:key]` when tag filtering is enabled |
 | `GET /recommendations/openshift/gpu` | GPU summary (counts, links to timeslicing/MIG listings) |
 | `GET /recommendations/openshift/gpu/timeslicing` | Node-level GPU time-slicing recommendations |
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |

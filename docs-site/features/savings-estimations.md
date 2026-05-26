@@ -75,6 +75,56 @@ Present on container list items, node engine rows, PVC recommendations, and GPU
 blocks (`estimated_monthly_gpu_savings`, `estimated_monthly_timeslicing_savings`).
 Idle/abandoned containers use 100% of current allocation as recoverable savings.
 
+### Node recommendations
+
+Nested under `recommendation_terms.<term>.recommendation_engines.{cost,performance}`:
+
+```json
+"cost": {
+  "recommended_cpu_cores": 8,
+  "recommended_memory_gib": 32,
+  "node_count_reduction": 1,
+  "estimated_monthly_savings": {
+    "value": "850.000000",
+    "units": "USD"
+  }
+}
+```
+
+Default list sort: `order_by=estimated_monthly_savings` (deprecated alias:
+`order_by=estimated_monthly_savings_usd`).
+
+### PVC recommendations
+
+Top-level on each PVC row:
+
+```json
+{
+  "persistentvolumeclaim": "data-pvc",
+  "estimated_monthly_savings": {
+    "value": "8.500000",
+    "units": "USD"
+  },
+  "currency": "USD"
+}
+```
+
+### GPU (container and time-slicing)
+
+Container `gpu.<term>` blocks use structured MIG savings:
+
+```json
+"estimated_monthly_gpu_savings": {
+  "value": "45.000000",
+  "units": "USD"
+}
+```
+
+Time-slicing list (`GET .../gpu/timeslicing`) still exposes numeric
+`savings_per_gpu_usd` and `total_node_savings_usd` on each node row (not the
+structured object). Per-container cross-reference:
+`estimated_monthly_timeslicing_savings` on the container `gpu` block.
+
 ### Fleet savings summary
 
 ```http

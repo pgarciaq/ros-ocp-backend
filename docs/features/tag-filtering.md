@@ -379,6 +379,7 @@ See [tag-sync-auth.md](../operations/tag-sync-auth.md) for TokenReview authentic
 | `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = Koku table JOIN; `api` = `resolved_tags` |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | N/A | Optional | Comma-separated SA names allowed to push; empty = any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | N/A | Dev only | Static bearer when SA token unavailable (must match Koku) |
+| `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | N/A | Optional | Max body size (MiB) for `POST /internal/tags/sync` |
 
 **On-prem example (cost-onprem chart):**
 
@@ -482,6 +483,36 @@ should have populated `resolved_tags` for the org.
 Implementation uses a two-step list query: resolve matching containers first, then
 fetch recommendations. See [query-performance](../operations/query-performance.md).
 
+### Group by tag (fleet savings summary)
+
+When `ROS_TAGS_ENABLED=true`, container savings can be aggregated per tag value:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary
+  ?group_by[tag:environment]=*
+
+# Flat alias
+GET .../savings-summary?group_by=tag:environment
+```
+
+Response shape: `{ "meta": { "count": N }, "data": [ { "tag_value": "production", "estimated_monthly_savings": { "value": "...", "units": "USD" } }, ... ] }`.
+Only **container** savings are grouped; node/PVC/snapshot totals are not split per tag value.
+
+List endpoints support tag **filters** only (not `group_by[tag:key]`).
+
+### Empty results (`meta.warnings`)
+
+When a tag filter returns zero rows and `ROS_TAGS_ENABLED=true`, list responses may include
+`meta.warnings` (string array) explaining likely causes (unknown tag key, or stale/missing
+push sync in `api` mode). Warnings are omitted when results are non-empty or tag filtering
+is disabled. Check `GET /internal/tags/status?org_id=<org_id>` for SaaS freshness.
+
+### On-prem startup health check (`ROS_TAGS_SOURCE=db`)
+
+With tags enabled and `db` source, ROS probes `reporting_enabledtagkeys` at startup
+([`internal/tags/verify.go`](../../internal/tags/verify.go)). Failure disables tag filtering
+for the process lifetime. The probe confirms table reachability, not column-level schema compatibility.
+
 ---
 
 ## Tag Lifecycle Scenarios
@@ -581,7 +612,7 @@ Monitor SaaS sync duration and Koku `ROS tag sync failed` logs. Alert on stale
 | Enhancement | Description |
 |-------------|-------------|
 | mTLS authentication | Transport-layer mutual auth for SaaS push; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
-| `group_by[tag:key]=*` | Aggregate recommendations by tag dimension in API responses |
+| `group_by[tag:key]` on list endpoints | Savings summary supports tag grouping today; list/history group-by remains future work |
 | Tag value autocomplete API | UI typeahead from tag catalog (db: live query; api: `org_tag_sync_metadata`) |
 | Tag-based cost allocation | Correlate ROS savings with Koku tag breakdown reports |
 | Webhook instant sync | Reduce reliance on 6-hour safety-net |

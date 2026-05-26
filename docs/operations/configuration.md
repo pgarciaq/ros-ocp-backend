@@ -169,6 +169,7 @@ central `Config` struct). See [Environment variables outside Config](#environmen
 **Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
 
 - **`kruize`** is mutually exclusive with native plugins. When enabled, only Kruize runs.
+- **`kruize` plus native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** (process exits).
 - With both allowlist and denylist unset, **`kruize` is off** unless explicitly allowlisted.
 
 **Disable namespace recommendations** (either approach):
@@ -238,6 +239,7 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
+| `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
 using `Authorization: Bearer <service-account-token>`. Sync freshness is available at
@@ -249,7 +251,10 @@ See [tag-sync-auth.md](tag-sync-auth.md) for current auth and the planned **mTLS
 **Data flow and lifecycle:** [tag-sync.md](tag-sync.md)
 
 List filtering supports Koku syntax `?filter[tag:key]=value1,value2` (OR within a key,
-AND across keys). See [features/tag-filtering.md](../features/tag-filtering.md).
+AND across keys). Fleet savings summary supports `?group_by[tag:key]=*` for per-tag-value
+container savings aggregation. Empty tag-filtered lists may include `meta.warnings`.
+With `ROS_TAGS_SOURCE=db`, startup verifies `reporting_enabledtagkeys` is reachable.
+See [features/tag-filtering.md](../features/tag-filtering.md).
 
 ---
 
