@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/datatypes"
 )
@@ -275,7 +276,7 @@ func TestInjectStoredRequestVariationPct(t *testing.T) {
 			CPUVariationShortCostPct:    float64Ptr(12.5),
 			MemoryVariationShortCostPct: float64Ptr(3.25),
 		}
-		out := injectStoredRequestVariationPct(data, pcts)
+		out := kruizeplugin.InjectStoredRequestVariationPct(data, pcts)
 		v := out["recommendation_terms"].(map[string]interface{})["short_term"].(map[string]interface{})["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})["variation"].(map[string]interface{})
 		req := v["requests"].(map[string]interface{})
 		lim := v["limits"].(map[string]interface{})
@@ -306,7 +307,7 @@ func TestInjectStoredRequestVariationPct(t *testing.T) {
 			CPUVariationShortCostPct:    float64Ptr(9.0),
 			MemoryVariationShortCostPct: nil,
 		}
-		out := injectStoredRequestVariationPct(data, pcts)
+		out := kruizeplugin.InjectStoredRequestVariationPct(data, pcts)
 		req := out["recommendation_terms"].(map[string]interface{})["short_term"].(map[string]interface{})["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})["variation"].(map[string]interface{})["requests"].(map[string]interface{})
 
 		if got := req["cpu"].(map[string]interface{})["amount"]; got != 9.0 {

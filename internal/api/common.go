@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/labstack/echo/v4"
+
+	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 )
 
 const timeLayout = "2006-01-02"
@@ -88,23 +90,11 @@ type Links struct {
 	Last     string `json:"last"`
 }
 
-var NotificationsToShow = map[string]string{
-	"323004": "NOTICE",
-	"323005": "NOTICE",
-	"324003": "NOTICE",
-	"324004": "NOTICE",
-}
+var NotificationsToShow = kruizeplugin.NotificationsToShow
 
-var MemoryUnitk8s = map[string]string{
-	"bytes": "bytes",
-	"MiB":   "Mi",
-	"GiB":   "Gi",
-}
+var MemoryUnitk8s = kruizeplugin.MemoryUnitk8s
 
-var CPUUnitk8s = map[string]string{
-	"millicores": "m",
-	"cores":      "",
-}
+var CPUUnitk8s = kruizeplugin.CPUUnitk8s
 
 var FlattenedCSVHeader = []string{
 	"id",

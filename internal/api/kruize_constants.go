@@ -1,18 +1,12 @@
 package api
 
+import kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
+
 const (
-	// Canonical Kruize recommendation term keys as they appear in the JSON payload.
-	KruizeShortTerm  = "short_term"
-	KruizeMediumTerm = "medium_term"
-	KruizeLongTerm   = "long_term"
+	KruizeShortTerm  = kruizeplugin.ShortTerm
+	KruizeMediumTerm = kruizeplugin.MediumTerm
+	KruizeLongTerm   = kruizeplugin.LongTerm
 
-	// Canonical Kruize recommendation engine keys as they appear in the JSON payload.
-	KruizeEngineCost        = "cost"
-	KruizeEnginePerformance = "performance"
+	KruizeEngineCost        = kruizeplugin.EngineCost
+	KruizeEnginePerformance = kruizeplugin.EnginePerformance
 )
-
-// Keep ordering stable for deterministic iteration.
-var kruizeRecommendationTerms = []string{KruizeShortTerm, KruizeMediumTerm, KruizeLongTerm}
-
-// Keep ordering stable for deterministic iteration.
-var kruizeRecommendationEngines = []string{KruizeEngineCost, KruizeEnginePerformance}
