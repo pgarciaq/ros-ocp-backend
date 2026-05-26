@@ -77,6 +77,7 @@ func seedThresholdCacheForOrgs(orgCount int, recType string) []string {
 		thresholdSettingsCache[key] = thresholdSettingsCacheEntry{value: defaults, until: until}
 	}
 	thresholdSettingsMu.Unlock()
+	updateThresholdCacheEntriesGauge()
 	return orgIDs
 }
 

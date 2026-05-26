@@ -23,6 +23,7 @@ func ClearThresholdSettingsCacheForTest() {
 	thresholdSettingsMu.Lock()
 	thresholdSettingsCache = map[thresholdSettingsCacheKey]thresholdSettingsCacheEntry{}
 	thresholdSettingsMu.Unlock()
+	updateThresholdCacheEntriesGauge()
 }
 
 // SetThresholdSettingsNowForTest replaces the clock used for cache TTL and returns a restore func.
@@ -53,6 +54,7 @@ func InvalidateThresholdCache(orgID, recommendationType string) {
 	thresholdSettingsMu.Lock()
 	delete(thresholdSettingsCache, thresholdSettingsCacheKey{orgID: orgID, recommendationType: recommendationType})
 	thresholdSettingsMu.Unlock()
+	updateThresholdCacheEntriesGauge()
 }
 
 func resolveThresholdCached[T any](
@@ -76,6 +78,12 @@ func resolveThresholdCached[T any](
 			return v, nil
 		}
 	}
+	if ok && !now.Before(e.until) {
+		thresholdSettingsMu.Lock()
+		delete(thresholdSettingsCache, key)
+		thresholdSettingsMu.Unlock()
+		updateThresholdCacheEntriesGauge()
+	}
 
 	result, err := resolve(ctx, pool, orgID)
 	if err != nil {
@@ -84,6 +92,7 @@ func resolveThresholdCached[T any](
 	thresholdSettingsMu.Lock()
 	thresholdSettingsCache[key] = thresholdSettingsCacheEntry{value: result, until: now.Add(thresholdSettingsCacheTTL)}
 	thresholdSettingsMu.Unlock()
+	updateThresholdCacheEntriesGauge()
 	return result, nil
 }
 
