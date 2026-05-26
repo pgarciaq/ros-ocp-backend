@@ -81,7 +81,7 @@ GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=fal
 ```
 
 Response objects include `is_underutilized` and `is_overcommitted` booleans (and `cpu_overcommit_ratio`)
-matching the stored classification. See [UI integration — node utilization](../ui-integration-guide.md#node-utilization-and-consolidation).
+matching the stored classification. See [UI integration — node recommendations](../ui-integration-guide.md#3-node-recommendations).
 
 ## Tag filtering
 

@@ -28,13 +28,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-go@v5
+      # Pin to v5.6.0 — @v5 tracks HEAD and failed when codeload could not fetch 40f1582
+      - uses: actions/setup-go@v5.6.0
         with:
           go-version-file: go.mod
+          check-latest: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.4.0
         with:
           python-version: '3.12'
 

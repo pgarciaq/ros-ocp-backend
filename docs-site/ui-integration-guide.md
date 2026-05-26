@@ -11,7 +11,7 @@ Practical API reference for **koku-ui** developers building OpenShift Resource O
 - [Configurability Reference](architecture/configurability.md) — env vars, defaults, tuning by use case
 - [Recommendation Engines](architecture/recommendation-engines.md) — algorithm behavior
 - [Cost Integration](architecture/cost-integration.md) — savings formulas and currency
-- [Business Hours](features-business-hours.md) — schedule design and reship flow
+- [Business Hours](features/business-hours.md) — schedule design and reship flow
 
 ---
 
