@@ -82,6 +82,7 @@ nav:
       - Savings Estimations: features/savings-estimations.md
       - History & Quality: features/history-and-quality.md
       - Tag Filtering: features/tag-filtering.md
+      - Idle / Zombie Detection: features/idle-detection.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Recommendation Engines: architecture/recommendation-engines.md

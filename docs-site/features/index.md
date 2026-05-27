@@ -19,6 +19,7 @@ dollar impact using Koku cost model rates.
 | Business Hours | container, namespace | cost, performance | Yes | Yes |
 | Configurable Thresholds | all | all | N/A | Yes |
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
+| Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
 
 ## Capabilities
 
@@ -64,6 +65,10 @@ recommendations and quality metrics (stability, adoption, OOM events).
 
 **[Tag Filtering](tag-filtering.md)** — Filter container recommendations by
 OpenShift labels synced from Koku (`filter[tag:key]=value`).
+
+**[Idle / Zombie Detection](idle-detection.md)** — Classify workloads with little or
+no usage (zombie vs idle), estimate full monthly waste, and filter with
+`filter[idle_state]=zombie,idle` — distinct from rightsizing savings.
 
 !!! tip "Getting Started"
     Integrate with the REST API and UI using the

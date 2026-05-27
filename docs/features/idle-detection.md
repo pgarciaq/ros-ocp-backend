@@ -1,0 +1,628 @@
+# Idle and Zombie Workload Detection
+
+Implementation-ready design for classifying provisioned-but-unused OpenShift workloads,
+estimating recoverable waste, and surfacing actionable termination guidance through
+the ROS recommendations API.
+
+---
+
+## Overview / Motivation
+
+Provisioned but unused resources represent **pure waste**: the customer pays 100% of
+allocated cost while receiving zero productive value. This is fundamentally different
+from [container right-sizing](../architecture/recommendation-engines.md):
+
+| Concern | Rightsizing | Idle / zombie detection |
+|---------|-------------|-------------------------|
+| Problem | Over-provisioned relative to usage | Allocated with negligible or no usage |
+| Savings model | Partial reduction (delta between request and recommendation) | **Full elimination** of resource cost |
+| User action | Lower requests/limits | Terminate workload, delete PVC, drain node, etc. |
+
+**Common scenarios:**
+
+- Abandoned dev/test namespaces left running after a project ends
+- Post-migration containers still requesting CPU/memory but serving no traffic
+- Idle Jupyter or ML notebook pods holding GPU or large memory requests
+- GPUs allocated via device plugin with `sm_active` / `dram_active` near zero for days
+- Orphaned PVCs with capacity reserved but no mounting pod
+
+ROS already performs **basic** idle detection during container recommendation:
+
+- [`DetectIdle()`](../../internal/engine/detect_idle.go) — true when **every** digest day's
+  max CPU and max memory are strictly below fixed millicore/KiB thresholds
+- [`DetectAbandoned()`](../../internal/engine/detect_idle.go) — true when **all** days have
+  exactly zero CPU and memory usage (maps to notification `NotifIdleWorkload` today)
+- [`ApplySavingsEstimates()`](../../internal/engine/savings.go) — idle/abandoned workloads
+  receive **100%** of current resource cost as recoverable savings
+
+This design **extends** that foundation with a three-state classification (`zombie`,
+`idle`, `active`), request-relative utilization, burst-workload guards, workload-level
+grouping for sidecars, multi-resource coverage, persisted API fields, and fleet-level
+waste metrics.
+
+```mermaid
+flowchart LR
+    subgraph ingest["Ingestion"]
+        MO["koku-metrics-operator CSVs"]
+        DIG["Container daily digests"]
+        MO --> DIG
+    end
+    subgraph engine["RecommendAllWorkloads"]
+        SIZE["CPU/memory right-sizing"]
+        CLASS["Idle state classifier"]
+        SAVE["Waste estimation"]
+        SIZE --> CLASS --> SAVE
+    end
+    subgraph store["PostgreSQL"]
+        RS["recommendation_sets<br/>idle_state, idle_since, …"]
+    end
+    subgraph api["REST API"]
+        LIST["Container list + filters"]
+        FLEET["savings-summary group_by"]
+    end
+    DIG --> engine --> store --> api
+```
+
+---
+
+## Scope
+
+| Resource | Primary signal | Phase |
+|----------|----------------|-------|
+| **Containers** | CPU/memory P95 vs request; peak vs P95 burst guard | 1–3 |
+| **GPUs** | `sm_active` / `dram_active` basis points (P95) | 4 |
+| **PVCs** | No pod mount for > 7 days; orphaned PVC | 4 |
+| **Nodes** | Node utilization P95 < 10%; drain candidate when pods reschedule | 4 |
+| **Namespaces** | **All** containers in namespace classified idle or zombie | 5 |
+
+Out of scope for initial delivery:
+
+- Automatic termination or scale-to-zero (recommendation only)
+- Dependency / blast-radius graph before terminate (future extension)
+- Cross-cluster idle correlation
+
+---
+
+## Classification Model
+
+Three persisted states: `zombie`, `idle`, `active` (default).
+
+Classification uses the **medium-term** digest window (7 days) unless configured otherwise.
+Admin/tenant settings can raise `idle_minimum_observation_days` (default **14**) so
+classification only runs after sufficient calendar coverage (two full weekends).
+
+### Containers
+
+| State | Condition | Minimum observation |
+|-------|-----------|---------------------|
+| **zombie** | P95(cpu) < 1 millicore **and** peak(cpu) < 10 millicores | 7 days (14 default gate) |
+| **idle** | `cpu_utilization_p95` < 2% of **request** **and** `mem_utilization_p95` < 5% of **request** | 7 days (14 default gate) |
+| **active** | Everything else | — |
+
+**Definitions:**
+
+- `cpu_utilization_p95` = P95 daily CPU usage (millicores) ÷ current CPU request (millicores)
+- `mem_utilization_p95` = P95 daily memory usage (bytes) ÷ current memory request (bytes)
+- P95 and peak are computed from digest rows in the observation window (same data as
+  [`MultiWeightedPercentileWithExtras()`](../../internal/engine/decay.go); idle logic
+  may use unweighted P95 for classification stability — implementer choice, document in code)
+
+**Mapping from today:**
+
+| Today | Proposed |
+|-------|----------|
+| `DetectAbandoned` (all zero) | **zombie** (stricter peak guard still applies) |
+| `DetectIdle` (max below fixed MC/KiB) | Superseded by **idle** (request-relative) or **zombie** |
+| Neither | **active** |
+
+Zombie is a **subset** of historically "idle" workloads with near-dead CPU profile;
+idle covers workloads with non-trivial requests but negligible utilization.
+
+### GPUs
+
+Uses existing GPU basis-point metrics from operator reports (see
+[GPU classification](../architecture/gpu-classification.md)).
+
+| State | Condition | Minimum observation |
+|-------|-----------|---------------------|
+| **zombie** | `sm_active_p95` < 100 bp (1%) **and** `dram_active_p95` < 100 bp | 7 days |
+| **idle** | `sm_active_p95` < 500 bp (5%) **and** `dram_active_p95` < 500 bp | 7 days |
+| **active** | Otherwise | — |
+
+Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
+[Cost Integration — GPU savings](../architecture/cost-integration.md#gpu-savings).
+
+### PVCs
+
+| State | Condition | Notes |
+|-------|-----------|-------|
+| **idle** | Capacity allocated; no pod mounting PVC for > 7 days | Requires pod–PVC binding from snapshot inventory / metrics |
+| **orphaned** | PVC exists with no pod reference in cluster inventory | Stronger signal; may map to `idle_state=idle` with `idle_recommendation.action=delete_pvc` |
+
+PVC idle detection shares inventory signals with [PVC right-sizing](../../docs-site/features/pvc-rightsizing.md).
+
+### Nodes
+
+| State | Condition |
+|-------|-----------|
+| **under-utilized** | `node_utilization_p95` < 10% for > 7 days |
+| **candidate for drain** | Under-utilized **and** simulation shows all pods schedulable elsewhere |
+
+Node states align with [node consolidation](../../docs-site/features/node-recommendations.md)
+but emphasize **idle waste** (full node monthly cost) vs rightsizing delta.
+
+### Namespaces (aggregate)
+
+| State | Condition |
+|-------|-----------|
+| **idle** | **Every** non-excluded container in the namespace is `idle` or `zombie` |
+| **active** | At least one container is `active` |
+
+Namespace aggregation runs after container classification (Phase 5). Namespace-level
+notifications today explicitly exclude `NotifIdleWorkload` (container-only); namespace
+idle may use a new code or fleet summary only.
+
+---
+
+## False Positive Prevention
+
+### CronJobs and burst workloads
+
+If `peak(cpu) > burst_ratio × P95(cpu)` (default `burst_ratio = 10`), classify as
+**active** (bursty), not idle.
+
+**Rationale:** A CronJob active ~5 minutes per day can show very low P95 while peak
+spikes are meaningful — classic false positive for percentile-only rules.
+
+### Sidecars and multi-container pods
+
+Group containers by `(namespace, workload, workload_type)` — the same key used in
+[`RecommendWorkloadsStreaming()`](../../internal/engine/recommend_all.go).
+
+| Rule | Behavior |
+|------|----------|
+| Primary container active | Sidecar (envoy, istio-proxy, vault-agent) → **supporting**; do not surface as idle in UI primary row |
+| All containers idle/zombie | Workload flagged; list API may show workload-level summary |
+
+Only flag a workload when **all** user-facing containers in the group pass idle/zombie
+checks (exclude init containers from the "all" predicate if they have zero requests).
+
+### Recently deployed workloads
+
+Skip classification when `observation_days < idle_minimum_observation_days` (configurable;
+default **14**). Set `idle_state = active` and omit `idle_since`.
+
+`first_seen` = earliest digest `bucket_date` for the container in the org/cluster.
+
+### Seasonality
+
+Default **14-day** minimum observation covers two full weekends and reduces false
+positives from weekly batch jobs. Tenants may lower to 7 via Settings API where
+workload churn is low (document risk in UI).
+
+### Known exclusions
+
+| Pattern | Handling |
+|---------|----------|
+| DaemonSets | Never classify (`workload_type` / owner kind check) |
+| `kube-system`, `openshift-*` namespaces | Default exclude list; configurable |
+| Opt-out annotation | `idle-detection/exclude: "true"` on Pod → **active** |
+| Init containers | Excluded from "all containers idle" namespace rule |
+
+---
+
+## Savings Estimation
+
+Idle waste is **full monthly cost** of the allocated resource — not a rightsizing delta.
+
+### Containers
+
+```
+wasted_monthly_cost = (
+    cpu_request_cores × cpu_rate_per_core_hour
+  + memory_request_gib × mem_rate_per_gb_hour
+) × 730 hours/month × replica_count
+```
+
+Plus infrastructure/distributed overhead using the same apportionment as
+[`computeIdleSavings()`](../../internal/engine/savings.go) when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
+
+Persist **`estimated_waste_cents`** on `recommendation_sets` (distinct from
+`estimated_monthly_savings` on rightsizing rows — see API section). For idle/zombie
+containers, rightsizing savings may be `$0` while waste field shows full elimination value.
+
+### GPUs
+
+```
+wasted_monthly_cost = gpu_cost_per_month × idle_gpu_count
+```
+
+### PVCs / nodes
+
+Use storage rate × allocated GiB (PVC) or `node_cost_per_month` (node) for full cost
+when classified idle/orphaned/under-utilized.
+
+---
+
+## Data Model Changes
+
+New columns on **`recommendation_sets`** (container plugin), one row per
+`(org_id, cluster_uuid, namespace, workload, container_name, term, engine)` — store
+idle fields on the **medium_term / cost** row or replicate on all rows (implementer:
+prefer single canonical row per container key to avoid drift; API merges from medium/cost).
+
+```sql
+ALTER TABLE recommendation_sets
+    ADD COLUMN IF NOT EXISTS idle_state TEXT NOT NULL DEFAULT 'active',
+    ADD COLUMN IF NOT EXISTS idle_since TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS idle_duration_days INTEGER,
+    ADD COLUMN IF NOT EXISTS estimated_waste_cents BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS peak_cpu_millicores INTEGER,
+    ADD COLUMN IF NOT EXISTS peak_memory_bytes BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_rs_idle_state
+    ON recommendation_sets (org_id, idle_state)
+    WHERE idle_state != 'active';
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `idle_state` | `TEXT` | `zombie`, `idle`, or `active` |
+| `idle_since` | `TIMESTAMPTZ` | First day state became idle/zombie (UTC) |
+| `idle_duration_days` | `INTEGER` | `floor(now - idle_since)` in days |
+| `estimated_waste_cents` | `BIGINT` | Full monthly waste (integer cents) |
+| `peak_cpu_millicores` | `INTEGER` | Max CPU in observation window |
+| `peak_memory_bytes` | `BIGINT` | Max memory in observation window |
+
+**Migration notes:**
+
+- Follow existing migration numbering in `migrations/`
+- Backfill: `idle_state = 'active'`, `estimated_waste_cents = 0`
+- GPU/PVC/node tables: add parallel columns in Phase 4 (`gpu_recommendation_sets`, etc.)
+
+**State transitions:** On each `RecommendAllWorkloads` pass, recompute from digests;
+update `idle_since` only when transitioning from `active` → `idle`/`zombie`, preserve
+when staying in same non-active state, clear when returning to `active`.
+
+---
+
+## API Changes
+
+Base path: `/api/cost-management/v1/recommendations/openshift`
+
+### Container list — filter
+
+```
+GET /api/cost-management/v1/recommendations/openshift
+  ?filter[idle_state]=zombie,idle
+```
+
+Follows existing filter infrastructure in
+[`internal/model`](../../internal/model) and
+[API Query Parameters](../operations/api-query-parameters.md).
+Multiple values = OR within the parameter.
+
+### Container list — response fields
+
+Added alongside existing recommendation payload (medium-term cost engine row):
+
+```json
+{
+  "idle_state": "zombie",
+  "idle_since": "2026-04-15",
+  "idle_duration_days": 42,
+  "peak_cpu_millicores": 2,
+  "peak_memory_bytes": 52428800,
+  "estimated_monthly_waste": {
+    "value": "89.500000",
+    "units": "USD"
+  },
+  "idle_recommendation": {
+    "action": "terminate",
+    "confidence": "high",
+    "reason": "No meaningful CPU or memory activity for 42 days"
+  }
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `idle_state` | `zombie`, `idle`, `active` |
+| `idle_since` | ISO date (date part of `idle_since` timestamptz) |
+| `estimated_monthly_waste` | Same shape as `estimated_monthly_savings` (6-decimal string + units) |
+| `idle_recommendation.action` | `terminate` (zombie/idle container), `delete_pvc`, `drain_node` (other resources, later phases) |
+| `idle_recommendation.confidence` | `high` if observation ≥ 14d and not bursty; `medium` if 7–13d |
+
+Omit `idle_recommendation` when `idle_state=active`. Omit waste object when
+`ROS_SAVINGS_ESTIMATES_ENABLED=false` or no cost data.
+
+### Savings summary — grouping
+
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary
+  ?group_by[idle_state]=*
+```
+
+Response adds breakdown rows:
+
+```json
+{
+  "meta": { "count": 3 },
+  "data": [
+    {
+      "idle_state": "zombie",
+      "estimated_monthly_waste": { "value": "4200.000000", "units": "USD" },
+      "container_count": 12
+    },
+    {
+      "idle_state": "idle",
+      "estimated_monthly_waste": { "value": "8250.000000", "units": "USD" },
+      "container_count": 35
+    }
+  ]
+}
+```
+
+Fleet meta (existing savings-summary `meta` or `total` section):
+
+```json
+{
+  "total_idle_waste": { "value": "12450.000000", "units": "USD" },
+  "idle_container_count": 47,
+  "zombie_container_count": 12
+}
+```
+
+Rightsizing savings and idle waste should be **reported separately** so dashboards do
+not double-count (idle = eliminate; rightsizing = reduce).
+
+---
+
+## Engine Implementation
+
+### When
+
+During [`RecommendAllWorkloads()`](../../internal/engine/recommend_all.go) /
+[`RecommendWorkloadsStreaming()`](../../internal/engine/recommend_all.go), **after**
+CPU/memory recommendation values are computed for each container key and **before**
+[`WriteRecommendations()`](../../internal/engine/recommend_all.go).
+
+Optionally extract `classifyIdleState(containerKey, digestRows, settings) IdleResult`
+in new file `internal/engine/idle_detection.go`.
+
+### Algorithm (pseudocode)
+
+```
+for each container with digest rows in window:
+    if excluded(namespace, workload_type, annotations):
+        idle_state = "active"
+        continue
+
+    if observation_days < settings.minimum_observation_days:
+        idle_state = "active"  // insufficient data
+        continue
+
+    cpu_p95 = percentile95(digest.cpu_usage)
+    mem_p95 = percentile95(digest.mem_usage)
+    cpu_peak = max(digest.cpu_usage)
+    mem_peak = max(digest.mem_usage)
+    cpu_request = current_cpu_request_millicores
+    mem_request = current_mem_request_bytes
+
+    if cpu_peak > settings.burst_ratio * max(cpu_p95, 1):
+        idle_state = "active"  // bursty workload
+        continue
+
+    if cpu_p95 < settings.zombie_cpu_p95_mc
+       AND cpu_peak < settings.zombie_cpu_peak_mc:
+        idle_state = "zombie"
+        idle_since = first_day_where(predicate)
+
+    else if cpu_request > 0 AND mem_request > 0
+            AND (cpu_p95 / cpu_request) < settings.idle_cpu_util_pct
+            AND (mem_p95 / mem_request) < settings.idle_mem_util_pct:
+        idle_state = "idle"
+        idle_since = first_day_where(utilization below thresholds)
+
+    else:
+        idle_state = "active"
+
+    if idle_state != "active":
+        estimated_waste_cents = compute_full_idle_cost(...)
+        peak_cpu_millicores = cpu_peak
+        peak_memory_bytes = mem_peak
+        idle_duration_days = days_since(idle_since)
+
+    // Workload-level pass: if any sibling container active, downgrade supporting sidecars
+
+ApplySavingsEstimates() // extend: map zombie/idle to waste + keep NotifIdleWorkload
+```
+
+### Performance
+
+**Negligible incremental cost** — digest rows are already loaded for percentile
+computation. Classification is O(days per container) with simple comparisons.
+No extra database round trips.
+
+### Notifications
+
+Extend [`EvaluateContainerNotifications()`](../../internal/engine/notifications.go):
+
+| Code | When |
+|------|------|
+| `NotifIdleWorkload` (existing) | `idle_state` ∈ {`idle`, `zombie`} — retain for backward compatibility |
+| New: `IDLE_CONTAINERS_DETECTED` (fleet) | Phase 3 — org-level transition detector |
+
+Fleet notification fires only on **transition** `active` → `idle`/`zombie`, not every
+scan (see Notifications section).
+
+---
+
+## Configuration
+
+### Feature flag
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_IDLE_DETECTION_ENABLED` | `false` | Master switch for classification + API fields |
+
+When `false`, omit new API fields; keep `idle_state='active'` in DB.
+
+### Threshold environment variables
+
+| Variable | Default | Maps to |
+|----------|---------|---------|
+| `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | `1` | Zombie P95 CPU (millicores) |
+| `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | `10` | Zombie peak CPU |
+| `ROS_IDLE_CPU_UTILIZATION_PERCENT` | `2` | Idle CPU % of request |
+| `ROS_IDLE_MEMORY_UTILIZATION_PERCENT` | `5` | Idle memory % of request |
+| `ROS_IDLE_BURST_RATIO` | `10` | peak/P95 burst guard |
+| `ROS_IDLE_MINIMUM_OBSERVATION_DAYS` | `14` | Min days before classify |
+| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Glob or prefix list |
+
+Admin env vars **lock** fields (same pattern as
+[Configurable Thresholds](../../docs-site/features/configurable-thresholds.md)).
+
+### Tenant Settings API (Phase 3)
+
+Extend `recommendation_type=container` threshold payload:
+
+```json
+{
+  "idle_minimum_observation_days": 14,
+  "idle_cpu_utilization_percent": 2,
+  "idle_memory_utilization_percent": 5,
+  "idle_burst_ratio": 10,
+  "idle_zombie_cpu_millicores": 1,
+  "idle_zombie_peak_millicores": 10
+}
+```
+
+Integrate with [`SizingThresholdSettings`](../../internal/engine/threshold_settings.go)
+or add `IdleDetectionSettings` struct resolved via
+[`ResolveSizingThresholds()`](../../internal/engine/threshold_settings.go).
+
+**Note:** Existing `idle_cpu_threshold_mc` / `idle_mem_threshold_kib` in sizing settings
+power legacy `DetectIdle`; migration path:
+
+1. Phase 1: new classifier coexists; legacy `IsIdle` derived from `idle_state != active`
+2. Phase 2: deprecate absolute thresholds in docs; map defaults to zombie/idle rules
+
+---
+
+## Notifications (Phase 3)
+
+| Property | Value |
+|----------|-------|
+| Code | `IDLE_CONTAINERS_DETECTED` |
+| Trigger | Org-level: ≥1 container newly `active` → `idle` or `zombie` since last notification watermark |
+| Payload | `idle_count`, `zombie_count`, `total_monthly_waste`, top 5 workloads by waste |
+| Debounce | Per org, at most once per 24h unless waste increases > 20% |
+
+Do not emit on steady-state rescans. Store last-notified snapshot in
+`org_recommendation_metadata` or notification service state table.
+
+---
+
+## UI Considerations (future)
+
+Not implemented in ros-ocp-backend; contract for koku-ui / HCCM:
+
+| Element | Behavior |
+|---------|----------|
+| Optimizations table | "Idle" tab or `filter[idle_state]` chips |
+| Dashboard card | Total idle waste + counts |
+| Severity | Zombie = critical; idle = warning |
+| Action | "View termination impact" → future dependency map |
+
+See [UI Integration Guide](../../docs-site/ui-integration-guide.md).
+
+---
+
+## Rollout Strategy
+
+| Phase | Deliverables | User-visible |
+|-------|--------------|--------------|
+| **1** | DB columns + engine classification + API `idle_state` fields | Filter/list only; no notifications |
+| **2** | `estimated_waste_cents`, savings-summary `group_by[idle_state]`, fleet meta | Waste dollars on dashboard |
+| **3** | Settings API thresholds + `IDLE_CONTAINERS_DETECTED` | Tunable + alerts |
+| **4** | GPU, PVC, node idle rules | Multi-resource |
+| **5** | Namespace aggregation | Namespace idle badge |
+
+Enable in dev with `ROS_IDLE_DETECTION_ENABLED=true`; default **off** in production
+until Phase 2 validation completes.
+
+---
+
+## Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| False positive → user terminates needed workload | 14-day default observation; burst ratio; high confidence only for zombie |
+| CronJobs flagged idle | `peak > 10 × P95` → active |
+| Sidecars flagged | Workload-level grouping; supporting container suppression |
+| Noisy notifications | Transition-only fleet notification; 24h debounce |
+| Threshold varies by org | Settings API + admin env locks |
+| Legacy `IsIdle` behavior change | Map `idle_state != active` to `IsIdle` for savings/notifications |
+| Double-count savings | Separate `estimated_monthly_waste` from rightsizing `estimated_monthly_savings` |
+
+---
+
+## Implementation Effort
+
+| Component | Effort | Dependencies |
+|-----------|--------|--------------|
+| Engine classification (`idle_detection.go`) | Small | Digest rows, existing keys |
+| DB migration | Small | New columns + partial index |
+| API filter + response | Small | Container list handler, money helpers |
+| Waste calculation | Small | Extend `computeIdleSavings` / new waste field |
+| Configuration | Small | Threshold settings pattern |
+| GPU idle | Small | GPU basis points in digests |
+| Node/namespace aggregation | Medium | Cross-container + scheduling sim |
+| Notifications | Medium | Notification framework |
+| IQE / E2E tests | Medium | Nise workloads with idle profiles |
+
+**Estimate:** 2–3 engineering days for Phases 1–2; ~1 week for full Phases 1–5.
+
+### Suggested implementation order
+
+1. Migration + `IdleResult` struct + unit tests (classification table)
+2. Hook into `RecommendWorkloadsStreaming` + persist columns
+3. API enrichment + `filter[idle_state]`
+4. Savings summary grouping + fleet meta
+5. Settings API + notifications + extended resources
+
+---
+
+## Comparison with Competitors
+
+| Tool | Idle detection | Notes |
+|------|----------------|-------|
+| Kubecost | Basic | Simple utilization threshold; limited burst handling |
+| CAST AI | Yes | Rebalancing / eviction focus |
+| Spot.io | Limited | Spot / interruption focus |
+| **ROS (this)** | Advanced | Burst guard, workload grouping, multi-resource, configurable thresholds, separate waste metric |
+
+---
+
+## Future Extensions
+
+| Extension | Description |
+|-----------|-------------|
+| **Scheduled idle** | Recurring idle (nights/weekends) → recommend KEDA/HPA schedules |
+| **Dependency mapping** | Graph of Services/Ingresses before terminate |
+| **Auto-hibernate** | Scale to zero integrations |
+| **Cost attribution** | Idle waste by tag/team via [tag filtering](tag-filtering.md) |
+| **VM idle** | Extend `NotifVMIdle` pattern to OpenShift Virtualization guests |
+
+---
+
+## Related Documentation
+
+- [Savings estimations](../../docs-site/features/savings-estimations.md)
+- [Configurable thresholds](../../docs-site/features/configurable-thresholds.md)
+- [Cost integration](../architecture/cost-integration.md)
+- [Container recommendations](../../docs-site/features/container-recommendations.md)
+- [Public feature page](../../docs-site/features/idle-detection.md)
+- Existing idle helpers: [`detect_idle.go`](../../internal/engine/detect_idle.go),
+  [`notifications.go`](../../internal/engine/notifications.go)
