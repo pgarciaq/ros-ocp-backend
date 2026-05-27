@@ -10,6 +10,8 @@ import (
 func TestFilterPaths_RemovesDisabledPluginPaths(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "container,namespace")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	spec := map[string]interface{}{
 		"info": map[string]interface{}{"title": "test"},
@@ -52,6 +54,8 @@ func TestFilterPaths_RemovesDisabledPluginPaths(t *testing.T) {
 func TestFilterPaths_AllPluginsEnabled(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	spec := map[string]interface{}{
 		"paths": map[string]interface{}{
@@ -78,6 +82,8 @@ func TestFilterPaths_AllPluginsEnabled(t *testing.T) {
 func TestFilterPaths_NoAnnotation_AlwaysIncluded(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "container")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	spec := map[string]interface{}{
 		"paths": map[string]interface{}{

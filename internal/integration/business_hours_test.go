@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -595,7 +596,7 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 		t.Skip("requires PostgreSQL")
 	}
 	enableBusinessHoursForTest(t)
-	var captured bool
+	var captured atomic.Bool
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/effective_rates/") {
 			w.Header().Set("Content-Type", "application/json")
@@ -609,7 +610,7 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "reship_ros") {
-			captured = true
+			captured.Store(true)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -643,8 +644,8 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && !captured {
+	for time.Now().Before(deadline) && !captured.Load() {
 		time.Sleep(20 * time.Millisecond)
 	}
-	assert.True(t, captured, "PUT should trigger masu reship_ros POST")
+	assert.True(t, captured.Load(), "PUT should trigger masu reship_ros POST")
 }

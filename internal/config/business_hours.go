@@ -11,6 +11,8 @@ func BusinessHoursFeatureEnabled() bool {
 // ResetForTest clears cached configuration so the next GetConfig() reloads from the environment.
 // Intended for tests in other packages that mutate ROS_BUSINESS_HOURS_ENABLED.
 func ResetForTest() {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	viper.Reset()
 	cfg = nil
 }

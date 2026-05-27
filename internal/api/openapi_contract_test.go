@@ -200,6 +200,7 @@ func contractTestIdentityMiddleware(orgID string) echo.MiddlewareFunc {
 func registerContractTestRoutes(e *echo.Echo) {
 	v1 := e.Group(apiV1Prefix)
 	api.RegisterV1RoutesForTest(v1, &reship.NoopTriggerer{})
+	api.RegisterTestInternalRoutes(e)
 	e.GET("/status", api.GetAppStatus)
 }
 

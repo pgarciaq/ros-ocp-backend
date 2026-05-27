@@ -44,6 +44,8 @@ func TagsUsePushSync() bool {
 // ResetTagsForTest clears cached configuration so the next GetConfig() reloads tag env vars.
 func ResetTagsForTest() {
 	ResetTagsRuntimeForTest()
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	viper.Reset()
 	cfg = nil
 }

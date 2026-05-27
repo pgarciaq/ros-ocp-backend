@@ -13,6 +13,8 @@ import (
 
 func TestRegisterDisabledPluginRouteGuards_GPUDisabled_Returns404(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "container")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	e := echo.New()
 	v1 := e.Group("/api/cost-management/v1")

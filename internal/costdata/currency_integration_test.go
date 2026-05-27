@@ -43,6 +43,7 @@ func enableKokuMockForSavings(t *testing.T, baseURL string) {
 	t.Setenv("KOKU_MASU_URL", baseURL)
 	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
 	config.ResetForTest()
+	_ = config.GetConfig()
 }
 
 func effectiveRatesResponse(currency, clusterID string) string {
@@ -82,6 +83,8 @@ func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*e
 		config.ResetForTest()
 		savingsIntegrationMu.Unlock()
 	})
+	api.ResetGPUCostProviderForTest()
+	costdata.ClearCostDataCacheForTest()
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -102,7 +105,9 @@ func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*e
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO rh_accounts (id, org_id) VALUES (1, $1)
+		ON CONFLICT (id) DO UPDATE SET org_id = EXCLUDED.org_id`, testutil.TestOrgID)
 	require.NoError(t, err)
 
 	app := echo.New()

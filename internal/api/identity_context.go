@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/platform-go-middlewares/identity"
@@ -14,7 +15,7 @@ import (
 func requireXRHID(c echo.Context) (identity.XRHID, error) {
 	v := c.Get("Identity")
 	xrhid, ok := v.(identity.XRHID)
-	if !ok {
+	if !ok || strings.TrimSpace(xrhid.Identity.OrgID) == "" {
 		return identity.XRHID{}, c.JSON(http.StatusUnauthorized, echo.Map{
 			"status":  "error",
 			"message": "missing or invalid identity",

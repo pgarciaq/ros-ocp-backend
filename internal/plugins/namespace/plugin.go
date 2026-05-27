@@ -101,12 +101,14 @@ func (p *NamespacePlugin) RegisterRoutes(g *echo.Group) {
 	native := !plugin.EnabledFor(plugin.KruizePluginName)
 	if native {
 		g.GET("/recommendations/openshift/namespaces", rosapi.GetNamespaceRecommendationSetListWithFallback)
+		g.GET("/recommendations/openshift/namespace", rosapi.GetNamespaceRecommendationSetListWithFallback)
 		g.GET("/recommendations/openshift/namespaces/:recommendation-id", rosapi.GetNamespaceRecommendationSetWithFallback)
 		g.GET("/openshift/namespace/recommendations", rosapi.GetNamespaceRecommendationSetListWithFallback)
 		g.GET("/recommendations/openshift/namespace/:recommendation-id", rosapi.GetNamespaceRecommendationSetWithFallback)
 		return
 	}
 	g.GET("/recommendations/openshift/namespaces", rosapi.GetNamespaceRecommendationSetList)
+	g.GET("/recommendations/openshift/namespace", rosapi.GetNamespaceRecommendationSetList)
 	g.GET("/recommendations/openshift/namespaces/:recommendation-id", rosapi.GetNamespaceRecommendationSet)
 	g.GET("/openshift/namespace/recommendations", rosapi.GetNamespaceRecommendationSetList)
 	g.GET("/recommendations/openshift/namespace/:recommendation-id", rosapi.GetNamespaceRecommendationSet)

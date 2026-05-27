@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -44,6 +45,8 @@ func buildTestCSVWithGPUAndNode(days int) string {
 
 func TestProcessContainerCSVNative_fallbackSkipsGPUAndNodeDigestsWhenDisabled(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "pvc")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -96,6 +99,8 @@ func TestProcessContainerCSVNative_fallbackSkipsGPUAndNodeDigestsWhenDisabled(t 
 
 func TestProcessContainerCSVNative_fallbackUpsertsGPUWhenGPUAllowed(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "pvc,gpu")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -135,6 +140,8 @@ func TestProcessContainerCSVNative_fallbackUpsertsGPUWhenGPUAllowed(t *testing.T
 
 func TestProcessContainerCSVNative_pluginPathDoesNotUseFallback(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "container,gpu")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

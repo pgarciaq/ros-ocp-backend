@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,11 +22,14 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 		t.Skip("requires PostgreSQL")
 	}
 
-	var captured struct {
-		method string
-		path   string
-		query  string
-	}
+	var (
+		capturedMu sync.Mutex
+		captured   struct {
+			method string
+			path   string
+			query  string
+		}
+	)
 	masu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/effective_rates/") {
 			w.Header().Set("Content-Type", "application/json")
@@ -38,9 +42,11 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 			})
 			return
 		}
+		capturedMu.Lock()
 		captured.method = r.Method
 		captured.path = r.URL.Path
 		captured.query = r.URL.RawQuery
+		capturedMu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer masu.Close()
@@ -63,19 +69,29 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	deadline := time.Now().Add(2 * time.Second)
+	var method, path, query string
 	for time.Now().Before(deadline) {
-		if captured.method == http.MethodPost {
+		capturedMu.Lock()
+		method = captured.method
+		capturedMu.Unlock()
+		if method == http.MethodPost {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	require.Equal(t, http.MethodPost, captured.method)
-	require.Equal(t, "/api/cost-management/v1/reship_ros/", captured.path)
-	require.Contains(t, captured.query, "schema=")
-	require.Contains(t, captured.query, "provider_uuid="+testutil.TestProviderUUID)
-	require.Contains(t, captured.query, "start_date=")
-	require.Contains(t, captured.query, "end_date=")
+	capturedMu.Lock()
+	method = captured.method
+	path = captured.path
+	query = captured.query
+	capturedMu.Unlock()
+
+	require.Equal(t, http.MethodPost, method)
+	require.Equal(t, "/api/cost-management/v1/reship_ros/", path)
+	require.Contains(t, query, "schema=")
+	require.Contains(t, query, "provider_uuid="+testutil.TestProviderUUID)
+	require.Contains(t, query, "start_date=")
+	require.Contains(t, query, "end_date=")
 }
 
 func TestSettingsAPI_PUT_PostgresDown(t *testing.T) {

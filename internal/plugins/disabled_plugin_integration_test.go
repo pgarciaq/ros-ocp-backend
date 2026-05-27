@@ -9,12 +9,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 
 	// Registers built-in plugins (avoid importing leaf packages twice — they register via init).
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins"
 )
+
+// syncPluginConfigFromEnv reloads ROS_ENABLED_PLUGINS / ROS_DISABLED_PLUGINS into config
+// after t.Setenv (GetConfig caches viper state until ResetForTest).
+func syncPluginConfigFromEnv(t *testing.T) {
+	t.Helper()
+	config.ResetForTest()
+	_ = config.GetConfig()
+}
 
 func ingestHookNames(t *testing.T) []string {
 	t.Helper()
@@ -30,13 +39,14 @@ func ingestHookNames(t *testing.T) []string {
 // hook from [plugin.ByTrait][plugin.IngestHook] while other hooks (e.g. node) remain.
 func TestRegistry_DisabledGPUExcludedFromIngestHooks(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
-
 	t.Setenv("ROS_DISABLED_PLUGINS", "gpu")
+	syncPluginConfigFromEnv(t)
 	off := ingestHookNames(t)
 	assert.NotContains(t, off, "gpu", "gpu IngestHook should be omitted when ROS_DISABLED_PLUGINS=gpu")
 	assert.Contains(t, off, "node", "node IngestHook should remain enabled")
 
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 	on := ingestHookNames(t)
 	assert.Contains(t, on, "gpu", "gpu IngestHook should register when not blocklisted")
 }
@@ -104,6 +114,7 @@ func dispatchContainerIngestAndHooks(ctx context.Context, pool *pgxpool.Pool, or
 func TestDisabledGPUPlugin_NoGPUDigestRows(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "gpu")
+	syncPluginConfigFromEnv(t)
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
@@ -24,6 +25,8 @@ func TestKruizePlugin_name(t *testing.T) {
 func TestKruizePlugin_enabled_defaultFalse(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	p := &KruizePlugin{}
 	assert.False(t, p.Enabled())
@@ -32,6 +35,8 @@ func TestKruizePlugin_enabled_defaultFalse(t *testing.T) {
 func TestKruizePlugin_enabled_whenAllowlisted(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "kruize")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
 
 	p := &KruizePlugin{}
 	assert.True(t, p.Enabled())

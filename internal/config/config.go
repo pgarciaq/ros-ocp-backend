@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/mitchellh/mapstructure"
@@ -274,7 +275,10 @@ type Config struct {
 	UnleashFullURL           string
 }
 
-var cfg *Config = nil
+var (
+	cfgMu sync.Mutex
+	cfg   *Config
+)
 
 func initConfig() {
 	_ = godotenv.Load() // loads .env into process environment if present; no-op otherwise
@@ -654,6 +658,8 @@ func (c *Config) TagsSyncBodyLimit() string {
 }
 
 func GetConfig() *Config {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	if cfg == nil {
 		initConfig()
 		log.Println("config: initialized")

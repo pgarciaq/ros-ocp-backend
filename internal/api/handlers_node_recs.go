@@ -365,7 +365,7 @@ func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 		return nil, fmt.Errorf("no database pool")
 	}
 	rows, err := dbPool.Query(ctx,
-		`SELECT DISTINCT c.cluster_uuid
+		`SELECT DISTINCT c.cluster_uuid::text
 		 FROM clusters c
 		 JOIN rh_accounts a ON c.tenant_id = a.id
 		 WHERE a.org_id = $1`, orgID)

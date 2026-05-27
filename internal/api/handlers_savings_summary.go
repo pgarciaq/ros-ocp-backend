@@ -192,7 +192,8 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		return c.JSON(http.StatusOK, byTag)
 	}
 
-	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile)
+	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
+	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile, currency)
 	if qerr != nil {
 		hlog.Errorf("fleet savings summary query failed: %v", qerr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -201,16 +202,17 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		})
 	}
 
-	summary.Currency = resolveFleetCurrency(ctx, orgID, clusterUUIDs)
-
 	summary.GPUSavingsNote = gpuSavingsFleetSummaryNote
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, summary)
 }
 
-func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string) (FleetSavingsSummaryResponse, error) {
+func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string, currency string) (FleetSavingsSummaryResponse, error) {
+	if currency == "" {
+		currency = costdata.DefaultCurrency
+	}
 	resp := FleetSavingsSummaryResponse{
-		Currency:  costdata.DefaultCurrency,
+		Currency:  currency,
 		ByCluster: []FleetClusterSavings{},
 	}
 
@@ -222,9 +224,9 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	totalUSD := roundUSD(
 		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot,
 	)
-	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, resp.Currency)
+	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, currency)
 
-	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile)
+	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, currency)
 	if err != nil {
 		return resp, err
 	}
@@ -272,7 +274,10 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	return out, nil
 }
 
-func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string) ([]FleetClusterSavings, error) {
+func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string, currency string) ([]FleetClusterSavings, error) {
+	if currency == "" {
+		currency = costdata.DefaultCurrency
+	}
 	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	noCostCode := fmt.Sprintf("%d", engine.NotifNoCostData)
@@ -370,7 +375,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		if err := rows.Scan(&row.ClusterUUID, &row.ClusterAlias, &savingsUSD, &row.HasCostData); err != nil {
 			return nil, err
 		}
-		row.EstimatedMonthlySavings = money.FormatUSDToSavings(roundUSD(savingsUSD), costdata.DefaultCurrency)
+		row.EstimatedMonthlySavings = money.FormatUSDToSavings(roundUSD(savingsUSD), currency)
 		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -459,13 +464,33 @@ func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID
 	return resp, nil
 }
 
+func sampleClusterUUIDFromRecommendations(ctx context.Context, orgID string) string {
+	pool := db.GetPool()
+	if pool == nil {
+		return ""
+	}
+	var clusterUUID string
+	err := pool.QueryRow(ctx, `
+		SELECT cluster_uuid::text
+		FROM recommendation_sets
+		WHERE org_id = $1 AND stale = false
+		LIMIT 1`, orgID).Scan(&clusterUUID)
+	if err != nil {
+		return ""
+	}
+	return clusterUUID
+}
+
 func resolveFleetCurrency(ctx context.Context, orgID string, clusterUUIDs []string) string {
 	if len(clusterUUIDs) > 0 {
 		return fetchClusterCurrency(ctx, orgID, clusterUUIDs[0])
 	}
 	clusters, err := getClustersForOrg(ctx, orgID)
-	if err != nil || len(clusters) == 0 {
-		return costdata.DefaultCurrency
+	if err == nil && len(clusters) > 0 {
+		return fetchClusterCurrency(ctx, orgID, clusters[0])
 	}
-	return fetchClusterCurrency(ctx, orgID, clusters[0])
+	if sample := sampleClusterUUIDFromRecommendations(ctx, orgID); sample != "" {
+		return fetchClusterCurrency(ctx, orgID, sample)
+	}
+	return costdata.DefaultCurrency
 }

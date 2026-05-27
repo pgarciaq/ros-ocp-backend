@@ -7,6 +7,13 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
 
+// RegisterTestInternalRoutes mounts internal API routes (tags sync/status) for contract tests.
+func RegisterTestInternalRoutes(e *echo.Echo) {
+	internal := e.Group("/api/cost-management/v1/internal")
+	internal.POST("/tags/sync", PostTagsSync)
+	internal.GET("/tags/status", GetTagsStatus)
+}
+
 // RegisterV1RoutesForTest mounts the same v1 recommendation routes as StartAPIServer.
 // Used by OpenAPI contract tests; bhTrigger may be nil (defaults to NoopTriggerer).
 func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
