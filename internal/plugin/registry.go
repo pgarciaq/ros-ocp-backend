@@ -76,13 +76,14 @@ func Enabled() []Plugin {
 	}
 
 	if len(kruizePlugins) > 0 && len(others) > 0 {
-		return kruizePlugins
+		return sortPluginsByPhase(kruizePlugins)
 	}
 
-	return candidates
+	return sortPluginsByPhase(candidates)
 }
 
-// ByTrait returns enabled plugins that implement trait T (an interface type).
+// ByTrait returns enabled plugins that implement trait T (an interface type),
+// in phase order (see [Enabled]).
 func ByTrait[T any]() []T {
 	var out []T
 	for _, p := range Enabled() {

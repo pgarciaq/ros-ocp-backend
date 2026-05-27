@@ -24,7 +24,9 @@ func init() {
 }
 
 // ExamplePlugin is a stub implementation used as a authoring template only.
-type ExamplePlugin struct{}
+type ExamplePlugin struct {
+	plugin.BasePlugin
+}
 
 func (p *ExamplePlugin) Name() string {
 	return "_example"

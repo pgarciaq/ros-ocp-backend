@@ -14,7 +14,9 @@ import (
 // ROS_API_TEST_ENRICHER=1 so other handler tests do not see synthetic GPU rows.
 const rosAPIEnricherTestPluginName = "ros_api_test_enricher"
 
-type rosAPIEnricherTestPlugin struct{}
+type rosAPIEnricherTestPlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&rosAPIEnricherTestPlugin{})

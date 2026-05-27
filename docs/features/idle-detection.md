@@ -40,6 +40,19 @@ This design **extends** that foundation with a three-state classification (`zomb
 grouping for sidecars, multi-resource coverage, persisted API fields, and fleet-level
 waste metrics.
 
+### Plugin architecture
+
+Idle detection ships as a **Phase 2 (Enrich)** plugin (`idledetection`), not inside
+the container plugin. See [Plugin execution phases](../architecture/plugin-phases.md).
+
+- **Phase 1** — the `container` plugin (and other Produce plugins) run first and
+  populate `recommendation_sets` with CPU/memory rightsizing.
+- **Barrier** — all Phase 1 plugins complete.
+- **Phase 2** — `idledetection` reads those rows, classifies idle/zombie state, and
+  persists `idle_state`, `estimated_waste_cents`, and related columns.
+
+`ROS_ENABLED_PLUGINS` order does not affect execution; the registry sorts by phase.
+
 ```mermaid
 flowchart LR
     subgraph ingest["Ingestion"]
@@ -674,7 +687,9 @@ until Phase 2 validation completes.
 ### Suggested implementation order
 
 1. Migration + `IdleResult` struct + unit tests (classification table)
-2. Hook into `RecommendWorkloadsStreaming` + persist columns
+2. Implement `internal/plugins/idledetection` as a Phase 2 plugin; run via
+   [`ExecuteInPhases`](../../internal/plugin/phases.go) after container recommendations
+   are written (not inside `RecommendWorkloadsStreaming`)
 3. API enrichment + `filter[idle_state]`
 4. Savings summary grouping + fleet meta
 5. Settings API + notifications + extended resources

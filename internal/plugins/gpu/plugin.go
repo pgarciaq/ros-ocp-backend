@@ -53,7 +53,9 @@ import (
 
 // GPUPlugin handles GPU utilization analysis, classification, and right-sizing
 // recommendations (MIG partitioning and time-slicing).
-type GPUPlugin struct{}
+type GPUPlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&GPUPlugin{})

@@ -92,11 +92,18 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	// Sweeping empty tables is a no-op.
 	retProviders := plugin.ByTrait[plugin.RetentionProvider]()
 	if len(retProviders) > 0 {
-		for _, rp := range retProviders {
+		if err := plugin.ExecuteInPhases(ctx, func(ctx context.Context, p plugin.Plugin) error {
+			rp, ok := p.(plugin.RetentionProvider)
+			if !ok {
+				return nil
+			}
 			if err := rp.SweepRetention(ctx, pool, cutoff); err != nil {
 				logging.GetLogger().Warnf("retention: RetentionProvider %s sweep failed: %v", rp.Name(), err)
-				errs = append(errs, fmt.Errorf("retention plugin %s: %w", rp.Name(), err))
+				return fmt.Errorf("retention plugin %s: %w", rp.Name(), err)
 			}
+			return nil
+		}); err != nil {
+			errs = append(errs, err)
 		}
 	} else {
 		if err := SweepPartitionedTables(ctx, pool, retainedTables, cutoffYM); err != nil {

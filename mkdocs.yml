@@ -85,6 +85,7 @@ nav:
       - Idle / Zombie Detection: features/idle-detection.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
+      - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
       - Configurability Reference: architecture/configurability.md
       - Recommendation Math: architecture/recommendation-math.md

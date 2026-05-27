@@ -49,7 +49,9 @@ import (
 
 // ContainerPlugin handles container CPU/memory recommendation CSV ingestion,
 // retention, and term configuration.
-type ContainerPlugin struct{}
+type ContainerPlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&ContainerPlugin{})

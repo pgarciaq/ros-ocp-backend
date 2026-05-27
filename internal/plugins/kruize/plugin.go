@@ -37,7 +37,9 @@ import (
 
 // KruizePlugin represents the legacy Kruize recommendation engine.
 // It is mutually exclusive with all native plugins.
-type KruizePlugin struct{}
+type KruizePlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&KruizePlugin{})

@@ -8,7 +8,7 @@
 //
 // # Trait Interfaces
 //
-//   - [Plugin] — base: name and enabled state
+//   - [Plugin] — base: name, execution phase, and enabled state
 //   - [CSVIngestor] — owns CSV parsing for one or more report types
 //   - [IngestHook] — runs after a CSVIngestor processes matching CSV types
 //   - [APIProvider] — registers HTTP routes on the authenticated API group
@@ -28,7 +28,7 @@
 //
 // See internal/plugins/example/ for a complete authoring template. Key steps:
 //  1. Create a package under internal/plugins/<name>/
-//  2. Define a struct implementing [Plugin] + desired trait interfaces
+//  2. Define a struct implementing [Plugin] + desired trait interfaces (embed [BasePlugin] for Phase 1)
 //  3. Call [Register] in init()
 //  4. Add your blank import to internal/plugins/plugins.go
 //  5. If implementing [TermProvider], choose appropriate default terms and MaxWindowDays
@@ -54,7 +54,7 @@ import (
 )
 
 // Plugin is the base interface every plugin implements. It declares the plugin's
-// identity and whether it is active in the current configuration.
+// identity, execution phase, and whether it is active in the current configuration.
 type Plugin interface {
 	// Name returns the unique identifier for this plugin (e.g., "container", "gpu", "pvc").
 	// This name is used for registry lookups, env var configuration, API responses,
@@ -65,6 +65,10 @@ type Plugin interface {
 	// exceptions (for example a template plugin that is always off, or the namespace
 	// plugin that stays enabled in Kruize mode for route compatibility).
 	Enabled() bool
+	// Phase returns the execution phase (1=Produce, 2=Enrich, 3=Optimize). The registry
+	// runs all plugins in phase N before any plugin in phase N+1. Embed [BasePlugin]
+	// for the default Phase 1 (Produce).
+	Phase() int
 }
 
 // CSVIngestor plugins own CSV parsing for one or more logical CSV report types.

@@ -59,7 +59,9 @@ import (
 
 // NamespacePlugin handles namespace-level resource quota recommendations
 // using aggregated container metrics and multiple engine profiles.
-type NamespacePlugin struct{}
+type NamespacePlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&NamespacePlugin{})

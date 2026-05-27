@@ -51,10 +51,10 @@ func DispatchCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, cl
 	return true, rows, hookErrs, nil
 }
 
-// RunIngestHooks fires all enabled IngestHooks that match csvType.
+// RunIngestHooks fires all enabled IngestHooks that match csvType, in plugin phase order.
 // Returns a slice of HookErrors for hooks that failed (non-fatal).
 func RunIngestHooks(ctx context.Context, pool *pgxpool.Pool, csvType string, rows []ingestion.MetricRow, orgID, clusterUUID string) []HookError {
-	hooks := ByTrait[IngestHook]()
+	hooks := ByTrait[IngestHook]() // phase-sorted via Enabled()
 	var errs []HookError
 	for _, hook := range hooks {
 		for _, ht := range hook.HookAfterCSVTypes() {

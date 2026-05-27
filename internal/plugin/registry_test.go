@@ -14,7 +14,9 @@ import (
 )
 
 type stubPlugin struct {
+	BasePlugin
 	name    string
+	phase   int
 	enabled func() bool
 }
 
@@ -27,6 +29,13 @@ func (s *stubPlugin) Enabled() bool {
 		return s.enabled()
 	}
 	return EnabledFor(s.name)
+}
+
+func (s *stubPlugin) Phase() int {
+	if s.phase != 0 {
+		return s.phase
+	}
+	return PhaseProduce
 }
 
 type csvIngestorStub struct {
@@ -301,4 +310,76 @@ func TestWarnKruizeEnabled_warnsWhenEnabled(t *testing.T) {
 	assert.NotPanics(t, func() {
 		warnKruizeEnabled()
 	})
+}
+
+func TestEnabled_sortedByPhase(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "enrich,produce,optimize")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "enrich", phase: PhaseEnrich})
+	Register(&stubPlugin{name: "produce", phase: PhaseProduce})
+	Register(&stubPlugin{name: "optimize", phase: PhaseOptimize})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 3)
+	assert.Equal(t, "produce", enabled[0].Name())
+	assert.Equal(t, "enrich", enabled[1].Name())
+	assert.Equal(t, "optimize", enabled[2].Name())
+}
+
+func TestEnabled_phaseOrderIndependentOfRegistrationOrder(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "b,a,c")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "c", phase: PhaseOptimize})
+	Register(&stubPlugin{name: "a", phase: PhaseProduce})
+	Register(&stubPlugin{name: "b", phase: PhaseEnrich})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 3)
+	names := []string{enabled[0].Name(), enabled[1].Name(), enabled[2].Name()}
+	assert.Equal(t, []string{"a", "b", "c"}, names)
+}
+
+func TestEnabled_samePhaseSortedByName(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "zebra,alpha")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "zebra", phase: PhaseProduce})
+	Register(&stubPlugin{name: "alpha", phase: PhaseProduce})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 2)
+	assert.Equal(t, "alpha", enabled[0].Name())
+	assert.Equal(t, "zebra", enabled[1].Name())
+}
+
+func TestExecuteInPhases_runsPhase1BeforePhase2(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "enrich,produce")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "enrich", phase: PhaseEnrich})
+	Register(&stubPlugin{name: "produce", phase: PhaseProduce})
+
+	var order []string
+	err := ExecuteInPhases(context.Background(), func(_ context.Context, p Plugin) error {
+		order = append(order, p.Name())
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"produce", "enrich"}, order)
+}
+
+func TestExecuteInPhases_invalidPhaseDefaultsToProduce(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "bad")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "bad", phase: 99})
+
+	assert.Equal(t, PhaseProduce, normalizePhase(Enabled()[0].Phase()))
 }

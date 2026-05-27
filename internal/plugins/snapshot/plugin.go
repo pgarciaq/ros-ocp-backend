@@ -41,7 +41,9 @@ import (
 )
 
 // SnapshotPlugin handles VolumeSnapshot staleness detection and reporting.
-type SnapshotPlugin struct{}
+type SnapshotPlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&SnapshotPlugin{})

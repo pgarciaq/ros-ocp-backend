@@ -50,7 +50,9 @@ import (
 
 // NodePlugin handles node-level utilization analysis and right-sizing
 // recommendations based on aggregated pod resource consumption.
-type NodePlugin struct{}
+type NodePlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&NodePlugin{})

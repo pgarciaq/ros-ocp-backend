@@ -58,7 +58,9 @@ import (
 
 // PVCPlugin handles PVC storage growth analysis and capacity right-sizing
 // recommendations using weighted least squares trend projection.
-type PVCPlugin struct{}
+type PVCPlugin struct {
+	plugin.BasePlugin
+}
 
 func init() {
 	plugin.Register(&PVCPlugin{})

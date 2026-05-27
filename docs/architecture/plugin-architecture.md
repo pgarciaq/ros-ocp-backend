@@ -8,6 +8,8 @@ ros-ocp-backend implements multiple recommendation domains—container CPU/memor
 
 This document describes **compile-time, in-process plugins** behind small Go interfaces, toggled at runtime via environment variables (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`). Plugins ship in the same binary (blank imports + `init()` registration)—no dynamic `.so` loading, no gRPC, no Wasm—preserving **zero interface dispatch overhead** on the hot path beyond ordinary Go polymorphism.
 
+**Execution phases:** Plugins declare a phase (1=Produce, 2=Enrich, 3=Optimize). The registry runs all Phase 1 plugins before Phase 2, then Phase 3, regardless of `ROS_ENABLED_PLUGINS` list order. See **[plugin-phases.md](plugin-phases.md)** for the full phase table and future plugins (idle detection, JVM tuning, binpacking).
+
 **Implementation note:** The Kafka consumer still uses an explicit top-level `switch`/branch per known CSV/payload type (`container`, `namespace`, `storage`, `snapshot`). Within each native branch, CSV handling routes through **`CSVIngestor`** plugins (`nativeCSVIngestViaPlugins`) where applicable; hooks and fallbacks preserve disable semantics for coupled domains (GPU/node digests).
 
 ## 1. Problem statement
@@ -229,7 +231,7 @@ Env semantics (**[`EnabledFor`](../../internal/plugin/registry.go)**):
 - If **`ROS_ENABLED_PLUGINS`** is non-empty: **allowlist** only (comma-separated names matching **`Plugin.Name()`**).
 - If empty: every plugin is eligible except **`kruize`** (off unless allowlisted), then **`ROS_DISABLED_PLUGINS`** applies as a blocklist.
 
-- **Ordering** — registry preserves registration order (side-effect import order in **[`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)**). For deterministic hooks, core may **sort** hooks or document that hook order follows registration order after filtering.
+- **Ordering** — [`Enabled()`](../../internal/plugin/registry.go) returns plugins sorted by **execution phase** (1→2→3), then by name within a phase. Registration order and `ROS_ENABLED_PLUGINS` list order do not affect execution. See **[`plugin-phases.md`](plugin-phases.md)**. [`ExecuteInPhases`](../../internal/plugin/phases.go) runs callbacks with barriers between phases; retention sweeps and [`ByTrait`](../../internal/plugin/registry.go) use this ordering.
 
 **Blank imports:** [`cmd/start.go`](../../cmd/start.go) imports **`_ ".../internal/plugins"`**, which loads **[`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)** — that file aggregates **`init()`** registration via blank imports of each plugin package:
 
