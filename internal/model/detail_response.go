@@ -35,18 +35,25 @@ type GPURecommendation struct {
 //	recommendations.monitoring_end_time
 //	recommendations.current
 type DetailResponse struct {
-	ID              string                        `json:"id"`
-	ClusterAlias    string                        `json:"cluster_alias"`
-	ClusterUUID     string                        `json:"cluster_uuid"`
-	Container       string                        `json:"container"`
-	Project         string                        `json:"project"`
-	Workload        string                        `json:"workload"`
-	WorkloadType    string                        `json:"workload_type"`
-	SourceID        string                        `json:"source_id"`
-	LastReported    string                        `json:"last_reported"`
-	Currency        string                        `json:"currency,omitempty"`
-	Recommendations DetailRecommendations         `json:"recommendations"`
-	GPU             map[string]*GPURecommendation `json:"gpu,omitempty"`
+	ID                      string                        `json:"id"`
+	ClusterAlias            string                        `json:"cluster_alias"`
+	ClusterUUID             string                        `json:"cluster_uuid"`
+	Container               string                        `json:"container"`
+	Project                 string                        `json:"project"`
+	Workload                string                        `json:"workload"`
+	WorkloadType            string                        `json:"workload_type"`
+	SourceID                string                        `json:"source_id"`
+	LastReported            string                        `json:"last_reported"`
+	Currency                string                        `json:"currency,omitempty"`
+	IdleState               string                        `json:"idle_state"`
+	IdleSince               *string                       `json:"idle_since,omitempty"`
+	IdleDurationDays        *int                          `json:"idle_duration_days,omitempty"`
+	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
+	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
+	EstimatedMonthlyWaste   *money.SavingsObject          `json:"estimated_monthly_waste,omitempty"`
+	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
+	Recommendations         DetailRecommendations         `json:"recommendations"`
+	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.
@@ -196,20 +203,31 @@ func BuildDetailResponse(
 		recs.Notifications = allNotifications
 	}
 
-	return &DetailResponse{
-		ID:              native.ID,
-		ClusterAlias:    native.ClusterAlias,
-		ClusterUUID:     native.ClusterUUID,
-		Container:       native.Container,
-		Project:         native.Project,
-		Workload:        native.Workload,
-		WorkloadType:    native.WorkloadType,
-		SourceID:        native.SourceID,
-		LastReported:    native.LastReported,
-		Currency:        native.Currency,
-		Recommendations: recs,
-		GPU:             native.GPU,
+	resp := &DetailResponse{
+		ID:                    native.ID,
+		ClusterAlias:          native.ClusterAlias,
+		ClusterUUID:           native.ClusterUUID,
+		Container:             native.Container,
+		Project:               native.Project,
+		Workload:              native.Workload,
+		WorkloadType:          native.WorkloadType,
+		SourceID:              native.SourceID,
+		LastReported:          native.LastReported,
+		Currency:              native.Currency,
+		IdleState:             native.IdleState,
+		IdleSince:             native.IdleSince,
+		IdleDurationDays:      native.IdleDurationDays,
+		PeakCPUMillicores:     native.PeakCPUMillicores,
+		PeakMemoryBytes:       native.PeakMemoryBytes,
+		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
+		IdleRecommendation:    native.IdleRecommendation,
+		Recommendations:       recs,
+		GPU:                   native.GPU,
 	}
+	if resp.IdleState == "" {
+		resp.IdleState = "active"
+	}
+	return resp
 }
 
 // toDetailEngine transforms a flat EngineRecommendation into the Kruize-

@@ -314,8 +314,8 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if err := applyNativeParamFilter(c, queryParams, "container", "rs.container_name", model.NamespaceMaxLen, false); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if idleFilter := queryparams.FirstFilter(c, "idle_state"); idleFilter != "" {
-		states, err := model.IdleStateFilterValues(idleFilter)
+	if idleVals := queryparams.IncludeValues(c, "idle_state"); len(idleVals) > 0 {
+		states, err := model.IdleStateFilterValues(strings.Join(idleVals, ","))
 		if err != nil {
 			filterErrs = append(filterErrs, err)
 		} else if len(states) > 0 {

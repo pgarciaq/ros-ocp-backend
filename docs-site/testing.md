@@ -22,9 +22,15 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 - Custom threshold application and 3-tier resolution (env > tenant DB > defaults)
 - Async recalculation when thresholds change
 
+### Idle / zombie detection
+
+- Contract tests in `internal/api/contract_test.go` (`TestContractIdleDetection_*`): `idle_state` on list responses, conditional waste/recommendation fields, `filter[idle_state]`, savings-summary `group_by[idle_state]`, CSV idle columns
+- IQE: `iqe_cost_management/tests/rest_api/v1/test_ros_idle_detection.py` (filters, settings GET/PUT/validation, CSV headers)
+- OpenAPI: `openapi.json` and `docs/openapi/idle-detection.yaml`
+
 ### API Layer
 
-- All CRUD operations for settings (thresholds, terms, business hours, snapshots)
+- All CRUD operations for settings (thresholds, terms, business hours, snapshots, idle-detection)
 - RBAC enforcement (read-only users blocked from PUT/DELETE)
 - OpenAPI spec/route parity (no spec drift)
 - Pagination, filtering, engine selection, CSV export (including `currency` column)

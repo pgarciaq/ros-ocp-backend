@@ -27,6 +27,7 @@ You can view it interactively using:
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration |
 | Settings | `/recommendations/openshift/settings/capabilities` | GET | Plugin capabilities |
 | Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT | Snapshot staleness threshold |
+| Settings | `/recommendations/openshift/settings/idle-detection` | GET/PUT/DELETE | Idle/zombie classification thresholds |
 
 ## Authentication
 

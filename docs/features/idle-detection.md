@@ -757,6 +757,17 @@ until Phase 2 validation completes.
 
 ---
 
+## Test and deployment coverage
+
+| Layer | Location | What it verifies |
+|-------|----------|------------------|
+| Contract tests | [`internal/api/contract_test.go`](../../internal/api/contract_test.go) (`TestContractIdleDetection_*`) | JSON list filters, idle field presence/omission, savings `group_by[idle_state]`, CSV headers |
+| IQE tests | `iqe-cost-management-plugin/iqe_cost_management/tests/rest_api/v1/test_ros_idle_detection.py` | Live API filters, settings GET/PUT validation, CSV export columns |
+| Helm chart | `cost-onprem-chart` — `cost-onprem/values.yaml` (`ros.api.idleDetection`) and `cost-onprem/templates/ros/_feature-env.yaml` | Injects all `ROS_IDLE_*` environment variables into ros-api and ros-processor |
+| OpenAPI | [`openapi.json`](../../openapi.json) (authoritative) and partial fragment [`docs/openapi/idle-detection.yaml`](../../docs/openapi/idle-detection.yaml) | `filter[idle_state]`, response fields, settings endpoints, grouped savings schema |
+
+---
+
 ## Related Documentation
 
 - [Savings estimations](../../docs-site/features/savings-estimations.md)

@@ -1,0 +1,150 @@
+# Partial OpenAPI 3.0 fragment: idle / zombie detection API additions.
+# Merged into the authoritative spec at openapi.json (repository root).
+# See docs-site/openapi.md and docs/features/idle-detection.md.
+
+openapi: 3.0.3
+info:
+  title: ROS-OCP Idle Detection (partial)
+  version: 1.0.0
+paths:
+  /recommendations/openshift:
+    get:
+      parameters:
+        - name: filter[idle_state]
+          in: query
+          description: Comma-separated idle states (active, idle, zombie).
+          schema:
+            type: string
+            example: zombie,idle
+  /recommendations/openshift/savings-summary:
+    get:
+      parameters:
+        - name: group_by[idle_state]
+          in: query
+          description: Group fleet waste by idle_state (value ignored, e.g. `*`).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Idle-state grouped waste rollup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetSavingsByIdleStateResponse'
+  /recommendations/openshift/settings/idle-detection:
+    get:
+      summary: Get idle detection settings
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdleDetectionSettingsResponse'
+    put:
+      summary: Update idle detection settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdleDetectionSettingsUpdate'
+    delete:
+      summary: Reset idle detection settings to defaults
+components:
+  schemas:
+    SavingsObject:
+      type: object
+      properties:
+        value:
+          type: string
+          pattern: '^\d+\.\d{6}$'
+        units:
+          type: string
+          example: USD
+    IdleRecommendation:
+      type: object
+      required: [action, confidence, reason]
+      properties:
+        action:
+          type: string
+          enum: [terminate]
+        confidence:
+          type: string
+          enum: [medium, high]
+        reason:
+          type: string
+    IdleDetectionThresholds:
+      type: object
+      properties:
+        cpu_utilization_percent:
+          type: integer
+          minimum: 1
+          maximum: 50
+        memory_utilization_percent:
+          type: integer
+          minimum: 1
+          maximum: 50
+        burst_ratio:
+          type: integer
+        minimum_observation_days:
+          type: integer
+        gpu_sm_active_basis_points:
+          type: integer
+        gpu_dram_active_basis_points:
+          type: integer
+    IdleDetectionExclusions:
+      type: object
+      properties:
+        namespaces:
+          type: array
+          items:
+            type: string
+        workload_types:
+          type: array
+          items:
+            type: string
+    IdleDetectionSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        thresholds:
+          $ref: '#/components/schemas/IdleDetectionThresholds'
+        exclusions:
+          $ref: '#/components/schemas/IdleDetectionExclusions'
+    IdleDetectionSettingsResponse:
+      type: object
+      properties:
+        idle_detection:
+          $ref: '#/components/schemas/IdleDetectionSettings'
+        locked_fields:
+          type: array
+          items:
+            type: string
+    IdleDetectionSettingsUpdate:
+      type: object
+      required: [idle_detection]
+      properties:
+        idle_detection:
+          $ref: '#/components/schemas/IdleDetectionSettings'
+    FleetIdleStateSavingsRow:
+      type: object
+      properties:
+        idle_state:
+          type: string
+          enum: [idle, zombie]
+        estimated_monthly_waste:
+          $ref: '#/components/schemas/SavingsObject'
+        container_count:
+          type: integer
+    FleetSavingsByIdleStateResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FleetIdleStateSavingsRow'
+        meta:
+          type: object
+          properties:
+            count:
+              type: integer
