@@ -255,7 +255,8 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings` | Container/namespace row | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation |
+| `estimated_monthly_savings` | Container/namespace row | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term; omitted when `idle_state != active` |
+| `estimated_monthly_waste` | Container row | Full terminate opportunity; present when `idle_state` is `idle` or `zombie` |
 | `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
 | GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
@@ -305,16 +306,24 @@ A recommendation is **stale** when the cluster stopped sending metrics beyond
 
 Detail lookups exclude stale rows (`stale = false` in DB query).
 
-### Idle / abandoned classification
+### Idle / zombie detection
 
-Detected via notification codes (not a separate column):
+List and detail responses include persisted fields (see [Idle / Zombie Detection](features/idle-detection.md)):
 
-| Code | Classification | Savings behavior |
-|------|----------------|------------------|
-| **5** | Idle — usage below CPU/memory idle thresholds but not all zero | 100% of current request cost recoverable |
-| **8** | Abandoned — zero CPU **and** zero memory across the window | 100% recoverable; supersedes idle |
+| Field | When present | UI guidance |
+|-------|--------------|-------------|
+| `idle_state` | Always | `active`, `idle`, or `zombie` — prefer over inferring from notification codes alone |
+| `estimated_monthly_waste` | `idle` / `zombie` | Full monthly cost if the workload is **terminated** |
+| `estimated_monthly_savings` | Usually `active` only | Rightsizing delta — **do not show** for idle/zombie rows (API omits it) |
+| `idle_recommendation` | Non-active | `action: "terminate"` → surface **waste**, not savings |
+| `idle_duration_days` | Non-active | As-of last recommendation run (±1 day), not live |
 
-Highlight these rows for potential decommissioning. Show full savings estimate when present.
+**Never sum** `estimated_monthly_savings` + `estimated_monthly_waste`.
+
+Filter idle workloads: `?filter[idle_state]=zombie,idle`. Fleet waste rollup:
+`?group_by[idle_state]=*` on savings-summary.
+
+Notification codes **5** (idle) and **8** (abandoned) remain for backward compatibility.
 
 ### UI Integration Recommendations
 
@@ -826,6 +835,9 @@ Per-tenant sizing and classification thresholds (native engine only).
 GET    /recommendations/openshift/settings/thresholds?recommendation_type={type}
 PUT    /recommendations/openshift/settings/thresholds?recommendation_type={type}
 DELETE /recommendations/openshift/settings/thresholds?recommendation_type={type}
+GET    /recommendations/openshift/settings/idle-detection
+PUT    /recommendations/openshift/settings/idle-detection
+DELETE /recommendations/openshift/settings/idle-detection
 ```
 
 `recommendation_type`: `container`, `namespace`, `node`, `gpu`, `pvc`.

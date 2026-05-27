@@ -53,6 +53,8 @@ func (p *SnapshotPlugin) Name() string { return "snapshot" }
 
 func (p *SnapshotPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
+func (p *SnapshotPlugin) Priority() int { return 40 }
+
 func (p *SnapshotPlugin) SupportedCSVTypes() []string {
 	return []string{string(types.PayloadTypeSnapshot)}
 }

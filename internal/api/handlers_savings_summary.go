@@ -37,6 +37,24 @@ type FleetClusterSavings struct {
 	HasCostData             bool               `json:"has_cost_data"`
 }
 
+// FleetIdleStateSavingsRow is one idle_state group in savings-summary group_by[idle_state] responses.
+type FleetIdleStateSavingsRow struct {
+	IdleState             string             `json:"idle_state"`
+	EstimatedMonthlyWaste money.SavingsObject `json:"estimated_monthly_waste"`
+	ContainerCount        int                `json:"container_count"`
+}
+
+// FleetSavingsByIdleMeta is metadata for group_by[idle_state] savings responses.
+type FleetSavingsByIdleMeta struct {
+	Count int `json:"count"`
+}
+
+// FleetSavingsByIdleStateResponse is returned when group_by[idle_state] is requested.
+type FleetSavingsByIdleStateResponse struct {
+	Data []FleetIdleStateSavingsRow `json:"data"`
+	Meta FleetSavingsByIdleMeta     `json:"meta"`
+}
+
 // FleetSavingsSummaryResponse is the JSON payload for GET /recommendations/openshift/savings-summary.
 type FleetSavingsSummaryResponse struct {
 	Currency                string                `json:"currency"`
@@ -98,6 +116,39 @@ func GetFleetSavingsSummary(c echo.Context) error {
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
+	}
+
+	if queryparams.GroupByIdleState(c) {
+		clusterQueryFilter := queryparams.FirstFilter(c, "cluster")
+		if clusterQueryFilter != "" {
+			if len(clusterUUIDs) > 0 {
+				allowed := false
+				for _, cu := range clusterUUIDs {
+					if cu == clusterQueryFilter {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					setRecommendationNoStore(c)
+					return c.JSON(http.StatusOK, FleetSavingsByIdleStateResponse{
+						Data: []FleetIdleStateSavingsRow{},
+						Meta: FleetSavingsByIdleMeta{Count: 0},
+					})
+				}
+			}
+			clusterUUIDs = []string{clusterQueryFilter}
+		}
+		byIdle, qerr := queryFleetSavingsByIdleState(ctx, pool, orgID, clusterUUIDs, engineProfile)
+		if qerr != nil {
+			hlog.Errorf("fleet savings by idle_state query failed: %v", qerr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to fetch fleet savings summary",
+			})
+		}
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, byIdle)
 	}
 
 	groupByTagKey := queryparams.GroupByTagKey(c)
@@ -362,6 +413,50 @@ func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engin
 	engineParam = len(args) + 1
 	args = append(args, engineProfile)
 	return filterSQL, args, engineParam
+}
+
+func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string) (FleetSavingsByIdleStateResponse, error) {
+	resp := FleetSavingsByIdleStateResponse{
+		Data: []FleetIdleStateSavingsRow{},
+		Meta: FleetSavingsByIdleMeta{Count: 0},
+	}
+	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
+	engineRef := fmt.Sprintf("$%d", engineParam)
+
+	rows, err := pool.Query(ctx, `
+		SELECT idle_state,
+		       COUNT(DISTINCT (cluster_uuid::text, namespace, workload, container_name))::int AS container_count,
+		       COALESCE(SUM(estimated_waste_cents), 0)::float / 100.0 AS waste_usd
+		FROM recommendation_sets
+		WHERE org_id = $1
+		  AND term = 'medium'
+		  AND engine = `+engineRef+`
+		  AND stale = false
+		  AND idle_state IN ('idle', 'zombie')`+clusterFilter+`
+		GROUP BY idle_state
+		ORDER BY idle_state`,
+		args...,
+	)
+	if err != nil {
+		return resp, err
+	}
+	defer rows.Close()
+
+	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
+	for rows.Next() {
+		var row FleetIdleStateSavingsRow
+		var wasteUSD float64
+		if err := rows.Scan(&row.IdleState, &row.ContainerCount, &wasteUSD); err != nil {
+			return resp, err
+		}
+		row.EstimatedMonthlyWaste = money.FormatUSDToSavings(roundUSD(wasteUSD), currency)
+		resp.Data = append(resp.Data, row)
+	}
+	if err := rows.Err(); err != nil {
+		return resp, err
+	}
+	resp.Meta.Count = len(resp.Data)
+	return resp, nil
 }
 
 func resolveFleetCurrency(ctx context.Context, orgID string, clusterUUIDs []string) string {

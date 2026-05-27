@@ -21,6 +21,7 @@
 // Each (namespace × term × engine) combination produces one recommendation.
 //
 // After namespace rows are written, [engine.AggregateNamespaceIdleState] runs as
+// part of report processing (container plugin priority 10 before namespace 90).
 // post-processing: a namespace is idle when every container recommendation in that
 // namespace is idle or zombie. Phase 1 alphabetical plugin order guarantees the
 // container plugin runs before namespace.
@@ -76,6 +77,8 @@ func (p *NamespacePlugin) Name() string { return "namespace" }
 
 // Enabled controls registry visibility for this plugin. Namespace HTTP routes must stay available
 // in Kruize mode; native CSV ingestion still respects mutual exclusivity via [plugin.Enabled].
+func (p *NamespacePlugin) Priority() int { return 90 }
+
 func (p *NamespacePlugin) Enabled() bool {
 	if plugin.EnabledFor(plugin.KruizePluginName) {
 		return true

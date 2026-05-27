@@ -36,6 +36,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("load gpu thresholds: %w", err)
 	}
+	gpuIdleCfg := LoadGPUIdleConfig(ctx, pool, orgID)
 	query := `
 		SELECT interval_start, namespace, workload, container_name,
 			COALESCE(gpu_model_name, ''), COALESCE(gpu_profile_name, ''),
@@ -115,7 +116,7 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			if len(windowDigests) < tc.MinDataDays {
 				continue
 			}
-			rec := RecommendGPUWithSettings(windowDigests, gpuSettings)
+			rec := RecommendGPUWithSettings(windowDigests, gpuSettings, gpuIdleCfg)
 			if rec != nil {
 				rec.Term = tc.Name
 				result[strKey] = append(result[strKey], rec)

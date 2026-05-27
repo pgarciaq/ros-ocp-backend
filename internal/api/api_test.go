@@ -741,6 +741,7 @@ func TestGenerateNativeCSV(t *testing.T) {
 			WorkloadType: "deployment",
 			SourceID:     "s1",
 			LastReported: "2026-04-07T00:00:00Z",
+			IdleState:    "active",
 			Recommendations: map[string]model.TermRecommendation{
 				"short_term": {
 					Cost: &model.EngineRecommendation{
@@ -775,18 +776,21 @@ func TestGenerateNativeCSV(t *testing.T) {
 	assert.Equal(t, "", costRow[8])  // pod_count_min (nil replicas)
 	assert.Equal(t, "", costRow[9])  // pod_count_max
 	assert.Equal(t, "", costRow[10]) // pod_count_avg
-	assert.Equal(t, "", costRow[11]) // estimated_monthly_savings (nil)
-	assert.Equal(t, "", costRow[12]) // currency (nil savings)
-	assert.Equal(t, "short_term", costRow[13])
-	assert.Equal(t, "cost", costRow[14])
-	assert.Equal(t, "100", costRow[15])
-	assert.Equal(t, "200", costRow[16])
-	assert.Equal(t, "2048", costRow[17])
-	assert.Equal(t, "4096", costRow[18])
+	assert.Equal(t, "", costRow[11])  // estimated_monthly_savings (nil)
+	assert.Equal(t, "", costRow[12])  // estimated_monthly_waste
+	assert.Equal(t, "", costRow[13])  // estimated_monthly_waste_currency
+	assert.Equal(t, "", costRow[14])  // currency (nil savings)
+	assert.Equal(t, "active", costRow[15]) // idle_state default
+	assert.Equal(t, "short_term", costRow[18])
+	assert.Equal(t, "cost", costRow[19])
+	assert.Equal(t, "100", costRow[20])
+	assert.Equal(t, "200", costRow[21])
+	assert.Equal(t, "2048", costRow[22])
+	assert.Equal(t, "4096", costRow[23])
 
 	perfRow := records[2]
-	assert.Equal(t, "performance", perfRow[14])
-	assert.Equal(t, "300", perfRow[15])
+	assert.Equal(t, "performance", perfRow[19])
+	assert.Equal(t, "300", perfRow[20])
 }
 
 func TestGenerateNativeCSV_Empty(t *testing.T) {

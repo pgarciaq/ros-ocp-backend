@@ -144,6 +144,13 @@ type NativeRecommendationRow struct {
 
 	EstimatedSavingsCents *int64 `gorm:"column:estimated_monthly_savings_usd"`
 
+	IdleState           string     `gorm:"column:idle_state"`
+	IdleSince           *time.Time `gorm:"column:idle_since"`
+	IdleDurationDays    *int       `gorm:"column:idle_duration_days"`
+	PeakCPUMillicores   *int64     `gorm:"column:peak_cpu_millicores"`
+	PeakMemoryBytes     *int64     `gorm:"column:peak_memory_bytes"`
+	EstimatedWasteCents *int64     `gorm:"column:estimated_waste_cents"`
+
 	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
 
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
@@ -172,7 +179,14 @@ type NativeContainerResult struct {
 	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *money.SavingsObject          `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlyWaste   *money.SavingsObject          `json:"estimated_monthly_waste,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
+	IdleState               string                        `json:"idle_state"`
+	IdleSince               *string                       `json:"idle_since,omitempty"`
+	IdleDurationDays        *int                          `json:"idle_duration_days,omitempty"`
+	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
+	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
+	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
@@ -456,6 +470,8 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
 	rs.estimated_monthly_savings_usd,
+	rs.idle_state, rs.idle_since, rs.idle_duration_days,
+	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
 	rs.monitoring_end_time,
 	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
@@ -610,19 +626,33 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 		}
 
 		result := NativeContainerResult{
-			ID:                      NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
-			ClusterAlias:            first.ClusterAlias,
-			ClusterUUID:             first.ClusterUUID,
-			Container:               first.ContainerName,
-			Project:                 first.Namespace,
-			Workload:                first.Workload,
-			WorkloadType:            first.WorkloadType,
-			SourceID:                first.SourceID,
-			LastReported:            first.LastReported.Format(time.RFC3339),
-			Replicas:                replicas,
-			EstimatedMonthlySavings: money.FormatCentsToSavingsPtr(first.EstimatedSavingsCents, money.DefaultCurrency),
-			MonitoringEndTime:       maxMonEnd,
-			Recommendations:         make(map[string]TermRecommendation),
+			ID:               NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
+			ClusterAlias:     first.ClusterAlias,
+			ClusterUUID:      first.ClusterUUID,
+			Container:        first.ContainerName,
+			Project:          first.Namespace,
+			Workload:         first.Workload,
+			WorkloadType:     first.WorkloadType,
+			SourceID:         first.SourceID,
+			LastReported:     first.LastReported.Format(time.RFC3339),
+			Replicas:         replicas,
+			MonitoringEndTime: maxMonEnd,
+			Recommendations:  make(map[string]TermRecommendation),
+		}
+		idleRow := pickIdleSourceRow(rowGroup)
+		savingsEnabled := idleRow.EstimatedSavingsCents != nil || idleRow.EstimatedWasteCents != nil
+		PopulateContainerIdleFields(
+			&result,
+			idleRow.IdleState,
+			idleRow.IdleSince,
+			idleRow.IdleDurationDays,
+			idleRow.PeakCPUMillicores,
+			idleRow.PeakMemoryBytes,
+			idleRow.EstimatedWasteCents,
+			savingsEnabled,
+		)
+		if result.IdleState == "active" {
+			result.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
 		}
 
 		for _, r := range rowGroup {
@@ -670,6 +700,19 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 	}
 
 	return results
+}
+
+// pickIdleSourceRow prefers the medium-term cost engine row for idle metadata.
+func pickIdleSourceRow(rows []NativeRecommendationRow) NativeRecommendationRow {
+	for _, r := range rows {
+		if r.Term == "medium" && r.Engine == "cost" {
+			return r
+		}
+	}
+	if len(rows) > 0 {
+		return rows[0]
+	}
+	return NativeRecommendationRow{IdleState: "active"}
 }
 
 func derefInt(p *int) int {

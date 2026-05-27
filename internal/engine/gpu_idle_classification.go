@@ -1,7 +1,10 @@
 package engine
 
 import (
+	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -19,28 +22,31 @@ type GPUIdleConfig struct {
 	MinObservationDays int   // default 7
 }
 
-// LoadGPUIdleConfig reads GPU idle detection settings from env (via config).
-func LoadGPUIdleConfig() GPUIdleConfig {
-	cfg := config.GetConfig()
-	out := GPUIdleConfig{
-		Enabled:            true,
-		IdleSMActiveBP:     500,
-		IdleDRAMActiveBP:   500,
-		ZombieSMActiveBP:   gpuZombieThresholdBP,
-		ZombieDRAMActiveBP: gpuZombieThresholdBP,
-		MinObservationDays: 7,
-	}
-	if cfg == nil {
+// LoadGPUIdleConfig resolves GPU idle thresholds using the same 3-tier model as LoadIdleConfig.
+func LoadGPUIdleConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) GPUIdleConfig {
+	settings, err := resolveIdleDetectionSettings(ctx, pool, orgID)
+	if err != nil {
+		cfg := config.GetConfig()
+		out := GPUIdleConfig{
+			Enabled:            true,
+			IdleSMActiveBP:     500,
+			IdleDRAMActiveBP:   500,
+			ZombieSMActiveBP:   gpuZombieThresholdBP,
+			ZombieDRAMActiveBP: gpuZombieThresholdBP,
+			MinObservationDays: 7,
+		}
+		if cfg != nil {
+			out.Enabled = cfg.IdleDetectionEnabled
+			if cfg.IdleGPUSMActiveBP > 0 {
+				out.IdleSMActiveBP = cfg.IdleGPUSMActiveBP
+			}
+			if cfg.IdleGPUDRAMActiveBP > 0 {
+				out.IdleDRAMActiveBP = cfg.IdleGPUDRAMActiveBP
+			}
+		}
 		return out
 	}
-	out.Enabled = cfg.IdleDetectionEnabled
-	if cfg.IdleGPUSMActiveBP > 0 {
-		out.IdleSMActiveBP = cfg.IdleGPUSMActiveBP
-	}
-	if cfg.IdleGPUDRAMActiveBP > 0 {
-		out.IdleDRAMActiveBP = cfg.IdleGPUDRAMActiveBP
-	}
-	return out
+	return gpuIdleConfigFromSettings(settings)
 }
 
 // ClassifyGPUIdleState determines if a GPU is zombie, idle, or active from P95

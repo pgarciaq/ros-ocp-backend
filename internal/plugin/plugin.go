@@ -69,6 +69,10 @@ type Plugin interface {
 	// runs all plugins in phase N before any plugin in phase N+1. Embed [BasePlugin]
 	// for the default Phase 1 (Produce).
 	Phase() int
+	// Priority returns the execution priority within a phase. Lower values run first.
+	// Plugins with the same priority run in name-sorted order (deterministic but arbitrary).
+	// Embed [BasePlugin] for default priority 50.
+	Priority() int
 }
 
 // CSVIngestor plugins own CSV parsing for one or more logical CSV report types.

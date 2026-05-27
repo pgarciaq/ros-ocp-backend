@@ -70,6 +70,8 @@ func (p *PVCPlugin) Name() string { return "pvc" }
 
 func (p *PVCPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
+func (p *PVCPlugin) Priority() int { return 30 }
+
 func (p *PVCPlugin) SupportedCSVTypes() []string {
 	return []string{string(types.PayloadTypeStorage)}
 }

@@ -120,7 +120,15 @@ func TestApplyGPUIdleWasteCents_ActiveNoWaste(t *testing.T) {
 
 func TestRecommendGPU_SetsGPUIdleState(t *testing.T) {
 	digests := gpuObservationRows(7, 50, 50)
-	rec := RecommendGPUWithSettings(digests, defaultGPUThresholdSettings)
+	idleCfg := GPUIdleConfig{
+		Enabled:            true,
+		IdleSMActiveBP:     500,
+		IdleDRAMActiveBP:   500,
+		ZombieSMActiveBP:   100,
+		ZombieDRAMActiveBP: 100,
+		MinObservationDays: 7,
+	}
+	rec := RecommendGPUWithSettings(digests, defaultGPUThresholdSettings, idleCfg)
 	require.NotNil(t, rec)
 	assert.Equal(t, IdleStateZombie, rec.GPUIdleState)
 }

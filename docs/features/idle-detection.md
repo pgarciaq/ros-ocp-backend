@@ -52,8 +52,9 @@ rows already in memory (no second DB pass).
   `estimated_waste_cents`, peaks, etc.).
 - **Namespaces** — after the namespace plugin writes `namespace_recommendation_sets`,
   [`AggregateNamespaceIdleState()`](../../internal/engine/idle_classification.go) marks a
-  namespace idle when **all** its container rows are `idle` or `zombie`. Phase 1
-  alphabetical plugin order guarantees `container` runs before `namespace`.
+  namespace idle when **all** container rows are non-active **and** all GPU rows in the
+  namespace are non-active (or no GPUs). Plugin **priority** guarantees `container` (10)
+  and `gpu` (20) run before `namespace` (90).
 
 Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) / [`DetectAbandoned()`](../../internal/engine/detect_idle.go)
 remain for notification codes; `DetectAbandoned` is still invoked for
@@ -297,7 +298,11 @@ CREATE INDEX IF NOT EXISTS idx_rs_idle_state
 |--------|------|-------------|
 | `idle_state` | `TEXT` | `zombie`, `idle`, or `active` |
 | `idle_since` | `TIMESTAMPTZ` | First day state became idle/zombie (UTC) |
-| `idle_duration_days` | `INTEGER` | `floor(now - idle_since)` in days |
+| `idle_duration_days` | `INTEGER` | Days since `idle_since` at classification time (see note below) |
+
+**Note:** `idle_duration_days` is computed at classification time (once per daily
+recommendation run). It reflects days since `idle_since` as of the last engine execution,
+not real-time. Consumers should treat it as "as of last recommendation run" — accurate ±1 day.
 | `estimated_waste_cents` | `BIGINT` | Full monthly waste (integer cents) |
 | `peak_cpu_millicores` | `INTEGER` | Max CPU in observation window |
 | `peak_memory_bytes` | `BIGINT` | Max memory in observation window |
@@ -312,6 +317,20 @@ CREATE INDEX IF NOT EXISTS idx_rs_idle_state
 **State transitions:** On each `RecommendAllWorkloads` pass, recompute from digests;
 update `idle_since` only when transitioning from `active` → `idle`/`zombie`, preserve
 when staying in same non-active state, clear when returning to `active`.
+
+### Savings vs Waste (Double-Counting Prevention)
+
+| Field | Meaning | When to show |
+|-------|---------|--------------|
+| `estimated_monthly_savings` | Rightsizing delta — cost if you **resize** requests to the recommended values | `idle_state = active` only |
+| `estimated_monthly_waste` | Full idle cost — cost if you **terminate** or remove the workload | `idle_state` ∈ {`idle`, `zombie`} |
+
+When `idle_state != active`, the API **suppresses** `estimated_monthly_savings` because
+rightsizing savings are misleading for workloads that should be removed. The UI must
+present waste and savings as **separate categories** and never sum them.
+
+`idle_recommendation.action = "terminate"` signals that `estimated_monthly_waste` is the
+actionable dollar figure.
 
 ---
 
@@ -357,8 +376,10 @@ Added alongside existing recommendation payload (medium-term cost engine row):
 | Field | Notes |
 |-------|-------|
 | `idle_state` | `zombie`, `idle`, `active` |
-| `idle_since` | ISO date (date part of `idle_since` timestamptz) |
+| `idle_since` | ISO date (`YYYY-MM-DD`) |
+| `idle_duration_days` | Staleness: see Data Model note above |
 | `estimated_monthly_waste` | Same shape as `estimated_monthly_savings` (6-decimal string + units) |
+| `estimated_monthly_savings` | Omitted when `idle_state != active` (rightsizing delta not actionable) |
 | `idle_recommendation.action` | `terminate` (zombie/idle container), `delete_pvc`, `drain_node` (other resources, later phases) |
 | `idle_recommendation.confidence` | `high` if observation ≥ 14d and not bursty; `medium` if 7–13d |
 
@@ -479,11 +500,14 @@ Extend [`EvaluateContainerNotifications()`](../../internal/engine/notifications.
 
 | Code | When |
 |------|------|
-| `NotifIdleWorkload` (existing) | `idle_state` ∈ {`idle`, `zombie`} — retain for backward compatibility |
-| New: `IDLE_CONTAINERS_DETECTED` (fleet) | Phase 3 — org-level transition detector |
+| `NotifIdleWorkload` (existing) | `idle_state` ∈ {`idle`, `zombie`} — emitted for backward compatibility |
+| `IDLE_CONTAINERS_DETECTED` (fleet, **planned**) | Org-level notification on transition `active` → `idle`/`zombie` since last watermark |
 
-Fleet notification fires only on **transition** `active` → `idle`/`zombie`, not every
-scan (see Notifications section).
+`NotifIdleWorkload` is implemented in [`EvaluateNotifications()`](../../internal/engine/notifications.go).
+
+**Planned (Phase 3):** `IDLE_CONTAINERS_DETECTED` — fleet-level digest when any container
+in the org newly transitions to `idle` or `zombie` compared to the previous recommendation
+watermark. Not implemented yet; per-container `NotifIdleWorkload` covers existing consumers.
 
 ---
 

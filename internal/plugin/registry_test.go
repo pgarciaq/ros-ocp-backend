@@ -15,9 +15,10 @@ import (
 
 type stubPlugin struct {
 	BasePlugin
-	name    string
-	phase   int
-	enabled func() bool
+	name     string
+	phase    int
+	priority int
+	enabled  func() bool
 }
 
 func (s *stubPlugin) Name() string {
@@ -36,6 +37,13 @@ func (s *stubPlugin) Phase() int {
 		return s.phase
 	}
 	return PhaseProduce
+}
+
+func (s *stubPlugin) Priority() int {
+	if s.priority != 0 {
+		return s.priority
+	}
+	return 50
 }
 
 type csvIngestorStub struct {
@@ -350,6 +358,34 @@ func TestEnabled_samePhaseSortedByName(t *testing.T) {
 
 	Register(&stubPlugin{name: "zebra", phase: PhaseProduce})
 	Register(&stubPlugin{name: "alpha", phase: PhaseProduce})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 2)
+	assert.Equal(t, "alpha", enabled[0].Name())
+	assert.Equal(t, "zebra", enabled[1].Name())
+}
+
+func TestEnabled_samePhaseSortedByPriority(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "namespace,container")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "namespace", phase: PhaseProduce, priority: 90})
+	Register(&stubPlugin{name: "container", phase: PhaseProduce, priority: 10})
+
+	enabled := Enabled()
+	require.Len(t, enabled, 2)
+	assert.Equal(t, "container", enabled[0].Name())
+	assert.Equal(t, "namespace", enabled[1].Name())
+}
+
+func TestEnabled_priorityTieBreaksByName(t *testing.T) {
+	resetRegistry(t)
+	t.Setenv(envEnabledPlugins, "zebra,alpha")
+	t.Setenv(envDisabledPlugins, "")
+
+	Register(&stubPlugin{name: "zebra", phase: PhaseProduce, priority: 30})
+	Register(&stubPlugin{name: "alpha", phase: PhaseProduce, priority: 30})
 
 	enabled := Enabled()
 	require.Len(t, enabled, 2)

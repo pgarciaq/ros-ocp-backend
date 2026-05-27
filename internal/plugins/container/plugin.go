@@ -61,6 +61,8 @@ func (p *ContainerPlugin) Name() string { return "container" }
 
 func (p *ContainerPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
+func (p *ContainerPlugin) Priority() int { return 10 }
+
 func (p *ContainerPlugin) SupportedCSVTypes() []string {
 	return []string{"container"}
 }

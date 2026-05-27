@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"math"
 	"sort"
 	"time"
@@ -296,7 +297,8 @@ func RecommendGPU(digests []GPUDigestRow) *GPURec {
 }
 
 // RecommendGPUWithSettings produces a GPU recommendation using explicit threshold settings.
-func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSettings) *GPURec {
+// Optional idleCfg overrides GPU idle/zombie thresholds; when omitted, env defaults apply.
+func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSettings, idleCfg ...GPUIdleConfig) *GPURec {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -360,7 +362,13 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 		}
 	}
 
-	gpuIdle := ClassifyGPUIdleFromDigests(digests, LoadGPUIdleConfig())
+	var gpuIdleCfg GPUIdleConfig
+	if len(idleCfg) > 0 {
+		gpuIdleCfg = idleCfg[0]
+	} else {
+		gpuIdleCfg = LoadGPUIdleConfig(context.Background(), nil, "")
+	}
+	gpuIdle := ClassifyGPUIdleFromDigests(digests, gpuIdleCfg)
 	rec.GPUIdleState = gpuIdle.State
 	rec.GPUIdleSince = gpuIdle.IdleSince
 	rec.GPUIdleDurationDays = gpuIdle.DurationDays

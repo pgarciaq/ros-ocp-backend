@@ -48,3 +48,5 @@ func init() {
 func (p *KruizePlugin) Name() string { return plugin.KruizePluginName }
 
 func (p *KruizePlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
+
+func (p *KruizePlugin) Priority() int { return 10 }

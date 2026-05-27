@@ -62,6 +62,8 @@ func (p *NodePlugin) Name() string { return "node" }
 
 func (p *NodePlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
+func (p *NodePlugin) Priority() int { return 30 }
+
 func (p *NodePlugin) HookAfterCSVTypes() []string {
 	return []string{"container"}
 }

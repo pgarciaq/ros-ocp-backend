@@ -17,10 +17,11 @@ const (
 // BasePlugin provides default Phase 1 for plugins that do not override Phase().
 type BasePlugin struct{}
 
-func (BasePlugin) Phase() int { return PhaseProduce }
+func (BasePlugin) Phase() int     { return PhaseProduce }
+func (BasePlugin) Priority() int { return 50 }
 
-// sortPluginsByPhase returns plugins ordered by Phase ascending, then Name ascending
-// within the same phase for deterministic execution.
+// sortPluginsByPhase returns plugins ordered by Phase ascending, then Priority ascending,
+// then Name ascending within the same phase for deterministic execution.
 func sortPluginsByPhase(plugins []Plugin) []Plugin {
 	if len(plugins) == 0 {
 		return nil
@@ -31,6 +32,10 @@ func sortPluginsByPhase(plugins []Plugin) []Plugin {
 		pi, pj := normalizePhase(sorted[i].Phase()), normalizePhase(sorted[j].Phase())
 		if pi != pj {
 			return pi < pj
+		}
+		pri, prj := sorted[i].Priority(), sorted[j].Priority()
+		if pri != prj {
+			return pri < prj
 		}
 		return sorted[i].Name() < sorted[j].Name()
 	})
@@ -45,7 +50,7 @@ func normalizePhase(phase int) int {
 }
 
 // groupEnabledByPhase returns enabled plugins grouped by phase. Each phase slice
-// is sorted by plugin name. Phases without enabled plugins are omitted.
+// is sorted by priority then name. Phases without enabled plugins are omitted.
 func groupEnabledByPhase() map[int][]Plugin {
 	enabled := Enabled()
 	groups := make(map[int][]Plugin)
@@ -53,12 +58,15 @@ func groupEnabledByPhase() map[int][]Plugin {
 		ph := normalizePhase(p.Phase())
 		groups[ph] = append(groups[ph], p)
 	}
+	for ph, plugins := range groups {
+		groups[ph] = sortPluginsByPhase(plugins)
+	}
 	return groups
 }
 
 // ExecuteInPhases runs fn for each enabled plugin in phase order (1, 2, 3).
 // All plugins in a phase complete before the next phase begins. Within a phase,
-// plugins run in name-sorted order.
+// plugins run in priority order (then name for ties).
 func ExecuteInPhases(ctx context.Context, fn func(context.Context, Plugin) error) error {
 	byPhase := groupEnabledByPhase()
 	for phase := PhaseProduce; phase <= PhaseOptimize; phase++ {

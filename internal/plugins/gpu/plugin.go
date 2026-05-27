@@ -65,6 +65,8 @@ func (p *GPUPlugin) Name() string { return "gpu" }
 
 func (p *GPUPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
+func (p *GPUPlugin) Priority() int { return 20 }
+
 func (p *GPUPlugin) HookAfterCSVTypes() []string {
 	return []string{"container"}
 }

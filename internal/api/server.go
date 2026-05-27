@@ -187,6 +187,9 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/settings/thresholds", GetThresholdSettings)
 		v1.PUT("/recommendations/openshift/settings/thresholds", PutThresholdSettings)
 		v1.DELETE("/recommendations/openshift/settings/thresholds", DeleteThresholdSettings)
+		v1.GET("/recommendations/openshift/settings/idle-detection", GetIdleDetectionSettings)
+		v1.PUT("/recommendations/openshift/settings/idle-detection", PutIdleDetectionSettings)
+		v1.DELETE("/recommendations/openshift/settings/idle-detection", DeleteIdleDetectionSettings)
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}
 

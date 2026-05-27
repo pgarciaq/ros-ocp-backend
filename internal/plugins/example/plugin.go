@@ -36,6 +36,8 @@ func (p *ExamplePlugin) Enabled() bool {
 	return false
 }
 
+func (p *ExamplePlugin) Priority() int { return 50 }
+
 func (p *ExamplePlugin) SupportedCSVTypes() []string {
 	logging.GetLogger().WithField("plugin", p.Name()).Debug("ExamplePlugin.SupportedCSVTypes")
 	return nil

@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 // IdleState represents the workload activity classification.
@@ -60,40 +58,14 @@ type IdleResult struct {
 	WasteCents      int64
 }
 
-// LoadIdleConfig reads idle detection settings from env (via config) with defaults.
-// Tenant-level overrides may be added later using orgID and pool.
-func LoadIdleConfig(_ context.Context, _ *pgxpool.Pool, _ string) IdleConfig {
-	cfg := config.GetConfig()
-	out := DefaultIdleConfig()
-	if cfg == nil {
-		return out
+// LoadIdleConfig resolves idle detection settings: compiled defaults, env overlay,
+// then tenant overrides from recommendation_thresholds (additive exclusions).
+func LoadIdleConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) IdleConfig {
+	settings, err := resolveIdleDetectionSettings(ctx, pool, orgID)
+	if err != nil {
+		return DefaultIdleConfig()
 	}
-	out.Enabled = cfg.IdleDetectionEnabled
-	if cfg.IdleZombieCPUMillicores > 0 {
-		out.ZombieCPUP95MC = cfg.IdleZombieCPUMillicores
-	}
-	if cfg.IdleZombiePeakMillicores > 0 {
-		out.ZombieCPUPeakMC = cfg.IdleZombiePeakMillicores
-	}
-	if cfg.IdleCPUUtilizationPct > 0 {
-		out.IdleCPUUtilPct = cfg.IdleCPUUtilizationPct
-	}
-	if cfg.IdleMemUtilizationPct > 0 {
-		out.IdleMemUtilPct = cfg.IdleMemUtilizationPct
-	}
-	if cfg.IdleBurstRatio > 0 {
-		out.BurstRatio = cfg.IdleBurstRatio
-	}
-	if cfg.IdleMinObservationDays > 0 {
-		out.MinObservationDays = cfg.IdleMinObservationDays
-	}
-	if cfg.IdleExcludeNamespaces != "" {
-		out.ExcludeNamespaces = splitCSVList(cfg.IdleExcludeNamespaces)
-	}
-	if cfg.IdleExcludeWorkloadTypes != "" {
-		out.ExcludeWorkloadTypes = splitCSVList(cfg.IdleExcludeWorkloadTypes)
-	}
-	return out
+	return idleConfigFromSettings(settings)
 }
 
 func splitCSVList(s string) []string {
@@ -287,9 +259,9 @@ func idleStateForWrite(s IdleState) string {
 	return string(s)
 }
 
-// AggregateNamespaceIdleState marks namespaces idle when all container recommendations
-// in the cluster are idle or zombie. Call after container recommendations are written
-// (Phase 1 alphabetical order: container before namespace).
+// AggregateNamespaceIdleState marks namespaces idle when all containers and GPUs in the
+// namespace are non-active. Call after container recommendations are written (container
+// plugin priority 10 runs before namespace priority 90).
 func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE namespace_recommendation_sets ns
@@ -300,7 +272,16 @@ func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID,
 				  AND rs.cluster_uuid = ns.cluster_uuid
 				  AND rs.namespace = ns.namespace_name
 				  AND rs.idle_state = 'active'
-			) AND EXISTS (
+			)
+			AND NOT EXISTS (
+				SELECT 1 FROM recommendation_sets rs
+				WHERE rs.org_id = ns.org_id
+				  AND rs.cluster_uuid = ns.cluster_uuid
+				  AND rs.namespace = ns.namespace_name
+				  AND rs.has_gpu = true
+				  AND rs.gpu_idle_state = 'active'
+			)
+			AND EXISTS (
 				SELECT 1 FROM recommendation_sets rs
 				WHERE rs.org_id = ns.org_id
 				  AND rs.cluster_uuid = ns.cluster_uuid

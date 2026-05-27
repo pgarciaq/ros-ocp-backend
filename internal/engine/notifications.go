@@ -65,7 +65,7 @@ func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th N
 	}
 	if rec.IsAbandoned {
 		codes = append(codes, NotifAbandonedWorkload)
-	} else if rec.IsIdle {
+	} else if rec.IsIdle || rec.IdleState == IdleStateIdle || rec.IdleState == IdleStateZombie {
 		codes = append(codes, NotifIdleWorkload)
 	}
 	if rec.Stale {

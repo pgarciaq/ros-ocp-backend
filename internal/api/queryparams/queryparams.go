@@ -154,6 +154,23 @@ func GroupByTagKey(c echo.Context) string {
 	return ""
 }
 
+// GroupByIdleState reports whether group_by[idle_state] was requested (value is ignored).
+func GroupByIdleState(c echo.Context) bool {
+	for key := range c.QueryParams() {
+		if key == GroupByPrefix+"idle_state]" {
+			return true
+		}
+	}
+	for _, raw := range c.QueryParams()["group_by"] {
+		for _, part := range SplitCommaValues([]string{raw}) {
+			if strings.TrimSpace(part) == "idle_state" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc or legacy order_by/order_how.
 func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField, defaultDirection string) (dbColumn, direction string, err error) {
 	if dbCol, dir, bracketErr := bracketOrderBy(c, allowedFields); bracketErr != nil {
