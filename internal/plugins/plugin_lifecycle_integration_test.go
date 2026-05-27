@@ -46,6 +46,7 @@ const namespaceCSV = "" +
 func TestPluginLifecycle_ContainerCSVToDigests(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -86,6 +87,7 @@ func TestPluginLifecycle_ContainerCSVToDigests(t *testing.T) {
 func TestPluginLifecycle_GPUIngestHookWritesDigests(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -123,6 +125,7 @@ func TestPluginLifecycle_GPUIngestHookWritesDigests(t *testing.T) {
 func TestPluginLifecycle_NamespaceCSVToDigests(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -167,6 +170,7 @@ func TestPluginLifecycle_NamespaceCSVToDigests(t *testing.T) {
 func TestPluginLifecycle_EndToEnd_FullDispatch(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

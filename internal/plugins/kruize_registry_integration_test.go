@@ -15,6 +15,7 @@ import (
 func TestRegistry_KruizeMutualExclusivity_withContainerPlugin(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "kruize,container")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	enabled := plugin.Enabled()
 	require.Len(t, enabled, 1)
@@ -24,6 +25,7 @@ func TestRegistry_KruizeMutualExclusivity_withContainerPlugin(t *testing.T) {
 func TestAPIProviders_keepsNamespaceRoutesEligibleUnderKruizeAllowlist(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "kruize")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	syncPluginConfigFromEnv(t)
 
 	var seenNamespace bool
 	for _, ap := range plugin.APIProviders() {

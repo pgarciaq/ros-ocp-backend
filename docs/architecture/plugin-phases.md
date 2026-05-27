@@ -28,6 +28,7 @@ and can theoretically run in parallel.
 | node | Node CPU/memory sizing recommendations |
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
+| quota (future) | ResourceQuota and ClusterResourceQuota right-sizing vs configured hard/used limits ([design](../features/quota-recommendations.md)) |
 | snapshot | Staleness detection for recommendation freshness |
 | kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
 | vm (future) | OpenShift Virtualization VM rightsizing |
@@ -59,7 +60,7 @@ Cross-entity aggregation requiring a global view of all recommendations.
 ## Execution model
 
 ```
-Phase 1: [container → gpu → node → pvc → snapshot → namespace]  (by Priority, then Name)
+Phase 1: [container → gpu → node → pvc → quota → snapshot → namespace]  (by Priority, then Name; `quota` future)
          ↓ barrier
 Phase 2: [java, golang, hpa, vpa, ...]  (future)
          ↓ barrier
@@ -97,6 +98,7 @@ All production plugins today use Phase 1 via embedded [`BasePlugin`](../../inter
 | gpu | 1 | 20 | Ingest hooks and recommendations after container rows exist; sets `gpu_idle_state` |
 | node | 1 | 30 | Independent; ingest hook after container CSV |
 | pvc | 1 | 30 | Independent; owns storage CSV ingest |
+| quota (future) | 1 | 35 | After PVC ingest; compares quota hard/used limits to namespace usage and container rec aggregates |
 | snapshot | 1 | 40 | Reads recommendation freshness after core recommendations exist |
 | example (`_example`) | 1 | 50 | Template default (`BasePlugin`); always disabled in production |
 | namespace | 1 | 90 | Aggregates namespace idle after container/GPU (and related) rows exist |
@@ -153,3 +155,25 @@ after writing namespace rows (`container` priority 10, `namespace` priority 90).
 
 Users enable via `ROS_ENABLED_PLUGINS=container,namespace,...`.
 Order in the env var does NOT matter — the registry sorts by phase, priority, and name automatically.
+
+## Future plugins (summary)
+
+Plugins marked **(future)** above are not registered in production builds today. They are
+documented here so phase and priority slots stay stable when implementations land.
+
+| Plugin | Phase | Priority (planned) | Domain |
+|--------|-------|-------------------|--------|
+| quota | 1 | 35 | [ResourceQuota / ClusterResourceQuota](../features/quota-recommendations.md) |
+| vm | 1 | (TBD) | OpenShift Virtualization VM rightsizing |
+| instance-type | 1 | (TBD) | Cloud instance type for nodes |
+| java | 2 | (TBD) | JVM heap / GC |
+| golang | 2 | (TBD) | GOMAXPROCS, GOMEMLIMIT |
+| python | 2 | (TBD) | Gunicorn/uWSGI workers |
+| nodejs | 2 | (TBD) | Node.js heap / cluster workers |
+| hpa | 2 | (TBD) | Horizontal Pod Autoscaler min/max/target |
+| vpa | 2 | (TBD) | Vertical Pod Autoscaler policy |
+| binpacking | 3 | (TBD) | Fleet pod placement |
+| machineset | 3 | (TBD) | Node pool right-sizing |
+
+See [performance-analysis.md §23](performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
+for industry gap context on HPA, runtime tuning, ephemeral storage, and quota recommendations.

@@ -70,6 +70,22 @@ OpenShift labels synced from Koku (`filter[tag:key]=value`).
 no usage (zombie vs idle), estimate full monthly waste, and filter with
 `filter[idle_state]=zombie,idle` — distinct from rightsizing savings.
 
+## Planned recommendation types
+
+Not yet implemented; phase and priority slots are reserved in
+[Plugin Execution Phases](../architecture/plugin-phases.md).
+
+| Type | Phase | Description |
+|------|-------|-------------|
+| [Quota (ResourceQuota / ClusterResourceQuota)](quota-recommendations.md) | 1 (~35) | Right-size quota hard limits vs usage and container rec aggregates |
+| VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
+| Instance type | 1 | Cloud instance optimization for worker nodes |
+| Java / JVM | 2 | Heap, GC, thread pool tuning from container memory recs |
+| Go runtime | 2 | GOMAXPROCS, GOMEMLIMIT |
+| Python / Node.js | 2 | Worker and heap advisories |
+| HPA / VPA | 2 | Autoscaler min/max/target and policy recommendations |
+| Binpacking / MachineSet | 3 | Fleet placement and node pool sizing |
+
 !!! tip "Getting Started"
     Integrate with the REST API and UI using the
     **[Frontend Integration Guide](../ui-integration-guide.md)**. It covers

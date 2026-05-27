@@ -83,6 +83,7 @@ nav:
       - History & Quality: features/history-and-quality.md
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
+      - Quota Recommendations (planned): features/quota-recommendations.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md

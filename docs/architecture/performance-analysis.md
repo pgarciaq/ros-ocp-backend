@@ -2539,29 +2539,46 @@ ros:nodejs_runtime_detected_fallback:
 
 **Industry coverage:** Kubecost (namespace budget alerts), limited direct quota recommendations.
 
+**Full design:** [quota-recommendations.md](../features/quota-recommendations.md) — namespace &
+cluster quota right-sizing (planned Phase 1 `quota` plugin, priority ~35).
+
+**What it is:** Right-size **ResourceQuota** (namespace-level) and **ClusterResourceQuota**
+(cluster-level) hard limits from actual usage patterns, peak usage, and container
+recommendation aggregates (with headroom margin).
+
+**Why it's useful:** Over-provisioned quotas reserve capacity other teams cannot use;
+under-provisioned quotas throttle workloads and block HPA scale-out. Pairs with idle
+detection (§23.1): idle namespace + oversized quota = double waste.
+
 **What to recommend:**
 
 - Recommended `requests.cpu` and `requests.memory` quota = sum of per-workload recommendations × safety factor (1.3)
 - Flag namespaces where quota >> actual usage (over-provisioned, blocks other teams)
 - Flag namespaces where usage is >80% of quota (risk of deployment failures)
 
-**Data status:** **NEW QUERY**.
+**Data status:** **PARTIAL** — hard limits already in ROS namespace CSV; used consumption not yet collected.
 
-**New Prometheus queries required (2 queries):**
+**Already collected (koku-metrics-operator):** `kube_resourcequota{type='hard'}` for
+`requests.cpu`, `limits.cpu`, `requests.memory`, `limits.memory` via
+`ros:*_namespace_sum` queries in the namespace CSV ingest path.
+
+**Still required (operator):**
 
 ```promql
--- ros:resourcequota_hard — Configured quota limits
-ros:resourcequota_hard:
-  kube_resourcequota{type='hard',resource=~'requests.cpu|requests.memory|limits.cpu|limits.memory|pods'}
-
 -- ros:resourcequota_used — Current usage against quota
 ros:resourcequota_used:
   kube_resourcequota{type='used',resource=~'requests.cpu|requests.memory|limits.cpu|limits.memory|pods'}
 ```
 
-**Algorithm:** Aggregate per-workload recommendations into namespace totals, compare against quota.
+Additional gaps: `openshift_clusterresourcequota`, storage/pod quota resources, per-quota object name/UID when multiple quotas exist per namespace.
 
-**Effort:** Moderate. 2 new operator queries, aggregation logic, new API endpoints.
+**Algorithm:** Compare namespace usage aggregates and peak usage + headroom against configured quota limits; recommend tighter or looser quotas. Aggregate per-workload recommendations into namespace totals.
+
+**Savings signal:** Over-provisioned quotas → freed capacity (not always direct dollar savings); combine with idle namespace waste in fleet views.
+
+**Implementation:** Phase 1 `quota` plugin reading ROS CSV quota columns + namespace plugin digests; see [plugin-phases.md](plugin-phases.md).
+
+**Effort:** Moderate. 1–2 new operator queries (used + optional ClusterResourceQuota), aggregation logic, new API endpoints.
 
 ---
 

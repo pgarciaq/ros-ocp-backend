@@ -1476,9 +1476,10 @@ kube_horizontalpodautoscaler_labels
 
 ### REQ-8.4: ResourceQuota recommendations [MEDIUM] — NOT IMPLEMENTED
 
-**Source:** Analysis §23.8
+**Source:** Analysis §23.8. **Design:** [quota-recommendations.md](../features/quota-recommendations.md).
 
-**Required:** 2 new queries: `kube_resourcequota{type="hard"}`, `kube_resourcequota{type="used"}`.
+**Required:** `kube_resourcequota{type="hard"}` is already collected in the ROS namespace CSV;
+add `kube_resourcequota{type="used"}` and optional ClusterResourceQuota metrics.
 
 **Algorithm:**
 1. Aggregate all container recommendations within a namespace.

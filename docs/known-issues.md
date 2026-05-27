@@ -97,7 +97,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | HPA optimization | REQ-8.1 | Needs 8 new operator queries; low customer demand |
 | Ephemeral storage | REQ-8.2 | cadvisor metrics unreliable through OCP 4.21; pending upstream fix |
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
-| ResourceQuota recs | REQ-8.4 | Needs 2 new operator queries; namespace recs partially address this |
+| ResourceQuota / ClusterResourceQuota recs | REQ-8.4 | Hard limits in ROS namespace CSV today; needs `type=used`, ClusterResourceQuota, dedicated `quota` plugin — see [quota-recommendations.md](features/quota-recommendations.md) |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
 | Cloud instance catalog | REQ-8c.6 | External API integration (AWS/Azure/GCP pricing); required for MachineSet Tier 2 |
@@ -575,6 +575,20 @@ Node Tier 1 (utilization visibility) is implemented. MachineSet Tier 2
 (right-sizing with cloud catalog) and Tier 3 (MachineAutoscaler) are not.
 Requires MachineSet queries in the operator, cloud instance catalog
 integration, and new API endpoints. **Planned for future release.**
+
+### Namespace & Cluster Quota Recommendations (REQ-8.4)
+
+No recommendations against Kubernetes **ResourceQuota** or **ClusterResourceQuota**
+objects. The koku-metrics-operator already collects `kube_resourcequota` **hard**
+limits (CPU/memory requests and limits) in the ROS namespace CSV; **used**
+consumption, storage/pod quota resources, and ClusterResourceQuota are not collected.
+The shipped **namespace** plugin sizes ideal totals from usage digests but does not
+compare them to configured quota CRs.
+
+Planned as a Phase 1 **`quota`** plugin (priority ~35) that reads quota data from the
+ROS CSV and namespace usage aggregates from the namespace and container plugins.
+See [quota-recommendations.md](features/quota-recommendations.md). **Planned for future
+release.**
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
