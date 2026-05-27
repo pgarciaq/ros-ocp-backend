@@ -3,7 +3,7 @@
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift`  
     **Filter:** `?filter[idle_state]=zombie,idle`  
-    **Configurable:** Yes (`ROS_IDLE_DETECTION_ENABLED` + threshold settings)  
+    **Configurable:** Yes — 3-tier model (admin env → tenant Settings API → defaults); see [Configuration](#configuration)  
     **Savings:** Full monthly waste (`estimated_monthly_waste`) — not a rightsizing reduction
 
 ## Overview
@@ -47,6 +47,21 @@ flowchart TD
 - **System namespaces** — `kube-system`, `openshift-*`, and DaemonSets are excluded by default.
 - **Opt-out** — Annotate pods with `idle-detection/exclude: "true"` to skip detection.
 
+## Configuration
+
+Idle detection uses the same **3-tier configurability** as other ROS threshold settings:
+
+1. **Compiled defaults** — safe out-of-the-box classification thresholds
+2. **Admin environment variables** — cluster-wide gates, zombie thresholds, and mandatory
+   exclusions (tenants cannot override locked fields)
+3. **Tenant Settings API** — org-specific tuning via
+   `GET/PUT .../recommendations/openshift/settings/idle-detection` (utilization %,
+   burst ratio, observation days, additive exclusions, notification cooldown)
+
+For the full env var table, validation rules, merge precedence, RBAC, and async
+recalculation behavior, see the internal design doc:
+[`docs/features/idle-detection.md` — Configuration (3-Tier Model)](../../docs/features/idle-detection.md#configuration-3-tier-model).
+
 ## Enable the feature
 
 Set on the ROS API and processor deployments:
@@ -55,17 +70,6 @@ Set on the ROS API and processor deployments:
 env:
   ROS_IDLE_DETECTION_ENABLED: "true"
 ```
-
-Optional tuning (admin environment variables; tenants can override several values via
-[Configurable Thresholds](configurable-thresholds.md) after Phase 3):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROS_IDLE_MINIMUM_OBSERVATION_DAYS` | `14` | Days of data before classifying |
-| `ROS_IDLE_CPU_UTILIZATION_PERCENT` | `2` | Max CPU % of request for **idle** |
-| `ROS_IDLE_MEMORY_UTILIZATION_PERCENT` | `5` | Max memory % of request for **idle** |
-| `ROS_IDLE_BURST_RATIO` | `10` | Peak/P95 ratio above which workload is **active** |
-| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Namespaces to skip |
 
 When disabled, all workloads appear as `active` and idle-specific fields are omitted.
 

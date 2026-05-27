@@ -458,55 +458,142 @@ scan (see Notifications section).
 
 ---
 
-## Configuration
+## Configuration (3-Tier Model)
 
-### Feature flag
+Follows the existing configurability pattern: admin env vars > tenant Settings API >
+compiled defaults. Same precedence model as
+[Configurable Thresholds](../../docs-site/features/configurable-thresholds.md).
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ROS_IDLE_DETECTION_ENABLED` | `false` | Master switch for classification + API fields |
+When `ROS_IDLE_DETECTION_ENABLED=false`, omit new API fields; keep `idle_state='active'`
+in DB.
 
-When `false`, omit new API fields; keep `idle_state='active'` in DB.
+### 9.1 Admin Environment Variables (Cluster-Wide)
 
-### Threshold environment variables
+| Env Var | Default | Type | Description |
+|---------|---------|------|-------------|
+| `ROS_IDLE_DETECTION_ENABLED` | `true` | bool | Feature gate |
+| `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | `1` | int | P95 CPU below this = zombie candidate |
+| `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | `10` | int | Peak CPU below this confirms zombie |
+| `ROS_IDLE_CPU_UTILIZATION_PCT` | `2` | int | P95/request % threshold for idle |
+| `ROS_IDLE_MEMORY_UTILIZATION_PCT` | `5` | int | P95/request % threshold for idle |
+| `ROS_IDLE_BURST_RATIO` | `10` | int | peak/P95 ratio that classifies workload as bursty (not idle) |
+| `ROS_IDLE_MIN_OBSERVATION_DAYS` | `14` | int | Days of data required before classifying |
+| `ROS_IDLE_GPU_SM_ACTIVE_BP` | `500` | int | GPU sm_active below this = idle (basis points, 500 = 5%) |
+| `ROS_IDLE_GPU_DRAM_ACTIVE_BP` | `500` | int | GPU dram_active below this = idle |
+| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | csv | Namespaces never flagged (glob patterns) |
+| `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `DaemonSet` | csv | Workload types never flagged |
+| `ROS_IDLE_NOTIFICATIONS_ENABLED` | `true` | bool | Send notifications on state transitions |
 
-| Variable | Default | Maps to |
-|----------|---------|---------|
-| `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | `1` | Zombie P95 CPU (millicores) |
-| `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | `10` | Zombie peak CPU |
-| `ROS_IDLE_CPU_UTILIZATION_PERCENT` | `2` | Idle CPU % of request |
-| `ROS_IDLE_MEMORY_UTILIZATION_PERCENT` | `5` | Idle memory % of request |
-| `ROS_IDLE_BURST_RATIO` | `10` | peak/P95 burst guard |
-| `ROS_IDLE_MINIMUM_OBSERVATION_DAYS` | `14` | Min days before classify |
-| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Glob or prefix list |
+Admin-locked fields cannot be overridden by tenants (same pattern as existing threshold
+settings).
 
-Admin env vars **lock** fields (same pattern as
-[Configurable Thresholds](../../docs-site/features/configurable-thresholds.md)).
+### 9.2 Tenant Settings API
 
-### Tenant Settings API (Phase 3)
+**Endpoint:** `GET/PUT /api/cost-management/v1/recommendations/openshift/settings/idle-detection`
 
-Extend `recommendation_type=container` threshold payload:
+**Request/Response shape:**
 
 ```json
 {
-  "idle_minimum_observation_days": 14,
-  "idle_cpu_utilization_percent": 2,
-  "idle_memory_utilization_percent": 5,
-  "idle_burst_ratio": 10,
-  "idle_zombie_cpu_millicores": 1,
-  "idle_zombie_peak_millicores": 10
+  "idle_detection": {
+    "enabled": true,
+    "thresholds": {
+      "cpu_utilization_percent": 2,
+      "memory_utilization_percent": 5,
+      "burst_ratio": 10,
+      "minimum_observation_days": 14,
+      "gpu_sm_active_basis_points": 500,
+      "gpu_dram_active_basis_points": 500
+    },
+    "exclusions": {
+      "namespaces": ["kube-system", "openshift-*", "monitoring"],
+      "workload_types": ["DaemonSet"],
+      "workload_names": ["istio-proxy-*", "envoy-*"],
+      "annotations": ["idle-detection/exclude"]
+    },
+    "notifications": {
+      "enabled": true,
+      "notify_on_transition_to": ["zombie", "idle"],
+      "cooldown_days": 7
+    }
+  },
+  "locked_fields": ["cpu_utilization_percent"]
 }
 ```
 
 Integrate with [`SizingThresholdSettings`](../../internal/engine/threshold_settings.go)
-or add `IdleDetectionSettings` struct resolved via
-[`ResolveSizingThresholds()`](../../internal/engine/threshold_settings.go).
+or add `IdleDetectionSettings` resolved at classification time (alongside
+[`ResolveSizingThresholds()`](../../internal/engine/threshold_settings.go)).
 
 **Note:** Existing `idle_cpu_threshold_mc` / `idle_mem_threshold_kib` in sizing settings
 power legacy `DetectIdle`; migration path:
 
 1. Phase 1: new classifier coexists; legacy `IsIdle` derived from `idle_state != active`
 2. Phase 2: deprecate absolute thresholds in docs; map defaults to zombie/idle rules
+
+### 9.3 Tenant Permissions
+
+| Parameter | Tenant-configurable? | Rationale |
+|-----------|---------------------|-----------|
+| `enabled` | Yes | Org may not want idle detection |
+| `thresholds.cpu_utilization_percent` | Yes (unless locked) | Different orgs have different tolerance |
+| `thresholds.memory_utilization_percent` | Yes (unless locked) | Same |
+| `thresholds.burst_ratio` | Yes (unless locked) | ML orgs may want higher (20×) to avoid false positives |
+| `thresholds.minimum_observation_days` | Yes (min 3, max 90) | Fast-moving teams want 7d, cautious want 30d |
+| `thresholds.gpu_*` | Yes (unless locked) | GPU usage patterns vary by workload type |
+| `exclusions.namespaces` | Yes (additive only) | Tenants add exclusions on top of admin's list |
+| `exclusions.workload_types` | Yes (additive only) | Same |
+| `exclusions.workload_names` | Yes | Tenant-specific workload patterns |
+| `exclusions.annotations` | Yes | Custom opt-out annotations |
+| `notifications.enabled` | Yes | Tenant can silence |
+| `notifications.cooldown_days` | Yes (min 1, max 90) | How often to re-notify |
+| Zombie thresholds (1m/10m CPU) | **No** — admin only | Defines "dead"; should not vary per tenant |
+| Admin `exclude_namespaces` | **No** — admin only | Security/compliance: infra namespaces always excluded |
+
+### 9.4 Validation Rules
+
+```
+cpu_utilization_percent:      1–50  (integer)
+memory_utilization_percent:   1–50  (integer)
+burst_ratio:                  2–100 (integer)
+minimum_observation_days:     3–90  (integer)
+gpu_sm_active_basis_points:   100–5000
+gpu_dram_active_basis_points: 100–5000
+cooldown_days:                1–90
+exclusions.namespaces:        max 50 entries, validated pattern (alphanumeric, dash, dot, * glob)
+exclusions.workload_types:    must be one of: Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig
+exclusions.workload_names:    max 50 entries, glob patterns allowed
+exclusions.annotations:       max 20 entries
+```
+
+Unknown fields in PUT request → 400 with descriptive error (same pattern as threshold
+settings).
+
+### 9.5 Precedence and Merge Logic
+
+1. Start with compiled defaults
+2. Overlay admin env vars (if set and non-zero)
+3. Overlay tenant Settings API values (if set and not locked)
+4. `exclusions` are **additive**: tenant exclusions are UNION'd with admin exclusions
+   (tenant cannot remove admin exclusions)
+
+### 9.6 Recalculation Trigger
+
+When a tenant updates idle settings via PUT:
+
+1. Validate input
+2. Persist to `idle_detection_settings` (JSONB column or table)
+3. Mark org as `reship_pending = true`
+4. Background worker re-runs idle classification with new thresholds
+5. API serves updated `idle_state` on next request
+
+Same async recalculation pattern as existing threshold settings changes.
+
+### 9.7 RBAC
+
+- **Read** idle settings: `cost_management:*:read` (any authenticated user in the org)
+- **Write** idle settings: `cost_management_settings:*:write` (same permission as threshold
+  settings)
 
 ---
 
