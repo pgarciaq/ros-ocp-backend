@@ -48,8 +48,12 @@ func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostDa
 		}
 
 		// Idle or abandoned workloads: 100% of current resource cost is recoverable
-		if recs[i].IsIdle || recs[i].IsAbandoned {
-			recs[i].EstimatedSavingsCents = money.USDToCents(computeIdleSavings(&recs[i], &ns, distType))
+		if recs[i].IsIdle || recs[i].IsAbandoned || recs[i].IdleState != IdleStateActive {
+			idleUSD := computeIdleSavings(&recs[i], &ns, distType)
+			recs[i].EstimatedSavingsCents = money.USDToCents(idleUSD)
+			if recs[i].IdleState != IdleStateActive {
+				recs[i].EstimatedWasteCents = recs[i].EstimatedSavingsCents
+			}
 			continue
 		}
 

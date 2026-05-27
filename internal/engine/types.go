@@ -96,6 +96,12 @@ type ContainerRec struct {
 	MemTrendSlope          float64
 	IsIdle                 bool
 	IsAbandoned            bool
+	IdleState              IdleState
+	IdleSince              *time.Time
+	IdleDurationDays       int
+	PeakCPUMC              int64
+	PeakMemoryBytes        int64
+	EstimatedWasteCents    int64
 	OOMCountSum            int64
 	DataDays               int
 	Stale                  bool

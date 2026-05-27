@@ -40,18 +40,26 @@ This design **extends** that foundation with a three-state classification (`zomb
 grouping for sidecars, multi-resource coverage, persisted API fields, and fleet-level
 waste metrics.
 
-### Plugin architecture
+### Inline engine helper (Phase 1)
 
-Idle detection ships as a **Phase 2 (Enrich)** plugin (`idledetection`), not inside
-the container plugin. See [Plugin execution phases](../architecture/plugin-phases.md).
+Per-container idle/zombie classification runs **inside** the container recommendation
+path via [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) in
+[`RecommendWorkloadsStreaming()`](../../internal/engine/recommend_all.go), using digest
+rows already in memory (no second DB pass).
 
-- **Phase 1** — the `container` plugin (and other Produce plugins) run first and
-  populate `recommendation_sets` with CPU/memory rightsizing.
-- **Barrier** — all Phase 1 plugins complete.
-- **Phase 2** — `idledetection` reads those rows, classifies idle/zombie state, and
-  persists `idle_state`, `estimated_waste_cents`, and related columns.
+- **Containers** — classified once per container when recommendations are produced;
+  results persist on `recommendation_sets` (`idle_state`, `idle_since`,
+  `estimated_waste_cents`, peaks, etc.).
+- **Namespaces** — after the namespace plugin writes `namespace_recommendation_sets`,
+  [`AggregateNamespaceIdleState()`](../../internal/engine/idle_classification.go) marks a
+  namespace idle when **all** its container rows are `idle` or `zombie`. Phase 1
+  alphabetical plugin order guarantees `container` runs before `namespace`.
 
-`ROS_ENABLED_PLUGINS` order does not affect execution; the registry sorts by phase.
+Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) / [`DetectAbandoned()`](../../internal/engine/detect_idle.go)
+remain for notification codes; `DetectAbandoned` is still invoked for
+`NotifIdleWorkload` compatibility.
+
+See [Plugin execution phases](../architecture/plugin-phases.md).
 
 ```mermaid
 flowchart LR
@@ -86,7 +94,7 @@ flowchart LR
 | **GPUs** | `sm_active` / `dram_active` basis points (P95) | 4 |
 | **PVCs** | No pod mount for > 7 days; orphaned PVC | 4 |
 | **Nodes** | Node utilization P95 < 10%; drain candidate when pods reschedule | 4 |
-| **Namespaces** | **All** containers in namespace classified idle or zombie | 5 |
+| **Namespaces** | **All** containers in namespace classified idle or zombie | 1 (post-process) |
 
 Out of scope for initial delivery:
 
@@ -686,10 +694,8 @@ until Phase 2 validation completes.
 
 ### Suggested implementation order
 
-1. Migration + `IdleResult` struct + unit tests (classification table)
-2. Implement `internal/plugins/idledetection` as a Phase 2 plugin; run via
-   [`ExecuteInPhases`](../../internal/plugin/phases.go) after container recommendations
-   are written (not inside `RecommendWorkloadsStreaming`)
+1. Migration + [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) + unit tests
+2. Wire into `RecommendWorkloadsStreaming` + namespace `AggregateNamespaceIdleState`
 3. API enrichment + `filter[idle_state]`
 4. Savings summary grouping + fleet meta
 5. Settings API + notifications + extended resources
@@ -726,5 +732,6 @@ until Phase 2 validation completes.
 - [Cost integration](../architecture/cost-integration.md)
 - [Container recommendations](../../docs-site/features/container-recommendations.md)
 - [Public feature page](../../docs-site/features/idle-detection.md)
-- Existing idle helpers: [`detect_idle.go`](../../internal/engine/detect_idle.go),
+- Inline classifier: [`idle_classification.go`](../../internal/engine/idle_classification.go)
+- Legacy notification helpers: [`detect_idle.go`](../../internal/engine/detect_idle.go),
   [`notifications.go`](../../internal/engine/notifications.go)

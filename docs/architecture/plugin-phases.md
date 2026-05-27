@@ -13,8 +13,8 @@ and can theoretically run in parallel.
 
 | Plugin | Description |
 |--------|-------------|
-| container | CPU/memory rightsizing from container usage digests |
-| namespace | Namespace-level resource recommendations |
+| container | CPU/memory rightsizing and inline idle/zombie classification ([`ClassifyIdleState`](../../internal/engine/idle_classification.go)) |
+| namespace | Namespace-level resource recommendations; post-processes namespace idle when all containers are idle/zombie |
 | node | Node CPU/memory sizing recommendations |
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
@@ -27,9 +27,6 @@ and can theoretically run in parallel.
 Read Phase 1 outputs and annotate, classify, or enhance them. These plugins depend
 on Phase 1 being complete but are independent of each other.
 
-| Plugin | Description | Depends on |
-|--------|-------------|------------|
-| idledetection (future) | Classify containers as idle/zombie | container |
 | java (future) | JVM heap/GC recommendations | container (memory rec) |
 | golang (future) | GOMAXPROCS, GOMEMLIMIT tuning | container (CPU+memory rec) |
 | python (future) | Worker process count (gunicorn/uvicorn) | container (CPU rec) |
@@ -51,7 +48,7 @@ Cross-entity aggregation requiring a global view of all recommendations.
 ```
 Phase 1: [container, namespace, node, gpu, pvc, snapshot] → all complete
          ↓ barrier
-Phase 2: [idledetection, java, golang, ...] → all complete
+Phase 2: [java, golang, hpa, vpa, ...] → all complete
          ↓ barrier
 Phase 3: [binpacking, machineset] → all complete
 ```
@@ -67,5 +64,10 @@ Phase 3: [binpacking, machineset] → all complete
 5. Phase 2: return `plugin.PhaseEnrich` from `Phase()`
 6. Phase 3: return `plugin.PhaseOptimize` from `Phase()`
 
-Users enable via `ROS_ENABLED_PLUGINS=container,namespace,...,idledetection`.
+Per-resource idle detection is **not** a separate plugin: Phase 1 `container` calls
+[`ClassifyIdleState`](../../internal/engine/idle_classification.go) inline; Phase 1
+`namespace` runs [`AggregateNamespaceIdleState`](../../internal/engine/idle_classification.go)
+after writing namespace rows (alphabetical order: `container` before `namespace`).
+
+Users enable via `ROS_ENABLED_PLUGINS=container,namespace,...`.
 Order in the env var does NOT matter — the registry sorts by phase automatically.

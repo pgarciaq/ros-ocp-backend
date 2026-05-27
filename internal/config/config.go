@@ -236,6 +236,17 @@ type Config struct {
 	// TagsSyncMaxBodyMiB caps POST /internal/tags/sync request bodies in MiB (default 10).
 	TagsSyncMaxBodyMiB int64 `mapstructure:"ROS_TAGS_SYNC_MAX_BODY_MIB"`
 
+	// Idle / zombie workload classification (inline engine helper; env tier of 3-tier config).
+	IdleDetectionEnabled     bool   `mapstructure:"ROS_IDLE_DETECTION_ENABLED"`
+	IdleZombieCPUMillicores  int64  `mapstructure:"ROS_IDLE_ZOMBIE_CPU_MILLICORES"`
+	IdleZombiePeakMillicores int64  `mapstructure:"ROS_IDLE_ZOMBIE_PEAK_MILLICORES"`
+	IdleCPUUtilizationPct    int64  `mapstructure:"ROS_IDLE_CPU_UTILIZATION_PCT"`
+	IdleMemUtilizationPct    int64  `mapstructure:"ROS_IDLE_MEMORY_UTILIZATION_PCT"`
+	IdleBurstRatio           int64  `mapstructure:"ROS_IDLE_BURST_RATIO"`
+	IdleMinObservationDays   int    `mapstructure:"ROS_IDLE_MIN_OBSERVATION_DAYS"`
+	IdleExcludeNamespaces    string `mapstructure:"ROS_IDLE_EXCLUDE_NAMESPACES"`
+	IdleExcludeWorkloadTypes string `mapstructure:"ROS_IDLE_EXCLUDE_WORKLOAD_TYPES"`
+
 	// Plugin configuration (see internal/plugin/registry.go).
 	EnabledPlugins  string `mapstructure:"ROS_ENABLED_PLUGINS"`
 	DisabledPlugins string `mapstructure:"ROS_DISABLED_PLUGINS"`
@@ -457,6 +468,15 @@ func initConfig() {
 	viper.SetDefault("ROS_CONTAINER_CPU_FLOOR_MC", 25)
 	viper.SetDefault("ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC", 10)
 	viper.SetDefault("ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB", 10240)
+	viper.SetDefault("ROS_IDLE_DETECTION_ENABLED", true)
+	viper.SetDefault("ROS_IDLE_ZOMBIE_CPU_MILLICORES", 1)
+	viper.SetDefault("ROS_IDLE_ZOMBIE_PEAK_MILLICORES", 10)
+	viper.SetDefault("ROS_IDLE_CPU_UTILIZATION_PCT", 2)
+	viper.SetDefault("ROS_IDLE_MEMORY_UTILIZATION_PCT", 5)
+	viper.SetDefault("ROS_IDLE_BURST_RATIO", 10)
+	viper.SetDefault("ROS_IDLE_MIN_OBSERVATION_DAYS", 14)
+	viper.SetDefault("ROS_IDLE_EXCLUDE_NAMESPACES", "kube-system,openshift-*")
+	viper.SetDefault("ROS_IDLE_EXCLUDE_WORKLOAD_TYPES", "DaemonSet")
 	viper.SetDefault("ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD", 100.0)
 	viper.SetDefault("ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD", 0.5)
 	viper.SetDefault("ROS_NAMESPACE_CPU_COST_PERCENTILE", 0.60)

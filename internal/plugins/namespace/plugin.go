@@ -20,6 +20,11 @@
 //
 // Each (namespace × term × engine) combination produces one recommendation.
 //
+// After namespace rows are written, [engine.AggregateNamespaceIdleState] runs as
+// post-processing: a namespace is idle when every container recommendation in that
+// namespace is idle or zombie. Phase 1 alphabetical plugin order guarantees the
+// container plugin runs before namespace.
+//
 // # Default Terms
 //
 //   - short: 1-day window, 1 day minimum data, no decay

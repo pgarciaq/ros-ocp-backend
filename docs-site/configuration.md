@@ -214,6 +214,24 @@ Only relevant when running the Kruize recommendation poller or `ROS_ENABLED_PLUG
 
 ---
 
+## Idle / Zombie Detection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_IDLE_DETECTION_ENABLED` | `true` | Master switch for inline idle/zombie classification. |
+| `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | `1` | P95 CPU (millicores) below this → zombie candidate. |
+| `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | `10` | Peak CPU below this confirms zombie. |
+| `ROS_IDLE_CPU_UTILIZATION_PCT` | `2` | P95 CPU as % of request; below → idle. |
+| `ROS_IDLE_MEMORY_UTILIZATION_PCT` | `5` | P95 memory as % of request; below → idle. |
+| `ROS_IDLE_BURST_RATIO` | `10` | `peak/P95` above this → bursty (stay active). |
+| `ROS_IDLE_MIN_OBSERVATION_DAYS` | `14` | Minimum digest days before classifying. |
+| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Comma-separated namespace globs to skip. |
+| `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `DaemonSet` | Comma-separated owner kinds to skip. |
+
+See [Idle / Zombie Detection](features/idle-detection.md).
+
+---
+
 ## Engine Thresholds
 
 Platform-wide defaults for recommendation algorithms. When set, they **lock**
@@ -231,6 +249,7 @@ workload-specific tuning examples, see
 | Snapshot staleness | `ROS_SNAPSHOT_*` |
 | Term windows | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
 | OOM feedback | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
+| Idle / zombie | `ROS_IDLE_*` (see section above) |
 
 ---
 

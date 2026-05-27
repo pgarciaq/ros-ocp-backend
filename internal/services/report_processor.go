@@ -743,6 +743,10 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		log.Errorf("native namespace engine: writing recommendations failed: %v", err)
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
+	if err := engine.AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
+		log.Errorf("native namespace engine: idle state aggregation failed: %v", err)
+		return fmt.Errorf("aggregate namespace idle state: %w", err)
+	}
 	metrics.IncRecommendationsWritten("namespace", len(results))
 	log.Infof("native namespace engine: wrote %d recommendations", len(results))
 

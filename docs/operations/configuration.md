@@ -267,6 +267,25 @@ See [features/tag-filtering.md](../features/tag-filtering.md).
 
 ---
 
+## Idle / Zombie Detection
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_IDLE_DETECTION_ENABLED` | `true` | Master switch for inline idle/zombie classification. |
+| `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | `1` | P95 CPU (millicores) below this → zombie candidate. |
+| `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | `10` | Peak CPU below this confirms zombie. |
+| `ROS_IDLE_CPU_UTILIZATION_PCT` | `2` | P95 CPU as % of request; below → idle. |
+| `ROS_IDLE_MEMORY_UTILIZATION_PCT` | `5` | P95 memory as % of request; below → idle. |
+| `ROS_IDLE_BURST_RATIO` | `10` | `peak/P95` above this → bursty (stay active). |
+| `ROS_IDLE_MIN_OBSERVATION_DAYS` | `14` | Minimum digest days before classifying. |
+| `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Comma-separated namespace globs to skip. |
+| `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `DaemonSet` | Comma-separated owner kinds to skip. |
+
+Tenant Settings API overrides for these thresholds are planned; env + defaults apply today.
+See [idle-detection.md](../features/idle-detection.md).
+
+---
+
 ## Engine Thresholds (Summary)
 
 Platform-wide defaults for sizing and classification. Each can lock the

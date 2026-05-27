@@ -61,6 +61,13 @@ func RecommendWorkloadsStreaming(
 		return fmt.Errorf("load container thresholds: %w", err)
 	}
 	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
+	idleCfg := LoadIdleConfig(ctx, pool, orgID)
+	maxIdleWindowDays := 0
+	for _, tc := range terms {
+		if tc.WindowDays > maxIdleWindowDays {
+			maxIdleWindowDays = tc.WindowDays
+		}
+	}
 
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date,
@@ -122,6 +129,18 @@ func RecommendWorkloadsStreaming(
 		currentMemLimKiB := latest.MemRequestP95KiB
 		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
 
+		idleRows := digests
+		if maxIdleWindowDays > 0 {
+			idleRows = filterByWindow(digests, latest.BucketDate, maxIdleWindowDays)
+		}
+		// ClassifyIdleState supersedes legacy DetectIdle for persisted idle_state;
+		// DetectAbandoned below remains for NotifIdleWorkload backward compatibility.
+		idleResult := ClassifyIdleState(
+			idleRows, currentCPUReqMC, currentMemReqKiB,
+			key.WorkloadType, key.Namespace, idleCfg,
+		)
+		classifiedIdle := idleResult.State != IdleStateActive
+
 		for _, tc := range terms {
 			windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
 			if len(windowRows) < tc.MinDataDays {
@@ -146,6 +165,7 @@ func RecommendWorkloadsStreaming(
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
+				// DetectAbandoned: all-zero usage; kept for NotifIdleWorkload (zombie allows non-zero peak).
 				abandoned := DetectAbandoned(windowRows)
 
 				var recCPUReq, recCPULim, recMemReq, recMemLim int64
@@ -181,8 +201,13 @@ func RecommendWorkloadsStreaming(
 					ConfidenceLevel:      confidence,
 					CPUTrendSlope:        cpuRec.TrendSlope,
 					MemTrendSlope:        memRec.TrendSlope,
-					IsIdle:               cpuRec.IsIdle,
+					IsIdle:               classifiedIdle || cpuRec.IsIdle,
 					IsAbandoned:          abandoned,
+					IdleState:            idleResult.State,
+					IdleSince:            idleResult.IdleSince,
+					IdleDurationDays:     idleResult.DurationDays,
+					PeakCPUMC:            idleResult.PeakCPUMC,
+					PeakMemoryBytes:      idleResult.PeakMemoryBytes,
 					OOMCountSum:          oomTotal,
 					DataDays:             dataDays,
 					Stale:                stale,
@@ -326,9 +351,11 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				pod_count_min, pod_count_max, pod_count_avg,
 				desired_replicas, available_replicas,
 				estimated_monthly_savings_usd,
+				idle_state, idle_since, idle_duration_days,
+				estimated_waste_cents, peak_cpu_millicores, peak_memory_bytes,
 				monitoring_start_time, monitoring_end_time,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -352,6 +379,12 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				desired_replicas = EXCLUDED.desired_replicas,
 				available_replicas = EXCLUDED.available_replicas,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
+				idle_state = EXCLUDED.idle_state,
+				idle_since = EXCLUDED.idle_since,
+				idle_duration_days = EXCLUDED.idle_duration_days,
+				estimated_waste_cents = EXCLUDED.estimated_waste_cents,
+				peak_cpu_millicores = EXCLUDED.peak_cpu_millicores,
+				peak_memory_bytes = EXCLUDED.peak_memory_bytes,
 				monitoring_start_time = EXCLUDED.monitoring_start_time,
 				monitoring_end_time = EXCLUDED.monitoring_end_time,
 				container_id = EXCLUDED.container_id,
@@ -368,6 +401,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 				r.DesiredReplicas, r.AvailableReplicas,
 				r.EstimatedSavingsCents,
+				idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
+				r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
 				r.MonitoringStartTime, r.MonitoringEndTime,
 			)
 		}

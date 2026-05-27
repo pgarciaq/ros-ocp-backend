@@ -316,6 +316,9 @@ func recalculateNamespaceCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	if err := WriteNamespaceRecommendations(ctx, pool, results); err != nil {
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
+	if err := AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
+		return fmt.Errorf("aggregate namespace idle state: %w", err)
+	}
 	metrics.IncRecommendationsWritten("namespace", len(results))
 	if err := WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
 		log.Warnf("threshold recalc: writing namespace history failed: %v", err)
