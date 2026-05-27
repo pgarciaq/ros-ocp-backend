@@ -14,14 +14,17 @@ const (
 	PhaseOptimize = 3
 )
 
-// BasePlugin provides default Phase 1 for plugins that do not override Phase().
+// BasePlugin provides default Phase 1 (Produce) and Priority 50.
+// Embed BasePlugin on plugin structs unless the plugin needs a different phase or
+// must run before/after other plugins in the same phase. See docs/architecture/plugin-phases.md.
 type BasePlugin struct{}
 
 func (BasePlugin) Phase() int     { return PhaseProduce }
 func (BasePlugin) Priority() int { return 50 }
 
-// sortPluginsByPhase returns plugins ordered by Phase ascending, then Priority ascending,
-// then Name ascending within the same phase for deterministic execution.
+// sortPluginsByPhase returns plugins ordered by Phase ascending, then Priority ascending
+// (lower Priority runs first), then Name ascending for ties. Phase always dominates:
+// a Phase 1 plugin with Priority 50 runs before any Phase 2 plugin regardless of priority.
 func sortPluginsByPhase(plugins []Plugin) []Plugin {
 	if len(plugins) == 0 {
 		return nil

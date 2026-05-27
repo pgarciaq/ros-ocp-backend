@@ -51,7 +51,8 @@ func All() []Plugin {
 	return out
 }
 
-// Enabled returns plugins that are active after env filtering and kruize exclusivity.
+// Enabled returns plugins that are active after env filtering and kruize exclusivity,
+// sorted by phase ascending, then priority ascending, then name ascending (see sortPluginsByPhase).
 func Enabled() []Plugin {
 	regMu.RLock()
 	regCopy := make([]Plugin, len(registry))

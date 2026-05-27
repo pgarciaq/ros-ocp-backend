@@ -6,6 +6,16 @@ Plugins execute in ordered phases. All plugins in a phase complete before the ne
 
 Implementation: [`internal/plugin/phases.go`](../../internal/plugin/phases.go), [`ExecuteInPhases`](../../internal/plugin/phases.go), and phase-sorted [`Enabled()`](../../internal/plugin/registry.go).
 
+## Phase constants
+
+| Value | Constant | Name | Purpose |
+|-------|----------|------|---------|
+| 1 | `PhaseProduce` | Produce | Generate recommendations from raw metrics and digests |
+| 2 | `PhaseEnrich` | Enrich | Annotate, classify, or enhance Phase 1 outputs |
+| 3 | `PhaseOptimize` | Optimize | Cross-entity aggregation requiring a global fleet view |
+
+Embed [`BasePlugin`](../../internal/plugin/phases.go) for Phase 1 and priority `50` unless a plugin needs a different phase or run order.
+
 ## Phase 1: Produce
 
 Generate recommendations from raw metrics and digests. These plugins are independent
@@ -19,6 +29,7 @@ and can theoretically run in parallel.
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
 | snapshot | Staleness detection for recommendation freshness |
+| kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
 | vm (future) | OpenShift Virtualization VM rightsizing |
 | instance-type (future) | Cloud instance type optimization for nodes |
 
@@ -27,62 +38,113 @@ and can theoretically run in parallel.
 Read Phase 1 outputs and annotate, classify, or enhance them. These plugins depend
 on Phase 1 being complete but are independent of each other.
 
-| java (future) | JVM heap/GC recommendations | container (memory rec) |
-| golang (future) | GOMAXPROCS, GOMEMLIMIT tuning | container (CPU+memory rec) |
-| python (future) | Worker process count (gunicorn/uvicorn) | container (CPU rec) |
-| nodejs (future) | --max-old-space-size, cluster workers | container (memory rec) |
-| hpa (future) | HPA min/max/target autoscaler config | container (recs + patterns) |
-| vpa (future) | VPA policy recommendations | container |
+| Plugin | Depends on | Description |
+|--------|------------|-------------|
+| java (future) | container (memory rec) | JVM heap/GC recommendations |
+| golang (future) | container (CPU+memory rec) | GOMAXPROCS, GOMEMLIMIT tuning |
+| python (future) | container (CPU rec) | Worker process count (gunicorn/uvicorn) |
+| nodejs (future) | container (memory rec) | --max-old-space-size, cluster workers |
+| hpa (future) | container (recs + patterns) | HPA min/max/target autoscaler config |
+| vpa (future) | container | VPA policy recommendations |
 
 ## Phase 3: Optimize
 
 Cross-entity aggregation requiring a global view of all recommendations.
 
-| Plugin | Description | Depends on |
+| Plugin | Depends on | Description |
 |--------|-------------|------------|
-| binpacking (future) | Optimal pod placement to reduce fragmentation | container, node |
-| machineset (future) | Fleet-level node pool right-sizing | binpacking, instance-type |
+| binpacking (future) | container, node | Optimal pod placement to reduce fragmentation |
+| machineset (future) | binpacking, instance-type | Fleet-level node pool right-sizing |
 
-## Execution Model
+## Execution model
 
 ```
-Phase 1: [container→gpu→node/pvc→snapshot→namespace] → all complete (by Priority)
+Phase 1: [container → gpu → node → pvc → snapshot → namespace]  (by Priority, then Name)
          ↓ barrier
-Phase 2: [java, golang, hpa, vpa, ...] → all complete
+Phase 2: [java, golang, hpa, vpa, ...]  (future)
          ↓ barrier
-Phase 3: [binpacking, machineset] → all complete
+Phase 3: [binpacking, machineset]  (future)
 ```
 
-Within a phase, plugins run in **priority order** (lower `Priority()` first), then by
-name for ties. See [Priority](#priority) below.
+[`Enabled()`](../../internal/plugin/registry.go) and [`ByTrait`](../../internal/plugin/registry.go) return plugins in this order. [`ExecuteInPhases`](../../internal/plugin/phases.go) invokes a callback per plugin with barriers between phases. Retention sweeps and ingest-hook dispatch use this ordering today; recommendation pipelines will adopt the same model as Phase 2/3 plugins land.
 
-[`Enabled()`](../../internal/plugin/registry.go) and [`ByTrait`](../../internal/plugin/registry.go) return plugins in phase order. [`ExecuteInPhases`](../../internal/plugin/phases.go) invokes a callback per plugin with barriers between phases. Retention sweeps and ingest-hook dispatch use this ordering today; recommendation pipelines will adopt the same model as Phase 2/3 plugins land.
+## Sorting rules
+
+When the registry builds the enabled plugin list (or runs [`ExecuteInPhases`](../../internal/plugin/phases.go)), it sorts with [`sortPluginsByPhase`](../../internal/plugin/phases.go):
+
+1. **`Phase()` ascending** — all Phase 1 plugins finish before any Phase 2 plugin starts.
+2. **`Priority()` ascending** — within the same phase, lower priority runs first.
+3. **`Name()` ascending** — when phase and priority match, alphabetical order (deterministic but arbitrary).
+
+`ROS_ENABLED_PLUGINS` list order does **not** affect execution order. Registration order (`init()` side-effect import order) also does **not** affect execution order.
+
+Invalid phase values (`< 1` or `> 3`) are treated as Phase 1 (Produce).
 
 ## Priority
 
-Each plugin implements [`Priority() int`](../../internal/plugin/plugin.go). Lower values run first within the same phase. Embed [`BasePlugin`](../../internal/plugin/phases.go) for the default priority `50`.
+Each plugin implements [`Priority() int`](../../internal/plugin/plugin.go). **Lower values run first within the same phase.** Embed [`BasePlugin`](../../internal/plugin/phases.go) for the default priority `50`.
+
+Choose priority when one plugin must read or update rows another plugin writes in the same phase (for example namespace idle aggregation after container and GPU rows exist).
+
+### Current plugins (Phase and Priority)
+
+All production plugins today use Phase 1 via embedded [`BasePlugin`](../../internal/plugin/phases.go) (none override `Phase()`). The `kruize` plugin is never enabled alongside native plugins.
 
 | Plugin | Phase | Priority | Rationale |
 |--------|-------|----------|-----------|
-| container | 1 | 10 | Writes `idle_state` on `recommendation_sets`; others depend on it |
+| container | 1 | 10 | Writes `idle_state` on `recommendation_sets`; downstream plugins depend on container rows |
 | kruize | 1 | 10 | Legacy container path (mutually exclusive with native plugins) |
-| gpu | 1 | 20 | Enriches GPU metadata and `gpu_idle_state` after container rows exist |
-| node | 1 | 30 | Independent |
-| pvc | 1 | 30 | Independent |
-| snapshot | 1 | 40 | Reads recommendation freshness |
-| namespace | 1 | 90 | Aggregates namespace idle after all container/GPU rows exist |
-| example | 1 | 50 | Template default |
+| gpu | 1 | 20 | Ingest hooks and recommendations after container rows exist; sets `gpu_idle_state` |
+| node | 1 | 30 | Independent; ingest hook after container CSV |
+| pvc | 1 | 30 | Independent; owns storage CSV ingest |
+| snapshot | 1 | 40 | Reads recommendation freshness after core recommendations exist |
+| example (`_example`) | 1 | 50 | Template default (`BasePlugin`); always disabled in production |
+| namespace | 1 | 90 | Aggregates namespace idle after container/GPU (and related) rows exist |
 
-`ROS_ENABLED_PLUGINS` list order does **not** affect execution order.
+When `node` and `pvc` are both enabled (priority 30), **`node` runs before `pvc`** because names tie-break alphabetically.
+
+### Example 1: Phase beats Priority
+
+Suppose two plugins are enabled:
+
+| Plugin | Phase | Priority |
+|--------|-------|----------|
+| early-producer | 1 | 50 |
+| enricher | 2 | 20 |
+
+**`early-producer` runs before `enricher`.** Phase 1 completes entirely before Phase 2 starts, even though `enricher` has a lower priority number (20 &lt; 50). Priority only orders plugins **within** the same phase.
+
+### Example 2: Priority within Phase 1
+
+Suppose two Phase 1 plugins are enabled:
+
+| Plugin | Phase | Priority |
+|--------|-------|----------|
+| container | 1 | 10 |
+| namespace | 1 | 90 |
+
+**`container` runs before `namespace`.** Both are Phase 1; priority 10 sorts before 90. This ensures container (and GPU hook) work finishes before namespace idle aggregation.
+
+### Example 3: Same phase and priority — sort by Name
+
+Suppose two Phase 1 plugins share priority 30:
+
+| Plugin | Phase | Priority |
+|--------|-------|----------|
+| pvc | 1 | 30 |
+| node | 1 | 30 |
+
+**`node` runs before `pvc`.** Phase and priority are equal, so the registry sorts by `Name()` ascending (`"node"` &lt; `"pvc"`). The order is stable across runs but is a naming convention, not a semantic dependency—if ordering matters, assign distinct priorities.
 
 ## Adding a New Plugin
 
 1. Create package under `internal/plugins/<name>/`
-2. Implement the Plugin interface including `Phase() int`
-3. Register with `plugin.Register("<name>", &MyPlugin{})`
-4. Phase 1: embed `plugin.BasePlugin` (default)
-5. Phase 2: return `plugin.PhaseEnrich` from `Phase()`
-6. Phase 3: return `plugin.PhaseOptimize` from `Phase()`
+2. Implement the [`Plugin`](../../internal/plugin/plugin.go) interface: `Name()`, `Enabled()`, and optionally override `Phase()` / `Priority()`
+3. Register with `plugin.Register(&MyPlugin{})` in `init()`
+4. Add a blank import to [`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)
+5. **Phase 1:** embed `plugin.BasePlugin` (default phase and priority 50)
+6. **Phase 2:** implement `Phase() int { return plugin.PhaseEnrich }` and set `Priority()` relative to other Enrich plugins
+7. **Phase 3:** implement `Phase() int { return plugin.PhaseOptimize }`
 
 Per-resource idle detection is **not** a separate plugin: Phase 1 `container` calls
 [`ClassifyIdleState`](../../internal/engine/idle_classification.go) inline; Phase 1
@@ -90,4 +152,4 @@ Per-resource idle detection is **not** a separate plugin: Phase 1 `container` ca
 after writing namespace rows (`container` priority 10, `namespace` priority 90).
 
 Users enable via `ROS_ENABLED_PLUGINS=container,namespace,...`.
-Order in the env var does NOT matter — the registry sorts by phase and priority automatically.
+Order in the env var does NOT matter — the registry sorts by phase, priority, and name automatically.

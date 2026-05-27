@@ -8,7 +8,7 @@
 //
 // # Trait Interfaces
 //
-//   - [Plugin] — base: name, execution phase, and enabled state
+//   - [Plugin] — base: name, execution phase, priority within phase, and enabled state
 //   - [CSVIngestor] — owns CSV parsing for one or more report types
 //   - [IngestHook] — runs after a CSVIngestor processes matching CSV types
 //   - [APIProvider] — registers HTTP routes on the authenticated API group
@@ -28,7 +28,7 @@
 //
 // See internal/plugins/example/ for a complete authoring template. Key steps:
 //  1. Create a package under internal/plugins/<name>/
-//  2. Define a struct implementing [Plugin] + desired trait interfaces (embed [BasePlugin] for Phase 1)
+//  2. Define a struct implementing [Plugin] + desired trait interfaces (embed [BasePlugin] for Phase 1 / priority 50)
 //  3. Call [Register] in init()
 //  4. Add your blank import to internal/plugins/plugins.go
 //  5. If implementing [TermProvider], choose appropriate default terms and MaxWindowDays

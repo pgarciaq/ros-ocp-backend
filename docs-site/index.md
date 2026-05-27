@@ -34,6 +34,7 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 - [Configurability Reference](architecture/configurability.md) — environment variables, Settings API, and tuning guidance
 - [Contributing Guide](contributing.md) — setup, testing, PR process
 - [Plugin Architecture](architecture/plugin-architecture.md) — how plugins work
+- [Plugin Execution Phases](architecture/plugin-phases.md) — phase and priority ordering with examples
 - [Plugin Reference](api-reference/index.md) — auto-generated from source code
 - [API Specification](openapi.md) — OpenAPI/Swagger docs
 - [Known Issues](known-issues.md) — current limitations and workarounds

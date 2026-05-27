@@ -18,7 +18,7 @@ The package is **non-functional**: it registers in `init()` but [`ExamplePlugin.
 
 | Interface | Role |
 |-----------|------|
-| [`Plugin`](../../internal/plugin/plugin.go) | Required: stable `Name()` and `Enabled()`. |
+| [`Plugin`](../../internal/plugin/plugin.go) | Required: stable `Name()`, `Enabled()`, and optionally `Phase()` / `Priority()` (embed [`BasePlugin`](../../internal/plugin/phases.go) for Phase 1 and priority 50). |
 | [`CSVIngestor`](../../internal/plugin/plugin.go) | Own CSV parsing for one or more logical types; [`SupportedCSVTypes`](../../internal/plugin/plugin.go) + [`IngestCSV`](../../internal/plugin/plugin.go) returning [`ingestion.MetricRow`](../../internal/ingestion/models.go). |
 | [`IngestHook`](../../internal/plugin/plugin.go) | Run after ingest; [`HookAfterCSVTypes`](../../internal/plugin/plugin.go) selects which CSV kinds trigger [`AfterIngest`](../../internal/plugin/plugin.go). |
 | [`APIProvider`](../../internal/plugin/plugin.go) | Register Echo routes on the authenticated group via [`RegisterRoutes`](../../internal/plugin/plugin.go). |
@@ -34,3 +34,5 @@ Shared dependencies today come from [`config.GetConfig()`](../../internal/config
 - `ROS_DISABLED_PLUGINS` — comma-separated blocklist when the allowlist is unset.
 
 The `kruize` plugin defaults **off**; when it is enabled alongside others, the registry keeps **only** `kruize` and drops native plugins (see [`plugin.Enabled`](../../internal/plugin/registry.go)).
+
+**Execution order:** [`plugin.Enabled`](../../internal/plugin/registry.go) sorts by phase, then priority (lower first), then name. `ROS_ENABLED_PLUGINS` list order does not matter. See [plugin-phases.md](../../docs/architecture/plugin-phases.md).
