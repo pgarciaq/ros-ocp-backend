@@ -62,6 +62,10 @@ type GPURec struct {
 	TimeSlicingNode                string // set by ComputeNodeTimeslicingRec for candidates
 	TimeSlicingReplicas            int    // set by ComputeNodeTimeslicingRec for candidates
 	Term                           string // short, medium, long
+	GPUIdleState                   IdleState
+	GPUIdleSince                   *time.Time
+	GPUIdleDurationDays            int
+	GPUEstimatedWasteCents         int64
 }
 
 // GPUThresholds holds the configurable thresholds for GPU workload classification
@@ -355,6 +359,11 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 			rec.RecommendedGPUProfile = settings.SelectMIGProfileWithSettings(spec, digests)
 		}
 	}
+
+	gpuIdle := ClassifyGPUIdleFromDigests(digests, LoadGPUIdleConfig())
+	rec.GPUIdleState = gpuIdle.State
+	rec.GPUIdleSince = gpuIdle.IdleSince
+	rec.GPUIdleDurationDays = gpuIdle.DurationDays
 
 	return rec
 }

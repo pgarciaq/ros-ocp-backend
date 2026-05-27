@@ -227,6 +227,8 @@ Only relevant when running the Kruize recommendation poller or `ROS_ENABLED_PLUG
 | `ROS_IDLE_MIN_OBSERVATION_DAYS` | `14` | Minimum digest days before classifying. |
 | `ROS_IDLE_EXCLUDE_NAMESPACES` | `kube-system,openshift-*` | Comma-separated namespace globs to skip. |
 | `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `DaemonSet` | Comma-separated owner kinds to skip. |
+| `ROS_IDLE_GPU_SM_ACTIVE_BP` | `500` | GPU `sm_active` P95 below this (basis points) → idle. |
+| `ROS_IDLE_GPU_DRAM_ACTIVE_BP` | `500` | GPU `dram_active` P95 below this (basis points) → idle. |
 
 See [Idle / Zombie Detection](features/idle-detection.md).
 

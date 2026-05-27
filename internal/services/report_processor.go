@@ -614,7 +614,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 				log.Warnf("native engine: load term config for GPU classification failed: %v", termErr)
 				gpuTerms = engine.DefaultTermsForPlugin("gpu")
 			}
-			if err := engine.StoreGPUClassifications(egCtx, pool, orgID, clusterUUID, gpuTerms); err != nil {
+			if err := engine.StoreGPUClassifications(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
 				log.Warnf("native engine: storing GPU classifications failed: %v", err)
 			}
 			metrics.ObservePipelinePhase("gpu_enrichment", tGPU)

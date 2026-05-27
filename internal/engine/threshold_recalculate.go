@@ -393,7 +393,11 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 
 	tGPU := time.Now()
-	if err := StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms); err != nil {
+	var gpuCostData *costdata.ClusterCostData
+	if config.GetConfig().SavingsEstimatesEnabled {
+		gpuCostData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+	}
+	if err := StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms, gpuCostData); err != nil {
 		return fmt.Errorf("store GPU classifications: %w", err)
 	}
 	metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
@@ -409,17 +413,15 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 
 	var gpuRate *float32
-	if config.GetConfig().SavingsEstimatesEnabled {
-		if costData := fetchRecalcCostData(ctx, orgID, clusterUUID, start, now); costData != nil {
-			for _, recs := range gpuRecs {
-				for _, rec := range recs {
-					ApplyGPUSavings(rec, costData)
-				}
+	if gpuCostData != nil {
+		for _, recs := range gpuRecs {
+			for _, rec := range recs {
+				ApplyGPUSavings(rec, gpuCostData)
 			}
-			if rate := GPUMonthlyRate(costData); rate > 0 {
-				r := float32(rate)
-				gpuRate = &r
-			}
+		}
+		if rate := GPUMonthlyRate(gpuCostData); rate > 0 {
+			r := float32(rate)
+			gpuRate = &r
 		}
 	}
 

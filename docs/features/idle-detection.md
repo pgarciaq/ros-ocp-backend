@@ -91,7 +91,7 @@ flowchart LR
 | Resource | Primary signal | Phase |
 |----------|----------------|-------|
 | **Containers** | CPU/memory P95 vs request; peak vs P95 burst guard | 1–3 |
-| **GPUs** | `sm_active` / `dram_active` basis points (P95) | 4 |
+| **GPUs** | `sm_active` / `dram_active` basis points (P95) | 4 (implemented) |
 | **PVCs** | No pod mount for > 7 days; orphaned PVC | 4 |
 | **Nodes** | Node utilization P95 < 10%; drain candidate when pods reschedule | 4 |
 | **Namespaces** | **All** containers in namespace classified idle or zombie | 1 (post-process) |
@@ -152,6 +152,13 @@ Uses existing GPU basis-point metrics from operator reports (see
 
 Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
 [Cost Integration — GPU savings](../architecture/cost-integration.md#gpu-savings).
+
+**Implementation (Phase 4):** [`ClassifyGPUIdleFromDigests()`](../../internal/engine/gpu_idle_classification.go)
+runs inside [`RecommendGPUWithSettings()`](../../internal/engine/gpu_recommender.go) when
+GPU recommendations are computed from `gpu_container_digests`. Results persist on
+`recommendation_sets` (`gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`,
+`gpu_estimated_waste_cents`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go)
+after container recommendations are written (GPU plugin `HookAfterCSVTypes` + report processor).
 
 ### PVCs
 
@@ -299,7 +306,8 @@ CREATE INDEX IF NOT EXISTS idx_rs_idle_state
 
 - Follow existing migration numbering in `migrations/`
 - Backfill: `idle_state = 'active'`, `estimated_waste_cents = 0`
-- GPU/PVC/node tables: add parallel columns in Phase 4 (`gpu_recommendation_sets`, etc.)
+- GPU idle columns on `recommendation_sets` (`gpu_idle_*`) — migration `000084` (Phase 4)
+- PVC/node tables: parallel columns in a future phase
 
 **State transitions:** On each `RecommendAllWorkloads` pass, recompute from digests;
 update `idle_since` only when transitioning from `active` → `idle`/`zombie`, preserve

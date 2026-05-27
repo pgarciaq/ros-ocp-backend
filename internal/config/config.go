@@ -246,6 +246,8 @@ type Config struct {
 	IdleMinObservationDays   int    `mapstructure:"ROS_IDLE_MIN_OBSERVATION_DAYS"`
 	IdleExcludeNamespaces    string `mapstructure:"ROS_IDLE_EXCLUDE_NAMESPACES"`
 	IdleExcludeWorkloadTypes string `mapstructure:"ROS_IDLE_EXCLUDE_WORKLOAD_TYPES"`
+	IdleGPUSMActiveBP        int64  `mapstructure:"ROS_IDLE_GPU_SM_ACTIVE_BP"`
+	IdleGPUDRAMActiveBP      int64  `mapstructure:"ROS_IDLE_GPU_DRAM_ACTIVE_BP"`
 
 	// Plugin configuration (see internal/plugin/registry.go).
 	EnabledPlugins  string `mapstructure:"ROS_ENABLED_PLUGINS"`
@@ -477,6 +479,8 @@ func initConfig() {
 	viper.SetDefault("ROS_IDLE_MIN_OBSERVATION_DAYS", 14)
 	viper.SetDefault("ROS_IDLE_EXCLUDE_NAMESPACES", "kube-system,openshift-*")
 	viper.SetDefault("ROS_IDLE_EXCLUDE_WORKLOAD_TYPES", "DaemonSet")
+	viper.SetDefault("ROS_IDLE_GPU_SM_ACTIVE_BP", 500)
+	viper.SetDefault("ROS_IDLE_GPU_DRAM_ACTIVE_BP", 500)
 	viper.SetDefault("ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD", 100.0)
 	viper.SetDefault("ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD", 0.5)
 	viper.SetDefault("ROS_NAMESPACE_CPU_COST_PERCENTILE", 0.60)

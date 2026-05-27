@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // GPUQueryFilters narrows gpu_container_digests rows (optional).
@@ -211,7 +213,9 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 
 	_, err = pool.Exec(ctx, `
 		UPDATE recommendation_sets rs
-		SET has_gpu = FALSE, gpu_model_name = '', gpu_classification = ''
+		SET has_gpu = FALSE, gpu_model_name = '', gpu_classification = '',
+		    gpu_idle_state = 'active', gpu_idle_since = NULL,
+		    gpu_idle_duration_days = NULL, gpu_estimated_waste_cents = 0
 		WHERE rs.org_id = $1
 		  AND rs.cluster_uuid = $2
 		  AND rs.has_gpu = TRUE
@@ -228,10 +232,10 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	return nil
 }
 
-// StoreGPUClassifications computes GPU classifications for all GPU containers
-// in a cluster and stores them in recommendation_sets.gpu_classification.
-// This runs after MarkContainersWithGPU so has_gpu and gpu_model_name are set.
-func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) error {
+// StoreGPUClassifications computes GPU classifications and idle/zombie state for all
+// GPU containers in a cluster and stores them on recommendation_sets. This runs after
+// MarkContainersWithGPU so has_gpu and gpu_model_name are set.
+func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig, costData *costdata.ClusterCostData) error {
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -MaxWindowDays(terms, 30))
 
@@ -249,6 +253,8 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 	defer tx.Rollback(ctx)
 
+	gpuMonthlyRate := GPUMonthlyRate(costData)
+
 	for key, recs := range gpuRecs {
 		parts := strings.SplitN(key, "/", 3)
 		if len(parts) != 3 {
@@ -261,17 +267,26 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			if classification == "" {
 				classification = string(GPUClassNoProfiling)
 			}
+			wasteCents := int64(0)
+			if rec.GPUIdleState != IdleStateActive && gpuMonthlyRate > 0 {
+				wasteCents = money.USDToCents(gpuMonthlyRate)
+			}
+			idleState := idleStateForWrite(rec.GPUIdleState)
 			_, err := tx.Exec(ctx, `
 				UPDATE recommendation_sets
-				SET gpu_classification = $6
+				SET gpu_classification = $6,
+				    gpu_idle_state = $8,
+				    gpu_idle_since = $9,
+				    gpu_idle_duration_days = $10,
+				    gpu_estimated_waste_cents = $11
 				WHERE org_id = $1
 				  AND cluster_uuid = $2
 				  AND namespace = $3
 				  AND workload = $4
 				  AND container_name = $5
-				  AND term = $7
-				  AND gpu_classification != $6`,
-				orgID, clusterUUID, ns, wl, cn, classification, rec.Term)
+				  AND term = $7`,
+				orgID, clusterUUID, ns, wl, cn, classification, rec.Term,
+				idleState, rec.GPUIdleSince, rec.GPUIdleDurationDays, wasteCents)
 			if err != nil {
 				return fmt.Errorf("store GPU classification for %s term=%s: %w", key, rec.Term, err)
 			}
