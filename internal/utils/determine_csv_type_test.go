@@ -14,6 +14,7 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		file string
 		want types.PayloadType
 	}{
+		// Operator-generated filenames (prefix match)
 		{"ros-openshift-cluster-quota-20260501-20260528.csv", types.PayloadTypeClusterQuota},
 		{"/tmp/ros-openshift-cluster-quota-20260501.csv", types.PayloadTypeClusterQuota},
 		{"ocp_ros_cluster_quota_usage.csv", types.PayloadTypeClusterQuota},
@@ -25,6 +26,13 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"ocp_storage_usage.csv", types.PayloadTypeStorage},
 		{"ocp_ros_usage.csv", types.PayloadTypeContainer},
 		{"some/path/with/namespace/in/middle.csv", types.PayloadTypeContainer},
+
+		// Nise-generated filenames with date/UUID prefix (contains fallback)
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_cluster_quota.csv", types.PayloadTypeClusterQuota},
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_namespace_usage.csv", types.PayloadTypeNamespace},
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_snapshot_inventory.csv", types.PayloadTypeSnapshot},
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_storage_usage.csv", types.PayloadTypeStorage},
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_usage.csv", types.PayloadTypeContainer},
 	}
 	for _, tc := range cases {
 		tc := tc

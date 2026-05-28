@@ -441,10 +441,12 @@ func isItFirstOfMonth(d time.Time) bool {
 
 func DetermineCSVType(fileName string) types.PayloadType {
 	base := filepath.Base(fileName)
-	prefixes := []struct {
-		prefix string
-		ptype  types.PayloadType
-	}{
+	type rule struct {
+		pattern string
+		ptype   types.PayloadType
+	}
+	// Ordered longest-match-first to avoid false positives.
+	rules := []rule{
 		{"ros-openshift-cluster-quota-", types.PayloadTypeClusterQuota},
 		{"ros-openshift-namespace-", types.PayloadTypeNamespace},
 		{"ros-openshift-snapshot-", types.PayloadTypeSnapshot},
@@ -454,9 +456,17 @@ func DetermineCSVType(fileName string) types.PayloadType {
 		{"ocp_snapshot_inventory", types.PayloadTypeSnapshot},
 		{"ocp_storage_usage", types.PayloadTypeStorage},
 	}
-	for _, p := range prefixes {
-		if strings.HasPrefix(base, p.prefix) {
-			return p.ptype
+	// Prefix match first (operator-generated filenames).
+	for _, r := range rules {
+		if strings.HasPrefix(base, r.pattern) {
+			return r.ptype
+		}
+	}
+	// Contains fallback for nise-generated filenames with date/UUID prefixes
+	// (e.g. "May-2026-UUID-ocp_ros_cluster_quota.csv").
+	for _, r := range rules {
+		if strings.Contains(base, r.pattern) {
+			return r.ptype
 		}
 	}
 	return types.PayloadTypeContainer
