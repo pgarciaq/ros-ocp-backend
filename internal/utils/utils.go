@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -439,14 +440,24 @@ func isItFirstOfMonth(d time.Time) bool {
 }
 
 func DetermineCSVType(fileName string) types.PayloadType {
-	if strings.Contains(fileName, "namespace") {
-		return types.PayloadTypeNamespace
+	base := filepath.Base(fileName)
+	prefixes := []struct {
+		prefix string
+		ptype  types.PayloadType
+	}{
+		{"ros-openshift-cluster-quota-", types.PayloadTypeClusterQuota},
+		{"ros-openshift-namespace-", types.PayloadTypeNamespace},
+		{"ros-openshift-snapshot-", types.PayloadTypeSnapshot},
+		{"ros-openshift-storage-", types.PayloadTypeStorage},
+		{"ocp_ros_cluster_quota", types.PayloadTypeClusterQuota},
+		{"ocp_ros_namespace", types.PayloadTypeNamespace},
+		{"ocp_snapshot_inventory", types.PayloadTypeSnapshot},
+		{"ocp_storage_usage", types.PayloadTypeStorage},
 	}
-	if strings.Contains(fileName, "snapshot") {
-		return types.PayloadTypeSnapshot
-	}
-	if strings.Contains(fileName, "storage") {
-		return types.PayloadTypeStorage
+	for _, p := range prefixes {
+		if strings.HasPrefix(base, p.prefix) {
+			return p.ptype
+		}
 	}
 	return types.PayloadTypeContainer
 }

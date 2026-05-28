@@ -167,6 +167,13 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			}
 			continue
 		}
+		if useNativeCSVIngest && csvType == types.PayloadTypeClusterQuota {
+			if err := processClusterQuotaCSVNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
+				recordKafkaTransient(err)
+			}
+			continue
+		}
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
@@ -637,6 +644,12 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 			PluginHookErrors.WithLabelValues("quota", "after_container_recs").Inc()
 		}
 	}
+	if plugin.EnabledFor("cluster-quota") {
+		if crqErr := engine.RunClusterQuotaRecommendations(ctx, pool, orgID, clusterUUID); crqErr != nil {
+			log.Warnf("native engine: cluster-quota recommendations failed: %v", crqErr)
+			PluginHookErrors.WithLabelValues("cluster-quota", "after_container_recs").Inc()
+		}
+	}
 	return nil
 }
 
@@ -762,6 +775,51 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		if isTransientKafkaProcessingError(err) {
 			return fmt.Errorf("write namespace history: %w", err)
 		}
+	}
+	return nil
+}
+
+// processClusterQuotaCSVNative ingests cluster-quota CSV and runs CRQ recommendations.
+func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native cluster-quota engine: unable to fetch CSV from URL: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("fetch cluster-quota CSV: %w", err)
+		}
+		return nil
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeClusterQuota))
+	if err != nil {
+		log.Errorf("native cluster-quota engine: ingest failed: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("cluster-quota ingest: %w", err)
+		}
+		return nil
+	}
+	if !handled {
+		if err := ingestion.ProcessClusterQuotaCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native cluster-quota engine: ingest failed: %v", err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("cluster-quota ingest: %w", err)
+			}
+			return nil
+		}
+	}
+
+	if err := engine.RunClusterQuotaRecommendations(ctx, pool, orgID, clusterUUID); err != nil {
+		log.Errorf("native cluster-quota engine: recommendation failed: %v", err)
+		return fmt.Errorf("cluster-quota recommendations: %w", err)
 	}
 	return nil
 }

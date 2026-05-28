@@ -16,7 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-const latestMigrationVersion uint = 86
+const latestMigrationVersion uint = 88
 
 // setupMigratePostgres starts PostgreSQL and returns a connection string. Migrations are not applied.
 func setupMigratePostgres(t *testing.T) string {

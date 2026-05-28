@@ -220,6 +220,10 @@ type Config struct {
 	QuotaHighRiskThresholdPercent     int `mapstructure:"ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
 	QuotaMediumRiskThresholdPercent   int `mapstructure:"ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
 
+	ClusterQuotaHeadroomPercent            int `mapstructure:"ROS_CLUSTER_QUOTA_HEADROOM_PERCENT"`
+	ClusterQuotaHighRiskThresholdPercent   int `mapstructure:"ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
+	ClusterQuotaMediumRiskThresholdPercent int `mapstructure:"ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
+
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
 	SnapshotOrphanAgeDays       int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
@@ -542,6 +546,9 @@ func initConfig() {
 	viper.SetDefault("ROS_QUOTA_HEADROOM_PERCENT", 10)
 	viper.SetDefault("ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT", 90)
 	viper.SetDefault("ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT", 70)
+	viper.SetDefault("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", 10)
+	viper.SetDefault("ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT", 90)
+	viper.SetDefault("ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT", 70)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

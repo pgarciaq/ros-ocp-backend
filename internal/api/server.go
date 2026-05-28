@@ -93,6 +93,12 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.PUT("/recommendations/openshift/settings/quota", disabledPluginRoute404("quota"))
 		v1.DELETE("/recommendations/openshift/settings/quota", disabledPluginRoute404("quota"))
 	}
+	if !pluginRecommendationRoutesActive("cluster-quota") {
+		v1.GET("/recommendations/openshift/cluster-quota", disabledPluginRoute404("cluster-quota"))
+		v1.GET("/recommendations/openshift/settings/cluster-quota", disabledPluginRoute404("cluster-quota"))
+		v1.PUT("/recommendations/openshift/settings/cluster-quota", disabledPluginRoute404("cluster-quota"))
+		v1.DELETE("/recommendations/openshift/settings/cluster-quota", disabledPluginRoute404("cluster-quota"))
+	}
 	registerBusinessHoursRouteGuards(v1)
 }
 
@@ -200,6 +206,11 @@ func StartAPIServer(ctx context.Context) {
 			v1.GET("/recommendations/openshift/settings/quota", GetQuotaSettings)
 			v1.PUT("/recommendations/openshift/settings/quota", PutQuotaSettings)
 			v1.DELETE("/recommendations/openshift/settings/quota", DeleteQuotaSettings)
+		}
+		if pluginRecommendationRoutesActive("cluster-quota") {
+			v1.GET("/recommendations/openshift/settings/cluster-quota", GetClusterQuotaSettings)
+			v1.PUT("/recommendations/openshift/settings/cluster-quota", PutClusterQuotaSettings)
+			v1.DELETE("/recommendations/openshift/settings/cluster-quota", DeleteClusterQuotaSettings)
 		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}

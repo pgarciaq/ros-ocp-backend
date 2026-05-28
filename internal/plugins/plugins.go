@@ -4,6 +4,7 @@
 package plugins
 
 import (
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"

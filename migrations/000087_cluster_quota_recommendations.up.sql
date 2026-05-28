@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS cluster_quota_recommendation_sets (
+    id BIGSERIAL PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    cluster_uuid UUID NOT NULL,
+    cluster_quota_name TEXT NOT NULL,
+    recommendation_type TEXT NOT NULL DEFAULT 'none',
+    risk_level TEXT NOT NULL DEFAULT 'low',
+    cpu_request_hard BIGINT,
+    cpu_request_used BIGINT,
+    cpu_request_recommended BIGINT,
+    cpu_limit_hard BIGINT,
+    cpu_limit_used BIGINT,
+    cpu_limit_recommended BIGINT,
+    memory_request_hard BIGINT,
+    memory_request_used BIGINT,
+    memory_request_recommended BIGINT,
+    memory_limit_hard BIGINT,
+    memory_limit_used BIGINT,
+    memory_limit_recommended BIGINT,
+    utilization_cpu_request_percent INT,
+    utilization_memory_request_percent INT,
+    savings_cpu_cores_freed BIGINT,
+    savings_memory_bytes_freed BIGINT,
+    savings_dollars_monthly INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(org_id, cluster_uuid, cluster_quota_name)
+);
+
+CREATE INDEX idx_crq_recs_org_cluster ON cluster_quota_recommendation_sets(org_id, cluster_uuid);
