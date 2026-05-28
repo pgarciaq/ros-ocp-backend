@@ -13,8 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
@@ -33,17 +31,9 @@ func (p *QuotaPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *QuotaPlugin) Priority() int { return 35 }
 
-// HookAfterCSVTypes returns "namespace" only. Container recommendations are written
-// after the container CSV ingest hook phase in report_processor; hooking "container"
-// would read stale recommendation_sets. processContainerCSVNative runs quota recs
-// after WriteRecommendations instead.
-func (p *QuotaPlugin) HookAfterCSVTypes() []string {
-	return []string{"namespace"}
-}
-
-func (p *QuotaPlugin) AfterIngest(ctx context.Context, pool *pgxpool.Pool, _ []ingestion.MetricRow, orgID, clusterUUID string) error {
-	return engine.RunQuotaRecommendations(ctx, pool, orgID, clusterUUID)
-}
+// Quota recommendations run from report_processor after container recommendations
+// are written (processContainerCSVNative). They are not registered as an IngestHook
+// because namespace CSV ingest hooks fire before container recommendation_sets exist.
 
 func (p *QuotaPlugin) RegisterRoutes(g *echo.Group) {
 	if plugin.EnabledFor(plugin.KruizePluginName) {

@@ -80,14 +80,14 @@ func TestUtilizationBP(t *testing.T) {
 
 func TestQuotaRecConfigFromApp(t *testing.T) {
 	appCfg := &config.Config{
-		QuotaHeadroomPercent:            20,
-		QuotaHighRiskThresholdPercent:   80,
-		QuotaMediumRiskThresholdPercent: 60,
+		QuotaHeadroomPercent:            10,
+		QuotaHighRiskThresholdPercent:   90,
+		QuotaMediumRiskThresholdPercent: 70,
 	}
 	cfg := QuotaRecConfigFromApp(appCfg)
-	assert.Equal(t, 12000, cfg.HeadroomBasisPoints)
-	assert.Equal(t, 8000, cfg.HighRiskThresholdBP)
-	assert.Equal(t, 6000, cfg.MediumRiskThresholdBP)
+	assert.Equal(t, 11000, cfg.HeadroomBasisPoints)
+	assert.Equal(t, 9000, cfg.HighRiskThresholdBP)
+	assert.Equal(t, 7000, cfg.MediumRiskThresholdBP)
 }
 
 func TestQuotaRecConfigFromApp_TenPercentHeadroom(t *testing.T) {

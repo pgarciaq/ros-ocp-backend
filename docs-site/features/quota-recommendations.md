@@ -1,26 +1,48 @@
 # ResourceQuota Recommendations
 
+!!! info "Quick Facts"
+    **API:** `GET /api/cost-management/v1/recommendations/openshift/quota/`  
+    **Plugin:** `quota` (priority 35, on by default in the native engine)  
+    **Configurable:** Admin env vars only — no Settings API  
+    **Savings:** Yes on `tighten` rows when cost integration is enabled
+
 Right-size Kubernetes **ResourceQuota** hard limits per namespace by comparing
 configured limits and observed usage against aggregated container recommendation totals.
 
-**Status:** Shipped. Enable with the native plugin set (`quota` is on by default).
+**Related:** [Namespace recommendations](namespace-recommendations.md) recommend ideal
+namespace CPU/memory totals from usage digests. The `quota` plugin tunes **existing**
+ResourceQuota objects against container rightsizing output and optional `kube_resourcequota`
+used metrics.
 
-**API:** `GET /api/cost-management/v1/recommendations/openshift/quota/`
-
-**Related:** [Namespace recommendations](namespace-recommendations.md) size ideal namespace
-totals from usage digests — distinct from tuning existing ResourceQuota objects.
+**ClusterResourceQuota** (OpenShift multi-namespace quotas) is not supported yet.
 
 ---
 
-## How it works (high level)
+## How it works
 
-1. The metrics operator reports namespace-level quota **hard** and optional **used** values.
-2. ROS ingests them into daily namespace digests and sums container rightsizing recommendations.
-3. For each namespace with hard limits, ROS recommends adjusted limits with headroom and
-   classifies the namespace as **tighten**, **raise**, or **optimal**.
-4. **Tighten** rows can include estimated monthly savings when cost integration is enabled.
+```mermaid
+flowchart LR
+  Op[Metrics operator] --> CSV[Namespace ROS CSV]
+  Cont[Container plugin] --> RS[recommendation_sets]
+  CSV --> Digests[daily_namespace_digests]
+  RS --> Quota[RunQuotaRecommendations]
+  Digests --> Quota
+  Quota --> API[GET .../quota/]
+```
 
-**ClusterResourceQuota** (OpenShift multi-namespace quotas) is not supported yet.
+1. The operator reports namespace-level quota **hard** (`*_namespace_sum`) and optional
+   **used** (`*_namespace_used`) values from `kube_resourcequota`.
+2. ROS ingests namespace digests and, in the same report cycle, runs container rightsizing.
+3. After container `recommendation_sets` are written, `RunQuotaRecommendations` compares
+   hard/used limits to aggregated container `term=medium` / `engine=cost` sums.
+4. Each namespace with hard limits gets a recommendation type, risk level, and optional
+   estimated savings on **tighten**.
+
+Quota does **not** use an ingest hook: namespace CSV hooks run before container
+recommendations exist, so the authoritative run is the explicit call at the end of
+`processContainerCSVNative` in the report processor.
+
+Internal design: [`docs/features/quota-recommendations.md`](../../docs/features/quota-recommendations.md).
 
 ---
 
@@ -29,13 +51,14 @@ totals from usage digests — distinct from tuning existing ResourceQuota object
 | `recommendation_type` | Meaning |
 |----------------------|---------|
 | `tighten` | Recommended hard limits are below current hard — reclaim stranded quota |
-| `raise` | Usage or recommendation totals are near the hard limit — scaling risk |
+| `raise` | Usage or recommendation totals are near the hard limit — admission risk |
 | `optimal` | Quota is reasonably aligned with workload needs |
+| `none` | No hard limits on the namespace snapshot |
 
 | `risk_level` | Typical utilization (max across CPU/memory request/limit) |
 |--------------|-----------------------------------------------------------|
-| `high` | ≥ high-risk threshold (default 80% of hard) |
-| `medium` | ≥ medium threshold (default 60%) |
+| `high` | ≥ high-risk threshold (default 90% of hard) |
+| `medium` | ≥ medium threshold (default 70%) |
 | `low` | Below medium but non-zero |
 | `none` | No utilization signal |
 
@@ -48,27 +71,54 @@ vs hard limits.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_QUOTA_HEADROOM_PERCENT` | `20` | Margin on recommended hard values (20 → 120% of container rec sums) |
-| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `80` | Triggers `raise` and `high` risk |
-| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `60` | `medium` risk band |
+| `ROS_QUOTA_HEADROOM_PERCENT` | `10` | Margin on recommended hard values (10 → 110% of container rec sums) |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | Triggers `raise` and `high` risk |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk band |
+
+**Settings API:** Quota thresholds are **not** exposed on
+`GET/PUT /recommendations/openshift/settings/*` (unlike idle detection, snapshot,
+container/namespace thresholds, and business hours). Change values via deployment
+env vars (Helm `ros.api.quotaRecommendations` on cost-onprem).
+
+| Feature | Runtime tuning |
+|---------|----------------|
+| Idle detection | `GET/PUT/DELETE .../settings/idle-detection` + env locks |
+| Snapshot | `GET/PUT .../settings/snapshot` + env locks |
+| Container, namespace, node, GPU, PVC | `GET/PUT/DELETE .../settings/thresholds?recommendation_type=...` |
+| Business hours | `.../settings/business-hours` (+ cluster/namespace overrides) |
+| **ResourceQuota (`quota`)** | **Env vars only** |
 
 Disable the feature: `ROS_DISABLED_PLUGINS=quota` or omit `quota` from `ROS_ENABLED_PLUGINS`
-(list endpoint returns 404).
+(the list endpoint returns 404).
 
 See [Configuration](../configuration.md#resourcequota-recommendations) for deployment notes.
 
 ---
 
-## One-cycle lag
+## Timing
 
-Container recommendation sums are read from the database after the container plugin runs.
-When a report bundle includes both container and namespace CSVs, quota runs twice in one
-cycle (after container processing and after namespace ingest). If only namespace data
-arrives in a cycle, quota uses container recommendations from the **previous** cycle.
+When a report bundle includes container CSV, quota runs **once** after container
+recommendations are persisted. If only namespace CSV arrives in a cycle, quota uses
+container sums from the **previous** cycle until container metrics are processed again.
 
 ---
 
-## Example response
+## API
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/quota/
+```
+
+| Parameter | Example | Description |
+|-----------|---------|-------------|
+| `filter[cluster]` | UUID | Limit to one cluster |
+| `filter[project]` | `production` | Limit to one namespace |
+| `filter[recommendation_type]` | `tighten,raise` | Filter by type |
+| `filter[risk_level]` | `high,medium` | Filter by risk |
+| `group_by[cluster]` | — | Aggregate rows per cluster |
+| `group_by[project]` | — | Aggregate rows per namespace |
+
+### Example response
 
 ```json
 {
@@ -78,7 +128,12 @@ arrives in a cycle, quota uses container recommendations from the **previous** c
     "offset": 0,
     "currency": "USD"
   },
-  "links": { "first": "/api/cost-management/v1/recommendations/openshift/quota/?limit=100&offset=0", "last": "...", "next": null, "previous": null },
+  "links": {
+    "first": "/api/cost-management/v1/recommendations/openshift/quota/?limit=100&offset=0",
+    "last": "...",
+    "next": null,
+    "previous": null
+  },
   "data": [
     {
       "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
@@ -113,19 +168,6 @@ arrives in a cycle, quota uses container recommendations from the **previous** c
   ]
 }
 ```
-
----
-
-## Query parameters
-
-| Parameter | Example | Description |
-|-----------|---------|-------------|
-| `filter[cluster]` | UUID | Limit to one cluster |
-| `filter[project]` | `production` | Limit to one namespace |
-| `filter[recommendation_type]` | `tighten,raise` | Filter by type |
-| `filter[risk_level]` | `high,medium` | Filter by risk |
-| `group_by[cluster]` | — | Aggregate rows per cluster |
-| `group_by[project]` | — | Aggregate rows per namespace |
 
 Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../../openapi.json).
 

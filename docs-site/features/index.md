@@ -15,7 +15,7 @@ dollar impact using Koku cost model rates.
 | GPU MIG Profiling | gpu | single | No | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
-| ResourceQuota Right-Sizing | quota | single | Yes (tighten) | Yes |
+| ResourceQuota Right-Sizing | quota | single | Yes (tighten) | Env only |
 | Snapshot Lifecycle | snapshot | single | Yes (cost) | Yes |
 | Business Hours | container, namespace | cost, performance | Yes | Yes |
 | Configurable Thresholds | all | all | N/A | Yes |

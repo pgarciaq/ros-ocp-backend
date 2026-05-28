@@ -52,16 +52,15 @@ oversized quota represents **double waste** (unused workloads plus stranded quot
    `daily_namespace_digests` (max per namespace per day). Missing `*_namespace_used`
    columns are ignored (**backward compatible** with older operator builds).
 3. **Container recommendations** — `processContainerCSVNative` runs container sizing,
-   then calls `engine.RunQuotaRecommendations` so quota sees fresh `recommendation_sets`
-   in the same cycle when container CSV is present.
-4. **Quota ingest hook** — `quota` plugin `AfterIngest` on namespace CSV runs
-   `RunQuotaRecommendations` again with updated hard/used snapshots.
-5. **Persistence** — Results upsert into `quota_recommendation_sets` (one row per
+   writes `recommendation_sets`, then calls `engine.RunQuotaRecommendations` so quota
+   sees fresh container aggregates in the same cycle when container CSV is present.
+4. **Persistence** — Results upsert into `quota_recommendation_sets` (one row per
    org / cluster / namespace).
 
 Plugin registration: [`internal/plugins/quota/plugin.go`](../../internal/plugins/quota/plugin.go).
-`HookAfterCSVTypes()` returns `namespace` only (not `container`) because container rows
-are not yet written when the container ingest hook runs.
+The `quota` plugin does **not** register an `IngestHook` — namespace CSV hooks run before
+container recommendations exist; the authoritative run is the explicit call in
+[`report_processor.go`](../../internal/services/report_processor.go) after container recs.
 
 ---
 
@@ -73,15 +72,15 @@ are not yet written when the container ingest hook runs.
    (`term=medium`, `engine=cost`) from `recommendation_sets`.
 3. **Compare (signal C)** — Utilization and risk use the **greater** of quota `used`
    and container recommendation sums vs hard limits. Recommended hard values =
-   container sums × headroom (default 120% when `ROS_QUOTA_HEADROOM_PERCENT=20`).
+   container sums × headroom (default 110% when `ROS_QUOTA_HEADROOM_PERCENT=10`).
 4. **Classify recommendation type**
-   - `raise` — max utilization (used or rec sum) ≥ high-risk threshold (default 80%)
+   - `raise` — max utilization (used or rec sum) ≥ high-risk threshold (default 90%)
    - `tighten` — recommended CPU or memory request hard &lt; current hard (capacity freed)
    - `optimal` — hard limits present but neither raise nor tighten applies
    - `none` — no hard limits on the namespace snapshot
 5. **Classify risk** — Based on the same max utilization vs hard:
-   - `high` — utilization ≥ `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default 80)
-   - `medium` — utilization ≥ `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default 60)
+   - `high` — utilization ≥ `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default 90)
+   - `medium` — utilization ≥ `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default 70)
    - `low` — utilization &gt; 0 but below medium threshold
    - `none` — no utilization signal
 6. **Savings** — `tighten` rows estimate monthly savings from freed CPU/memory via Koku
@@ -96,11 +95,10 @@ Implementation: [`internal/engine/recommend_quota.go`](../../internal/engine/rec
 Container sums are read from PostgreSQL (`recommendation_sets`), not passed in memory
 from the container plugin. In a typical payload (container CSV then namespace CSV):
 
-1. Container digest ingest runs (ingest hooks do not run quota on container).
+1. Container digest ingest runs.
 2. `RecommendWorkloadsStreaming` writes fresh `term=medium` / `engine=cost` rows.
-3. Quota runs at the end of `processContainerCSVNative` with those new rows.
-4. Namespace digest ingest runs; the quota ingest hook runs again with updated
-   hard/used snapshots from the namespace CSV.
+3. Quota runs **once** at the end of `processContainerCSVNative` with those new rows.
+4. Namespace digest ingest updates hard/used snapshots for the **next** quota run.
 
 If only namespace CSV is ingested in a cycle, quota uses container recommendations
 from the **previous** cycle until container metrics arrive. On first deployment,
@@ -112,11 +110,14 @@ expect one report cycle before tighten/raise signals fully reflect container-bas
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROS_QUOTA_HEADROOM_PERCENT` | `20` | Extra margin on recommended quota hard values (20 → multiply sums by 1.20) |
-| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `80` | `raise` recommendation and `high` risk when max utilization ≥ 80% of hard |
-| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `60` | `medium` risk when utilization ≥ 60% and below high threshold |
+| `ROS_QUOTA_HEADROOM_PERCENT` | `10` | Extra margin on recommended quota hard values (10 → multiply sums by 1.10) |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization ≥ 90% of hard |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below high threshold |
 
-Platform-wide env vars only (not tenant Settings API). See
+Platform-wide env vars only (not tenant Settings API). Unlike idle detection
+(`GET/PUT .../settings/idle-detection`), snapshot settings, or per-type threshold
+overrides, quota has no runtime Settings API — change via deployment env (Helm
+`quotaRecommendations` on cost-onprem). See
 [configurability.md](../architecture/configurability.md#resourcequota) and
 [operations/configuration.md](../operations/configuration.md).
 
