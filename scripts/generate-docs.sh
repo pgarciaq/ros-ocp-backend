@@ -32,8 +32,8 @@ gomarkdoc --output "$API_REF_DIR/plugin.md" \
     ./internal/plugin/ 2>/dev/null || \
 gomarkdoc --output "$API_REF_DIR/plugin.md" ./internal/plugin/
 
-# Generate docs for each plugin package
-for pkg in container gpu node pvc quota cluster-quota namespace snapshot kruize example; do
+# Generate docs for each plugin package (quota and cluster-quota are hand-written in docs-site/api-reference/)
+for pkg in container gpu node pvc namespace snapshot kruize example; do
     echo "  → internal/plugins/$pkg"
     gomarkdoc --output "$API_REF_DIR/$pkg.md" "./internal/plugins/$pkg/" 2>/dev/null || \
     gomarkdoc --output "$API_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"

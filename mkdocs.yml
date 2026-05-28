@@ -64,6 +64,8 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
+      - What's New: whats-new.md
+      - Quick Start Tutorial: quickstart.md
       - Contributing: contributing.md
       - Local Development: development.md
       - Testing & Quality: testing.md

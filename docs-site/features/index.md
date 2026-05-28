@@ -23,6 +23,27 @@ dollar impact using Koku cost model rates.
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
 
+## All feature pages
+
+| Page | Topic |
+|------|-------|
+| [container-recommendations.md](container-recommendations.md) | Container CPU/memory right-sizing |
+| [namespace-recommendations.md](namespace-recommendations.md) | Namespace quota optimization |
+| [quota-recommendations.md](quota-recommendations.md) | ResourceQuota right-sizing |
+| [cluster-resource-quota.md](cluster-resource-quota.md) | ClusterResourceQuota right-sizing |
+| [node-recommendations.md](node-recommendations.md) | Node consolidation |
+| [gpu-mig.md](gpu-mig.md) | GPU MIG profiling |
+| [gpu-time-slicing.md](gpu-time-slicing.md) | GPU time-slicing |
+| [pvc-rightsizing.md](pvc-rightsizing.md) | PVC storage right-sizing |
+| [snapshot-staleness.md](snapshot-staleness.md) | VolumeSnapshot lifecycle |
+| [idle-detection.md](idle-detection.md) | Idle and zombie workloads |
+| [business-hours.md](business-hours.md) | Business-hours weighted analysis |
+| [configurable-thresholds.md](configurable-thresholds.md) | Per-tenant threshold tuning |
+| [tag-filtering.md](tag-filtering.md) | Label-based filtering |
+| [dual-engine.md](dual-engine.md) | Cost vs performance engines |
+| [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
+| [history-and-quality.md](history-and-quality.md) | History and quality metrics |
+
 ## Capabilities
 
 **[Container Right-Sizing](container-recommendations.md)** — The core feature.

@@ -57,16 +57,77 @@ Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_
 
 ### Settings
 
+Per-organization overrides for CRQ headroom and utilization risk bands. Resolution order:
+**Settings API** → **`ROS_CLUSTER_QUOTA_*` env vars** → compiled defaults (10 / 90 / 70).
+
 ```
 GET /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
 PUT /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
 DELETE /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
 ```
 
-Body fields: `headroom_percent`, `high_risk_threshold_percent`, `medium_risk_threshold_percent`.
-GET includes `locked_fields` when `ROS_CLUSTER_QUOTA_*` env vars are set.
+Requires the `cluster-quota` plugin (`ROS_ENABLED_PLUGINS`). When the plugin is disabled,
+routes return **404**.
 
-Handlers: [`GetClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go), etc.
+#### GET response
+
+```json
+{
+  "headroom_percent": 10,
+  "high_risk_threshold_percent": 90,
+  "medium_risk_threshold_percent": 70,
+  "locked_fields": []
+}
+```
+
+`locked_fields` lists API fields that cannot be changed via PUT because the matching
+`ROS_CLUSTER_QUOTA_*` environment variable is set on the deployment.
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `headroom_percent` | `10` | Extra margin on recommended CRQ hard values (10 → 110% of aggregated namespace quota sums) |
+| `high_risk_threshold_percent` | `90` | Triggers `raise` recommendation and `high` risk when utilization ≥ threshold |
+| `medium_risk_threshold_percent` | `70` | `medium` risk when utilization is between medium and high thresholds |
+
+#### PUT request
+
+Send all three percent fields in the JSON body:
+
+```json
+{
+  "headroom_percent": 15,
+  "high_risk_threshold_percent": 85,
+  "medium_risk_threshold_percent": 65
+}
+```
+
+Validation rules:
+
+- `headroom_percent`: 0–100
+- `high_risk_threshold_percent`: 1–100, must be **greater than** `medium_risk_threshold_percent`
+- `medium_risk_threshold_percent`: 1–99
+
+Returns **400** with `validation_errors` on invalid input. Returns **403** when updating
+a field listed in `locked_fields`.
+
+#### DELETE
+
+Removes the per-org override in `recommendation_thresholds` (`recommendation_type=cluster-quota`).
+Subsequent runs use env or compiled defaults.
+
+#### Environment locks
+
+| Variable | Locks field |
+|----------|-------------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `headroom_percent` |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `high_risk_threshold_percent` |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `medium_risk_threshold_percent` |
+
+Handlers: [`GetClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go),
+[`PutClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go),
+[`DeleteClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go).
+
+Engine: [`ResolveClusterQuotaSettings`](../../internal/engine/cluster_quota_settings.go).
 
 ## Engine
 

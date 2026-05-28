@@ -1,42 +1,159 @@
 # Local Development
 
-See the [Contributing Guide](contributing.md) for full setup instructions.
+This guide covers day-to-day development for **ros-ocp-backend** (ROBNE — the ROS-OCP
+Backend Native Engine). For contribution workflow, PR expectations, and architecture
+background, see the [Contributing Guide](contributing.md). For the full test inventory
+and NISE filename conventions, see [Testing & Quality](testing.md).
 
-## Quick Start
+## Prerequisites
+
+| Tool | Version / notes |
+|------|-----------------|
+| **Go** | See `go.mod` (currently Go 1.25+) |
+| **PostgreSQL** | 16 — local install, Docker, or `scripts/docker-compose.yml` (`db-ros` on port **15432**) |
+| **Docker or Podman** | Required for integration tests ([Testcontainers](https://golang.testcontainers.org/)) |
+| **Kafka** | Optional for full pipeline; provided by `scripts/docker-compose.yml` |
+| **golang-migrate** | Via `go run rosocp.go db migrate` (no separate install required) |
+
+## Quick start
 
 ```bash
-# Prerequisites
-go install (see go.mod for version)
-podman run -d --name ros-test-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+# Clone and configure
+git clone https://github.com/pgarciaq/ros-ocp-backend.git
+cd ros-ocp-backend
+cp .env.example .env   # edit DB/Kafka ports if needed
 
-# Run
-cp .env.example .env  # edit as needed
-go run . start
+# Infrastructure (Kafka + PostgreSQL + topics)
+docker compose -f scripts/docker-compose.yml up -d kafka db-ros kafka-create-topics
 
-# Test
-go test ./...                    # unit tests (short)
-go test -count=1 ./...           # all tests including integration
+# Database migrations
+go run rosocp.go db migrate up
+
+# Terminal 1 — API
+PROMETHEUS_PORT=5007 go run rosocp.go start api
+
+# Terminal 2 — processor (consumes Kafka, ingests CSVs)
+PROMETHEUS_PORT=5005 go run rosocp.go start processor
+
+# Terminal 3 — recommendation poller
+PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```
 
-## Environment Variables
+Makefile shortcuts: `make db-migrate`, `make run-api-server`, `make run-processor`,
+`make run-recommendation-poller`, `make build`, `make test`.
 
-ROS-OCP uses [Viper](https://github.com/spf13/viper) for configuration.
-Create a `.env` file at the repository root (see `.env.example`).
+For a guided first run with NISE data and API queries, see the
+[Quick Start Tutorial](quickstart.md).
 
-Key variables:
+## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ROS_DB_HOST` | `localhost` | PostgreSQL host |
-| `ROS_DB_PORT` | `5432` | PostgreSQL port |
-| `ROS_DB_NAME` | `ros_ocp` | Database name |
-| `ROS_DB_USER` | `postgres` | Database user |
-| `ROS_DB_PASSWORD` | `postgres` | Database password |
-| `ROS_KAFKA_BROKERS` | `localhost:9092` | Kafka bootstrap servers |
-| `ROS_ENABLED_PLUGINS` | (all) | Comma-separated plugin allowlist |
-| `ROS_DISABLED_PLUGINS` | (none) | Comma-separated plugin denylist |
+ROS-OCP uses [Viper](https://github.com/spf13/viper) with [godotenv](https://github.com/joho/godotenv).
+Copy `.env.example` to `.env` and uncomment only what you need.
 
-## Plugin Development
+**Precedence:** shell env vars → `.env` → defaults in `internal/config/config.go`.
 
-See the [Plugin Architecture](architecture/plugin-architecture.md) and
-[example plugin](api-reference/example.md) for how to add new recommendation domains.
+| Variable | Default (local) | Description |
+|----------|-------------------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `15432` | PostgreSQL port (`db-ros` in compose) |
+| `DB_NAME` | `postgres` | Database name |
+| `DB_USER` / `DB_PASSWORD` | `postgres` | Credentials |
+| `DB_SSL` | `disable` | TLS mode |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Kafka brokers |
+| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group |
+| `UPLOAD_TOPIC` | `platform.upload.announce` | Upload events (processor) |
+| `API_PORT` | `8000` | REST API port |
+| `LOG_LEVEL` | `INFO` | Log level |
+| `RBAC_ENABLE` | `false` (local) | API authorization |
+| `ROS_USE_NATIVE_ENGINE` | `true` | Native plugin engine vs legacy Kruize |
+| `ROS_ENABLED_PLUGINS` | (all native) | Comma-separated allowlist |
+| `ROS_DISABLED_PLUGINS` | (none) | Comma-separated denylist |
+
+See [Configuration Reference](configuration.md) for performance tuning, plugin env vars,
+GPU/PVC/snapshot thresholds, and tag-sync settings.
+
+## Running tests
+
+```bash
+# Unit + integration (Docker required for testcontainers)
+go test ./internal/... -v
+
+# Full suite (serial packages, race detector — matches CI)
+make test
+
+# Benchmarks
+go test -bench=. -run='^$' ./internal/engine/
+
+# Specific package
+go test ./internal/utils/ -run TestDetermineCSVType -v
+```
+
+Details: [Testing & Quality](testing.md) — markers, E2E in cost-onprem-chart, IQE profiles.
+
+## Test data generation
+
+Use [NISE](https://github.com/project-koku/nise) to produce operator-compatible CSVs.
+Filename patterns must match `DetermineCSVType()` (prefix rules + `Contains` fallback
+for `--write-monthly` names). See [Test Data Generation](testing.md#test-data-generation-nise).
+
+**Critical:** Upload tarballs must include `manifest.json` with non-empty **`start`**
+and **`end`** fields so Koku can populate summary tables. Hand-crafted manifests that
+omit these fields cause silent empty cost summaries. ROBNE validates `start`/`end`
+when a Kafka message includes optional `manifest` metadata.
+
+## Common workflows
+
+### Adding a plugin
+
+1. Implement interfaces under `internal/plugins/<name>/` (see
+   [Plugin Architecture](architecture/plugin-architecture.md)).
+2. Register in `internal/plugin/registry.go` with phase and priority.
+3. Add migrations for new tables under `migrations/`.
+4. Add API routes via `RegisterRoutes` and OpenAPI entries.
+5. Enable locally: `ROS_ENABLED_PLUGINS=container,gpu,...,myplugin`.
+
+### Adding an API endpoint
+
+1. Handler in `internal/api/` (use `requireXRHID`, tenant-scoped DB via `db.GetPool()`).
+2. Register route in plugin `RegisterRoutes` or `internal/api/server.go`.
+3. Update `openapi.json` and contract tests.
+4. Document in `docs-site/api-reference/` or feature pages.
+
+### Adding a migration
+
+```bash
+go run rosocp.go db migrate create -ext sql -dir migrations -seq add_my_table
+go run rosocp.go db migrate up
+```
+
+Partitioned tables follow patterns in existing migrations; see
+[Contributing — Database](contributing.md).
+
+## Debugging tips
+
+- **Processor not ingesting:** Check Kafka topic, `UPLOAD_TOPIC`, and processor logs.
+  Use `make upload-msg-to-rosocp` with compose `nginx` serving sample CSVs on port 8888.
+- **All CSVs treated as container:** Filename missing `ocp_ros_namespace`, `ocp_storage_usage`, etc.
+  Run `go test ./internal/utils/ -run NiseMonthly`.
+- **Recommendations empty:** Confirm digests exist for the cluster; check poller logs and
+  `ROS_ENABLED_PLUGINS`.
+- **API 403:** Set `RBAC_ENABLE=false` locally or pass a valid `x-rh-identity` header.
+- **Integration tests hang:** Ensure Docker is running; use `make test` (`-p=1`) to avoid
+  testcontainer starvation.
+- **DB connection refused:** `DB_PORT=15432` for compose `db-ros`, not 5432.
+
+Structured logs use logrus; search by `org_id`, `cluster_uuid`, and `request_id` from Kafka messages.
+
+## Plugin development
+
+See [Plugin Architecture](architecture/plugin-architecture.md) and the
+[example plugin](api-reference/example.md) template.
+
+## Related documentation
+
+| Document | Purpose |
+|----------|---------|
+| [Contributing](contributing.md) | PR workflow, architecture, code style |
+| [Testing](testing.md) | Test layers, NISE, manifest structure |
+| [Quick Start Tutorial](quickstart.md) | End-to-end first run |
+| [Configuration](configuration.md) | All environment variables |

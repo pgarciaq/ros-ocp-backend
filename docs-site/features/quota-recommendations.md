@@ -43,7 +43,7 @@ Quota does **not** use an ingest hook: namespace CSV hooks run before container
 recommendations exist, so the authoritative run is the explicit call at the end of
 `processContainerCSVNative` in the report processor.
 
-Internal design: [`docs/features/quota-recommendations.md`](../../docs/features/quota-recommendations.md).
+Internal design: [`docs/features/quota-recommendations.md`](../../../docs/features/quota-recommendations.md) (repo `docs/` tree).
 
 ---
 

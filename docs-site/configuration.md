@@ -123,7 +123,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Used only when the allowlist is empty; removes plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
 | `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated** — use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
 
-**Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
+**Available plugins** (sorted by execution order): `container`, `kruize`, `gpu`, `node`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `namespace`
 
 - **`kruize`** is mutually exclusive with native plugins (Kruize-only when enabled).
 - Listing **`kruize` together with native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** — the process exits before serving traffic.
@@ -245,8 +245,11 @@ organization from the Settings API, then env vars, then compiled defaults.
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization (used or rec sum vs hard) ≥ 90%. |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below the high-risk threshold. |
 
-**Settings API:** `GET` / `PUT` / `DELETE` `/recommendations/openshift/settings/quota`
-(requires `quota` plugin). Env vars lock the corresponding field in `locked_fields`.
+**Settings API:** `GET` / `PUT` / `DELETE`
+`/api/cost-management/v1/recommendations/openshift/settings/quota`
+(requires `quota` plugin). JSON fields: `headroom_percent`, `high_risk_threshold_percent`,
+`medium_risk_threshold_percent`, `locked_fields`. Env vars lock the corresponding field in
+`locked_fields`.
 
 See [ResourceQuota Recommendations](features/quota-recommendations.md) and
 [Configurability — ResourceQuota](architecture/configurability.md#resourcequota).
