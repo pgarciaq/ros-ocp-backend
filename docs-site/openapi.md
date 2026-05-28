@@ -22,6 +22,7 @@ You can view it interactively using:
 | GPU | `/recommendations/openshift/gpu/mig` | GET | MIG partition recommendations |
 | Nodes | `/recommendations/openshift/nodes` | GET | Node utilization recommendations |
 | PVCs | `/recommendations/openshift/pvcs` | GET | PVC right-sizing recommendations |
+| Quota | `/recommendations/openshift/quota` | GET | Namespace ResourceQuota right-sizing (`quota` plugin) |
 | Namespaces | `/recommendations/openshift/namespaces` | GET | Namespace quota recommendations |
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration |
