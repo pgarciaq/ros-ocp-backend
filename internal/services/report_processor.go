@@ -96,7 +96,6 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		commitOnPermanentFailure("validation failed")
 		return
 	}
-
 	log = logging.Set_request_details(kafkaMsg)
 
 	var kafkaTransientErr error

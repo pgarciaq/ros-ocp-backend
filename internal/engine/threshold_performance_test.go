@@ -4,60 +4,21 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-// Shared non-nil pool handle so resolveThresholdCached uses the cache path without
-// hitting the DB on cache hits. Initialized once via testcontainers (not per iteration).
-var (
-	thresholdPerfPool     *pgxpool.Pool
-	thresholdPerfPoolOnce sync.Once
-	thresholdPerfPoolErr  error
-)
-
+// thresholdPerfPoolHandle returns the shared test DB pool so resolveThresholdCached
+// exercises the cache path with a non-nil pool without starting another container.
 func thresholdPerfPoolHandle(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
-	if testing.Short() {
-		tb.Skip("skipping threshold performance test (requires pool handle)")
-	}
-	thresholdPerfPoolOnce.Do(func() {
-		ctx := context.Background()
-		pgContainer, err := postgres.Run(ctx,
-			"postgres:16-alpine",
-			postgres.WithDatabase("ros_bench"),
-			postgres.WithUsername("postgres"),
-			postgres.WithPassword("postgres"),
-			testcontainers.WithWaitStrategy(
-				wait.ForLog("database system is ready to accept connections").
-					WithOccurrence(2).
-					WithStartupTimeout(60*time.Second),
-			),
-		)
-		if err != nil {
-			thresholdPerfPoolErr = fmt.Errorf("start postgres: %w", err)
-			return
-		}
-		connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-		if err != nil {
-			thresholdPerfPoolErr = fmt.Errorf("connection string: %w", err)
-			return
-		}
-		thresholdPerfPool, thresholdPerfPoolErr = pgxpool.New(ctx, connStr)
-	})
-	if thresholdPerfPoolErr != nil {
-		tb.Fatalf("threshold perf pool: %v", thresholdPerfPoolErr)
-	}
-	return thresholdPerfPool
+	return testutil.SetupTestDB(tb)
 }
 
 func seedThresholdCacheForOrgs(orgCount int, recType string) []string {

@@ -23,7 +23,6 @@ func digestRow(tensor, dram, sm, fbMax float32) GPUDigestRow {
 }
 
 func TestClassifyGPUWorkload_Idle(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
 		digestRow(0.1, 0.1, 0.01, 1000),
@@ -35,7 +34,6 @@ func TestClassifyGPUWorkload_Idle(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_Underutilized(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
 		digestRow(0.10, 0.2, 0.20, 1000),
@@ -47,7 +45,6 @@ func TestClassifyGPUWorkload_Underutilized(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_MemoryBound(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
 		digestRow(0.10, 0.65, 0.50, 1000),
@@ -59,7 +56,6 @@ func TestClassifyGPUWorkload_MemoryBound(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_WellUtilized(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
 		digestRow(0.30, 0.20, 0.45, 1000),
@@ -71,7 +67,6 @@ func TestClassifyGPUWorkload_WellUtilized(t *testing.T) {
 }
 
 func TestClassifyGPUWorkload_NoProfilingData(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
 		{IntervalStart: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), FBUsageMaxMiB: 5000},
@@ -82,7 +77,6 @@ func TestClassifyGPUWorkload_NoProfilingData(t *testing.T) {
 }
 
 func TestGPU_MIGProfile_A100_80GB_LowFB(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	spec := gpuModels["A100_80GB"]
 	digests := []GPUDigestRow{{FBUsageMaxMiB: 4500}}
@@ -91,7 +85,6 @@ func TestGPU_MIGProfile_A100_80GB_LowFB(t *testing.T) {
 }
 
 func TestGPU_MIGProfile_A100_80GB_HighFB(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	spec := gpuModels["A100_80GB"]
 	digests := []GPUDigestRow{{FBUsageMaxMiB: 70000}}
@@ -100,7 +93,6 @@ func TestGPU_MIGProfile_A100_80GB_HighFB(t *testing.T) {
 }
 
 func TestGPU_MIGProfile_NonMIG(t *testing.T) {
-	t.Parallel()
 	th := DefaultGPUThresholds()
 	spec := gpuModels["T4"]
 	digests := []GPUDigestRow{{FBUsageMaxMiB: 1000}}
@@ -109,7 +101,6 @@ func TestGPU_MIGProfile_NonMIG(t *testing.T) {
 }
 
 func TestGPUConfidence_FewDays(t *testing.T) {
-	t.Parallel()
 	var digests []GPUDigestRow
 	for i := 0; i < 2; i++ {
 		digests = append(digests, GPUDigestRow{
@@ -121,7 +112,6 @@ func TestGPUConfidence_FewDays(t *testing.T) {
 }
 
 func TestGPUConfidence_14Days(t *testing.T) {
-	t.Parallel()
 	var digests []GPUDigestRow
 	for i := 0; i < 14; i++ {
 		digests = append(digests, GPUDigestRow{
@@ -134,7 +124,6 @@ func TestGPUConfidence_14Days(t *testing.T) {
 }
 
 func TestGPUConfidence_Bursty(t *testing.T) {
-	t.Parallel()
 	var digests []GPUDigestRow
 	for i := 0; i < 14; i++ {
 		digests = append(digests, GPUDigestRow{SMActiveAvg: bp(0.1), SMActiveMax: bp(0.11)})
@@ -173,7 +162,6 @@ func TestRecommendGPU_IdleA100(t *testing.T) {
 }
 
 func TestRecommendGPU_NoGPUData(t *testing.T) {
-	t.Parallel()
 	assert.Nil(t, RecommendGPU(nil))
 	assert.Nil(t, RecommendGPU([]GPUDigestRow{}))
 }
@@ -199,7 +187,6 @@ func TestRecommendGPU_Tier2_V100(t *testing.T) {
 // --- GPUThresholds struct tests (parallel-safe, no global mutation) ---
 
 func TestGPUThresholdsFromConfig(t *testing.T) {
-	t.Parallel()
 	cfg := &config.Config{
 		GPUIdleThreshold:                0.05,
 		GPUUnderutilizedSMThreshold:     0.99,
@@ -218,7 +205,6 @@ func TestGPUThresholdsFromConfig(t *testing.T) {
 }
 
 func TestGPUThresholdsFromConfig_Nil(t *testing.T) {
-	t.Parallel()
 	th := GPUThresholdsFromConfig(nil)
 	defaults := DefaultGPUThresholds()
 	assert.Equal(t, defaults, th)
@@ -231,7 +217,6 @@ func TestInitGPUEngine_NilNoOp(t *testing.T) {
 }
 
 func TestClassify_IdleThresholdOverride(t *testing.T) {
-	t.Parallel()
 	digests := []GPUDigestRow{
 		digestRow(0.1, 0.1, 0.03, 1000),
 		digestRow(0.1, 0.1, 0.03, 1000),
@@ -256,7 +241,6 @@ func TestClassify_IdleThresholdOverride(t *testing.T) {
 }
 
 func TestClassify_MemBoundThresholdOverride(t *testing.T) {
-	t.Parallel()
 	digests := []GPUDigestRow{
 		digestRow(0.10, 0.55, 0.30, 1000),
 	}
@@ -278,7 +262,6 @@ func TestClassify_MemBoundThresholdOverride(t *testing.T) {
 }
 
 func TestFilterGPUByWindow(t *testing.T) {
-	t.Parallel()
 	rows := []GPUDigestRow{
 		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.1)},
 		{IntervalStart: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), SMActiveAvg: bp(0.2)},
@@ -301,7 +284,6 @@ func TestFilterGPUByWindow(t *testing.T) {
 }
 
 func TestLatestGPUDigest(t *testing.T) {
-	t.Parallel()
 	rows := []GPUDigestRow{
 		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
 		{IntervalStart: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)},
@@ -312,7 +294,6 @@ func TestLatestGPUDigest(t *testing.T) {
 }
 
 func TestLatestGPUDigest_Empty(t *testing.T) {
-	t.Parallel()
 	latest := latestGPUDigest(nil)
 	assert.True(t, latest.IntervalStart.IsZero())
 }

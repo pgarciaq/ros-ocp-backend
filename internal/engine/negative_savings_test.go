@@ -26,7 +26,6 @@ const negTestGibKiB = 1024 * 1024
 // TestNodeSavings_Negative_WhenScaleUpNeeded covers overloaded nodes (95% util vs 80% target)
 // where the recommendation is to add capacity — savings should be negative.
 func TestNodeSavings_Negative_WhenScaleUpNeeded(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{
 		{
 			Node:              "overloaded-worker",
@@ -46,7 +45,6 @@ func TestNodeSavings_Negative_WhenScaleUpNeeded(t *testing.T) {
 // TestPVCSavings_Negative_WhenGrowthProjected covers PVCs near capacity with growth trend
 // where the recommendation is a larger volume — savings should be negative.
 func TestPVCSavings_Negative_WhenGrowthProjected(t *testing.T) {
-	t.Parallel()
 	recommended := int64(250 * 1024 * 1024 * 1024)
 	recs := []PVCRec{
 		{
@@ -70,7 +68,6 @@ func TestPVCSavings_Negative_WhenGrowthProjected(t *testing.T) {
 // TestContainerSavings_Negative_WhenUnderprovisioned covers containers hitting OOM with
 // a scale-up recommendation — cost increases, savings should be negative.
 func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
-	t.Parallel()
 	recs := []ContainerRec{
 		{
 			Namespace:            "app-ns",
@@ -197,7 +194,6 @@ func TestSavingsSummary_ByPlugin_CanBeNegative(t *testing.T) {
 // TestNodeSavings_Zero_WhenOptimallySized verifies no action needed when current
 // capacity matches the recommendation — savings is explicitly zero.
 func TestNodeSavings_Zero_WhenOptimallySized(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{
 		{
 			Node:               "right-sized-worker",

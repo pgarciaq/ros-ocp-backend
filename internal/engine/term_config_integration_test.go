@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,15 +28,17 @@ import (
 func TestTerms_AffectRecommendationOutput_Integration(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	orgID := testutil.TestOrgID
-	clusterUUID := testutil.TestClusterUUID
+	// Dedicated org/cluster so shared-DB runs are not polluted by other tests using TestOrgID.
+	orgID := "org-term-affect-output"
+	clusterUUID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").String()
 
+	const termTestTenantID = 9027
 	_, err := pool.Exec(ctx,
-		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+		`INSERT INTO rh_accounts (id, org_id) VALUES ($2, $1) ON CONFLICT DO NOTHING`, orgID, termTestTenantID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx,
 		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
-		 VALUES (1, $1, 'term-test-cluster', 'src-term', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+		 VALUES ($2, $1, 'term-test-cluster', 'src-term', now()) ON CONFLICT DO NOTHING`, clusterUUID, termTestTenantID)
 	require.NoError(t, err)
 
 	// Seed exactly 4 days of data ending today.
@@ -98,9 +101,12 @@ func TestTerms_AffectRecommendationOutput_Integration(t *testing.T) {
 		})
 	require.NoError(t, err)
 
-	// Group recs by term.
+	// Group recs by term (only the workload seeded in this test).
 	termRecs := map[string][]engine.ContainerRec{}
 	for _, r := range recs {
+		if r.Namespace != "term-test-ns" || r.ContainerName != "term-test-container" {
+			continue
+		}
 		termRecs[r.Term] = append(termRecs[r.Term], r)
 	}
 
@@ -128,7 +134,7 @@ func TestTerms_AffectRecommendationOutput_Integration(t *testing.T) {
 func TestTerms_EnvVarLock_OverridesDB_Integration(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	orgID := testutil.TestOrgID
+	orgID := "org-term-env-lock"
 
 	// Set env var to lock short term at window_days=3 for container.
 	t.Setenv("ROS_TERMS_CONTAINER_SHORT_WINDOW_DAYS", "3")

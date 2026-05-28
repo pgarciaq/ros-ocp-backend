@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestClusterQuotaRecConfigFromSettings(t *testing.T) {
@@ -35,4 +37,20 @@ func TestClusterQuotaSettingsFromConfig(t *testing.T) {
 	_ = config.GetConfig()
 	s := clusterQuotaSettingsFromConfig(config.GetConfig())
 	assert.Equal(t, 15, s.HeadroomPercent)
+}
+
+func TestUpdateClusterQuotaSettings_RejectsLockedField(t *testing.T) {
+	t.Setenv("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", "12")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-cluster-quota-locked"
+
+	err := UpdateClusterQuotaSettings(ctx, pool, orgID, json.RawMessage(
+		`{"headroom_percent": 20, "high_risk_threshold_percent": 90, "medium_risk_threshold_percent": 70}`,
+	))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrFieldsLocked)
 }

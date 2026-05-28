@@ -13,8 +13,6 @@ import (
 )
 
 func TestStorageGBUsageRateFromCostData(t *testing.T) {
-	t.Parallel()
-
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
 			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},

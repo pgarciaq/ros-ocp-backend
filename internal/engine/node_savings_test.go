@@ -12,7 +12,6 @@ import (
 const gibKiB = 1024 * 1024
 
 func TestApplyNodeSavings_NilCostData(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{{Node: "worker-1"}}
 	ApplyNodeSavings(recs, nil)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
@@ -20,7 +19,6 @@ func TestApplyNodeSavings_NilCostData(t *testing.T) {
 }
 
 func TestApplyNodeSavings_ZeroRates(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{
 		{
 			CurrentCPUMC:       8000,
@@ -37,7 +35,6 @@ func TestApplyNodeSavings_ZeroRates(t *testing.T) {
 }
 
 func TestApplyNodeSavings_Downsizing(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{
 		{
 			CurrentCPUMC:       8000,
@@ -60,7 +57,6 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 }
 
 func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
-	t.Parallel()
 	recs := []NodeRec{
 		{
 			CurrentCPUMC:      4000,
@@ -80,7 +76,6 @@ func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 }
 
 func TestRecommendedNodeCapacity(t *testing.T) {
-	t.Parallel()
 	cpu, mem := recommendedNodeCapacity(3500, 8*gibKiB, 0, 0, 0.80)
 	assert.Equal(t, int64(5000), cpu)
 	assert.Equal(t, int64(10*gibKiB), mem)
@@ -91,7 +86,6 @@ func TestRecommendedNodeCapacity(t *testing.T) {
 }
 
 func TestComputeNodeSavings(t *testing.T) {
-	t.Parallel()
 	rec := &NodeRec{
 		CurrentCPUMC:      10000,
 		RecommendedCPUMC:  6000,

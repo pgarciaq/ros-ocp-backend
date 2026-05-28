@@ -33,6 +33,16 @@ func TestParseClusterQuotaCSVRows_NiseColumnNames(t *testing.T) {
 	assert.Equal(t, int64(1000), rows[0].CPURequestUsedMC)
 }
 
+func TestParseClusterQuotaCSVRows_SpecialCharactersInName(t *testing.T) {
+	csv := `interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used
+2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,team.payments-prod_v2,2,1
+`
+	rows, err := ParseClusterQuotaCSVRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "team.payments-prod_v2", rows[0].ClusterQuotaName)
+}
+
 func TestParseClusterQuotaCSVRows_MissingUsedColumns(t *testing.T) {
 	csv := `interval_start,interval_end,cluster_quota_name,cpu_request_hard,memory_request_hard
 2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,team-a,1,1048576

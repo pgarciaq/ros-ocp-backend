@@ -10,7 +10,6 @@ import (
 )
 
 func TestApplyPVCSavings_NilCostData(t *testing.T) {
-	t.Parallel()
 	recs := []PVCRec{{Namespace: "app", PVC: "data"}}
 	ApplyPVCSavings(recs, nil)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
@@ -18,7 +17,6 @@ func TestApplyPVCSavings_NilCostData(t *testing.T) {
 }
 
 func TestApplyPVCSavings_ZeroRates(t *testing.T) {
-	t.Parallel()
 	recommended := int64(10 * 1024 * 1024 * 1024)
 	recs := []PVCRec{
 		{
@@ -33,7 +31,6 @@ func TestApplyPVCSavings_ZeroRates(t *testing.T) {
 }
 
 func TestApplyPVCSavings_Downsizing(t *testing.T) {
-	t.Parallel()
 	recommended := int64(10 * 1024 * 1024 * 1024)
 	recs := []PVCRec{
 		{
@@ -52,7 +49,6 @@ func TestApplyPVCSavings_Downsizing(t *testing.T) {
 }
 
 func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
-	t.Parallel()
 	recommended := int64(5 * 1024 * 1024 * 1024)
 	recs := []PVCRec{
 		{
@@ -71,7 +67,6 @@ func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
 }
 
 func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
-	t.Parallel()
 	recommended := int64(200 * 1024 * 1024 * 1024)
 	recs := []PVCRec{
 		{
@@ -89,7 +84,6 @@ func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
 }
 
 func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
-	t.Parallel()
 	recs := []PVCRec{
 		{
 			RequestBytes: 100 * 1024 * 1024 * 1024,
@@ -105,7 +99,6 @@ func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
 }
 
 func TestStorageRequestPerMonth(t *testing.T) {
-	t.Parallel()
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
 			"storage_gb_request_per_month": {Infrastructure: 0.01, Supplementary: 0.02},
