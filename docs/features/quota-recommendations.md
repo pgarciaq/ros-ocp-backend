@@ -55,8 +55,8 @@ Source: `internal/collector/queries.go` in koku-metrics-operator.
 
 The **namespace** plugin ingests these columns into `daily_namespace_digests` and
 produces rightsizing recommendations from usage percentiles. The planned **quota** plugin
-would add a second pass: compare digest aggregates and container recommendation sums
-against the same hard-limit series (and eventually `type='used'` consumption).
+compares digest hard/used snapshots and container recommendation sums against
+configured quota limits.
 
 ---
 
@@ -77,7 +77,8 @@ against the same hard-limit series (and eventually `type='used'` consumption).
    optional `*_namespace_used` columns map to `type=used`. Values are stored on
    `daily_namespace_digests` (max per day).
 2. **Aggregate** — Sum container `rec_*` request/limit columns per namespace
-   (`term=medium`, `engine=cost`).
+   (`term=medium`, `engine=cost`) from `recommendation_sets` (previous cycle until
+   container CSV in the same payload is processed; see timing below).
 3. **Compare (signal C)** — Utilization and risk use the **greater** of quota `used`
    and container recommendation sums vs hard limits. Recommended hard values apply
    headroom (default 120%, `ROS_QUOTA_HEADROOM_PERCENT=20`).
@@ -88,6 +89,21 @@ against the same hard-limit series (and eventually `type='used'` consumption).
 
 Configuration: `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`,
 `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT`.
+
+### Timing and one-cycle lag
+
+Container sums are read from PostgreSQL (`recommendation_sets`), not passed in memory
+from the container plugin. In a typical payload (container CSV then namespace CSV):
+
+1. Container digest ingest runs (ingest hooks do not run quota on container).
+2. `RecommendWorkloadsStreaming` writes fresh `term=medium` / `engine=cost` rows.
+3. Quota runs at the end of container processing with those new rows.
+4. Namespace digest ingest runs; the quota ingest hook runs again with updated
+   hard/used snapshots from the namespace CSV.
+
+If only namespace CSV is ingested in a cycle, quota uses container recommendations
+from the **previous** cycle until container metrics arrive. On first deployment,
+expect one report cycle before tighten/raise signals use container-based sums.
 
 Implementation: [`internal/plugins/quota/`](../../internal/plugins/quota/),
 [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),

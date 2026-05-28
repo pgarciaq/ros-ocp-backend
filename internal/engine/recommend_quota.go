@@ -326,6 +326,12 @@ func maxInt64(a, b int64) int64 {
 }
 
 // QueryContainerQuotaAggregates sums container recommendation requests per namespace.
+//
+// Data comes from recommendation_sets (term=medium, engine=cost), not from in-memory
+// container plugin output. Rows are written in processContainerCSVNative after digest
+// ingest; the quota plugin runs on namespace CSV ingest and again after container recs
+// in the same payload. If a report has only namespace CSV, aggregates reflect the
+// previous ingestion cycle until container metrics arrive (one-cycle lag on deploy).
 func QueryContainerQuotaAggregates(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (map[string]ContainerQuotaAggregate, error) {
 	query := `
 		SELECT namespace,

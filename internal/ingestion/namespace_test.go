@@ -116,6 +116,59 @@ func TestParseNamespaceCSVRows_OptionalColumnsAbsent(t *testing.T) {
 	if r.MemRSSAvgKiB != 0 {
 		t.Errorf("expected MemRSSAvgKiB=0 (absent), got %d", r.MemRSSAvgKiB)
 	}
+	if r.CPURequestUsedMC != 0 || r.CPULimitUsedMC != 0 || r.MemoryRequestUsedBytes != 0 || r.MemoryLimitUsedBytes != 0 {
+		t.Errorf("expected quota used fields 0 when columns absent, got used=%d/%d mem=%d/%d",
+			r.CPURequestUsedMC, r.CPULimitUsedMC, r.MemoryRequestUsedBytes, r.MemoryLimitUsedBytes)
+	}
+}
+
+func TestParseNamespaceCSVRows_QuotaUsedColumns(t *testing.T) {
+	csv := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_request_namespace_used,cpu_limit_namespace_sum,cpu_limit_namespace_used,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_request_namespace_used,memory_limit_namespace_sum,memory_limit_namespace_used,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,2.000,1.500,4.000,3.000,0.500,2147483648,1073741824,4294967296,2147483648,536870912",
+	}, "\n")
+
+	rows, err := ParseNamespaceCSVRows(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	r := rows[0]
+	if r.CPURequestUsedMC != 1500 {
+		t.Errorf("CPURequestUsedMC: want 1500, got %d", r.CPURequestUsedMC)
+	}
+	if r.CPULimitUsedMC != 3000 {
+		t.Errorf("CPULimitUsedMC: want 3000, got %d", r.CPULimitUsedMC)
+	}
+	if r.MemoryRequestUsedBytes != 1073741824 {
+		t.Errorf("MemoryRequestUsedBytes: want 1073741824, got %d", r.MemoryRequestUsedBytes)
+	}
+	if r.MemoryLimitUsedBytes != 2147483648 {
+		t.Errorf("MemoryLimitUsedBytes: want 2147483648, got %d", r.MemoryLimitUsedBytes)
+	}
+}
+
+func TestComputeNamespaceDigest_QuotaUsedMaxPerDay(t *testing.T) {
+	key := NamespaceDigestKey{
+		OrgID: "org1", ClusterUUID: "cluster-1", Namespace: "app",
+		BucketDate: time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+	}
+	rows := []NamespaceMetricRow{
+		{CPURequestHardMC: 1000, CPURequestUsedMC: 400, MemoryRequestHardBytes: 2048, MemoryRequestUsedBytes: 512},
+		{CPURequestHardMC: 2000, CPURequestUsedMC: 900, MemoryRequestHardBytes: 4096, MemoryRequestUsedBytes: 1024},
+	}
+	d := ComputeNamespaceDigest(key, rows)
+	if d.CPURequestHardMC != 2000 {
+		t.Errorf("CPURequestHardMC max: want 2000, got %d", d.CPURequestHardMC)
+	}
+	if d.CPURequestUsedMC != 900 {
+		t.Errorf("CPURequestUsedMC max: want 900, got %d", d.CPURequestUsedMC)
+	}
+	if d.MemoryRequestUsedBytes != 1024 {
+		t.Errorf("MemoryRequestUsedBytes max: want 1024, got %d", d.MemoryRequestUsedBytes)
+	}
 }
 
 func TestGroupNamespaceCSVRows(t *testing.T) {

@@ -630,6 +630,13 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		log.Warnf("native engine: post-container recommendations incomplete: %v", err)
 		return fmt.Errorf("post-container recommendations: %w", err)
 	}
+
+	if plugin.EnabledFor("quota") {
+		if quotaErr := engine.RunQuotaRecommendations(ctx, pool, orgID, clusterUUID); quotaErr != nil {
+			log.Warnf("native engine: quota recommendations failed: %v", quotaErr)
+			PluginHookErrors.WithLabelValues("quota", "after_container_recs").Inc()
+		}
+	}
 	return nil
 }
 

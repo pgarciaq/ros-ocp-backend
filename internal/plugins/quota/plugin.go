@@ -33,8 +33,12 @@ func (p *QuotaPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *QuotaPlugin) Priority() int { return 35 }
 
+// HookAfterCSVTypes returns "namespace" only. Container recommendations are written
+// after the container CSV ingest hook phase in report_processor; hooking "container"
+// would read stale recommendation_sets. processContainerCSVNative runs quota recs
+// after WriteRecommendations instead.
 func (p *QuotaPlugin) HookAfterCSVTypes() []string {
-	return []string{"container", "namespace"}
+	return []string{"namespace"}
 }
 
 func (p *QuotaPlugin) AfterIngest(ctx context.Context, pool *pgxpool.Pool, _ []ingestion.MetricRow, orgID, clusterUUID string) error {

@@ -122,6 +122,9 @@ type nsColumnIndex struct {
 	memLimitUsed   int
 }
 
+// buildNSColumnIndex maps CSV headers to column indices. Parsing is header-based, not
+// positional: older operator CSVs without *_namespace_used columns leave those indices
+// at -1 and parseNSRecord leaves the corresponding used fields at zero (stored as NULL).
 func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 	idx := nsColumnIndex{
 		intervalStart: -1, intervalEnd: -1, namespace: -1,
