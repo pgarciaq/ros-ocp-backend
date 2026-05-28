@@ -15,6 +15,7 @@ dollar impact using Koku cost model rates.
 | GPU MIG Profiling | gpu | single | No | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
+| ResourceQuota Right-Sizing | quota | single | Yes (tighten) | Yes |
 | Snapshot Lifecycle | snapshot | single | Yes (cost) | Yes |
 | Business Hours | container, namespace | cost, performance | Yes | Yes |
 | Configurable Thresholds | all | all | N/A | Yes |
@@ -43,6 +44,10 @@ recommendations for non-MIG GPUs when workloads are underutilized.
 
 **[PVC Right-Sizing](pvc-rightsizing.md)** — Classifies PVCs as oversized,
 near-full, orphaned, or healthy; projects growth trends and estimates storage savings.
+
+**[ResourceQuota Recommendations](quota-recommendations.md)** — Compares namespace
+ResourceQuota hard and used limits against container recommendation sums; advises
+tighten, raise, or optimal with risk levels and optional dollar savings on tighten.
 
 **[Snapshot Staleness](snapshot-staleness.md)** — Flags orphaned, stale,
 redundant, and never-restored VolumeSnapshots; estimates recoverable monthly cost.
@@ -77,7 +82,7 @@ Not yet implemented; phase and priority slots are reserved in
 
 | Type | Phase | Description |
 |------|-------|-------------|
-| [Quota (ResourceQuota / ClusterResourceQuota)](quota-recommendations.md) | 1 (~35) | Right-size quota hard limits vs usage and container rec aggregates |
+| ClusterResourceQuota | — | OpenShift team quotas across namespace selectors (extension of [quota](quota-recommendations.md)) |
 | VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
 | Instance type | 1 | Cloud instance optimization for worker nodes |
 | Java / JVM | 2 | Heap, GC, thread pool tuning from container memory recs |

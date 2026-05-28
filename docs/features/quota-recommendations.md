@@ -1,29 +1,32 @@
-# Namespace & Cluster Quota Recommendations
+# Namespace ResourceQuota Recommendations
 
-Right-size Kubernetes **ResourceQuota** (namespace-level) objects based on observed
-usage, configured hard limits, and aggregated container recommendation totals.
+Right-size Kubernetes **ResourceQuota** (namespace-level) hard limits using observed
+usage, configured quota limits, and aggregated container recommendation totals.
 
 **Status:** Implemented. Phase 1 plugin `quota` (priority 35) between PVC (30) and
 snapshot (40). API: `GET /api/cost-management/v1/recommendations/openshift/quota/`.
 See [plugin-phases.md](../architecture/plugin-phases.md).
 
-This is distinct from the shipped **[namespace](../../docs-site/features/namespace-recommendations.md)** plugin,
-which recommends ideal CPU/memory totals from namespace usage digests. The `quota` plugin
-would compare those aggregates (and actual usage) against **configured** quota hard limits
-and consumption, then advise operators to tighten or loosen existing quota objects.
+This is distinct from the **[namespace](../../docs-site/features/namespace-recommendations.md)**
+plugin, which recommends ideal CPU/memory totals from namespace usage digests. The
+`quota` plugin compares those aggregates (and actual quota consumption) against
+**configured** ResourceQuota hard limits and advises operators to tighten or raise them.
+
+**ClusterResourceQuota** (OpenShift team/tenant quotas) is **not** implemented yet — see
+[future work](#future-work) below.
 
 ---
 
 ## What it is
 
 - **ResourceQuota:** Per-namespace caps on aggregate resource consumption
-  (`requests.cpu`, `requests.memory`, `limits.*`, `pods`, storage classes, etc.).
-- **ClusterResourceQuota:** OpenShift extension that applies quota across a selector
-  of namespaces (team/tenant boundaries at cluster scope).
+  (`requests.cpu`, `requests.memory`, `limits.*`, etc.).
+- **ClusterResourceQuota (planned):** OpenShift extension that applies quota across a
+  selector of namespaces — no metrics or recommendations yet.
 
-Recommendations would suggest adjusted hard limits with a configurable headroom margin,
-flag mismatches between quota and real usage, and surface risk of admission failures
-when usage approaches limits.
+Recommendations suggest adjusted hard limits with a configurable headroom margin, flag
+mismatches between quota and real usage, and surface admission risk when utilization
+approaches limits.
 
 ---
 
@@ -40,27 +43,102 @@ oversized quota represents **double waste** (unused workloads plus stranded quot
 
 ---
 
-## What data we already have
+## Ingestion path
 
-The [koku-metrics-operator](https://github.com/project-koku/koku-metrics-operator)
-already emits namespace-level quota **hard limits** in the ROS namespace CSV via
-Prometheus recording queries:
+1. **Operator** — koku-metrics-operator emits namespace ROS CSV with aggregated
+   `kube_resourcequota` hard limits (`*_namespace_sum`) and optional used values
+   (`*_namespace_used`). See [data sources](#what-data-we-already-have).
+2. **Namespace digest** — `internal/ingestion/namespace.go` maps CSV columns into
+   `daily_namespace_digests` (max per namespace per day). Missing `*_namespace_used`
+   columns are ignored (**backward compatible** with older operator builds).
+3. **Container recommendations** — `processContainerCSVNative` runs container sizing,
+   then calls `engine.RunQuotaRecommendations` so quota sees fresh `recommendation_sets`
+   in the same cycle when container CSV is present.
+4. **Quota ingest hook** — `quota` plugin `AfterIngest` on namespace CSV runs
+   `RunQuotaRecommendations` again with updated hard/used snapshots.
+5. **Persistence** — Results upsert into `quota_recommendation_sets` (one row per
+   org / cluster / namespace).
 
-- `ros:cpu_request_namespace_sum` → `kube_resourcequota{resource='requests.cpu', type='hard'}`
-- `ros:cpu_limit_namespace_sum` → `kube_resourcequota{resource='limits.cpu', type='hard'}`
-- `ros:memory_request_namespace_sum` → `kube_resourcequota{resource='requests.memory', type='hard'}`
-- `ros:memory_limit_namespace_sum` → `kube_resourcequota{resource='limits.memory', type='hard'}`
-
-Source: `internal/collector/queries.go` in koku-metrics-operator.
-
-The **namespace** plugin ingests these columns into `daily_namespace_digests` and
-produces rightsizing recommendations from usage percentiles. The planned **quota** plugin
-compares digest hard/used snapshots and container recommendation sums against
-configured quota limits.
+Plugin registration: [`internal/plugins/quota/plugin.go`](../../internal/plugins/quota/plugin.go).
+`HookAfterCSVTypes()` returns `namespace` only (not `container`) because container rows
+are not yet written when the container ingest hook runs.
 
 ---
 
-## What's still missing (future work)
+## How it works
+
+1. **Ingest** — Namespace CSV columns `*_namespace_sum` → ResourceQuota `type=hard`;
+   optional `*_namespace_used` → `type=used`. Stored on `daily_namespace_digests`.
+2. **Aggregate** — Sum container `rec_*` request/limit columns per namespace
+   (`term=medium`, `engine=cost`) from `recommendation_sets`.
+3. **Compare (signal C)** — Utilization and risk use the **greater** of quota `used`
+   and container recommendation sums vs hard limits. Recommended hard values =
+   container sums × headroom (default 120% when `ROS_QUOTA_HEADROOM_PERCENT=20`).
+4. **Classify recommendation type**
+   - `raise` — max utilization (used or rec sum) ≥ high-risk threshold (default 80%)
+   - `tighten` — recommended CPU or memory request hard &lt; current hard (capacity freed)
+   - `optimal` — hard limits present but neither raise nor tighten applies
+   - `none` — no hard limits on the namespace snapshot
+5. **Classify risk** — Based on the same max utilization vs hard:
+   - `high` — utilization ≥ `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default 80)
+   - `medium` — utilization ≥ `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default 60)
+   - `low` — utilization &gt; 0 but below medium threshold
+   - `none` — no utilization signal
+6. **Savings** — `tighten` rows estimate monthly savings from freed CPU/memory via Koku
+   effective rates when `ROS_SAVINGS_ESTIMATES_ENABLED=true` (`estimated_savings` in API).
+
+Implementation: [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
+[`internal/engine/quota_run.go`](../../internal/engine/quota_run.go),
+[`internal/api/handlers_quota_recs.go`](../../internal/api/handlers_quota_recs.go).
+
+### Timing and one-cycle lag
+
+Container sums are read from PostgreSQL (`recommendation_sets`), not passed in memory
+from the container plugin. In a typical payload (container CSV then namespace CSV):
+
+1. Container digest ingest runs (ingest hooks do not run quota on container).
+2. `RecommendWorkloadsStreaming` writes fresh `term=medium` / `engine=cost` rows.
+3. Quota runs at the end of `processContainerCSVNative` with those new rows.
+4. Namespace digest ingest runs; the quota ingest hook runs again with updated
+   hard/used snapshots from the namespace CSV.
+
+If only namespace CSV is ingested in a cycle, quota uses container recommendations
+from the **previous** cycle until container metrics arrive. On first deployment,
+expect one report cycle before tighten/raise signals fully reflect container-based sums.
+
+---
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_QUOTA_HEADROOM_PERCENT` | `20` | Extra margin on recommended quota hard values (20 → multiply sums by 1.20) |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `80` | `raise` recommendation and `high` risk when max utilization ≥ 80% of hard |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `60` | `medium` risk when utilization ≥ 60% and below high threshold |
+
+Platform-wide env vars only (not tenant Settings API). See
+[configurability.md](../architecture/configurability.md#resourcequota) and
+[operations/configuration.md](../operations/configuration.md).
+
+Enable the plugin via `ROS_ENABLED_PLUGINS` (included in native defaults; omit `quota`
+or use `ROS_DISABLED_PLUGINS=quota` to disable — API returns 404).
+
+---
+
+## API
+
+`GET /api/cost-management/v1/recommendations/openshift/quota/`
+
+- Filters: `filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[risk_level]`
+- Group by: `group_by[cluster]` or `group_by[project]` (aggregated counts and savings)
+- Requires `quota` in `ROS_ENABLED_PLUGINS`
+
+Public reference: [docs-site feature page](../../docs-site/features/quota-recommendations.md),
+[openapi.json](../../openapi.json).
+
+---
+
+## Future work
 
 | Gap | Notes |
 |-----|-------|
@@ -71,49 +149,9 @@ configured quota limits.
 
 ---
 
-## How it works
-
-1. **Ingest** — Namespace CSV columns `*_namespace_sum` map to ResourceQuota `type=hard`;
-   optional `*_namespace_used` columns map to `type=used`. Values are stored on
-   `daily_namespace_digests` (max per day).
-2. **Aggregate** — Sum container `rec_*` request/limit columns per namespace
-   (`term=medium`, `engine=cost`) from `recommendation_sets` (previous cycle until
-   container CSV in the same payload is processed; see timing below).
-3. **Compare (signal C)** — Utilization and risk use the **greater** of quota `used`
-   and container recommendation sums vs hard limits. Recommended hard values apply
-   headroom (default 120%, `ROS_QUOTA_HEADROOM_PERCENT=20`).
-4. **Classify** — `tighten` when recommended &lt; hard; `raise` when utilization ≥
-   high-risk threshold (default 80%); otherwise `optimal`.
-5. **Savings** — Tighten rows estimate monthly savings from freed CPU/memory capacity
-   via Koku effective rates (`estimated_savings` in API).
-
-Configuration: `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`,
-`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT`.
-
-### Timing and one-cycle lag
-
-Container sums are read from PostgreSQL (`recommendation_sets`), not passed in memory
-from the container plugin. In a typical payload (container CSV then namespace CSV):
-
-1. Container digest ingest runs (ingest hooks do not run quota on container).
-2. `RecommendWorkloadsStreaming` writes fresh `term=medium` / `engine=cost` rows.
-3. Quota runs at the end of container processing with those new rows.
-4. Namespace digest ingest runs; the quota ingest hook runs again with updated
-   hard/used snapshots from the namespace CSV.
-
-If only namespace CSV is ingested in a cycle, quota uses container recommendations
-from the **previous** cycle until container metrics arrive. On first deployment,
-expect one report cycle before tighten/raise signals use container-based sums.
-
-Implementation: [`internal/plugins/quota/`](../../internal/plugins/quota/),
-[`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
-[`internal/api/handlers_quota_recs.go`](../../internal/api/handlers_quota_recs.go).
-
----
-
 ## Related documentation
 
-- [Namespace Quota Optimization](../../docs-site/features/namespace-recommendations.md) — shipped usage-based namespace sizing
-- [Plugin Execution Phases](../architecture/plugin-phases.md) — future plugin table
+- [Namespace Quota Optimization](../../docs-site/features/namespace-recommendations.md) — usage-based namespace sizing
+- [Plugin Execution Phases](../architecture/plugin-phases.md) — phase and priority table
 - [REQ-8.4](../architecture/requirements.md) — requirements traceability
-- [Known issues — ResourceQuota](../known-issues.md) — MVP deferral notes
+- [Known issues](../known-issues.md) — ClusterResourceQuota and remaining gaps

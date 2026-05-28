@@ -2539,8 +2539,9 @@ ros:nodejs_runtime_detected_fallback:
 
 **Industry coverage:** Kubecost (namespace budget alerts), limited direct quota recommendations.
 
-**Full design:** [quota-recommendations.md](../features/quota-recommendations.md) — namespace &
-cluster quota right-sizing (planned Phase 1 `quota` plugin, priority ~35).
+**Full design:** [quota-recommendations.md](../features/quota-recommendations.md) — namespace
+ResourceQuota right-sizing **implemented** (`quota` plugin, priority 35). ClusterResourceQuota
+remains future work.
 
 **What it is:** Right-size **ResourceQuota** (namespace-level) and **ClusterResourceQuota**
 (cluster-level) hard limits from actual usage patterns, peak usage, and container
@@ -2556,7 +2557,7 @@ detection (§23.1): idle namespace + oversized quota = double waste.
 - Flag namespaces where quota >> actual usage (over-provisioned, blocks other teams)
 - Flag namespaces where usage is >80% of quota (risk of deployment failures)
 
-**Data status:** **PARTIAL** — hard limits already in ROS namespace CSV; used consumption not yet collected.
+**Data status:** **PARTIAL** — hard and optional used limits in ROS namespace CSV; ClusterResourceQuota and storage/pod quota resources not collected.
 
 **Already collected (koku-metrics-operator):** `kube_resourcequota{type='hard'}` for
 `requests.cpu`, `limits.cpu`, `requests.memory`, `limits.memory` via
@@ -2576,9 +2577,9 @@ Additional gaps: `openshift_clusterresourcequota`, storage/pod quota resources, 
 
 **Savings signal:** Over-provisioned quotas → freed capacity (not always direct dollar savings); combine with idle namespace waste in fleet views.
 
-**Implementation:** Phase 1 `quota` plugin reading ROS CSV quota columns + namespace plugin digests; see [plugin-phases.md](plugin-phases.md).
+**Implementation:** Shipped — Phase 1 `quota` plugin, `quota_recommendation_sets`, `GET .../quota/`; see [plugin-phases.md](plugin-phases.md).
 
-**Effort:** Moderate. 1–2 new operator queries (used + optional ClusterResourceQuota), aggregation logic, new API endpoints.
+**Remaining effort:** ClusterResourceQuota metrics, per-quota object identity, notification codes.
 
 ---
 

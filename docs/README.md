@@ -40,6 +40,7 @@
 
 | Document | Scope |
 |----------|-------|
+| [features/quota-recommendations.md](features/quota-recommendations.md) | ResourceQuota right-sizing (`quota` plugin, priority 35) |
 | [features-f26-f33-f54-f55.md](features-f26-f33-f54-f55.md) | Staleness, idle/abandoned detection, adoption, fleet summary, fleet savings summary |
 | [features-f27-pvc-rightsizing.md](features-f27-pvc-rightsizing.md) | PVC right-sizing: oversized, near-full, orphaned, growth trend |
 | [features-f-snapshot-staleness.md](features-f-snapshot-staleness.md) | Snapshot staleness detection |

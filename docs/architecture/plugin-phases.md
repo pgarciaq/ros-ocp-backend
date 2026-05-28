@@ -98,7 +98,7 @@ All production plugins today use Phase 1 via embedded [`BasePlugin`](../../inter
 | gpu | 1 | 20 | Ingest hooks and recommendations after container rows exist; sets `gpu_idle_state` |
 | node | 1 | 30 | Independent; ingest hook after container CSV |
 | pvc | 1 | 30 | Independent; owns storage CSV ingest |
-| quota (future) | 1 | 35 | After PVC ingest; compares quota hard/used limits to namespace usage and container rec aggregates |
+| quota | 1 | 35 | After PVC ingest; compares quota hard/used limits to namespace usage and container rec aggregates |
 | snapshot | 1 | 40 | Reads recommendation freshness after core recommendations exist |
 | example (`_example`) | 1 | 50 | Template default (`BasePlugin`); always disabled in production |
 | namespace | 1 | 90 | Aggregates namespace idle after container/GPU (and related) rows exist |
@@ -163,7 +163,6 @@ documented here so phase and priority slots stay stable when implementations lan
 
 | Plugin | Phase | Priority (planned) | Domain |
 |--------|-------|-------------------|--------|
-| quota | 1 | 35 | [ResourceQuota / ClusterResourceQuota](../features/quota-recommendations.md) |
 | vm | 1 | (TBD) | OpenShift Virtualization VM rightsizing |
 | instance-type | 1 | (TBD) | Cloud instance type for nodes |
 | java | 2 | (TBD) | JVM heap / GC |
@@ -176,4 +175,6 @@ documented here so phase and priority slots stay stable when implementations lan
 | machineset | 3 | (TBD) | Node pool right-sizing |
 
 See [performance-analysis.md §23](performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
-for industry gap context on HPA, runtime tuning, ephemeral storage, and quota recommendations.
+for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota
+recommendations are implemented — see [quota-recommendations.md](../features/quota-recommendations.md);
+ClusterResourceQuota remains future work.

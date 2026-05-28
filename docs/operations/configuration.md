@@ -331,6 +331,12 @@ override behavior: [configurability.md](../architecture/configurability.md).
 `ROS_PVC_MIN_TREND_DAYS`, `ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER`,
 `ROS_PVC_MIN_RECOMMENDED_GIB`, `ROS_PVC_DAYS_TO_FULL_ALERT`
 
+### ResourceQuota
+
+`ROS_QUOTA_HEADROOM_PERCENT` (default `20`), `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default `80`),
+`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default `60`). See
+[quota-recommendations.md](../features/quota-recommendations.md).
+
 ### Snapshot
 
 `ROS_SNAPSHOT_ORPHAN_AGE_DAYS`, `ROS_SNAPSHOT_NEVER_RESTORED_DAYS`,

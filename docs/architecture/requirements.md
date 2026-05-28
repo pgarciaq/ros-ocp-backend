@@ -164,7 +164,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | F34 | **HPA optimization** | Saturated HPA (at max), idle HPA (at min), flapping (>10 events/hr), combined VPA+HPA advice. | 8 | REQ-8.1 | Yes (8 queries) | Active | **NO** | **Net-new** — No HPA analysis in legacy pipeline. | Open question: combined VPA+HPA priority (Q9). |
 | F35 | **Ephemeral storage recommendations** | Right-size ephemeral storage requests/limits. | 8 | REQ-8.2 | Yes (4 queries) | Active (informational only) | **NO** | **Net-new** — No ephemeral storage recommendations in legacy pipeline. | OFF by default (`ROS_ENABLE_EPHEMERAL_STORAGE=false`). cadvisor metrics unreliable through OCP 4.21. Pending upstream fix. |
 | F36 | **Node.js heap advisory** | Detect Node.js via `nodejs_version_info`. Emit "set `--max-old-space-size` to 75% of mem limit" notification. | 8 | REQ-8.3 | Yes (1 query) | Active (informational only) | **NO** | **Net-new** — No Node.js runtime recommendations in legacy pipeline. | Weakest recommendation type. OFF by default (`ROS_ENABLE_NODEJS_RECS=false`). No actionable numeric value. |
-| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **NO** | **Net-new** — No ResourceQuota analysis in legacy pipeline. | — |
+| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **YES** | **`quota` plugin** — `GET .../quota/`; ClusterResourceQuota still future. | — |
 
 ### VM Recommendations
 
@@ -1474,18 +1474,21 @@ kube_horizontalpodautoscaler_labels
 
 **Note:** This is the weakest recommendation type in the system. Gate behind `ROS_ENABLE_NODEJS_RECS=false` (OFF by default).
 
-### REQ-8.4: ResourceQuota recommendations [MEDIUM] — NOT IMPLEMENTED
+### REQ-8.4: ResourceQuota recommendations [MEDIUM] — IMPLEMENTED (namespace ResourceQuota)
 
 **Source:** Analysis §23.8. **Design:** [quota-recommendations.md](../features/quota-recommendations.md).
 
-**Required:** `kube_resourcequota{type="hard"}` is already collected in the ROS namespace CSV;
-add `kube_resourcequota{type="used"}` and optional ClusterResourceQuota metrics.
+**Shipped:** Phase 1 `quota` plugin (priority 35). Ingests hard/used limits from ROS namespace
+CSV into `daily_namespace_digests`; compares against `recommendation_sets` container sums;
+persists `quota_recommendation_sets`; exposes `GET /api/cost-management/v1/recommendations/openshift/quota/`.
 
-**Algorithm:**
-1. Aggregate all container recommendations within a namespace.
-2. Compare aggregate vs quota hard limits.
-3. If aggregate recommended < quota × 0.5: suggest reducing quota.
-4. If aggregate recommended > quota × 0.9: warn quota may block scaling.
+**Algorithm (implemented):**
+1. Sum container `term=medium` / `engine=cost` request/limit recommendations per namespace.
+2. Utilization = max(quota used, container sums) vs hard limits (per resource).
+3. `tighten` when recommended hard &lt; current hard; `raise` when utilization ≥ high-risk threshold (default 80%).
+4. Risk bands: high ≥ 80%, medium ≥ 60%, low otherwise.
+
+**Future:** ClusterResourceQuota metrics, storage/pod quota resources, per-quota object identity.
 
 ---
 
@@ -3387,7 +3390,7 @@ Risks identified during the 2026-03-26 review, with their resolutions.
 | REQ-8.1 HPA optimization | §23.3 | 8 | High | Yes | No | Yes |
 | REQ-8.2 Ephemeral storage | §23.6 | 8 | Low (informational, pending cadvisor fix) | Yes | No | Yes |
 | REQ-8.3 Node.js heap | §23.7 | 8 | Low (informational only) | Yes | No | Yes |
-| REQ-8.4 ResourceQuota | §23.8 | 8 | Medium | Yes | No | Yes |
+| REQ-8.4 ResourceQuota | §23.8 | 8 | Medium | Yes | Yes | Partial (CRQ future) |
 | REQ-9.1 JVM detection | §18 | 9 | High | Yes (optional) | No | No |
 | REQ-9.2 MaxRAMPercentage | §18 | 9 | High | No | No | Yes |
 | REQ-9.3 GC policy | §18 | 9 | High | No | No | Yes |

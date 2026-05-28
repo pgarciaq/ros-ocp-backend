@@ -14,7 +14,8 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 | **gpu** | NVIDIA GPUs | Utilization classification, MIG partitioning, time-slicing replicas |
 | **node** | Node sizing | Node over/under-provisioning, consolidation opportunities |
 | **pvc** | Storage | PVC capacity right-sizing using growth trend projection |
-| **namespace** | Quotas | Namespace-level resource quota recommendations |
+| **quota** | ResourceQuota | Right-size namespace ResourceQuota hard limits vs usage and container recs |
+| **namespace** | Quotas | Namespace-level CPU/memory sizing from usage digests |
 | **snapshot** | VolumeSnapshots | Stale snapshot detection |
 
 ## Architecture Highlights

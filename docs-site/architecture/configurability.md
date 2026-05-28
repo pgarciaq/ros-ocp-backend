@@ -249,6 +249,24 @@ because storage growth is slow.
 
 ---
 
+## ResourceQuota
+
+Namespace **ResourceQuota** hard-limit recommendations (`quota` plugin). Compares
+configured quota hard/used metrics from the namespace CSV against aggregated container
+`term=medium` / `engine=cost` sums. Not tenant-configurable via Settings API — admin
+env vars only.
+
+| Env var | Default | Type | Description | Tenant-configurable | Status |
+|---------|---------|------|-------------|---------------------|--------|
+| `ROS_QUOTA_HEADROOM_PERCENT` | 20 | int | Headroom on recommended hard limits. <br><em>Expanded: Added to 100% before multiplying container recommendation sums. 20 means recommended quota hard = sum × 1.20 (12000 basis points). Applies to CPU/memory request and limit recommendations derived from container rec totals.</em> | No | New |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 80 | int | High utilization / raise signal. <br><em>Expanded: When max utilization (greater of quota used or container rec sum vs hard) reaches this percent of hard, recommendation_type is `raise` and risk_level is `high`. Default 80% warns before admission failures.</em> | No | New |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 60 | int | Medium risk band. <br><em>Expanded: Utilization at or above this percent (and below high threshold) sets risk_level to `medium`. Does not alone trigger `raise` — that requires the high-risk threshold.</em> | No | New |
+
+See [quota-recommendations.md](../features/quota-recommendations.md) for ingestion timing,
+one-cycle lag, and API fields.
+
+---
+
 ## Snapshot
 
 VolumeSnapshot staleness classification. Snapshot thresholds are tenant-configurable

@@ -13,7 +13,8 @@ internal/plugins/
 ├── gpu/                  ← GPU utilization and MIG/time-slicing
 ├── node/                 ← Node sizing and utilization
 ├── pvc/                  ← PVC storage right-sizing
-├── namespace/            ← Namespace quota recommendations
+├── quota/                ← ResourceQuota hard-limit recommendations
+├── namespace/            ← Namespace usage-based sizing
 ├── snapshot/             ← VolumeSnapshot staleness
 ├── kruize/               ← Legacy engine (mutual-exclusive)
 └── example/              ← Authoring template for new plugins
@@ -27,6 +28,7 @@ internal/plugins/
 | gpu | | ✓ | ✓ | ✓ | ✓ | ✓ (max 90d) |
 | node | | ✓ | ✓ | | ✓ | ✓ (max 90d) |
 | pvc | ✓ | | ✓ | | ✓ | ✓ (max 365d) |
+| quota | | ✓ | ✓ | | ✓ | |
 | namespace | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | snapshot | ✓ | | ✓ | | | |
 | kruize | | | | | | |

@@ -234,6 +234,22 @@ See [Idle / Zombie Detection](features/idle-detection.md).
 
 ---
 
+## ResourceQuota Recommendations
+
+Namespace **ResourceQuota** tuning via the `quota` plugin. Admin env vars only (not
+exposed on the Settings API).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_QUOTA_HEADROOM_PERCENT` | `20` | Extra margin on recommended hard limits (20 → multiply container rec sums by 1.20). |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `80` | `raise` recommendation and `high` risk when max utilization (used or rec sum vs hard) ≥ 80%. |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `60` | `medium` risk when utilization ≥ 60% and below the high-risk threshold. |
+
+See [ResourceQuota Recommendations](features/quota-recommendations.md) and
+[Configurability — ResourceQuota](architecture/configurability.md#resourcequota).
+
+---
+
 ## Engine Thresholds
 
 Platform-wide defaults for recommendation algorithms. When set, they **lock**
