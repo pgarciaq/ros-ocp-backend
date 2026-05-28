@@ -15,6 +15,7 @@ ResourceQuota objects against container rightsizing output and optional `kube_re
 used metrics.
 
 **ClusterResourceQuota** (OpenShift multi-namespace quotas) is not supported yet.
+Design: [`docs/features/cluster-resource-quota.md`](../../docs/features/cluster-resource-quota.md).
 
 ---
 

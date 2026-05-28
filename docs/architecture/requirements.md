@@ -164,7 +164,8 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | F34 | **HPA optimization** | Saturated HPA (at max), idle HPA (at min), flapping (>10 events/hr), combined VPA+HPA advice. | 8 | REQ-8.1 | Yes (8 queries) | Active | **NO** | **Net-new** — No HPA analysis in legacy pipeline. | Open question: combined VPA+HPA priority (Q9). |
 | F35 | **Ephemeral storage recommendations** | Right-size ephemeral storage requests/limits. | 8 | REQ-8.2 | Yes (4 queries) | Active (informational only) | **NO** | **Net-new** — No ephemeral storage recommendations in legacy pipeline. | OFF by default (`ROS_ENABLE_EPHEMERAL_STORAGE=false`). cadvisor metrics unreliable through OCP 4.21. Pending upstream fix. |
 | F36 | **Node.js heap advisory** | Detect Node.js via `nodejs_version_info`. Emit "set `--max-old-space-size` to 75% of mem limit" notification. | 8 | REQ-8.3 | Yes (1 query) | Active (informational only) | **NO** | **Net-new** — No Node.js runtime recommendations in legacy pipeline. | Weakest recommendation type. OFF by default (`ROS_ENABLE_NODEJS_RECS=false`). No actionable numeric value. |
-| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **YES** | **`quota` plugin** — `GET .../quota/`; ClusterResourceQuota still future. | — |
+| F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **YES** | **`quota` plugin** — `GET .../quota/`; see [quota-recommendations.md](../features/quota-recommendations.md). | — |
+| F37b | **ClusterResourceQuota recommendations** | OpenShift-only: right-size team/tenant CRQ hard limits from `openshift_clusterresourcequota_*` metrics and aggregated namespace/container signals. | 8 | REQ-8.4b | Yes (8+ queries, new CSV) | Planned | **NO** | **`cluster-quota` plugin (proposed)** — `GET .../cluster-quota/`; design [cluster-resource-quota.md](../features/cluster-resource-quota.md). | Requires OCP + openshift-state-metrics. Clusters without CRQs: no rows, no errors. |
 
 ### VM Recommendations
 
@@ -1488,7 +1489,38 @@ persists `quota_recommendation_sets`; exposes `GET /api/cost-management/v1/recom
 3. `tighten` when recommended hard &lt; current hard; `raise` when utilization ≥ high-risk threshold (default 80%).
 4. Risk bands: high ≥ 80%, medium ≥ 60%, low otherwise.
 
-**Future:** ClusterResourceQuota metrics, storage/pod quota resources, per-quota object identity.
+**Future (namespace quota):** Storage/pod quota resources, per-quota object identity (multiple ResourceQuotas per namespace).
+
+### REQ-8.4b: ClusterResourceQuota recommendations [MEDIUM] — PLANNED
+
+**Source:** Analysis §23.8, extension of REQ-8.4. **Design:** [cluster-resource-quota.md](../features/cluster-resource-quota.md).
+
+**Scope:** OpenShift `ClusterResourceQuota` only (`quota.openshift.io/v1`). Per-cluster object;
+selects namespaces by label/annotation selector; aggregates hard/used like ResourceQuota.
+
+**Requirements:**
+
+1. **Operator (Phase A):** Collect `openshift_clusterresourcequota_usage` for
+   `requests.cpu`, `limits.cpu`, `requests.memory`, `limits.memory` (`type=hard|used`).
+   Do **not** use `kube_resourcequota` for CRQ aggregates.
+2. **Operator (Phase A):** Emit a **separate** ROS CSV keyed by `cluster_resource_quota` name
+   (not extend namespace CSV grain).
+3. **Operator (Phase A):** Optional: `openshift_clusterresourcequota_selector` and
+   `openshift_clusterresourcequota_namespace_usage` for selector labels and matched namespace count.
+4. **Backward compatibility:** If no CRQ metrics exist, omit CRQ report; ros-ocp-backend produces
+   zero recommendations without error.
+5. **Backend (Phase B–C):** Ingest CRQ snapshots; `cluster-quota` plugin (priority 36, after `quota`);
+   table `cluster_quota_recommendation_sets`; API `GET .../recommendations/openshift/cluster-quota/`.
+6. **Algorithm (Phase C):** Reuse namespace quota classification (tighten/raise/optimal/none, risk bands).
+   Recommended hard: sum of namespace quota recommendations (or container sums) for namespaces under the CRQ.
+   Utilization: max(CRQ used, aggregated workload signal) vs CRQ hard.
+7. **FinOps:** Support filters by cluster, CRQ name, recommendation_type, risk_level; document that
+   CRQ vs namespace savings must not be double-counted in fleet totals.
+
+**Dependencies:** Namespace `quota` plugin recommended but not strictly required if aggregating from
+container `recommendation_sets` + CRQ namespace membership.
+
+**Not in v1:** Storage/pod/object-count CRQ resources; overlapping CRQ deduplication UI.
 
 ---
 

@@ -177,4 +177,5 @@ documented here so phase and priority slots stay stable when implementations lan
 See [performance-analysis.md §23](performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
 for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota
 recommendations are implemented — see [quota-recommendations.md](../features/quota-recommendations.md);
-ClusterResourceQuota remains future work.
+ClusterResourceQuota remains future work — design:
+[cluster-resource-quota.md](../features/cluster-resource-quota.md) (proposed `cluster-quota` plugin, priority 36).
