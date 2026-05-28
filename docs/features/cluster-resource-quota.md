@@ -1,6 +1,6 @@
 # ClusterResourceQuota Recommendations (Design)
 
-**Status:** Design only — not implemented.  
+**Status:** Design only — not implemented. Routing, naming, and `DetermineCSVType` decisions finalized.  
 **Depends on:** Namespace [ResourceQuota recommendations](quota-recommendations.md) (shipped).  
 **OpenShift:** Required — `ClusterResourceQuota` is an OpenShift API extension (`quota.openshift.io/v1`), not upstream Kubernetes.
 
@@ -130,24 +130,38 @@ cross-check namespace quota recs).
 (or serialize selector as JSON in one column per CRQ row). Needed for API `selector` field and
 for joining to namespace-level data.
 
-**Availability / backward compatibility:**
+**Availability:**
 
-- If `openshift_clusterresourcequota_usage` returns no series, emit **no CRQ CSV file** (or an
-  empty file with header only). Downstream must treat missing report type as “no CRQs” — not an
-  error.
-- Document minimum OpenShift / monitoring version where openshift-state-metrics exposes these
-  metrics (verify on target OCP versions during Phase A).
+- If PromQL returns no series (no CRQs, or openshift-state-metrics not exposing metrics), the
+  operator emits **no CRQ CSV file** — not an empty file, not an error.
+- See [Backward compatibility](#backward-compatibility) and [Minimum OpenShift version](#minimum-openshift-version).
 
-#### New CSV — separate report type (recommended)
+#### New CSV — separate report type (finalized)
 
-**Do not extend** the namespace ROS CSV. Grain differs:
+**Do not extend** the namespace ROS CSV. Grain differs.
+
+**Filename (operator):**
+
+```
+ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv
+```
+
+Example: `ros-openshift-cluster-quota-20260501-20260528.csv`
+
+The `ros-openshift` substring matches the operator’s existing packaging rule in
+[`packaging.go`](../../../koku-metrics-operator/internal/packaging/packaging.go)
+(`strings.Contains(file.Name(), "ros-openshift")`), so the file is placed in
+`resource_optimization_files` automatically. **No listener or manifest schema changes are required.**
+
+**Nise compatibility (test data):** legacy filenames such as `ocp_ros_cluster_quota_usage.csv`
+remain routable in ros-ocp-backend via `DetermineCSVType` prefix rules (see Phase B).
 
 | Report | Row grain | Key columns |
 |--------|-----------|-------------|
 | `ros-openshift-namespace-*.csv` | `(interval, namespace)` | `namespace`, `*_namespace_sum`, usage stats |
-| **`ros-openshift-cluster-quota-*.csv` (new)** | `(interval, crq_name)` | `cluster_resource_quota`, hard/used sums, optional selector |
+| **`ros-openshift-cluster-quota-*.csv`** | `(interval, crq_name)` | `cluster_resource_quota`, hard/used sums, optional selector |
 
-Proposed columns (align units with namespace quota: cores for CPU, bytes for memory):
+Columns (align units with namespace quota: cores for CPU, bytes for memory):
 
 | Column | Source |
 |--------|--------|
@@ -161,13 +175,79 @@ Proposed columns (align units with namespace quota: cores for CPU, bytes for mem
 | `matched_namespace_count` | `count by (name) (openshift_clusterresourcequota_namespace_usage{...})` (optional) |
 | `selector_labels` | Serialized match-labels from `openshift_clusterresourcequota_selector` (optional JSON) |
 
-Manifest / listener: register new file type (e.g. `ocp_ros_cluster_quota_usage.csv` or
-operator-internal `ros-openshift-cluster-quota-*.csv`) in the same payload as other ROS reports.
+#### Operator implementation (Phase A)
 
-#### Koku / ingress
+| Item | Decision |
+|------|----------|
+| PromQL | `openshift_clusterresourcequota_usage{type="hard"}` and `{type="used"}` per resource (`requests.cpu`, `limits.cpu`, `requests.memory`, `limits.memory`) |
+| Struct | New `rosClusterQuotaRow` in [`types.go`](../../../koku-metrics-operator/internal/collector/types.go) |
+| CSV writer | New collector path; file prefix `ros-openshift-cluster-quota-` |
+| Manifest | File listed under `resource_optimization_files` via existing `ros-openshift` routing |
+| RBAC | **No new RBAC** — operator queries Prometheus/Thanos, not the Kubernetes API |
+| Empty metrics | PromQL returns no series → **no CSV generated**, no error |
 
-Confirm listener routing and masu report type mapping when implementing Phase A — out of scope
-for this design doc, but required before ros-ocp-backend ingest.
+---
+
+## Koku listener routing (no changes)
+
+The full pipeline from operator upload to ros-ocp-backend ingest:
+
+```mermaid
+sequenceDiagram
+    participant Op as koku-metrics-operator
+    participant Ing as Koku listener
+    participant S3 as Object storage
+    participant K as Kafka hccm.ros.events
+    participant ROS as ros-ocp-backend
+
+    Op->>Op: PromQL openshift_clusterresourcequota_usage
+    Op->>Op: Write ros-openshift-cluster-quota-*.csv
+    Op->>Op: packaging.go: ros-openshift → resource_optimization_files
+    Op->>Ing: Upload tarball + manifest.json
+    Ing->>S3: Copy all resource_optimization_files
+    Ing->>K: ROSReportShipper.process_manifest_reports
+    K->>ROS: Consumer downloads CSV from S3
+    ROS->>ROS: DetermineCSVType → ClusterQuota ingest
+```
+
+| Step | Component | Behavior |
+|------|-----------|----------|
+| 1 | **Operator collector** | Generates `ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv` when metrics exist |
+| 2 | **`packaging.go`** | `strings.Contains(name, "ros-openshift")` → `resource_optimization_files` |
+| 3 | **Upload** | Tarball manifest lists the file under `resource_optimization_files` |
+| 4 | **Koku listener** | [`kafka_msg_handler.py`](../../../koku/koku/masu/external/kafka_msg_handler.py) forwards **all** `resource_optimization_files` to S3 and emits `hccm.ros.events` via `ROSReportShipper` — **no per-filename filter** |
+| 5 | **ros-ocp-backend** | Kafka consumer downloads CSV; routes type via `DetermineCSVType` (Phase B refactor) |
+
+**Why no Koku changes:** ROS files are already shipped wholesale to ros-ocp-backend. Adding a
+new ROS CSV with the `ros-openshift` prefix does not require masu report-type mapping, Trino
+tables, or listener logic updates.
+
+---
+
+## Minimum OpenShift version
+
+| Fact | Detail |
+|------|--------|
+| Metric origin | `openshift_clusterresourcequota_*` added to openshift-state-metrics in **2019** |
+| Supported OCP | **All OCP 4.x (4.1+)** where openshift-state-metrics runs in `openshift-monitoring` |
+| Missing metrics | If openshift-state-metrics is down or the cluster has no `ClusterResourceQuota` objects, PromQL returns empty — operator skips CSV; **no error** |
+| Not required | Upstream Kubernetes (no CRQ API); clusters without CRQ objects are normal |
+
+---
+
+## Backward compatibility
+
+| Scenario | Behavior |
+|----------|----------|
+| **Cluster has no CRQs** | No `openshift_clusterresourcequota_*` series → operator generates no CRQ CSV → no Kafka payload for that file → `cluster-quota` plugin returns **empty results** (not an error) |
+| **`cluster-quota` plugin disabled** | Routes return 404 (same as other plugins) |
+| **`cluster-quota` enabled, no CRQ file** | Ingest has nothing for `PayloadTypeClusterQuota`; recommendation run produces 0 rows — plugin does **not** auto-disable |
+| **Older operator (pre-CRQ)** | Payload lacks CRQ file; ros-ocp-backend unchanged for other report types |
+| **Nise / legacy filenames** | `DetermineCSVType` accepts `ocp_ros_cluster_quota*` (and other `ocp_*` prefixes) for dev/test payloads |
+| **Namespace quota** | Independent feature; continues to work with or without CRQ CSV |
+
+No special “missing CRQ” handling in the engine or API beyond treating absent ingest data as
+zero recommendations.
 
 ---
 
@@ -312,7 +392,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | Name | `cluster-quota` |
 | Phase | 1 (infrastructure / capacity) |
 | Priority | `36` (after namespace `quota` at 35, before `snapshot` at 40) |
-| Routes | `GET .../cluster-quota/` |
+| Routes | `GET .../cluster-quota/`, `GET/PUT/DELETE .../settings/cluster-quota` |
 | Retention | `cluster_quota_recommendation_sets` |
 | Ingest hook | None — run after namespace quota + container recs (same as `quota`) |
 
@@ -328,8 +408,9 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 **Can run without namespace quota plugin:** Yes, if recommended values are computed by summing
 container recs for namespaces matched to each CRQ (requires namespace membership resolution).
 
-**Clusters without CRQs:** No metrics → no CSV rows → `RunClusterQuotaRecommendations` returns
-0 recs, no API errors. Existing namespace quota behavior unchanged.
+**Clusters without CRQs:** No metrics → no CSV file → no ingest rows →
+`RunClusterQuotaRecommendations` returns 0 recs; API lists empty. The `cluster-quota` plugin stays
+enabled. Existing namespace quota behavior unchanged. See [Backward compatibility](#backward-compatibility).
 
 ---
 
@@ -429,25 +510,46 @@ will over-count. API docs should state: CRQ savings are **team-pool** view; name
 
 | Phase | Owner | Work |
 |-------|-------|------|
-| **A — Operator** | koku-metrics-operator | PromQL for `openshift_clusterresourcequota_usage` (+ optional selector/count); new CSV; tests; report-fields doc |
-| **B — Ingest** | ros-ocp-backend | Listener/report type; ingest → `daily_cluster_quota_digests` or direct snapshot; backward compat when file absent |
-| **C — Engine + API** | ros-ocp-backend | `cluster-quota` plugin; `recommend_cluster_quota.go`; `cluster_quota_recommendation_sets`; `GET .../cluster-quota/` |
+| **A — Operator** | koku-metrics-operator | PromQL on `openshift_clusterresourcequota_usage` (`type=hard` / `type=used`); `rosClusterQuotaRow` in `types.go`; CSV `ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv`; packaging via existing `ros-openshift` rule; tests; report-fields doc. **No Koku listener changes.** |
+| **B — Ingest** | ros-ocp-backend | Refactor [`DetermineCSVType`](../../internal/utils/utils.go) to ordered prefix matching on `filepath.Base(fileName)`; add `PayloadTypeClusterQuota` ingest path → `daily_cluster_quota_digests` or snapshot; nise `ocp_ros_cluster_quota*` compat. **No listener changes.** |
+| **C — Engine + API** | ros-ocp-backend | `cluster-quota` plugin; `recommend_cluster_quota.go`; `cluster_quota_recommendation_sets`; `GET .../cluster-quota/`; empty results when no CRQ data |
 | **D — Polish** | ros-ocp-backend | Settings API (`GET/PUT/DELETE .../settings/cluster-quota`), `ROS_CLUSTER_QUOTA_*` env wiring, OpenAPI, docs-site, cost-onprem-chart Helm values, IQE fixtures, unit/integration tests |
+
+### Phase B — `DetermineCSVType` refactor (finalized)
+
+**Problem:** Today’s implementation uses fragile `strings.Contains` on the full path, which can
+mis-classify filenames (e.g. a path segment containing `namespace`).
+
+**Solution:** Ordered **prefix** matching on `filepath.Base(fileName)`. Check longer / more-specific
+prefixes first; default to `PayloadTypeContainer`.
+
+| Prefix | `PayloadType` |
+|--------|---------------|
+| `ros-openshift-cluster-quota-` | ClusterQuota |
+| `ros-openshift-namespace-` | Namespace |
+| `ros-openshift-snapshot-` | Snapshot |
+| `ros-openshift-storage-` | Storage |
+| `ocp_ros_cluster_quota` | ClusterQuota (nise compat) |
+| `ocp_ros_namespace` | Namespace (nise compat) |
+| `ocp_snapshot_inventory` | Snapshot (nise compat) |
+| `ocp_storage_usage` | Storage (nise compat) |
+| *(default)* | Container |
+
+Implementation note: use a slice of `{prefix, type}` pairs iterated in order; first match wins.
 
 ---
 
 ## Open questions
 
-| # | Question | Current leaning |
-|---|----------|-----------------|
-| 1 | Does `kube_resourcequota` expose CRQ? | **No** — use `openshift_clusterresourcequota_*` |
-| 2 | CRQs spanning clusters? | **N/A** — CRQ is per-cluster |
-| 3 | Savings: aggregate namespace savings vs independent CRQ compute? | **Independent** CRQ tighten savings from CRQ hard − recommended; document dedup for fleet totals |
-| 4 | Extend namespace CSV vs separate CSV? | **Separate CSV** (different grain) |
-| 5 | Single table + `scope` column? | **Separate table** (cleaner keys and API) |
-| 6 | Namespace membership for sums | `openshift_clusterresourcequota_namespace_usage` vs evaluate selector against `kube_namespace_labels` |
-| 7 | Multiple CRQs selecting overlapping namespaces | Emit one row per CRQ; optional warning in API meta |
-| 8 | Metric availability on older OCP | Feature-detect; skip silently if metrics missing |
+| # | Question | Status |
+|---|----------|--------|
+| 1 | Savings: aggregate namespace savings vs independent CRQ compute? | **Open** — independent CRQ tighten savings; document dedup for fleet totals |
+| 2 | Namespace membership for recommended-hard sums | **Open** — `openshift_clusterresourcequota_namespace_usage` vs selector evaluation |
+| 3 | Multiple CRQs selecting overlapping namespaces | **Open** — one row per CRQ; optional warning in API meta |
+
+**Resolved (see sections above):** metric source (`openshift_clusterresourcequota_*`), separate CSV,
+filename `ros-openshift-cluster-quota-*`, listener routing (no changes), `DetermineCSVType` prefix
+algorithm, no-CRQ → empty results, OCP 4.1+ metric availability, separate DB table and plugin.
 
 ---
 
@@ -458,7 +560,7 @@ will over-count. API docs should state: CRQ savings are **team-pool** view; name
 | Scope | Single namespace | Multiple namespaces (label selector) |
 | Admin level | Namespace / project admin | Cluster / platform admin |
 | Metric source | `kube_resourcequota` | `openshift_clusterresourcequota_usage` (+ related) |
-| Operator CSV | `ros-openshift-namespace-*.csv` | `ros-openshift-cluster-quota-*.csv` (proposed) |
+| Operator CSV | `ros-openshift-namespace-*.csv` | `ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv` |
 | DB table | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` (proposed) |
 | Plugin | `quota` (shipped) | `cluster-quota` (proposed) |
 | API | `GET .../quota/` | `GET .../cluster-quota/` |
