@@ -241,6 +241,7 @@ Env semantics (**[`EnabledFor`](../../internal/plugin/registry.go)**):
 
 ```go
 import (
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/example"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
@@ -248,6 +249,7 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/node"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
 )
 ```
@@ -398,6 +400,12 @@ internal/plugins/
   pvc/
     plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
 
+  quota/
+    plugin.go            # APIProvider + RetentionProvider (+ tests)
+
+  cluster-quota/
+    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
+
   snapshot/
     plugin.go            # CSVIngestor + APIProvider (+ tests)
 
@@ -420,15 +428,20 @@ See **`internal/plugins/example/README.md`** for trait contracts and registratio
 
 ## 9. Trait matrix (current recommendation types)
 
-| Domain | Plugin name | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | MigrationProvider | TermProvider |
-|--------|-------------|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
-| Container CPU/memory | `container` | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
-| Namespace | `namespace` | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — | ✅ (max 90d) |
-| GPU (MIG / time-slicing) | `gpu` | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
-| Node utilization | `node` | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
-| PVC | `pvc` | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
-| Snapshot | `snapshot` | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — | — |
-| Template (disabled by default) | `_example` | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait | ✅ stub |
+Sorted by execution order (Phase → Priority → Name):
+
+| Domain | Plugin name | Phase | Priority | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | MigrationProvider | TermProvider |
+|--------|-------------|:-----:|:--------:|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
+| Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
+| Legacy Kruize | `kruize` | 1 | 10 | — | — | — (core handlers) | — | — | — | — |
+| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
+| Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
+| PVC | `pvc` | 1 | 30 | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
+| ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets` | — | — |
+| ClusterResourceQuota | `cluster-quota` | 1 | 36 | ✅ CRQ CSV | — | ✅ `/cluster-quota` + settings | — | ✅ `cluster_quota_recommendation_sets`, `daily_cluster_quota_digests` | — | — |
+| Snapshot | `snapshot` | 1 | 40 | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — | — |
+| Template (disabled) | `_example` | 1 | 50 | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait | ✅ stub |
+| Namespace | `namespace` | 1 | 90 | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — | ✅ (max 90d) |
 
 *`MigrationProvider` is implemented today **only** by **`example`** (`Name()` **`_example`**); the trait is **reserved** for future tooling — no production dispatch consumes it.*
 
