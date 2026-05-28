@@ -236,14 +236,17 @@ See [Idle / Zombie Detection](features/idle-detection.md).
 
 ## ResourceQuota Recommendations
 
-Namespace **ResourceQuota** tuning via the `quota` plugin. Admin env vars only (not
-exposed on the Settings API).
+Namespace **ResourceQuota** tuning via the `quota` plugin. Thresholds resolve per
+organization from the Settings API, then env vars, then compiled defaults.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_QUOTA_HEADROOM_PERCENT` | `10` | Extra margin on recommended hard limits (10 → multiply container rec sums by 1.10). |
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization (used or rec sum vs hard) ≥ 90%. |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below the high-risk threshold. |
+
+**Settings API:** `GET` / `PUT` / `DELETE` `/recommendations/openshift/settings/quota`
+(requires `quota` plugin). Env vars lock the corresponding field in `locked_fields`.
 
 See [ResourceQuota Recommendations](features/quota-recommendations.md) and
 [Configurability — ResourceQuota](architecture/configurability.md#resourcequota).

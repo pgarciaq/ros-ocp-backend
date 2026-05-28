@@ -34,6 +34,11 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 		v1.GET("/recommendations/openshift/settings/idle-detection", GetIdleDetectionSettings)
 		v1.PUT("/recommendations/openshift/settings/idle-detection", PutIdleDetectionSettings)
 		v1.DELETE("/recommendations/openshift/settings/idle-detection", DeleteIdleDetectionSettings)
+		if pluginRecommendationRoutesActive("quota") {
+			v1.GET("/recommendations/openshift/settings/quota", GetQuotaSettings)
+			v1.PUT("/recommendations/openshift/settings/quota", PutQuotaSettings)
+			v1.DELETE("/recommendations/openshift/settings/quota", DeleteQuotaSettings)
+		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)

@@ -39,6 +39,8 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
 | `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
+| `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
+| `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
 
 When a parameter is locked by an admin env var, the Settings API marks it `"locked": true`
 in GET responses and rejects PUT attempts for that field.
@@ -253,14 +255,16 @@ because storage growth is slow.
 
 Namespace **ResourceQuota** hard-limit recommendations (`quota` plugin). Compares
 configured quota hard/used metrics from the namespace CSV against aggregated container
-`term=medium` / `engine=cost` sums. Not tenant-configurable via Settings API — admin
-env vars only.
+`term=medium` / `engine=cost` sums. Tenant overrides via `GET/PUT/DELETE /settings/quota`;
+env vars lock fields for operator-controlled deployments.
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
-| `ROS_QUOTA_HEADROOM_PERCENT` | 10 | int | Headroom on recommended hard limits. <br><em>Expanded: Added to 100% before multiplying container recommendation sums. 10 means recommended quota hard = sum × 1.10 (11000 basis points). Applies to CPU/memory request and limit recommendations derived from container rec totals.</em> | No | New |
-| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 90 | int | High utilization / raise signal. <br><em>Expanded: When max utilization (greater of quota used or container rec sum vs hard) reaches this percent of hard, recommendation_type is `raise` and risk_level is `high`. Default 90% warns before admission failures.</em> | No | New |
-| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 70 | int | Medium risk band. <br><em>Expanded: Utilization at or above this percent (and below high threshold) sets risk_level to `medium`. Does not alone trigger `raise` — that requires the high-risk threshold.</em> | No | New |
+| `ROS_QUOTA_HEADROOM_PERCENT` | 10 | int | Headroom on recommended hard limits. <br><em>Expanded: Added to 100% before multiplying container recommendation sums. 10 means recommended quota hard = sum × 1.10 (11000 basis points). Applies to CPU/memory request and limit recommendations derived from container rec totals.</em> | Yes* | New |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 90 | int | High utilization / raise signal. <br><em>Expanded: When max utilization (greater of quota used or container rec sum vs hard) reaches this percent of hard, recommendation_type is `raise` and risk_level is `high`. Default 90% warns before admission failures.</em> | Yes* | New |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 70 | int | Medium risk band. <br><em>Expanded: Utilization at or above this percent (and below high threshold) sets risk_level to `medium`. Does not alone trigger `raise` — that requires the high-risk threshold.</em> | Yes* | New |
+
+\* Configurable via `PUT /settings/quota` unless the matching `ROS_QUOTA_*` env var is set (field locked).
 
 See [quota-recommendations.md](../features/quota-recommendations.md) for ingestion timing,
 one-cycle lag, and API fields.

@@ -3,7 +3,7 @@
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/quota/`  
     **Plugin:** `quota` (priority 35, on by default in the native engine)  
-    **Configurable:** Admin env vars only — no Settings API  
+    **Configurable:** Per-org Settings API + admin env vars  
     **Savings:** Yes on `tighten` rows when cost integration is enabled
 
 Right-size Kubernetes **ResourceQuota** hard limits per namespace by comparing
@@ -69,15 +69,31 @@ vs hard limits.
 
 ## Configuration
 
+Resolution order: **per-org Settings API** → **environment variables** → **compiled defaults** (10 / 90 / 70).
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_QUOTA_HEADROOM_PERCENT` | `10` | Margin on recommended hard values (10 → 110% of container rec sums) |
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | Triggers `raise` and `high` risk |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk band |
 
-**Settings API:** Quota thresholds are **not** exposed on
-`GET/PUT /recommendations/openshift/settings/*` (unlike idle detection, snapshot,
-container/namespace thresholds, and business hours). Change values via deployment
+**Settings API:** `GET` / `PUT` / `DELETE`
+`/api/cost-management/v1/recommendations/openshift/settings/quota`
+
+```json
+{
+  "headroom_percent": 10,
+  "high_risk_threshold_percent": 90,
+  "medium_risk_threshold_percent": 70,
+  "locked_fields": []
+}
+```
+
+PUT requires all three percent fields. `high_risk_threshold_percent` must be greater than
+`medium_risk_threshold_percent`. Fields listed in `locked_fields` (set via `ROS_QUOTA_*`
+env vars) cannot be updated through the API. DELETE clears per-org overrides.
+
+For platform-wide defaults without tenant overrides, use deployment
 env vars (Helm `ros.api.quotaRecommendations` on cost-onprem).
 
 | Feature | Runtime tuning |
@@ -86,7 +102,7 @@ env vars (Helm `ros.api.quotaRecommendations` on cost-onprem).
 | Snapshot | `GET/PUT .../settings/snapshot` + env locks |
 | Container, namespace, node, GPU, PVC | `GET/PUT/DELETE .../settings/thresholds?recommendation_type=...` |
 | Business hours | `.../settings/business-hours` (+ cluster/namespace overrides) |
-| **ResourceQuota (`quota`)** | **Env vars only** |
+| **ResourceQuota (`quota`)** | `GET/PUT/DELETE .../settings/quota` + env locks |
 
 Disable the feature: `ROS_DISABLED_PLUGINS=quota` or omit `quota` from `ROS_ENABLED_PLUGINS`
 (the list endpoint returns 404).

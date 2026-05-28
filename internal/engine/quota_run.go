@@ -18,7 +18,10 @@ func RunQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 
 	log := logging.ForOrg(orgID, clusterUUID)
 	appCfg := config.GetConfig()
-	cfg := QuotaRecConfigFromApp(appCfg)
+	cfg, err := ResolveQuotaRecConfig(ctx, pool, orgID)
+	if err != nil {
+		return fmt.Errorf("resolve quota settings: %w", err)
+	}
 
 	recs, err := RecommendQuotas(ctx, pool, orgID, clusterUUID, cfg)
 	if err != nil {

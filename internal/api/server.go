@@ -89,6 +89,9 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 	}
 	if !pluginRecommendationRoutesActive("quota") {
 		v1.GET("/recommendations/openshift/quota", disabledPluginRoute404("quota"))
+		v1.GET("/recommendations/openshift/settings/quota", disabledPluginRoute404("quota"))
+		v1.PUT("/recommendations/openshift/settings/quota", disabledPluginRoute404("quota"))
+		v1.DELETE("/recommendations/openshift/settings/quota", disabledPluginRoute404("quota"))
 	}
 	registerBusinessHoursRouteGuards(v1)
 }
@@ -193,6 +196,11 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/settings/idle-detection", GetIdleDetectionSettings)
 		v1.PUT("/recommendations/openshift/settings/idle-detection", PutIdleDetectionSettings)
 		v1.DELETE("/recommendations/openshift/settings/idle-detection", DeleteIdleDetectionSettings)
+		if pluginRecommendationRoutesActive("quota") {
+			v1.GET("/recommendations/openshift/settings/quota", GetQuotaSettings)
+			v1.PUT("/recommendations/openshift/settings/quota", PutQuotaSettings)
+			v1.DELETE("/recommendations/openshift/settings/quota", DeleteQuotaSettings)
+		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}
 

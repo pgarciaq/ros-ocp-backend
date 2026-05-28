@@ -108,17 +108,21 @@ expect one report cycle before tighten/raise signals fully reflect container-bas
 
 ## Configuration
 
+Thresholds resolve in three tiers (same pattern as idle detection settings):
+
+1. **Per-org DB override** — `PUT /recommendations/openshift/settings/quota` persists to
+   `recommendation_thresholds` (`recommendation_type=quota`).
+2. **Environment variables** — deployment-wide defaults; when set, the field appears in
+   `locked_fields` on GET and cannot be changed via PUT.
+3. **Compiled defaults** — 10 / 90 / 70 when no DB row and no env override.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_QUOTA_HEADROOM_PERCENT` | `10` | Extra margin on recommended quota hard values (10 → multiply sums by 1.10) |
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization ≥ 90% of hard |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below high threshold |
 
-Platform-wide env vars only (not tenant Settings API). Unlike idle detection
-(`GET/PUT .../settings/idle-detection`), snapshot settings, or per-type threshold
-overrides, quota has no runtime Settings API — change via deployment env (Helm
-`quotaRecommendations` on cost-onprem). See
-[configurability.md](../architecture/configurability.md#resourcequota) and
+See [configurability.md](../architecture/configurability.md#resourcequota) and
 [operations/configuration.md](../operations/configuration.md).
 
 Enable the plugin via `ROS_ENABLED_PLUGINS` (included in native defaults; omit `quota`
@@ -133,6 +137,14 @@ or use `ROS_DISABLED_PLUGINS=quota` to disable — API returns 404).
 - Filters: `filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[risk_level]`
 - Group by: `group_by[cluster]` or `group_by[project]` (aggregated counts and savings)
 - Requires `quota` in `ROS_ENABLED_PLUGINS`
+
+**Settings** (`GET` / `PUT` / `DELETE` `/api/cost-management/v1/recommendations/openshift/settings/quota`):
+
+- GET returns merged thresholds plus `locked_fields` for env-locked parameters.
+- PUT body: `headroom_percent` (0–100), `high_risk_threshold_percent` (1–100, must be
+  greater than medium), `medium_risk_threshold_percent` (1–99).
+- DELETE removes the per-org override; subsequent runs use env or compiled defaults.
+- Disabled when the `quota` plugin is off (404).
 
 Public reference: [docs-site feature page](../../docs-site/features/quota-recommendations.md),
 [openapi.json](../../openapi.json).

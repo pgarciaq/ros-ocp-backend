@@ -334,7 +334,8 @@ override behavior: [configurability.md](../architecture/configurability.md).
 ### ResourceQuota
 
 `ROS_QUOTA_HEADROOM_PERCENT` (default `10`), `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default `90`),
-`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default `70`). See
+`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default `70`). Per-org overrides:
+`GET/PUT/DELETE .../settings/quota`. See
 [quota-recommendations.md](../features/quota-recommendations.md).
 
 ### Snapshot
