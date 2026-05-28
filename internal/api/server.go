@@ -40,7 +40,7 @@ func registerRecommendationRoutes(v1 *echo.Group) {
 func StartAPIServer() {
 const businessHoursPluginName = "business-hours"
 
-// pluginRecommendationRoutesActive reports whether gpu/node/pvc/snapshot HTTP routes are registered:
+// pluginRecommendationRoutesActive reports whether gpu/node/pvc/snapshot/quota HTTP routes are registered:
 // those plugins omit routes entirely when Kruize owns recommendations or when the plugin is disabled.
 // The business-hours feature uses x-plugin-required "business-hours" and ROS_BUSINESS_HOURS_ENABLED.
 func pluginRecommendationRoutesActive(pluginName string) bool {
@@ -86,6 +86,9 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.GET("/recommendations/openshift/snapshots", disabledPluginRoute404("snapshot"))
 		v1.GET("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
 		v1.PUT("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
+	}
+	if !pluginRecommendationRoutesActive("quota") {
+		v1.GET("/recommendations/openshift/quota", disabledPluginRoute404("quota"))
 	}
 	registerBusinessHoursRouteGuards(v1)
 }

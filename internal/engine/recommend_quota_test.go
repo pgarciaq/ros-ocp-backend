@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestComputeQuotaRecommendation_Tighten(t *testing.T) {
@@ -86,4 +88,166 @@ func TestQuotaRecConfigFromApp(t *testing.T) {
 	assert.Equal(t, 12000, cfg.HeadroomBasisPoints)
 	assert.Equal(t, 8000, cfg.HighRiskThresholdBP)
 	assert.Equal(t, 6000, cfg.MediumRiskThresholdBP)
+}
+
+func TestQuotaRecConfigFromApp_TenPercentHeadroom(t *testing.T) {
+	cfg := QuotaRecConfigFromApp(&config.Config{QuotaHeadroomPercent: 10})
+	assert.Equal(t, 11000, cfg.HeadroomBasisPoints)
+}
+
+func TestNamespaceQuotaSnapshot_hasHardLimits(t *testing.T) {
+	assert.False(t, (NamespaceQuotaSnapshot{}).hasHardLimits())
+	assert.True(t, (NamespaceQuotaSnapshot{CPURequestHardMC: 1}).hasHardLimits())
+	assert.True(t, (NamespaceQuotaSnapshot{MemoryLimitHardBytes: 1024}).hasHardLimits())
+}
+
+func TestComputeQuotaRecommendation_Optimal(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   20000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		CPURequestHardMC: 100000,
+		CPURequestUsedMC: 10000,
+	}
+	agg := ContainerQuotaAggregate{CPURequestSumMC: 50000}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, agg, cfg)
+
+	assert.Equal(t, QuotaRecTypeOptimal, rec.RecommendationType)
+	assert.Equal(t, int64(100000), rec.Recommended.CPURequestMillicores)
+	assert.Equal(t, QuotaRiskLow, rec.RiskLevel)
+	assert.Zero(t, rec.CapacityFreed.CPUMillicores)
+}
+
+func TestComputeQuotaRecommendation_MediumRisk(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   10000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		CPURequestHardMC: 100000,
+		CPURequestUsedMC: 65000,
+	}
+	agg := ContainerQuotaAggregate{}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, agg, cfg)
+
+	assert.Equal(t, QuotaRiskMedium, rec.RiskLevel)
+	require.NotNil(t, rec.Utilization.CPURequestBP)
+	assert.Equal(t, 6500, *rec.Utilization.CPURequestBP)
+}
+
+func TestComputeQuotaRecommendation_LowRisk(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   10000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		CPURequestHardMC: 100000,
+		CPURequestUsedMC: 30000,
+	}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, ContainerQuotaAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRiskLow, rec.RiskLevel)
+}
+
+func TestComputeQuotaRecommendation_ZeroContainerAgg_OptimalNoTighten(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   12000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		CPURequestHardMC: 100000,
+		CPURequestUsedMC: 10000,
+	}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, ContainerQuotaAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRecTypeOptimal, rec.RecommendationType)
+	assert.Zero(t, rec.Recommended.CPURequestMillicores)
+	assert.Equal(t, QuotaRiskLow, rec.RiskLevel)
+}
+
+func TestComputeQuotaRecommendation_ZeroUsed_UsesAggregateForUtilization(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   10000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		CPURequestHardMC: 100000,
+	}
+	agg := ContainerQuotaAggregate{CPURequestSumMC: 85000}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, agg, cfg)
+
+	assert.Equal(t, QuotaRecTypeRaise, rec.RecommendationType)
+	require.NotNil(t, rec.Utilization.CPURequestBP)
+	assert.Equal(t, 8500, *rec.Utilization.CPURequestBP)
+}
+
+func TestClassifyQuotaRisk_NoneWhenNoUtilization(t *testing.T) {
+	cfg := QuotaRecConfig{HighRiskThresholdBP: 8000, MediumRiskThresholdBP: 6000}
+	assert.Equal(t, QuotaRiskNone, classifyQuotaRisk(QuotaUtilizationBP{}, cfg))
+}
+
+func TestMaxUtilizationBP_IgnoresNilPointers(t *testing.T) {
+	cpu := 4500
+	assert.Equal(t, 4500, maxUtilizationBP(QuotaUtilizationBP{CPURequestBP: &cpu}))
+}
+
+func TestApplyQuotaSavings_NilCostData(t *testing.T) {
+	recs := []QuotaRec{{
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 1000},
+	}}
+	ApplyQuotaSavings(recs, nil)
+	assert.Zero(t, recs[0].EstimatedSavingsCents)
+}
+
+func TestApplyQuotaSavings_TightenOnly(t *testing.T) {
+	recs := []QuotaRec{
+		{
+			RecommendationType: QuotaRecTypeTighten,
+			CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 2000, MemoryBytes: 0},
+		},
+		{
+			RecommendationType: QuotaRecTypeRaise,
+			CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 5000},
+		},
+	}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_usage_per_hour":    {Supplementary: 1.0},
+			"memory_gb_usage_per_hour":   {Supplementary: 2.0},
+		},
+	}
+	ApplyQuotaSavings(recs, cd)
+
+	// 2 cores freed * $1/core-hour * 730 h/month = $1460
+	assert.Equal(t, int64(146000), recs[0].EstimatedSavingsCents)
+	assert.Zero(t, recs[1].EstimatedSavingsCents)
+}
+
+func TestApplyQuotaSavings_MemoryFreed(t *testing.T) {
+	const gib = 1024 * 1024 * 1024
+	recs := []QuotaRec{{
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed:      QuotaCapacityFreed{MemoryBytes: 2 * gib},
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"memory_gb_usage_per_hour": {Supplementary: 1.0},
+		},
+	}
+	ApplyQuotaSavings(recs, cd)
+
+	// 2 GiB * $1/GiB-hour * 730 h = $1460
+	assert.Equal(t, int64(146000), recs[0].EstimatedSavingsCents)
 }
