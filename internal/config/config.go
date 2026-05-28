@@ -215,6 +215,11 @@ type Config struct {
 	PVCMinRecommendedGiB         int     `mapstructure:"ROS_PVC_MIN_RECOMMENDED_GIB"`
 	PVCDaysToFullAlert           int     `mapstructure:"ROS_PVC_DAYS_TO_FULL_ALERT"`
 
+	// Quota recommendation thresholds (percent values; basis points = percent * 100).
+	QuotaHeadroomPercent              int `mapstructure:"ROS_QUOTA_HEADROOM_PERCENT"`
+	QuotaHighRiskThresholdPercent     int `mapstructure:"ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
+	QuotaMediumRiskThresholdPercent   int `mapstructure:"ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
+
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
 	SnapshotOrphanAgeDays       int     `mapstructure:"ROS_SNAPSHOT_ORPHAN_AGE_DAYS"`
@@ -534,6 +539,9 @@ func initConfig() {
 	viper.SetDefault("ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER", 2)
 	viper.SetDefault("ROS_PVC_MIN_RECOMMENDED_GIB", 1)
 	viper.SetDefault("ROS_PVC_DAYS_TO_FULL_ALERT", 30)
+	viper.SetDefault("ROS_QUOTA_HEADROOM_PERCENT", 20)
+	viper.SetDefault("ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT", 80)
+	viper.SetDefault("ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT", 60)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

@@ -36,6 +36,17 @@ type NamespaceMetricRow struct {
 	MemUsageMinKiB   int64
 	MemRSSAvgKiB     int64
 	MemRSSMaxKiB     int64
+
+	// ResourceQuota hard limits (operator maps *_namespace_sum to type=hard).
+	CPURequestHardMC       int64
+	CPULimitHardMC         int64
+	MemoryRequestHardBytes int64
+	MemoryLimitHardBytes   int64
+	// ResourceQuota used consumption (optional CSV columns).
+	CPURequestUsedMC       int64
+	CPULimitUsedMC         int64
+	MemoryRequestUsedBytes int64
+	MemoryLimitUsedBytes   int64
 }
 
 // NamespaceDigestKey uniquely identifies a namespace-day and schedule stream.
@@ -76,6 +87,15 @@ type NamespaceDigestResult struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
+
+	CPURequestHardMC       int64
+	CPULimitHardMC         int64
+	MemoryRequestHardBytes int64
+	MemoryLimitHardBytes   int64
+	CPURequestUsedMC       int64
+	CPULimitUsedMC         int64
+	MemoryRequestUsedBytes int64
+	MemoryLimitUsedBytes   int64
 }
 
 type nsColumnIndex struct {
@@ -96,6 +116,10 @@ type nsColumnIndex struct {
 	memUsageMin    int
 	memRSSUsageAvg int
 	memRSSUsageMax int
+	cpuRequestUsed int
+	cpuLimitUsed   int
+	memRequestUsed int
+	memLimitUsed   int
 }
 
 func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
@@ -107,6 +131,8 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 		memRequestSum: -1, memLimitSum: -1,
 		memUsageAvg: -1, memUsageMax: -1, memUsageMin: -1,
 		memRSSUsageAvg: -1, memRSSUsageMax: -1,
+		cpuRequestUsed: -1, cpuLimitUsed: -1,
+		memRequestUsed: -1, memLimitUsed: -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -144,6 +170,14 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 			idx.memRSSUsageAvg = i
 		case "memory_rss_usage_namespace_max":
 			idx.memRSSUsageMax = i
+		case "cpu_request_namespace_used":
+			idx.cpuRequestUsed = i
+		case "cpu_limit_namespace_used":
+			idx.cpuLimitUsed = i
+		case "memory_request_namespace_used":
+			idx.memRequestUsed = i
+		case "memory_limit_namespace_used":
+			idx.memLimitUsed = i
 		}
 	}
 	required := []struct {
@@ -228,6 +262,7 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 	if err != nil {
 		return row, err
 	}
+	row.CPURequestHardMC = row.CPURequestSumMC
 	row.CPUUsageAvgMC, err = CoreToMillicores(record[idx.cpuUsageAvg])
 	if err != nil {
 		return row, err
@@ -236,6 +271,7 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 	if err != nil {
 		return row, err
 	}
+	row.MemoryRequestHardBytes = row.MemRequestSumKiB * 1024
 	row.MemUsageAvgKiB, err = BytesToKiB(record[idx.memUsageAvg])
 	if err != nil {
 		return row, err
@@ -246,6 +282,7 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 		if err != nil {
 			return row, err
 		}
+		row.CPULimitHardMC = row.CPULimitSumMC
 	}
 	if idx.cpuUsageMax >= 0 && idx.cpuUsageMax < len(record) && record[idx.cpuUsageMax] != "" {
 		row.CPUUsageMaxMC, err = CoreToMillicores(record[idx.cpuUsageMax])
@@ -276,6 +313,33 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 		if err != nil {
 			return row, err
 		}
+		row.MemoryLimitHardBytes = row.MemLimitSumKiB * 1024
+	}
+	if idx.cpuRequestUsed >= 0 && idx.cpuRequestUsed < len(record) && record[idx.cpuRequestUsed] != "" {
+		row.CPURequestUsedMC, err = CoreToMillicores(record[idx.cpuRequestUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.cpuLimitUsed >= 0 && idx.cpuLimitUsed < len(record) && record[idx.cpuLimitUsed] != "" {
+		row.CPULimitUsedMC, err = CoreToMillicores(record[idx.cpuLimitUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.memRequestUsed >= 0 && idx.memRequestUsed < len(record) && record[idx.memRequestUsed] != "" {
+		usedKiB, err := BytesToKiB(record[idx.memRequestUsed])
+		if err != nil {
+			return row, err
+		}
+		row.MemoryRequestUsedBytes = usedKiB * 1024
+	}
+	if idx.memLimitUsed >= 0 && idx.memLimitUsed < len(record) && record[idx.memLimitUsed] != "" {
+		usedKiB, err := BytesToKiB(record[idx.memLimitUsed])
+		if err != nil {
+			return row, err
+		}
+		row.MemoryLimitUsedBytes = usedKiB * 1024
 	}
 	if idx.memUsageMax >= 0 && idx.memUsageMax < len(record) && record[idx.memUsageMax] != "" {
 		row.MemUsageMaxKiB, err = BytesToKiB(record[idx.memUsageMax])
@@ -421,6 +485,8 @@ func ComputeNamespaceDigestWeighted(key NamespaceDigestKey, rows []NamespaceMetr
 		}
 	}
 
+	quotaHardUsed := computeNamespaceQuotaSnapshot(rows)
+
 	return NamespaceDigestResult{
 		Key:              key,
 		CPURequestP50MC:  cpuReqD.P50,
@@ -448,7 +514,38 @@ func ComputeNamespaceDigestWeighted(key NamespaceDigestKey, rows []NamespaceMetr
 		CPUUsageMeanMC:   cpuUseD.Mean,
 		MemUsageMeanKiB:  memUseD.Mean,
 		SampleCount:      cpuUseD.Count,
+
+		CPURequestHardMC:       quotaHardUsed.CPURequestHardMC,
+		CPULimitHardMC:         quotaHardUsed.CPULimitHardMC,
+		MemoryRequestHardBytes: quotaHardUsed.MemoryRequestHardBytes,
+		MemoryLimitHardBytes:   quotaHardUsed.MemoryLimitHardBytes,
+		CPURequestUsedMC:       quotaHardUsed.CPURequestUsedMC,
+		CPULimitUsedMC:         quotaHardUsed.CPULimitUsedMC,
+		MemoryRequestUsedBytes: quotaHardUsed.MemoryRequestUsedBytes,
+		MemoryLimitUsedBytes:   quotaHardUsed.MemoryLimitUsedBytes,
 	}
+}
+
+func computeNamespaceQuotaSnapshot(rows []NamespaceMetricRow) NamespaceDigestResult {
+	var snap NamespaceDigestResult
+	for _, r := range rows {
+		snap.CPURequestHardMC = maxInt64NS(snap.CPURequestHardMC, r.CPURequestHardMC)
+		snap.CPULimitHardMC = maxInt64NS(snap.CPULimitHardMC, r.CPULimitHardMC)
+		snap.MemoryRequestHardBytes = maxInt64NS(snap.MemoryRequestHardBytes, r.MemoryRequestHardBytes)
+		snap.MemoryLimitHardBytes = maxInt64NS(snap.MemoryLimitHardBytes, r.MemoryLimitHardBytes)
+		snap.CPURequestUsedMC = maxInt64NS(snap.CPURequestUsedMC, r.CPURequestUsedMC)
+		snap.CPULimitUsedMC = maxInt64NS(snap.CPULimitUsedMC, r.CPULimitUsedMC)
+		snap.MemoryRequestUsedBytes = maxInt64NS(snap.MemoryRequestUsedBytes, r.MemoryRequestUsedBytes)
+		snap.MemoryLimitUsedBytes = maxInt64NS(snap.MemoryLimitUsedBytes, r.MemoryLimitUsedBytes)
+	}
+	return snap
+}
+
+func maxInt64NS(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func extractNSField(rows []NamespaceMetricRow, fn func(NamespaceMetricRow) int64) []int64 {
@@ -544,14 +641,19 @@ func upsertNamespaceDigests(
 				cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
 				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
 				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
-				cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+				cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
+				cpu_request_hard_millicores, cpu_limit_hard_millicores,
+				memory_request_hard_bytes, memory_limit_hard_bytes,
+				cpu_request_used_millicores, cpu_limit_used_millicores,
+				memory_request_used_bytes, memory_limit_used_bytes
 			) VALUES (
 				$1, $2, $3, $4, $5,
 				$6, $7, $8, $9, $10,
 				$11, $12, $13, $14, $15, $16,
 				$17, $18, $19, $20, $21,
 				$22, $23, $24, $25, $26, $27,
-				$28, $29, $30
+				$28, $29, $30,
+				$31, $32, $33, $34, $35, $36, $37, $38
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET
@@ -579,7 +681,15 @@ func upsertNamespaceDigests(
 				memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
 				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
 				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
-				sample_count = EXCLUDED.sample_count`,
+				sample_count = EXCLUDED.sample_count,
+				cpu_request_hard_millicores = EXCLUDED.cpu_request_hard_millicores,
+				cpu_limit_hard_millicores = EXCLUDED.cpu_limit_hard_millicores,
+				memory_request_hard_bytes = EXCLUDED.memory_request_hard_bytes,
+				memory_limit_hard_bytes = EXCLUDED.memory_limit_hard_bytes,
+				cpu_request_used_millicores = EXCLUDED.cpu_request_used_millicores,
+				cpu_limit_used_millicores = EXCLUDED.cpu_limit_used_millicores,
+				memory_request_used_bytes = EXCLUDED.memory_request_used_bytes,
+				memory_limit_used_bytes = EXCLUDED.memory_limit_used_bytes`,
 			key.BucketDate.Format("2006-01-02"),
 			key.OrgID, key.ClusterUUID, key.Namespace, string(key.ScheduleType),
 			d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
@@ -587,6 +697,8 @@ func upsertNamespaceDigests(
 			d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
 			d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
 			d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
+			d.CPURequestHardMC, d.CPULimitHardMC, d.MemoryRequestHardBytes, d.MemoryLimitHardBytes,
+			d.CPURequestUsedMC, d.CPULimitUsedMC, d.MemoryRequestUsedBytes, d.MemoryLimitUsedBytes,
 		)
 	}
 

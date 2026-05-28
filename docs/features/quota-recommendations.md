@@ -1,11 +1,11 @@
-# Namespace & Cluster Quota Recommendations (Planned)
+# Namespace & Cluster Quota Recommendations
 
-Right-size Kubernetes **ResourceQuota** (namespace-level) and **ClusterResourceQuota**
-(cluster-level) objects based on observed usage, peak demand, and container-level
-recommendation aggregates.
+Right-size Kubernetes **ResourceQuota** (namespace-level) objects based on observed
+usage, configured hard limits, and aggregated container recommendation totals.
 
-**Status:** Not implemented. Planned as a Phase 1 plugin (`quota`, priority ~35)
-between PVC (30) and snapshot (40). See [plugin-phases.md](../architecture/plugin-phases.md).
+**Status:** Implemented. Phase 1 plugin `quota` (priority 35) between PVC (30) and
+snapshot (40). API: `GET /api/cost-management/v1/recommendations/openshift/quota/`.
+See [plugin-phases.md](../architecture/plugin-phases.md).
 
 This is distinct from the shipped **[namespace](../../docs-site/features/namespace-recommendations.md)** plugin,
 which recommends ideal CPU/memory totals from namespace usage digests. The `quota` plugin
@@ -60,49 +60,38 @@ against the same hard-limit series (and eventually `type='used'` consumption).
 
 ---
 
-## What's missing
+## What's still missing (future work)
 
 | Gap | Notes |
 |-----|-------|
-| **`type='used'` metrics** | Hard limits are collected; current **used** quota consumption is not in the ROS CSV |
-| **ClusterResourceQuota** | No `openshift_clusterresourcequota` (or equivalent) queries today |
-| **Storage / object counts** | `persistentvolumeclaims`, `services`, `configmaps`, etc. not in ROS namespace quota columns |
-| **Per-quota object identity** | Namespace CSV aggregates by namespace; multiple ResourceQuotas per namespace need name/UID dimension |
-| **Dedicated API / notifications** | No list endpoint or notification codes for quota-specific guidance |
-
-Industry gap analysis: [performance-analysis.md §23.8](../architecture/performance-analysis.md#238-priority-8-resourcequota-recommendations).
+| **ClusterResourceQuota** | No `openshift_clusterresourcequota` metrics yet |
+| **Storage / object counts** | PVC/service/configmap quota resources not in namespace CSV |
+| **Per-quota object identity** | Aggregated per namespace; multiple ResourceQuotas per namespace are not split |
+| **Notification codes** | API returns types/risk only; no Kruize-style notification catalog yet |
 
 ---
 
-## How it would work
+## How it works
 
-1. **Ingest** — Extend namespace CSV ingest (or add `quota` CSV type) to persist hard
-   and used limits per `(namespace, quota_name, resource)`.
-2. **Aggregate usage** — For each namespace, sum container recommendation outputs
-   (from the container plugin) and observed peak usage from namespace digests.
-3. **Compare** — For each quota resource:
-   - If `used` or recommended aggregate ≪ hard limit (e.g. &lt; 50%): recommend **lowering** quota (frees capacity for other teams).
-   - If `used` or recommended aggregate &gt; ~80% of hard limit: warn **quota may block scaling**; suggest raising limit or rightsizing workloads first.
-   - Apply headroom factor (e.g. 1.2–1.3× on recommended aggregate) for proposed new hard values.
-4. **Cluster scope** — Phase 2: roll up namespaces matched by ClusterResourceQuota
-   selectors and apply the same logic at cluster quota boundaries.
-5. **Savings signal** — Over-provisioned quotas contribute to **freed capacity** savings
-   (not direct dollar line items unless mapped via node/cluster effective rates); combine
-   with idle namespace waste in fleet summaries.
+1. **Ingest** — Namespace CSV columns `*_namespace_sum` map to ResourceQuota `type=hard`;
+   optional `*_namespace_used` columns map to `type=used`. Values are stored on
+   `daily_namespace_digests` (max per day).
+2. **Aggregate** — Sum container `rec_*` request/limit columns per namespace
+   (`term=medium`, `engine=cost`).
+3. **Compare (signal C)** — Utilization and risk use the **greater** of quota `used`
+   and container recommendation sums vs hard limits. Recommended hard values apply
+   headroom (default 120%, `ROS_QUOTA_HEADROOM_PERCENT=20`).
+4. **Classify** — `tighten` when recommended &lt; hard; `raise` when utilization ≥
+   high-risk threshold (default 80%); otherwise `optimal`.
+5. **Savings** — Tighten rows estimate monthly savings from freed CPU/memory capacity
+   via Koku effective rates (`estimated_savings` in API).
 
----
+Configuration: `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`,
+`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT`.
 
-## Implementation approach
-
-| Aspect | Plan |
-|--------|------|
-| **Plugin phase** | Phase 1 (Produce) — generates standalone quota recommendation rows |
-| **Priority** | ~35 (after `node`/`pvc` at 30, before `snapshot` at 40) |
-| **Dependencies** | Namespace digests + container plugin outputs (namespace plugin at 90 runs later for idle rollup; quota does not require namespace rec rows) |
-| **Operator changes** | Add `kube_resourcequota{type='used',...}` queries; optional ClusterResourceQuota metrics |
-| **Effort** | Moderate — reuse existing ingest patterns; new comparison algorithm and API surface |
-
-Execution ordering reference: [plugin-phases.md](../architecture/plugin-phases.md).
+Implementation: [`internal/plugins/quota/`](../../internal/plugins/quota/),
+[`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
+[`internal/api/handlers_quota_recs.go`](../../internal/api/handlers_quota_recs.go).
 
 ---
 

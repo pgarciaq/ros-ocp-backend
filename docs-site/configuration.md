@@ -248,6 +248,7 @@ workload-specific tuning examples, see
 | Node consolidation | `ROS_NODE_*` |
 | GPU classification | `ROS_GPU_*` |
 | PVC right-sizing | `ROS_PVC_*` |
+| ResourceQuota | `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`, `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` |
 | Snapshot staleness | `ROS_SNAPSHOT_*` |
 | Term windows | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
 | OOM feedback | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |

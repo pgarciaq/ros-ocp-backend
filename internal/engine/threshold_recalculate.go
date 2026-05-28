@@ -214,6 +214,8 @@ func defaultRecalculateCluster(ctx context.Context, pool *pgxpool.Pool, orgID, c
 		return recalculateGPUCluster(ctx, pool, orgID, clusterUUID)
 	case "pvc":
 		return recalculatePVCCluster(ctx, pool, orgID, clusterUUID)
+	case "quota":
+		return RunQuotaRecommendations(ctx, pool, orgID, clusterUUID)
 	default:
 		return fmt.Errorf("unsupported recommendation_type %q", recType)
 	}

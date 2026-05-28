@@ -154,6 +154,24 @@ func GroupByTagKey(c echo.Context) string {
 	return ""
 }
 
+// GroupByField reports whether group_by[field] was requested (value is ignored).
+func GroupByField(c echo.Context, name string) bool {
+	bracketKey := GroupByPrefix + name + "]"
+	for key := range c.QueryParams() {
+		if key == bracketKey {
+			return true
+		}
+	}
+	for _, raw := range c.QueryParams()["group_by"] {
+		for _, part := range SplitCommaValues([]string{raw}) {
+			if strings.TrimSpace(part) == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // GroupByIdleState reports whether group_by[idle_state] was requested (value is ignored).
 func GroupByIdleState(c echo.Context) bool {
 	for key := range c.QueryParams() {

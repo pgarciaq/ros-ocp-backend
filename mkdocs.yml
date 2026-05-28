@@ -75,6 +75,7 @@ nav:
       - GPU MIG Profiling: features/gpu-mig.md
       - GPU Time-Slicing: features/gpu-time-slicing.md
       - PVC Right-Sizing: features/pvc-rightsizing.md
+      - ResourceQuota: features/quota-recommendations.md
       - Snapshot Staleness: features/snapshot-staleness.md
       - Business Hours: features/business-hours.md
       - Configurable Thresholds: features/configurable-thresholds.md

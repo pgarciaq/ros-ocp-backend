@@ -28,7 +28,7 @@ and can theoretically run in parallel.
 | node | Node CPU/memory sizing recommendations |
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
-| quota (future) | ResourceQuota and ClusterResourceQuota right-sizing vs configured hard/used limits ([design](../features/quota-recommendations.md)) |
+| quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([design](../features/quota-recommendations.md)) |
 | snapshot | Staleness detection for recommendation freshness |
 | kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
 | vm (future) | OpenShift Virtualization VM rightsizing |
@@ -60,7 +60,7 @@ Cross-entity aggregation requiring a global view of all recommendations.
 ## Execution model
 
 ```
-Phase 1: [container → gpu → node → pvc → quota → snapshot → namespace]  (by Priority, then Name; `quota` future)
+Phase 1: [container → gpu → node → pvc → quota → snapshot → namespace]  (by Priority, then Name)
          ↓ barrier
 Phase 2: [java, golang, hpa, vpa, ...]  (future)
          ↓ barrier
