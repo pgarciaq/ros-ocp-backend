@@ -98,7 +98,6 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | HPA optimization | REQ-8.1 | Needs 8 new operator queries; low customer demand |
 | Ephemeral storage | REQ-8.2 | cadvisor metrics unreliable through OCP 4.21; pending upstream fix |
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
-| ClusterResourceQuota recs | REQ-8.4 | Namespace **ResourceQuota** shipped via `quota` plugin; ClusterResourceQuota and per-quota object identity still future — see [quota-recommendations.md](features/quota-recommendations.md) |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
 | Cloud instance catalog | REQ-8c.6 | External API integration (AWS/Azure/GCP pricing); required for MachineSet Tier 2 |
@@ -584,8 +583,25 @@ The **`quota`** plugin (Phase 1, priority 35) compares ResourceQuota **hard** an
 API: `GET /api/cost-management/v1/recommendations/openshift/quota/`. See
 [quota-recommendations.md](features/quota-recommendations.md).
 
-**Still future:** ClusterResourceQuota metrics, storage/pod/object-count quota resources,
-and per-ResourceQuota object identity when multiple quotas exist in one namespace.
+**Still future (namespace quota):** Storage/pod/object-count quota resources and per-ResourceQuota
+object identity when multiple quotas exist in one namespace.
+
+### ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
+
+The **`cluster-quota`** plugin (Phase 1, priority 36) ingests
+`ros-openshift-cluster-quota-*.csv`, compares CRQ hard/used to aggregated namespace quota
+recommendation totals, and exposes
+`GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`. See
+[cluster-resource-quota.md](features/cluster-resource-quota.md).
+
+**One-cycle lag:** Same as namespace quota — CRQ recommendations read namespace quota and
+container data from PostgreSQL, not in-memory from the same payload. If only the cluster-quota
+CSV arrives in a cycle, recommended-hard sums may reflect the **previous** namespace quota run
+until container and namespace/quota processing complete. Expect one report cycle after first
+deployment for signals to fully align.
+
+**Still future (CRQ v1 gaps):** Per-CRQ namespace selector membership for recommended-hard sums;
+selector labels in API; storage/pod/object-count CRQ resources.
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 

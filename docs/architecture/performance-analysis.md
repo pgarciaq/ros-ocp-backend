@@ -2580,7 +2580,7 @@ Additional gaps: `openshift_clusterresourcequota`, storage/pod quota resources, 
 **Implementation:** Shipped — Phase 1 `quota` plugin, `quota_recommendation_sets`, `GET .../quota/`; see [plugin-phases.md](plugin-phases.md).
 
 **Remaining effort:** ClusterResourceQuota metrics, per-quota object identity, notification codes.
-See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for the CRQ design (separate
+See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for implemented CRQ support (separate
 `openshift_clusterresourcequota_*` metrics, new CSV, `cluster-quota` plugin).
 
 ---

@@ -28,7 +28,8 @@ and can theoretically run in parallel.
 | node | Node CPU/memory sizing recommendations |
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
-| quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([design](../features/quota-recommendations.md)) |
+| quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([quota-recommendations.md](../features/quota-recommendations.md)) |
+| cluster-quota | OpenShift ClusterResourceQuota right-sizing from `openshift_clusterresourcequota_*` metrics ([cluster-resource-quota.md](../features/cluster-resource-quota.md)) |
 | snapshot | Staleness detection for recommendation freshness |
 | kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
 | vm (future) | OpenShift Virtualization VM rightsizing |
@@ -60,7 +61,7 @@ Cross-entity aggregation requiring a global view of all recommendations.
 ## Execution model
 
 ```
-Phase 1: [container → gpu → node → pvc → quota → snapshot → namespace]  (by Priority, then Name)
+Phase 1: [container → gpu → node → pvc → quota → cluster-quota → snapshot → namespace]  (by Priority, then Name)
          ↓ barrier
 Phase 2: [java, golang, hpa, vpa, ...]  (future)
          ↓ barrier
@@ -99,6 +100,7 @@ All production plugins today use Phase 1 via embedded [`BasePlugin`](../../inter
 | node | 1 | 30 | Independent; ingest hook after container CSV |
 | pvc | 1 | 30 | Independent; owns storage CSV ingest |
 | quota | 1 | 35 | After PVC ingest; compares quota hard/used limits to namespace usage and container rec aggregates |
+| cluster-quota | 1 | 36 | After namespace `quota`; ingests CRQ CSV; compares CRQ hard/used to namespace quota rec aggregates |
 | snapshot | 1 | 40 | Reads recommendation freshness after core recommendations exist |
 | example (`_example`) | 1 | 50 | Template default (`BasePlugin`); always disabled in production |
 | namespace | 1 | 90 | Aggregates namespace idle after container/GPU (and related) rows exist |
@@ -175,7 +177,6 @@ documented here so phase and priority slots stay stable when implementations lan
 | machineset | 3 | (TBD) | Node pool right-sizing |
 
 See [performance-analysis.md §23](performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
-for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota
-recommendations are implemented — see [quota-recommendations.md](../features/quota-recommendations.md);
-ClusterResourceQuota remains future work — design:
-[cluster-resource-quota.md](../features/cluster-resource-quota.md) (proposed `cluster-quota` plugin, priority 36).
+for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota and ClusterResourceQuota recommendations are implemented — see
+[quota-recommendations.md](../features/quota-recommendations.md) and
+[cluster-resource-quota.md](../features/cluster-resource-quota.md).

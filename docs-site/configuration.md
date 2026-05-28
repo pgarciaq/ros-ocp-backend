@@ -253,6 +253,26 @@ See [ResourceQuota Recommendations](features/quota-recommendations.md) and
 
 ---
 
+## ClusterResourceQuota Recommendations
+
+OpenShift **ClusterResourceQuota** tuning via the `cluster-quota` plugin. Thresholds resolve per
+organization from the Settings API, then env vars, then compiled defaults.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `10` | Margin on recommended CRQ hard values |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | Triggers `raise` and `high` risk |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk band |
+
+**Settings API:** `GET` / `PUT` / `DELETE`
+`/api/cost-management/v1/recommendations/openshift/settings/cluster-quota`
+
+**List API:** `GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`
+
+See [ClusterResourceQuota Recommendations](features/cluster-resource-quota.md).
+
+---
+
 ## Engine Thresholds
 
 Platform-wide defaults for recommendation algorithms. When set, they **lock**
@@ -268,6 +288,7 @@ workload-specific tuning examples, see
 | GPU classification | `ROS_GPU_*` |
 | PVC right-sizing | `ROS_PVC_*` |
 | ResourceQuota | `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`, `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` |
+| ClusterResourceQuota | `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT`, `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`, `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` |
 | Snapshot staleness | `ROS_SNAPSHOT_*` |
 | Term windows | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
 | OOM feedback | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |

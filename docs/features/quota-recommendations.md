@@ -151,11 +151,15 @@ Public reference: [docs-site feature page](../../docs-site/features/quota-recomm
 
 ---
 
-## Future work
+## Related: ClusterResourceQuota
+
+OpenShift team/tenant quotas are implemented separately via the **`cluster-quota`** plugin.
+See [cluster-resource-quota.md](cluster-resource-quota.md) for API, operator CSV, and configuration.
+
+## Future work (namespace quota)
 
 | Gap | Notes |
 |-----|-------|
-| **ClusterResourceQuota** | Design: [cluster-resource-quota.md](cluster-resource-quota.md); no operator metrics yet |
 | **Storage / object counts** | PVC/service/configmap quota resources not in namespace CSV |
 | **Per-quota object identity** | Aggregated per namespace; multiple ResourceQuotas per namespace are not split |
 | **Notification codes** | API returns types/risk only; no Kruize-style notification catalog yet |
@@ -167,5 +171,5 @@ Public reference: [docs-site feature page](../../docs-site/features/quota-recomm
 - [Namespace Quota Optimization](../../docs-site/features/namespace-recommendations.md) — usage-based namespace sizing
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — phase and priority table
 - [REQ-8.4](../architecture/requirements.md) — requirements traceability
-- [ClusterResourceQuota recommendations (design)](cluster-resource-quota.md) — next evolution
+- [ClusterResourceQuota recommendations](cluster-resource-quota.md) — `cluster-quota` plugin
 - [Known issues](../known-issues.md) — ClusterResourceQuota and remaining gaps

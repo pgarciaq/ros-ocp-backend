@@ -165,7 +165,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | F35 | **Ephemeral storage recommendations** | Right-size ephemeral storage requests/limits. | 8 | REQ-8.2 | Yes (4 queries) | Active (informational only) | **NO** | **Net-new** — No ephemeral storage recommendations in legacy pipeline. | OFF by default (`ROS_ENABLE_EPHEMERAL_STORAGE=false`). cadvisor metrics unreliable through OCP 4.21. Pending upstream fix. |
 | F36 | **Node.js heap advisory** | Detect Node.js via `nodejs_version_info`. Emit "set `--max-old-space-size` to 75% of mem limit" notification. | 8 | REQ-8.3 | Yes (1 query) | Active (informational only) | **NO** | **Net-new** — No Node.js runtime recommendations in legacy pipeline. | Weakest recommendation type. OFF by default (`ROS_ENABLE_NODEJS_RECS=false`). No actionable numeric value. |
 | F37 | **ResourceQuota recommendations** | Aggregate container recs within namespace vs quota hard limits. Flag over-/under-provisioned quotas. | 8 | REQ-8.4 | Yes (2 queries) | Active | **YES** | **`quota` plugin** — `GET .../quota/`; see [quota-recommendations.md](../features/quota-recommendations.md). | — |
-| F37b | **ClusterResourceQuota recommendations** | OpenShift-only: right-size team/tenant CRQ hard limits from `openshift_clusterresourcequota_*` metrics and aggregated namespace/container signals. | 8 | REQ-8.4b | Yes (8+ queries, new CSV) | Planned | **NO** | **`cluster-quota` plugin (proposed)** — `GET .../cluster-quota/`; design [cluster-resource-quota.md](../features/cluster-resource-quota.md). | Requires OCP + openshift-state-metrics. Clusters without CRQs: no rows, no errors. |
+| F37b | **ClusterResourceQuota recommendations** | OpenShift-only: right-size team/tenant CRQ hard limits from `openshift_clusterresourcequota_*` metrics and aggregated namespace quota signals. | 8 | REQ-8.4b | Yes (8+ queries, new CSV) | Active | **YES** | **`cluster-quota` plugin** — `GET .../cluster-quota/`; see [cluster-resource-quota.md](../features/cluster-resource-quota.md). | Requires OCP + openshift-state-metrics. Clusters without CRQs: no rows, no errors. |
 
 ### VM Recommendations
 
@@ -1491,36 +1491,28 @@ persists `quota_recommendation_sets`; exposes `GET /api/cost-management/v1/recom
 
 **Future (namespace quota):** Storage/pod quota resources, per-quota object identity (multiple ResourceQuotas per namespace).
 
-### REQ-8.4b: ClusterResourceQuota recommendations [MEDIUM] — PLANNED
+### REQ-8.4b: ClusterResourceQuota recommendations [MEDIUM] — IMPLEMENTED
 
 **Source:** Analysis §23.8, extension of REQ-8.4. **Design:** [cluster-resource-quota.md](../features/cluster-resource-quota.md).
 
-**Scope:** OpenShift `ClusterResourceQuota` only (`quota.openshift.io/v1`). Per-cluster object;
-selects namespaces by label/annotation selector; aggregates hard/used like ResourceQuota.
+**Shipped:** Phase 1 `cluster-quota` plugin (priority 36). Operator emits
+`ros-openshift-cluster-quota-*.csv`; ROS ingests `daily_cluster_quota_digests`, runs
+`RunClusterQuotaRecommendations`, persists `cluster_quota_recommendation_sets`; exposes
+`GET /api/cost-management/v1/recommendations/openshift/cluster-quota/` and
+`GET/PUT/DELETE .../settings/cluster-quota`.
 
-**Requirements:**
+**Algorithm (implemented):**
 
-1. **Operator (Phase A):** Collect `openshift_clusterresourcequota_usage` for
-   `requests.cpu`, `limits.cpu`, `requests.memory`, `limits.memory` (`type=hard|used`).
-   Do **not** use `kube_resourcequota` for CRQ aggregates.
-2. **Operator (Phase A):** Emit a **separate** ROS CSV keyed by `cluster_resource_quota` name
-   (not extend namespace CSV grain).
-3. **Operator (Phase A):** Optional: `openshift_clusterresourcequota_selector` and
-   `openshift_clusterresourcequota_namespace_usage` for selector labels and matched namespace count.
-4. **Backward compatibility:** If no CRQ metrics exist, omit CRQ report; ros-ocp-backend produces
-   zero recommendations without error.
-5. **Backend (Phase B–C):** Ingest CRQ snapshots; `cluster-quota` plugin (priority 36, after `quota`);
-   table `cluster_quota_recommendation_sets`; API `GET .../recommendations/openshift/cluster-quota/`.
-6. **Algorithm (Phase C):** Reuse namespace quota classification (tighten/raise/optimal/none, risk bands).
-   Recommended hard: sum of namespace quota recommendations (or container sums) for namespaces under the CRQ.
-   Utilization: max(CRQ used, aggregated workload signal) vs CRQ hard.
-7. **FinOps:** Support filters by cluster, CRQ name, recommendation_type, risk_level; document that
-   CRQ vs namespace savings must not be double-counted in fleet totals.
+1. Load latest CRQ hard/used per `cluster_quota_name` from digests.
+2. Aggregate namespace `quota_recommendation_sets` cluster-wide for v1 recommended-hard sums.
+3. Reuse namespace quota classification (`tighten` / `raise` / `optimal` / `none`, risk bands).
+4. Utilization: max(CRQ used, recommended sums) vs CRQ hard per resource.
+5. Optional monthly savings on `tighten` when cost integration is enabled.
 
-**Dependencies:** Namespace `quota` plugin recommended but not strictly required if aggregating from
-container `recommendation_sets` + CRQ namespace membership.
+**Backward compatibility:** Clusters without CRQs produce zero rows without error.
 
-**Not in v1:** Storage/pod/object-count CRQ resources; overlapping CRQ deduplication UI.
+**Still future (v1 gaps):** Per-CRQ namespace membership for recommended-hard sums; selector labels
+in API; storage/pod/object-count CRQ resources; overlapping CRQ deduplication in fleet totals.
 
 ---
 
@@ -3422,7 +3414,7 @@ Risks identified during the 2026-03-26 review, with their resolutions.
 | REQ-8.1 HPA optimization | §23.3 | 8 | High | Yes | No | Yes |
 | REQ-8.2 Ephemeral storage | §23.6 | 8 | Low (informational, pending cadvisor fix) | Yes | No | Yes |
 | REQ-8.3 Node.js heap | §23.7 | 8 | Low (informational only) | Yes | No | Yes |
-| REQ-8.4 ResourceQuota | §23.8 | 8 | Medium | Yes | Yes | Partial (CRQ future) |
+| REQ-8.4 ResourceQuota | §23.8 | 8 | Medium | Yes | Yes | Yes (namespace + CRQ) |
 | REQ-9.1 JVM detection | §18 | 9 | High | Yes (optional) | No | No |
 | REQ-9.2 MaxRAMPercentage | §18 | 9 | High | No | No | Yes |
 | REQ-9.3 GC policy | §18 | 9 | High | No | No | Yes |

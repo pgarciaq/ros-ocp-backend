@@ -271,6 +271,25 @@ one-cycle lag, and API fields.
 
 ---
 
+## ClusterResourceQuota
+
+OpenShift **ClusterResourceQuota** recommendations (`cluster-quota` plugin). Compares CRQ
+hard/used from the cluster-quota ROS CSV against aggregated namespace quota recommendation
+totals. Tenant overrides via `GET/PUT/DELETE /settings/cluster-quota`; env vars lock fields.
+
+| Env var | Default | Type | Description | Tenant-configurable | Status |
+|---------|---------|------|-------------|---------------------|--------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | 10 | int | Headroom on recommended CRQ hard limits (same semantics as `ROS_QUOTA_HEADROOM_PERCENT`). | Yes* | New |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 90 | int | High utilization / `raise` signal vs CRQ hard. | Yes* | New |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 70 | int | Medium risk band. | Yes* | New |
+
+\* Configurable via `PUT /settings/cluster-quota` unless the matching `ROS_CLUSTER_QUOTA_*` env var is set (field locked).
+
+See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for ingestion timing,
+one-cycle lag (same as namespace quota), and API fields.
+
+---
+
 ## Snapshot
 
 VolumeSnapshot staleness classification. Snapshot thresholds are tenant-configurable

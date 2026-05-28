@@ -14,6 +14,7 @@ internal/plugins/
 ├── node/                 ← Node sizing and utilization
 ├── pvc/                  ← PVC storage right-sizing
 ├── quota/                ← ResourceQuota hard-limit recommendations
+├── cluster-quota/        ← ClusterResourceQuota team-pool recommendations
 ├── namespace/            ← Namespace usage-based sizing
 ├── snapshot/             ← VolumeSnapshot staleness
 ├── kruize/               ← Legacy engine (mutual-exclusive)
@@ -29,6 +30,7 @@ internal/plugins/
 | node | | ✓ | ✓ | | ✓ | ✓ (max 90d) |
 | pvc | ✓ | | ✓ | | ✓ | ✓ (max 365d) |
 | quota | | ✓ | ✓ | | ✓ | |
+| cluster-quota | ✓ | | ✓ | | ✓ | |
 | namespace | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | snapshot | ✓ | | ✓ | | | |
 | kruize | | | | | | |

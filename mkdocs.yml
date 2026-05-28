@@ -76,6 +76,7 @@ nav:
       - GPU Time-Slicing: features/gpu-time-slicing.md
       - PVC Right-Sizing: features/pvc-rightsizing.md
       - ResourceQuota Recommendations: features/quota-recommendations.md
+      - ClusterResourceQuota Recommendations: features/cluster-resource-quota.md
       - Snapshot Staleness: features/snapshot-staleness.md
       - Business Hours: features/business-hours.md
       - Configurable Thresholds: features/configurable-thresholds.md
@@ -103,6 +104,7 @@ nav:
       - node: api-reference/node.md
       - pvc: api-reference/pvc.md
       - quota: api-reference/quota.md
+      - cluster-quota: api-reference/cluster-quota.md
       - namespace: api-reference/namespace.md
       - snapshot: api-reference/snapshot.md
       - kruize: api-reference/kruize.md

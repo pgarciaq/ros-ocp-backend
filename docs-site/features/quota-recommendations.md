@@ -14,8 +14,8 @@ namespace CPU/memory totals from usage digests. The `quota` plugin tunes **exist
 ResourceQuota objects against container rightsizing output and optional `kube_resourcequota`
 used metrics.
 
-**ClusterResourceQuota** (OpenShift multi-namespace quotas) is not supported yet.
-Design: [`docs/features/cluster-resource-quota.md`](../../docs/features/cluster-resource-quota.md).
+**ClusterResourceQuota** (OpenShift multi-namespace quotas) is implemented by the
+**`cluster-quota`** plugin — see [ClusterResourceQuota Recommendations](cluster-resource-quota.md).
 
 ---
 

@@ -15,6 +15,7 @@ ROS-OCP Backend receives metric reports from the [koku-metrics-operator](https:/
 | **node** | Node sizing | Node over/under-provisioning, consolidation opportunities |
 | **pvc** | Storage | PVC capacity right-sizing using growth trend projection |
 | **quota** | ResourceQuota | Right-size namespace ResourceQuota hard limits vs usage and container recs |
+| **cluster-quota** | ClusterResourceQuota | Right-size OpenShift ClusterResourceQuota team pools vs namespace quota recs |
 | **namespace** | Quotas | Namespace-level CPU/memory sizing from usage digests |
 | **snapshot** | VolumeSnapshots | Stale snapshot detection |
 

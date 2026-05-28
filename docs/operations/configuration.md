@@ -338,6 +338,16 @@ override behavior: [configurability.md](../architecture/configurability.md).
 `GET/PUT/DELETE .../settings/quota`. See
 [quota-recommendations.md](../features/quota-recommendations.md).
 
+### ClusterResourceQuota
+
+`ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` (default `10`),
+`ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` (default `90`),
+`ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default `70`). Per-org overrides:
+`GET/PUT/DELETE .../settings/cluster-quota`. API list:
+`GET .../recommendations/openshift/cluster-quota/`. Requires `cluster-quota` in
+`ROS_ENABLED_PLUGINS`. See
+[cluster-resource-quota.md](../features/cluster-resource-quota.md).
+
 ### Snapshot
 
 `ROS_SNAPSHOT_ORPHAN_AGE_DAYS`, `ROS_SNAPSHOT_NEVER_RESTORED_DAYS`,
