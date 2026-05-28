@@ -180,6 +180,11 @@ namespace API filters. CRQ needs `(org_id, cluster_uuid, crq_name)` and selector
 
 **Preferred:** `cluster_quota_recommendation_sets` (name TBD in implementation).
 
+Headroom and risk thresholds are **not** columns on this table — they are resolved at
+runtime from [Configuration](#configuration) (per-org DB → env → defaults), same as how
+operators should treat new CRQ tables vs the legacy `headroom_basis_points` snapshot on
+namespace `quota_recommendation_sets`.
+
 ```sql
 -- Illustrative — not migrated yet
 CREATE TABLE cluster_quota_recommendation_sets (
@@ -206,7 +211,6 @@ CREATE TABLE cluster_quota_recommendation_sets (
     memory_request_recommended_bytes BIGINT,
     memory_limit_recommended_bytes BIGINT,
 
-    headroom_basis_points INT NOT NULL DEFAULT 12000,
     cpu_request_utilization_bp INT,
     cpu_limit_utilization_bp INT,
     memory_request_utilization_bp INT,
@@ -283,10 +287,10 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 }
 ```
 
-**Settings API (Phase D):** Either extend
-`/recommendations/openshift/settings/quota` with `scope=cluster` or add
-`/settings/cluster-quota` sharing the same threshold keys (`headroom_percent`,
-`high_risk_threshold_percent`, `medium_risk_threshold_percent`).
+**Settings API:** `GET` / `PUT` / `DELETE`
+`/api/cost-management/v1/recommendations/openshift/settings/cluster-quota`
+(separate endpoint — not shared with namespace quota; matches the separate
+`cluster-quota` plugin). See [Configuration](#configuration) below.
 
 **Plugin gate:** `cluster-quota` in `ROS_ENABLED_PLUGINS`; 404 when disabled (same as `quota`).
 
@@ -329,6 +333,79 @@ container recs for namespaces matched to each CRQ (requires namespace membership
 
 ---
 
+## Configuration
+
+Thresholds resolve in three tiers (same pattern as namespace quota and idle detection):
+
+1. **Per-org DB override** — `PUT .../settings/cluster-quota` persists to
+   `recommendation_thresholds` (`recommendation_type=cluster-quota`).
+2. **Environment variables** — deployment-wide defaults; when set, the field appears in
+   `locked_fields` on GET and cannot be changed via PUT (403).
+3. **Compiled defaults** — 10 / 90 / 70 when no DB row and no env override.
+
+### Environment variables (instance-wide defaults)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `10` | Extra margin on recommended CRQ hard values (10 → multiply sums by 1.10) |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization ≥ 90% of hard |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below high threshold |
+
+Distinct `ROS_CLUSTER_QUOTA_*` prefix avoids confusion with namespace `ROS_QUOTA_*` vars.
+
+### Settings API (per-org override)
+
+`GET` / `PUT` / `DELETE`
+`/api/cost-management/v1/recommendations/openshift/settings/cluster-quota`
+
+Requires `cluster-quota` in `ROS_ENABLED_PLUGINS` (404 when disabled).
+
+**Request/response shape** (same as namespace quota settings):
+
+```json
+{
+  "headroom_percent": 10,
+  "high_risk_threshold_percent": 90,
+  "medium_risk_threshold_percent": 70,
+  "locked_fields": []
+}
+```
+
+**Validation** (same rules as namespace quota):
+
+- `headroom_percent`: integer 0–100
+- `high_risk_threshold_percent`: integer 1–100, must be greater than `medium_risk_threshold_percent`
+- `medium_risk_threshold_percent`: integer 1–99
+- PUT on a field listed in `locked_fields` (env override) → **403**
+
+DELETE removes the per-org override; subsequent runs use env or compiled defaults.
+
+### Rationale
+
+| Decision | Why |
+|----------|-----|
+| Same defaults (10 / 90 / 70) as namespace quota | Both features tune quota utilization with identical risk semantics |
+| Separate settings endpoint | Separate `cluster-quota` plugin → separate route; consistent with plugin architecture |
+| `ROS_CLUSTER_QUOTA_*` env prefix | Operators can set cluster-wide CRQ defaults without colliding with `ROS_QUOTA_*` |
+| Headroom not stored per recommendation row | Thresholds are resolved at runtime from settings; only utilization and outcomes are persisted |
+
+### Helm values (cost-onprem-chart)
+
+When implemented, the chart will expose instance defaults under `ros.api`:
+
+```yaml
+ros:
+  api:
+    clusterQuotaRecommendations:
+      headroomPercent: 10
+      highRiskThresholdPercent: 90
+      mediumRiskThresholdPercent: 70
+```
+
+Maps to `ROS_CLUSTER_QUOTA_*` environment variables on the ROS API deployment.
+
+---
+
 ## Recommendation algorithm (Phase C)
 
 Reuse namespace quota classification from
@@ -338,7 +415,8 @@ Reuse namespace quota classification from
 2. Build `recommended` bundle:
    - **v1 default:** `SUM(namespace quota_recommended_*)` for namespaces in CRQ.
    - **Utilization:** `max(crq_used, sum(namespace recommended or used))` vs `crq_hard` per resource.
-3. Apply same `tighten` / `raise` / `optimal` / `none` and risk bands (shared config).
+3. Apply same `tighten` / `raise` / `optimal` / `none` and risk bands (CRQ settings from
+   [Configuration](#configuration) — not stored per row).
 4. **Savings on `tighten`:** Freed CRQ capacity × cluster effective rates (same as namespace quota).
 
 **Open question — savings double-counting:** Fleet dashboards summing namespace + CRQ savings
@@ -354,7 +432,7 @@ will over-count. API docs should state: CRQ savings are **team-pool** view; name
 | **A — Operator** | koku-metrics-operator | PromQL for `openshift_clusterresourcequota_usage` (+ optional selector/count); new CSV; tests; report-fields doc |
 | **B — Ingest** | ros-ocp-backend | Listener/report type; ingest → `daily_cluster_quota_digests` or direct snapshot; backward compat when file absent |
 | **C — Engine + API** | ros-ocp-backend | `cluster-quota` plugin; `recommend_cluster_quota.go`; `cluster_quota_recommendation_sets`; `GET .../cluster-quota/` |
-| **D — Polish** | ros-ocp-backend | Settings API, OpenAPI, docs-site, IQE fixtures, unit/integration tests |
+| **D — Polish** | ros-ocp-backend | Settings API (`GET/PUT/DELETE .../settings/cluster-quota`), `ROS_CLUSTER_QUOTA_*` env wiring, OpenAPI, docs-site, cost-onprem-chart Helm values, IQE fixtures, unit/integration tests |
 
 ---
 
@@ -384,6 +462,8 @@ will over-count. API docs should state: CRQ savings are **team-pool** view; name
 | DB table | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` (proposed) |
 | Plugin | `quota` (shipped) | `cluster-quota` (proposed) |
 | API | `GET .../quota/` | `GET .../cluster-quota/` |
+| Settings API | `GET/PUT/DELETE .../settings/quota` | `GET/PUT/DELETE .../settings/cluster-quota` |
+| Env vars | `ROS_QUOTA_*` | `ROS_CLUSTER_QUOTA_*` |
 | Status | **Implemented** | **Design** |
 
 ---
