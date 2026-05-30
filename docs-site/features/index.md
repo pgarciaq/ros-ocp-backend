@@ -22,6 +22,7 @@ dollar impact using Koku cost model rates.
 | Configurable Thresholds | all | all | N/A | Yes |
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
+| Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
 
 ## All feature pages
 
@@ -43,6 +44,7 @@ dollar impact using Koku cost model rates.
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
+| [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
 
 ## Capabilities
 
@@ -101,6 +103,12 @@ OpenShift labels synced from Koku (`filter[tag:key]=value`).
 no usage (zombie vs idle), estimate full monthly waste, and filter with
 `filter[idle_state]=zombie,idle` — distinct from rightsizing savings.
 
+**[Seasonality & Proactive Recommendations](seasonality.md)** — *Planned.* Detect
+recurring peaks in daily usage history, forecast upcoming demand with
+[Augurs](https://github.com/grafana/augurs), and warn operators days before
+predictable spikes (month-end batch, weekly surges, holiday traffic). See the
+internal design: [`docs/design/seasonality-plugin.md`](../../../docs/design/seasonality-plugin.md).
+
 ## Planned recommendation types
 
 Not yet implemented; phase and priority slots are reserved in
@@ -108,6 +116,7 @@ Not yet implemented; phase and priority slots are reserved in
 
 | Type | Phase | Description |
 |------|-------|-------------|
+| Seasonality (detector / forecast / proactive) | 1–3 | Learned periodicity → proactive quota/node/container guidance |
 | VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
 | Instance type | 1 | Cloud instance optimization for worker nodes |
 | Java / JVM | 2 | Heap, GC, thread pool tuning from container memory recs |

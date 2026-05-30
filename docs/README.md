@@ -10,6 +10,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [design/seasonality-plugin.md](design/seasonality-plugin.md) | **Planned** — Seasonality detection, Augurs forecasting, proactive recommendations |
 | [requirements.md](architecture/requirements.md) | Master requirements document — 60 features, 87 REQs, database schema, phasing strategy, deployment model |
 | [plugin-architecture.md](architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
 | [recommendation-engines.md](architecture/recommendation-engines.md) | Plugin thresholds, percentiles, terms, and engine behavior |

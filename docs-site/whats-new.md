@@ -51,6 +51,15 @@ first production-ready native engine release.
 
 - **OpenAPI specification** — Contract-tested REST API under `/api/cost-management/v1/recommendations/openshift/`. See [OpenAPI](openapi.md).
 
+## Coming soon
+
+- **[Seasonality & proactive recommendations](features/seasonality.md)** — Learn
+  weekly, monthly, and annual usage patterns from historical daily digests;
+  forecast upcoming peaks with [Augurs](https://github.com/grafana/augurs); emit
+  forward-looking guidance (for example, "in 7 days, raise namespace CPU quota
+  before the month-end batch spike"). **Status: planned / future work.** Technical
+  design: [`docs/design/seasonality-plugin.md`](../docs/design/seasonality-plugin.md).
+
 ## Getting started
 
 - [Quick Start Tutorial](quickstart.md) — Clone to first API response
