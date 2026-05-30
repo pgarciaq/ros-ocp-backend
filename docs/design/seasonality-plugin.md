@@ -384,6 +384,72 @@ Infrastructure metrics are **structured and periodic**; classical methods often 
 
 **Future option:** Optional **premium sidecar** (Python + GPU) for tenants with complex, weakly periodic workloads — not in v1 scope.
 
+---
+
+## GPU-Accelerated Tier (Optional)
+
+> **Implementation order:** The default path below (Augurs only, no GPU) is what we expect to ship first. The GPU tier is an **optional** add-on for SaaS or on-prem clusters that already run GPU hardware and want higher accuracy on irregular workloads.
+
+When GPUs are available (managed SaaS or on-prem with NVIDIA-capable nodes), a **tiered architecture** becomes viable without replacing the primary recommendation:
+
+| Tier | Runtime | When used | Role |
+|------|---------|-----------|------|
+| **Tier 1 (default)** | Augurs (Rust) | All entities after minimum history | Handles **80%+** of workloads — weekly/monthly cycles, PVC growth, namespace aggregates |
+| **Tier 2 (opt-in, GPU)** | Chronos-2 (Amazon, Apache 2.0) | Residual variance above threshold **and** GPU enabled | Complex or irregular patterns where classical decomposition leaves high unexplained variance |
+
+### Why Chronos-2 over Moirai / TimesFM
+
+| Criterion | Chronos-2 | Moirai / TimesFM |
+|-----------|-----------|------------------|
+| License | Apache 2.0 | Various (research / restrictive) |
+| Model sizes | `mini` → `large` (latency/cost tradeoff) | Typically single large checkpoint |
+| Zero-shot | Yes — no per-entity training | Yes |
+| Multi-variate | Native support for correlated metrics | Varies by model |
+| Operational fit | Sidecar batch inference on flagged series only | Full-fleet inference is costly |
+
+Moirai and TimesFM remain useful for **offline benchmarking** during development; they are not the planned production GPU tier.
+
+### Why not GPU-only
+
+1. **Cost** — Running a transformer over ~200k container-level series (even a subset) is roughly **$2–5/hr** in cloud GPU time; namespace-level defaults reduce cardinality but Tier 2 still targets the hardest cases only.
+2. **Signal** — Most OpenShift usage is **simple periodicity** (weekly login surge, month-end batch); Augurs MSTL/ETS matches or beats transformers at far lower CPU and no extra infrastructure.
+3. **Dependency** — GPU-only seasonality hard-requires NVIDIA nodes, drivers, and chart changes; unsuitable as the default for cost-onprem and air-gapped SNO.
+
+### Configuration (GPU tier)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_SEASONALITY_GPU_ENABLED` | `false` | Enable Tier 2 Chronos-2 sidecar path |
+| `ROS_SEASONALITY_GPU_MODEL` | `chronos-2-mini` | Model size (`mini`, `small`, `base`, `large`) |
+| `ROS_SEASONALITY_GPU_THRESHOLD` | `0.3` | Minimum residual variance (post-MSTL) to flag an entity for Tier 2 |
+
+Tier 1 env vars (`ROS_SEASONALITY_ENABLED`, confidence, horizon, scope, retention) apply unchanged; GPU settings are ignored when `ROS_SEASONALITY_GPU_ENABLED=false`.
+
+### Tiered flow (architecture)
+
+```mermaid
+flowchart TB
+  TS[(seasonal_time_series)]
+  SD[seasonality-detector<br/>Augurs MSTL + ACF]
+  TS --> SD
+  SD -->|low residual| P1[seasonal_patterns<br/>Tier 1]
+  SD -->|residual ≥ threshold<br/>AND GPU enabled| FLAG[Flag for Tier 2]
+  FLAG --> C2[Chronos-2 sidecar<br/>batch inference]
+  C2 --> P2[seasonal_patterns<br/>Tier 2 metadata]
+  P1 --> SF[seasonality-forecast]
+  P2 --> SF
+  SF -->|ETS / Augurs| F1[Forecast Tier 1]
+  SF -->|Chronos-2 horizon| F2[Forecast Tier 2]
+  F1 --> PS[seasonality-proactive]
+  F2 --> PS
+  PS --> API[proactive_recommendations[]]
+  RECS[Reactive plugin outputs] --> PS
+```
+
+- **`seasonality-detector`:** Always runs Augurs MSTL on Tier 1 path. If normalized residual variance ≥ `ROS_SEASONALITY_GPU_THRESHOLD` and `ROS_SEASONALITY_GPU_ENABLED=true`, enqueue entity/metric for Chronos-2 refinement (pattern confirmation + updated confidence).
+- **`seasonality-forecast`:** Tier 1 uses Augurs ETS (and linear growth for PVC metrics). Tier 2 uses Chronos-2 multi-step forecast for flagged series only; results share the same enrichment schema (`upcoming_peak_date`, confidence, horizon).
+- **`seasonality-proactive`:** Consumes forecasts **regardless of tier** — no API change for UI; optional `forecast_tier` field in JSON for support/debug.
+
 ### Augurs integration paths
 
 | Approach | Pros | Cons |

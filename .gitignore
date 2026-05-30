@@ -31,6 +31,7 @@ docs-site/api-reference/example.md
 docs-site/architecture/
 docs-site/operations/
 docs-site/features/
+!docs-site/features/seasonality.md
 docs-site/contributing.md
 docs-site/known-issues.md
 # mkdocs build output
