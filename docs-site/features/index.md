@@ -25,6 +25,7 @@ dollar impact using Koku cost model rates.
 | Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
 | Virtual Machine Recommendations | vm (planned) | cost, performance | Planned | Planned |
 | Java / JVM Optimization | java (planned) | cost, performance | Planned | Planned |
+| Network Optimization | network (planned) | single | Planned (SaaS $) | Planned |
 
 ## All feature pages
 
@@ -49,6 +50,7 @@ dollar impact using Koku cost model rates.
 | [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
 | [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**planned**) |
 | [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
+| [network.md](network.md) | Network egress, DNS latency, and traffic health (**planned**) |
 
 ## Capabilities
 
@@ -124,6 +126,12 @@ and container limits that account for non-heap memory (metaspace, thread stacks)
 OOMKills where the heap was not full. Gated behind `ROS_ENABLE_JVM_RECS`.
 Technical design: [`docs/design/java-recommendations.md`](../../../docs/design/java-recommendations.md).
 
+**[Network Optimization](network.md)** — *Planned.* Analyze OpenShift Network Observability flows to
+recommend reductions in expensive internet egress, fix DNS latency outliers, and surface unhealthy
+packet-drop paths; SaaS deployments add egress cost attribution by namespace. Cross-zone co-location
+hints are planned for v2 after classification quality gates. Gated behind `ROS_ENABLE_NETWORK_RECS`.
+Technical design: [`docs/design/network-recommendations.md`](../../../docs/design/network-recommendations.md).
+
 ## Planned recommendation types
 
 Not yet implemented; phase and priority slots are reserved in
@@ -135,6 +143,7 @@ Not yet implemented; phase and priority slots are reserved in
 | VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
 | Instance type | 1 | Cloud instance optimization for worker nodes |
 | Java / JVM | 2 | Heap, GC, thread pool tuning — see [java-jvm.md](java-jvm.md) |
+| Network | 1 | Egress, DNS, drops — see [network.md](network.md) |
 | Go runtime | 2 | GOMAXPROCS, GOMEMLIMIT |
 | Python / Node.js | 2 | Worker and heap advisories |
 | HPA / VPA | 2 | Autoscaler min/max/target and policy recommendations |

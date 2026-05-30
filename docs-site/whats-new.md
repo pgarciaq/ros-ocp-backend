@@ -74,6 +74,12 @@ first production-ready native engine release.
   in Phase 2. **Status: planned / future work.** Technical
   design: [`docs/design/java-recommendations.md`](../docs/design/java-recommendations.md).
 
+- **[Network Optimization](features/network.md)** — Identify high internet egress, DNS latency
+  outliers, and unhealthy packet-drop paths using the OpenShift Network Observability Operator;
+  SaaS mode adds namespace-level egress cost attribution. Cross-zone co-location recommendations
+  are planned for v2. **Status: planned / future work.** Technical
+  design: [`docs/design/network-recommendations.md`](../docs/design/network-recommendations.md).
+
 ## Getting started
 
 - [Quick Start Tutorial](quickstart.md) — Clone to first API response
