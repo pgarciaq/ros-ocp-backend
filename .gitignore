@@ -33,6 +33,7 @@ docs-site/operations/
 docs-site/features/
 !docs-site/features/seasonality.md
 !docs-site/features/virtual-machines.md
+!docs-site/features/java-jvm.md
 docs-site/contributing.md
 docs-site/known-issues.md
 # mkdocs build output

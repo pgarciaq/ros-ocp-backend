@@ -67,6 +67,13 @@ first production-ready native engine release.
   restart cost. **Status: planned / future work.** Technical
   design: [`docs/design/vm-recommendations.md`](../docs/design/vm-recommendations.md).
 
+- **[Java & JVM Optimization](features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
+  Quarkus, and plain Java: heap sizing (`MaxRAMPercentage`), garbage collector selection,
+  thread pool configuration, and container memory limits that include metaspace and thread
+  stacks — fixing OOMKills where the heap was not full. Enriches container recommendations
+  in Phase 2. **Status: planned / future work.** Technical
+  design: [`docs/design/java-recommendations.md`](../docs/design/java-recommendations.md).
+
 ## Getting started
 
 - [Quick Start Tutorial](quickstart.md) — Clone to first API response

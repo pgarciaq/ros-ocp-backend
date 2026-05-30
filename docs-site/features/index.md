@@ -24,6 +24,7 @@ dollar impact using Koku cost model rates.
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
 | Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
 | Virtual Machine Recommendations | vm (planned) | cost, performance | Planned | Planned |
+| Java / JVM Optimization | java (planned) | cost, performance | Planned | Planned |
 
 ## All feature pages
 
@@ -47,6 +48,7 @@ dollar impact using Koku cost model rates.
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
 | [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
 | [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**planned**) |
+| [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
 
 ## Capabilities
 
@@ -116,6 +118,12 @@ KubeVirt guests: whole vCPU and GiB recommendations, instance type mapping (cx1,
 u1, …), idle VM detection, disk growth and I/O hints. Gated behind `ROS_ENABLE_VM_RECS`.
 Technical design: [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
 
+**[Java & JVM Optimization](java-jvm.md)** — *Planned.* JVM-specific tuning on top of container
+recommendations: MaxRAMPercentage, garbage collector selection, Quarkus/Spring thread pools,
+and container limits that account for non-heap memory (metaspace, thread stacks). Addresses
+OOMKills where the heap was not full. Gated behind `ROS_ENABLE_JVM_RECS`.
+Technical design: [`docs/design/java-recommendations.md`](../../../docs/design/java-recommendations.md).
+
 ## Planned recommendation types
 
 Not yet implemented; phase and priority slots are reserved in
@@ -126,7 +134,7 @@ Not yet implemented; phase and priority slots are reserved in
 | Seasonality (detector / forecast / proactive) | 1–3 | Learned periodicity → proactive quota/node/container guidance |
 | VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
 | Instance type | 1 | Cloud instance optimization for worker nodes |
-| Java / JVM | 2 | Heap, GC, thread pool tuning from container memory recs |
+| Java / JVM | 2 | Heap, GC, thread pool tuning — see [java-jvm.md](java-jvm.md) |
 | Go runtime | 2 | GOMAXPROCS, GOMEMLIMIT |
 | Python / Node.js | 2 | Worker and heap advisories |
 | HPA / VPA | 2 | Autoscaler min/max/target and policy recommendations |
