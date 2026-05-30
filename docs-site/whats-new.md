@@ -60,6 +60,13 @@ first production-ready native engine release.
   before the month-end batch spike"). **Status: planned / future work.** Technical
   design: [`docs/design/seasonality-plugin.md`](../docs/design/seasonality-plugin.md).
 
+- **[Virtual Machine Recommendations](features/virtual-machines.md)** — Right-size
+  OpenShift Virtualization workloads: vCPU and memory in whole units, instance type
+  suggestions (m1, u1, cx1, …), idle VM detection, disk growth trending, and
+  informational storage I/O guidance. Conservative downsize rules account for VM
+  restart cost. **Status: planned / future work.** Technical
+  design: [`docs/design/vm-recommendations.md`](../docs/design/vm-recommendations.md).
+
 ## Getting started
 
 - [Quick Start Tutorial](quickstart.md) — Clone to first API response

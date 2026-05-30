@@ -88,6 +88,7 @@ nav:
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
       - Seasonality & Proactive Recs (Planned): features/seasonality.md
+      - Virtual Machine Recommendations (Planned): features/virtual-machines.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md

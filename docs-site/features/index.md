@@ -23,6 +23,7 @@ dollar impact using Koku cost model rates.
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
 | Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
+| Virtual Machine Recommendations | vm (planned) | cost, performance | Planned | Planned |
 
 ## All feature pages
 
@@ -45,6 +46,7 @@ dollar impact using Koku cost model rates.
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
 | [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
+| [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**planned**) |
 
 ## Capabilities
 
@@ -108,6 +110,11 @@ recurring peaks in daily usage history, forecast upcoming demand with
 [Augurs](https://github.com/grafana/augurs), and warn operators days before
 predictable spikes (month-end batch, weekly surges, holiday traffic). See the
 internal design: [`docs/design/seasonality-plugin.md`](../../../docs/design/seasonality-plugin.md).
+
+**[Virtual Machine Recommendations](virtual-machines.md)** — *Planned.* Right-size
+KubeVirt guests: whole vCPU and GiB recommendations, instance type mapping (cx1, m1,
+u1, …), idle VM detection, disk growth and I/O hints. Gated behind `ROS_ENABLE_VM_RECS`.
+Technical design: [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
 
 ## Planned recommendation types
 
