@@ -19,7 +19,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
+	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
@@ -75,11 +77,23 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	if parseErr != nil {
 		return nil, fmt.Errorf("parse cluster UUID: %w", parseErr)
 	}
-	if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, engine.VMRecConfigResolved()); recErr != nil {
+	vmCfg, cfgErr := engine.ResolveVMRecConfig(ctx, pool, orgID)
+	if cfgErr != nil {
+		return nil, fmt.Errorf("resolve VM config: %w", cfgErr)
+	}
+	if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, vmCfg); recErr != nil {
 		return nil, fmt.Errorf("run VM recommendations: %w", recErr)
 	}
 
 	return nil, nil
+}
+
+func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
+	if plugin.EnabledFor(plugin.KruizePluginName) {
+		return
+	}
+	g.GET("/recommendations/openshift/vm", rosapi.GetVMRecommendations)
+	g.GET("/recommendations/openshift/vm/detail", rosapi.GetVMRecommendationDetail)
 }
 
 func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {

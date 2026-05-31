@@ -1,0 +1,391 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+)
+
+// VM sizing resource blocks for API responses.
+type vmSizingBlock struct {
+	VCPU         int32   `json:"vcpu"`
+	MemoryGiB    int32   `json:"memory_gib"`
+	DiskGiB      *int32  `json:"disk_gib"`
+	InstanceType *string `json:"instance_type"`
+}
+
+type vmRecommendedSizing struct {
+	vmSizingBlock
+	Series *string `json:"series,omitempty"`
+}
+
+type vmRecMetadata struct {
+	GuestAgentDetected bool   `json:"guest_agent_detected"`
+	Confidence         string `json:"confidence"`
+	Term               string `json:"term"`
+	Engine             string `json:"engine"`
+	IsIdle             bool   `json:"is_idle"`
+	IsOversized        bool   `json:"is_oversized"`
+}
+
+type vmIOProfile struct {
+	ReadIOPSP95  *int64  `json:"read_iops_p95"`
+	WriteIOPSP95 *int64  `json:"write_iops_p95"`
+	ReadBPSP95   *int64  `json:"read_bps_p95"`
+	WriteBPSP95  *int64  `json:"write_bps_p95"`
+	Hint         *string `json:"hint"`
+}
+
+type vmDiskProjection struct {
+	DaysUntilFull        *int32   `json:"days_until_full"`
+	GrowthGiBPerDay      *float64 `json:"growth_gib_per_day"`
+	RecommendedExpandGiB *int32   `json:"recommended_expand_gib"`
+}
+
+// VMRecommendationItem is a single VM recommendation in list/detail responses.
+type VMRecommendationItem struct {
+	VMName            string              `json:"vm_name"`
+	Namespace         string              `json:"namespace"`
+	ClusterUUID       string              `json:"cluster_uuid"`
+	GuestOS           string              `json:"guest_os"`
+	Current           vmSizingBlock       `json:"current"`
+	Recommended       vmRecommendedSizing `json:"recommended"`
+	Metadata          vmRecMetadata       `json:"metadata"`
+	IOProfile         vmIOProfile         `json:"io_profile"`
+	DiskProjection    vmDiskProjection    `json:"disk_projection"`
+	Notifications     []any               `json:"notifications"`
+	LastRecommendedAt string              `json:"last_recommended_at"`
+	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
+}
+
+type vmDailyDigestItem struct {
+	BucketDate     string `json:"bucket_date"`
+	CPUUsageP95MC  int64  `json:"cpu_usage_p95_mc"`
+	MemUsageP95KiB int64  `json:"mem_usage_p95_kib"`
+	SampleCount    int32  `json:"sample_count"`
+	CPUUsageP50MC  int64  `json:"cpu_usage_p50_mc,omitempty"`
+	CPUUsageP99MC  int64  `json:"cpu_usage_p99_mc,omitempty"`
+	CPUUsageMaxMC  int64  `json:"cpu_usage_max_mc,omitempty"`
+	MemUsageP50KiB int64  `json:"mem_usage_p50_kib,omitempty"`
+	MemUsageP99KiB int64  `json:"mem_usage_p99_kib,omitempty"`
+	MemUsageMaxKiB int64  `json:"mem_usage_max_kib,omitempty"`
+}
+
+// VMRecommendationListResponse wraps paginated VM recommendations.
+type VMRecommendationListResponse struct {
+	Meta  Metadata               `json:"meta"`
+	Links Links                  `json:"links"`
+	Data  []VMRecommendationItem `json:"data"`
+}
+
+var vmRecAllowedOrderBy = map[string]string{
+	"vm_name":                "vm_name",
+	"namespace":              "namespace",
+	"recommended_vcpu":       "recommended_vcpu",
+	"recommended_memory_gib": "recommended_memory_gib",
+	"last_recommended_at":    "last_recommended_at",
+}
+
+const vmRecDefaultOrderBy = "vm_name"
+
+// GetVMRecommendations handles GET /recommendations/openshift/vm.
+func GetVMRecommendations(c echo.Context) error {
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgID)
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	limit := 10
+	offset := 0
+	if l := c.QueryParam("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
+			limit = v
+		}
+	}
+	if o := c.QueryParam("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, vmRecAllowedOrderBy, vmRecDefaultOrderBy, listoptions.OrderAsc)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	ctx := c.Request().Context()
+	allClusters, err := getClustersForOrg(ctx, orgID)
+	if err != nil {
+		hlog.Errorf("GetVMRecommendations: resolve clusters: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
+	if len(allowedClusters) == 0 {
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, VMRecommendationListResponse{
+			Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
+			Data: []VMRecommendationItem{},
+		})
+	}
+
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	if clusterFilter != "" {
+		allowed := false
+		for _, u := range allowedClusters {
+			if u == clusterFilter {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			setRecommendationNoStore(c)
+			return c.JSON(http.StatusOK, VMRecommendationListResponse{
+				Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
+				Data: []VMRecommendationItem{},
+			})
+		}
+		allowedClusters = []string{clusterFilter}
+	}
+
+	filters := engine.VMRecommendationFilters{
+		ClusterUUIDs: allowedClusters,
+		Namespace:    queryparams.FirstFilter(c, "namespace"),
+		VMName:       queryparams.FirstFilter(c, "vm_name"),
+		Term:         queryparams.FirstFilter(c, "term"),
+		Engine:       queryparams.FirstFilter(c, "engine"),
+		Confidence:   queryparams.FirstFilter(c, "confidence"),
+		OrderBy:      orderByKey,
+		OrderDesc:    orderHow == listoptions.OrderDesc,
+		Limit:        limit,
+		Offset:       offset,
+	}
+	if v := queryparams.FirstFilter(c, "is_idle"); v != "" {
+		b := strings.EqualFold(v, "true")
+		filters.IsIdle = &b
+	}
+	if v := queryparams.FirstFilter(c, "is_oversized"); v != "" {
+		b := strings.EqualFold(v, "true")
+		filters.IsOversized = &b
+	}
+
+	if filters.Engine != "" && filters.Engine != "cost" && filters.Engine != "performance" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
+	}
+
+	recs, total, err := engine.ListVMRecommendations(ctx, pool, orgID, filters)
+	if err != nil {
+		hlog.Errorf("GetVMRecommendations: list failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch VM recommendations",
+		})
+	}
+
+	data := make([]VMRecommendationItem, 0, len(recs))
+	for _, r := range recs {
+		data = append(data, vmRecToAPIItem(r))
+	}
+
+	setRecommendationNoStore(c)
+	resp := VMRecommendationListResponse{
+		Meta:  Metadata{Count: int(total), Limit: limit, Offset: offset},
+		Links: buildLinks(c.Request(), int(total), limit, offset),
+		Data:  data,
+	}
+	if resp.Data == nil {
+		resp.Data = []VMRecommendationItem{}
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// GetVMRecommendationDetail handles GET /recommendations/openshift/vm/detail.
+func GetVMRecommendationDetail(c echo.Context) error {
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
+
+	clusterUUID := strings.TrimSpace(c.QueryParam("cluster_uuid"))
+	if clusterUUID == "" {
+		clusterUUID = queryparams.FirstFilter(c, "cluster")
+	}
+	vmName := strings.TrimSpace(c.QueryParam("vm_name"))
+	namespace := strings.TrimSpace(c.QueryParam("namespace"))
+	term := strings.TrimSpace(c.QueryParam("term"))
+	engineName := strings.TrimSpace(c.QueryParam("engine"))
+
+	if clusterUUID == "" || vmName == "" || namespace == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": "cluster_uuid, vm_name, and namespace are required",
+		})
+	}
+	if term == "" {
+		term = "medium_term"
+	}
+	if engineName == "" {
+		engineName = "cost"
+	}
+	if engineName != "cost" && engineName != "performance" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
+	}
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	ctx := c.Request().Context()
+	allClusters, err := getClustersForOrg(ctx, orgID)
+	if err != nil {
+		hlog.Errorf("GetVMRecommendationDetail: resolve clusters: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	allowed := filterClustersByRBAC(allClusters, get_user_permissions(c))
+	if !clusterAllowed(allowed, clusterUUID) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "VM recommendation not found",
+		})
+	}
+
+	rec, digests, err := engine.GetVMRecommendationDetail(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName)
+	if err != nil {
+		hlog.Errorf("GetVMRecommendationDetail: query failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch VM recommendation",
+		})
+	}
+	if rec == nil {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "VM recommendation not found",
+		})
+	}
+
+	item := vmRecToAPIItem(*rec)
+	item.DailyDigests = vmDigestsToAPI(digests)
+	setRecommendationNoStore(c)
+	return c.JSON(http.StatusOK, item)
+}
+
+func clusterAllowed(allowed []string, clusterUUID string) bool {
+	for _, u := range allowed {
+		if u == clusterUUID {
+			return true
+		}
+	}
+	return false
+}
+
+func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
+	return VMRecommendationItem{
+		VMName:      r.VMName,
+		Namespace:   r.Namespace,
+		ClusterUUID: r.ClusterUUID.String(),
+		GuestOS:     r.GuestOS,
+		Current: vmSizingBlock{
+			VCPU:         r.CurrentVCPU,
+			MemoryGiB:    r.CurrentMemoryGiB,
+			DiskGiB:      r.CurrentDiskGiB,
+			InstanceType: r.CurrentInstanceType,
+		},
+		Recommended: vmRecommendedSizing{
+			vmSizingBlock: vmSizingBlock{
+				VCPU:         r.RecommendedVCPU,
+				MemoryGiB:    r.RecommendedMemoryGiB,
+				DiskGiB:      r.RecommendedDiskGiB,
+				InstanceType: r.RecommendedInstanceType,
+			},
+			Series: r.RecommendedSeries,
+		},
+		Metadata: vmRecMetadata{
+			GuestAgentDetected: r.GuestAgentDetected,
+			Confidence:         r.Confidence,
+			Term:               r.Term,
+			Engine:             r.Engine,
+			IsIdle:             r.IsIdle,
+			IsOversized:        r.IsOversized,
+		},
+		IOProfile: vmIOProfile{
+			ReadIOPSP95:  r.IOReadIOPSP95,
+			WriteIOPSP95: r.IOWriteIOPSP95,
+			ReadBPSP95:   r.IOReadBPS95,
+			WriteBPSP95:  r.IOWriteBPS95,
+			Hint:         r.IOHint,
+		},
+		DiskProjection: vmDiskProjection{
+			DaysUntilFull:        r.DiskDaysUntilFull,
+			GrowthGiBPerDay:      r.DiskGrowthGiBPerDay,
+			RecommendedExpandGiB: r.DiskRecommendedExpandGiB,
+		},
+		Notifications:     parseVMNotifications(r.Notifications),
+		LastRecommendedAt: r.LastRecommendedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func parseVMNotifications(raw []byte) []any {
+	if len(raw) == 0 {
+		return []any{}
+	}
+	var out []any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return []any{}
+	}
+	if out == nil {
+		return []any{}
+	}
+	return out
+}
+
+func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
+	out := make([]vmDailyDigestItem, 0, len(digests))
+	for _, d := range digests {
+		out = append(out, vmDailyDigestItem{
+			BucketDate:     d.BucketDate.Format("2006-01-02"),
+			CPUUsageP50MC:  d.CPUUsageP50MC,
+			CPUUsageP95MC:  d.CPUUsageP95MC,
+			CPUUsageP99MC:  d.CPUUsageP99MC,
+			CPUUsageMaxMC:  d.CPUUsageMaxMC,
+			MemUsageP50KiB: d.MemUsageP50KiB,
+			MemUsageP95KiB: d.MemUsageP95KiB,
+			MemUsageP99KiB: d.MemUsageP99KiB,
+			MemUsageMaxKiB: d.MemUsageMaxKiB,
+			SampleCount:    d.SampleCount,
+		})
+	}
+	return out
+}

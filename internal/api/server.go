@@ -99,6 +99,14 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.PUT("/recommendations/openshift/settings/cluster-quota", disabledPluginRoute404("cluster-quota"))
 		v1.DELETE("/recommendations/openshift/settings/cluster-quota", disabledPluginRoute404("cluster-quota"))
 	}
+	if !pluginRecommendationRoutesActive("vm") {
+		v1.GET("/recommendations/openshift/vm", disabledPluginRoute404("vm"))
+		v1.GET("/recommendations/openshift/vm/*", disabledPluginRoute404("vm"))
+		v1.GET("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
+		v1.PUT("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
+		v1.GET("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
+		v1.PUT("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
+	}
 	registerBusinessHoursRouteGuards(v1)
 }
 
@@ -211,6 +219,12 @@ func StartAPIServer(ctx context.Context) {
 			v1.GET("/recommendations/openshift/settings/cluster-quota", GetClusterQuotaSettings)
 			v1.PUT("/recommendations/openshift/settings/cluster-quota", PutClusterQuotaSettings)
 			v1.DELETE("/recommendations/openshift/settings/cluster-quota", DeleteClusterQuotaSettings)
+		}
+		if pluginRecommendationRoutesActive("vm") {
+			v1.GET("/recommendations/openshift/settings/vm", GetVMSettings)
+			v1.PUT("/recommendations/openshift/settings/vm", PutVMSettings)
+			v1.GET("/recommendations/openshift/settings/vm/terms", GetVMTermSettings)
+			v1.PUT("/recommendations/openshift/settings/vm/terms", PutVMTermSettings)
 		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}
