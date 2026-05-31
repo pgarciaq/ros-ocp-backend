@@ -10,8 +10,8 @@
 | Layer | Originally planned | Implemented | Notes |
 |-------|-------------------|-------------|-------|
 | **Unit** (ros-ocp-backend) | ~25–30 | **~58** test functions | Ingestion, engine, catalog, notifications, API, settings |
-| **E2E** (cost-onprem-chart) | ~12–15 | **13** | ROS + settings + extended flow |
-| **IQE** | ~10–12 | **26** | Full API contract in `test_ros_vm_recommendations.py` |
+| **E2E** (cost-onprem-chart) | ~12–15 | **32** | ROS + settings + extended + enhancements + GPU flow |
+| **IQE** | ~10–12 | **35** | Full API contract in `test_ros_vm_recommendations.py` |
 | **Nise** | 4 scenarios | ✅ | `ocp_report_vm.yml` (chart + IQE) |
 
 Legend: ✅ implemented · ⬜ not implemented / pending
@@ -77,7 +77,7 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
 | `filter[is_abandoned]` | ✅ `TestVMRecommendations_ListFilterAbandoned` |
-| `filter[has_gpu]`, `filter[gpu_classification]` | ⬜ | API filters implemented; add handler tests when needed |
+| `filter[has_gpu]`, `filter[gpu_classification]` | ✅ | IQE + E2E `test_vm_gpu_flow.py` |
 
 ### Integration (`vm_lifecycle_integration_test.go`)
 
@@ -142,9 +142,27 @@ Template: `tests/data/nise_templates/ocp_report_vm_enhancements.yml`. Run:
 
 `tests/data/nise_templates/ocp_report_vm.yml` — idle Linux/Windows, guest-agent VM, legacy profiles.
 
+### Extended E2E — GPU (`test_vm_gpu_flow.py`) — 10 tests ✅
+
+| Test | Status |
+|------|--------|
+| `test_vm_gpu_csv_ingestion` | ✅ |
+| `test_vm_gpu_idle_classification_and_notification` | ✅ |
+| `test_vm_gpu_filter_has_gpu` | ✅ |
+| `test_vm_gpu_filter_classification_idle` | ✅ |
+| `test_vm_gpu_detail_response_shape` | ✅ |
+| `test_vm_gpu_underutil_notification_51` | ✅ |
+| `test_vm_gpu_memory_saturated_notification_52` | ✅ |
+| `test_vm_gpu_compute_saturated_notification_53` | ✅ |
+| `test_vm_gpu_instance_type_gn1_match` | ✅ |
+| `test_vm_no_gpu_excludes_gn1` | ✅ |
+
+Template: `tests/data/nise_templates/ocp_report_vm_gpu.yml`. Run:
+`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow`.
+
 ---
 
-## Layer C — IQE (`test_ros_vm_recommendations.py`) — 26 tests ✅
+## Layer C — IQE (`test_ros_vm_recommendations.py`) — 35 tests ✅
 
 Paths (constants):
 
@@ -182,6 +200,22 @@ RECOMMENDATIONS_SETTINGS_VM_TERMS = "/recommendations/openshift/settings/vm/term
 
 Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (namespace `vm-enhancements`).
 
+### IQE — GPU notifications and filters (codes 50–53)
+
+| Test | Status |
+|------|--------|
+| `test_vm_gpu_list_filter_has_gpu` | ✅ |
+| `test_vm_gpu_list_filter_classification` | ✅ |
+| `test_vm_gpu_detail_response_shape` | ✅ |
+| `test_vm_gpu_idle_notification_code_50` | ✅ |
+| `test_vm_gpu_underutil_notification_code_51` | ✅ |
+| `test_vm_gpu_memory_saturated_code_52` | ✅ |
+| `test_vm_gpu_compute_saturated_code_53` | ✅ |
+| `test_vm_gpu_instance_type_gn1_match` | ✅ |
+| `test_vm_no_gpu_excludes_gn1` | ✅ |
+
+GPU VMs are defined in `ocp_report_ros_vm.yml` (`ml-training`, `inference` namespaces).
+
 ---
 
 ## Layer D — Nise
@@ -192,8 +226,9 @@ Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (namespace `vm-
 | Idle Linux / Windows | ✅ `idle-vm-linux-01`, `idle-windows-legacy-01` |
 | Windows + guest agent | ✅ `db-server-windows-01` |
 | High I/O / upsize | ⬜ | Partial via legacy-app profiles |
+| GPU idle / underutil / saturated | ✅ | `gpu-idle-vm`, `gpu-underutil-mig-vm`, `gpu-memory-saturated-vm`, `gpu-compute-saturated-vm` in nise templates |
 
-Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `cost-onprem-chart/tests/data/nise_templates/ocp_report_vm.yml`.
+Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `cost-onprem-chart/tests/data/nise_templates/ocp_report_vm.yml`, `ocp_report_vm_gpu.yml` (GPU E2E).
 
 ---
 
@@ -220,6 +255,7 @@ go test ./internal/engine/... ./internal/ingestion/... ./internal/api/... -run '
 cd cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_recommendations_flow
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow
 ```
 
 ---
