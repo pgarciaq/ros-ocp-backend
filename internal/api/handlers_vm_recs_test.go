@@ -153,6 +153,32 @@ func TestVMSettings_GET_ReturnsConfig(t *testing.T) {
 	assert.Contains(t, resp, "io")
 }
 
+func TestParseVMNotifications_StructuredObjects(t *testing.T) {
+	raw := []byte(`[
+		{"code":19,"type":"warning","message":"VM is oversized"},
+		{"code":38,"type":"info","message":"QEMU guest agent not installed"}
+	]`)
+	out := parseVMNotifications(raw)
+	require.Len(t, out, 2)
+
+	first, ok := out[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(19), first["code"])
+	assert.Equal(t, "warning", first["type"])
+
+	second, ok := out[1].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(38), second["code"])
+}
+
+func TestParseVMNotifications_LegacyIntArray(t *testing.T) {
+	raw := []byte(`[18,19]`)
+	out := parseVMNotifications(raw)
+	require.Len(t, out, 2)
+	assert.Equal(t, float64(18), out[0])
+	assert.Equal(t, float64(19), out[1])
+}
+
 func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	for apiKey, dbCol := range vmRecAllowedOrderBy {
 		assert.Equal(t, apiKey, dbCol, "API key should match DB column for %q", apiKey)
