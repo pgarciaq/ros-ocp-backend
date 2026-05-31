@@ -334,7 +334,7 @@ func pctToValue(pct *int32) *DetailResourceValue {
 	if pct == nil {
 		return nil
 	}
-	return &DetailResourceValue{Amount: float64(*pct), Format: "percentage"}
+	return &DetailResourceValue{Amount: float64(*pct), Format: "percent"}
 }
 
 func mergeNotifications(dst map[string]notifications.NotificationEntry, eng *DetailEngine) {
