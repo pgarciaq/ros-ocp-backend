@@ -16,26 +16,32 @@ import (
 
 // VMRecommendationFilters holds list query filters for VM recommendations.
 type VMRecommendationFilters struct {
-	ClusterUUIDs []string
-	Namespace    string
-	VMName       string
-	Term         string
-	Engine       string
-	Confidence          string
-	GuestAgentDetected  *bool
-	IsIdle              *bool
-	IsOversized         *bool
-	OrderBy      string
-	OrderDesc    bool
-	Limit        int
-	Offset       int
+	ClusterUUIDs       []string
+	Namespace          string
+	VMName             string
+	Term               string
+	Engine             string
+	Confidence         string
+	GuestAgentDetected *bool
+	IsIdle             *bool
+	IsOversized        *bool
+	OrderBy            string
+	OrderDesc          bool
+	Limit              int
+	Offset             int
 }
 
 var vmRecOrderColumns = map[string]string{
 	"vm_name":                "vm_name",
 	"namespace":              "namespace",
+	"current_vcpu":           "current_vcpu",
+	"current_memory_gib":     "current_memory_gib",
+	"guest_os":               "guest_os",
 	"recommended_vcpu":       "recommended_vcpu",
 	"recommended_memory_gib": "recommended_memory_gib",
+	"is_idle":                "is_idle",
+	"is_oversized":           "is_oversized",
+	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
 }
 

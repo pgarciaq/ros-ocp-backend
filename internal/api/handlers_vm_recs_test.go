@@ -148,6 +148,22 @@ func TestVMSettings_GET_ReturnsConfig(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Contains(t, resp, "thresholds")
+	assert.Contains(t, resp, "memory_floors")
 	assert.Contains(t, resp, "disk")
 	assert.Contains(t, resp, "io")
+}
+
+func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
+	for apiKey, dbCol := range vmRecAllowedOrderBy {
+		assert.Equal(t, apiKey, dbCol, "API key should match DB column for %q", apiKey)
+	}
+	expected := []string{
+		"vm_name", "namespace", "current_vcpu", "current_memory_gib", "guest_os",
+		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_oversized",
+		"confidence", "last_recommended_at",
+	}
+	for _, key := range expected {
+		_, ok := vmRecAllowedOrderBy[key]
+		assert.True(t, ok, "missing order_by key %q", key)
+	}
 }

@@ -92,8 +92,14 @@ type VMRecommendationListResponse struct {
 var vmRecAllowedOrderBy = map[string]string{
 	"vm_name":                "vm_name",
 	"namespace":              "namespace",
+	"current_vcpu":           "current_vcpu",
+	"current_memory_gib":     "current_memory_gib",
+	"guest_os":               "guest_os",
 	"recommended_vcpu":       "recommended_vcpu",
 	"recommended_memory_gib": "recommended_memory_gib",
+	"is_idle":                "is_idle",
+	"is_oversized":           "is_oversized",
+	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
 }
 

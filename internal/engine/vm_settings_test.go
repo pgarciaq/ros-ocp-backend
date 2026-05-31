@@ -42,6 +42,19 @@ func TestValidateVMSettingsResponse_RejectsMinGreaterThanMaxMargin(t *testing.T)
 func TestValidateVMSettingsResponse_AcceptsDefaults(t *testing.T) {
 	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
 	require.NoError(t, validateVMSettingsResponse(resp))
+	assert.Equal(t, int32(1), resp.MemoryFloors.LinuxGiB)
+	assert.Equal(t, int32(2), resp.MemoryFloors.WindowsGiB)
+}
+
+func TestValidateVMSettingsResponse_RejectsLowMemoryFloor(t *testing.T) {
+	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp.MemoryFloors.LinuxGiB = 0
+
+	err := validateVMSettingsResponse(resp)
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "linux_gib")
 }
 
 func TestUpdateVMSettings_RejectsInvalidPercentile(t *testing.T) {

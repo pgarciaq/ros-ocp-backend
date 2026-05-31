@@ -43,21 +43,29 @@ type VMIOSettingsAPI struct {
 	HighIOPSThreshold int64 `json:"high_iops_threshold"`
 }
 
+// VMMemoryFloorsSettingsAPI is the memory floor block in VM settings responses.
+type VMMemoryFloorsSettingsAPI struct {
+	LinuxGiB   int32 `json:"linux_gib"`
+	WindowsGiB int32 `json:"windows_gib"`
+}
+
 // VMSettingsResponse is the API GET/PUT response for VM recommendation settings.
 type VMSettingsResponse struct {
-	Enabled              bool                   `json:"enabled"`
-	Thresholds           VMThresholdSettingsAPI `json:"thresholds"`
-	Disk                 VMDiskSettingsAPI      `json:"disk"`
-	IO                   VMIOSettingsAPI        `json:"io"`
-	InstanceTypeMatching bool                   `json:"instance_type_matching"`
-	LockedFields         []string               `json:"locked_fields,omitempty"`
+	Enabled              bool                      `json:"enabled"`
+	Thresholds           VMThresholdSettingsAPI    `json:"thresholds"`
+	MemoryFloors         VMMemoryFloorsSettingsAPI `json:"memory_floors"`
+	Disk                 VMDiskSettingsAPI         `json:"disk"`
+	IO                   VMIOSettingsAPI           `json:"io"`
+	InstanceTypeMatching bool                      `json:"instance_type_matching"`
+	LockedFields         []string                  `json:"locked_fields,omitempty"`
 }
 
 type vmSettingsStored struct {
-	Thresholds           *VMThresholdSettingsAPI `json:"thresholds,omitempty"`
-	Disk                 *VMDiskSettingsAPI      `json:"disk,omitempty"`
-	IO                   *VMIOSettingsAPI        `json:"io,omitempty"`
-	InstanceTypeMatching *bool                   `json:"instance_type_matching,omitempty"`
+	Thresholds           *VMThresholdSettingsAPI    `json:"thresholds,omitempty"`
+	MemoryFloors         *VMMemoryFloorsSettingsAPI `json:"memory_floors,omitempty"`
+	Disk                 *VMDiskSettingsAPI         `json:"disk,omitempty"`
+	IO                   *VMIOSettingsAPI           `json:"io,omitempty"`
+	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
 }
 
 func vmEnvLockMap() map[string]string {
@@ -74,6 +82,8 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_IDLE_MEMORY_MIB":               "thresholds.idle_memory_mib",
 		"ROS_VM_IDLE_CPU_MC_WINDOWS":           "thresholds.idle_cpu_mc_windows",
 		"ROS_VM_IDLE_MEMORY_MIB_WINDOWS":       "thresholds.idle_memory_mib_windows",
+		"ROS_VM_LINUX_MEMORY_FLOOR_GIB":        "memory_floors.linux_gib",
+		"ROS_VM_WINDOWS_MEMORY_FLOOR_GIB":      "memory_floors.windows_gib",
 		"ROS_VM_DISK_PROJECTION_DAYS":          "disk.projection_window_days",
 		"ROS_VM_DISK_HEADROOM_PCT":             "disk.headroom_pct",
 		"ROS_VM_DISK_ROUND_STEP_GIB":           "disk.round_step_gib",
@@ -115,10 +125,18 @@ func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
 	return VMIOSettingsAPI{HighIOPSThreshold: cfg.HighIOPSThreshold}
 }
 
+func vmRecConfigToMemoryFloorsAPI(cfg VMRecConfig) VMMemoryFloorsSettingsAPI {
+	return VMMemoryFloorsSettingsAPI{
+		LinuxGiB:   cfg.LinuxMemoryFloorGiB,
+		WindowsGiB: cfg.WindowsMemoryFloorGiB,
+	}
+}
+
 func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 	return VMSettingsResponse{
 		Enabled:              vmFeatureEnabled(),
 		Thresholds:           vmRecConfigToThresholdAPI(cfg),
+		MemoryFloors:         vmRecConfigToMemoryFloorsAPI(cfg),
 		Disk:                 vmRecConfigToDiskAPI(cfg),
 		IO:                   vmRecConfigToIOAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
@@ -195,6 +213,10 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.IdleCPUMCWindows = t.IdleCPUMCWindows
 		dest.IdleMemoryMiBWindows = t.IdleMemoryMiBWindows
 	}
+	if stored.MemoryFloors != nil {
+		dest.LinuxMemoryFloorGiB = stored.MemoryFloors.LinuxGiB
+		dest.WindowsMemoryFloorGiB = stored.MemoryFloors.WindowsGiB
+	}
 	if stored.Disk != nil {
 		dest.DiskProjectionWindowDays = stored.Disk.ProjectionWindowDays
 		dest.DiskHeadroomPct = stored.Disk.HeadroomPct
@@ -232,6 +254,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid thresholds: %w", err)
 		}
 	}
+	if raw, ok := patch["memory_floors"]; ok {
+		if err := json.Unmarshal(raw, &resp.MemoryFloors); err != nil {
+			return fmt.Errorf("invalid memory_floors: %w", err)
+		}
+	}
 	if raw, ok := patch["disk"]; ok {
 		if err := json.Unmarshal(raw, &resp.Disk); err != nil {
 			return fmt.Errorf("invalid disk: %w", err)
@@ -255,6 +282,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	overrides := map[string]json.RawMessage{}
 	if b, err := json.Marshal(resp.Thresholds); err == nil {
 		overrides["thresholds"] = b
+	}
+	if b, err := json.Marshal(resp.MemoryFloors); err == nil {
+		overrides["memory_floors"] = b
 	}
 	if b, err := json.Marshal(resp.Disk); err == nil {
 		overrides["disk"] = b
@@ -305,7 +335,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "disk": {}, "io": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "disk": {}, "io": {},
 		"instance_type_matching": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -335,6 +365,9 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt64("thresholds.idle_memory_mib", resp.Thresholds.IdleMemoryMiB, 0, 1048576)
 	v.addRangeInt64("thresholds.idle_cpu_mc_windows", resp.Thresholds.IdleCPUMCWindows, 0, 100000)
 	v.addRangeInt64("thresholds.idle_memory_mib_windows", resp.Thresholds.IdleMemoryMiBWindows, 0, 1048576)
+
+	v.addRangeInt("memory_floors.linux_gib", int(resp.MemoryFloors.LinuxGiB), 1, 1024)
+	v.addRangeInt("memory_floors.windows_gib", int(resp.MemoryFloors.WindowsGiB), 1, 1024)
 
 	v.addRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
 	v.addRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)

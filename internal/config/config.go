@@ -238,6 +238,8 @@ type Config struct {
 	VMIdleMemoryMiB              int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB"`
 	VMIdleCPUMCWindows           int64   `mapstructure:"ROS_VM_IDLE_CPU_MC_WINDOWS"`
 	VMIdleMemoryMiBWindows       int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB_WINDOWS"`
+	VMLinuxMemoryFloorGiB        int32   `mapstructure:"ROS_VM_LINUX_MEMORY_FLOOR_GIB"`
+	VMWindowsMemoryFloorGiB      int32   `mapstructure:"ROS_VM_WINDOWS_MEMORY_FLOOR_GIB"`
 	VMDiskProjectionDays         int32   `mapstructure:"ROS_VM_DISK_PROJECTION_DAYS"`
 	VMDiskHeadroomPct            float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
 	VMDiskRoundStepGiB           int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
@@ -582,6 +584,8 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_IDLE_MEMORY_MIB", 512)
 	viper.SetDefault("ROS_VM_IDLE_CPU_MC_WINDOWS", 200)
 	viper.SetDefault("ROS_VM_IDLE_MEMORY_MIB_WINDOWS", 3072)
+	viper.SetDefault("ROS_VM_LINUX_MEMORY_FLOOR_GIB", 1)
+	viper.SetDefault("ROS_VM_WINDOWS_MEMORY_FLOOR_GIB", 2)
 	viper.SetDefault("ROS_VM_DISK_PROJECTION_DAYS", 30)
 	viper.SetDefault("ROS_VM_DISK_HEADROOM_PCT", 0.25)
 	viper.SetDefault("ROS_VM_DISK_ROUND_STEP_GIB", 10)

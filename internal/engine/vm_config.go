@@ -124,6 +124,12 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	if _, ok := os.LookupEnv("ROS_VM_IDLE_MEMORY_MIB_WINDOWS"); ok {
 		base.IdleMemoryMiBWindows = cfg.VMIdleMemoryMiBWindows
 	}
+	if _, ok := os.LookupEnv("ROS_VM_LINUX_MEMORY_FLOOR_GIB"); ok {
+		base.LinuxMemoryFloorGiB = cfg.VMLinuxMemoryFloorGiB
+	}
+	if _, ok := os.LookupEnv("ROS_VM_WINDOWS_MEMORY_FLOOR_GIB"); ok {
+		base.WindowsMemoryFloorGiB = cfg.VMWindowsMemoryFloorGiB
+	}
 	if _, ok := os.LookupEnv("ROS_VM_DISK_PROJECTION_DAYS"); ok {
 		base.DiskProjectionWindowDays = cfg.VMDiskProjectionDays
 	}

@@ -37,11 +37,15 @@ func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {
 
 	t.Setenv("ROS_VM_IDLE_CPU_MC", "99")
 	t.Setenv("ROS_VM_HIGH_IOPS_THRESHOLD", "4500")
+	t.Setenv("ROS_VM_LINUX_MEMORY_FLOOR_GIB", "4")
+	t.Setenv("ROS_VM_WINDOWS_MEMORY_FLOOR_GIB", "8")
 	config.ResetForTest()
 	InitVMRecDefaults(config.GetConfig())
 
 	got := VMRecConfigResolved()
 	assert.Equal(t, int64(99), got.IdleCPUMC)
 	assert.Equal(t, int64(4500), got.HighIOPSThreshold)
+	assert.Equal(t, int32(4), got.LinuxMemoryFloorGiB)
+	assert.Equal(t, int32(8), got.WindowsMemoryFloorGiB)
 	assert.Equal(t, int64(200), got.IdleCPUMCWindows, "windows idle CPU unchanged without env")
 }
