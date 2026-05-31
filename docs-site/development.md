@@ -117,7 +117,7 @@ when a Kafka message includes optional `manifest` metadata.
 1. Handler in `internal/api/` (use `requireXRHID`, tenant-scoped DB via `db.GetPool()`).
 2. Register route in plugin `RegisterRoutes` or `internal/api/server.go`.
 3. Update `openapi.json` and contract tests.
-4. Document in `docs-site/api-reference/` or feature pages.
+4. Document in `docs-site/plugin-reference/` or feature pages.
 
 ### Adding a migration
 
@@ -147,7 +147,7 @@ Structured logs use logrus; search by `org_id`, `cluster_uuid`, and `request_id`
 ## Plugin development
 
 See [Plugin Architecture](architecture/plugin-architecture.md) and the
-[example plugin](api-reference/example.md) template.
+[example plugin](plugin-reference/example.md) template.
 
 ## Related documentation
 

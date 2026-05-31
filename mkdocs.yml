@@ -88,7 +88,7 @@ nav:
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
       - Seasonality & Proactive Recs (Planned): features/seasonality.md
-      - Virtual Machine Recommendations (Planned): features/virtual-machines.md
+      - Virtual Machine Recommendations: features/virtual-machines.md
       - Java & JVM Optimization (Planned): features/java-jvm.md
       - Network Optimization (Planned): features/network.md
   - Architecture:
@@ -103,18 +103,19 @@ nav:
       - API Versioning: architecture/api-versioning.md
       - Native Migration: architecture/native-migration.md
   - Plugin Reference:
-      - Overview: api-reference/index.md
-      - plugin (interfaces): api-reference/plugin.md
-      - container: api-reference/container.md
-      - gpu: api-reference/gpu.md
-      - node: api-reference/node.md
-      - pvc: api-reference/pvc.md
-      - quota: api-reference/quota.md
-      - cluster-quota: api-reference/cluster-quota.md
-      - namespace: api-reference/namespace.md
-      - snapshot: api-reference/snapshot.md
-      - kruize: api-reference/kruize.md
-      - example (template): api-reference/example.md
+      - Overview: plugin-reference/index.md
+      - plugin (interfaces): plugin-reference/plugin.md
+      - container: plugin-reference/container.md
+      - gpu: plugin-reference/gpu.md
+      - node: plugin-reference/node.md
+      - pvc: plugin-reference/pvc.md
+      - quota: plugin-reference/quota.md
+      - cluster-quota: plugin-reference/cluster-quota.md
+      - namespace: plugin-reference/namespace.md
+      - snapshot: plugin-reference/snapshot.md
+      - vm: plugin-reference/vm.md
+      - kruize: plugin-reference/kruize.md
+      - example (template): plugin-reference/example.md
   - API Specification:
       - OpenAPI: openapi.md
   - Operations:

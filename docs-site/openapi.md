@@ -37,5 +37,5 @@ All endpoints require the `x-rh-identity` header (base64-encoded JSON identity).
 See the [API Versioning](architecture/api-versioning.md) doc for compatibility policy.
 
 Query parameters use Koku bracket notation (`filter[project]`, `order_by[field]`); see
-[Query Parameters](api-reference/query-parameters.md). **mTLS** is the planned auth upgrade
+[Query Parameters](plugin-reference/query-parameters.md). **mTLS** is the planned auth upgrade
 for on-prem service accounts; bracket syntax is unchanged.

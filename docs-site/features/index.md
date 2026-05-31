@@ -48,7 +48,7 @@ dollar impact using Koku cost model rates.
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
 | [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
-| [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**planned**) |
+| [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**Preview Beta**) |
 | [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health (**planned**) |
 
@@ -141,7 +141,7 @@ Not yet implemented; phase and priority slots are reserved in
 | Type | Phase | Description |
 |------|-------|-------------|
 | Seasonality (detector / forecast / proactive) | 1–3 | Learned periodicity → proactive quota/node/container guidance |
-| VM (OpenShift Virtualization) | 1 | vCPU, memory, disk rightsizing for KubeVirt guests |
+| ~~VM (OpenShift Virtualization)~~ | 1 | **Shipped (Preview Beta)** — see [virtual-machines.md](virtual-machines.md) |
 | Instance type | 1 | Cloud instance optimization for worker nodes |
 | Java / JVM | 2 | Heap, GC, thread pool tuning — see [java-jvm.md](java-jvm.md) |
 | Network | 1 | Egress, DNS, drops — see [network.md](network.md) |

@@ -17,6 +17,7 @@ internal/plugins/
 ├── cluster-quota/        ← ClusterResourceQuota team-pool recommendations
 ├── namespace/            ← Namespace usage-based sizing
 ├── snapshot/             ← VolumeSnapshot staleness
+├── vm/                   ← OpenShift Virtualization VM right-sizing
 ├── kruize/               ← Legacy engine (mutual-exclusive)
 └── example/              ← Authoring template for new plugins
 ```
@@ -33,6 +34,7 @@ internal/plugins/
 | cluster-quota | ✓ | | ✓ | | ✓ | |
 | namespace | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | snapshot | ✓ | | ✓ | | | |
+| vm | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | kruize | | | | | | |
 
 ## Term Defaults
@@ -44,6 +46,7 @@ internal/plugins/
 | node | 1d / 1d | 7d / 3d | 15d / 7d | 90d |
 | namespace | 1d / 1d | 7d / 3d | 15d / 7d | 90d |
 | pvc | 7d / 3d | 30d / 14d | 90d / 30d | 365d |
+| vm | 7d / 3d | 15d / 7d | 30d / 15d | 90d |
 
 ## Browsing
 

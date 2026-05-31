@@ -27,6 +27,8 @@ first production-ready native engine release.
 
 - **[Snapshot staleness](features/snapshot-staleness.md)** — Orphaned, stale, redundant, and never-restored VolumeSnapshot detection.
 
+- **[Virtual Machine recommendations](features/virtual-machines.md)** — Right-size OpenShift Virtualization workloads: whole vCPU/GiB sizing, instance type matching (u1/cx1/m1), idle and abandoned detection, disk projection, I/O profiling, graduated guest-agent confidence, and dual cost/performance engines. **Preview (Beta)** — enabled by default.
+
 ## Analysis and policy
 
 - **[Idle / zombie detection](features/idle-detection.md)** — Classify abandoned workloads and estimate full monthly waste separately from rightsizing.
@@ -59,14 +61,6 @@ first production-ready native engine release.
   forward-looking guidance (for example, "in 7 days, raise namespace CPU quota
   before the month-end batch spike"). **Status: planned / future work.** Technical
   design: [`docs/design/seasonality-plugin.md`](../docs/design/seasonality-plugin.md).
-
-- **[Virtual Machine Recommendations](features/virtual-machines.md)** — Right-size
-  OpenShift Virtualization workloads: vCPU and memory in whole units, instance type
-  matching (m1, u1, cx1, per-cluster discovery), idle and abandoned VM detection,
-  disk growth projection (guest-agent and hypervisor-only), I/O profiling, graduated
-  confidence with guest agent adaptivity, and OS-aware thresholds. **Status: Preview
-  (Beta) — enabled by default.** Technical
-  design: [`docs/design/vm-recommendations.md`](../docs/design/vm-recommendations.md).
 
 - **[Java & JVM Optimization](features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
   Quarkus, and plain Java: heap sizing (`MaxRAMPercentage`), garbage collector selection,
