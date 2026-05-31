@@ -11,7 +11,8 @@
 | Document | Description |
 |----------|-------------|
 | [design/seasonality-plugin.md](design/seasonality-plugin.md) | **Planned** — Seasonality detection, Augurs forecasting, proactive recommendations |
-| [design/vm-recommendations.md](design/vm-recommendations.md) | **Planned** — OpenShift Virtualization VM right-sizing, instance types, idle/disk/IOPS |
+| [design/vm-recommendations.md](design/vm-recommendations.md) | **Implemented (phase11)** — OpenShift Virtualization VM right-sizing, instance types, notifications, API |
+| [design/vm-test-plan.md](design/vm-test-plan.md) | VM recommendations test inventory (unit, E2E, IQE) |
 | [design/java-recommendations.md](design/java-recommendations.md) | **Planned** — Java/JVM heap, GC, thread pools, non-heap OOM, MaxRAMPercentage (Phase 9) |
 | [design/network-recommendations.md](design/network-recommendations.md) | **Planned** — NetObserv integration, egress/DNS/drops, SaaS cost attribution, cross-zone v2 |
 | [requirements.md](architecture/requirements.md) | Master requirements document — 60 features, 87 REQs, database schema, phasing strategy, deployment model |

@@ -1,11 +1,12 @@
-# OpenShift Virtualization Recommendations (Planned)
+# OpenShift Virtualization Recommendations
 
-**Status:** Planned / Future Work  
+**Status:** Implemented (phase11) — backend plugin, engine, API, and settings  
 **Last updated:** 2026-05-31  
 **Public overview:** [Virtual Machine Recommendations (docs-site)](../../docs-site/features/virtual-machines.md)
 
 **Related requirements:** [requirements.md §12b (Phase 8b)](../architecture/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)  
-**Related analysis:** [performance-analysis.md §30](../architecture/performance-analysis.md#30-openshift-virtualization-vm-recommendations)
+**Related analysis:** [performance-analysis.md §30](../architecture/performance-analysis.md#30-openshift-virtualization-vm-recommendations)  
+**Test plan:** [vm-test-plan.md](vm-test-plan.md)
 
 ---
 
@@ -16,426 +17,389 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Dimension | Containers | VMs |
 |-----------|--------------|-----|
 | Resource units | Millicores, KiB (continuous) | Whole vCPUs, whole GiB (discrete) |
-| Resize impact | Pod restart / rolling update | **VM restart** or live migration (vCPU/memory change still disruptive) |
+| Resize impact | Pod restart / rolling update | **VM restart** or disruptive live migration |
 | Workload profile | Often bursty, ephemeral | Usually long-running, more stable |
 | Overprovisioning | 2–10× common | **5–20× common** (lift-and-shift sizing) |
 
-**Today:** VM metrics flow **operator → Koku** for cost reporting only. **ROS has no VM pipeline** — `aggregator.go` accepts only standard workload types; VM CSVs are not ingested.
+**Data path:** The metrics operator emits `ros-openshift-vm-usage-*.csv` at **15-minute** resolution. The `vm` plugin (Produce phase, **priority 40**) ingests rows, builds `daily_vm_digests`, runs `recommendVM()` in Go, and persists `vm_recommendations`. Koku continues to consume hourly `cm-openshift-vm-usage-*.csv` for cost only.
 
-**Goal:** Add a `vm` plugin (Phase 1 Produce, **priority 40**) gated by `ROS_ENABLE_VM_RECS` (default **enabled** with auto-detection) that ingests VM usage digests at **15-minute** resolution, runs `recommendVM()` in Go, and exposes list/detail APIs aligned with container recommendations.
+**Gate:** `ROS_ENABLE_VM_RECS` (default **`true`**). If no VM CSV is present, the plugin no-ops silently.
+
+---
+
+## Implementation status
+
+| Component | Status | Code |
+|-----------|--------|------|
+| VM CSV ingestion → `daily_vm_digests` | ✅ | [`internal/ingestion/vm_csv.go`](../../internal/ingestion/vm_csv.go), [`internal/plugins/vm/plugin.go`](../../internal/plugins/vm/plugin.go) |
+| `recommendVM()` engine | ✅ | [`internal/engine/vm_recommender.go`](../../internal/engine/vm_recommender.go) |
+| Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
+| Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
+| Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
+| Notifications 18, 19, 37–42 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
+| Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
+| Operator Strategy 3 dual-CSV | ⬜ (operator) | koku-metrics-operator |
+| Savings ($) in API | ⬜ | — |
+| `current_instance_type` from operator | ⬜ | TODO in [`vm_recommender.go`](../../internal/engine/vm_recommender.go#L142) |
+| koku-ui VM page | ⬜ | koku-ui |
+| Per-mountpoint disk recs | ⬜ | — |
+| VirtualMachinePreference CRD | ⬜ | — |
+| Recommendation history | ⬜ | Only latest row per VM/term/engine |
 
 ---
 
 ## Collection strategy: Strategy 3 (unified 15-min, dual-CSV)
 
-The operator collects **all VM metrics once** at **15-minute** resolution. To avoid duplicate Prometheus queries and to keep Koku ingestion stable:
+The operator collects VM metrics once at **15-minute** resolution and emits two CSV streams:
 
 | Output | Cadence | Consumer | Purpose |
 |--------|---------|----------|---------|
-| `ros-openshift-vm-usage-*.csv` | **15 min** | ROS-OCP | Percentiles, I/O profile, filesystem (when guest agent present) |
-| `cm-openshift-vm-usage-*.csv` | **Hourly** (aggregated from same scrape) | Koku | Cost reporting (unchanged contract) |
+| `ros-openshift-vm-usage-*.csv` | **15 min** | ROS-OCP | Percentiles, I/O, filesystem (guest agent) |
+| `cm-openshift-vm-usage-*.csv` | **Hourly** (aggregated) | Koku | Cost reporting (unchanged) |
 
-**Benefits:**
-
-- Single scrape pass per VM metric — no overlapping `cost:vm_*` + `ros:vm_*` query storms
-- ROS gets higher resolution for stable percentile estimates
-- Koku continues to receive hourly CSVs without pipeline changes
-
-**Impact at scale (R2):** At **1,000 VMs**, Strategy 3 adds ~**1 MB per upload** (compressed) over a 6-hour cycle versus hourly-only collection. Operator PVC usage ~**720 MB** at 30 retained reports. Negligible relative to cluster and network capacity.
-
----
-
-## Current state
-
-### koku-metrics-operator (cost path → dual output)
-
-The operator today collects **~11 `cost:vm_*` queries** at **hourly** granularity for billing. Under Strategy 3, the same underlying series are scraped at **15 min**; Koku-bound CSVs are downsampled to hourly aggregates.
-
-| Query | Prometheus series (summary) | Purpose |
-|-------|-----------------------------|---------|
-| `cost:vm_cpu_usage` | `rate(kubevirt_vmi_cpu_usage_seconds_total[5m])` | CPU utilization |
-| `cost:vm_cpu_request_cores` | `kubevirt_vm_resource_requests{resource='cpu'}` | CPU allocation |
-| `cost:vm_cpu_limit_cores` | `kubevirt_vm_resource_limits{resource='cpu'}` | CPU limit |
-| `cost:vm_cpu_request_sockets` | sockets unit on CPU requests | Topology (cost only) |
-| `cost:vm_cpu_request_threads` | threads unit on CPU requests | Topology (cost only) |
-| `cost:vm_memory_usage_bytes` | `kubevirt_vmi_memory_used_bytes` | Memory utilization |
-| `cost:vm_memory_request_bytes` | `kubevirt_vm_resource_requests{resource='memory'}` | Memory allocation |
-| `cost:vm_memory_limit_bytes` | `kubevirt_vm_resource_limits{resource='memory'}` | Memory limit |
-| `cost:vm_disk_allocated_size_bytes` | `kubevirt_vm_disk_allocated_size_bytes` | Disk provisioned size |
-| `cost:vm_info` | `kubevirt_vmi_info{phase='running'}` | OS, instance type, guest OS |
-| `cost:vm_labels` | `kubevirt_vm_labels` | Labels for cost allocation |
-
-**Outputs:** `cm-openshift-vm-usage-<YYYYMM>.csv` (hourly, Koku) and `ros-openshift-vm-usage-*.csv` (15 min, ROS) in the operator upload tarball.
-
-### Koku backend (cost + reporting)
-
-- Line items: `openshift_vm_usage_line_items` (Trino/Parquet SaaS; self-hosted PostgreSQL on-prem)
-- UI summary: `reporting_ocp_vm_summary_p` / `OCPVirtualMachineSummaryP`
-- Cost model metrics: `vm_cost_per_month`, `vm_core_cost_per_hour`, etc.
-- REST: `reports/openshift/resources/virtual-machines/`
-
-VMs are identified in Koku via the pod label `vm.kubevirt.io/name` (`vm_kubevirt_io_name` in JSON).
-
-### ros-ocp-backend (gaps)
-
-| Item | Status |
-|------|--------|
-| VM CSV ingestion | **Not implemented** |
-| `daily_vm_digests` | Schema specified in requirements §18; table not wired |
-| `recommendVM()` | **Not implemented** |
-| VM API endpoints | **Not implemented** |
-| Notification codes **18** (`NotifVMIdle`), **19** (`NotifVMOversized`) | Defined in `internal/engine/notifications.go`; **no plugin emits them** |
-| `ROS_ENABLE_VM_RECS` | Master gate (default **`true`**; auto-no-op if no VM CSV) |
+**ROS CSV columns** (canonical header in [`vm_csv.go`](../../internal/ingestion/vm_csv.go)): `interval_start`, `interval_end`, `vm_name`, `namespace`, `node_name`, `guest_os`, CPU/memory request/limit/usage, `disk_allocated_bytes`, optional `filesystem_used_bytes` / `filesystem_capacity_bytes`, disk IOPS and throughput.
 
 ---
 
 ## Guest agent: adaptive per-VM
 
-Recommendation quality adapts **per VM** based on whether QEMU guest agent metrics are present in the CSV (non-null columns):
-
 | Mode | Detection | Engine behavior | API `confidence` |
 |------|-----------|-----------------|------------------|
-| **Enhanced** | Guest agent columns populated | Working-set memory, per-mountpoint filesystem used %, swap detection | `"high"` |
-| **Hypervisor-only** | Guest agent columns null | Hypervisor metrics only; wider safety margins | `"moderate"` |
+| **Enhanced** | Guest-agent columns populated in digests | Filesystem projection, working-set signals, code 40/42 | `"high"` |
+| **Hypervisor-only** | Guest-agent columns null | Wider margins; Strategy B disk trending; code 38, 37 | `"moderate"` |
 
-**API fields:**
+Guest-agent **disk strategy takes precedence** when any digest has non-null `filesystem_used_bytes` and `filesystem_capacity_bytes`; hypervisor allocation trending is not used for that VM.
 
-- `guest_agent_detected` — `true` when guest agent metrics were present for this VM in the analysis window
-- `confidence` — `"high"` (guest agent) or `"moderate"` (hypervisor-only)
-
-Without guest agent, in-guest OOM and filesystem pressure are not visible in Prometheus — the engine compensates with higher memory margins (same pattern as containers without OOM feedback).
+API fields: `metadata.guest_agent_detected`, `metadata.confidence` (`high` | `moderate` | `low` accepted on filters).
 
 ---
 
 ## Recommendation types
 
-### 1. vCPU right-sizing
+### vCPU and memory right-sizing
 
-- **Input:** p95 CPU usage (millicores) over the active term window.
-- **Algorithm:** Apply adaptive margin (minimum **15%**, maximum **50%**), convert to vCPUs, **ceil** to whole vCPUs (minimum 1).
-- **Engines:** Cost engine uses p95; performance engine uses p99 (same pattern as containers).
+- **CPU:** p95 (cost) or p99 (performance) millicores → adaptive margin (15–50%) → ceil to whole vCPUs (min 1).
+- **Memory:** p95 + margin (min 20%) → **memory floors** (`memory_floors.linux_gib` default 1, `windows_gib` default 2) → ceil to whole GiB (min 1).
+- **Downsize hysteresis:** Recommend downsize only if `recommended/current < 0.60` **or** drop ≥ `min_vcpu_change` (2) vCPU **or** ≥ `min_gib_change` (2) GiB.
 
-### 2. Memory right-sizing
+### Instance type matching
 
-- **Input:** p95 memory usage (KiB); with guest agent, prefer working-set signals where available.
-- **Algorithm:** Minimum **20%** margin above p95; apply **guest OS floor** (Windows: **2 GiB**, Linux: **0.5 GiB**); **ceil** to whole GiB (minimum 1 GiB).
+Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) (OpenShift Virtualization defaults). **GPU types (`gn1.*`) are defined but excluded** from matching until GPU metrics exist.
 
-### 3. Instance type matching
-
-Map recommended vCPU + memory to the **smallest** `VirtualMachineClusterInstancetype` that satisfies both dimensions.
-
-- **Catalog:** Built-in OpenShift Virt defaults (series below) + operator-collected custom types (**VM-E, phase11 scope**).
-- **`VirtualMachinePreference` CRDs:** Optional hints for workload class (e.g. high-performance vs development) to bias series selection.
-
-### 4. Idle / zombie VM detection (OS-aware)
-
-Flag VMs where **both** CPU and memory p95 stay below OS-specific idle thresholds:
-
-| Guest OS family | CPU p95 threshold | Memory p95 threshold |
-|-----------------|-------------------|----------------------|
-| **Linux** (default) | **< 50 millicores** | **< 512 MiB** |
-| **Windows** | **< 200 millicores** | **< 3072 MiB** (3 GiB) |
-
-**OS detection:** `os` label on `kubevirt_vmi_info` (available when the VM spec declares OS, even without guest agent).
-
-Emits `NotifVMIdle` (code 18). Distinct from rightsizing — full allocated waste, not marginal savings.
-
-### 5. Disk size trending
-
-- **Hypervisor-only:** Daily max `disk_allocated_bytes` + **30-day** linear trend + **25%** headroom → round to **10 GiB**.
-- **With guest agent:** Per-mountpoint recommendations from filesystem used/capacity (queries 13–14); projection uses in-guest utilization where available.
-
-### 6. Disk I/O profile (day one)
-
-- **Input:** p95 read/write IOPS and throughput (queries 7–10).
-- **Output:** Notification when total p95 IOPS exceeds **3000** — suggests reviewing storage class performance; **no automatic storage class name** (catalog varies per cluster).
-
----
-
-## Instance type recommendation (detail)
-
-OpenShift Virtualization ships **VirtualMachineClusterInstancetype** CRDs. Common series (sizes from `small` through `8xlarge`):
-
-| Series | Typical profile | Selection heuristic |
-|--------|-----------------|---------------------|
-| **cx1** | CPU-heavy | High CPU/memory ratio, sustained CPU |
-| **m1** | Balanced general purpose | Default when no strong skew |
-| **u1** | Utility / low cost | Idle or very low utilization |
-| **gn1** | GPU | GPU-attached workloads |
-| **o1** | Bursty | High variance, short peaks |
-| **n1** | Network-optimized | Future: network-heavy VMs |
+| Series | API `series` value | Sizes (examples) |
+|--------|-------------------|------------------|
+| **u1** | `general-purpose` | `u1.nano` … `u1.8xlarge` |
+| **cx1** | `compute-optimized` | `cx1.medium` … `cx1.8xlarge` |
+| **m1** | `memory-optimized` | `m1.large` … `m1.4xlarge` |
 
 **Algorithm:**
 
-1. Compute recommended vCPU count and GiB from usage + margins.
-2. Enumerate instance types from catalog (built-in defaults + cluster CRs collected by operator).
-3. Choose the **smallest** type where `spec.cpu.guest >= rec_vcpu` and `spec.memory.guest >= rec_gib`.
-4. Classify workload → series using CPU/memory ratio, idle flag, and optional preference labels.
-5. If VM uses **raw** `spec.template.spec.domain.resources` (no instance type), still emit vCPU/GiB recs; instance type field may be null.
+1. Compute recommended vCPU and GiB from usage + margins.
+2. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose).
+3. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type in preferred series that fits vCPU and memory (MiB-aware for `u1.nano`).
+4. Fall back to general-purpose series if no match in preferred series.
+5. Emit notification **41** when a type is recommended.
 
-**Operator addition (VM-E, phase11):** List `VirtualMachineClusterInstancetype` objects (and optionally preferences) into CSV or a sidecar manifest for catalog sync.
+Cluster custom `VirtualMachineClusterInstancetype` CRs are **not** merged into the catalog yet (operator catalog sync remains future work).
+
+### Idle detection (OS-aware)
+
+Both CPU and memory p95 must be below thresholds:
+
+| Guest OS | CPU p95 | Memory p95 |
+|----------|---------|------------|
+| **Linux** (default) | < 50 millicores | < 512 MiB |
+| **Windows** | < 200 millicores | < 3072 MiB |
+
+Emits notification **18** (`warning`). OS from `guest_os` in CSV.
+
+### Disk projection
+
+**Strategy A (guest agent)** — when filesystem metrics exist on digests:
+
+- Linear growth from earliest→latest daily `filesystem_used_max_bytes` vs capacity.
+- Sets `disk_projection.days_until_full` when growth > 0.
+- Notification **40** when `days_until_full < 90`.
+- Notification **42** (`critical`) when latest used/capacity > 90%.
+
+**Strategy B (hypervisor-only)** — OLS slope on daily `disk_allocated_max_bytes`:
+
+- Requires ≥ 2 days with positive allocation samples.
+- Slope must be ≥ `disk.min_growth_mib_per_day` (default **100** MiB/day).
+- Sets `disk_projection.growth_gib_per_day` and `recommended_expand_gib` (30-day projection × headroom, rounded to `round_step_gib`).
+- **`days_until_full` is always `null`** — allocated bytes do not represent in-guest free space.
+- Notification **37** when growth is significant.
+
+Guest-agent path **wins** whenever filesystem columns are present; Strategy B is not combined for the same VM.
+
+### Disk I/O profile
+
+p95 read/write IOPS and throughput from digests. When read+write p95 exceeds `io.high_iops_threshold` (default 3000), sets `io_profile.hint` and notification **39**.
 
 ---
 
-## Engine design
+## Notifications
 
-### Plugin registration
+All notifications are JSON objects in the `notifications` array:
+
+```json
+{"code": 18, "type": "warning", "message": "VM is idle: CPU and memory usage are consistently below thresholds"}
+```
+
+| Code | Name | Type | Trigger |
+|------|------|------|---------|
+| **18** | `NotifVMIdle` | `warning` | `metadata.is_idle` |
+| **19** | `NotifVMOversized` | `warning` | `metadata.is_oversized` (meaningful downsize) |
+| **37** | `NotifVMDiskGrowingNoCapacity` | `info` | Hypervisor allocation growth ≥ min threshold; no guest agent |
+| **38** | `NotifVMNoGuestAgent` | `info` | `guest_agent_detected == false` |
+| **39** | `NotifVMHighIO` | `warning` | Total p95 IOPS > high IOPS threshold |
+| **40** | `NotifVMDiskFillingGuest` | `warning` | Guest agent: `days_until_full < 90` |
+| **41** | `NotifVMInstanceTypeRec` | `info` | `recommended.instance_type` set |
+| **42** | `NotifVMDiskCritical` | `critical` | Guest agent: filesystem > 90% used |
+
+Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
+
+---
+
+## Plugin and pipeline
 
 | Property | Value |
 |----------|-------|
 | Plugin name | `vm` |
-| Phase | **1 — Produce** (ingest + recommend + persist) |
-| Priority | **40** (after `pvc` 30, `quota` 35, `cluster-quota` 36) |
-| Gate | `ROS_ENABLE_VM_RECS` (default **`true`**) |
-| Auto-detection | If no `ros-openshift-vm-usage-*.csv` arrives, plugin **no-ops silently** (same pattern as GPU plugins) |
-| Pattern | Same as `container`: ingest CSV → `daily_vm_digests` → `recommendVM()` → `vm_recommendations` |
-
-### Pipeline
+| Phase | **1 — Produce** |
+| Priority | **40** |
+| CSV type | `PayloadTypeVM` / `ros-openshift-vm-usage` |
+| Retention tables | `daily_vm_digests`, `vm_recommendations` |
 
 ```
-ros-openshift-vm-usage-*.csv (operator, 15-min)
+ros-openshift-vm-usage-*.csv
         │
         ▼
-  ParseVMRows() ──► ComputeVMDigests() ──► Upsert daily_vm_digests
+  ParseVMCSVRows() → BuildDailyVMDigests() → Upsert daily_vm_digests
         │
         ▼
-  recommendVM()  (batch read digests, all terms in memory)
+  RunVMRecommendations() / recommendVM()
         │
         ▼
-  vm_recommendations + notifications (18/19, disk/IOPS info codes)
+  vm_recommendations + notifications
         │
         ▼
-  GET /recommendations/openshift/virtual-machines[/:id]
+  GET /recommendations/openshift/vm
+  GET /recommendations/openshift/vm/detail
 ```
 
-### Key differences from containers
-
-| Behavior | Containers | VMs |
-|----------|--------------|-----|
-| Output granularity | `250m`, `512Mi` | Whole vCPUs, whole GiB |
-| Downsize hysteresis | Moderate | **Strong:** recommend downsize only if `rec/current < 0.60` **OR** drop ≥ **2** vCPU **or** ≥ **2** GiB |
-| Upsize | Standard margins | Same — favor headroom (restart cost of under-provisioning) |
-| OOM / throttling feedback | Yes | **No** (hypervisor-only); guest agent improves memory/disk signals |
-| Limit vs request | Both tuned | Focus on **requests** / domain resources (limits optional in API) |
-
-### Terms
-
-VMs are more stable than pods; term windows use **higher minimum data** thresholds:
-
-| Term | Window | Min data points | Rationale |
-|------|--------|-----------------|-----------|
-| **Short** | 7 days | 3 | Quick signal; VMs change slowly |
-| **Medium** | 30 days | 14 | Weekly patterns |
-| **Long** | 90 days | 30 | Quarterly behavior |
-
-At **15-minute** sampling: 672 / 2880 / 8640 samples per term — sufficient for percentile stability.
-
-### Default thresholds
-
-| Parameter | Default | Notes |
-|-----------|---------|-------|
-| CPU percentile (cost) | 0.95 | |
-| CPU percentile (performance) | 0.99 | |
-| CPU margin min / max | 15% / 50% | Adaptive margin between bounds |
-| Memory margin min | 20% | Wider when `confidence=moderate` |
-| Downsize hysteresis ratio | **0.60** | `recommended / current` must be below this (or absolute drop rule) |
-| Min vCPU change to recommend | **2** | Avoid noisy 1-vCPU churn |
-| Min GiB change to recommend | **2** | |
-| Idle CPU threshold (Linux) | 50 millicores | p95 |
-| Idle memory threshold (Linux) | 512 MiB | p95 |
-| Idle CPU threshold (Windows) | 200 millicores | p95 |
-| Idle memory threshold (Windows) | 3072 MiB | p95 |
-| Disk headroom | 25% | On projected size |
-| Disk projection window | 30 days | Linear trend on daily max allocated |
-| Disk round step | 10 GiB | |
-| High IOPS hint (read+write p95) | 3000 | Informational |
-
-Configurable via Settings API and env locks (see [Configuration](#configuration)).
-
----
-
-## Metrics — Strategy 3 (14 ROS queries at 15-min)
-
-All VM metrics are collected at **15-minute** resolution. The operator emits a **dual-CSV**: 15-min for ROS, hourly aggregate for Koku. **14 `ros:vm_*` queries** cover rightsizing, I/O, filesystem (guest agent), and metadata.
-
-### Full metrics table
-
-| # | ROS query | Prometheus source | In Koku hourly CSV? | Notes |
-|---|-----------|-------------------|---------------------|-------|
-| 1 | `ros:vm_cpu_usage_cores` | `rate(kubevirt_vmi_cpu_usage_seconds_total[5m])` | Yes (aggregated) | Same series as `cost:vm_cpu_usage` |
-| 2 | `ros:vm_cpu_request_cores` | `kubevirt_vm_resource_requests{resource='cpu'}` | Yes | |
-| 3 | `ros:vm_cpu_limit_cores` | `kubevirt_vm_resource_limits{resource='cpu'}` | Yes | |
-| 4 | `ros:vm_memory_usage_bytes` | `kubevirt_vmi_memory_used_bytes` | Yes | Hypervisor view |
-| 5 | `ros:vm_memory_request_bytes` | `kubevirt_vm_resource_requests{resource='memory'}` | Yes | |
-| 6 | `ros:vm_memory_available_bytes` | `kubevirt_vmi_memory_available_bytes` | No | Headroom / balloon visibility |
-| 7 | `ros:vm_disk_read_iops` | `rate(kubevirt_vmi_storage_iops_read_total[5m])` | No | **Day one** — IOPS profile |
-| 8 | `ros:vm_disk_write_iops` | `rate(kubevirt_vmi_storage_iops_write_total[5m])` | No | **Day one** |
-| 9 | `ros:vm_disk_read_bytes_per_sec` | `rate(kubevirt_vmi_storage_read_traffic_bytes_total[5m])` | No | **Day one** — throughput |
-| 10 | `ros:vm_disk_write_bytes_per_sec` | `rate(kubevirt_vmi_storage_write_traffic_bytes_total[5m])` | No | **Day one** |
-| 11 | `ros:vm_disk_allocated_bytes` | `kubevirt_vm_disk_allocated_size_bytes` | Yes | Allocation trending |
-| 12 | `ros:vm_info` | `kubevirt_vmi_info{phase='running'}` | Yes | OS label, instance type, join key |
-| 13 | `ros:vm_filesystem_used_bytes` | `kubevirt_vmi_filesystem_used_bytes` | No | **Guest agent** — per mountpoint |
-| 14 | `ros:vm_filesystem_capacity_bytes` | `kubevirt_vmi_filesystem_capacity_bytes` | No | **Guest agent** — per mountpoint |
-
-**Not in ROS CSV:** `cost:vm_labels`, socket/thread CPU breakdown — cost-only unless needed for filtering.
-
-### Detection filter
-
-All VM queries **must** join `kubevirt_vmi_info{phase='running'}` on `(name, namespace)` — do not rely on pod labels alone.
+Default term windows ([`plugin.go`](../../internal/plugins/vm/plugin.go)): **7 / 15 / 30** days lookback with **3 / 7 / 15** min data days (`short_term`, `medium_term`, `long_term`). Max plugin window: **90** days.
 
 ---
 
 ## Configuration
 
-### Master gate and auto-detection
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROS_ENABLE_VM_RECS` | **`true`** | Registers VM plugin; set `false` to disable entirely |
-
-When enabled but **no VM CSV** is present in uploads, the plugin **no-ops silently** (no errors, no empty recommendations) — same pattern as GPU recommendation plugins.
-
 ### Three-tier precedence
 
-Same model as containers, nodes, and PVCs: **compiled defaults → tenant Settings API → env locks**.
+Compiled defaults → tenant Settings API → environment variable locks (field paths in `locked_fields`).
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET/PUT/DELETE .../settings/ros/thresholds/?recommendation_type=vm` | Threshold overrides (percentiles, margins, idle, disk, IOPS) |
-| `GET/PUT/DELETE .../settings/ros/terms/?recommendation_type=vm` | Term windows and min data points |
+### Settings API (implemented paths)
 
-Env-locked fields follow existing `ROS_*` lock semantics documented in [configurability.md](../architecture/configurability.md).
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/cost-management/v1/recommendations/openshift/settings/vm` | Thresholds, memory floors, disk, I/O, instance type matching |
+| PUT | `/api/cost-management/v1/recommendations/openshift/settings/vm` | Partial update of allowed blocks |
+| GET | `/api/cost-management/v1/recommendations/openshift/settings/vm/terms` | Term windows |
+| PUT | `/api/cost-management/v1/recommendations/openshift/settings/vm/terms` | Replace term windows (1–3 terms) |
 
-### Environment variables (full list)
+**GET settings response shape** ([`VMSettingsResponse`](../../internal/engine/vm_settings.go)):
 
-| Variable | Default | Configurable via Settings API |
-|----------|---------|------------------------------|
+```json
+{
+  "enabled": true,
+  "thresholds": {
+    "cpu_percentile_cost": 0.95,
+    "cpu_percentile_perf": 0.99,
+    "cpu_margin_min": 0.15,
+    "cpu_margin_max": 0.50,
+    "mem_margin_min": 0.20,
+    "downsize_hysteresis_ratio": 0.60,
+    "min_vcpu_change": 2,
+    "min_gib_change": 2,
+    "idle_cpu_mc": 50,
+    "idle_memory_mib": 512,
+    "idle_cpu_mc_windows": 200,
+    "idle_memory_mib_windows": 3072
+  },
+  "memory_floors": { "linux_gib": 1, "windows_gib": 2 },
+  "disk": {
+    "projection_window_days": 30,
+    "headroom_pct": 0.25,
+    "round_step_gib": 10,
+    "min_growth_mib_per_day": 100
+  },
+  "io": { "high_iops_threshold": 3000 },
+  "instance_type_matching": true,
+  "locked_fields": []
+}
+```
+
+### Environment variables
+
+| Variable | Default | Settings API field |
+|----------|---------|-------------------|
 | `ROS_ENABLE_VM_RECS` | `true` | No (deployment gate) |
-| `ROS_VM_CPU_PERCENTILE` | `0.95` | Yes |
-| `ROS_VM_CPU_PERCENTILE_PERFORMANCE` | `0.99` | Yes |
-| `ROS_VM_CPU_MARGIN_MIN` | `0.15` | Yes |
-| `ROS_VM_CPU_MARGIN_MAX` | `0.50` | Yes |
-| `ROS_VM_MEMORY_MARGIN_MIN` | `0.20` | Yes |
-| `ROS_VM_DOWNSIZE_HYSTERESIS` | `0.60` | Yes |
-| `ROS_VM_MIN_VCPU_CHANGE` | `2` | Yes |
-| `ROS_VM_MIN_GIB_CHANGE` | `2` | Yes |
-| `ROS_VM_IDLE_CPU_MC` | `50` | Yes |
-| `ROS_VM_IDLE_MEMORY_MIB` | `512` | Yes |
-| `ROS_VM_IDLE_CPU_MC_WINDOWS` | `200` | Yes |
-| `ROS_VM_IDLE_MEMORY_MIB_WINDOWS` | `3072` | Yes |
-| `ROS_VM_DISK_HEADROOM` | `0.25` | Yes |
-| `ROS_VM_DISK_PROJECTION_DAYS` | `30` | Yes |
-| `ROS_VM_DISK_ROUND_GIB` | `10` | Yes |
-| `ROS_VM_HIGH_IOPS_HINT` | `3000` | Yes |
+| `ROS_VM_CPU_PERCENTILE_COST` | `0.95` | `thresholds.cpu_percentile_cost` |
+| `ROS_VM_CPU_PERCENTILE_PERF` | `0.99` | `thresholds.cpu_percentile_perf` |
+| `ROS_VM_CPU_MARGIN_MIN` | `0.15` | `thresholds.cpu_margin_min` |
+| `ROS_VM_CPU_MARGIN_MAX` | `0.50` | `thresholds.cpu_margin_max` |
+| `ROS_VM_MEM_MARGIN_MIN` | `0.20` | `thresholds.mem_margin_min` |
+| `ROS_VM_DOWNSIZE_HYSTERESIS_RATIO` | `0.60` | `thresholds.downsize_hysteresis_ratio` |
+| `ROS_VM_MIN_VCPU_CHANGE` | `2` | `thresholds.min_vcpu_change` |
+| `ROS_VM_MIN_GIB_CHANGE` | `2` | `thresholds.min_gib_change` |
+| `ROS_VM_IDLE_CPU_MC` | `50` | `thresholds.idle_cpu_mc` |
+| `ROS_VM_IDLE_MEMORY_MIB` | `512` | `thresholds.idle_memory_mib` |
+| `ROS_VM_IDLE_CPU_MC_WINDOWS` | `200` | `thresholds.idle_cpu_mc_windows` |
+| `ROS_VM_IDLE_MEMORY_MIB_WINDOWS` | `3072` | `thresholds.idle_memory_mib_windows` |
+| `ROS_VM_LINUX_MEMORY_FLOOR_GIB` | `1` | `memory_floors.linux_gib` |
+| `ROS_VM_WINDOWS_MEMORY_FLOOR_GIB` | `2` | `memory_floors.windows_gib` |
+| `ROS_VM_DISK_PROJECTION_DAYS` | `30` | `disk.projection_window_days` |
+| `ROS_VM_DISK_HEADROOM_PCT` | `0.25` | `disk.headroom_pct` |
+| `ROS_VM_DISK_ROUND_STEP_GIB` | `10` | `disk.round_step_gib` |
+| `ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY` | `100` | `disk.min_growth_mib_per_day` |
+| `ROS_VM_HIGH_IOPS_THRESHOLD` | `3000` | `io.high_iops_threshold` |
+| `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `true` | `instance_type_matching` |
+
+Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm_config.go`](../../internal/engine/vm_config.go).
 
 ---
 
-## API
+## REST API reference
 
-### Endpoints
+Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-management entitlement. Routes return **404** when `ROS_ENABLE_VM_RECS=false` or the `vm` plugin is not in `enabledPlugins`.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/cost-management/v1/recommendations/openshift/virtual-machines/` | Paginated VM recommendation list |
-| GET | `/api/cost-management/v1/recommendations/openshift/virtual-machines/:id` | Detail for one VM |
+### List recommendations
 
-### Filters
+`GET /recommendations/openshift/vm`
 
-- `filter[vm_name]`
-- `filter[namespace]`
-- `filter[cluster]` (cluster UUID)
-- `filter[recommendation_status]` — e.g. active, idle, oversized
-- `filter[confidence]` — `high`, `moderate`
+**Query parameters**
 
-### Response shape (conceptual)
+| Parameter | Description |
+|-----------|-------------|
+| `limit` | 1–100 (default 10) |
+| `offset` | Pagination offset |
+| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_oversized`, `confidence`, `last_recommended_at` |
+| `order_how` | `asc` or `desc` |
+| `filter[cluster]` | Cluster UUID (RBAC-scoped) |
+| `filter[namespace]` | Namespace |
+| `filter[vm_name]` | VM name |
+| `filter[term]` | `short_term`, `medium_term`, `long_term` |
+| `filter[engine]` | `cost` or `performance` |
+| `filter[confidence]` | `high`, `moderate`, or `low` |
+| `filter[is_idle]` | `true` / `false` |
+| `filter[is_oversized]` | `true` / `false` |
+| `filter[guest_agent_detected]` | `true` / `false` |
 
-Per VM (aligned with requirements § VM Recommendation Response Format):
+**Example**
 
-- **Identity:** `vm_name`, `namespace`, `cluster_id`, `guest_os_name`, `vm_instance_type` (current)
-- **Current / recommended:** vCPU, memory_gib, disk_gib (and per-mountpoint disk when guest agent present)
-- **Instance type:** `recommended_instance_type` (e.g. `m1.large`), `series`, optional `preference`
-- **Quality:** `guest_agent_detected`, `confidence` (`"high"` | `"moderate"`)
-- **Flags:** `idle`, `oversized`, `abandoned` (future)
-- **Terms:** which term drove the primary recommendation
-- **IOPS profile:** read/write p95 IOPS and throughput (informational)
-- **Notifications:** codes 18/19 + informational storage messages
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/vm?limit=10&filter[is_idle]=true'
+```
+
+**Response (abbreviated)**
+
+```json
+{
+  "meta": { "count": 1, "limit": 10, "offset": 0 },
+  "links": { "first": "...", "last": "...", "next": null, "previous": null },
+  "data": [
+    {
+      "vm_name": "legacy-app-02",
+      "namespace": "finance",
+      "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
+      "guest_os": "linux",
+      "current": { "vcpu": 8, "memory_gib": 32, "disk_gib": 500, "instance_type": null },
+      "recommended": { "vcpu": 4, "memory_gib": 16, "disk_gib": 600, "instance_type": "u1.xlarge", "series": "general-purpose" },
+      "metadata": {
+        "guest_agent_detected": false,
+        "confidence": "moderate",
+        "term": "medium_term",
+        "engine": "cost",
+        "is_idle": false,
+        "is_oversized": true
+      },
+      "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },
+      "disk_projection": { "days_until_full": null, "growth_gib_per_day": 2.1, "recommended_expand_gib": 100 },
+      "notifications": [
+        { "code": 19, "type": "warning", "message": "VM is oversized: recommended resources are significantly below current allocation" },
+        { "code": 38, "type": "info", "message": "QEMU guest agent not installed: recommendations based on hypervisor metrics only (moderate confidence)" }
+      ],
+      "last_recommended_at": "2026-05-30T12:00:00Z"
+    }
+  ]
+}
+```
+
+### Detail (includes daily digests)
+
+`GET /recommendations/openshift/vm/detail`
+
+**Required query parameters:** `cluster_uuid` (or `filter[cluster]`), `vm_name`, `namespace`  
+**Optional:** `term` (default `medium_term`), `engine` (default `cost`)
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/vm/detail?cluster_uuid=CLUSTER&vm_name=erp-backend&namespace=finance&term=medium_term&engine=cost'
+```
+
+Adds `daily_digests[]` with per-day percentile fields for charts.
 
 ---
 
-## Implementation priority
+## Not yet implemented (future work)
 
-| Phase | Work | Effort | Owner |
-|-------|------|--------|-------|
-| **VM-A** | Operator: Strategy 3 — 14 `ros:vm_*` at 15-min + dual-CSV + manifest entry | **Moderate** | koku-metrics-operator |
-| **VM-B** | ros-ocp-backend: migrations (`daily_vm_digests`, `vm_recommendations`), CSV parser, digest upsert | **Low–moderate** | ros-ocp-backend |
-| **VM-C** | `recommendVM()`, guest agent branches, OS idle, notifications 18/19 | **Moderate** | ros-ocp-backend |
-| **VM-D** | API list/detail + settings/terms for `recommendation_type=vm` | **Low** | ros-ocp-backend + Koku API proxy if needed |
-| **VM-E** | Instance type catalog + series classification (**phase11**) | **Low** (parallel with VM-C) | operator + ros-ocp-backend |
-
-**VM-A** and **VM-E** can start in parallel. **VM-B/C** need VM-A for end-to-end validation (mock CSVs suffice for unit tests).
-
----
-
-## Dependencies
-
-| Dependency | Notes |
-|------------|-------|
-| koku-metrics-operator VM-A | Strategy 3 dual-CSV + 14 queries at 15-min |
-| Koku cost pipeline | **No change** — continues ingesting hourly `cm-openshift-vm-usage-*.csv` |
-| Instance type catalog | VM-E: operator list of `VirtualMachineClusterInstancetype` + default catalog in Go |
-| Feature gate | `ROS_ENABLE_VM_RECS` (default on; auto-no-op without data) |
-| UI | Optimizations VM views; namespace flag for on-prem (`cost-management.koku-ui-ros.namespace`) |
+| Item | Notes |
+|------|-------|
+| **Savings estimation** | No dollar fields in API; Koku VM cost rates not wired |
+| **GPU / MIG VMs** | `gn1` catalog reference only; no GPU metrics or recommendations |
+| **koku-ui** | No dedicated VM optimizations view |
+| **`current_instance_type`** | Column exists; not populated from operator/`kubevirt_vmi_info` yet |
+| **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
+| **VirtualMachinePreference** | No CRD-based series bias |
+| **Recommendation history** | Upsert keeps latest row only |
+| **Cluster instance type catalog** | Built-in u/cx/m only; no operator CR list |
+| **OpenAPI spec** | VM paths not in [`openapi.json`](../../openapi.json) yet |
 
 ---
 
-## Risks and mitigations
+## Database
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| No in-guest disk **used** % (hypervisor-only) | Allocation-only disk recs | Guest agent → filesystem queries 13–14; `confidence=moderate` + wider margins |
-| No guest OOM in Prometheus | Memory upsizing less reactive | Higher memory margin; performance engine p99; guest agent working-set when present |
-| Instance types optional | Many VMs use raw domain resources | vCPU/GiB recs still valuable; nullable instance type field |
-| Balloon driver not enabled | `memory_available` misleading | Document metric prerequisite; fall back to usage-only |
-| VM restart churn | Operator ignores noisy recs | Strong downsize hysteresis (0.60, min 2 vCPU/GiB delta) |
-| Windows idle false negatives (uniform threshold) | Missed idle VMs | **OS-aware idle thresholds** from day one via `os` label |
-| Upload size growth | Operator PVC / bandwidth | ~1 MB/compressed upload per 1k VMs per 6h cycle — negligible |
+Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_recommendations.up.sql), notification seeds in `000090`/`000091`.
 
----
-
-## Database objects (target)
-
-See [requirements.md §18](../architecture/requirements.md) for canonical DDL sketches:
-
-- `daily_vm_digests` — partitioned by `bucket_date`; BIGINT metrics (`_mc`, `_kib`, IOPS columns); optional filesystem columns per mountpoint
-- `vm_recommendations` — current vs recommended resources, flags, instance type, IOPS JSON, `guest_agent_detected`, `confidence`
-
-No raw 15-min VM metrics in PostgreSQL — same digest-only model as containers.
+- `daily_vm_digests` — partitioned by `bucket_date`; percentile and I/O columns
+- `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB
 
 ---
 
 ## Testing
 
-See the dedicated [VM Test Plan](vm-test-plan.md) for comprehensive test specifications
-covering unit tests (~30), E2E tests (~15), IQE tests (~12), and nise data generation.
+See [vm-test-plan.md](vm-test-plan.md). Summary:
 
-Key acceptance criteria:
-- VM CSV → `daily_vm_digests` population (15-min intervals)
-- Whole vCPU / whole GiB rounding with correct ceilings
-- Windows memory floor ≥ 2 GiB; Linux ≥ 512 MiB
-- Downsize hysteresis: ratio < 0.60 OR delta ≥ 2
-- OS-aware idle thresholds (Linux vs Windows)
-- Guest agent detection → confidence high/moderate
-- Instance type smallest-fit selection from catalog
-- API list/detail/settings contract tests
-- Full pipeline: CSV → digests → recommend → API response
+| Layer | Planned | Implemented (approx.) |
+|-------|---------|------------------------|
+| Unit (ros-ocp-backend) | ~30 | **~58** test functions |
+| E2E (cost-onprem-chart) | ~15 | **13** |
+| IQE | ~12 | **26** |
+| Nise templates | — | `ocp_report_vm.yml` (chart + IQE) |
+
+```bash
+cd ros-ocp-backend
+go test ./internal/engine/... ./internal/ingestion/... ./internal/api/... -run 'VM|Vm|vm' -count=1
+```
 
 ---
 
 ## References
 
-- [requirements.md §12b — Phase 8b](../architecture/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)
-- [performance-analysis.md §30](../architecture/performance-analysis.md#30-openshift-virtualization-vm-recommendations)
-- [known-issues.md](../known-issues.md) — VM notification codes without plugin
+- [vm-test-plan.md](vm-test-plan.md)
+- [configurability.md](../architecture/configurability.md) — global `ROS_*` precedence
 - [plugin-phases.md](../architecture/plugin-phases.md) — `vm` priority 40
-- koku-metrics-operator: `internal/collector/queries.go` (`cost:vm_*` / `ros:vm_*` queries)
-- ros-ocp-backend: `internal/engine/notifications.go` (`NotifVMIdle`, `NotifVMOversized`)
+- IQE: [`test_ros_vm_recommendations.py`](../../../iqe-cost-management-plugin/iqe_cost_management/tests/rest_api/v1/test_ros_vm_recommendations.py)
+- E2E: [`test_vm_recommendations.py`](../../../cost-onprem-chart/tests/suites/ros/test_vm_recommendations.py)
