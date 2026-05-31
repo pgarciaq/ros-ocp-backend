@@ -644,21 +644,25 @@ func TestVMRecommend_MultipleNotifications(t *testing.T) {
 
 func TestVMRecommend_HappyPathEmptyNotifications(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	avail := int64(4 * 1024 * 1024)
+	avail := int64(1 * 1024 * 1024)
 	used := int64(40 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
+
+	cfg := DefaultVMRecConfig()
+	cfg.EnableInstanceTypeMatching = false
 
 	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
 		d.CPURequestMC = 4000
 		d.CPULimitMC = 4000
-		d.CPUUsageP95MC = 3500
+		d.CPUUsageP95MC = 3400
+		d.MemRequestKiB = 8 * 1024 * 1024
 		d.MemUsageP95KiB = 3 * 1024 * 1024
 		d.MemAvailableP95KiB = &avail
 		d.FilesystemUsedMaxBytes = &used
 		d.FilesystemCapacityBytes = &capacity
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsIdle)
