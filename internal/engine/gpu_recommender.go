@@ -120,6 +120,7 @@ func InitGPUEngine(cfg *config.Config) {
 		return
 	}
 	InitThresholdDefaults(cfg)
+	InitVMRecDefaults(cfg)
 	defaultThresholds = defaultGPUThresholdSettings.GPUThresholds
 }
 

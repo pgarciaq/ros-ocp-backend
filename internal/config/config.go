@@ -216,13 +216,33 @@ type Config struct {
 	PVCDaysToFullAlert           int     `mapstructure:"ROS_PVC_DAYS_TO_FULL_ALERT"`
 
 	// Quota recommendation thresholds (percent values; basis points = percent * 100).
-	QuotaHeadroomPercent              int `mapstructure:"ROS_QUOTA_HEADROOM_PERCENT"`
-	QuotaHighRiskThresholdPercent     int `mapstructure:"ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
-	QuotaMediumRiskThresholdPercent   int `mapstructure:"ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
+	QuotaHeadroomPercent            int `mapstructure:"ROS_QUOTA_HEADROOM_PERCENT"`
+	QuotaHighRiskThresholdPercent   int `mapstructure:"ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
+	QuotaMediumRiskThresholdPercent int `mapstructure:"ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
 
 	ClusterQuotaHeadroomPercent            int `mapstructure:"ROS_CLUSTER_QUOTA_HEADROOM_PERCENT"`
 	ClusterQuotaHighRiskThresholdPercent   int `mapstructure:"ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"`
 	ClusterQuotaMediumRiskThresholdPercent int `mapstructure:"ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
+
+	// VM (OpenShift Virtualization) recommendation thresholds.
+	EnableVMRecs                 bool    `mapstructure:"ROS_ENABLE_VM_RECS"`
+	VMCPUPercentileCost          float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_COST"`
+	VMCPUPercentilePerf          float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_PERF"`
+	VMCPUMarginMin               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MIN"`
+	VMCPUMarginMax               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MAX"`
+	VMMemMarginMin               float64 `mapstructure:"ROS_VM_MEM_MARGIN_MIN"`
+	VMDownsizeHysteresisRatio    float64 `mapstructure:"ROS_VM_DOWNSIZE_HYSTERESIS_RATIO"`
+	VMMinVCPUChange              int32   `mapstructure:"ROS_VM_MIN_VCPU_CHANGE"`
+	VMMinGiBChange               int32   `mapstructure:"ROS_VM_MIN_GIB_CHANGE"`
+	VMIdleCPUMC                  int64   `mapstructure:"ROS_VM_IDLE_CPU_MC"`
+	VMIdleMemoryMiB              int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB"`
+	VMIdleCPUMCWindows           int64   `mapstructure:"ROS_VM_IDLE_CPU_MC_WINDOWS"`
+	VMIdleMemoryMiBWindows       int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB_WINDOWS"`
+	VMDiskProjectionDays         int32   `mapstructure:"ROS_VM_DISK_PROJECTION_DAYS"`
+	VMDiskHeadroomPct            float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
+	VMDiskRoundStepGiB           int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
+	VMHighIOPSThreshold          int64   `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
+	VMEnableInstanceTypeMatching bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -549,6 +569,24 @@ func initConfig() {
 	viper.SetDefault("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", 10)
 	viper.SetDefault("ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT", 90)
 	viper.SetDefault("ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT", 70)
+	viper.SetDefault("ROS_ENABLE_VM_RECS", true)
+	viper.SetDefault("ROS_VM_CPU_PERCENTILE_COST", 0.95)
+	viper.SetDefault("ROS_VM_CPU_PERCENTILE_PERF", 0.99)
+	viper.SetDefault("ROS_VM_CPU_MARGIN_MIN", 0.15)
+	viper.SetDefault("ROS_VM_CPU_MARGIN_MAX", 0.50)
+	viper.SetDefault("ROS_VM_MEM_MARGIN_MIN", 0.20)
+	viper.SetDefault("ROS_VM_DOWNSIZE_HYSTERESIS_RATIO", 0.60)
+	viper.SetDefault("ROS_VM_MIN_VCPU_CHANGE", 2)
+	viper.SetDefault("ROS_VM_MIN_GIB_CHANGE", 2)
+	viper.SetDefault("ROS_VM_IDLE_CPU_MC", 50)
+	viper.SetDefault("ROS_VM_IDLE_MEMORY_MIB", 512)
+	viper.SetDefault("ROS_VM_IDLE_CPU_MC_WINDOWS", 200)
+	viper.SetDefault("ROS_VM_IDLE_MEMORY_MIB_WINDOWS", 3072)
+	viper.SetDefault("ROS_VM_DISK_PROJECTION_DAYS", 30)
+	viper.SetDefault("ROS_VM_DISK_HEADROOM_PCT", 0.25)
+	viper.SetDefault("ROS_VM_DISK_ROUND_STEP_GIB", 10)
+	viper.SetDefault("ROS_VM_HIGH_IOPS_THRESHOLD", 3000)
+	viper.SetDefault("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING", true)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

@@ -5,11 +5,12 @@ import "time"
 type PayloadType string
 
 const (
-	PayloadTypeContainer     PayloadType = "container"
-	PayloadTypeNamespace     PayloadType = "namespace"
-	PayloadTypeStorage       PayloadType = "storage"
-	PayloadTypeSnapshot      PayloadType = "snapshot"
-	PayloadTypeClusterQuota  PayloadType = "cluster-quota"
+	PayloadTypeContainer    PayloadType = "container"
+	PayloadTypeNamespace    PayloadType = "namespace"
+	PayloadTypeStorage      PayloadType = "storage"
+	PayloadTypeSnapshot     PayloadType = "snapshot"
+	PayloadTypeClusterQuota PayloadType = "cluster-quota"
+	PayloadTypeVM           PayloadType = "vm"
 )
 
 type KafkaMsg struct {

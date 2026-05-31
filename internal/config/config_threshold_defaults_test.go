@@ -83,6 +83,25 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, 6, cfg.SnapshotInventoryFreshHours)
 	assert.Equal(t, 48, cfg.SnapshotInventoryRetentionH)
 	assert.Equal(t, 48, cfg.SnapshotStaleGraceHours)
+
+	assert.True(t, cfg.EnableVMRecs)
+	assert.InDelta(t, 0.95, cfg.VMCPUPercentileCost, 1e-9)
+	assert.InDelta(t, 0.99, cfg.VMCPUPercentilePerf, 1e-9)
+	assert.InDelta(t, 0.15, cfg.VMCPUMarginMin, 1e-9)
+	assert.InDelta(t, 0.50, cfg.VMCPUMarginMax, 1e-9)
+	assert.InDelta(t, 0.20, cfg.VMMemMarginMin, 1e-9)
+	assert.InDelta(t, 0.60, cfg.VMDownsizeHysteresisRatio, 1e-9)
+	assert.Equal(t, int32(2), cfg.VMMinVCPUChange)
+	assert.Equal(t, int32(2), cfg.VMMinGiBChange)
+	assert.Equal(t, int64(50), cfg.VMIdleCPUMC)
+	assert.Equal(t, int64(512), cfg.VMIdleMemoryMiB)
+	assert.Equal(t, int64(200), cfg.VMIdleCPUMCWindows)
+	assert.Equal(t, int64(3072), cfg.VMIdleMemoryMiBWindows)
+	assert.Equal(t, int32(30), cfg.VMDiskProjectionDays)
+	assert.InDelta(t, 0.25, cfg.VMDiskHeadroomPct, 1e-9)
+	assert.Equal(t, int32(10), cfg.VMDiskRoundStepGiB)
+	assert.Equal(t, int64(3000), cfg.VMHighIOPSThreshold)
+	assert.True(t, cfg.VMEnableInstanceTypeMatching)
 }
 
 func TestThresholdEnvOverride(t *testing.T) {

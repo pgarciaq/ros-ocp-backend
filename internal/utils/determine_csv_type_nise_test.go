@@ -37,11 +37,14 @@ func TestDetermineCSVType_NiseMonthlyOutput(t *testing.T) {
 		{"ros-openshift-namespace-20260501.csv", types.PayloadTypeNamespace},
 		{"ros-openshift-storage-20260501.csv", types.PayloadTypeStorage},
 		{"ros-openshift-snapshot-inventory-20260501.csv", types.PayloadTypeSnapshot},
+		{"ros-openshift-vm-usage-20260501.csv", types.PayloadTypeVM},
 		{"ocp_ros_usage.csv", types.PayloadTypeContainer},
 		{"ocp_ros_namespace_usage.csv", types.PayloadTypeNamespace},
 		{"ocp_ros_cluster_quota.csv", types.PayloadTypeClusterQuota},
 		{"ocp_storage_usage.csv", types.PayloadTypeStorage},
 		{"ocp_snapshot_inventory.csv", types.PayloadTypeSnapshot},
+		{"May-2026-" + clusterUUID + "-ocp_ros_vm_usage.csv", types.PayloadTypeVM},
+		{"ocp_ros_vm_usage.csv", types.PayloadTypeVM},
 	}
 
 	for _, tc := range monthlyFiles {
@@ -61,11 +64,11 @@ func TestDetermineCSVType_NiseMonthlyOutput(t *testing.T) {
 		"May-2026-" + clusterUUID + "-ocp_snapshot_inventory.csv",
 	}
 	expected := map[types.PayloadType]int{
-		types.PayloadTypeContainer:     1,
-		types.PayloadTypeNamespace:     1,
-		types.PayloadTypeClusterQuota:  1,
-		types.PayloadTypeStorage:       1,
-		types.PayloadTypeSnapshot:      1,
+		types.PayloadTypeContainer:    1,
+		types.PayloadTypeNamespace:    1,
+		types.PayloadTypeClusterQuota: 1,
+		types.PayloadTypeStorage:      1,
+		types.PayloadTypeSnapshot:     1,
 	}
 	got := map[types.PayloadType]int{}
 	for _, name := range manifestFiles {
