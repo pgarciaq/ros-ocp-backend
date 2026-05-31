@@ -26,6 +26,8 @@ type VMRecommendationFilters struct {
 	IsIdle             *bool
 	IsAbandoned        *bool
 	IsOversized        *bool
+	HasGPU             *bool
+	GPUClassification  string // comma-separated list
 	OrderBy            string
 	OrderDesc          bool
 	Limit              int
@@ -97,7 +99,10 @@ func ListVMRecommendations(
 			is_idle, is_abandoned, is_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
-			notifications, last_recommended_at, created_at, updated_at
+			notifications,
+			gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
+			recommended_gpu_profile, gpu_utilization_avg_bp,
+			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations` + where +
 		fmt.Sprintf(` ORDER BY %s %s LIMIT $%d OFFSET $%d`, orderCol, orderHow, argLimit, argOffset)
 
@@ -145,7 +150,10 @@ func GetVMRecommendationDetail(
 			is_idle, is_abandoned, is_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
-			notifications, last_recommended_at, created_at, updated_at
+			notifications,
+			gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
+			recommended_gpu_profile, gpu_utilization_avg_bp,
+			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
 		  AND term = $5 AND engine = $6`
@@ -197,7 +205,10 @@ func QueryDailyVMDigestsForVM(
 			disk_allocated_max_bytes,
 			filesystem_used_max_bytes, filesystem_capacity_bytes,
 			disk_read_iops_p95, disk_write_iops_p95, disk_read_bps_p95, disk_write_bps_p95,
-			sample_count, agent_sample_count, restart_count_sum
+			sample_count, agent_sample_count, restart_count_sum,
+			gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
+			gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
+			gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
 		  AND bucket_date >= $5::date
@@ -223,6 +234,9 @@ func QueryDailyVMDigestsForVM(
 			&d.FilesystemUsedMaxBytes, &d.FilesystemCapacityBytes,
 			&d.DiskReadIOPSP95, &d.DiskWriteIOPSP95, &d.DiskReadBPS95, &d.DiskWriteBPS95,
 			&d.SampleCount, &d.AgentSampleCount, &d.RestartCountSum,
+			&d.GPUCount, &d.GPUModel, &d.GPUUtilAvgBP, &d.GPUUtilMaxBP,
+			&d.GPUFBUsedAvgMiB, &d.GPUFBUsedMaxMiB, &d.GPUSMActiveAvgBP,
+			&d.GPUTensorAvgBP, &d.GPUDRAMAvgBP, &d.GPUMIGProfile, &d.GPUMaxSlices, &d.HasGPU,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan VM digest: %w", err)
@@ -290,6 +304,28 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 		args = append(args, *filters.IsOversized)
 		argIdx++
 	}
+	if filters.HasGPU != nil {
+		if *filters.HasGPU {
+			clauses = append(clauses, "AND gpu_count > 0")
+		} else {
+			clauses = append(clauses, "AND gpu_count = 0")
+		}
+	}
+	if filters.GPUClassification != "" {
+		parts := strings.Split(filters.GPUClassification, ",")
+		var classes []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				classes = append(classes, p)
+			}
+		}
+		if len(classes) > 0 {
+			clauses = append(clauses, "AND gpu_classification = ANY($"+strconv.Itoa(argIdx)+")")
+			args = append(args, classes)
+			argIdx++
+		}
+	}
 	_ = argIdx
 	return " " + strings.Join(clauses, " "), args
 }
@@ -313,7 +349,10 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.IsIdle, &r.IsAbandoned, &r.IsOversized,
 		&r.IOReadIOPSP95, &r.IOWriteIOPSP95, &r.IOReadBPS95, &r.IOWriteBPS95, &r.IOHint,
 		&r.DiskDaysUntilFull, &r.DiskGrowthGiBPerDay, &r.DiskRecommendedExpandGiB,
-		&r.Notifications, &r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,
+		&r.Notifications,
+		&r.GPUCount, &r.GPUModel, &r.GPUClassification, &r.RecommendedGPUAction,
+		&r.RecommendedGPUProfile, &r.GPUUtilizationAvgBP,
+		&r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
 		return model.VMRecommendation{}, fmt.Errorf("scan VM recommendation: %w", err)

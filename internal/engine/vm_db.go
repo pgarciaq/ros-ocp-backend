@@ -26,7 +26,10 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 			disk_allocated_max_bytes,
 			filesystem_used_max_bytes, filesystem_capacity_bytes,
 			disk_read_iops_p95, disk_write_iops_p95, disk_read_bps_p95, disk_write_bps_p95,
-			sample_count, agent_sample_count, restart_count_sum
+			sample_count, agent_sample_count, restart_count_sum,
+			gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
+			gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
+			gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND bucket_date >= $3::date
 		ORDER BY vm_name, namespace, bucket_date`,
@@ -51,6 +54,9 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 			&d.FilesystemUsedMaxBytes, &d.FilesystemCapacityBytes,
 			&d.DiskReadIOPSP95, &d.DiskWriteIOPSP95, &d.DiskReadBPS95, &d.DiskWriteBPS95,
 			&d.SampleCount, &d.AgentSampleCount, &d.RestartCountSum,
+			&d.GPUCount, &d.GPUModel, &d.GPUUtilAvgBP, &d.GPUUtilMaxBP,
+			&d.GPUFBUsedAvgMiB, &d.GPUFBUsedMaxMiB, &d.GPUSMActiveAvgBP,
+			&d.GPUTensorAvgBP, &d.GPUDRAMAvgBP, &d.GPUMIGProfile, &d.GPUMaxSlices, &d.HasGPU,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan VM digest: %w", err)
@@ -92,7 +98,10 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				is_idle, is_abandoned, is_oversized,
 				io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 				disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
-				notifications, last_recommended_at, updated_at
+				notifications,
+				gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
+				recommended_gpu_profile, gpu_utilization_avg_bp,
+				last_recommended_at, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5,
 				$6, $7, $8, $9,
@@ -102,7 +111,9 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				$19, $20, $21,
 				$22, $23, $24, $25, $26,
 				$27, $28, $29,
-				$30, $31, now()
+				$30,
+				$31, $32, $33, $34, $35, $36,
+				$37, now()
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
 				guest_os = EXCLUDED.guest_os,
@@ -129,6 +140,12 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				disk_growth_gib_per_day = EXCLUDED.disk_growth_gib_per_day,
 				disk_recommended_expand_gib = EXCLUDED.disk_recommended_expand_gib,
 				notifications = EXCLUDED.notifications,
+				gpu_count = EXCLUDED.gpu_count,
+				gpu_model = EXCLUDED.gpu_model,
+				gpu_classification = EXCLUDED.gpu_classification,
+				recommended_gpu_action = EXCLUDED.recommended_gpu_action,
+				recommended_gpu_profile = EXCLUDED.recommended_gpu_profile,
+				gpu_utilization_avg_bp = EXCLUDED.gpu_utilization_avg_bp,
 				last_recommended_at = EXCLUDED.last_recommended_at,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
@@ -139,7 +156,10 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 			r.IsIdle, r.IsAbandoned, r.IsOversized,
 			r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint,
 			r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
-			r.Notifications, r.LastRecommendedAt,
+			r.Notifications,
+			r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,
+			r.RecommendedGPUProfile, r.GPUUtilizationAvgBP,
+			r.LastRecommendedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert VM rec %s/%s: %w", r.Namespace, r.VMName, err)

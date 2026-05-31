@@ -250,6 +250,9 @@ type Config struct {
 	VMWindowsKernelReserveGiB    float64 `mapstructure:"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB"`
 	VMDownsizeStabilityDays      int     `mapstructure:"ROS_VM_DOWNSIZE_STABILITY_DAYS"`
 	VMCrashLoopRestartThreshold  int32   `mapstructure:"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"`
+	VMGPUIdleThreshold           float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
+	VMGPUUnderutilThreshold      float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
+	VMGPUComputeSaturationThreshold float64 `mapstructure:"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -601,6 +604,9 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", 1.5)
 	viper.SetDefault("ROS_VM_DOWNSIZE_STABILITY_DAYS", 3)
 	viper.SetDefault("ROS_VM_CRASH_LOOP_RESTART_THRESHOLD", 3)
+	viper.SetDefault("ROS_VM_GPU_IDLE_THRESHOLD", 0.05)
+	viper.SetDefault("ROS_VM_GPU_UNDERUTIL_THRESHOLD", 0.30)
+	viper.SetDefault("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD", 0.85)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

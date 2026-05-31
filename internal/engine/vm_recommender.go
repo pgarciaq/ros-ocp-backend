@@ -172,14 +172,22 @@ func RecommendVM(
 			vmDiskProjection(windowed, cfg)
 	}
 
+	gpuAnalysis := analyzeVMGPU(windowed, cfg)
+
 	var (
 		recommendedInstanceType *string
 		recommendedSeries       *string
 	)
 	if cfg.EnableInstanceTypeMatching {
 		preferredSeries := vmClassifySeries(recommendedVCPU, recommendedMemGiB, isIdle)
+		if gpuAnalysis.RequireGPUInstance {
+			preferredSeries = vmSeriesGPU
+		}
 		preferredSeries = prefCtx.SeriesForVM(latest.Namespace, latest.VMName, preferredSeries)
-		if match := MatchInstanceType(recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes); match != nil {
+		if match := MatchInstanceType(
+			recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes,
+			gpuAnalysis.RequireGPUInstance, gpuAnalysis.GPUCount, gpuAnalysis.MinGPUMemoryGiB,
+		); match != nil {
 			recommendedInstanceType = &match.Name
 			recommendedSeries = &match.Series
 		} else {
@@ -210,6 +218,7 @@ func RecommendVM(
 		DownsizeHeld:            downsizeHeld,
 		DownsizeStabilityDays:   stabilityDays,
 	})
+	notifications = appendVMGPUNotifications(notifications, gpuAnalysis.NotificationCodes)
 
 	now := time.Now().UTC()
 	rec := &model.VMRecommendation{
@@ -242,6 +251,12 @@ func RecommendVM(
 		DiskGrowthGiBPerDay:      diskGrowthGiBPerDay,
 		DiskRecommendedExpandGiB: diskExpandGiB,
 		Notifications:            notifications,
+		GPUCount:                 gpuAnalysis.GPUCount,
+		GPUModel:                 gpuAnalysis.GPUModel,
+		GPUClassification:        gpuAnalysis.Classification,
+		RecommendedGPUAction:     gpuAnalysis.Action,
+		RecommendedGPUProfile:    gpuAnalysis.Profile,
+		GPUUtilizationAvgBP:      gpuAnalysis.UtilizationAvgBP,
 		LastRecommendedAt:        now,
 		CreatedAt:                now,
 		UpdatedAt:                now,

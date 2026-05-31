@@ -25,7 +25,10 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				disk_allocated_max_bytes,
 				filesystem_used_max_bytes, filesystem_capacity_bytes,
 				disk_read_iops_p95, disk_write_iops_p95, disk_read_bps_p95, disk_write_bps_p95,
-				sample_count, agent_sample_count, restart_count_sum
+				sample_count, agent_sample_count, restart_count_sum,
+				gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
+				gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
+				gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10, $11, $12, $13,
@@ -34,7 +37,8 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				$21,
 				$22, $23,
 				$24, $25, $26, $27,
-				$28, $29, $30
+				$28, $29, $30,
+				$31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, bucket_date)
 			DO UPDATE SET
@@ -62,7 +66,19 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				disk_write_bps_p95 = EXCLUDED.disk_write_bps_p95,
 				sample_count = EXCLUDED.sample_count,
 				agent_sample_count = EXCLUDED.agent_sample_count,
-				restart_count_sum = EXCLUDED.restart_count_sum`,
+				restart_count_sum = EXCLUDED.restart_count_sum,
+				gpu_count = EXCLUDED.gpu_count,
+				gpu_model = EXCLUDED.gpu_model,
+				gpu_util_avg_bp = EXCLUDED.gpu_util_avg_bp,
+				gpu_util_max_bp = EXCLUDED.gpu_util_max_bp,
+				gpu_fb_used_avg_mib = EXCLUDED.gpu_fb_used_avg_mib,
+				gpu_fb_used_max_mib = EXCLUDED.gpu_fb_used_max_mib,
+				gpu_sm_active_avg_bp = EXCLUDED.gpu_sm_active_avg_bp,
+				gpu_tensor_avg_bp = EXCLUDED.gpu_tensor_avg_bp,
+				gpu_dram_avg_bp = EXCLUDED.gpu_dram_avg_bp,
+				gpu_mig_profile = EXCLUDED.gpu_mig_profile,
+				gpu_max_slices = EXCLUDED.gpu_max_slices,
+				has_gpu = EXCLUDED.has_gpu`,
 			orgID, clusterUUID, d.VMName, d.Namespace, d.NodeName, d.GuestOS, d.BucketDate,
 			d.CPUUsageP50MC, d.CPUUsageP95MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
 			d.CPURequestMC, d.CPULimitMC,
@@ -73,6 +89,9 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 			d.FilesystemUsedMaxBytes, d.FilesystemCapacityBytes,
 			d.DiskReadIOPSP95, d.DiskWriteIOPSP95, d.DiskReadBPS95, d.DiskWriteBPS95,
 			d.SampleCount, d.AgentSampleCount, d.RestartCountSum,
+			d.GPUCount, d.GPUModel, d.GPUUtilAvgBP, d.GPUUtilMaxBP,
+			d.GPUFBUsedAvgMiB, d.GPUFBUsedMaxMiB, d.GPUSMActiveAvgBP,
+			d.GPUTensorAvgBP, d.GPUDRAMAvgBP, d.GPUMIGProfile, d.GPUMaxSlices, d.HasGPU,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting VM digest %s/%s: %w", d.Namespace, d.VMName, err)

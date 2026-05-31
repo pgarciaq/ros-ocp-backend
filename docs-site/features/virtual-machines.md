@@ -177,17 +177,33 @@ From daily digest P95 read/write IOPS and throughput:
 
 Built-in catalog (OpenShift Virtualization defaults): **u1** (general-purpose),
 **cx1** (compute-optimized), **m1** (memory-optimized). **n1** (network-optimized) and
-**gn1** (GPU) types are included for **recognition** (`LookupInstanceTypeByName`) but are
-**not recommended** until network/GPU metrics exist. **GPU types (`gn1.*`)** — see [GPU MIG Profiling](gpu-mig.md).
+**gn1** (GPU) types are **recommended** when VM GPU metrics are present. **n1** (network-optimized) remains recognition-only until network metrics exist.
 
 **Algorithm:**
 
 1. Compute recommended vCPU and GiB from usage + margins.
-2. Classify preferred series via CPU:memory ratio (`vmClassifySeries`); idle → general-purpose.
-3. If the VM has a `VirtualMachine.spec.preference` in `cluster_instance_types.json`, **preference class overrides ratio**.
-4. If `instance_type_matching` is enabled (default **true**), `MatchInstanceType()` picks the smallest fitting type in the preferred series.
-5. Fall back to **u1** / general-purpose if no match in preferred series.
-6. Notification **41** when a type is recommended.
+2. Run GPU classification when DCGM metrics are present (see [GPU recommendations](#gpu-recommendations)).
+3. Classify preferred series via CPU:memory ratio (`vmClassifySeries`); idle → general-purpose; **GPU VMs → `gpu` series**.
+4. If the VM has a `VirtualMachine.spec.preference` in `cluster_instance_types.json`, **preference class overrides ratio**.
+5. If `instance_type_matching` is enabled (default **true**), `MatchInstanceType()` picks the smallest fitting type (vCPU, memory, and GPU memory when applicable).
+6. Fall back to **u1** / general-purpose if no match in preferred series (non-GPU VMs never receive `gn1.*`).
+7. Notification **41** when a type is recommended.
+
+## GPU recommendations
+
+When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher pod), the operator adds GPU columns to `ros-openshift-vm-usage-*.csv`. ROS classifies utilization and may recommend:
+
+| Classification | Action | Notification |
+|----------------|--------|--------------|
+| Idle | Remove GPU assignment | **50** |
+| Underutilized | Smaller MIG profile or consider vGPU/MIG | **51** |
+| Memory saturated | Larger GPU / more frame buffer | **52** |
+| Compute saturated | More powerful GPU | **53** |
+| Well utilized | No change | — |
+
+List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
+
+Container GPU MIG profiling is documented in [GPU MIG Profiling](gpu-mig.md).
 
 **Preference class mapping:**
 

@@ -60,6 +60,15 @@ type vmDiskProjection struct {
 	RecommendedExpandGiB *int32   `json:"recommended_expand_gib"`
 }
 
+type vmGPURecommendation struct {
+	GPUCount              int32  `json:"gpu_count"`
+	GPUModel              string `json:"gpu_model,omitempty"`
+	GPUClassification     string `json:"gpu_classification,omitempty"`
+	RecommendedGPUAction  string `json:"recommended_gpu_action,omitempty"`
+	RecommendedGPUProfile string `json:"recommended_gpu_profile,omitempty"`
+	GPUUtilizationAvgBP   int32  `json:"gpu_utilization_avg_bp"`
+}
+
 // VMRecommendationItem is a single VM recommendation in list/detail responses.
 type VMRecommendationItem struct {
 	VMName            string              `json:"vm_name"`
@@ -72,6 +81,7 @@ type VMRecommendationItem struct {
 	IOProfile         vmIOProfile         `json:"io_profile"`
 	DiskProjection    vmDiskProjection    `json:"disk_projection"`
 	Notifications     []any               `json:"notifications"`
+	GPU               *vmGPURecommendation `json:"gpu,omitempty"`
 	LastRecommendedAt string              `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
 }
@@ -191,6 +201,10 @@ func GetVMRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	hasGPU, err := parseVMRecBoolFilter(c, "has_gpu")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
@@ -254,6 +268,8 @@ func GetVMRecommendations(c echo.Context) error {
 		IsIdle:             isIdle,
 		IsAbandoned:        isAbandoned,
 		IsOversized:        isOversized,
+		HasGPU:             hasGPU,
+		GPUClassification:  queryparams.FirstFilter(c, "gpu_classification"),
 		OrderBy:            orderByKey,
 		OrderDesc:          orderHow == listoptions.OrderDesc,
 		Limit:              limit,
@@ -396,7 +412,7 @@ func clusterAllowed(allowed []string, clusterUUID string) bool {
 }
 
 func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
-	return VMRecommendationItem{
+	item := VMRecommendationItem{
 		VMName:      r.VMName,
 		Namespace:   r.Namespace,
 		ClusterUUID: r.ClusterUUID.String(),
@@ -440,6 +456,17 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 		Notifications:     parseVMNotifications(r.Notifications),
 		LastRecommendedAt: r.LastRecommendedAt.UTC().Format(time.RFC3339),
 	}
+	if r.GPUCount > 0 || r.GPUClassification != "" {
+		item.GPU = &vmGPURecommendation{
+			GPUCount:              r.GPUCount,
+			GPUModel:              r.GPUModel,
+			GPUClassification:     r.GPUClassification,
+			RecommendedGPUAction:  r.RecommendedGPUAction,
+			RecommendedGPUProfile: r.RecommendedGPUProfile,
+			GPUUtilizationAvgBP:   r.GPUUtilizationAvgBP,
+		}
+	}
+	return item
 }
 
 func parseVMNotifications(raw []byte) []any {

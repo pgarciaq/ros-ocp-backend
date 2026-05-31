@@ -9,12 +9,13 @@ const (
 
 // InstanceType describes an OpenShift Virtualization instance type.
 type InstanceType struct {
-	Name       string
-	Series     string // general-purpose, compute-optimized, memory-optimized, network-optimized, gpu
-	VCPU       int32
-	MemoryGiB  int32 // nominal GiB; use memoryCapacityMiB for smallest-fit comparison
-	GPUs       int32
-	Selectable bool // false = recognition only (n-series, gn-series until metrics exist)
+	Name         string
+	Series       string // general-purpose, compute-optimized, memory-optimized, network-optimized, gpu
+	VCPU         int32
+	MemoryGiB    int32 // nominal GiB; use memoryCapacityMiB for smallest-fit comparison
+	GPUs         int32
+	GPUMemoryGiB int32 // per-GPU frame buffer capacity (GiB); 0 when no GPU
+	Selectable   bool  // false = recognition only (n-series until network metrics exist)
 }
 
 func memoryCapacityMiB(t InstanceType) int32 {
@@ -57,12 +58,13 @@ var vmInstanceCatalog = []InstanceType{
 	{Name: "n1.2xlarge", Series: vmSeriesNetworkOptimized, VCPU: 8, MemoryGiB: 32, GPUs: 0, Selectable: false},
 }
 
-// vmInstanceCatalogGPU is reference-only; not recommended until GPU metrics exist.
+// vmInstanceCatalogGPU lists GPU-enabled OpenShift Virtualization instance types.
 var vmInstanceCatalogGPU = []InstanceType{
-	{Name: "gn1.xlarge", Series: vmSeriesGPU, VCPU: 4, MemoryGiB: 16, GPUs: 1, Selectable: false},
-	{Name: "gn1.2xlarge", Series: vmSeriesGPU, VCPU: 8, MemoryGiB: 32, GPUs: 1, Selectable: false},
-	{Name: "gn1.4xlarge", Series: vmSeriesGPU, VCPU: 16, MemoryGiB: 64, GPUs: 2, Selectable: false},
-	{Name: "gn1.8xlarge", Series: vmSeriesGPU, VCPU: 32, MemoryGiB: 128, GPUs: 4, Selectable: false},
+	{Name: "gn1.xlarge", Series: vmSeriesGPU, VCPU: 4, MemoryGiB: 16, GPUs: 1, GPUMemoryGiB: 16, Selectable: true},
+	{Name: "gn1.2xlarge", Series: vmSeriesGPU, VCPU: 8, MemoryGiB: 32, GPUs: 1, GPUMemoryGiB: 24, Selectable: true},
+	{Name: "gn1.4xlarge", Series: vmSeriesGPU, VCPU: 16, MemoryGiB: 64, GPUs: 1, GPUMemoryGiB: 40, Selectable: true},
+	{Name: "gn1.8xlarge", Series: vmSeriesGPU, VCPU: 32, MemoryGiB: 128, GPUs: 1, GPUMemoryGiB: 80, Selectable: true},
+	{Name: "gn1.16xlarge", Series: vmSeriesGPU, VCPU: 64, MemoryGiB: 256, GPUs: 2, GPUMemoryGiB: 80, Selectable: true},
 }
 
 func vmAllInstanceTypes(clusterTypes []InstanceType) []InstanceType {
@@ -85,7 +87,15 @@ func instanceTypeWaste(t InstanceType, recommendedVCPU, recommendedMemoryMiB int
 	return (t.VCPU - recommendedVCPU) + (memMiB-recommendedMemoryMiB)/1024
 }
 
-func smallestFitInCatalog(catalog []InstanceType, series string, recommendedVCPU, recommendedMemoryMiB int32, selectableOnly bool) *InstanceType {
+func smallestFitInCatalog(
+	catalog []InstanceType,
+	series string,
+	recommendedVCPU, recommendedMemoryMiB int32,
+	selectableOnly bool,
+	requireGPU bool,
+	gpuCount int32,
+	minGPUMemoryGiB int32,
+) *InstanceType {
 	var best *InstanceType
 	var bestWaste int32 = math.MaxInt32
 
@@ -94,7 +104,11 @@ func smallestFitInCatalog(catalog []InstanceType, series string, recommendedVCPU
 		if selectableOnly && !t.Selectable {
 			continue
 		}
-		if t.GPUs > 0 && selectableOnly {
+		if requireGPU {
+			if t.GPUs < gpuCount || t.GPUMemoryGiB < minGPUMemoryGiB {
+				continue
+			}
+		} else if t.GPUs > 0 {
 			continue
 		}
 		if t.Series != series {
@@ -104,8 +118,7 @@ func smallestFitInCatalog(catalog []InstanceType, series string, recommendedVCPU
 			continue
 		}
 		waste := instanceTypeWaste(*t, recommendedVCPU, recommendedMemoryMiB)
-		if best == nil || waste < bestWaste ||
-			(waste == bestWaste && (t.VCPU < best.VCPU || (t.VCPU == best.VCPU && memoryCapacityMiB(*t) < memoryCapacityMiB(*best)))) {
+		if best == nil || vmInstanceBetterFit(*t, waste, best, bestWaste, requireGPU) {
 			best = t
 			bestWaste = waste
 		}
@@ -113,8 +126,29 @@ func smallestFitInCatalog(catalog []InstanceType, series string, recommendedVCPU
 	return best
 }
 
+func vmInstanceBetterFit(t InstanceType, waste int32, best *InstanceType, bestWaste int32, requireGPU bool) bool {
+	if waste < bestWaste {
+		return true
+	}
+	if waste > bestWaste {
+		return false
+	}
+	if requireGPU {
+		if t.GPUs != best.GPUs {
+			return t.GPUs < best.GPUs
+		}
+		if t.GPUMemoryGiB != best.GPUMemoryGiB {
+			return t.GPUMemoryGiB < best.GPUMemoryGiB
+		}
+	}
+	if t.VCPU != best.VCPU {
+		return t.VCPU < best.VCPU
+	}
+	return memoryCapacityMiB(t) < memoryCapacityMiB(*best)
+}
+
 func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
-	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB, true)
+	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB, true, false, 0, 0)
 }
 
 func matchInCatalog(
@@ -122,32 +156,45 @@ func matchInCatalog(
 	recommendedVCPU, recommendedMemoryMiB int32,
 	preferredSeries string,
 	selectableOnly bool,
+	requireGPU bool,
+	gpuCount int32,
+	minGPUMemoryGiB int32,
 ) *InstanceType {
 	if len(catalog) == 0 {
 		return nil
 	}
-	if match := smallestFitInCatalog(catalog, preferredSeries, recommendedVCPU, recommendedMemoryMiB, selectableOnly); match != nil {
+	if match := smallestFitInCatalog(catalog, preferredSeries, recommendedVCPU, recommendedMemoryMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB); match != nil {
 		return match
 	}
 	if preferredSeries != vmSeriesGeneralPurpose {
-		return smallestFitInCatalog(catalog, vmSeriesGeneralPurpose, recommendedVCPU, recommendedMemoryMiB, selectableOnly)
+		return smallestFitInCatalog(catalog, vmSeriesGeneralPurpose, recommendedVCPU, recommendedMemoryMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB)
 	}
 	return nil
 }
 
-// MatchInstanceType finds the smallest selectable instance type that fits recommended vCPU and memory.
+// MatchInstanceType finds the smallest selectable instance type that fits recommended vCPU, memory, and optional GPU needs.
 // Cluster types may include non-selectable entries for recognition; only Selectable types are returned.
-func MatchInstanceType(recommendedVCPU, recommendedMemoryGiB int32, preferredSeries string, clusterTypes []InstanceType) *InstanceType {
+func MatchInstanceType(
+	recommendedVCPU, recommendedMemoryGiB int32,
+	preferredSeries string,
+	clusterTypes []InstanceType,
+	requireGPU bool,
+	gpuCount int32,
+	minGPUMemoryGiB int32,
+) *InstanceType {
 	if recommendedVCPU < 1 {
 		recommendedVCPU = 1
 	}
 	recMemMiB := recommendedMemoryMiB(recommendedMemoryGiB)
 
-	if match := matchInCatalog(clusterTypes, recommendedVCPU, recMemMiB, preferredSeries, true); match != nil {
-		return match
+	catalogs := [][]InstanceType{clusterTypes, vmInstanceCatalog}
+	if requireGPU {
+		catalogs = append([][]InstanceType{vmInstanceCatalogGPU}, catalogs...)
 	}
-	if match := matchInCatalog(vmInstanceCatalog, recommendedVCPU, recMemMiB, preferredSeries, true); match != nil {
-		return match
+	for _, catalog := range catalogs {
+		if match := matchInCatalog(catalog, recommendedVCPU, recMemMiB, preferredSeries, true, requireGPU, gpuCount, minGPUMemoryGiB); match != nil {
+			return match
+		}
 	}
 	return nil
 }

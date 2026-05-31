@@ -52,4 +52,18 @@ type DailyVMDigest struct {
 	SampleCount        int32 `db:"sample_count"`
 	AgentSampleCount   int32 `db:"agent_sample_count"`
 	RestartCountSum    int32 `db:"restart_count_sum"`
+
+	// GPU digest (aggregated from samples that have GPU data)
+	GPUCount        int32   `db:"gpu_count"`
+	GPUModel        string  `db:"gpu_model"`
+	GPUUtilAvgBP    int32   `db:"gpu_util_avg_bp"`
+	GPUUtilMaxBP    int32   `db:"gpu_util_max_bp"`
+	GPUFBUsedAvgMiB float64 `db:"gpu_fb_used_avg_mib"`
+	GPUFBUsedMaxMiB float64 `db:"gpu_fb_used_max_mib"`
+	GPUSMActiveAvgBP int32  `db:"gpu_sm_active_avg_bp"`
+	GPUTensorAvgBP  int32   `db:"gpu_tensor_avg_bp"`
+	GPUDRAMAvgBP    int32   `db:"gpu_dram_avg_bp"`
+	GPUMIGProfile   string  `db:"gpu_mig_profile"`
+	GPUMaxSlices    int32   `db:"gpu_max_slices"`
+	HasGPU          bool    `db:"has_gpu"`
 }

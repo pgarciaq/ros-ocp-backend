@@ -103,7 +103,7 @@ Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender
 
 ### Instance type matching
 
-Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) (OpenShift Virtualization defaults). **GPU types (`gn1.*`) are defined but excluded** from matching until GPU metrics exist.
+Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) (OpenShift Virtualization defaults). **GPU types (`gn1.*`) are selectable** when VM GPU metrics indicate an attached device.
 
 | Series | API `series` value | Sizes (examples) |
 |--------|-------------------|------------------|
@@ -111,16 +111,31 @@ Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance
 | **cx1** | `compute-optimized` | `cx1.medium` … `cx1.8xlarge` |
 | **m1** | `memory-optimized` | `m1.large` … `m1.4xlarge` |
 | **n1** | `network-optimized` | `n1.medium` … `n1.2xlarge` — **recognition only** (`Selectable: false`) |
-| **gn1** | `gpu` | `gn1.xlarge` … `gn1.8xlarge` — **recognition only** until GPU metrics exist |
+| **gn1** | `gpu` | `gn1.xlarge` … `gn1.16xlarge` — GPU memory capacity per size |
+
+### GPU analysis
+
+When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launcher pods), ROS aggregates daily GPU utilization and classifies workloads in [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go):
+
+| Classification | Typical action | Notification |
+|----------------|----------------|--------------|
+| `idle` | `remove_gpu` | **50** |
+| `underutilized` | `smaller_mig_profile` or `consider_vgpu_or_mig` | **51** |
+| `memory_saturated` | `larger_gpu` | **52** |
+| `compute_saturated` | `more_powerful_gpu` | **53** |
+| `well_utilized` | `no_change` | — |
+
+Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_THRESHOLD` (default 0.30), `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` (default 0.85). Frame-buffer saturation uses 90% of catalog GPU memory when `GPUFBSaturationMiB` is unset.
 
 **Algorithm:**
 
 1. Compute recommended vCPU and GiB from usage + margins.
-2. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose).
-3. If the VM has a `VirtualMachine.spec.preference` mapping in `cluster_instance_types.json`, override the series using the preference’s class label (**preference wins over ratio**). See [VirtualMachinePreference integration](#virtualmachinepreference-integration).
-4. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type in preferred series that fits vCPU and memory (MiB-aware for `u1.nano`).
-5. Fall back to general-purpose series if no match in preferred series.
-6. Emit notification **41** when a type is recommended.
+2. Run GPU analysis when `has_gpu` is true on daily digests.
+3. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose; **GPU VMs → `gpu` series**).
+4. If the VM has a `VirtualMachine.spec.preference` mapping in `cluster_instance_types.json`, override the series using the preference’s class label (**preference wins over ratio**). See [VirtualMachinePreference integration](#virtualmachinepreference-integration).
+5. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type that fits vCPU, memory, and (when applicable) GPU count + GPU memory.
+6. Fall back to general-purpose series if no match in preferred series (non-GPU VMs never receive `gn1.*`).
+7. Emit notification **41** when a type is recommended.
 
 Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference` CRs are exported in `cluster_instance_types.json` by the metrics operator and persisted for matching.
 

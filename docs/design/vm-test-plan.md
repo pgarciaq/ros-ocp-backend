@@ -62,7 +62,8 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Windows kernel reserve | `TestWindows_KernelReserveSubtracted`, `TestWindows_KernelReserveDoesNotGoBelowFloor`, `TestWindows_KernelReserveConfigurable` | ✅ |
 | Windows update spike (code 47) | `TestWindowsUpdateSpike_NotificationTriggered`, `TestWindowsUpdateSpike_NoNotificationWhenSmallSpread`, `TestWindowsUpdateSpike_OnlyForWindows` | ✅ |
 | Crash loop (code 48) | `TestCrashLoop_NotificationTriggered`, `TestCrashLoop_BelowThreshold`, `TestCrashLoop_NilRestartCount` | ✅ |
-| Instance catalog n1/gn1 (`Selectable: false`) | `TestCatalog_ContainsNSeries`, `TestCatalog_ContainsGPUSeries`, `TestMatchInstanceType_NeverRecommendsNonSelectable`, `TestMatchInstanceType_RecognizesGPUType` | ✅ |
+| Instance catalog n1/gn1 | `TestCatalog_ContainsNSeries`, `TestCatalog_ContainsGPUSeries`, `TestMatchInstanceType_NeverRecommendsNonSelectable`, `TestMatchInstanceType_RecognizesGPUType` | ✅ |
+| VM GPU classification (codes 50–53) | `TestVMGPU_*` in `vm_gpu_recommender_test.go`, `TestInstanceType_GPU*` | ✅ |
 | Unknown OS (code 46) | `TestUnknownOS_NotificationAdded`, `TestUnknownOS_UsesLinuxDefaults` | ✅ |
 | Downsize stability (code 49) | `TestDownsizeStability_AllDaysBelow_RecommendsDownsize`, `TestDownsizeStability_OneDayAbove_HoldsAtCurrent`, `TestDownsizeStability_OnlyPerformanceEngine` | ✅ |
 
@@ -76,6 +77,7 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
 | `filter[is_abandoned]` | ✅ `TestVMRecommendations_ListFilterAbandoned` |
+| `filter[has_gpu]`, `filter[gpu_classification]` | ⬜ | API filters implemented; add handler tests when needed |
 
 ### Integration (`vm_lifecycle_integration_test.go`)
 

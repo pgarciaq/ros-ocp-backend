@@ -50,6 +50,19 @@ type VMDigestResult struct {
 	SampleCount      int32
 	AgentSampleCount int32
 	RestartCountSum  int32
+
+	GPUCount        int32
+	GPUModel        string
+	GPUUtilAvgBP    int32
+	GPUUtilMaxBP    int32
+	GPUFBUsedAvgMiB float64
+	GPUFBUsedMaxMiB float64
+	GPUSMActiveAvgBP int32
+	GPUTensorAvgBP  int32
+	GPUDRAMAvgBP    int32
+	GPUMIGProfile   string
+	GPUMaxSlices    int32
+	HasGPU          bool
 }
 
 // VMDigestKey identifies a single VM-day digest group.
@@ -81,6 +94,18 @@ type vmDigestAccumulator struct {
 	sampleCount      int
 	agentSampleCount int
 	restartCountSum  int32
+
+	gpuCountSamples int32
+	gpuModel        string
+	gpuUtilAvg      []float64
+	gpuUtilMax      []float64
+	gpuFBAvg        []float64
+	gpuFBMax        []float64
+	gpuSMAvg        []float64
+	gpuTensorAvg    []float64
+	gpuDRAMAvg      []float64
+	gpuMIGProfile   string
+	gpuMaxSlices    int32
 }
 
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
@@ -148,6 +173,40 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 
 		if r.RestartCount != nil {
 			acc.restartCountSum += *r.RestartCount
+		}
+
+		if r.GPUCount != nil && *r.GPUCount > 0 {
+			acc.gpuCountSamples = maxInt32(acc.gpuCountSamples, *r.GPUCount)
+			if r.GPUModel != nil && *r.GPUModel != "" {
+				acc.gpuModel = *r.GPUModel
+			}
+			if r.GPUUtilizationAvg != nil {
+				acc.gpuUtilAvg = append(acc.gpuUtilAvg, *r.GPUUtilizationAvg)
+			}
+			if r.GPUUtilizationMax != nil {
+				acc.gpuUtilMax = append(acc.gpuUtilMax, *r.GPUUtilizationMax)
+			}
+			if r.GPUFBUsedAvgMiB != nil {
+				acc.gpuFBAvg = append(acc.gpuFBAvg, *r.GPUFBUsedAvgMiB)
+			}
+			if r.GPUFBUsedMaxMiB != nil {
+				acc.gpuFBMax = append(acc.gpuFBMax, *r.GPUFBUsedMaxMiB)
+			}
+			if r.GPUSMActiveAvg != nil {
+				acc.gpuSMAvg = append(acc.gpuSMAvg, *r.GPUSMActiveAvg)
+			}
+			if r.GPUTensorActiveAvg != nil {
+				acc.gpuTensorAvg = append(acc.gpuTensorAvg, *r.GPUTensorActiveAvg)
+			}
+			if r.GPUDRAMActiveAvg != nil {
+				acc.gpuDRAMAvg = append(acc.gpuDRAMAvg, *r.GPUDRAMActiveAvg)
+			}
+			if r.GPUMIGProfile != nil && *r.GPUMIGProfile != "" {
+				acc.gpuMIGProfile = *r.GPUMIGProfile
+			}
+			if r.GPUMaxSlices != nil && *r.GPUMaxSlices > acc.gpuMaxSlices {
+				acc.gpuMaxSlices = *r.GPUMaxSlices
+			}
 		}
 
 		acc.sampleCount++
@@ -224,7 +283,51 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		d.DiskWriteBPS95 = &p95
 	}
 
+	if acc.gpuCountSamples > 0 {
+		d.HasGPU = true
+		d.GPUCount = acc.gpuCountSamples
+		d.GPUModel = acc.gpuModel
+		d.GPUUtilAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuUtilAvg))
+		d.GPUUtilMaxBP = ratioToBasisPoints(maxFloatSlice(acc.gpuUtilMax))
+		d.GPUFBUsedAvgMiB = avgFloatSlice(acc.gpuFBAvg)
+		d.GPUFBUsedMaxMiB = maxFloatSlice(acc.gpuFBMax)
+		d.GPUSMActiveAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuSMAvg))
+		d.GPUTensorAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuTensorAvg))
+		d.GPUDRAMAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuDRAMAvg))
+		d.GPUMIGProfile = acc.gpuMIGProfile
+		d.GPUMaxSlices = acc.gpuMaxSlices
+	}
+
 	return d
+}
+
+func maxInt32(a, b int32) int32 {
+	if b > a {
+		return b
+	}
+	return a
+}
+
+func avgFloatSlice(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func maxFloatSlice(values []float64) float64 {
+	return maxFloat(values)
+}
+
+func ratioToBasisPoints(r float64) int32 {
+	if r < 0 {
+		return 0
+	}
+	return int32(math.Round(r * 10000))
 }
 
 func sortedCopy(values []float64) []float64 {

@@ -37,4 +37,17 @@ type VMRow struct {
 
 	// RestartCount is the number of VMI transitions to Running in the interval (nil if unavailable).
 	RestartCount *int32
+
+	// GPU fields (nil when VM has no GPU attached)
+	GPUCount           *int32
+	GPUModel           *string
+	GPUUtilizationAvg  *float64 // 0-1
+	GPUUtilizationMax  *float64 // 0-1
+	GPUFBUsedAvgMiB    *float64
+	GPUFBUsedMaxMiB    *float64
+	GPUSMActiveAvg     *float64 // 0-1
+	GPUTensorActiveAvg *float64 // 0-1
+	GPUDRAMActiveAvg   *float64 // 0-1
+	GPUMIGProfile      *string  // e.g. "3g.20gb", empty for passthrough
+	GPUMaxSlices       *int32   // 0 for non-MIG
 }

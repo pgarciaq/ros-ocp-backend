@@ -54,6 +54,14 @@ type VMRecommendation struct {
 	// Notifications (stored as JSONB)
 	Notifications []byte `db:"notifications"`
 
+	// GPU recommendation (empty when VM has no GPU)
+	GPUCount              int32  `db:"gpu_count" json:"gpu_count"`
+	GPUModel              string `db:"gpu_model" json:"gpu_model"`
+	GPUClassification     string `db:"gpu_classification" json:"gpu_classification"`
+	RecommendedGPUAction  string `db:"recommended_gpu_action" json:"recommended_gpu_action"`
+	RecommendedGPUProfile string `db:"recommended_gpu_profile" json:"recommended_gpu_profile"`
+	GPUUtilizationAvgBP   int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
+
 	// Timestamps
 	LastRecommendedAt time.Time `db:"last_recommended_at"`
 	CreatedAt         time.Time `db:"created_at"`

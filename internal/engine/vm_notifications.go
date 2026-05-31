@@ -38,6 +38,10 @@ const (
 	NotifVMWindowsUpdateSpike     int16 = 47
 	NotifVMCrashLoop              int16 = 48
 	NotifVMDownsizeHeld           int16 = 49
+	NotifVMGPUIdle                int16 = 50
+	NotifVMGPUUnderutilized       int16 = 51
+	NotifVMGPUMemorySaturated     int16 = 52
+	NotifVMGPUComputeSaturated    int16 = 53
 )
 
 type vmNotificationParams struct {

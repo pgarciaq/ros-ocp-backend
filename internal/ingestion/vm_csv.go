@@ -54,6 +54,17 @@ type vmHeaderIdx struct {
 	diskReadBytesPerSec     int
 	diskWriteBytesPerSec    int
 	restartCount            int
+	gpuCount                int
+	gpuModel                int
+	gpuUtilizationAvg       int
+	gpuUtilizationMax       int
+	gpuFBUsedAvgMiB         int
+	gpuFBUsedMaxMiB         int
+	gpuSMActiveAvg          int
+	gpuTensorActiveAvg      int
+	gpuDRAMActiveAvg        int
+	gpuMIGProfile           int
+	gpuMaxSlices            int
 }
 
 func newVMHeaderIdx() vmHeaderIdx {
@@ -78,6 +89,17 @@ func newVMHeaderIdx() vmHeaderIdx {
 		diskReadBytesPerSec:     -1,
 		diskWriteBytesPerSec:    -1,
 		restartCount:            -1,
+		gpuCount:                -1,
+		gpuModel:                -1,
+		gpuUtilizationAvg:       -1,
+		gpuUtilizationMax:       -1,
+		gpuFBUsedAvgMiB:         -1,
+		gpuFBUsedMaxMiB:         -1,
+		gpuSMActiveAvg:          -1,
+		gpuTensorActiveAvg:      -1,
+		gpuDRAMActiveAvg:        -1,
+		gpuMIGProfile:           -1,
+		gpuMaxSlices:            -1,
 	}
 }
 
@@ -125,6 +147,28 @@ func buildVMColumnIndex(header []string) (vmHeaderIdx, error) {
 			idx.diskWriteBytesPerSec = i
 		case "restart_count":
 			idx.restartCount = i
+		case "gpu_count":
+			idx.gpuCount = i
+		case "gpu_model":
+			idx.gpuModel = i
+		case "gpu_utilization_avg":
+			idx.gpuUtilizationAvg = i
+		case "gpu_utilization_max":
+			idx.gpuUtilizationMax = i
+		case "gpu_fb_used_avg_mib":
+			idx.gpuFBUsedAvgMiB = i
+		case "gpu_fb_used_max_mib":
+			idx.gpuFBUsedMaxMiB = i
+		case "gpu_sm_active_avg":
+			idx.gpuSMActiveAvg = i
+		case "gpu_tensor_active_avg":
+			idx.gpuTensorActiveAvg = i
+		case "gpu_dram_active_avg":
+			idx.gpuDRAMActiveAvg = i
+		case "gpu_mig_profile":
+			idx.gpuMIGProfile = i
+		case "gpu_max_slices":
+			idx.gpuMaxSlices = i
 		}
 	}
 
@@ -301,6 +345,53 @@ func parseVMRecord(record []string, idx vmHeaderIdx) (VMRow, error) {
 	row.RestartCount, err = parseOptionalInt32(fieldAt(record, idx.restartCount))
 	if err != nil {
 		return row, fmt.Errorf("parse restart_count: %w", err)
+	}
+
+	row.GPUCount, err = parseOptionalInt32(fieldAt(record, idx.gpuCount))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_count: %w", err)
+	}
+	if idx.gpuModel >= 0 {
+		if s := strings.TrimSpace(fieldAt(record, idx.gpuModel)); s != "" {
+			row.GPUModel = &s
+		}
+	}
+	row.GPUUtilizationAvg, err = parseOptionalFloat(fieldAt(record, idx.gpuUtilizationAvg))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_utilization_avg: %w", err)
+	}
+	row.GPUUtilizationMax, err = parseOptionalFloat(fieldAt(record, idx.gpuUtilizationMax))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_utilization_max: %w", err)
+	}
+	row.GPUFBUsedAvgMiB, err = parseOptionalFloat(fieldAt(record, idx.gpuFBUsedAvgMiB))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_fb_used_avg_mib: %w", err)
+	}
+	row.GPUFBUsedMaxMiB, err = parseOptionalFloat(fieldAt(record, idx.gpuFBUsedMaxMiB))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_fb_used_max_mib: %w", err)
+	}
+	row.GPUSMActiveAvg, err = parseOptionalFloat(fieldAt(record, idx.gpuSMActiveAvg))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_sm_active_avg: %w", err)
+	}
+	row.GPUTensorActiveAvg, err = parseOptionalFloat(fieldAt(record, idx.gpuTensorActiveAvg))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_tensor_active_avg: %w", err)
+	}
+	row.GPUDRAMActiveAvg, err = parseOptionalFloat(fieldAt(record, idx.gpuDRAMActiveAvg))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_dram_active_avg: %w", err)
+	}
+	if idx.gpuMIGProfile >= 0 {
+		if s := strings.TrimSpace(fieldAt(record, idx.gpuMIGProfile)); s != "" {
+			row.GPUMIGProfile = &s
+		}
+	}
+	row.GPUMaxSlices, err = parseOptionalInt32(fieldAt(record, idx.gpuMaxSlices))
+	if err != nil {
+		return row, fmt.Errorf("parse gpu_max_slices: %w", err)
 	}
 
 	return row, nil

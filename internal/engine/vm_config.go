@@ -57,6 +57,12 @@ type VMRecConfig struct {
 
 	// Abandoned: minimum consecutive days of zero CPU and memory max usage in the term window
 	AbandonedMinDays int32 // default 3 (≈72h at daily digest granularity)
+
+	// GPU thresholds for VM passthrough/vGPU recommendations
+	GPUIdleThreshold              float64 // default 0.05 (5%)
+	GPUUnderutilThreshold         float64 // default 0.30 (30%)
+	GPUFBSaturationMiB            float64 // default 0 (auto-detect from model catalog)
+	GPUComputeSaturationThreshold float64 // default 0.85 (85%)
 }
 
 // DefaultVMRecConfig returns the compiled defaults for VM recommendations.
@@ -86,6 +92,10 @@ func DefaultVMRecConfig() VMRecConfig {
 		HighIOPSThreshold:          3000,
 		EnableInstanceTypeMatching: true,
 		AbandonedMinDays:           3,
+		GPUIdleThreshold:              0.05,
+		GPUUnderutilThreshold:         0.30,
+		GPUFBSaturationMiB:            0,
+		GPUComputeSaturationThreshold: 0.85,
 	}
 }
 
@@ -177,6 +187,15 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"); ok {
 		base.CrashLoopRestartThreshold = cfg.VMCrashLoopRestartThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_IDLE_THRESHOLD"); ok {
+		base.GPUIdleThreshold = cfg.VMGPUIdleThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_UNDERUTIL_THRESHOLD"); ok {
+		base.GPUUnderutilThreshold = cfg.VMGPUUnderutilThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"); ok {
+		base.GPUComputeSaturationThreshold = cfg.VMGPUComputeSaturationThreshold
 	}
 	return base
 }
