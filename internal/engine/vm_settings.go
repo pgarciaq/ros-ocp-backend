@@ -29,6 +29,7 @@ type VMThresholdSettingsAPI struct {
 	IdleMemoryMiB           int64   `json:"idle_memory_mib"`
 	IdleCPUMCWindows        int64   `json:"idle_cpu_mc_windows"`
 	IdleMemoryMiBWindows    int64   `json:"idle_memory_mib_windows"`
+	AbandonedMinDays        int32   `json:"abandoned_min_days"`
 }
 
 // VMDiskSettingsAPI is the disk block in VM settings responses.
@@ -83,6 +84,7 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_IDLE_MEMORY_MIB":               "thresholds.idle_memory_mib",
 		"ROS_VM_IDLE_CPU_MC_WINDOWS":           "thresholds.idle_cpu_mc_windows",
 		"ROS_VM_IDLE_MEMORY_MIB_WINDOWS":       "thresholds.idle_memory_mib_windows",
+		"ROS_VM_ABANDONED_MIN_DAYS":            "thresholds.abandoned_min_days",
 		"ROS_VM_LINUX_MEMORY_FLOOR_GIB":        "memory_floors.linux_gib",
 		"ROS_VM_WINDOWS_MEMORY_FLOOR_GIB":      "memory_floors.windows_gib",
 		"ROS_VM_DISK_PROJECTION_DAYS":          "disk.projection_window_days",
@@ -112,6 +114,7 @@ func vmRecConfigToThresholdAPI(cfg VMRecConfig) VMThresholdSettingsAPI {
 		IdleMemoryMiB:           cfg.IdleMemoryMiB,
 		IdleCPUMCWindows:        cfg.IdleCPUMCWindows,
 		IdleMemoryMiBWindows:    cfg.IdleMemoryMiBWindows,
+		AbandonedMinDays:        cfg.AbandonedMinDays,
 	}
 }
 
@@ -215,6 +218,7 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.IdleMemoryMiB = t.IdleMemoryMiB
 		dest.IdleCPUMCWindows = t.IdleCPUMCWindows
 		dest.IdleMemoryMiBWindows = t.IdleMemoryMiBWindows
+		dest.AbandonedMinDays = t.AbandonedMinDays
 	}
 	if stored.MemoryFloors != nil {
 		dest.LinuxMemoryFloorGiB = stored.MemoryFloors.LinuxGiB
@@ -369,6 +373,7 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt64("thresholds.idle_memory_mib", resp.Thresholds.IdleMemoryMiB, 0, 1048576)
 	v.addRangeInt64("thresholds.idle_cpu_mc_windows", resp.Thresholds.IdleCPUMCWindows, 0, 100000)
 	v.addRangeInt64("thresholds.idle_memory_mib_windows", resp.Thresholds.IdleMemoryMiBWindows, 0, 1048576)
+	v.addRangeInt("thresholds.abandoned_min_days", int(resp.Thresholds.AbandonedMinDays), 1, 90)
 
 	v.addRangeInt("memory_floors.linux_gib", int(resp.MemoryFloors.LinuxGiB), 1, 1024)
 	v.addRangeInt("memory_floors.windows_gib", int(resp.MemoryFloors.WindowsGiB), 1, 1024)

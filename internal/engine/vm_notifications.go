@@ -30,11 +30,14 @@ const (
 	NotifVMHighIO            int16 = 39
 	NotifVMDiskFillingGuest  int16 = 40
 	NotifVMInstanceTypeRec   int16 = 41
-	NotifVMDiskCritical      int16 = 42
+	NotifVMDiskCritical int16 = 42
+	NotifVMAbandoned    int16 = 43
 )
 
 type vmNotificationParams struct {
 	IsIdle                   bool
+	IsAbandoned              bool
+	AbandonedDays            int
 	IsOversized              bool
 	GuestAgentDetected       bool
 	IOHint                   *string
@@ -49,7 +52,20 @@ type vmNotificationParams struct {
 func vmBuildNotifications(p vmNotificationParams) []byte {
 	var out []VMNotification
 
-	if p.IsIdle {
+	if p.IsAbandoned {
+		days := p.AbandonedDays
+		if days < 1 {
+			days = 1
+		}
+		out = append(out, VMNotification{
+			Code: NotifVMAbandoned,
+			Type: vmNotifTypeCritical,
+			Message: fmt.Sprintf(
+				"VM appears abandoned: zero CPU and memory usage for %d days. Consider deleting or powering off to recover resources.",
+				days,
+			),
+		})
+	} else if p.IsIdle {
 		out = append(out, VMNotification{
 			Code:    NotifVMIdle,
 			Type:    vmNotifTypeWarning,

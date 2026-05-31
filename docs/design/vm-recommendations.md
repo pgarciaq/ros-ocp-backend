@@ -36,7 +36,8 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
 | Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Notifications 18, 19, 37–42 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| Notifications 18, 19, 37–43 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
 | Operator Strategy 3 dual-CSV | ⬜ (operator) | koku-metrics-operator |
@@ -114,6 +115,21 @@ Both CPU and memory p95 must be below thresholds:
 
 Emits notification **18** (`warning`). OS from `guest_os` in CSV.
 
+### Abandoned detection (zero usage)
+
+Stricter than idle: **every** daily digest in the term window must have `cpu_usage_max_mc = 0` and `mem_usage_max_kib = 0`, and the window must include at least `abandoned_min_days` digests (default **3**, ≈72 hours at daily granularity).
+
+| Classification | Condition | Notification | Recommended sizing |
+|----------------|-----------|--------------|-------------------|
+| **Idle** | CPU and memory **p95** below OS thresholds (non-zero usage allowed) | **18** `warning` | 1 vCPU + memory floor |
+| **Abandoned** | All days: CPU max = 0 **and** memory max = 0 | **43** `critical` | **0** vCPU, **0** GiB (deallocate) |
+
+**Precedence:** abandoned supersedes idle — a VM never has both `is_abandoned` and `is_idle`, and notification **18** is omitted when **43** applies.
+
+Algorithm: [`DetectVMAbandoned()`](../../internal/engine/vm_detect_abandoned.go) runs in [`RecommendVM()`](../../internal/engine/vm_recommender.go) before idle classification.
+
+Configure via `thresholds.abandoned_min_days` (Settings API) or `ROS_VM_ABANDONED_MIN_DAYS` (env lock).
+
 ### Disk projection
 
 **Strategy A (guest agent)** — when filesystem metrics exist on digests:
@@ -157,6 +173,7 @@ All notifications are JSON objects in the `notifications` array:
 | **40** | `NotifVMDiskFillingGuest` | `warning` | Guest agent: `days_until_full < 90` |
 | **41** | `NotifVMInstanceTypeRec` | `info` | `recommended.instance_type` set |
 | **42** | `NotifVMDiskCritical` | `critical` | Guest agent: filesystem > 90% used |
+| **43** | `NotifVMAbandoned` | `critical` | `metadata.is_abandoned` — zero CPU and memory max for N days |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
@@ -225,7 +242,8 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
     "idle_cpu_mc": 50,
     "idle_memory_mib": 512,
     "idle_cpu_mc_windows": 200,
-    "idle_memory_mib_windows": 3072
+    "idle_memory_mib_windows": 3072,
+    "abandoned_min_days": 3
   },
   "memory_floors": { "linux_gib": 1, "windows_gib": 2 },
   "disk": {
@@ -257,6 +275,7 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
 | `ROS_VM_IDLE_MEMORY_MIB` | `512` | `thresholds.idle_memory_mib` |
 | `ROS_VM_IDLE_CPU_MC_WINDOWS` | `200` | `thresholds.idle_cpu_mc_windows` |
 | `ROS_VM_IDLE_MEMORY_MIB_WINDOWS` | `3072` | `thresholds.idle_memory_mib_windows` |
+| `ROS_VM_ABANDONED_MIN_DAYS` | `3` | `thresholds.abandoned_min_days` |
 | `ROS_VM_LINUX_MEMORY_FLOOR_GIB` | `1` | `memory_floors.linux_gib` |
 | `ROS_VM_WINDOWS_MEMORY_FLOOR_GIB` | `2` | `memory_floors.windows_gib` |
 | `ROS_VM_DISK_PROJECTION_DAYS` | `30` | `disk.projection_window_days` |
@@ -284,7 +303,7 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 |-----------|-------------|
 | `limit` | 1–100 (default 10) |
 | `offset` | Pagination offset |
-| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_oversized`, `confidence`, `last_recommended_at` |
+| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at` |
 | `order_how` | `asc` or `desc` |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
 | `filter[namespace]` | Namespace |
@@ -293,6 +312,7 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 | `filter[engine]` | `cost` or `performance` |
 | `filter[confidence]` | `high`, `moderate`, or `low` |
 | `filter[is_idle]` | `true` / `false` |
+| `filter[is_abandoned]` | `true` / `false` |
 | `filter[is_oversized]` | `true` / `false` |
 | `filter[guest_agent_detected]` | `true` / `false` |
 
@@ -323,6 +343,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
         "term": "medium_term",
         "engine": "cost",
         "is_idle": false,
+        "is_abandoned": false,
         "is_oversized": true
       },
       "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },

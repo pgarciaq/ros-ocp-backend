@@ -45,6 +45,9 @@ type VMRecConfig struct {
 
 	// Instance type
 	EnableInstanceTypeMatching bool // default true
+
+	// Abandoned: minimum consecutive days of zero CPU and memory max usage in the term window
+	AbandonedMinDays int32 // default 3 (≈72h at daily digest granularity)
 }
 
 // DefaultVMRecConfig returns the compiled defaults for VM recommendations.
@@ -70,6 +73,7 @@ func DefaultVMRecConfig() VMRecConfig {
 		DiskMinGrowthMiBPerDay:     100,
 		HighIOPSThreshold:          3000,
 		EnableInstanceTypeMatching: true,
+		AbandonedMinDays:           3,
 	}
 }
 
@@ -149,6 +153,9 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"); ok {
 		base.EnableInstanceTypeMatching = cfg.VMEnableInstanceTypeMatching
+	}
+	if _, ok := os.LookupEnv("ROS_VM_ABANDONED_MIN_DAYS"); ok {
+		base.AbandonedMinDays = cfg.VMAbandonedMinDays
 	}
 	return base
 }

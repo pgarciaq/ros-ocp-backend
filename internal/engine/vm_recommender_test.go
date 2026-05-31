@@ -692,3 +692,98 @@ func TestVMRecommend_InstanceSeriesFromRecommendation(t *testing.T) {
 	require.NotNil(t, rec.RecommendedInstanceType)
 	assert.Equal(t, "cx1.8xlarge", *rec.RecommendedInstanceType)
 }
+
+func vmDigestDaysAllZero(base time.Time, n int) []model.DailyVMDigest {
+	return vmDigestDays(base, n, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 0
+		d.CPUUsageP99MC = 0
+		d.CPUUsageMaxMC = 0
+		d.MemUsageP95KiB = 0
+		d.MemUsageP99KiB = 0
+		d.MemUsageMaxKiB = 0
+	})
+}
+
+func TestVMAbandoned_AllZeroUsage(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 5)
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.True(t, rec.IsAbandoned)
+	assert.False(t, rec.IsIdle)
+	assert.Equal(t, int32(0), rec.RecommendedVCPU)
+	assert.Equal(t, int32(0), rec.RecommendedMemoryGiB)
+
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	n := vmHasNotificationCode(notifs, NotifVMAbandoned)
+	require.NotNil(t, n)
+	assert.Equal(t, vmNotifTypeCritical, n.Type)
+	assert.Contains(t, n.Message, "abandoned")
+	assert.Contains(t, n.Message, "5 days")
+	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMIdle))
+}
+
+func TestVMAbandoned_InsufficientDays(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 2)
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.Nil(t, rec, "below MinDataDays for term")
+}
+
+func TestVMAbandoned_PartialUsage(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 4)
+	digests[3].CPUUsageMaxMC = 10
+	digests[3].MemUsageMaxKiB = 0
+	digests[3].CPUUsageP95MC = 10
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.False(t, rec.IsAbandoned)
+}
+
+func TestVMAbandoned_SupersedesIdle(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 3)
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.True(t, rec.IsAbandoned)
+	assert.False(t, rec.IsIdle)
+
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMAbandoned))
+	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMIdle))
+}
+
+func TestVMAbandoned_RecommendsZero(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 3)
+	digests[0].CPURequestMC = 8000
+	digests[0].MemRequestKiB = 16 * 1024 * 1024
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, int32(0), rec.RecommendedVCPU)
+	assert.Equal(t, int32(0), rec.RecommendedMemoryGiB)
+}
+
+func TestVMAbandoned_ConfigurableThreshold(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDaysAllZero(base, 3)
+
+	cfg := DefaultVMRecConfig()
+	cfg.AbandonedMinDays = 5
+
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.False(t, rec.IsAbandoned)
+}

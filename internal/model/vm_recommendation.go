@@ -35,8 +35,9 @@ type VMRecommendation struct {
 	Engine             string `db:"engine"`     // cost, performance
 
 	// Status flags
-	IsIdle      bool `db:"is_idle"`
-	IsOversized bool `db:"is_oversized"`
+	IsIdle       bool `db:"is_idle"`
+	IsAbandoned  bool `db:"is_abandoned"`
+	IsOversized  bool `db:"is_oversized"`
 
 	// I/O profile (nullable JSON or individual columns)
 	IOReadIOPSP95  *int64  `db:"io_read_iops_p95"`

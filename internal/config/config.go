@@ -246,6 +246,7 @@ type Config struct {
 	VMDiskMinGrowthMiBPerDay     int64   `mapstructure:"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"`
 	VMHighIOPSThreshold          int64   `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
 	VMEnableInstanceTypeMatching bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
+	VMAbandonedMinDays           int32   `mapstructure:"ROS_VM_ABANDONED_MIN_DAYS"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -593,6 +594,7 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY", 100)
 	viper.SetDefault("ROS_VM_HIGH_IOPS_THRESHOLD", 3000)
 	viper.SetDefault("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING", true)
+	viper.SetDefault("ROS_VM_ABANDONED_MIN_DAYS", 3)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

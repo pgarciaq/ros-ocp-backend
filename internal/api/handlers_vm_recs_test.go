@@ -185,7 +185,7 @@ func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	}
 	expected := []string{
 		"vm_name", "namespace", "current_vcpu", "current_memory_gib", "guest_os",
-		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_oversized",
+		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_abandoned", "is_oversized",
 		"confidence", "last_recommended_at",
 	}
 	for _, key := range expected {

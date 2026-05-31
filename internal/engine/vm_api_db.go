@@ -24,6 +24,7 @@ type VMRecommendationFilters struct {
 	Confidence         string
 	GuestAgentDetected *bool
 	IsIdle             *bool
+	IsAbandoned        *bool
 	IsOversized        *bool
 	OrderBy            string
 	OrderDesc          bool
@@ -40,6 +41,7 @@ var vmRecOrderColumns = map[string]string{
 	"recommended_vcpu":       "recommended_vcpu",
 	"recommended_memory_gib": "recommended_memory_gib",
 	"is_idle":                "is_idle",
+	"is_abandoned":           "is_abandoned",
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
@@ -92,7 +94,7 @@ func ListVMRecommendations(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_oversized,
+			is_idle, is_abandoned, is_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications, last_recommended_at, created_at, updated_at
@@ -140,7 +142,7 @@ func GetVMRecommendationDetail(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_oversized,
+			is_idle, is_abandoned, is_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications, last_recommended_at, created_at, updated_at
@@ -278,6 +280,11 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 		args = append(args, *filters.IsIdle)
 		argIdx++
 	}
+	if filters.IsAbandoned != nil {
+		clauses = append(clauses, "AND is_abandoned = $"+strconv.Itoa(argIdx))
+		args = append(args, *filters.IsAbandoned)
+		argIdx++
+	}
 	if filters.IsOversized != nil {
 		clauses = append(clauses, "AND is_oversized = $"+strconv.Itoa(argIdx))
 		args = append(args, *filters.IsOversized)
@@ -303,7 +310,7 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.RecommendedVCPU, &r.RecommendedMemoryGiB, &r.RecommendedDiskGiB,
 		&r.RecommendedInstanceType, &r.RecommendedSeries,
 		&r.GuestAgentDetected, &r.Confidence, &r.Term, &r.Engine,
-		&r.IsIdle, &r.IsOversized,
+		&r.IsIdle, &r.IsAbandoned, &r.IsOversized,
 		&r.IOReadIOPSP95, &r.IOWriteIOPSP95, &r.IOReadBPS95, &r.IOWriteBPS95, &r.IOHint,
 		&r.DiskDaysUntilFull, &r.DiskGrowthGiBPerDay, &r.DiskRecommendedExpandGiB,
 		&r.Notifications, &r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,

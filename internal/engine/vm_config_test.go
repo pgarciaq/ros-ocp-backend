@@ -30,6 +30,7 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.Equal(t, int64(100), cfg.DiskMinGrowthMiBPerDay)
 	assert.Equal(t, int64(3000), cfg.HighIOPSThreshold)
 	assert.True(t, cfg.EnableInstanceTypeMatching)
+	assert.Equal(t, int32(3), cfg.AbandonedMinDays)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {

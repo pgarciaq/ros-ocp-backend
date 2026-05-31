@@ -44,6 +44,7 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | CPU/memory right-sizing, floors | ✅ |
 | Downsize hysteresis ratio and min delta | ✅ |
 | Idle Linux / Windows | ✅ |
+| Abandoned zero-usage (codes 43, supersedes idle) | ✅ `TestVMAbandoned_*`, `vm_detect_abandoned_test.go` |
 | Oversized → notification 19 | ✅ |
 | Guest agent high / moderate confidence | ✅ |
 | Disk projection guest vs hypervisor | ✅ `TestVMRecommend_DiskProjectionGrowth`, `DiskProjectionNoFilesystem`, `DiskGrowingHypervisorNotification` |
@@ -63,6 +64,7 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Settings GET | ✅ `TestVMSettings_GET_ReturnsConfig` |
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
+| `filter[is_abandoned]` | ✅ `TestVMRecommendations_ListFilterAbandoned` |
 
 ### Integration (`vm_lifecycle_integration_test.go`)
 

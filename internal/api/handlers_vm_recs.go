@@ -36,6 +36,7 @@ type vmRecMetadata struct {
 	Term               string `json:"term"`
 	Engine             string `json:"engine"`
 	IsIdle             bool   `json:"is_idle"`
+	IsAbandoned        bool   `json:"is_abandoned"`
 	IsOversized        bool   `json:"is_oversized"`
 }
 
@@ -98,6 +99,7 @@ var vmRecAllowedOrderBy = map[string]string{
 	"recommended_vcpu":       "recommended_vcpu",
 	"recommended_memory_gib": "recommended_memory_gib",
 	"is_idle":                "is_idle",
+	"is_abandoned":           "is_abandoned",
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
@@ -175,6 +177,10 @@ func GetVMRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	isAbandoned, err := parseVMRecBoolFilter(c, "is_abandoned")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 	guestAgentDetected, err := parseVMRecBoolFilter(c, "guest_agent_detected")
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
@@ -240,6 +246,7 @@ func GetVMRecommendations(c echo.Context) error {
 		Confidence:         confidenceFilter,
 		GuestAgentDetected: guestAgentDetected,
 		IsIdle:             isIdle,
+		IsAbandoned:        isAbandoned,
 		IsOversized:        isOversized,
 		OrderBy:            orderByKey,
 		OrderDesc:          orderHow == listoptions.OrderDesc,
@@ -389,6 +396,7 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			Term:               r.Term,
 			Engine:             r.Engine,
 			IsIdle:             r.IsIdle,
+			IsAbandoned:        r.IsAbandoned,
 			IsOversized:        r.IsOversized,
 		},
 		IOProfile: vmIOProfile{

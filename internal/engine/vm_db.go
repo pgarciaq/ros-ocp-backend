@@ -89,7 +89,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 				recommended_instance_type, recommended_series,
 				guest_agent_detected, confidence, term, engine,
-				is_idle, is_oversized,
+				is_idle, is_abandoned, is_oversized,
 				io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 				disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 				notifications, last_recommended_at, updated_at
@@ -99,10 +99,10 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				$10, $11, $12,
 				$13, $14,
 				$15, $16, $17, $18,
-				$19, $20,
-				$21, $22, $23, $24, $25,
-				$26, $27, $28,
-				$29, $30, now()
+				$19, $20, $21,
+				$22, $23, $24, $25, $26,
+				$27, $28, $29,
+				$30, $31, now()
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
 				guest_os = EXCLUDED.guest_os,
@@ -118,6 +118,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				guest_agent_detected = EXCLUDED.guest_agent_detected,
 				confidence = EXCLUDED.confidence,
 				is_idle = EXCLUDED.is_idle,
+				is_abandoned = EXCLUDED.is_abandoned,
 				is_oversized = EXCLUDED.is_oversized,
 				io_read_iops_p95 = EXCLUDED.io_read_iops_p95,
 				io_write_iops_p95 = EXCLUDED.io_write_iops_p95,
@@ -135,7 +136,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 			r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
 			r.RecommendedInstanceType, r.RecommendedSeries,
 			r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
-			r.IsIdle, r.IsOversized,
+			r.IsIdle, r.IsAbandoned, r.IsOversized,
 			r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint,
 			r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
 			r.Notifications, r.LastRecommendedAt,

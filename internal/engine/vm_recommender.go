@@ -44,6 +44,12 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 	currentMemGiB := vmCurrentMemoryGiB(latest)
 	currentDiskGiB := vmCurrentDiskGiB(latest)
 
+	abandonedMinDays := int(cfg.AbandonedMinDays)
+	if abandonedMinDays < 1 {
+		abandonedMinDays = 1
+	}
+	isAbandoned := DetectVMAbandoned(windowed, abandonedMinDays)
+
 	idleCPUThreshold := cfg.IdleCPUMC
 	idleMemKiB := cfg.IdleMemoryMiB * 1024
 	if isWindows {
@@ -54,7 +60,7 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 	maxCPUP95 := vmMaxCPUUsage(windowed, engine == vmEnginePerformance)
 	maxMemKiB := vmMaxMemoryUsageKiB(windowed, engine, cfg)
 
-	isIdle := maxCPUP95 < idleCPUThreshold && maxMemKiB < idleMemKiB
+	isIdle := !isAbandoned && maxCPUP95 < idleCPUThreshold && maxMemKiB < idleMemKiB
 
 	memFloorGiB := cfg.LinuxMemoryFloorGiB
 	if isWindows {
@@ -70,7 +76,18 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 		rawRecommendedMemGiB int32
 	)
 
-	if isIdle {
+	if isAbandoned {
+		recommendedVCPU = 0
+		recommendedMemGiB = 0
+		rawRecommendedVCPU = 0
+		rawRecommendedMemGiB = 0
+		guestAgentDetected = vmGuestAgentDetected(windowed)
+		if guestAgentDetected {
+			confidence = "high"
+		} else {
+			confidence = "moderate"
+		}
+	} else if isIdle {
 		recommendedVCPU = 1
 		recommendedMemGiB = memFloorGiB
 		guestAgentDetected = vmGuestAgentDetected(windowed)
@@ -143,6 +160,8 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 
 	notifications := vmBuildNotifications(vmNotificationParams{
 		IsIdle:                  isIdle,
+		IsAbandoned:             isAbandoned,
+		AbandonedDays:           len(windowed),
 		IsOversized:             isOversized,
 		GuestAgentDetected:      guestAgentDetected,
 		IOHint:                  ioHint,
@@ -174,6 +193,7 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 		Term:                     term.Name,
 		Engine:                   engine,
 		IsIdle:                   isIdle,
+		IsAbandoned:              isAbandoned,
 		IsOversized:              isOversized,
 		IOReadIOPSP95:            ioRead,
 		IOWriteIOPSP95:           ioWrite,
