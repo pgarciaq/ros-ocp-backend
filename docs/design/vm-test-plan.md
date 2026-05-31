@@ -55,6 +55,17 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Config defaults and env overrides | ✅ `vm_config_test.go` |
 | Settings validation | ✅ `vm_settings_test.go` |
 
+### Phase 11 MVP enhancements (`vm_recommender_test.go`, `vm_instance_catalog_test.go`)
+
+| Enhancement | Unit tests | Status |
+|-------------|------------|--------|
+| Windows kernel reserve | `TestWindows_KernelReserveSubtracted`, `TestWindows_KernelReserveDoesNotGoBelowFloor`, `TestWindows_KernelReserveConfigurable` | ✅ |
+| Windows update spike (code 47) | `TestWindowsUpdateSpike_NotificationTriggered`, `TestWindowsUpdateSpike_NoNotificationWhenSmallSpread`, `TestWindowsUpdateSpike_OnlyForWindows` | ✅ |
+| Crash loop (code 48) | `TestCrashLoop_NotificationTriggered`, `TestCrashLoop_BelowThreshold`, `TestCrashLoop_NilRestartCount` | ✅ |
+| Instance catalog n1/gn1 (`Selectable: false`) | `TestCatalog_ContainsNSeries`, `TestCatalog_ContainsGPUSeries`, `TestMatchInstanceType_NeverRecommendsNonSelectable`, `TestMatchInstanceType_RecognizesGPUType` | ✅ |
+| Unknown OS (code 46) | `TestUnknownOS_NotificationAdded`, `TestUnknownOS_UsesLinuxDefaults` | ✅ |
+| Downsize stability (code 49) | `TestDownsizeStability_AllDaysBelow_RecommendsDownsize`, `TestDownsizeStability_OneDayAbove_HoldsAtCurrent`, `TestDownsizeStability_OnlyPerformanceEngine` | ✅ |
+
 ### API (`internal/api/handlers_vm_recs_test.go`)
 
 | Test | Status |
@@ -108,6 +119,23 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | `test_vm_guest_agent_confidence` | ✅ |
 | Explicit notification 18/19 subtests | ⬜ | Idle/oversized asserted via metadata; not code-level assert |
 
+### Extended E2E — MVP enhancements (`test_vm_enhancements_flow.py`) — 9 tests ✅
+
+| Test | Status |
+|------|--------|
+| `test_windows_kernel_reserve_reflected` | ✅ |
+| `test_crash_loop_notification_present` | ✅ |
+| `test_unknown_os_notification` | ✅ |
+| `test_instance_type_catalog_gn1_recognized` | ✅ |
+| `test_settings_api_kernel_reserve` | ✅ |
+| `test_settings_api_downsize_stability_days` | ✅ |
+| `test_windows_update_spike_notification` | ✅ |
+| `test_downsize_held_notification` | ✅ |
+| `test_non_selectable_instance_types_not_recommended` | ✅ |
+
+Template: `tests/data/nise_templates/ocp_report_vm_enhancements.yml`. Run:
+`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_enhancements_flow`.
+
 ### Nise template ✅
 
 `tests/data/nise_templates/ocp_report_vm.yml` — idle Linux/Windows, guest-agent VM, legacy profiles.
@@ -136,6 +164,21 @@ RECOMMENDATIONS_SETTINGS_VM_TERMS = "/recommendations/openshift/settings/vm/term
 | Known nise VM names (optional) | 1 | ✅ |
 
 **New vs original plan:** disk projection, notifications structure, settings terms, `memory_floors` / `min_growth_mib_per_day` validated in settings tests.
+
+### IQE — notification codes 46–49
+
+| Test | Status |
+|------|--------|
+| `test_vm_notification_code_46_unknown_os` | ✅ |
+| `test_vm_notification_code_47_windows_spike` | ✅ |
+| `test_vm_notification_code_48_crash_loop` | ✅ |
+| `test_vm_notification_code_49_downsize_held` | ✅ |
+| `test_vm_filter_by_restart_count` | ✅ |
+| `test_vm_windows_kernel_reserve_vs_linux` | ✅ |
+| `test_vm_settings_kernel_reserve` / `test_vm_settings_downsize_stability_days` | ✅ |
+| `test_vm_instance_type_non_selectable_not_recommended` | ✅ |
+
+Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (namespace `vm-enhancements`).
 
 ---
 

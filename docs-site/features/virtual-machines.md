@@ -258,6 +258,10 @@ All codes appear in the `notifications` array on list and detail responses:
 | **43** | critical | VM abandoned (zero CPU and memory max for N days) |
 | **44** | info | Guest agent interrupted (was present, latest day &lt; 80% stable) |
 | **45** | info | Insufficient data (`confidence=low`) |
+| **46** | info | Unknown guest OS (`guest_os` empty); Linux defaults applied |
+| **47** | info | Windows update spike (P99−P95 spread &gt; 50% CPU or &gt; 30% memory) |
+| **48** | warning | Crash loop (`restart_count` sum ≥ threshold in term window) |
+| **49** | info | Performance engine: downsize held (unstable N-day P95 pattern) |
 
 Abandoned VMs emit **43** only (not **18**).
 
@@ -299,7 +303,8 @@ Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Setti
         "idle_memory_mib_windows": 3072,
         "abandoned_min_days": 3
       },
-      "memory_floors": { "linux_gib": 1, "windows_gib": 2 },
+      "memory_floors": { "linux_gib": 1, "windows_gib": 2, "windows_kernel_reserve_gib": 1.5 },
+      "stability": { "downsize_stability_days": 3, "crash_loop_restart_threshold": 3 },
       "disk": {
         "projection_window_days": 30,
         "headroom_pct": 0.25,
@@ -314,8 +319,11 @@ Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Setti
 
 Key env vars (each maps to a Settings API field): `ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_IDLE_CPU_MC`, `ROS_VM_ABANDONED_MIN_DAYS`, `ROS_VM_DISK_*`,
-`ROS_VM_HIGH_IOPS_THRESHOLD`, `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, and others.
-Full list: [Configurability Reference](../architecture/configurability.md).
+`ROS_VM_HIGH_IOPS_THRESHOLD`, `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`,
+`ROS_VM_WINDOWS_KERNEL_RESERVE_GIB`, `ROS_VM_DOWNSIZE_STABILITY_DAYS`,
+`ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, and others.
+Full list: [VM design doc](../../../docs/design/vm-recommendations.md#environment-variables) and
+[Configurability Reference](../architecture/configurability.md).
 
 ## API endpoints
 

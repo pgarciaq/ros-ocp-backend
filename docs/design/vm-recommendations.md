@@ -347,6 +347,9 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
 | `ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY` | `100` | `disk.min_growth_mib_per_day` |
 | `ROS_VM_HIGH_IOPS_THRESHOLD` | `3000` | `io.high_iops_threshold` |
 | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `true` | `instance_type_matching` |
+| `ROS_VM_WINDOWS_KERNEL_RESERVE_GIB` | `1.5` | `memory_floors.windows_kernel_reserve_gib` |
+| `ROS_VM_DOWNSIZE_STABILITY_DAYS` | `3` | `stability.downsize_stability_days` |
+| `ROS_VM_CRASH_LOOP_RESTART_THRESHOLD` | `3` | `stability.crash_loop_restart_threshold` |
 
 Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm_config.go`](../../internal/engine/vm_config.go).
 
