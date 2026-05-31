@@ -39,6 +39,7 @@ type VMRow struct {
 	RestartCount *int32
 
 	// GPU fields (nil when VM has no GPU attached)
+	GPUUUID            *string // optional per-device identifier from operator
 	GPUCount           *int32
 	GPUModel           *string
 	GPUUtilizationAvg  *float64 // 0-1

@@ -2,16 +2,33 @@ package ingestion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
+
+// ingestGPUDeviceDigest mirrors model.GPUDeviceDigest for JSON storage (avoids import cycle).
+type ingestGPUDeviceDigest struct {
+	UUID          string  `json:"uuid"`
+	Model         string  `json:"model"`
+	UtilAvgBP     int32   `json:"util_avg_bp"`
+	UtilMaxBP     int32   `json:"util_max_bp"`
+	FBUsedAvgMiB  float64 `json:"fb_used_avg_mib"`
+	FBUsedMaxMiB  float64 `json:"fb_used_max_mib"`
+	SMActiveAvgBP int32   `json:"sm_active_avg_bp"`
+	TensorAvgBP   int32   `json:"tensor_avg_bp"`
+	DRAMAvgBP     int32   `json:"dram_avg_bp"`
+	MIGProfile    string  `json:"mig_profile,omitempty"`
+	MaxSlices     int32   `json:"max_slices,omitempty"`
+}
 
 // VMDigestResult is a daily aggregated VM digest ready for database upsert.
 type VMDigestResult struct {
@@ -63,6 +80,7 @@ type VMDigestResult struct {
 	GPUMIGProfile   string
 	GPUMaxSlices    int32
 	HasGPU          bool
+	GPUDevices      []byte
 }
 
 // VMDigestKey identifies a single VM-day digest group.
@@ -106,6 +124,22 @@ type vmDigestAccumulator struct {
 	gpuDRAMAvg      []float64
 	gpuMIGProfile   string
 	gpuMaxSlices    int32
+
+	gpuDevices map[string]*vmGPUDeviceAccumulator
+}
+
+type vmGPUDeviceAccumulator struct {
+	uuid        string
+	model       string
+	migProfile  string
+	maxSlices   int32
+	utilAvg     []float64
+	utilMax     []float64
+	fbAvg       []float64
+	fbMax       []float64
+	smAvg       []float64
+	tensorAvg   []float64
+	dramAvg     []float64
 }
 
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
@@ -177,36 +211,7 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 
 		if r.GPUCount != nil && *r.GPUCount > 0 {
 			acc.gpuCountSamples = maxInt32(acc.gpuCountSamples, *r.GPUCount)
-			if r.GPUModel != nil && *r.GPUModel != "" {
-				acc.gpuModel = *r.GPUModel
-			}
-			if r.GPUUtilizationAvg != nil {
-				acc.gpuUtilAvg = append(acc.gpuUtilAvg, *r.GPUUtilizationAvg)
-			}
-			if r.GPUUtilizationMax != nil {
-				acc.gpuUtilMax = append(acc.gpuUtilMax, *r.GPUUtilizationMax)
-			}
-			if r.GPUFBUsedAvgMiB != nil {
-				acc.gpuFBAvg = append(acc.gpuFBAvg, *r.GPUFBUsedAvgMiB)
-			}
-			if r.GPUFBUsedMaxMiB != nil {
-				acc.gpuFBMax = append(acc.gpuFBMax, *r.GPUFBUsedMaxMiB)
-			}
-			if r.GPUSMActiveAvg != nil {
-				acc.gpuSMAvg = append(acc.gpuSMAvg, *r.GPUSMActiveAvg)
-			}
-			if r.GPUTensorActiveAvg != nil {
-				acc.gpuTensorAvg = append(acc.gpuTensorAvg, *r.GPUTensorActiveAvg)
-			}
-			if r.GPUDRAMActiveAvg != nil {
-				acc.gpuDRAMAvg = append(acc.gpuDRAMAvg, *r.GPUDRAMActiveAvg)
-			}
-			if r.GPUMIGProfile != nil && *r.GPUMIGProfile != "" {
-				acc.gpuMIGProfile = *r.GPUMIGProfile
-			}
-			if r.GPUMaxSlices != nil && *r.GPUMaxSlices > acc.gpuMaxSlices {
-				acc.gpuMaxSlices = *r.GPUMaxSlices
-			}
+			acc.ingestGPURow(r)
 		}
 
 		acc.sampleCount++
@@ -296,9 +301,113 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		d.GPUDRAMAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuDRAMAvg))
 		d.GPUMIGProfile = acc.gpuMIGProfile
 		d.GPUMaxSlices = acc.gpuMaxSlices
+		d.GPUDevices = acc.finalizeGPUDevicesJSON()
 	}
 
 	return d
+}
+
+func (acc *vmDigestAccumulator) ingestGPURow(r VMRow) {
+	if r.GPUModel != nil && *r.GPUModel != "" {
+		acc.gpuModel = *r.GPUModel
+	}
+	if r.GPUUtilizationAvg != nil {
+		acc.gpuUtilAvg = append(acc.gpuUtilAvg, *r.GPUUtilizationAvg)
+	}
+	if r.GPUUtilizationMax != nil {
+		acc.gpuUtilMax = append(acc.gpuUtilMax, *r.GPUUtilizationMax)
+	}
+	if r.GPUFBUsedAvgMiB != nil {
+		acc.gpuFBAvg = append(acc.gpuFBAvg, *r.GPUFBUsedAvgMiB)
+	}
+	if r.GPUFBUsedMaxMiB != nil {
+		acc.gpuFBMax = append(acc.gpuFBMax, *r.GPUFBUsedMaxMiB)
+	}
+	if r.GPUSMActiveAvg != nil {
+		acc.gpuSMAvg = append(acc.gpuSMAvg, *r.GPUSMActiveAvg)
+	}
+	if r.GPUTensorActiveAvg != nil {
+		acc.gpuTensorAvg = append(acc.gpuTensorAvg, *r.GPUTensorActiveAvg)
+	}
+	if r.GPUDRAMActiveAvg != nil {
+		acc.gpuDRAMAvg = append(acc.gpuDRAMAvg, *r.GPUDRAMActiveAvg)
+	}
+	if r.GPUMIGProfile != nil && *r.GPUMIGProfile != "" {
+		acc.gpuMIGProfile = *r.GPUMIGProfile
+	}
+	if r.GPUMaxSlices != nil && *r.GPUMaxSlices > acc.gpuMaxSlices {
+		acc.gpuMaxSlices = *r.GPUMaxSlices
+	}
+
+	uuid := "gpu-0"
+	if r.GPUUUID != nil && strings.TrimSpace(*r.GPUUUID) != "" {
+		uuid = strings.TrimSpace(*r.GPUUUID)
+	}
+	if acc.gpuDevices == nil {
+		acc.gpuDevices = make(map[string]*vmGPUDeviceAccumulator)
+	}
+	dev, ok := acc.gpuDevices[uuid]
+	if !ok {
+		dev = &vmGPUDeviceAccumulator{uuid: uuid}
+		acc.gpuDevices[uuid] = dev
+	}
+	if r.GPUModel != nil && *r.GPUModel != "" {
+		dev.model = *r.GPUModel
+	}
+	if r.GPUUtilizationAvg != nil {
+		dev.utilAvg = append(dev.utilAvg, *r.GPUUtilizationAvg)
+	}
+	if r.GPUUtilizationMax != nil {
+		dev.utilMax = append(dev.utilMax, *r.GPUUtilizationMax)
+	}
+	if r.GPUFBUsedAvgMiB != nil {
+		dev.fbAvg = append(dev.fbAvg, *r.GPUFBUsedAvgMiB)
+	}
+	if r.GPUFBUsedMaxMiB != nil {
+		dev.fbMax = append(dev.fbMax, *r.GPUFBUsedMaxMiB)
+	}
+	if r.GPUSMActiveAvg != nil {
+		dev.smAvg = append(dev.smAvg, *r.GPUSMActiveAvg)
+	}
+	if r.GPUTensorActiveAvg != nil {
+		dev.tensorAvg = append(dev.tensorAvg, *r.GPUTensorActiveAvg)
+	}
+	if r.GPUDRAMActiveAvg != nil {
+		dev.dramAvg = append(dev.dramAvg, *r.GPUDRAMActiveAvg)
+	}
+	if r.GPUMIGProfile != nil && *r.GPUMIGProfile != "" {
+		dev.migProfile = *r.GPUMIGProfile
+	}
+	if r.GPUMaxSlices != nil && *r.GPUMaxSlices > dev.maxSlices {
+		dev.maxSlices = *r.GPUMaxSlices
+	}
+}
+
+func (acc *vmDigestAccumulator) finalizeGPUDevicesJSON() []byte {
+	if len(acc.gpuDevices) == 0 {
+		return []byte("[]")
+	}
+	devs := make([]ingestGPUDeviceDigest, 0, len(acc.gpuDevices))
+	for _, d := range acc.gpuDevices {
+		devs = append(devs, ingestGPUDeviceDigest{
+			UUID:          d.uuid,
+			Model:         d.model,
+			UtilAvgBP:     ratioToBasisPoints(avgFloatSlice(d.utilAvg)),
+			UtilMaxBP:     ratioToBasisPoints(maxFloatSlice(d.utilMax)),
+			FBUsedAvgMiB:  avgFloatSlice(d.fbAvg),
+			FBUsedMaxMiB:  maxFloatSlice(d.fbMax),
+			SMActiveAvgBP: ratioToBasisPoints(avgFloatSlice(d.smAvg)),
+			TensorAvgBP:   ratioToBasisPoints(avgFloatSlice(d.tensorAvg)),
+			DRAMAvgBP:     ratioToBasisPoints(avgFloatSlice(d.dramAvg)),
+			MIGProfile:    d.migProfile,
+			MaxSlices:     d.maxSlices,
+		})
+	}
+	b, err := json.Marshal(devs)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
 }
 
 func maxInt32(a, b int32) int32 {

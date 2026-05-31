@@ -42,6 +42,7 @@ const (
 	NotifVMGPUUnderutilized       int16 = 51
 	NotifVMGPUMemorySaturated     int16 = 52
 	NotifVMGPUComputeSaturated    int16 = 53
+	NotifVMGPUMixedIdle           int16 = 54
 )
 
 type vmNotificationParams struct {

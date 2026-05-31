@@ -18,9 +18,9 @@ ALTER TABLE vm_recommendations ADD COLUMN IF NOT EXISTS recommended_gpu_action T
 ALTER TABLE vm_recommendations ADD COLUMN IF NOT EXISTS recommended_gpu_profile TEXT NOT NULL DEFAULT '';
 ALTER TABLE vm_recommendations ADD COLUMN IF NOT EXISTS gpu_utilization_avg_bp INTEGER NOT NULL DEFAULT 0;
 
-INSERT INTO notification_code_definitions (code, description) VALUES
-  (50, 'GPU is idle — consider removing GPU passthrough/vGPU assignment'),
-  (51, 'GPU underutilized — consider a smaller vGPU profile or MIG partition'),
-  (52, 'GPU memory saturated — consider a larger GPU or additional GPU'),
-  (53, 'GPU compute saturated — workload may benefit from a more powerful GPU')
+INSERT INTO notification_code_definitions (code, name, severity, description) VALUES
+  (50, 'VM_GPU_IDLE', 'WARNING', 'GPU is idle — consider removing GPU passthrough/vGPU assignment'),
+  (51, 'VM_GPU_UNDERUTILIZED', 'WARNING', 'GPU underutilized — see recommended_gpu_action and recommended_gpu_profile'),
+  (52, 'VM_GPU_MEMORY_SATURATED', 'WARNING', 'GPU memory saturated — consider a larger GPU or additional GPU'),
+  (53, 'VM_GPU_COMPUTE_SATURATED', 'WARNING', 'GPU compute saturated — workload may benefit from a more powerful GPU')
 ON CONFLICT (code) DO NOTHING;

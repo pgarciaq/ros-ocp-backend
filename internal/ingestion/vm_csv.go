@@ -54,6 +54,7 @@ type vmHeaderIdx struct {
 	diskReadBytesPerSec     int
 	diskWriteBytesPerSec    int
 	restartCount            int
+	gpuUUID                 int
 	gpuCount                int
 	gpuModel                int
 	gpuUtilizationAvg       int
@@ -89,6 +90,7 @@ func newVMHeaderIdx() vmHeaderIdx {
 		diskReadBytesPerSec:     -1,
 		diskWriteBytesPerSec:    -1,
 		restartCount:            -1,
+		gpuUUID:                 -1,
 		gpuCount:                -1,
 		gpuModel:                -1,
 		gpuUtilizationAvg:       -1,
@@ -147,6 +149,8 @@ func buildVMColumnIndex(header []string) (vmHeaderIdx, error) {
 			idx.diskWriteBytesPerSec = i
 		case "restart_count":
 			idx.restartCount = i
+		case "gpu_uuid":
+			idx.gpuUUID = i
 		case "gpu_count":
 			idx.gpuCount = i
 		case "gpu_model":
@@ -347,6 +351,11 @@ func parseVMRecord(record []string, idx vmHeaderIdx) (VMRow, error) {
 		return row, fmt.Errorf("parse restart_count: %w", err)
 	}
 
+	if idx.gpuUUID >= 0 {
+		if s := strings.TrimSpace(fieldAt(record, idx.gpuUUID)); s != "" {
+			row.GPUUUID = &s
+		}
+	}
 	row.GPUCount, err = parseOptionalInt32(fieldAt(record, idx.gpuCount))
 	if err != nil {
 		return row, fmt.Errorf("parse gpu_count: %w", err)

@@ -66,4 +66,5 @@ type DailyVMDigest struct {
 	GPUMIGProfile   string  `db:"gpu_mig_profile"`
 	GPUMaxSlices    int32   `db:"gpu_max_slices"`
 	HasGPU          bool    `db:"has_gpu"`
+	GPUDevices      []byte  `db:"gpu_devices"` // JSONB array of GPUDeviceDigest
 }
