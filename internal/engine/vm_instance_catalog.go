@@ -212,6 +212,25 @@ func LookupInstanceTypeByName(name string, clusterTypes []InstanceType) *Instanc
 	return nil
 }
 
+// RecognizeInstanceTypeExact returns a catalog type with exact vCPU and memory capacity match.
+// Checks cluster types first, then the global catalog. Returns nil when no exact match exists.
+func RecognizeInstanceTypeExact(vcpu, memoryGiB int32, clusterTypes []InstanceType) *InstanceType {
+	if vcpu < 1 {
+		vcpu = 1
+	}
+	targetMemMiB := recommendedMemoryMiB(memoryGiB)
+	for _, catalog := range [][]InstanceType{clusterTypes, vmAllInstanceTypes(nil)} {
+		for i := range catalog {
+			t := &catalog[i]
+			if t.VCPU == vcpu && memoryCapacityMiB(*t) == targetMemMiB {
+				typ := *t
+				return &typ
+			}
+		}
+	}
+	return nil
+}
+
 // RecognizeInstanceType finds the smallest catalog type matching current vCPU/memory (any series).
 // Includes non-selectable n-series and gn-series for current_instance_type identification.
 func RecognizeInstanceType(vcpu, memoryGiB int32, clusterTypes []InstanceType) *InstanceType {
