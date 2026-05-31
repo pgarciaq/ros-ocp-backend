@@ -34,6 +34,30 @@ func TestRegisterDisabledPluginRouteGuards_GPUDisabled_Returns404(t *testing.T) 
 	require.Contains(t, msg, "plugin 'gpu' is not enabled")
 }
 
+func TestRegisterDisabledPluginRouteGuards_VMDisabled_Returns404(t *testing.T) {
+	t.Setenv("ROS_ENABLE_VM_RECS", "false")
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	registerDisabledPluginRouteGuards(v1)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/vm", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "not_found", body["status"])
+	msg, ok := body["message"].(string)
+	require.True(t, ok)
+	require.Contains(t, msg, "plugin 'vm' is not enabled")
+}
+
 func TestBusinessHoursDisabled_Routes404(t *testing.T) {
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "container")

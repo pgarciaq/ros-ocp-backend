@@ -45,6 +45,28 @@ func vmDigestDays(base time.Time, n int, mutate func(*model.DailyVMDigest)) []mo
 	return out
 }
 
+func TestVMRecommend_EmptyDigests_ReturnsError(t *testing.T) {
+	rec, err := RecommendVM(nil, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost)
+	require.Error(t, err)
+	require.Nil(t, rec)
+	assert.Contains(t, err.Error(), "no digests")
+}
+
+func TestVMRecommend_AllZeroCPU_TreatedAsIdle(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 0
+		d.CPUUsageP99MC = 0
+		d.MemUsageP95KiB = 100 * 1024
+	})
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.True(t, rec.IsIdle)
+	assert.Equal(t, int32(1), rec.RecommendedVCPU)
+}
+
 func TestVMRecommend_IdleLinux(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {

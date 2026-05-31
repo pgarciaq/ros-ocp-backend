@@ -248,6 +248,10 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 		}
 	}
 
+	if err := validateVMSettingsResponse(resp); err != nil {
+		return err
+	}
+
 	overrides := map[string]json.RawMessage{}
 	if b, err := json.Marshal(resp.Thresholds); err == nil {
 		overrides["thresholds"] = b
@@ -310,6 +314,34 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 			v.addConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
+	return v.result()
+}
+
+func validateVMSettingsResponse(resp VMSettingsResponse) error {
+	v := &fieldValidator{}
+
+	v.addRangeFloat("thresholds.cpu_percentile_cost", resp.Thresholds.CPUPercentileCost, 0.01, 1.0)
+	v.addRangeFloat("thresholds.cpu_percentile_perf", resp.Thresholds.CPUPercentilePerf, 0.01, 1.0)
+	v.addRangeFloat("thresholds.cpu_margin_min", resp.Thresholds.CPUMarginMin, 0.0, 5.0)
+	v.addRangeFloat("thresholds.cpu_margin_max", resp.Thresholds.CPUMarginMax, 0.0, 5.0)
+	if resp.Thresholds.CPUMarginMin > resp.Thresholds.CPUMarginMax {
+		v.addConstraint("thresholds.cpu_margin_min", "must be less than or equal to cpu_margin_max")
+	}
+	v.addRangeFloat("thresholds.mem_margin_min", resp.Thresholds.MemMarginMin, 0.0, 5.0)
+	v.addRangeFloat("thresholds.downsize_hysteresis_ratio", resp.Thresholds.DownsizeHysteresisRatio, 0.01, 1.0)
+	v.addRangeInt("thresholds.min_vcpu_change", int(resp.Thresholds.MinVCPUChange), 1, 64)
+	v.addRangeInt("thresholds.min_gib_change", int(resp.Thresholds.MinGiBChange), 1, 1024)
+	v.addRangeInt64("thresholds.idle_cpu_mc", resp.Thresholds.IdleCPUMC, 0, 100000)
+	v.addRangeInt64("thresholds.idle_memory_mib", resp.Thresholds.IdleMemoryMiB, 0, 1048576)
+	v.addRangeInt64("thresholds.idle_cpu_mc_windows", resp.Thresholds.IdleCPUMCWindows, 0, 100000)
+	v.addRangeInt64("thresholds.idle_memory_mib_windows", resp.Thresholds.IdleMemoryMiBWindows, 0, 1048576)
+
+	v.addRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
+	v.addRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)
+	v.addRangeInt("disk.round_step_gib", int(resp.Disk.RoundStepGiB), 1, 1024)
+
+	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
+
 	return v.result()
 }
 

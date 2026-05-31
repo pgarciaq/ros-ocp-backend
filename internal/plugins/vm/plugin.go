@@ -89,7 +89,7 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 }
 
 func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
-	if plugin.EnabledFor(plugin.KruizePluginName) {
+	if plugin.EnabledFor(plugin.KruizePluginName) || !config.GetConfig().EnableVMRecs {
 		return
 	}
 	g.GET("/recommendations/openshift/vm", rosapi.GetVMRecommendations)

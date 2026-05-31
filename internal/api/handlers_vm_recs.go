@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,6 +99,22 @@ var vmRecAllowedOrderBy = map[string]string{
 
 const vmRecDefaultOrderBy = "vm_name"
 
+var vmRecValidConfidence = map[string]struct{}{
+	"high": {}, "moderate": {}, "low": {},
+}
+
+func parseVMRecBoolFilter(c echo.Context, param string) (*bool, error) {
+	v := queryparams.FirstFilter(c, param)
+	if v == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: must be true or false", param)
+	}
+	return &b, nil
+}
+
 // GetVMRecommendations handles GET /recommendations/openshift/vm.
 func GetVMRecommendations(c echo.Context) error {
 	xrhid, err := requireXRHID(c)
@@ -119,19 +136,56 @@ func GetVMRecommendations(c echo.Context) error {
 	limit := 10
 	offset := 0
 	if l := c.QueryParam("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
-			limit = v
+		v, err := strconv.Atoi(l)
+		if err != nil || v <= 0 || v > 100 {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": "limit must be an integer between 1 and 100",
+			})
 		}
+		limit = v
 	}
 	if o := c.QueryParam("offset"); o != "" {
-		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
-			offset = v
+		v, err := strconv.Atoi(o)
+		if err != nil || v < 0 {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": "offset must be a non-negative integer",
+			})
 		}
+		offset = v
 	}
 
 	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, vmRecAllowedOrderBy, vmRecDefaultOrderBy, listoptions.OrderAsc)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	isIdle, err := parseVMRecBoolFilter(c, "is_idle")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+	isOversized, err := parseVMRecBoolFilter(c, "is_oversized")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+	guestAgentDetected, err := parseVMRecBoolFilter(c, "guest_agent_detected")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	engineFilter := queryparams.FirstFilter(c, "engine")
+	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
+	}
+	confidenceFilter := queryparams.FirstFilter(c, "confidence")
+	if confidenceFilter != "" {
+		if _, ok := vmRecValidConfidence[confidenceFilter]; !ok {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": "confidence must be one of: high, moderate, low",
+			})
+		}
 	}
 
 	ctx := c.Request().Context()
@@ -172,28 +226,19 @@ func GetVMRecommendations(c echo.Context) error {
 	}
 
 	filters := engine.VMRecommendationFilters{
-		ClusterUUIDs: allowedClusters,
-		Namespace:    queryparams.FirstFilter(c, "namespace"),
-		VMName:       queryparams.FirstFilter(c, "vm_name"),
-		Term:         queryparams.FirstFilter(c, "term"),
-		Engine:       queryparams.FirstFilter(c, "engine"),
-		Confidence:   queryparams.FirstFilter(c, "confidence"),
-		OrderBy:      orderByKey,
-		OrderDesc:    orderHow == listoptions.OrderDesc,
-		Limit:        limit,
-		Offset:       offset,
-	}
-	if v := queryparams.FirstFilter(c, "is_idle"); v != "" {
-		b := strings.EqualFold(v, "true")
-		filters.IsIdle = &b
-	}
-	if v := queryparams.FirstFilter(c, "is_oversized"); v != "" {
-		b := strings.EqualFold(v, "true")
-		filters.IsOversized = &b
-	}
-
-	if filters.Engine != "" && filters.Engine != "cost" && filters.Engine != "performance" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
+		ClusterUUIDs:       allowedClusters,
+		Namespace:          queryparams.FirstFilter(c, "namespace"),
+		VMName:             queryparams.FirstFilter(c, "vm_name"),
+		Term:               queryparams.FirstFilter(c, "term"),
+		Engine:             engineFilter,
+		Confidence:         confidenceFilter,
+		GuestAgentDetected: guestAgentDetected,
+		IsIdle:             isIdle,
+		IsOversized:        isOversized,
+		OrderBy:            orderByKey,
+		OrderDesc:          orderHow == listoptions.OrderDesc,
+		Limit:              limit,
+		Offset:             offset,
 	}
 
 	recs, total, err := engine.ListVMRecommendations(ctx, pool, orgID, filters)

@@ -21,9 +21,10 @@ type VMRecommendationFilters struct {
 	VMName       string
 	Term         string
 	Engine       string
-	Confidence   string
-	IsIdle       *bool
-	IsOversized  *bool
+	Confidence          string
+	GuestAgentDetected  *bool
+	IsIdle              *bool
+	IsOversized         *bool
 	OrderBy      string
 	OrderDesc    bool
 	Limit        int
@@ -259,6 +260,11 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 	if filters.Confidence != "" {
 		clauses = append(clauses, "AND confidence = $"+strconv.Itoa(argIdx))
 		args = append(args, filters.Confidence)
+		argIdx++
+	}
+	if filters.GuestAgentDetected != nil {
+		clauses = append(clauses, "AND guest_agent_detected = $"+strconv.Itoa(argIdx))
+		args = append(args, *filters.GuestAgentDetected)
 		argIdx++
 	}
 	if filters.IsIdle != nil {

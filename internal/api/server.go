@@ -50,6 +50,10 @@ func pluginRecommendationRoutesActive(pluginName string) bool {
 	if pluginName == businessHoursPluginName {
 		return config.BusinessHoursFeatureEnabled()
 	}
+	if pluginName == "vm" {
+		cfg := config.GetConfig()
+		return cfg != nil && cfg.EnableVMRecs && plugin.EnabledFor(pluginName)
+	}
 	return plugin.EnabledFor(pluginName)
 }
 

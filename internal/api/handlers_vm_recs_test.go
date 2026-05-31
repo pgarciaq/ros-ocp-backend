@@ -76,6 +76,42 @@ func TestVMRecommendations_ListAcceptsFilters(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 }
 
+func TestVMRecommendations_ListInvalidLimit_Returns400(t *testing.T) {
+	orgID := "org-vm-rec-bad-limit-" + uuid.New().String()[:8]
+	e := setupVMRecommendationsHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/vm?limit=500", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestParseVMRecBoolFilter_InvalidValue(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?filter%5Bguest_agent_detected%5D=maybe", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	_, err := parseVMRecBoolFilter(c, "guest_agent_detected")
+	require.Error(t, err)
+}
+
+func TestVMRecommendations_ListInvalidGuestAgentFilter_Returns400(t *testing.T) {
+	orgID := "org-vm-rec-bad-ga-" + uuid.New().String()[:8]
+	e := setupVMRecommendationsHandler(t, orgID)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter%5Bguest_agent_detected%5D=maybe",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestVMRecommendations_DetailMissingParams(t *testing.T) {
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {

@@ -75,6 +75,11 @@ func TestFirstFilter(t *testing.T) {
 		c := newEchoContext("cluster_uuid=550e8400-e29b-41d4-a716-446655440000")
 		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", FirstFilter(c, "cluster"))
 	})
+
+	t.Run("guest_agent_detected bracket filter", func(t *testing.T) {
+		c := newEchoContext("filter%5Bguest_agent_detected%5D=true")
+		assert.Equal(t, "true", FirstFilter(c, "guest_agent_detected"))
+	})
 }
 
 func TestParseOrderBy(t *testing.T) {
