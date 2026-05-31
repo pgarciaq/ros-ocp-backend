@@ -433,19 +433,18 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | Gap | Notes |
 |-----|-------|
 | **No dollar savings** | `estimated_monthly_savings` not populated; Koku VM cost rates not wired |
-| **Multi-GPU VMs** | Count-aware matching only; no per-device utilization analysis |
-| **vGPU fractional sharing** | Classification + coarse MIG step-down only; not full vGPU profile recommendations |
+| **Multi-GPU VMs** | Per-device `gpu_devices` digest and notification **54** when some GPUs are idle |
+| **vGPU fractional sharing** | MIG profile (`use_mig_profile`) and time-slicing (`enable_time_slicing`) with catalog-based `OptimalMIGProfile()` |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **n-series (network-optimized)** | `n1` types are recognition-only until network metrics exist — not active recommendations |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
 | **NUMA-aware placement** | Not modeled |
 | **SR-IOV network recommendations** | Not implemented |
 | **Power management / suspend** | No suspend or power-state recommendations |
-| **`current_instance_type`** | Column exists; not yet populated from operator |
+| **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
-| **No recommendation history** | Latest row per VM/term/engine only |
+| **Recommendation history** | `GET /recommendations/openshift/vms/{vm_name}/history` (retention configurable) |
 | **No koku-ui VM page** | API-only today |
-| **OpenAPI** | VM paths not yet in published `openapi.json` |
 
 ## Related documentation
 

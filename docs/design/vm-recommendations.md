@@ -43,11 +43,16 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
 | Operator Strategy 3 dual-CSV | ⬜ (operator) | koku-metrics-operator |
 | Savings ($) in API | ⬜ | — |
-| `current_instance_type` from operator | ⬜ | TODO in [`vm_recommender.go`](../../internal/engine/vm_recommender.go#L142) |
+| `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
+| CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
+| vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
+| Multi-GPU per-device analysis (notification **54**) | ✅ | `gpu_devices` JSONB on digests, [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go) |
+| Disk projection window from settings | ✅ | `vmComputeDiskExpandGiB()` uses `DiskProjectionWindowDays` |
+| VM recommendation history API | ✅ | `vm_recommendation_history` table, `GET .../vms/{vm_name}/history` |
 | koku-ui VM page | ⬜ | koku-ui |
 | Per-mountpoint disk recs | ⬜ | — |
 | VirtualMachinePreference CRD | ✅ | Operator `cluster_instance_types.json`; series override in [`vm_cluster_preferences.go`](../../internal/engine/vm_cluster_preferences.go) |
-| Recommendation history | ⬜ | Only latest row per VM/term/engine |
+| Recommendation history | ✅ | Append-only `vm_recommendation_history`; `ROS_VM_REC_HISTORY_RETENTION_DAYS` (default 90) |
 
 ---
 
@@ -96,7 +101,7 @@ Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender
 
 ### vCPU and memory right-sizing
 
-- **CPU:** p95 (cost) or p99 (performance) millicores → adaptive margin (15–50%) → ceil to whole vCPUs (min 1).
+- **CPU:** p95 (cost) or p99 (performance) millicores → variability-driven margin (15–50% from daily P95 CV when `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED=true`, else fixed `cpu_margin_min` / `cpu_margin_max` for performance) → ceil to whole vCPUs (min 1).
 - **Memory:** p95 + margin (min 20%) → **memory floors** (`memory_floors.linux_gib` default 1, `windows_gib` default 2) → ceil to whole GiB (min 1).
 - **Windows kernel reserve:** For Windows guests, subtract `memory_floors.windows_kernel_reserve_gib` (default **1.5** GiB) from observed memory usage before sizing (hypervisor `mem_usage_*` and guest-agent working set). Floors still apply after subtraction.
 - **Downsize hysteresis:** Recommend downsize only if `recommended/current < 0.60` **and** drop ≥ `min_vcpu_change` (2) vCPU **and** ≥ `min_gib_change` (2) GiB.
@@ -121,7 +126,7 @@ When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launc
 | Classification | Typical action | Notification |
 |----------------|----------------|--------------|
 | `idle` | `remove_gpu` | **50** |
-| `underutilized` | `smaller_mig_profile` or `consider_vgpu_or_mig` | **51** |
+| `underutilized` | `use_mig_profile`, `enable_time_slicing`, or legacy `consider_vgpu_or_mig` | **51** |
 | `memory_saturated` | `larger_gpu` | **52** |
 | `compute_saturated` | `more_powerful_gpu` | **53** |
 | `well_utilized` | `no_change` | — |
@@ -256,6 +261,7 @@ All notifications are JSON objects in the `notifications` array:
 | **51** | `NotifVMGPUUnderutilized` | `info` | GPU underutilized — smaller MIG or vGPU/MIG |
 | **52** | `NotifVMGPUMemorySaturated` | `warning` | GPU memory saturated — larger GPU |
 | **53** | `NotifVMGPUComputeSaturated` | `warning` | GPU compute saturated — more powerful GPU |
+| **54** | `NotifVMGPUMixedIdle` | `warning` | Some GPUs idle while others are active — reduce GPU count |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 

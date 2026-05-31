@@ -104,10 +104,7 @@ func RecommendVM(
 		rawRecommendedVCPU = recommendedVCPU
 		rawRecommendedMemGiB = recommendedMemGiB
 	} else {
-		cpuMargin := cfg.CPUMarginMin
-		if engine == vmEnginePerformance {
-			cpuMargin = cfg.CPUMarginMax
-		}
+		cpuMargin := vmResolveCPUMargin(cfg, engine, windowed, useP99CPU)
 
 		recommendedMC := float64(maxCPUP95) * (1 + cpuMargin)
 		rawRecommendedVCPU = int32(math.Max(1, math.Ceil(recommendedMC/1000.0)))
@@ -184,9 +181,13 @@ func RecommendVM(
 			preferredSeries = vmSeriesGPU
 		}
 		preferredSeries = prefCtx.SeriesForVM(latest.Namespace, latest.VMName, preferredSeries)
+		gpuCountForMatch := gpuAnalysis.GPUCount
+		if gpuAnalysis.ActiveGPUCount > 0 {
+			gpuCountForMatch = gpuAnalysis.ActiveGPUCount
+		}
 		if match := MatchInstanceType(
 			recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes,
-			gpuAnalysis.RequireGPUInstance, gpuAnalysis.GPUCount, gpuAnalysis.MinGPUMemoryGiB,
+			gpuAnalysis.RequireGPUInstance, gpuCountForMatch, gpuAnalysis.MinGPUMemoryGiB,
 		); match != nil {
 			recommendedInstanceType = &match.Name
 			recommendedSeries = &match.Series
@@ -195,7 +196,10 @@ func RecommendVM(
 		}
 	}
 
-	// TODO(current_instance_type): populate from operator kubevirt_vmi_info labels or a dedicated query.
+	var currentInstanceType *string
+	if match := RecognizeInstanceTypeExact(currentVCPU, currentMemGiB, clusterTypes); match != nil {
+		currentInstanceType = &match.Name
+	}
 
 	notifications := vmBuildNotifications(vmNotificationParams{
 		IsIdle:                  isIdle,
@@ -230,6 +234,7 @@ func RecommendVM(
 		CurrentVCPU:              currentVCPU,
 		CurrentMemoryGiB:         currentMemGiB,
 		CurrentDiskGiB:           currentDiskGiB,
+		CurrentInstanceType:      currentInstanceType,
 		RecommendedVCPU:          recommendedVCPU,
 		RecommendedMemoryGiB:     recommendedMemGiB,
 		RecommendedDiskGiB:       diskExpandGiB,
@@ -255,8 +260,9 @@ func RecommendVM(
 		GPUModel:                 gpuAnalysis.GPUModel,
 		GPUClassification:        gpuAnalysis.Classification,
 		RecommendedGPUAction:     gpuAnalysis.Action,
-		RecommendedGPUProfile:    gpuAnalysis.Profile,
-		GPUUtilizationAvgBP:      gpuAnalysis.UtilizationAvgBP,
+		RecommendedGPUProfile:       gpuAnalysis.Profile,
+		RecommendedTimeSliceCount:   gpuAnalysis.RecommendedTimeSliceCount,
+		GPUUtilizationAvgBP:         gpuAnalysis.UtilizationAvgBP,
 		LastRecommendedAt:        now,
 		CreatedAt:                now,
 		UpdatedAt:                now,
@@ -722,7 +728,8 @@ func vmDiskProjectionGuestAgent(days []model.DailyVMDigest, cfg VMRecConfig) (
 		return daysUntilFull, growthGiBPerDay, nil, false
 	}
 
-	expand := vmComputeDiskExpandGiB(growthGiB, cfg)
+	currentUsageGiB := float64(usedLatest) / float64(vmBytesPerGiB)
+	expand := vmComputeDiskExpandGiB(currentUsageGiB, growthGiB, cfg)
 	expandGiB = &expand
 	return daysUntilFull, growthGiBPerDay, expandGiB, false
 }
@@ -760,13 +767,19 @@ func vmDiskProjectionHypervisor(days []model.DailyVMDigest, cfg VMRecConfig) (
 	growthGiBPerDay = &growthGiB
 	hypervisorDiskGrowth = true
 
-	expand := vmComputeDiskExpandGiB(growthGiB, cfg)
+	latest := allocDays[len(allocDays)-1]
+	currentUsageGiB := float64(latest.DiskAllocatedMaxBytes) / float64(vmBytesPerGiB)
+	expand := vmComputeDiskExpandGiB(currentUsageGiB, growthGiB, cfg)
 	expandGiB = &expand
 	return nil, growthGiBPerDay, expandGiB, hypervisorDiskGrowth
 }
 
-func vmComputeDiskExpandGiB(growthGiB float64, cfg VMRecConfig) int32 {
-	projectedGiB := growthGiB * 180
+func vmComputeDiskExpandGiB(currentUsageGiB, growthGiB float64, cfg VMRecConfig) int32 {
+	window := float64(cfg.DiskProjectionWindowDays)
+	if window < 1 {
+		window = 30
+	}
+	projectedGiB := currentUsageGiB + (growthGiB * window)
 	withHeadroom := projectedGiB * (1 + cfg.DiskHeadroomPct)
 	step := float64(cfg.DiskRoundStepGiB)
 	if step < 1 {

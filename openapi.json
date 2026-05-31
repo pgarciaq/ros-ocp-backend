@@ -2165,6 +2165,62 @@
         }
       }
     },
+    "/recommendations/openshift/vm": {
+      "get": {
+        "tags": [
+          "VM Recommendations"
+        ],
+        "summary": "List OpenShift Virtualization VM sizing recommendations",
+        "x-plugin-required": "vm",
+        "responses": {
+          "200": {
+            "description": "VM recommendation list"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/vm/detail": {
+      "get": {
+        "tags": [
+          "VM Recommendations"
+        ],
+        "summary": "Get VM recommendation detail with daily digests",
+        "x-plugin-required": "vm",
+        "responses": {
+          "200": {
+            "description": "VM recommendation detail"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/vms/{vm_name}/history": {
+      "get": {
+        "tags": [
+          "VM Recommendations"
+        ],
+        "summary": "Get historical VM recommendations for a workload",
+        "x-plugin-required": "vm",
+        "responses": {
+          "200": {
+            "description": "VM recommendation history"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/instance-types": {
+      "get": {
+        "tags": [
+          "VM Recommendations"
+        ],
+        "summary": "List cluster VirtualMachineClusterInstancetype definitions",
+        "x-plugin-required": "vm",
+        "responses": {
+          "200": {
+            "description": "Cluster instance types"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/nodes": {
       "get": {
         "tags": ["Node Recommendations"],

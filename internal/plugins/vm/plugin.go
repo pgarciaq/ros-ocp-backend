@@ -94,6 +94,7 @@ func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
 	}
 	g.GET("/recommendations/openshift/vm", rosapi.GetVMRecommendations)
 	g.GET("/recommendations/openshift/vm/detail", rosapi.GetVMRecommendationDetail)
+	g.GET("/recommendations/openshift/vms/:vm_name/history", rosapi.GetVMRecommendationHistory)
 	g.GET("/recommendations/openshift/instance-types", rosapi.GetClusterInstanceTypes)
 }
 
@@ -108,7 +109,7 @@ func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
 func (p *VMPlugin) MaxWindowDays() int { return 90 }
 
 func (p *VMPlugin) RetentionTables() []string {
-	return []string{"daily_vm_digests", "vm_recommendations"}
+	return []string{"daily_vm_digests", "vm_recommendations", "vm_recommendation_history"}
 }
 
 func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {

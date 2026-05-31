@@ -61,12 +61,14 @@ type vmDiskProjection struct {
 }
 
 type vmGPURecommendation struct {
-	GPUCount              int32  `json:"gpu_count"`
-	GPUModel              string `json:"gpu_model,omitempty"`
-	GPUClassification     string `json:"gpu_classification,omitempty"`
-	RecommendedGPUAction  string `json:"recommended_gpu_action,omitempty"`
-	RecommendedGPUProfile string `json:"recommended_gpu_profile,omitempty"`
-	GPUUtilizationAvgBP   int32  `json:"gpu_utilization_avg_bp"`
+	GPUCount                  int32                    `json:"gpu_count"`
+	GPUModel                  string                   `json:"gpu_model,omitempty"`
+	GPUClassification         string                   `json:"gpu_classification,omitempty"`
+	RecommendedGPUAction      string                   `json:"recommended_gpu_action,omitempty"`
+	RecommendedGPUProfile     string                   `json:"recommended_gpu_profile,omitempty"`
+	RecommendedTimeSliceCount int32                    `json:"recommended_time_slice_count,omitempty"`
+	GPUUtilizationAvgBP       int32                    `json:"gpu_utilization_avg_bp"`
+	GPUDevices                []model.GPUDeviceDigest  `json:"gpu_devices,omitempty"`
 }
 
 // VMRecommendationItem is a single VM recommendation in list/detail responses.
@@ -87,16 +89,17 @@ type VMRecommendationItem struct {
 }
 
 type vmDailyDigestItem struct {
-	BucketDate     string `json:"bucket_date"`
-	CPUUsageP95MC  int64  `json:"cpu_usage_p95_mc"`
-	MemUsageP95KiB int64  `json:"mem_usage_p95_kib"`
-	SampleCount    int32  `json:"sample_count"`
-	CPUUsageP50MC  int64  `json:"cpu_usage_p50_mc,omitempty"`
-	CPUUsageP99MC  int64  `json:"cpu_usage_p99_mc,omitempty"`
-	CPUUsageMaxMC  int64  `json:"cpu_usage_max_mc,omitempty"`
-	MemUsageP50KiB int64  `json:"mem_usage_p50_kib,omitempty"`
-	MemUsageP99KiB int64  `json:"mem_usage_p99_kib,omitempty"`
-	MemUsageMaxKiB int64  `json:"mem_usage_max_kib,omitempty"`
+	BucketDate     string                  `json:"bucket_date"`
+	CPUUsageP95MC  int64                   `json:"cpu_usage_p95_mc"`
+	MemUsageP95KiB int64                   `json:"mem_usage_p95_kib"`
+	SampleCount    int32                   `json:"sample_count"`
+	CPUUsageP50MC  int64                   `json:"cpu_usage_p50_mc,omitempty"`
+	CPUUsageP99MC  int64                   `json:"cpu_usage_p99_mc,omitempty"`
+	CPUUsageMaxMC  int64                   `json:"cpu_usage_max_mc,omitempty"`
+	MemUsageP50KiB int64                   `json:"mem_usage_p50_kib,omitempty"`
+	MemUsageP99KiB int64                   `json:"mem_usage_p99_kib,omitempty"`
+	MemUsageMaxKiB int64                   `json:"mem_usage_max_kib,omitempty"`
+	GPUDevices     []model.GPUDeviceDigest `json:"gpu_devices,omitempty"`
 }
 
 // VMRecommendationListResponse wraps paginated VM recommendations.
@@ -378,6 +381,10 @@ func GetVMRecommendationDetail(c echo.Context) error {
 
 	item := vmRecToAPIItem(*rec)
 	item.DailyDigests = vmDigestsToAPI(digests)
+	if item.GPU != nil && len(digests) > 0 {
+		gpuDetail := engine.AnalyzeVMGPU(digests, engine.VMRecConfigResolved())
+		item.GPU.GPUDevices = gpuDetail.GPUDevices
+	}
 	if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
 		enrichVMRecPreferenceMetadata(c.Request().Context(), pool, orgID, clusterID, &item)
 	}
@@ -458,12 +465,13 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 	}
 	if r.GPUCount > 0 || r.GPUClassification != "" {
 		item.GPU = &vmGPURecommendation{
-			GPUCount:              r.GPUCount,
-			GPUModel:              r.GPUModel,
-			GPUClassification:     r.GPUClassification,
-			RecommendedGPUAction:  r.RecommendedGPUAction,
-			RecommendedGPUProfile: r.RecommendedGPUProfile,
-			GPUUtilizationAvgBP:   r.GPUUtilizationAvgBP,
+			GPUCount:                  r.GPUCount,
+			GPUModel:                  r.GPUModel,
+			GPUClassification:         r.GPUClassification,
+			RecommendedGPUAction:      r.RecommendedGPUAction,
+			RecommendedGPUProfile:     r.RecommendedGPUProfile,
+			RecommendedTimeSliceCount: r.RecommendedTimeSliceCount,
+			GPUUtilizationAvgBP:       r.GPUUtilizationAvgBP,
 		}
 	}
 	return item
@@ -486,7 +494,7 @@ func parseVMNotifications(raw []byte) []any {
 func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
 	out := make([]vmDailyDigestItem, 0, len(digests))
 	for _, d := range digests {
-		out = append(out, vmDailyDigestItem{
+		item := vmDailyDigestItem{
 			BucketDate:     d.BucketDate.Format("2006-01-02"),
 			CPUUsageP50MC:  d.CPUUsageP50MC,
 			CPUUsageP95MC:  d.CPUUsageP95MC,
@@ -497,7 +505,14 @@ func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
 			MemUsageP99KiB: d.MemUsageP99KiB,
 			MemUsageMaxKiB: d.MemUsageMaxKiB,
 			SampleCount:    d.SampleCount,
-		})
+		}
+		if len(d.GPUDevices) > 0 {
+			var devs []model.GPUDeviceDigest
+			if err := json.Unmarshal(d.GPUDevices, &devs); err == nil {
+				item.GPUDevices = devs
+			}
+		}
+		out = append(out, item)
 	}
 	return out
 }
