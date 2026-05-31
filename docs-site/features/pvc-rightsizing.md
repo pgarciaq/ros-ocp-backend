@@ -1,9 +1,48 @@
-# F27: PVC Right-Sizing
+# PVC Right-Sizing
+
+!!! info "Quick Facts"
+    **API:** `GET /api/cost-management/v1/recommendations/openshift/pvcs`  
+    **Plugin:** `pvc` (priority 45, on by default in the native engine)  
+    **Data source:** `cm-openshift-storage-usage-*.csv` from koku-metrics-operator  
+    **Update frequency:** Each ROS report ingestion cycle (typically daily)  
+    **Configurable:** Yes — per-org Settings API + admin env vars (`ROS_PVC_*`)  
+    **Key thresholds:** oversized &lt; 20% utilization, near-full &gt; 85%, orphaned zero usage 3+ days  
+    **Savings:** Yes on **oversized** rows when `KOKU_MASU_URL` and savings estimates are enabled
 
 ## Overview
 
 PVC (PersistentVolumeClaim) right-sizing analyzes storage capacity vs. actual
 usage and classifies PVCs to help reduce storage costs and prevent outages.
+
+## How it works
+
+```mermaid
+flowchart TD
+  Prom[Prometheus / operator metrics] --> CSV[Storage usage CSV]
+  CSV --> Digest[Daily PVC digests]
+  Digest --> Util[Compute utilization %]
+  Util --> Compare{vs thresholds}
+  Compare -->|under 20% utilization| Oversized[oversized — resize down]
+  Compare -->|over 85% or growth trend| NearFull[near_full — expand]
+  Compare -->|zero usage 3+ days| Orphaned[orphaned — delete candidate]
+  Compare -->|20–85%| Healthy[healthy — no change]
+  Oversized --> API[GET .../pvcs]
+  NearFull --> API
+  Orphaned --> API
+  Healthy --> API
+```
+
+1. **Collection** — The koku-metrics-operator reports PVC capacity and usage
+   (`persistentvolumeclaim_capacity_bytes`, `persistentvolumeclaim_usage_byte_seconds`)
+   in hourly storage CSV rows.
+2. **Digestion** — ROS aggregates samples into `daily_pvc_digests` (min/max/avg usage per day).
+3. **Utilization** — For each PVC in the configured term window, max usage is compared
+   to provisioned capacity to compute `usage_ratio`.
+4. **Classification** — Thresholds flag **oversized** (under-provisioned waste),
+   **near-full** (capacity risk, including growth projection), **orphaned** (zero usage),
+   or **healthy** (no action).
+5. **Recommendation** — `RecommendPVCs()` writes `pvc_recommendation_sets` with
+   recommended capacity, `resize_note`, notifications, and optional dollar savings.
 
 ## Data Source
 
@@ -23,15 +62,6 @@ changes are required for data collection.
 - `persistentvolumeclaim_capacity_bytes` — provisioned capacity
 - `persistentvolumeclaim_usage_byte_seconds` — usage × seconds (converted to bytes)
 - `volume_request_storage_byte_seconds` — request × seconds
-
-## Pipeline
-
-1. **Detection**: `DetermineCSVType()` identifies `"storage"` in the filename
-2. **Parsing**: `ingestion.ParsePVCRows()` reads CSV into `PVCRow` structs
-3. **Digestion**: `ComputePVCDigests()` aggregates hourly rows into daily min/max/avg
-4. **Upsert**: `UpsertPVCDigests()` writes to `daily_pvc_digests` table
-5. **Recommendation**: `RecommendPVCs()` loads digests within the configured term window and classifies
-6. **Persistence**: `WritePVCRecommendations()` upserts to `pvc_recommendation_sets`
 
 > **Configurable terms:** PVC uses the TermProvider trait with defaults of
 > 7d (short), 30d (medium), 90d (long). The maximum allowed window is 365 days

@@ -25,12 +25,12 @@ Full design rationale: [features-business-hours.md](features-business-hours.md).
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   Admin[Admin UI / API] -->|PUT schedule| ROSAPI[ros-api Settings]
   ROSAPI --> Sched[(business_hours_schedules)]
   ROSAPI -->|async reship_ros| Masu[koku masu]
   Masu --> S3[(ros-data S3)]
-  Masu --> Kafka[hccm.ros.events]
+  S3 --> Kafka[hccm.ros.events]
   Kafka --> Processor[ros-processor]
   Processor --> Ingest[ParseAndDigestCSV]
   Sched --> Ingest

@@ -7,7 +7,7 @@ options, see [Local Development](development.md).
 ## What you will build
 
 ```mermaid
-flowchart LR
+flowchart TD
   NISE[NISE --write-monthly] --> Tar[tar.gz + manifest.json]
   Tar --> Ingress[Ingress upload]
   Ingress --> Koku[Koku listener]

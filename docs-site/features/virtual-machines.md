@@ -27,7 +27,7 @@ Technical design (maintainers): [`docs/design/vm-recommendations.md`](../../../d
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
   Op[Metrics operator] -->|15-min CSV| Ingress[Koku ingress / listener]
   Ingress --> ROS[ros-ocp-backend vm plugin]
   ROS --> Digests[daily_vm_digests]

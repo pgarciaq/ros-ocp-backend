@@ -22,7 +22,7 @@ used metrics.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
   Op[Metrics operator] --> CSV[Namespace ROS CSV]
   Cont[Container plugin] --> RS[recommendation_sets]
   CSV --> Digests[daily_namespace_digests]

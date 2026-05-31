@@ -20,7 +20,7 @@ Internal design: [`docs/features/cluster-resource-quota.md`](../../../docs/featu
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
   Op[Metrics operator] --> CSV[CRQ ROS CSV]
   Quota[quota plugin] --> QRS[quota_recommendation_sets]
   CSV --> Digests[daily_cluster_quota_digests]
