@@ -59,8 +59,9 @@ type VMRecommendation struct {
 	GPUModel              string `db:"gpu_model" json:"gpu_model"`
 	GPUClassification     string `db:"gpu_classification" json:"gpu_classification"`
 	RecommendedGPUAction  string `db:"recommended_gpu_action" json:"recommended_gpu_action"`
-	RecommendedGPUProfile string `db:"recommended_gpu_profile" json:"recommended_gpu_profile"`
-	GPUUtilizationAvgBP   int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
+	RecommendedGPUProfile      string `db:"recommended_gpu_profile" json:"recommended_gpu_profile"`
+	RecommendedTimeSliceCount  int32  `db:"recommended_time_slice_count" json:"recommended_time_slice_count"`
+	GPUUtilizationAvgBP        int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
 
 	// Timestamps
 	LastRecommendedAt time.Time `db:"last_recommended_at"`
