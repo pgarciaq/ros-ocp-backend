@@ -45,7 +45,8 @@ func TestVMGPU_UnderutilizedPassthrough(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	analysis := analyzeVMGPU(digests, cfg)
 	assert.Equal(t, "underutilized", analysis.Classification)
-	assert.Equal(t, vmGPUActionConsiderVGPUOrMIG, analysis.Action)
+	assert.Equal(t, vmGPUActionUseMIGProfile, analysis.Action)
+	assert.NotEmpty(t, analysis.Profile)
 	assert.Contains(t, analysis.NotificationCodes, NotifVMGPUUnderutilized)
 }
 
@@ -58,7 +59,7 @@ func TestVMGPU_UnderutilizedMIG(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	analysis := analyzeVMGPU(digests, cfg)
 	assert.Equal(t, "underutilized", analysis.Classification)
-	assert.Equal(t, vmGPUActionSmallerMIGProfile, analysis.Action)
+	assert.Equal(t, vmGPUActionUseMIGProfile, analysis.Action)
 	assert.NotEmpty(t, analysis.Profile)
 	assert.Contains(t, analysis.NotificationCodes, NotifVMGPUUnderutilized)
 }
