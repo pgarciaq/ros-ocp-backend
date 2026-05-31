@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
@@ -31,13 +35,15 @@ type vmRecommendedSizing struct {
 }
 
 type vmRecMetadata struct {
-	GuestAgentDetected bool   `json:"guest_agent_detected"`
-	Confidence         string `json:"confidence"`
-	Term               string `json:"term"`
-	Engine             string `json:"engine"`
-	IsIdle             bool   `json:"is_idle"`
-	IsAbandoned        bool   `json:"is_abandoned"`
-	IsOversized        bool   `json:"is_oversized"`
+	GuestAgentDetected bool    `json:"guest_agent_detected"`
+	Confidence         string  `json:"confidence"`
+	Term               string  `json:"term"`
+	Engine             string  `json:"engine"`
+	IsIdle             bool    `json:"is_idle"`
+	IsAbandoned        bool    `json:"is_abandoned"`
+	IsOversized        bool    `json:"is_oversized"`
+	PreferenceName     *string `json:"preference_name,omitempty"`
+	PreferenceClass    *string `json:"preference_class,omitempty"`
 }
 
 type vmIOProfile struct {
@@ -356,8 +362,28 @@ func GetVMRecommendationDetail(c echo.Context) error {
 
 	item := vmRecToAPIItem(*rec)
 	item.DailyDigests = vmDigestsToAPI(digests)
+	if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
+		enrichVMRecPreferenceMetadata(c.Request().Context(), pool, orgID, clusterID, &item)
+	}
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, item)
+}
+
+func enrichVMRecPreferenceMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, item *VMRecommendationItem) {
+	if item == nil || pool == nil {
+		return
+	}
+	prefCtx, err := engine.QueryClusterVMPreferences(ctx, pool, orgID, clusterUUID)
+	if err != nil || prefCtx == nil {
+		return
+	}
+	name, class := prefCtx.PreferenceInfoForVM(item.Namespace, item.VMName)
+	if name != "" {
+		item.Metadata.PreferenceName = &name
+	}
+	if class != "" {
+		item.Metadata.PreferenceClass = &class
+	}
 }
 
 func clusterAllowed(allowed []string, clusterUUID string) bool {

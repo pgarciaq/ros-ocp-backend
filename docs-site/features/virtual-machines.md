@@ -1,65 +1,27 @@
 # Virtual Machine Recommendations
 
-OpenShift Virtualization (KubeVirt) VMs can be right-sized like containers, with recommendations for vCPU, memory, disk growth, and instance type.
+OpenShift Virtualization workloads can be right-sized using ROS VM recommendations. The service analyzes 15-minute usage samples from the metrics operator and suggests vCPU, memory, disk expansion, and **instance type** matches.
 
-## Idle vs abandoned
+## Instance type preferences
 
-| Status | What it means | What we recommend |
-|--------|---------------|-------------------|
-| **Idle** | CPU and memory usage stay **low** but not necessarily zero | Downsize to a small floor (for example 1 vCPU and 1 GiB on Linux) |
-| **Abandoned** | **Zero** CPU and memory usage on **every** day in the observation window | **0** vCPU and **0** GiB — treat the VM as unused; consider deleting or powering off |
+Cluster admins can steer recommendations per VM using **VirtualMachineClusterPreference** resources and the VM’s `spec.preference.name` field. The metrics operator exports preferences and VM mappings in `cluster_instance_types.json`; ROS respects the preference **class** when choosing an instance type series.
 
-Abandoned is stronger than idle:
+**Precedence:** administrator preference class overrides automatic CPU:memory ratio classification. If no preference is set, or the class label is unknown, ROS uses the same ratio logic as before.
 
-- Detection uses daily **max** usage (not percentiles): all days must show 0 CPU and 0 memory.
-- You get a **critical** notification (code **43**), not the idle warning (code **18**).
-- A VM is never marked both idle and abandoned; abandoned wins.
+**Typical class labels:**
 
-Default rule: at least **3** days of all-zero usage in the term window (about **72 hours** with daily digests).
+| Preference class | Recommended series |
+|------------------|-------------------|
+| `general-purpose` | General-purpose (`u1.*`) |
+| `compute-intensive` | Compute-optimized (`cx1.*`) |
+| `memory-intensive` | Memory-optimized (`m1.*`) |
 
-## Configure the abandoned threshold
+Example: a VM with high CPU versus memory usage might normally map to compute-optimized, but if it references a `database` preference labeled `memory-intensive`, ROS recommends a memory-optimized instance type instead.
 
-**Settings API** (per organization):
+## API
 
-```http
-GET /api/cost-management/v1/recommendations/openshift/settings/vm
-```
+- `GET /api/cost-management/v1/recommendations/openshift/vm` — list recommendations
+- `GET /api/cost-management/v1/recommendations/openshift/vm/detail` — detail with `metadata.preference_name` / `metadata.preference_class` when configured
+- `GET /api/cost-management/v1/recommendations/openshift/instance-types` — cluster instance type catalog and `preferences.configured` summary
 
-Look for `thresholds.abandoned_min_days` (default `3`). Update with PUT on the same path (partial body allowed), for example:
-
-```json
-{
-  "thresholds": {
-    "abandoned_min_days": 5
-  }
-}
-```
-
-**Deployment environment** (locks the field for all tenants when set):
-
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `ROS_VM_ABANDONED_MIN_DAYS` | `3` | Minimum number of daily digests with zero max CPU and memory |
-
-## Find abandoned VMs in the API
-
-```http
-GET /api/cost-management/v1/recommendations/openshift/vm?filter[is_abandoned]=true
-```
-
-Response `metadata` includes `is_abandoned`. Sort with `order_by=is_abandoned`.
-
-Notifications include a structured object, for example:
-
-```json
-{
-  "code": 43,
-  "type": "critical",
-  "message": "VM appears abandoned: zero CPU and memory usage for 5 days. Consider deleting or powering off to recover resources."
-}
-```
-
-## Further reading
-
-- [VM Recommendations Design](../../docs/design/vm-recommendations.md) — algorithms, env vars, and API reference
-- [UI Integration Guide](../ui-integration-guide.md) — full REST patterns for the Cost Management UI
+See [VM recommendations design](../../docs/design/vm-recommendations.md) for algorithms, settings, and notification codes.

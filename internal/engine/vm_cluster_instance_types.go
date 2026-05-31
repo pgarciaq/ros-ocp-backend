@@ -19,6 +19,8 @@ type ClusterInstanceTypesPayload struct {
 	ClusterUUID   string                      `json:"cluster_uuid"`
 	CollectedAt   time.Time                   `json:"collected_at"`
 	InstanceTypes []ClusterInstanceTypeRecord `json:"instance_types"`
+	Preferences   []ClusterPreferenceRecord   `json:"preferences"`
+	VMPreferences map[string]string           `json:"vm_preferences"`
 }
 
 // ClusterInstanceTypeRecord is one cluster-defined VirtualMachineClusterInstancetype.
@@ -120,6 +122,10 @@ func UpsertClusterInstanceTypes(ctx context.Context, pool *pgxpool.Pool, orgID s
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit cluster instance types: %w", err)
+	}
+
+	if err := UpsertClusterVMPreferencesMeta(ctx, pool, orgID, clusterUUID, doc.Preferences, doc.VMPreferences, collectedAt); err != nil {
+		return err
 	}
 	return nil
 }

@@ -19,10 +19,17 @@ type clusterInstanceTypeItem struct {
 	GPUs      int32  `json:"gpus"`
 }
 
+type clusterPreferencesSummary struct {
+	Configured        bool `json:"configured"`
+	PreferenceCount   int  `json:"preference_count"`
+	VMPreferenceCount int  `json:"vm_preference_count"`
+}
+
 type clusterInstanceTypesResponse struct {
 	ClusterUUID   string                    `json:"cluster_uuid"`
 	CollectedAt   string                    `json:"collected_at"`
 	InstanceTypes []clusterInstanceTypeItem `json:"instance_types"`
+	Preferences   clusterPreferencesSummary `json:"preferences"`
 }
 
 // GetClusterInstanceTypes handles GET /recommendations/openshift/instance-types/.
@@ -66,9 +73,22 @@ func GetClusterInstanceTypes(c echo.Context) error {
 		}
 	}
 
+	prefSummary, err := engine.QueryClusterVMPreferencesSummary(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"error":   "internal_error",
+			"message": err.Error(),
+		})
+	}
+
 	return c.JSON(http.StatusOK, clusterInstanceTypesResponse{
 		ClusterUUID:   clusterUUID.String(),
 		CollectedAt:   collectedAt.UTC().Format(time.RFC3339),
 		InstanceTypes: items,
+		Preferences: clusterPreferencesSummary{
+			Configured:        prefSummary.HasPreferences,
+			PreferenceCount:   prefSummary.PreferenceCount,
+			VMPreferenceCount: prefSummary.VMPreferenceCount,
+		},
 	})
 }

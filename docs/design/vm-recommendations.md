@@ -45,7 +45,7 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | `current_instance_type` from operator | ⬜ | TODO in [`vm_recommender.go`](../../internal/engine/vm_recommender.go#L142) |
 | koku-ui VM page | ⬜ | koku-ui |
 | Per-mountpoint disk recs | ⬜ | — |
-| VirtualMachinePreference CRD | ⬜ | — |
+| VirtualMachinePreference CRD | ✅ | Operator `cluster_instance_types.json`; series override in [`vm_cluster_preferences.go`](../../internal/engine/vm_cluster_preferences.go) |
 | Recommendation history | ⬜ | Only latest row per VM/term/engine |
 
 ---
@@ -98,11 +98,40 @@ Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance
 
 1. Compute recommended vCPU and GiB from usage + margins.
 2. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose).
-3. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type in preferred series that fits vCPU and memory (MiB-aware for `u1.nano`).
-4. Fall back to general-purpose series if no match in preferred series.
-5. Emit notification **41** when a type is recommended.
+3. If the VM has a `VirtualMachine.spec.preference` mapping in `cluster_instance_types.json`, override the series using the preference’s class label (**preference wins over ratio**). See [VirtualMachinePreference integration](#virtualmachinepreference-integration).
+4. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type in preferred series that fits vCPU and memory (MiB-aware for `u1.nano`).
+5. Fall back to general-purpose series if no match in preferred series.
+6. Emit notification **41** when a type is recommended.
 
-Cluster custom `VirtualMachineClusterInstancetype` CRs are **not** merged into the catalog yet (operator catalog sync remains future work).
+Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference` CRs are exported in `cluster_instance_types.json` by the metrics operator and persisted for matching.
+
+### VirtualMachinePreference integration
+
+OpenShift Virtualization lets admins attach a **cluster preference** to a VM (`spec.preference.name`). Preferences carry a **class** label (`instancetype.kubevirt.io/class` on the preference CR) that indicates intended series (for example memory-intensive for database workloads).
+
+The operator extends `cluster_instance_types.json`:
+
+```json
+{
+  "preferences": [{"name": "database", "class": "memory-intensive"}],
+  "vm_preferences": {"production/db-server-01": "database"}
+}
+```
+
+ROS loads this catalog on ingest ([`UpsertClusterInstanceTypes`](../../internal/engine/vm_cluster_instance_types.go)) and applies overrides in [`RecommendVM()`](../../internal/engine/vm_recommender.go) via [`VMPreferenceContext.SeriesForVM()`](../../internal/engine/vm_cluster_preferences.go).
+
+**Precedence:** `VirtualMachinePreference` class → ratio-based `vmClassifySeries()` → general-purpose fallback inside `MatchInstanceType()`.
+
+**Class → series mapping** ([`NormalizePreferenceClass()`](../../internal/engine/vm_cluster_preferences.go)):
+
+| KubeVirt class label | ROS `series` value |
+|----------------------|-------------------|
+| `general-purpose` | `general-purpose` |
+| `compute-intensive`, `compute` | `compute-optimized` |
+| `memory-intensive`, `memory` | `memory-optimized` |
+| unknown / empty | ratio classification (no override) |
+
+Detail API adds `metadata.preference_name` and `metadata.preference_class` when configured. The instance-types API reports `preferences.configured` and counts.
 
 ### Idle detection (OS-aware)
 
@@ -383,9 +412,7 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **koku-ui** | No dedicated VM optimizations view |
 | **`current_instance_type`** | Column exists; not populated from operator/`kubevirt_vmi_info` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
-| **VirtualMachinePreference** | No CRD-based series bias |
 | **Recommendation history** | Upsert keeps latest row only |
-| **Cluster instance type catalog** | Built-in u/cx/m only; no operator CR list |
 | **OpenAPI spec** | VM paths not in [`openapi.json`](../../openapi.json) yet |
 
 ---

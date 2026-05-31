@@ -70,7 +70,7 @@ func TestInstanceType_DisabledLeavesNilInRecommender(t *testing.T) {
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.RecommendedInstanceType)
