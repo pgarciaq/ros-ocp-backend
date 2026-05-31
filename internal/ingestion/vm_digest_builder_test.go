@@ -79,17 +79,34 @@ func TestVMDigestBuilder_SingleVMMultipleDays(t *testing.T) {
 	require.Len(t, digests, 2)
 }
 
+func TestVMDigestBuilder_MinAgentSamplesForPercentile(t *testing.T) {
+	base := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	rows := make([]VMRow, 0, 19)
+	for i := 0; i < 19; i++ {
+		mem := 100.0 + float64(i)
+		rows = append(rows, vmSampleRow(base.Add(time.Duration(i)*15*time.Minute), "ga-vm", "ns", 20, 2000, func(r *VMRow) {
+			r.MemoryAvailableKiB = &mem
+		}))
+	}
+	digests := BuildDailyVMDigests(rows)
+	require.Len(t, digests, 1)
+	var d VMDigestResult
+	for _, v := range digests {
+		d = v
+	}
+	assert.Equal(t, int32(19), d.AgentSampleCount)
+	assert.Nil(t, d.MemAvailableP50KiB)
+	assert.Nil(t, d.MemAvailableP95KiB)
+}
+
 func TestVMDigestBuilder_GuestAgentFieldsPresent(t *testing.T) {
 	base := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
-	mem100 := 100.0
-	mem300 := 300.0
-	rows := []VMRow{
-		vmSampleRow(base, "ga-vm", "ns", 10, 1000, func(r *VMRow) {
-			r.MemoryAvailableKiB = &mem100
-		}),
-		vmSampleRow(base.Add(15*time.Minute), "ga-vm", "ns", 20, 2000, func(r *VMRow) {
-			r.MemoryAvailableKiB = &mem300
-		}),
+	rows := make([]VMRow, 0, 20)
+	for i := 0; i < 20; i++ {
+		mem := 100.0 + float64(i)*10
+		rows = append(rows, vmSampleRow(base.Add(time.Duration(i)*15*time.Minute), "ga-vm", "ns", 10+float64(i), 1000, func(r *VMRow) {
+			r.MemoryAvailableKiB = &mem
+		}))
 	}
 	digests := BuildDailyVMDigests(rows)
 	require.Len(t, digests, 1)
@@ -99,8 +116,9 @@ func TestVMDigestBuilder_GuestAgentFieldsPresent(t *testing.T) {
 	}
 	require.NotNil(t, d.MemAvailableP50KiB)
 	require.NotNil(t, d.MemAvailableP95KiB)
-	assert.Equal(t, int64(100), *d.MemAvailableP50KiB)
-	assert.Equal(t, int64(300), *d.MemAvailableP95KiB)
+	assert.Equal(t, int32(20), d.AgentSampleCount)
+	assert.NotNil(t, d.MemAvailableP50KiB)
+	assert.NotNil(t, d.MemAvailableP95KiB)
 }
 
 func TestVMDigestBuilder_NoGuestAgentFields(t *testing.T) {

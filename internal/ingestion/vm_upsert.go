@@ -25,7 +25,7 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				disk_allocated_max_bytes,
 				filesystem_used_max_bytes, filesystem_capacity_bytes,
 				disk_read_iops_p95, disk_write_iops_p95, disk_read_bps_p95, disk_write_bps_p95,
-				sample_count
+				sample_count, agent_sample_count
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10, $11, $12, $13,
@@ -34,7 +34,7 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				$21,
 				$22, $23,
 				$24, $25, $26, $27,
-				$28
+				$28, $29
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, bucket_date)
 			DO UPDATE SET
@@ -60,7 +60,8 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				disk_write_iops_p95 = EXCLUDED.disk_write_iops_p95,
 				disk_read_bps_p95 = EXCLUDED.disk_read_bps_p95,
 				disk_write_bps_p95 = EXCLUDED.disk_write_bps_p95,
-				sample_count = EXCLUDED.sample_count`,
+				sample_count = EXCLUDED.sample_count,
+				agent_sample_count = EXCLUDED.agent_sample_count`,
 			orgID, clusterUUID, d.VMName, d.Namespace, d.NodeName, d.GuestOS, d.BucketDate,
 			d.CPUUsageP50MC, d.CPUUsageP95MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
 			d.CPURequestMC, d.CPULimitMC,
@@ -70,7 +71,7 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 			d.DiskAllocatedMaxBytes,
 			d.FilesystemUsedMaxBytes, d.FilesystemCapacityBytes,
 			d.DiskReadIOPSP95, d.DiskWriteIOPSP95, d.DiskReadBPS95, d.DiskWriteBPS95,
-			d.SampleCount,
+			d.SampleCount, d.AgentSampleCount,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting VM digest %s/%s: %w", d.Namespace, d.VMName, err)

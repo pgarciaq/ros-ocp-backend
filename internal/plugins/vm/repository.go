@@ -49,6 +49,7 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, digests []mod
 			DiskReadBPS95:           d.DiskReadBPS95,
 			DiskWriteBPS95:          d.DiskWriteBPS95,
 			SampleCount:             d.SampleCount,
+			AgentSampleCount:        d.AgentSampleCount,
 		}
 	}
 	return ingestion.UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID, rows)

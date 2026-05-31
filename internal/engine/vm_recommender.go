@@ -20,6 +20,11 @@ const (
 	vmIOHintHigh = "high-io"
 
 	kibPerGiB = 1024 * 1024
+
+	vmMinSamplesPerDay        = 20
+	vmMinAgentSamplesPercentile = 20
+	vmAgentStableRatio        = 0.80
+	vmMinFilesystemDaysForA   = 2
 )
 
 // RecommendVM computes a VM recommendation from aggregated daily digests.
@@ -64,8 +69,12 @@ func RecommendVM(
 		idleMemKiB = cfg.IdleMemoryMiBWindows * 1024
 	}
 
+	confidence, useAgentData := DetermineVMConfidence(windowed)
+	guestAgentDetected := vmLatestDayGuestAgentStable(windowed)
+	agentInterrupted := vmAgentInterrupted(windowed, useAgentData)
+
 	maxCPUP95 := vmMaxCPUUsage(windowed, engine == vmEnginePerformance)
-	maxMemKiB := vmMaxMemoryUsageKiB(windowed, engine, cfg)
+	maxMemKiB := vmMaxMemoryUsageKiB(windowed, engine, cfg, useAgentData)
 
 	isIdle := !isAbandoned && maxCPUP95 < idleCPUThreshold && maxMemKiB < idleMemKiB
 
@@ -77,8 +86,6 @@ func RecommendVM(
 	var (
 		recommendedVCPU      int32
 		recommendedMemGiB    int32
-		guestAgentDetected   bool
-		confidence           string
 		rawRecommendedVCPU   int32
 		rawRecommendedMemGiB int32
 	)
@@ -88,21 +95,9 @@ func RecommendVM(
 		recommendedMemGiB = 0
 		rawRecommendedVCPU = 0
 		rawRecommendedMemGiB = 0
-		guestAgentDetected = vmGuestAgentDetected(windowed)
-		if guestAgentDetected {
-			confidence = "high"
-		} else {
-			confidence = "moderate"
-		}
 	} else if isIdle {
 		recommendedVCPU = 1
 		recommendedMemGiB = memFloorGiB
-		guestAgentDetected = vmGuestAgentDetected(windowed)
-		if guestAgentDetected {
-			confidence = "high"
-		} else {
-			confidence = "moderate"
-		}
 		rawRecommendedVCPU = recommendedVCPU
 		rawRecommendedMemGiB = recommendedMemGiB
 	} else {
@@ -114,14 +109,11 @@ func RecommendVM(
 		recommendedMC := float64(maxCPUP95) * (1 + cpuMargin)
 		rawRecommendedVCPU = int32(math.Max(1, math.Ceil(recommendedMC/1000.0)))
 
-		guestAgentDetected = vmGuestAgentDetected(windowed)
-		if guestAgentDetected {
-			confidence = "high"
+		if useAgentData {
 			peakActualKiB := vmPeakActualMemoryKiB(windowed, engine)
 			recommendedKiB := float64(peakActualKiB) * (1 + cfg.MemMarginMin)
 			rawRecommendedMemGiB = int32(math.Max(1, math.Ceil(recommendedKiB/kibPerGiB)))
 		} else {
-			confidence = "moderate"
 			memMargin := cfg.MemMarginMin
 			recommendedKiB := float64(maxMemKiB) * (1 + memMargin)
 			rawRecommendedMemGiB = int32(math.Max(1, math.Ceil(recommendedKiB/kibPerGiB)))
@@ -146,8 +138,14 @@ func RecommendVM(
 
 	ioRead, ioWrite, ioReadBPS, ioWriteBPS, ioHint := vmIOProfile(windowed, cfg)
 
-	diskDaysUntilFull, diskGrowthGiBPerDay, diskExpandGiB, hypervisorDiskGrowth :=
-		vmDiskProjection(windowed, cfg)
+	var diskDaysUntilFull *int32
+	var diskGrowthGiBPerDay *float64
+	var diskExpandGiB *int32
+	var hypervisorDiskGrowth bool
+	if confidence != "low" {
+		diskDaysUntilFull, diskGrowthGiBPerDay, diskExpandGiB, hypervisorDiskGrowth =
+			vmDiskProjection(windowed, cfg)
+	}
 
 	var (
 		recommendedInstanceType *string
@@ -172,6 +170,8 @@ func RecommendVM(
 		AbandonedDays:           len(windowed),
 		IsOversized:             isOversized,
 		GuestAgentDetected:      guestAgentDetected,
+		AgentInterrupted:        agentInterrupted,
+		LowConfidence:           confidence == "low",
 		IOHint:                  ioHint,
 		DiskDaysUntilFull:       diskDaysUntilFull,
 		DiskGrowthGiBPerDay:     diskGrowthGiBPerDay,
@@ -293,7 +293,67 @@ func vmMaxCPUUsage(days []model.DailyVMDigest, useP99 bool) int64 {
 	return peak
 }
 
-func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig) int64 {
+// DetermineVMConfidence evaluates guest-agent stability across digests in the term window.
+// Digests should cover the lookback window; the latest bucket_date drives the decision.
+func DetermineVMConfidence(digests []model.DailyVMDigest) (confidence string, useAgentData bool) {
+	if len(digests) == 0 {
+		return "low", false
+	}
+
+	sorted := append([]model.DailyVMDigest(nil), digests...)
+	sortVMDigestsByDate(sorted)
+	latest := sorted[len(sorted)-1]
+
+	if latest.SampleCount < vmMinSamplesPerDay {
+		return "low", false
+	}
+
+	if latest.AgentSampleCount > 0 && latest.SampleCount > 0 {
+		agentRatio := float64(latest.AgentSampleCount) / float64(latest.SampleCount)
+		if agentRatio >= vmAgentStableRatio {
+			return "high", true
+		}
+	}
+
+	for _, d := range sorted {
+		if d.AgentSampleCount > 0 {
+			return "moderate", false
+		}
+	}
+
+	return "moderate", false
+}
+
+func vmLatestDayGuestAgentStable(days []model.DailyVMDigest) bool {
+	if len(days) == 0 {
+		return false
+	}
+	latest := latestVMDigest(days)
+	if latest.SampleCount == 0 {
+		return false
+	}
+	return float64(latest.AgentSampleCount)/float64(latest.SampleCount) >= vmAgentStableRatio
+}
+
+func vmAgentInterrupted(days []model.DailyVMDigest, useAgentData bool) bool {
+	if useAgentData {
+		return false
+	}
+	for _, d := range days {
+		if d.AgentSampleCount > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, useAgentData bool) int64 {
+	if useAgentData {
+		peak := vmPeakActualMemoryKiB(days, engine)
+		if peak > 0 {
+			return peak
+		}
+	}
 	useP99 := engine == vmEnginePerformance
 	var peak int64
 	for _, d := range days {
@@ -306,15 +366,6 @@ func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecCon
 		}
 	}
 	return peak
-}
-
-func vmGuestAgentDetected(days []model.DailyVMDigest) bool {
-	for _, d := range days {
-		if d.MemAvailableP95KiB != nil {
-			return true
-		}
-	}
-	return false
 }
 
 func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string) int64 {
@@ -333,7 +384,7 @@ func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string) int64 {
 		}
 	}
 	if peak == 0 {
-		return vmMaxMemoryUsageKiB(days, engine, VMRecConfig{})
+		return vmMaxMemoryUsageKiB(days, engine, VMRecConfig{}, false)
 	}
 	return peak
 }
@@ -412,19 +463,20 @@ const vmBytesPerGiB = 1024 * 1024 * 1024
 func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (
 	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
 ) {
-	if vmHasGuestAgentFilesystemData(days) {
+	if vmCountFilesystemDays(days) >= vmMinFilesystemDaysForA {
 		return vmDiskProjectionGuestAgent(days, cfg)
 	}
 	return vmDiskProjectionHypervisor(days, cfg)
 }
 
-func vmHasGuestAgentFilesystemData(days []model.DailyVMDigest) bool {
+func vmCountFilesystemDays(days []model.DailyVMDigest) int {
+	n := 0
 	for _, d := range days {
 		if d.FilesystemUsedMaxBytes != nil && d.FilesystemCapacityBytes != nil {
-			return true
+			n++
 		}
 	}
-	return false
+	return n
 }
 
 func vmDiskProjectionGuestAgent(days []model.DailyVMDigest, cfg VMRecConfig) (

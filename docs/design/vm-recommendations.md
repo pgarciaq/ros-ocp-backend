@@ -63,16 +63,31 @@ The operator collects VM metrics once at **15-minute** resolution and emits two 
 
 ---
 
-## Guest agent: adaptive per-VM
+## Guest agent: graduated confidence
 
-| Mode | Detection | Engine behavior | API `confidence` |
-|------|-----------|-----------------|------------------|
-| **Enhanced** | Guest-agent columns populated in digests | Filesystem projection, working-set signals, code 40/42 | `"high"` |
-| **Hypervisor-only** | Guest-agent columns null | Wider margins; Strategy B disk trending; code 38, 37 | `"moderate"` |
+Confidence reflects **guest-agent stability on the latest day**, not merely whether agent columns ever appeared. Each daily digest stores `sample_count` (total 15-minute intervals) and `agent_sample_count` (intervals with non-null `memory_available_kib`).
 
-Guest-agent **disk strategy takes precedence** when any digest has non-null `filesystem_used_bytes` and `filesystem_capacity_bytes`; hypervisor allocation trending is not used for that VM.
+| Condition | `confidence` | Memory sizing | Disk strategy |
+|-----------|--------------|---------------|---------------|
+| Latest day ≥ 80% agent samples (`agent_sample_count / sample_count ≥ 0.80`) and ≥ 20 samples that day | `high` | Working set from `mem_available_*` (request − available p95) | Strategy A when ≥ 2 days have filesystem metrics; else Strategy B |
+| Agent data exists in the window but latest day &lt; 80% stable | `moderate` | Hypervisor `mem_usage_*` p95/p99 | Strategy B |
+| No agent samples in the window | `moderate` | Hypervisor usage | Strategy B |
+| Latest day &lt; 20 total samples (&lt; one full day) | `low` | Hypervisor usage | None (no disk projection) |
 
-API fields: `metadata.guest_agent_detected`, `metadata.confidence` (`high` | `moderate` | `low` accepted on filters).
+**Minimum agent samples for percentiles:** `mem_available_p50_kib` and `mem_available_p95_kib` are computed only when `agent_sample_count ≥ 20` on that day. Fewer agent samples still count toward the stability ratio but do not produce agent percentiles (sizing falls back to hypervisor metrics internally without changing the confidence label).
+
+**Transitions (no artificial multi-day penalty):**
+
+- New VM with agent from boot → first full day (≥ 20 samples, ≥ 80% agent) → `high` immediately.
+- Agent installed mid-day → if that day reaches ≥ 80% agent coverage, next day is `high`; otherwise `moderate` until stable.
+- Agent removed or flapping (&lt; 80% on latest day) → `moderate` with notification **44** (`VM_GUEST_AGENT_INTERRUPTED`).
+- Never had agent → `moderate` with notification **38** (`VM_NO_GUEST_AGENT`), not **44**.
+
+**Disk projection:** Strategy A (filesystem linear growth) requires **≥ 2 days** with both `filesystem_used_max_bytes` and `filesystem_capacity_bytes`. With fewer filesystem days, Strategy B (hypervisor `disk_allocated_max_bytes` slope) is used. The two strategies are never mixed in one regression.
+
+API fields: `metadata.guest_agent_detected` (latest day ≥ 80% agent), `metadata.confidence` (`high` | `moderate` | `low` on filters).
+
+Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender.go), digest field `agent_sample_count` in [`vm_digest_builder.go`](../../internal/ingestion/vm_digest_builder.go).
 
 ---
 
@@ -176,7 +191,7 @@ Configure via `thresholds.abandoned_min_days` (Settings API) or `ROS_VM_ABANDONE
 - **`days_until_full` is always `null`** — allocated bytes do not represent in-guest free space.
 - Notification **37** when growth is significant.
 
-Guest-agent path **wins** whenever filesystem columns are present; Strategy B is not combined for the same VM.
+Strategy A runs only when **≥ 2 days** have filesystem metrics; otherwise Strategy B is used. The two strategies are never combined for the same VM.
 
 ### Disk I/O profile
 
@@ -197,7 +212,9 @@ All notifications are JSON objects in the `notifications` array:
 | **18** | `NotifVMIdle` | `warning` | `metadata.is_idle` |
 | **19** | `NotifVMOversized` | `warning` | `metadata.is_oversized` (meaningful downsize) |
 | **37** | `NotifVMDiskGrowingNoCapacity` | `info` | Hypervisor allocation growth ≥ min threshold; no guest agent |
-| **38** | `NotifVMNoGuestAgent` | `info` | `guest_agent_detected == false` |
+| **38** | `NotifVMNoGuestAgent` | `info` | Never had stable guest agent (no notification **44**) |
+| **44** | `NotifVMGuestAgentInterrupted` | `info` | Agent data in window but latest day &lt; 80% stable |
+| **45** | `NotifVMInsufficientData` | `info` | `confidence == low` (&lt; one full day of samples) |
 | **39** | `NotifVMHighIO` | `warning` | Total p95 IOPS > high IOPS threshold |
 | **40** | `NotifVMDiskFillingGuest` | `warning` | Guest agent: `days_until_full < 90` |
 | **41** | `NotifVMInstanceTypeRec` | `info` | `recommended.instance_type` set |

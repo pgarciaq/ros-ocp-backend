@@ -31,7 +31,9 @@ const (
 	NotifVMDiskFillingGuest  int16 = 40
 	NotifVMInstanceTypeRec   int16 = 41
 	NotifVMDiskCritical int16 = 42
-	NotifVMAbandoned    int16 = 43
+	NotifVMAbandoned              int16 = 43
+	NotifVMGuestAgentInterrupted  int16 = 44
+	NotifVMInsufficientData       int16 = 45
 )
 
 type vmNotificationParams struct {
@@ -40,6 +42,8 @@ type vmNotificationParams struct {
 	AbandonedDays            int
 	IsOversized              bool
 	GuestAgentDetected       bool
+	AgentInterrupted         bool
+	LowConfidence            bool
 	IOHint                   *string
 	DiskDaysUntilFull        *int32
 	DiskGrowthGiBPerDay      *float64
@@ -79,7 +83,20 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 			Message: "VM is oversized: recommended resources are significantly below current allocation",
 		})
 	}
-	if !p.GuestAgentDetected {
+	if p.LowConfidence {
+		out = append(out, VMNotification{
+			Code:    NotifVMInsufficientData,
+			Type:    vmNotifTypeInfo,
+			Message: "Insufficient data: less than one full day of metrics available",
+		})
+	}
+	if p.AgentInterrupted {
+		out = append(out, VMNotification{
+			Code:    NotifVMGuestAgentInterrupted,
+			Type:    vmNotifTypeInfo,
+			Message: "Guest agent data interrupted: recommendations using hypervisor metrics (moderate confidence)",
+		})
+	} else if !p.GuestAgentDetected {
 		out = append(out, VMNotification{
 			Code:    NotifVMNoGuestAgent,
 			Type:    vmNotifTypeInfo,

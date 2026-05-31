@@ -49,5 +49,6 @@ type DailyVMDigest struct {
 	DiskReadBPS95    *int64 `db:"disk_read_bps_p95"`
 	DiskWriteBPS95   *int64 `db:"disk_write_bps_p95"`
 
-	SampleCount int32 `db:"sample_count"`
+	SampleCount        int32 `db:"sample_count"`
+	AgentSampleCount   int32 `db:"agent_sample_count"`
 }

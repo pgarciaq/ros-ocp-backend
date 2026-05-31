@@ -63,12 +63,13 @@ func TestVMPreference_OverridesRatioClassification(t *testing.T) {
 	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
 		d.Namespace = "production"
 		d.VMName = "cpu-heavy"
-		d.CPURequestMC = 20000
-		d.CPUUsageP95MC = 20000
-		d.CPUUsageMaxMC = 20000
-		d.MemRequestKiB = 2 * 1024 * 1024
-		d.MemUsageP95KiB = 1 * 1024 * 1024
-		d.MemUsageMaxKiB = 1 * 1024 * 1024
+		// Sized to fit a memory-optimized catalog entry (avoids general-purpose fallback in MatchInstanceType).
+		d.CPURequestMC = 8000
+		d.CPUUsageP95MC = 6000
+		d.CPUUsageMaxMC = 6000
+		d.MemRequestKiB = 32 * 1024 * 1024
+		d.MemUsageP95KiB = 24 * 1024 * 1024
+		d.MemUsageMaxKiB = 24 * 1024 * 1024
 	})
 	prefCtx := buildVMPreferenceContext(
 		[]ClusterPreferenceRecord{{Name: "database", Class: "memory-intensive"}},

@@ -197,7 +197,7 @@ func QueryDailyVMDigestsForVM(
 			disk_allocated_max_bytes,
 			filesystem_used_max_bytes, filesystem_capacity_bytes,
 			disk_read_iops_p95, disk_write_iops_p95, disk_read_bps_p95, disk_write_bps_p95,
-			sample_count
+			sample_count, agent_sample_count
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
 		  AND bucket_date >= $5::date
@@ -222,7 +222,7 @@ func QueryDailyVMDigestsForVM(
 			&d.DiskAllocatedMaxBytes,
 			&d.FilesystemUsedMaxBytes, &d.FilesystemCapacityBytes,
 			&d.DiskReadIOPSP95, &d.DiskWriteIOPSP95, &d.DiskReadBPS95, &d.DiskWriteBPS95,
-			&d.SampleCount,
+			&d.SampleCount, &d.AgentSampleCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan VM digest: %w", err)

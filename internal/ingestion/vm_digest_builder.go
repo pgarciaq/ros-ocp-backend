@@ -47,7 +47,8 @@ type VMDigestResult struct {
 	DiskReadBPS95    *int64
 	DiskWriteBPS95   *int64
 
-	SampleCount int32
+	SampleCount      int32
+	AgentSampleCount int32
 }
 
 // VMDigestKey identifies a single VM-day digest group.
@@ -76,7 +77,8 @@ type vmDigestAccumulator struct {
 	diskReadBPS   []float64
 	diskWriteBPS  []float64
 
-	sampleCount int
+	sampleCount      int
+	agentSampleCount int
 }
 
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
@@ -118,6 +120,7 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 		acc.memRequest = r.MemoryRequestKiB
 		if r.MemoryAvailableKiB != nil {
 			acc.memAvailable = append(acc.memAvailable, *r.MemoryAvailableKiB)
+			acc.agentSampleCount++
 		}
 
 		acc.diskAllocated = append(acc.diskAllocated, r.DiskAllocatedBytes)
@@ -158,7 +161,8 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		NodeName:    acc.nodeName,
 		GuestOS:     acc.guestOS,
 		BucketDate:  key.BucketDate,
-		SampleCount: int32(acc.sampleCount),
+		SampleCount:      int32(acc.sampleCount),
+		AgentSampleCount: int32(acc.agentSampleCount),
 	}
 
 	sortedCPU := sortedCopy(acc.cpuUsage)
@@ -176,7 +180,8 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 	d.MemUsageMaxKiB = roundFloat64ToInt64(maxFloat(acc.memUsage))
 	d.MemRequestKiB = roundFloat64ToInt64(acc.memRequest)
 
-	if len(acc.memAvailable) > 0 {
+	const minAgentSamplesForPercentile = 20
+	if acc.agentSampleCount >= minAgentSamplesForPercentile {
 		sortedAvail := sortedCopy(acc.memAvailable)
 		p50 := roundFloat64ToInt64(percentileFloat(sortedAvail, 0.50))
 		p95 := roundFloat64ToInt64(percentileFloat(sortedAvail, 0.95))

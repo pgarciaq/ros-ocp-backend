@@ -1,27 +1,21 @@
-# Virtual Machine Recommendations
+# Virtual machine recommendations
 
-OpenShift Virtualization workloads can be right-sized using ROS VM recommendations. The service analyzes 15-minute usage samples from the metrics operator and suggests vCPU, memory, disk expansion, and **instance type** matches.
+OpenShift Virtualization workloads receive right-sizing recommendations from daily metrics aggregated from 15-minute ROS samples.
 
-## Instance type preferences
+## Confidence levels
 
-Cluster admins can steer recommendations per VM using **VirtualMachineClusterPreference** resources and the VM’s `spec.preference.name` field. The metrics operator exports preferences and VM mappings in `cluster_instance_types.json`; ROS respects the preference **class** when choosing an instance type series.
+Confidence reflects **how stable the QEMU guest agent is on the latest day**, not whether the agent was ever installed.
 
-**Precedence:** administrator preference class overrides automatic CPU:memory ratio classification. If no preference is set, or the class label is unknown, ROS uses the same ratio logic as before.
+| Level | What it means |
+|-------|----------------|
+| **High** | At least one full day of metrics (20+ samples) and ≥ 80% of today's samples include guest-agent memory data. Sizing uses in-guest working set (memory available). Disk growth may use guest filesystem trends when two or more days of filesystem data exist. |
+| **Moderate** | Either no guest agent in the lookback window, or agent data is missing or unstable on the latest day. Sizing uses hypervisor memory usage. |
+| **Low** | Less than one full day of metrics on the latest day. Treat recommendations as preliminary; disk expansion is not projected. |
 
-**Typical class labels:**
+New VMs with the guest agent enabled from first boot can reach **high** confidence as soon as the first complete day of data is available—there is no multi-day waiting period.
 
-| Preference class | Recommended series |
-|------------------|-------------------|
-| `general-purpose` | General-purpose (`u1.*`) |
-| `compute-intensive` | Compute-optimized (`cx1.*`) |
-| `memory-intensive` | Memory-optimized (`m1.*`) |
+### Notifications
 
-Example: a VM with high CPU versus memory usage might normally map to compute-optimized, but if it references a `database` preference labeled `memory-intensive`, ROS recommends a memory-optimized instance type instead.
-
-## API
-
-- `GET /api/cost-management/v1/recommendations/openshift/vm` — list recommendations
-- `GET /api/cost-management/v1/recommendations/openshift/vm/detail` — detail with `metadata.preference_name` / `metadata.preference_class` when configured
-- `GET /api/cost-management/v1/recommendations/openshift/instance-types` — cluster instance type catalog and `preferences.configured` summary
-
-See [VM recommendations design](../../docs/design/vm-recommendations.md) for algorithms, settings, and notification codes.
+- **Guest agent not installed (38):** Hypervisor-only metrics for the entire window.
+- **Guest agent interrupted (44):** Agent data appeared earlier but the latest day is below the 80% stability threshold (removed, flapping, or partial-day install).
+- **Insufficient data (45):** Fewer than 20 samples on the latest day.

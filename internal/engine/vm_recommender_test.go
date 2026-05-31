@@ -64,9 +64,25 @@ func vmDigestDays(base time.Time, n int, mutate func(*model.DailyVMDigest)) []mo
 			MemUsageP95KiB:        100 * 1024,
 			MemUsageP99KiB:        120 * 1024,
 			DiskAllocatedMaxBytes: 100 * 1024 * 1024 * 1024,
+			SampleCount:           96,
 		}
 		if mutate != nil {
 			mutate(&d)
+		}
+		if d.MemAvailableP95KiB != nil && d.AgentSampleCount == 0 {
+			d.AgentSampleCount = d.SampleCount
+		}
+		if d.CPUUsageMaxMC == 0 && d.CPUUsageP95MC > 0 {
+			d.CPUUsageMaxMC = d.CPUUsageP99MC
+			if d.CPUUsageMaxMC < d.CPUUsageP95MC {
+				d.CPUUsageMaxMC = d.CPUUsageP95MC
+			}
+		}
+		if d.MemUsageMaxKiB == 0 && d.MemUsageP95KiB > 0 {
+			d.MemUsageMaxKiB = d.MemUsageP99KiB
+			if d.MemUsageMaxKiB < d.MemUsageP95KiB {
+				d.MemUsageMaxKiB = d.MemUsageP95KiB
+			}
 		}
 		out[i] = d
 	}
@@ -163,6 +179,224 @@ func TestVMRecommend_NonIdlePerformanceEngine(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(3), rec.RecommendedVCPU)
+}
+
+func TestDetermineVMConfidence_NewVMWithAgentFromBoot(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 1, func(d *model.DailyVMDigest) {
+		d.SampleCount = 96
+		d.AgentSampleCount = 96
+		avail := int64(2 * 1024 * 1024)
+		d.MemAvailableP95KiB = &avail
+	})
+
+	confidence, useAgent := DetermineVMConfidence(digests)
+	assert.Equal(t, "high", confidence)
+	assert.True(t, useAgent)
+}
+
+func TestDetermineVMConfidence_AgentInstalledMidDay(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 2, nil)
+	digests[0].SampleCount = 96
+	digests[0].AgentSampleCount = 70
+	digests[1].SampleCount = 96
+	digests[1].AgentSampleCount = 96
+	avail := int64(2 * 1024 * 1024)
+	digests[1].MemAvailableP95KiB = &avail
+
+	confDay1, _ := DetermineVMConfidence(digests[:1])
+	assert.Equal(t, "moderate", confDay1)
+
+	confDay2, useAgent := DetermineVMConfidence(digests)
+	assert.Equal(t, "high", confDay2)
+	assert.True(t, useAgent)
+}
+
+func TestDetermineVMConfidence_AgentInstalled2HoursIn(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 1, func(d *model.DailyVMDigest) {
+		d.SampleCount = 96
+		d.AgentSampleCount = 88
+		avail := int64(2 * 1024 * 1024)
+		d.MemAvailableP95KiB = &avail
+	})
+
+	confidence, useAgent := DetermineVMConfidence(digests)
+	assert.Equal(t, "high", confidence)
+	assert.True(t, useAgent)
+}
+
+func TestConfidence_AgentRemoved(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	avail := int64(2 * 1024 * 1024)
+	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 4 * 1024 * 1024
+	})
+	for i := 0; i < 5; i++ {
+		digests[i].AgentSampleCount = 96
+		digests[i].MemAvailableP95KiB = &avail
+	}
+	for i := 5; i < 7; i++ {
+		digests[i].AgentSampleCount = 0
+		digests[i].MemAvailableP95KiB = nil
+	}
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "moderate", rec.Confidence)
+	assert.False(t, rec.GuestAgentDetected)
+
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	require.NotNil(t, vmHasNotificationCode(notifs, NotifVMGuestAgentInterrupted))
+	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMNoGuestAgent))
+}
+
+func TestConfidence_Flapping(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	avail := int64(2 * 1024 * 1024)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 4 * 1024 * 1024
+		d.SampleCount = 96
+		d.AgentSampleCount = 30
+		d.MemAvailableP95KiB = &avail
+	})
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "moderate", rec.Confidence)
+	assert.False(t, rec.GuestAgentDetected)
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	require.NotNil(t, vmHasNotificationCode(notifs, NotifVMGuestAgentInterrupted))
+}
+
+func TestConfidence_NeverHadAgent(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 4 * 1024 * 1024
+		d.AgentSampleCount = 0
+		d.MemAvailableP95KiB = nil
+	})
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "moderate", rec.Confidence)
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	require.NotNil(t, vmHasNotificationCode(notifs, NotifVMNoGuestAgent))
+	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMGuestAgentInterrupted))
+}
+
+func TestConfidence_MinSampleThreshold(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	avail := int64(2 * 1024 * 1024)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 5 * 1024 * 1024
+	})
+	digests[2].AgentSampleCount = 10
+	digests[2].MemAvailableP95KiB = &avail
+
+	confidence, useAgent := DetermineVMConfidence(digests)
+	assert.Equal(t, "moderate", confidence)
+	assert.False(t, useAgent)
+}
+
+func TestConfidence_LessThanOneDay(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 4 * 1024 * 1024
+	})
+	digests[2].SampleCount = 15
+	digests[2].AgentSampleCount = 0
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "low", rec.Confidence)
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	require.NotNil(t, vmHasNotificationCode(notifs, NotifVMInsufficientData))
+}
+
+func TestDiskProjection_StrategyA_Requires2Days(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	used := int64(50 * 1024 * 1024 * 1024)
+	capacity := int64(200 * 1024 * 1024 * 1024)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 2 * 1024 * 1024
+		d.DiskAllocatedMaxBytes = 100 * 1024 * 1024 * 1024
+	})
+	digests[2].FilesystemUsedMaxBytes = &used
+	digests[2].FilesystemCapacityBytes = &capacity
+
+	daysUntil, growth, expand, hypervisor := vmDiskProjection(digests, DefaultVMRecConfig())
+	assert.Nil(t, daysUntil)
+	assert.Nil(t, growth)
+	// Strategy B may still recommend expansion from allocation trend when 3 alloc days exist
+	_ = expand
+	_ = hypervisor
+}
+
+func TestDiskProjection_StrategyA_Has2Days(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	usedEarly := int64(50 * 1024 * 1024 * 1024)
+	usedLate := int64(80 * 1024 * 1024 * 1024)
+	capacity := int64(200 * 1024 * 1024 * 1024)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 2 * 1024 * 1024
+	})
+	digests[1].FilesystemUsedMaxBytes = &usedEarly
+	digests[1].FilesystemCapacityBytes = &capacity
+	digests[2].FilesystemUsedMaxBytes = &usedLate
+	digests[2].FilesystemCapacityBytes = &capacity
+
+	daysUntil, growth, expand, hypervisor := vmDiskProjection(digests, DefaultVMRecConfig())
+	require.NotNil(t, daysUntil)
+	require.NotNil(t, growth)
+	require.NotNil(t, expand)
+	assert.False(t, hypervisor)
+}
+
+func TestSizingSource_HighConfidence_UsesAvailable(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	avail := int64(6 * 1024 * 1024)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 2 * 1024 * 1024
+		d.MemAvailableP95KiB = &avail
+		d.AgentSampleCount = 96
+	})
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "high", rec.Confidence)
+	// working set ~2 GiB + margin → below hypervisor p95 path (~2 GiB usage + margin would differ)
+	assert.LessOrEqual(t, rec.RecommendedMemoryGiB, int32(3))
+}
+
+func TestSizingSource_ModerateConfidence_UsesUsage(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPUUsageP95MC = 3000
+		d.MemUsageP95KiB = 5 * 1024 * 1024
+		d.AgentSampleCount = 0
+		d.MemAvailableP95KiB = nil
+	})
+
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "moderate", rec.Confidence)
+	assert.GreaterOrEqual(t, rec.RecommendedMemoryGiB, int32(6))
 }
 
 func TestVMRecommend_GuestAgentHighConfidence(t *testing.T) {
