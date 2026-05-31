@@ -340,7 +340,7 @@ When `ROS_TAGS_SOURCE=db`, these variables are **ignored** — Koku does not pus
 ### On-prem (`ROS_TAGS_SOURCE=db`)
 
 ```mermaid
-flowchart LR
+flowchart TD
     USER["API request"] --> ROS["ROS API"]
     ROS --> JOIN["JOIN org_container_keys<br/>to org1234567.reporting_ocptags_values"]
     JOIN --> PG[("Shared PostgreSQL")]
