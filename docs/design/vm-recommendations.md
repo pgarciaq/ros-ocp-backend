@@ -97,7 +97,9 @@ Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender
 
 - **CPU:** p95 (cost) or p99 (performance) millicores → adaptive margin (15–50%) → ceil to whole vCPUs (min 1).
 - **Memory:** p95 + margin (min 20%) → **memory floors** (`memory_floors.linux_gib` default 1, `windows_gib` default 2) → ceil to whole GiB (min 1).
-- **Downsize hysteresis:** Recommend downsize only if `recommended/current < 0.60` **or** drop ≥ `min_vcpu_change` (2) vCPU **or** ≥ `min_gib_change` (2) GiB.
+- **Windows kernel reserve:** For Windows guests, subtract `memory_floors.windows_kernel_reserve_gib` (default **1.5** GiB) from observed memory usage before sizing (hypervisor `mem_usage_*` and guest-agent working set). Floors still apply after subtraction.
+- **Downsize hysteresis:** Recommend downsize only if `recommended/current < 0.60` **and** drop ≥ `min_vcpu_change` (2) vCPU **and** ≥ `min_gib_change` (2) GiB.
+- **Performance downsize stability:** Performance engine additionally requires each of the last `stability.downsize_stability_days` days (default **3**) to have per-day **P95** usage below the downsize threshold; otherwise hold current size and emit notification **49**.
 
 ### Instance type matching
 
@@ -108,6 +110,8 @@ Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance
 | **u1** | `general-purpose` | `u1.nano` … `u1.8xlarge` |
 | **cx1** | `compute-optimized` | `cx1.medium` … `cx1.8xlarge` |
 | **m1** | `memory-optimized` | `m1.large` … `m1.4xlarge` |
+| **n1** | `network-optimized` | `n1.medium` … `n1.2xlarge` — **recognition only** (`Selectable: false`) |
+| **gn1** | `gpu` | `gn1.xlarge` … `gn1.8xlarge` — **recognition only** until GPU metrics exist |
 
 **Algorithm:**
 
@@ -158,6 +162,14 @@ Both CPU and memory p95 must be below thresholds:
 | **Windows** | < 200 millicores | < 3072 MiB |
 
 Emits notification **18** (`warning`). OS from `guest_os` in CSV.
+
+**Unknown OS:** Empty `guest_os` uses Linux thresholds and emits notification **46** (`info`).
+
+**Windows update spikes:** When P99−P95 spread exceeds **50%** (CPU) or **30%** (memory) across the window, emit notification **47** (`info`) — typical of Windows Update bursts; performance sizing already uses P99.
+
+### Crash loop detection
+
+Operator query `ros:vm_restart_count` counts `Running` phase transitions per 15-minute interval (`restart_count` CSV column). Daily digests sum `restart_count_sum`. When the term-window sum ≥ `stability.crash_loop_restart_threshold` (default **3**), emit notification **48** (`warning`).
 
 ### Abandoned detection (zero usage)
 
@@ -220,6 +232,10 @@ All notifications are JSON objects in the `notifications` array:
 | **41** | `NotifVMInstanceTypeRec` | `info` | `recommended.instance_type` set |
 | **42** | `NotifVMDiskCritical` | `critical` | Guest agent: filesystem > 90% used |
 | **43** | `NotifVMAbandoned` | `critical` | `metadata.is_abandoned` — zero CPU and memory max for N days |
+| **46** | `NotifVMUnknownOS` | `info` | Empty `guest_os` — Linux defaults |
+| **47** | `NotifVMWindowsUpdateSpike` | `info` | Windows P99≫P95 CPU or memory spread |
+| **48** | `NotifVMCrashLoop` | `warning` | `restart_count_sum` ≥ threshold in window |
+| **49** | `NotifVMDownsizeHeld` | `info` | Performance engine: unstable downsize (N-day P95 check) |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
@@ -291,7 +307,8 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
     "idle_memory_mib_windows": 3072,
     "abandoned_min_days": 3
   },
-  "memory_floors": { "linux_gib": 1, "windows_gib": 2 },
+  "memory_floors": { "linux_gib": 1, "windows_gib": 2, "windows_kernel_reserve_gib": 1.5 },
+  "stability": { "downsize_stability_days": 3, "crash_loop_restart_threshold": 3 },
   "disk": {
     "projection_window_days": 30,
     "headroom_pct": 0.25,

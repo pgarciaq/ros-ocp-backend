@@ -76,3 +76,37 @@ func TestInstanceType_DisabledLeavesNilInRecommender(t *testing.T) {
 	assert.Nil(t, rec.RecommendedInstanceType)
 	assert.Nil(t, rec.RecommendedSeries)
 }
+
+func TestCatalog_ContainsNSeries(t *testing.T) {
+	var found int
+	for _, t := range vmInstanceCatalog {
+		if t.Series == vmSeriesNetworkOptimized {
+			found++
+		}
+	}
+	assert.Equal(t, 4, found)
+}
+
+func TestCatalog_ContainsGPUSeries(t *testing.T) {
+	assert.Len(t, vmInstanceCatalogGPU, 4)
+	assert.Equal(t, "gn1.xlarge", vmInstanceCatalogGPU[0].Name)
+}
+
+func TestMatchInstanceType_NeverRecommendsNonSelectable(t *testing.T) {
+	clusterTypes := []InstanceType{
+		{Name: "n1.xlarge", Series: vmSeriesNetworkOptimized, VCPU: 4, MemoryGiB: 16, Selectable: false},
+		{Name: "gn1.xlarge", Series: vmSeriesGPU, VCPU: 4, MemoryGiB: 16, GPUs: 1, Selectable: false},
+	}
+	match := MatchInstanceType(4, 16, vmSeriesNetworkOptimized, clusterTypes)
+	require.NotNil(t, match)
+	assert.NotEqual(t, "n1.xlarge", match.Name)
+	assert.NotEqual(t, "gn1.xlarge", match.Name)
+}
+
+func TestMatchInstanceType_RecognizesGPUType(t *testing.T) {
+	match := LookupInstanceTypeByName("gn1.xlarge", nil)
+	require.NotNil(t, match)
+	assert.Equal(t, "gn1.xlarge", match.Name)
+	assert.Equal(t, vmSeriesGPU, match.Series)
+	assert.False(t, match.Selectable)
+}

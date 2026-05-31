@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -1020,4 +1021,239 @@ func TestVMAbandoned_ConfigurableThreshold(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsAbandoned)
+}
+
+func TestWindows_KernelReserveSubtracted(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	usageKiB := int64(10 * 1024 * 1024)
+	availKiB := int64(22 * 1024 * 1024) // 32 GiB request - 10 GiB working set
+	makeWindows := func(d *model.DailyVMDigest) {
+		d.GuestOS = "windows"
+		d.MemRequestKiB = 32 * 1024 * 1024
+		d.MemUsageP95KiB = usageKiB
+		d.MemAvailableP95KiB = &availKiB
+		d.AgentSampleCount = d.SampleCount
+	}
+	winDigests := vmDigestDays(base, 3, makeWindows)
+	linDigests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = "linux"
+		d.MemRequestKiB = 32 * 1024 * 1024
+		d.MemUsageP95KiB = usageKiB
+		d.MemAvailableP95KiB = &availKiB
+		d.AgentSampleCount = d.SampleCount
+	})
+
+	cfg := DefaultVMRecConfig()
+	winRec, err := RecommendVM(winDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, winRec)
+	linRec, err := RecommendVM(linDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, linRec)
+	assert.Less(t, winRec.RecommendedMemoryGiB, linRec.RecommendedMemoryGiB)
+}
+
+func TestWindows_KernelReserveDoesNotGoBelowFloor(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	avail := int64(32*1024*1024 - 100*1024) // tiny working set
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = "windows"
+		d.MemRequestKiB = 32 * 1024 * 1024
+		d.MemUsageP95KiB = 100 * 1024
+		d.MemAvailableP95KiB = &avail
+		d.AgentSampleCount = d.SampleCount
+	})
+	cfg := DefaultVMRecConfig()
+	cfg.WindowsMemoryFloorGiB = 2
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.GreaterOrEqual(t, rec.RecommendedMemoryGiB, cfg.WindowsMemoryFloorGiB)
+}
+
+func TestWindows_KernelReserveConfigurable(t *testing.T) {
+	saved := defaultVMRecConfig
+	t.Cleanup(func() { defaultVMRecConfig = saved })
+
+	t.Setenv("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", "4")
+	config.ResetForTest()
+	InitVMRecDefaults(config.GetConfig())
+	assert.InDelta(t, 4.0, VMRecConfigResolved().WindowsKernelReserveGiB, 1e-9)
+}
+
+func TestWindowsUpdateSpike_NotificationTriggered(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = "windows"
+		d.CPUUsageP95MC = 1000
+		d.CPUUsageP99MC = 2000
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	require.NotNil(t, vmHasNotificationCode(notifs, NotifVMWindowsUpdateSpike))
+}
+
+func TestWindowsUpdateSpike_NoNotificationWhenSmallSpread(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = "windows"
+		d.CPUUsageP95MC = 1000
+		d.CPUUsageP99MC = 1100
+		d.MemUsageP95KiB = 100 * 1024
+		d.MemUsageP99KiB = 110 * 1024
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMWindowsUpdateSpike))
+}
+
+func TestWindowsUpdateSpike_OnlyForWindows(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = "linux"
+		d.CPUUsageP95MC = 1000
+		d.CPUUsageP99MC = 2000
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMWindowsUpdateSpike))
+}
+
+func TestCrashLoop_NotificationTriggered(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.RestartCountSum = 2
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	notifs := vmUnmarshalNotifications(t, rec.Notifications)
+	n := vmHasNotificationCode(notifs, NotifVMCrashLoop)
+	require.NotNil(t, n)
+	assert.Contains(t, n.Message, "6")
+}
+
+func TestCrashLoop_BelowThreshold(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 2, func(d *model.DailyVMDigest) {
+		d.RestartCountSum = 1
+	})
+	term := TermWindow{Name: "short", LookbackDays: 7, MinDataDays: 2}
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), term, vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMCrashLoop))
+}
+
+func TestCrashLoop_NilRestartCount(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMCrashLoop))
+}
+
+func TestUnknownOS_NotificationAdded(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = ""
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	require.NotNil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMUnknownOS))
+}
+
+func TestUnknownOS_UsesLinuxDefaults(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.GuestOS = ""
+		d.CPUUsageP95MC = 40
+		d.MemUsageP95KiB = 400 * 1024
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.True(t, rec.IsIdle)
+}
+
+func TestDownsizeStability_AllDaysBelow_RecommendsDownsize(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPURequestMC = 10000
+		d.CPUUsageP95MC = 2000
+		d.CPUUsageP99MC = 2100
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Less(t, rec.RecommendedVCPU, rec.CurrentVCPU)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMDownsizeHeld))
+}
+
+func TestDownsizeStability_OneDayAbove_HoldsAtCurrent(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPURequestMC = 10000
+		d.CPUUsageP95MC = 2000
+		d.CPUUsageP99MC = 2100
+	})
+	digests[0].CPUUsageP95MC = 2000
+	digests[1].CPUUsageP95MC = 2000
+	digests[0].CPUUsageP99MC = 2600
+	digests[1].CPUUsageP99MC = 2600
+	digests[2].CPUUsageP95MC = 9000
+	digests[2].CPUUsageP99MC = 2600
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, int32(10), rec.CurrentVCPU)
+	assert.Equal(t, int32(10), rec.RecommendedVCPU)
+	require.NotNil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMDownsizeHeld))
+}
+
+func TestDownsizeStability_OnlyPerformanceEngine(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPURequestMC = 10000
+		d.CPUUsageP95MC = 2000
+		d.CPUUsageP99MC = 2100
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Less(t, rec.RecommendedVCPU, rec.CurrentVCPU)
+	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMDownsizeHeld))
+}
+
+func TestDownsizeStability_Configurable(t *testing.T) {
+	saved := defaultVMRecConfig
+	t.Cleanup(func() { defaultVMRecConfig = saved })
+
+	t.Setenv("ROS_VM_DOWNSIZE_STABILITY_DAYS", "5")
+	config.ResetForTest()
+	InitVMRecDefaults(config.GetConfig())
+	assert.Equal(t, 5, VMRecConfigResolved().DownsizeStabilityDays)
+}
+
+func TestDownsizeStability_InsufficientDays(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	term := TermWindow{Name: "short", LookbackDays: 7, MinDataDays: 2}
+	digests := vmDigestDays(base, 2, func(d *model.DailyVMDigest) {
+		d.CPURequestMC = 10000
+		d.CPUUsageP95MC = 2000
+		d.CPUUsageP99MC = 2100
+	})
+	cfg := DefaultVMRecConfig()
+	cfg.DownsizeStabilityDays = 3
+	rec, err := RecommendVM(digests, cfg, term, vmEnginePerformance, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, rec.CurrentVCPU, rec.RecommendedVCPU)
+	require.NotNil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMDownsizeHeld))
 }

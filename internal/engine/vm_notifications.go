@@ -34,6 +34,10 @@ const (
 	NotifVMAbandoned              int16 = 43
 	NotifVMGuestAgentInterrupted  int16 = 44
 	NotifVMInsufficientData       int16 = 45
+	NotifVMUnknownOS              int16 = 46
+	NotifVMWindowsUpdateSpike     int16 = 47
+	NotifVMCrashLoop              int16 = 48
+	NotifVMDownsizeHeld           int16 = 49
 )
 
 type vmNotificationParams struct {
@@ -51,6 +55,11 @@ type vmNotificationParams struct {
 	RecommendedInstanceType  *string
 	RecommendedSeries        *string
 	FilesystemUsedPct        *float64
+	UnknownOS                bool
+	WindowsUpdateSpike       bool
+	CrashLoopRestarts        int
+	DownsizeHeld             bool
+	DownsizeStabilityDays    int
 }
 
 func vmBuildNotifications(p vmNotificationParams) []byte {
@@ -152,6 +161,44 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 			Message: fmt.Sprintf(
 				"Filesystem is %.0f%% full: immediate expansion recommended",
 				*p.FilesystemUsedPct,
+			),
+		})
+	}
+	if p.UnknownOS {
+		out = append(out, VMNotification{
+			Code:    NotifVMUnknownOS,
+			Type:    vmNotifTypeInfo,
+			Message: "Guest OS not detected — using Linux defaults. Install qemu-guest-agent for OS-specific thresholds.",
+		})
+	}
+	if p.WindowsUpdateSpike {
+		out = append(out, VMNotification{
+			Code:    NotifVMWindowsUpdateSpike,
+			Type:    vmNotifTypeInfo,
+			Message: "Periodic usage spikes detected (possibly OS updates); P95 sizing accounts for this",
+		})
+	}
+	if p.CrashLoopRestarts > 0 {
+		out = append(out, VMNotification{
+			Code: NotifVMCrashLoop,
+			Type: vmNotifTypeWarning,
+			Message: fmt.Sprintf(
+				"VM restarted %d times in the observation window — possible instability or crash loop",
+				p.CrashLoopRestarts,
+			),
+		})
+	}
+	if p.DownsizeHeld {
+		days := p.DownsizeStabilityDays
+		if days < 1 {
+			days = 3
+		}
+		out = append(out, VMNotification{
+			Code: NotifVMDownsizeHeld,
+			Type: vmNotifTypeInfo,
+			Message: fmt.Sprintf(
+				"Downsize recommendation suppressed: usage not consistently below threshold for %d days",
+				days,
 			),
 		})
 	}

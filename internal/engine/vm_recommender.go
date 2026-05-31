@@ -46,8 +46,9 @@ func RecommendVM(
 	}
 
 	latest := latestVMDigest(windowed)
-	isWindows := vmIsWindows(latest.GuestOS)
-	guestOS := latest.GuestOS
+	guestOS := strings.TrimSpace(latest.GuestOS)
+	unknownOS := guestOS == ""
+	isWindows := !unknownOS && vmIsWindows(guestOS)
 
 	orgID := latest.OrgID
 	clusterUUID := latest.ClusterUUID
@@ -73,8 +74,9 @@ func RecommendVM(
 	guestAgentDetected := vmLatestDayGuestAgentStable(windowed)
 	agentInterrupted := vmAgentInterrupted(windowed, useAgentData)
 
-	maxCPUP95 := vmMaxCPUUsage(windowed, engine == vmEnginePerformance)
-	maxMemKiB := vmMaxMemoryUsageKiB(windowed, engine, cfg, useAgentData)
+	useP99CPU := engine == vmEnginePerformance
+	maxCPUP95 := vmMaxCPUUsage(windowed, useP99CPU)
+	maxMemKiB := vmMaxMemoryUsageKiB(windowed, engine, cfg, useAgentData, isWindows)
 
 	isIdle := !isAbandoned && maxCPUP95 < idleCPUThreshold && maxMemKiB < idleMemKiB
 
@@ -88,6 +90,7 @@ func RecommendVM(
 		recommendedMemGiB    int32
 		rawRecommendedVCPU   int32
 		rawRecommendedMemGiB int32
+		downsizeHeld         bool
 	)
 
 	if isAbandoned {
@@ -110,7 +113,7 @@ func RecommendVM(
 		rawRecommendedVCPU = int32(math.Max(1, math.Ceil(recommendedMC/1000.0)))
 
 		if useAgentData {
-			peakActualKiB := vmPeakActualMemoryKiB(windowed, engine)
+			peakActualKiB := vmPeakActualMemoryKiB(windowed, engine, cfg, isWindows)
 			recommendedKiB := float64(peakActualKiB) * (1 + cfg.MemMarginMin)
 			rawRecommendedMemGiB = int32(math.Max(1, math.Ceil(recommendedKiB/kibPerGiB)))
 		} else {
@@ -126,12 +129,34 @@ func RecommendVM(
 		recommendedVCPU = rawRecommendedVCPU
 		recommendedMemGiB = rawRecommendedMemGiB
 
-		recommendedVCPU = applyVMDownsizeHysteresisVCPU(
-			currentVCPU, recommendedVCPU, rawRecommendedVCPU, cfg,
+		var memHeld bool
+		recommendedVCPU, downsizeHeld = applyVMDownsizeHysteresisVCPU(
+			currentVCPU, recommendedVCPU, rawRecommendedVCPU, cfg, engine, windowed, useP99CPU,
 		)
-		recommendedMemGiB = applyVMDownsizeHysteresisMemory(
-			currentMemGiB, recommendedMemGiB, rawRecommendedMemGiB, cfg,
+		recommendedMemGiB, memHeld = applyVMDownsizeHysteresisMemory(
+			currentMemGiB, recommendedMemGiB, rawRecommendedMemGiB, cfg, engine, windowed,
+			useAgentData, isWindows, useP99CPU,
 		)
+		if memHeld {
+			downsizeHeld = true
+		}
+	}
+
+	crashLoopRestarts := vmSumRestartCounts(windowed)
+	crashThreshold := cfg.CrashLoopRestartThreshold
+	if crashThreshold < 1 {
+		crashThreshold = 1
+	}
+	crashLoopDetected := crashLoopRestarts >= crashThreshold
+
+	windowsUpdateSpike := false
+	if isWindows {
+		windowsUpdateSpike = vmDetectWindowsUpdateSpike(windowed)
+	}
+
+	stabilityDays := cfg.DownsizeStabilityDays
+	if stabilityDays < 1 {
+		stabilityDays = 3
 	}
 
 	isOversized := rawRecommendedVCPU < currentVCPU || rawRecommendedMemGiB < currentMemGiB
@@ -179,6 +204,11 @@ func RecommendVM(
 		RecommendedInstanceType: recommendedInstanceType,
 		RecommendedSeries:       recommendedSeries,
 		FilesystemUsedPct:       vmLatestFilesystemUsedPct(windowed),
+		UnknownOS:               unknownOS,
+		WindowsUpdateSpike:      windowsUpdateSpike,
+		CrashLoopRestarts:       vmCrashLoopNotificationCount(crashLoopDetected, crashLoopRestarts),
+		DownsizeHeld:            downsizeHeld,
+		DownsizeStabilityDays:   stabilityDays,
 	})
 
 	now := time.Now().UTC()
@@ -347,9 +377,27 @@ func vmAgentInterrupted(days []model.DailyVMDigest, useAgentData bool) bool {
 	return false
 }
 
-func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, useAgentData bool) int64 {
+func vmWindowsKernelReserveKiB(cfg VMRecConfig) int64 {
+	if cfg.WindowsKernelReserveGiB <= 0 {
+		return 0
+	}
+	return int64(cfg.WindowsKernelReserveGiB * float64(kibPerGiB))
+}
+
+func vmAdjustMemoryUsageKiB(kiB int64, isWindows bool, cfg VMRecConfig) int64 {
+	if !isWindows {
+		return kiB
+	}
+	adjusted := kiB - vmWindowsKernelReserveKiB(cfg)
+	if adjusted < 0 {
+		return 0
+	}
+	return adjusted
+}
+
+func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, useAgentData bool, isWindows bool) int64 {
 	if useAgentData {
-		peak := vmPeakActualMemoryKiB(days, engine)
+		peak := vmPeakActualMemoryKiB(days, engine, cfg, isWindows)
 		if peak > 0 {
 			return peak
 		}
@@ -361,6 +409,7 @@ func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecCon
 		if useP99 {
 			v = d.MemUsageP99KiB
 		}
+		v = vmAdjustMemoryUsageKiB(v, isWindows, cfg)
 		if v > peak {
 			peak = v
 		}
@@ -368,7 +417,7 @@ func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecCon
 	return peak
 }
 
-func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string) int64 {
+func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, isWindows bool) int64 {
 	var peak int64
 	for _, d := range days {
 		if d.MemAvailableP95KiB == nil {
@@ -379,36 +428,173 @@ func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string) int64 {
 		if actual < 0 {
 			actual = 0
 		}
+		actual = vmAdjustMemoryUsageKiB(actual, isWindows, cfg)
 		if actual > peak {
 			peak = actual
 		}
 	}
 	if peak == 0 {
-		return vmMaxMemoryUsageKiB(days, engine, VMRecConfig{}, false)
+		return vmMaxMemoryUsageKiB(days, engine, cfg, false, isWindows)
 	}
 	return peak
 }
 
-func applyVMDownsizeHysteresisVCPU(current, recommended, raw int32, cfg VMRecConfig) int32 {
-	if raw >= current {
-		return recommended
+func vmLastNDigests(days []model.DailyVMDigest, n int) []model.DailyVMDigest {
+	if n <= 0 || len(days) == 0 {
+		return nil
 	}
-	threshold := float64(current) * cfg.DownsizeHysteresisRatio
-	if float64(raw) <= threshold && current-raw >= cfg.MinVCPUChange {
-		return raw
+	sorted := append([]model.DailyVMDigest(nil), days...)
+	sortVMDigestsByDate(sorted)
+	if len(sorted) <= n {
+		return sorted
 	}
-	return current
+	return sorted[len(sorted)-n:]
 }
 
-func applyVMDownsizeHysteresisMemory(current, recommended, raw int32, cfg VMRecConfig) int32 {
+func vmDayRawVCPU(d model.DailyVMDigest, cpuMargin float64, useP99 bool) int32 {
+	v := d.CPUUsageP95MC
+	if useP99 {
+		v = d.CPUUsageP99MC
+	}
+	return int32(math.Max(1, math.Ceil(float64(v)*(1+cpuMargin)/1000.0)))
+}
+
+func vmDayRawMemoryGiB(
+	d model.DailyVMDigest,
+	memMargin float64,
+	useAgentData bool,
+	isWindows bool,
+	cfg VMRecConfig,
+	useP99 bool,
+) int32 {
+	var usageKiB int64
+	if useAgentData && d.MemAvailableP95KiB != nil {
+		usageKiB = d.MemRequestKiB - *d.MemAvailableP95KiB
+		if usageKiB < 0 {
+			usageKiB = 0
+		}
+		usageKiB = vmAdjustMemoryUsageKiB(usageKiB, isWindows, cfg)
+	} else {
+		usageKiB = d.MemUsageP95KiB
+		if useP99 {
+			usageKiB = d.MemUsageP99KiB
+		}
+		usageKiB = vmAdjustMemoryUsageKiB(usageKiB, isWindows, cfg)
+	}
+	return int32(math.Max(1, math.Ceil(float64(usageKiB)*(1+memMargin)/float64(kibPerGiB))))
+}
+
+func applyVMDownsizeHysteresisVCPU(
+	current, recommended, raw int32,
+	cfg VMRecConfig,
+	engine string,
+	days []model.DailyVMDigest,
+	useP99 bool,
+) (int32, bool) {
 	if raw >= current {
-		return recommended
+		return recommended, false
 	}
 	threshold := float64(current) * cfg.DownsizeHysteresisRatio
-	if float64(raw) <= threshold && current-raw >= cfg.MinGiBChange {
-		return raw
+	if float64(raw) > threshold || current-raw < cfg.MinVCPUChange {
+		return current, false
 	}
-	return current
+	if engine == vmEnginePerformance {
+		stabilityDays := cfg.DownsizeStabilityDays
+		if stabilityDays < 1 {
+			stabilityDays = 3
+		}
+		if len(days) < stabilityDays {
+			return current, true
+		}
+		cpuMargin := cfg.CPUMarginMax
+		for _, d := range vmLastNDigests(days, stabilityDays) {
+			// Stability uses per-day P95 even when sizing uses P99 (performance engine).
+			if float64(vmDayRawVCPU(d, cpuMargin, false)) > threshold {
+				return current, true
+			}
+		}
+	}
+	return raw, false
+}
+
+func applyVMDownsizeHysteresisMemory(
+	current, recommended, raw int32,
+	cfg VMRecConfig,
+	engine string,
+	days []model.DailyVMDigest,
+	useAgentData bool,
+	isWindows bool,
+	useP99 bool,
+) (int32, bool) {
+	if raw >= current {
+		return recommended, false
+	}
+	threshold := float64(current) * cfg.DownsizeHysteresisRatio
+	if float64(raw) > threshold || current-raw < cfg.MinGiBChange {
+		return current, false
+	}
+	if engine == vmEnginePerformance {
+		stabilityDays := cfg.DownsizeStabilityDays
+		if stabilityDays < 1 {
+			stabilityDays = 3
+		}
+		if len(days) < stabilityDays {
+			return current, true
+		}
+		memMargin := cfg.MemMarginMin
+		memThreshold := threshold
+		for _, d := range vmLastNDigests(days, stabilityDays) {
+			if float64(vmDayRawMemoryGiB(d, memMargin, useAgentData, isWindows, cfg, false)) > memThreshold {
+				return current, true
+			}
+		}
+	}
+	return raw, false
+}
+
+func vmSumRestartCounts(days []model.DailyVMDigest) int32 {
+	var sum int32
+	for _, d := range days {
+		sum += d.RestartCountSum
+	}
+	return sum
+}
+
+func vmCrashLoopNotificationCount(detected bool, restarts int32) int {
+	if !detected {
+		return 0
+	}
+	return int(restarts)
+}
+
+const (
+	vmWindowsCPUSpikeRatio = 0.50
+	vmWindowsMemSpikeRatio = 0.30
+)
+
+func vmDetectWindowsUpdateSpike(days []model.DailyVMDigest) bool {
+	var peakCPUP95, peakCPUP99, peakMemP95, peakMemP99 int64
+	for _, d := range days {
+		if d.CPUUsageP95MC > peakCPUP95 {
+			peakCPUP95 = d.CPUUsageP95MC
+		}
+		if d.CPUUsageP99MC > peakCPUP99 {
+			peakCPUP99 = d.CPUUsageP99MC
+		}
+		if d.MemUsageP95KiB > peakMemP95 {
+			peakMemP95 = d.MemUsageP95KiB
+		}
+		if d.MemUsageP99KiB > peakMemP99 {
+			peakMemP99 = d.MemUsageP99KiB
+		}
+	}
+	if peakCPUP95 > 0 && float64(peakCPUP99-peakCPUP95)/float64(peakCPUP95) > vmWindowsCPUSpikeRatio {
+		return true
+	}
+	if peakMemP95 > 0 && float64(peakMemP99-peakMemP95)/float64(peakMemP95) > vmWindowsMemSpikeRatio {
+		return true
+	}
+	return false
 }
 
 func vmIOProfile(days []model.DailyVMDigest, cfg VMRecConfig) (readIOPS, writeIOPS, readBPS, writeBPS *int64, hint *string) {

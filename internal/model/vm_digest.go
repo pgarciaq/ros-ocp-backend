@@ -51,4 +51,5 @@ type DailyVMDigest struct {
 
 	SampleCount        int32 `db:"sample_count"`
 	AgentSampleCount   int32 `db:"agent_sample_count"`
+	RestartCountSum    int32 `db:"restart_count_sum"`
 }

@@ -34,6 +34,15 @@ type VMRecConfig struct {
 	LinuxMemoryFloorGiB   int32 // default 1 (0.5 GiB rounds to 1)
 	WindowsMemoryFloorGiB int32 // default 2
 
+	// Windows kernel memory reserve subtracted before sizing (GiB)
+	WindowsKernelReserveGiB float64 // default 1.5
+
+	// Performance-engine downsize: require N consecutive days below threshold
+	DownsizeStabilityDays int // default 3
+
+	// Crash loop: sum of restart_count across term window
+	CrashLoopRestartThreshold int32 // default 3
+
 	// Disk
 	DiskProjectionWindowDays int32   // default 30
 	DiskHeadroomPct          float64 // default 0.25
@@ -67,6 +76,9 @@ func DefaultVMRecConfig() VMRecConfig {
 		IdleMemoryMiBWindows:       3072,
 		LinuxMemoryFloorGiB:        1,
 		WindowsMemoryFloorGiB:      2,
+		WindowsKernelReserveGiB:    1.5,
+		DownsizeStabilityDays:      3,
+		CrashLoopRestartThreshold:  3,
 		DiskProjectionWindowDays:   30,
 		DiskHeadroomPct:            0.25,
 		DiskRoundStepGiB:           10,
@@ -156,6 +168,15 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ABANDONED_MIN_DAYS"); ok {
 		base.AbandonedMinDays = cfg.VMAbandonedMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB"); ok {
+		base.WindowsKernelReserveGiB = cfg.VMWindowsKernelReserveGiB
+	}
+	if _, ok := os.LookupEnv("ROS_VM_DOWNSIZE_STABILITY_DAYS"); ok {
+		base.DownsizeStabilityDays = cfg.VMDownsizeStabilityDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"); ok {
+		base.CrashLoopRestartThreshold = cfg.VMCrashLoopRestartThreshold
 	}
 	return base
 }

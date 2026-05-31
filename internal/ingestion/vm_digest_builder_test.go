@@ -151,3 +151,22 @@ func TestVMDigestBuilder_SingleSamplePercentilesEqual(t *testing.T) {
 	assert.Equal(t, int64(8888), d.MemUsageP95KiB)
 	assert.Equal(t, int32(1), d.SampleCount)
 }
+
+func TestVMDigestBuilder_RestartCountSum(t *testing.T) {
+	base := time.Date(2026, 5, 10, 6, 0, 0, 0, time.UTC)
+	r1 := int32(1)
+	r2 := int32(2)
+	rows := []VMRow{
+		vmSampleRow(base, "vm", "ns", 100, 1024, nil),
+		vmSampleRow(base.Add(15*time.Minute), "vm", "ns", 100, 1024, nil),
+	}
+	rows[0].RestartCount = &r1
+	rows[1].RestartCount = &r2
+	digests := BuildDailyVMDigests(rows)
+	require.Len(t, digests, 1)
+	var d VMDigestResult
+	for _, v := range digests {
+		d = v
+	}
+	assert.Equal(t, int32(3), d.RestartCountSum)
+}

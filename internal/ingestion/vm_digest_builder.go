@@ -49,6 +49,7 @@ type VMDigestResult struct {
 
 	SampleCount      int32
 	AgentSampleCount int32
+	RestartCountSum  int32
 }
 
 // VMDigestKey identifies a single VM-day digest group.
@@ -79,6 +80,7 @@ type vmDigestAccumulator struct {
 
 	sampleCount      int
 	agentSampleCount int
+	restartCountSum  int32
 }
 
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
@@ -144,6 +146,10 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 			acc.diskWriteBPS = append(acc.diskWriteBPS, *r.DiskWriteBytesPerSec)
 		}
 
+		if r.RestartCount != nil {
+			acc.restartCountSum += *r.RestartCount
+		}
+
 		acc.sampleCount++
 	}
 
@@ -163,6 +169,7 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		BucketDate:  key.BucketDate,
 		SampleCount:      int32(acc.sampleCount),
 		AgentSampleCount: int32(acc.agentSampleCount),
+		RestartCountSum:  acc.restartCountSum,
 	}
 
 	sortedCPU := sortedCopy(acc.cpuUsage)

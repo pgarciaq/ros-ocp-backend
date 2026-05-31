@@ -53,6 +53,7 @@ type vmHeaderIdx struct {
 	diskWriteIOPS           int
 	diskReadBytesPerSec     int
 	diskWriteBytesPerSec    int
+	restartCount            int
 }
 
 func newVMHeaderIdx() vmHeaderIdx {
@@ -76,6 +77,7 @@ func newVMHeaderIdx() vmHeaderIdx {
 		diskWriteIOPS:           -1,
 		diskReadBytesPerSec:     -1,
 		diskWriteBytesPerSec:    -1,
+		restartCount:            -1,
 	}
 }
 
@@ -121,6 +123,8 @@ func buildVMColumnIndex(header []string) (vmHeaderIdx, error) {
 			idx.diskReadBytesPerSec = i
 		case "disk_write_bytes_per_sec":
 			idx.diskWriteBytesPerSec = i
+		case "restart_count":
+			idx.restartCount = i
 		}
 	}
 
@@ -294,8 +298,28 @@ func parseVMRecord(record []string, idx vmHeaderIdx) (VMRow, error) {
 	if err != nil {
 		return row, fmt.Errorf("parse disk_write_bytes_per_sec: %w", err)
 	}
+	row.RestartCount, err = parseOptionalInt32(fieldAt(record, idx.restartCount))
+	if err != nil {
+		return row, fmt.Errorf("parse restart_count: %w", err)
+	}
 
 	return row, nil
+}
+
+func parseOptionalInt32(s string) (*int32, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	if v < 0 {
+		return nil, fmt.Errorf("negative value %d", v)
+	}
+	out := int32(v)
+	return &out, nil
 }
 
 func fieldAt(record []string, col int) string {

@@ -98,8 +98,23 @@ Tune via Settings API `thresholds.*` or `ROS_VM_CPU_*` env vars.
 | **OS floors** | Linux default **1** GiB; Windows default **2** GiB (`memory_floors`) |
 | **Rounding** | Ceil to **whole GiB** (minimum 1 for non-abandoned VMs) |
 | **Downsize hysteresis** | Same ratio as CPU, or ≥ `min_gib_change` (default **2**) GiB |
+| **Windows kernel reserve** | Subtract `memory_floors.windows_kernel_reserve_gib` (default **1.5** GiB) from usage before sizing |
 
-`guest_os` from CSV drives idle thresholds and memory floors.
+`guest_os` from CSV drives idle thresholds and memory floors. Empty `guest_os` uses Linux defaults and notification **46**.
+
+### Windows-specific handling
+
+- Higher idle thresholds (200 millicores / 3072 MiB) and **2** GiB memory floor.
+- **Kernel reserve** (default 1.5 GiB) removed from working set before memory recommendations.
+- **Update spike** notification **47** when P99 is much higher than P95 (CPU or memory).
+
+### Time-aware downsize (performance engine only)
+
+Cost engine may downsize when hysteresis thresholds pass. Performance engine also requires **each of the last N days** (default **3**, per-day **P95**) to stay below the downsize threshold; otherwise sizing holds at current and notification **49** is emitted. Configure `stability.downsize_stability_days`.
+
+### Crash loop detection
+
+The operator exports `restart_count` per 15-minute sample (KubeVirt `Running` phase transitions). Summed daily as `restart_count_sum`. Notification **48** when the term-window total meets `stability.crash_loop_restart_threshold` (default **3**).
 
 ## Idle VM detection
 
@@ -161,8 +176,9 @@ From daily digest P95 read/write IOPS and throughput:
 ## Instance type matching
 
 Built-in catalog (OpenShift Virtualization defaults): **u1** (general-purpose),
-**cx1** (compute-optimized), **m1** (memory-optimized). **GPU types (`gn1.*`) are
-excluded** until GPU VM metrics exist — see [GPU MIG Profiling](gpu-mig.md).
+**cx1** (compute-optimized), **m1** (memory-optimized). **n1** (network-optimized) and
+**gn1** (GPU) types are included for **recognition** (`LookupInstanceTypeByName`) but are
+**not recommended** until network/GPU metrics exist. **GPU types (`gn1.*`)** — see [GPU MIG Profiling](gpu-mig.md).
 
 **Algorithm:**
 

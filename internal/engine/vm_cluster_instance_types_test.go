@@ -17,7 +17,7 @@ func TestNormalizeInstanceTypeSeries(t *testing.T) {
 
 func TestMatchInstanceType_ClusterCatalogOverridesGlobal(t *testing.T) {
 	clusterTypes := []InstanceType{
-		{Name: "custom-db-optimized", Series: vmSeriesMemoryOptimized, VCPU: 8, MemoryGiB: 64, GPUs: 0},
+		{Name: "custom-db-optimized", Series: vmSeriesMemoryOptimized, VCPU: 8, MemoryGiB: 64, GPUs: 0, Selectable: true},
 	}
 	match := MatchInstanceType(8, 64, vmSeriesMemoryOptimized, clusterTypes)
 	require.NotNil(t, match)

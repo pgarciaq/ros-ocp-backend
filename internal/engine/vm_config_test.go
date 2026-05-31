@@ -31,6 +31,9 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.Equal(t, int64(3000), cfg.HighIOPSThreshold)
 	assert.True(t, cfg.EnableInstanceTypeMatching)
 	assert.Equal(t, int32(3), cfg.AbandonedMinDays)
+	assert.InDelta(t, 1.5, cfg.WindowsKernelReserveGiB, 1e-9)
+	assert.Equal(t, 3, cfg.DownsizeStabilityDays)
+	assert.Equal(t, int32(3), cfg.CrashLoopRestartThreshold)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {

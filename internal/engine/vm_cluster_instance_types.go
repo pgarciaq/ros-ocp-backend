@@ -71,11 +71,12 @@ func clusterRecordsToInstanceTypes(records []ClusterInstanceTypeRecord) []Instan
 			memGiB = 1
 		}
 		out = append(out, InstanceType{
-			Name:      rec.Name,
-			Series:    NormalizeInstanceTypeSeries(rec.Series),
-			VCPU:      vcpu,
-			MemoryGiB: memGiB,
-			GPUs:      rec.GPUs,
+			Name:       rec.Name,
+			Series:     NormalizeInstanceTypeSeries(rec.Series),
+			VCPU:       vcpu,
+			MemoryGiB:  memGiB,
+			GPUs:       rec.GPUs,
+			Selectable: true,
 		})
 	}
 	return out
@@ -156,11 +157,12 @@ func QueryClusterInstanceTypes(ctx context.Context, pool *pgxpool.Pool, orgID st
 			return nil, fmt.Errorf("scan cluster instance type: %w", err)
 		}
 		out = append(out, InstanceType{
-			Name:      name,
-			Series:    series,
-			VCPU:      vcpu,
-			MemoryGiB: memoryGiB,
-			GPUs:      gpus,
+			Name:       name,
+			Series:     series,
+			VCPU:       vcpu,
+			MemoryGiB:  memoryGiB,
+			GPUs:       gpus,
+			Selectable: true,
 		})
 	}
 	if err := rows.Err(); err != nil {

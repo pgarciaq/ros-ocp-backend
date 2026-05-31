@@ -34,4 +34,7 @@ type VMRow struct {
 	DiskWriteIOPS        *float64
 	DiskReadBytesPerSec  *float64
 	DiskWriteBytesPerSec *float64
+
+	// RestartCount is the number of VMI transitions to Running in the interval (nil if unavailable).
+	RestartCount *int32
 }

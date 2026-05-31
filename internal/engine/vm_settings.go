@@ -47,8 +47,15 @@ type VMIOSettingsAPI struct {
 
 // VMMemoryFloorsSettingsAPI is the memory floor block in VM settings responses.
 type VMMemoryFloorsSettingsAPI struct {
-	LinuxGiB   int32 `json:"linux_gib"`
-	WindowsGiB int32 `json:"windows_gib"`
+	LinuxGiB              int32   `json:"linux_gib"`
+	WindowsGiB            int32   `json:"windows_gib"`
+	WindowsKernelReserveGiB float64 `json:"windows_kernel_reserve_gib"`
+}
+
+// VMStabilitySettingsAPI holds performance-engine downsize stability settings.
+type VMStabilitySettingsAPI struct {
+	DownsizeStabilityDays     int   `json:"downsize_stability_days"`
+	CrashLoopRestartThreshold int32 `json:"crash_loop_restart_threshold"`
 }
 
 // VMSettingsResponse is the API GET/PUT response for VM recommendation settings.
@@ -56,6 +63,7 @@ type VMSettingsResponse struct {
 	Enabled              bool                      `json:"enabled"`
 	Thresholds           VMThresholdSettingsAPI    `json:"thresholds"`
 	MemoryFloors         VMMemoryFloorsSettingsAPI `json:"memory_floors"`
+	Stability            VMStabilitySettingsAPI    `json:"stability"`
 	Disk                 VMDiskSettingsAPI         `json:"disk"`
 	IO                   VMIOSettingsAPI           `json:"io"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
@@ -68,6 +76,7 @@ type vmSettingsStored struct {
 	Disk                 *VMDiskSettingsAPI         `json:"disk,omitempty"`
 	IO                   *VMIOSettingsAPI           `json:"io,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
+	Stability            *VMStabilitySettingsAPI    `json:"stability,omitempty"`
 }
 
 func vmEnvLockMap() map[string]string {
@@ -93,6 +102,9 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY":   "disk.min_growth_mib_per_day",
 		"ROS_VM_HIGH_IOPS_THRESHOLD":           "io.high_iops_threshold",
 		"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING": "instance_type_matching",
+		"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB":    "memory_floors.windows_kernel_reserve_gib",
+		"ROS_VM_DOWNSIZE_STABILITY_DAYS":       "stability.downsize_stability_days",
+		"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD":  "stability.crash_loop_restart_threshold",
 	}
 }
 
@@ -133,8 +145,16 @@ func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
 
 func vmRecConfigToMemoryFloorsAPI(cfg VMRecConfig) VMMemoryFloorsSettingsAPI {
 	return VMMemoryFloorsSettingsAPI{
-		LinuxGiB:   cfg.LinuxMemoryFloorGiB,
-		WindowsGiB: cfg.WindowsMemoryFloorGiB,
+		LinuxGiB:              cfg.LinuxMemoryFloorGiB,
+		WindowsGiB:            cfg.WindowsMemoryFloorGiB,
+		WindowsKernelReserveGiB: cfg.WindowsKernelReserveGiB,
+	}
+}
+
+func vmRecConfigToStabilityAPI(cfg VMRecConfig) VMStabilitySettingsAPI {
+	return VMStabilitySettingsAPI{
+		DownsizeStabilityDays:     cfg.DownsizeStabilityDays,
+		CrashLoopRestartThreshold: cfg.CrashLoopRestartThreshold,
 	}
 }
 
@@ -143,6 +163,7 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		Enabled:              vmFeatureEnabled(),
 		Thresholds:           vmRecConfigToThresholdAPI(cfg),
 		MemoryFloors:         vmRecConfigToMemoryFloorsAPI(cfg),
+		Stability:            vmRecConfigToStabilityAPI(cfg),
 		Disk:                 vmRecConfigToDiskAPI(cfg),
 		IO:                   vmRecConfigToIOAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
@@ -223,6 +244,11 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 	if stored.MemoryFloors != nil {
 		dest.LinuxMemoryFloorGiB = stored.MemoryFloors.LinuxGiB
 		dest.WindowsMemoryFloorGiB = stored.MemoryFloors.WindowsGiB
+		dest.WindowsKernelReserveGiB = stored.MemoryFloors.WindowsKernelReserveGiB
+	}
+	if stored.Stability != nil {
+		dest.DownsizeStabilityDays = stored.Stability.DownsizeStabilityDays
+		dest.CrashLoopRestartThreshold = stored.Stability.CrashLoopRestartThreshold
 	}
 	if stored.Disk != nil {
 		dest.DiskProjectionWindowDays = stored.Disk.ProjectionWindowDays
@@ -267,6 +293,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid memory_floors: %w", err)
 		}
 	}
+	if raw, ok := patch["stability"]; ok {
+		if err := json.Unmarshal(raw, &resp.Stability); err != nil {
+			return fmt.Errorf("invalid stability: %w", err)
+		}
+	}
 	if raw, ok := patch["disk"]; ok {
 		if err := json.Unmarshal(raw, &resp.Disk); err != nil {
 			return fmt.Errorf("invalid disk: %w", err)
@@ -293,6 +324,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.MemoryFloors); err == nil {
 		overrides["memory_floors"] = b
+	}
+	if b, err := json.Marshal(resp.Stability); err == nil {
+		overrides["stability"] = b
 	}
 	if b, err := json.Marshal(resp.Disk); err == nil {
 		overrides["disk"] = b
@@ -343,7 +377,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "memory_floors": {}, "disk": {}, "io": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {},
 		"instance_type_matching": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -377,6 +411,10 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 
 	v.addRangeInt("memory_floors.linux_gib", int(resp.MemoryFloors.LinuxGiB), 1, 1024)
 	v.addRangeInt("memory_floors.windows_gib", int(resp.MemoryFloors.WindowsGiB), 1, 1024)
+	v.addRangeFloat("memory_floors.windows_kernel_reserve_gib", resp.MemoryFloors.WindowsKernelReserveGiB, 0.0, 64.0)
+
+	v.addRangeInt("stability.downsize_stability_days", resp.Stability.DownsizeStabilityDays, 1, 30)
+	v.addRangeInt("stability.crash_loop_restart_threshold", int(resp.Stability.CrashLoopRestartThreshold), 1, 100)
 
 	v.addRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
 	v.addRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)
