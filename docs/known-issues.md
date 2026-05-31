@@ -564,10 +564,11 @@ count up or down.) **Not planned for current MVP.**
 
 ### VM Recommendations (REQ-8b.1 – REQ-8b.9)
 
-No virtual machine right-sizing. Notification codes 18-19 (VM-related) exist
-but no engine logic, no ingestion, no API endpoints. Requires 12 new operator
-Prometheus queries and a dedicated daily digest pipeline. **Planned for future
-release — depends on OpenShift Virtualization adoption.**
+**Implemented (Preview/Beta).** Virtual machine right-sizing is available with
+14 Prometheus queries, daily digest pipeline, full recommendation engine
+(CPU/memory sizing, idle/abandoned detection, disk projection, instance type
+matching), and dedicated API endpoints. Gated by `ROS_ENABLE_VM_RECS` (default
+`true`). Remaining gap: MachineSet-level VM placement optimization.
 
 ### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5)
 

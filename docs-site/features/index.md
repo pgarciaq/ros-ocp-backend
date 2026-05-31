@@ -23,7 +23,7 @@ dollar impact using Koku cost model rates.
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
 | Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
-| Virtual Machine Recommendations | vm (planned) | cost, performance | Planned | Planned |
+| Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
 | Java / JVM Optimization | java (planned) | cost, performance | Planned | Planned |
 | Network Optimization | network (planned) | single | Planned (SaaS $) | Planned |
 
@@ -115,9 +115,10 @@ recurring peaks in daily usage history, forecast upcoming demand with
 predictable spikes (month-end batch, weekly surges, holiday traffic). See the
 internal design: [`docs/design/seasonality-plugin.md`](../../../docs/design/seasonality-plugin.md).
 
-**[Virtual Machine Recommendations](virtual-machines.md)** — *Planned.* Right-size
-KubeVirt guests: whole vCPU and GiB recommendations, instance type mapping (cx1, m1,
-u1, …), idle VM detection, disk growth and I/O hints. Gated behind `ROS_ENABLE_VM_RECS`.
+**[Virtual Machine Recommendations](virtual-machines.md)** — *Preview (Beta).* Right-size
+KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (cx1, m1,
+u1, …), idle and abandoned VM detection, disk growth projection, I/O profiling,
+graduated confidence with guest agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
 Technical design: [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
 
 **[Java & JVM Optimization](java-jvm.md)** — *Planned.* JVM-specific tuning on top of container

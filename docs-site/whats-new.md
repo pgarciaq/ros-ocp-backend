@@ -62,9 +62,10 @@ first production-ready native engine release.
 
 - **[Virtual Machine Recommendations](features/virtual-machines.md)** — Right-size
   OpenShift Virtualization workloads: vCPU and memory in whole units, instance type
-  suggestions (m1, u1, cx1, …), idle VM detection, disk growth trending, and
-  informational storage I/O guidance. Conservative downsize rules account for VM
-  restart cost. **Status: planned / future work.** Technical
+  matching (m1, u1, cx1, per-cluster discovery), idle and abandoned VM detection,
+  disk growth projection (guest-agent and hypervisor-only), I/O profiling, graduated
+  confidence with guest agent adaptivity, and OS-aware thresholds. **Status: Preview
+  (Beta) — enabled by default.** Technical
   design: [`docs/design/vm-recommendations.md`](../docs/design/vm-recommendations.md).
 
 - **[Java & JVM Optimization](features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
