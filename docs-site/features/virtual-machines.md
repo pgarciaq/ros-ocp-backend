@@ -500,6 +500,41 @@ Container recommendations are **unchanged** when VM recommendations ship.
 
 ---
 
+## Testing
+
+VM recommendations include comprehensive test coverage across four layers:
+
+| Layer | Repository | Tests | Runs without cluster? |
+|-------|------------|-------|----------------------|
+| **Unit** | ros-ocp-backend | ~30 tests: plugin traits, CSV parsing, engine logic, API handlers, settings | Yes |
+| **E2E** | cost-onprem-chart | ~15 tests: API integration, settings, full upload-to-recommendation flow | No (needs OpenShift) |
+| **IQE** | iqe-cost-management-plugin | ~12 tests: API contract, filters, settings | No (needs deployed stack) |
+| **Data generation** | nise | VM scenarios: oversized, idle, Windows, guest-agent | Yes |
+
+### Running unit tests
+
+```bash
+cd ros-ocp-backend
+go test ./internal/plugins/vm/... ./internal/engine/... ./internal/ingestion/... -run "VM" -v
+```
+
+### Running E2E tests
+
+```bash
+cd cost-onprem-chart
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k "vm"
+```
+
+For the full end-to-end flow (requires nise data upload):
+
+```bash
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k "vm_recommendations_flow"
+```
+
+See the [internal test plan](../../../docs/design/vm-test-plan.md) for detailed test specifications.
+
+---
+
 ## Related documentation
 
 | Document | Audience |

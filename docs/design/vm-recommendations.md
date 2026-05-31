@@ -413,17 +413,21 @@ No raw 15-min VM metrics in PostgreSQL — same digest-only model as containers.
 
 ---
 
-## Testing (planned)
+## Testing
 
-From [test-plan.md](../architecture/test-plan.md#phase-8b-vm-right-sizing):
+See the dedicated [VM Test Plan](vm-test-plan.md) for comprehensive test specifications
+covering unit tests (~30), E2E tests (~15), IQE tests (~12), and nise data generation.
 
-- VM CSV → `daily_vm_digests` population (15-min rows aggregated to daily)
-- Whole vCPU / whole GiB rounding
-- Windows memory floor ≥ 2 GiB; Windows idle thresholds
-- Downsize hysteresis gates
-- Instance type smallest-fit selection
-- Guest agent vs hypervisor-only code paths; `confidence` field
-- API list/detail contract tests
+Key acceptance criteria:
+- VM CSV → `daily_vm_digests` population (15-min intervals)
+- Whole vCPU / whole GiB rounding with correct ceilings
+- Windows memory floor ≥ 2 GiB; Linux ≥ 512 MiB
+- Downsize hysteresis: ratio < 0.60 OR delta ≥ 2
+- OS-aware idle thresholds (Linux vs Windows)
+- Guest agent detection → confidence high/moderate
+- Instance type smallest-fit selection from catalog
+- API list/detail/settings contract tests
+- Full pipeline: CSV → digests → recommend → API response
 
 ---
 
