@@ -173,6 +173,15 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			}
 			continue
 		}
+		if useNativeCSVIngest && csvType == types.PayloadTypeVM {
+			if config.GetConfig().EnableVMRecs {
+				if err := processVMCsvNative(file, kafkaMsg); err != nil {
+					reportProcessingFailed = true
+					recordKafkaTransient(err)
+				}
+			}
+			continue
+		}
 
 		data, fetchError := utils.ReadCSVFromUrl(file)
 		if fetchError != nil {
@@ -819,6 +828,45 @@ func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error
 	if err := engine.RunClusterQuotaRecommendations(ctx, pool, orgID, clusterUUID); err != nil {
 		log.Errorf("native cluster-quota engine: recommendation failed: %v", err)
 		return fmt.Errorf("cluster-quota recommendations: %w", err)
+	}
+	return nil
+}
+
+func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg) error {
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native VM engine: unable to fetch CSV from URL: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("fetch VM CSV: %w", err)
+		}
+		return nil
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeVM))
+	if err != nil {
+		log.Errorf("native VM engine: ingest failed: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("VM ingest: %w", err)
+		}
+		return nil
+	}
+	if !handled {
+		if err := ingestion.ProcessVMCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			log.Errorf("native VM engine: ingest failed: %v", err)
+			if isTransientKafkaProcessingError(err) {
+				return fmt.Errorf("VM ingest: %w", err)
+			}
+			return nil
+		}
 	}
 	return nil
 }

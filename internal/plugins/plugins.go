@@ -13,4 +13,5 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 )
