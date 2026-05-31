@@ -189,11 +189,11 @@ docs-serve: docs-generate ## Serve docs locally with live reload (http://localho
 
 .PHONY: docs-clean
 docs-clean: ## Remove generated docs and build output
-	rm -f docs-site/api-reference/plugin.md docs-site/api-reference/container.md
-	rm -f docs-site/api-reference/gpu.md docs-site/api-reference/node.md
-	rm -f docs-site/api-reference/pvc.md docs-site/api-reference/namespace.md
-	rm -f docs-site/api-reference/snapshot.md docs-site/api-reference/kruize.md
-	rm -f docs-site/api-reference/example.md
+	rm -f docs-site/plugin-reference/plugin.md docs-site/plugin-reference/container.md
+	rm -f docs-site/plugin-reference/gpu.md docs-site/plugin-reference/node.md
+	rm -f docs-site/plugin-reference/pvc.md docs-site/plugin-reference/namespace.md
+	rm -f docs-site/plugin-reference/snapshot.md docs-site/plugin-reference/kruize.md
+	rm -f docs-site/plugin-reference/vm.md docs-site/plugin-reference/example.md
 	rm -f docs-site/contributing.md docs-site/known-issues.md
 	rm -rf docs-site/architecture/ docs-site/operations/ docs-site/features/
 	rm -rf _site

@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCS_DIR="$ROOT_DIR/docs-site"
-API_REF_DIR="$DOCS_DIR/api-reference"
+PLUGIN_REF_DIR="$DOCS_DIR/plugin-reference"
 
 export PATH="${PATH}:$(go env GOPATH)/bin"
 
@@ -24,19 +24,19 @@ fi
 
 echo "Generating plugin API reference..."
 
-mkdir -p "$API_REF_DIR"
+mkdir -p "$PLUGIN_REF_DIR"
 
 # Generate docs for the plugin interfaces package
-gomarkdoc --output "$API_REF_DIR/plugin.md" \
+gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" \
     --template-file file="$ROOT_DIR/scripts/docs-templates/package.gotxt" \
     ./internal/plugin/ 2>/dev/null || \
-gomarkdoc --output "$API_REF_DIR/plugin.md" ./internal/plugin/
+gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" ./internal/plugin/
 
-# Generate docs for each plugin package (quota and cluster-quota are hand-written in docs-site/api-reference/)
-for pkg in container gpu node pvc namespace snapshot kruize example; do
+# Generate docs for each plugin package (quota and cluster-quota are hand-written in docs-site/plugin-reference/)
+for pkg in container gpu node pvc namespace snapshot kruize vm example; do
     echo "  → internal/plugins/$pkg"
-    gomarkdoc --output "$API_REF_DIR/$pkg.md" "./internal/plugins/$pkg/" 2>/dev/null || \
-    gomarkdoc --output "$API_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"
+    gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/" 2>/dev/null || \
+    gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"
 done
 
 # Copy static docs into the site directory structure
@@ -111,7 +111,7 @@ Key variables:
 ## Plugin Development
 
 See the [Plugin Architecture](architecture/plugin-architecture.md) and
-[example plugin](api-reference/example.md) for how to add new recommendation domains.
+[example plugin](plugin-reference/example.md) for how to add new recommendation domains.
 EOF
 fi
 
