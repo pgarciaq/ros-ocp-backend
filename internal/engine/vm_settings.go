@@ -36,6 +36,7 @@ type VMDiskSettingsAPI struct {
 	ProjectionWindowDays int32   `json:"projection_window_days"`
 	HeadroomPct          float64 `json:"headroom_pct"`
 	RoundStepGiB         int32   `json:"round_step_gib"`
+	MinGrowthMiBPerDay   int64   `json:"min_growth_mib_per_day"`
 }
 
 // VMIOSettingsAPI is the I/O block in VM settings responses.
@@ -87,6 +88,7 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_DISK_PROJECTION_DAYS":          "disk.projection_window_days",
 		"ROS_VM_DISK_HEADROOM_PCT":             "disk.headroom_pct",
 		"ROS_VM_DISK_ROUND_STEP_GIB":           "disk.round_step_gib",
+		"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY":   "disk.min_growth_mib_per_day",
 		"ROS_VM_HIGH_IOPS_THRESHOLD":           "io.high_iops_threshold",
 		"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING": "instance_type_matching",
 	}
@@ -118,6 +120,7 @@ func vmRecConfigToDiskAPI(cfg VMRecConfig) VMDiskSettingsAPI {
 		ProjectionWindowDays: cfg.DiskProjectionWindowDays,
 		HeadroomPct:          cfg.DiskHeadroomPct,
 		RoundStepGiB:         cfg.DiskRoundStepGiB,
+		MinGrowthMiBPerDay:   cfg.DiskMinGrowthMiBPerDay,
 	}
 }
 
@@ -221,6 +224,7 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.DiskProjectionWindowDays = stored.Disk.ProjectionWindowDays
 		dest.DiskHeadroomPct = stored.Disk.HeadroomPct
 		dest.DiskRoundStepGiB = stored.Disk.RoundStepGiB
+		dest.DiskMinGrowthMiBPerDay = stored.Disk.MinGrowthMiBPerDay
 	}
 	if stored.IO != nil {
 		dest.HighIOPSThreshold = stored.IO.HighIOPSThreshold
@@ -372,6 +376,7 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
 	v.addRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)
 	v.addRangeInt("disk.round_step_gib", int(resp.Disk.RoundStepGiB), 1, 1024)
+	v.addRangeInt64("disk.min_growth_mib_per_day", resp.Disk.MinGrowthMiBPerDay, 1, 1048576)
 
 	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
 

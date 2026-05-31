@@ -27,6 +27,7 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.Equal(t, int32(30), cfg.DiskProjectionWindowDays)
 	assert.InDelta(t, 0.25, cfg.DiskHeadroomPct, 1e-9)
 	assert.Equal(t, int32(10), cfg.DiskRoundStepGiB)
+	assert.Equal(t, int64(100), cfg.DiskMinGrowthMiBPerDay)
 	assert.Equal(t, int64(3000), cfg.HighIOPSThreshold)
 	assert.True(t, cfg.EnableInstanceTypeMatching)
 }

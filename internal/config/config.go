@@ -243,6 +243,7 @@ type Config struct {
 	VMDiskProjectionDays         int32   `mapstructure:"ROS_VM_DISK_PROJECTION_DAYS"`
 	VMDiskHeadroomPct            float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
 	VMDiskRoundStepGiB           int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
+	VMDiskMinGrowthMiBPerDay     int64   `mapstructure:"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"`
 	VMHighIOPSThreshold          int64   `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
 	VMEnableInstanceTypeMatching bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
 
@@ -589,6 +590,7 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_DISK_PROJECTION_DAYS", 30)
 	viper.SetDefault("ROS_VM_DISK_HEADROOM_PCT", 0.25)
 	viper.SetDefault("ROS_VM_DISK_ROUND_STEP_GIB", 10)
+	viper.SetDefault("ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY", 100)
 	viper.SetDefault("ROS_VM_HIGH_IOPS_THRESHOLD", 3000)
 	viper.SetDefault("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING", true)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)

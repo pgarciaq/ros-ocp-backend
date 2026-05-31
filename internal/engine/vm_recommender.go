@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -123,15 +122,37 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 
 	ioRead, ioWrite, ioReadBPS, ioWriteBPS, ioHint := vmIOProfile(windowed, cfg)
 
-	diskDaysUntilFull, diskGrowthGiBPerDay, diskExpandGiB := vmDiskProjection(windowed, cfg)
+	diskDaysUntilFull, diskGrowthGiBPerDay, diskExpandGiB, hypervisorDiskGrowth :=
+		vmDiskProjection(windowed, cfg)
 
-	var recommendedSeries *string
+	var (
+		recommendedInstanceType *string
+		recommendedSeries       *string
+	)
 	if cfg.EnableInstanceTypeMatching {
-		series := vmClassifySeries(recommendedVCPU, recommendedMemGiB, isIdle)
-		recommendedSeries = &series
+		preferredSeries := vmClassifySeries(recommendedVCPU, recommendedMemGiB, isIdle)
+		if match := MatchInstanceType(recommendedVCPU, recommendedMemGiB, preferredSeries); match != nil {
+			recommendedInstanceType = &match.Name
+			recommendedSeries = &match.Series
+		} else {
+			recommendedSeries = &preferredSeries
+		}
 	}
 
-	notifications := vmBuildNotifications(isIdle, isOversized)
+	// TODO(current_instance_type): populate from operator kubevirt_vmi_info labels or a dedicated query.
+
+	notifications := vmBuildNotifications(vmNotificationParams{
+		IsIdle:                  isIdle,
+		IsOversized:             isOversized,
+		GuestAgentDetected:      guestAgentDetected,
+		IOHint:                  ioHint,
+		DiskDaysUntilFull:       diskDaysUntilFull,
+		DiskGrowthGiBPerDay:     diskGrowthGiBPerDay,
+		HypervisorDiskGrowth:    hypervisorDiskGrowth,
+		RecommendedInstanceType: recommendedInstanceType,
+		RecommendedSeries:       recommendedSeries,
+		FilesystemUsedPct:       vmLatestFilesystemUsedPct(windowed),
+	})
 
 	now := time.Now().UTC()
 	rec := &model.VMRecommendation{
@@ -146,7 +167,7 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 		RecommendedVCPU:          recommendedVCPU,
 		RecommendedMemoryGiB:     recommendedMemGiB,
 		RecommendedDiskGiB:       diskExpandGiB,
-		RecommendedInstanceType:  nil,
+		RecommendedInstanceType:  recommendedInstanceType,
 		RecommendedSeries:        recommendedSeries,
 		GuestAgentDetected:       guestAgentDetected,
 		Confidence:               confidence,
@@ -355,7 +376,32 @@ func vmIOProfile(days []model.DailyVMDigest, cfg VMRecConfig) (readIOPS, writeIO
 	return readIOPS, writeIOPS, readBPS, writeBPS, hint
 }
 
-func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32) {
+const vmBytesPerGiB = 1024 * 1024 * 1024
+
+// vmDiskProjection returns disk growth/expansion signals. Strategy A (guest-agent
+// filesystem) runs when filesystem metrics exist; otherwise Strategy B uses hypervisor
+// disk_allocated_max_bytes trending.
+func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (
+	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
+) {
+	if vmHasGuestAgentFilesystemData(days) {
+		return vmDiskProjectionGuestAgent(days, cfg)
+	}
+	return vmDiskProjectionHypervisor(days, cfg)
+}
+
+func vmHasGuestAgentFilesystemData(days []model.DailyVMDigest) bool {
+	for _, d := range days {
+		if d.FilesystemUsedMaxBytes != nil && d.FilesystemCapacityBytes != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func vmDiskProjectionGuestAgent(days []model.DailyVMDigest, cfg VMRecConfig) (
+	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
+) {
 	var fsDays []model.DailyVMDigest
 	for _, d := range days {
 		if d.FilesystemUsedMaxBytes != nil && d.FilesystemCapacityBytes != nil {
@@ -363,7 +409,7 @@ func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (daysUntilFul
 		}
 	}
 	if len(fsDays) < 2 {
-		return nil, nil, nil
+		return nil, nil, nil, false
 	}
 
 	sortVMDigestsByDate(fsDays)
@@ -381,10 +427,10 @@ func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (daysUntilFul
 
 	growthPerDay := float64(usedLatest-usedEarliest) / float64(daysBetween)
 	if growthPerDay <= 0 {
-		return nil, nil, nil
+		return nil, nil, nil, false
 	}
 
-	growthGiB := growthPerDay / float64(1024*1024*1024)
+	growthGiB := growthPerDay / float64(vmBytesPerGiB)
 	growthGiBPerDay = &growthGiB
 
 	remaining := float64(capacity - usedLatest)
@@ -392,9 +438,53 @@ func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (daysUntilFul
 	daysUntilFull = &daysFull
 
 	if daysFull >= 90 {
-		return daysUntilFull, growthGiBPerDay, nil
+		return daysUntilFull, growthGiBPerDay, nil, false
 	}
 
+	expand := vmComputeDiskExpandGiB(growthGiB, cfg)
+	expandGiB = &expand
+	return daysUntilFull, growthGiBPerDay, expandGiB, false
+}
+
+func vmDiskProjectionHypervisor(days []model.DailyVMDigest, cfg VMRecConfig) (
+	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
+) {
+	var allocDays []model.DailyVMDigest
+	for _, d := range days {
+		if d.DiskAllocatedMaxBytes > 0 {
+			allocDays = append(allocDays, d)
+		}
+	}
+	if len(allocDays) < 2 {
+		return nil, nil, nil, false
+	}
+
+	sortVMDigestsByDate(allocDays)
+	series := make([]float64, len(allocDays))
+	for i, d := range allocDays {
+		series[i] = float64(d.DiskAllocatedMaxBytes)
+	}
+
+	growthPerDay := linearRegressionSlope(series)
+	if growthPerDay <= 0 {
+		return nil, nil, nil, false
+	}
+
+	minGrowthBytes := float64(cfg.DiskMinGrowthMiBPerDay) * 1024 * 1024
+	if growthPerDay < minGrowthBytes {
+		return nil, nil, nil, false
+	}
+
+	growthGiB := growthPerDay / float64(vmBytesPerGiB)
+	growthGiBPerDay = &growthGiB
+	hypervisorDiskGrowth = true
+
+	expand := vmComputeDiskExpandGiB(growthGiB, cfg)
+	expandGiB = &expand
+	return nil, growthGiBPerDay, expandGiB, hypervisorDiskGrowth
+}
+
+func vmComputeDiskExpandGiB(growthGiB float64, cfg VMRecConfig) int32 {
 	projectedGiB := growthGiB * 180
 	withHeadroom := projectedGiB * (1 + cfg.DiskHeadroomPct)
 	step := float64(cfg.DiskRoundStepGiB)
@@ -405,8 +495,7 @@ func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (daysUntilFul
 	if expand < int32(step) {
 		expand = int32(step)
 	}
-	expandGiB = &expand
-	return daysUntilFull, growthGiBPerDay, expandGiB
+	return expand
 }
 
 func sortVMDigestsByDate(days []model.DailyVMDigest) {
@@ -431,17 +520,3 @@ func vmClassifySeries(vcpu, memGiB int32, isIdle bool) string {
 	return vmSeriesGeneralPurpose
 }
 
-func vmBuildNotifications(isIdle, isOversized bool) []byte {
-	var codes []int16
-	if isIdle {
-		codes = append(codes, NotifVMIdle)
-	}
-	if isOversized {
-		codes = append(codes, NotifVMOversized)
-	}
-	b, err := json.Marshal(codes)
-	if err != nil {
-		return []byte("[]")
-	}
-	return b
-}

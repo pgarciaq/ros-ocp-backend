@@ -38,6 +38,7 @@ type VMRecConfig struct {
 	DiskProjectionWindowDays int32   // default 30
 	DiskHeadroomPct          float64 // default 0.25
 	DiskRoundStepGiB         int32   // default 10
+	DiskMinGrowthMiBPerDay   int64   // default 100 — hypervisor-only trending threshold
 
 	// I/O
 	HighIOPSThreshold int64 // default 3000
@@ -66,6 +67,7 @@ func DefaultVMRecConfig() VMRecConfig {
 		DiskProjectionWindowDays:   30,
 		DiskHeadroomPct:            0.25,
 		DiskRoundStepGiB:           10,
+		DiskMinGrowthMiBPerDay:     100,
 		HighIOPSThreshold:          3000,
 		EnableInstanceTypeMatching: true,
 	}
@@ -138,6 +140,9 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_DISK_ROUND_STEP_GIB"); ok {
 		base.DiskRoundStepGiB = cfg.VMDiskRoundStepGiB
+	}
+	if _, ok := os.LookupEnv("ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"); ok {
+		base.DiskMinGrowthMiBPerDay = cfg.VMDiskMinGrowthMiBPerDay
 	}
 	if _, ok := os.LookupEnv("ROS_VM_HIGH_IOPS_THRESHOLD"); ok {
 		base.HighIOPSThreshold = cfg.VMHighIOPSThreshold

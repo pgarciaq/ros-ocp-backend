@@ -36,8 +36,8 @@ var Definitions = map[int16]notifDef{
 	15: {"INFO", "MachineAutoscaler at minReplicas sustained — consider decreasing"},
 	16: {"WARNING", "Frequent scale events — widen stabilization window"},
 	17: {"INFO", "MachineSet has variable load but no autoscaler configured"},
-	18: {"WARNING", "Virtual machine has near-zero utilization"},
-	19: {"INFO", "Virtual machine allocated resources exceed usage by resize threshold"},
+	18: {"WARNING", "VM is idle: CPU and memory usage are consistently below thresholds"},
+	19: {"WARNING", "VM is oversized: recommended resources are significantly below current allocation"},
 	20: {"WARNING", "PVC has zero usage across all intervals"},
 	21: {"WARNING", "HPA at maxReplicas sustained — scaling is bottlenecked"},
 	22: {"INFO", "Workload is managed by an HPA — replica count recommendations suppressed"},
@@ -55,6 +55,12 @@ var Definitions = map[int16]notifDef{
 	34: {"INFO", "Snapshot older than retention threshold with no known usage"},
 	35: {"INFO", "Snapshot is managed by backup tool — review retention policy for cost optimization"},
 	36: {"INFO", "GPU time-slicing candidate — workload may benefit from shared GPU scheduling"},
+	37: {"WARNING", "Virtual machine disk allocation is growing but guest-agent capacity data is unavailable"},
+	38: {"INFO", "QEMU guest agent not installed: recommendations based on hypervisor metrics only (moderate confidence)"},
+	39: {"WARNING", "High disk I/O detected: consider storage-optimized instance type or faster storage class"},
+	40: {"WARNING", "Filesystem usage growing toward capacity at current growth rate"},
+	41: {"INFO", "Recommended instance type available for virtual machine sizing"},
+	42: {"CRITICAL", "Filesystem critically full: immediate expansion recommended"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

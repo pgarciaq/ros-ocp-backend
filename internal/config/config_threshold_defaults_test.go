@@ -100,6 +100,7 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, int32(30), cfg.VMDiskProjectionDays)
 	assert.InDelta(t, 0.25, cfg.VMDiskHeadroomPct, 1e-9)
 	assert.Equal(t, int32(10), cfg.VMDiskRoundStepGiB)
+	assert.Equal(t, int64(100), cfg.VMDiskMinGrowthMiBPerDay)
 	assert.Equal(t, int64(3000), cfg.VMHighIOPSThreshold)
 	assert.True(t, cfg.VMEnableInstanceTypeMatching)
 }
