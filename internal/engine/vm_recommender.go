@@ -23,7 +23,7 @@ const (
 )
 
 // RecommendVM computes a VM recommendation from aggregated daily digests.
-func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow, engine string) (*model.VMRecommendation, error) {
+func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow, engine string, clusterTypes []InstanceType) (*model.VMRecommendation, error) {
 	if len(digests) == 0 {
 		return nil, fmt.Errorf("recommend VM: no digests")
 	}
@@ -131,7 +131,7 @@ func RecommendVM(digests []model.DailyVMDigest, cfg VMRecConfig, term TermWindow
 	)
 	if cfg.EnableInstanceTypeMatching {
 		preferredSeries := vmClassifySeries(recommendedVCPU, recommendedMemGiB, isIdle)
-		if match := MatchInstanceType(recommendedVCPU, recommendedMemGiB, preferredSeries); match != nil {
+		if match := MatchInstanceType(recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes); match != nil {
 			recommendedInstanceType = &match.Name
 			recommendedSeries = &match.Series
 		} else {

@@ -137,6 +137,14 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
 
 	for _, file := range kafkaMsg.Files {
+		if useNativeCSVIngest && config.GetConfig().EnableVMRecs && engine.IsClusterInstanceTypesFile(file) {
+			if err := processClusterInstanceTypesNative(file, kafkaMsg); err != nil {
+				reportProcessingFailed = true
+				recordKafkaTransient(err)
+			}
+			continue
+		}
+
 		csvType = utils.DetermineCSVType(file)
 
 		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
@@ -830,6 +838,35 @@ func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error
 		log.Errorf("native cluster-quota engine: recommendation failed: %v", err)
 		return fmt.Errorf("cluster-quota recommendations: %w", err)
 	}
+	return nil
+}
+
+func processClusterInstanceTypesNative(fileURL string, kafkaMsg types.KafkaMsg) error {
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	log := logging.ForOrg(orgID, clusterUUID)
+
+	body, err := utils.ReadCSVBodyFromUrl(fileURL)
+	if err != nil {
+		csvFetchError.Inc()
+		log.Errorf("native VM engine: unable to fetch cluster instance types JSON: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("fetch cluster instance types JSON: %w", err)
+		}
+		return nil
+	}
+	defer body.Close()
+
+	ctx := context.Background()
+	pool := db.GetPool()
+	if err := engine.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID); err != nil {
+		log.Errorf("native VM engine: cluster instance types ingest failed: %v", err)
+		if isTransientKafkaProcessingError(err) {
+			return fmt.Errorf("cluster instance types ingest: %w", err)
+		}
+		return nil
+	}
+	log.Info("native VM engine: cluster instance types ingested")
 	return nil
 }
 

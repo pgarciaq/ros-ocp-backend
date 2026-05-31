@@ -106,6 +106,7 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 	if !pluginRecommendationRoutesActive("vm") {
 		v1.GET("/recommendations/openshift/vm", disabledPluginRoute404("vm"))
 		v1.GET("/recommendations/openshift/vm/*", disabledPluginRoute404("vm"))
+		v1.GET("/recommendations/openshift/instance-types", disabledPluginRoute404("vm"))
 		v1.GET("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
 		v1.PUT("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
 		v1.GET("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))

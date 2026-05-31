@@ -94,6 +94,7 @@ func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
 	}
 	g.GET("/recommendations/openshift/vm", rosapi.GetVMRecommendations)
 	g.GET("/recommendations/openshift/vm/detail", rosapi.GetVMRecommendationDetail)
+	g.GET("/recommendations/openshift/instance-types", rosapi.GetClusterInstanceTypes)
 }
 
 func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {

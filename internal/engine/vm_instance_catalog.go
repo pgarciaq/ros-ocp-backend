@@ -69,12 +69,15 @@ func instanceTypeWaste(t InstanceType, recommendedVCPU, recommendedMemoryMiB int
 	return (t.VCPU - recommendedVCPU) + (memMiB-recommendedMemoryMiB)/1024
 }
 
-func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
+func smallestFitInCatalog(catalog []InstanceType, series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
 	var best *InstanceType
 	var bestWaste int32 = math.MaxInt32
 
-	for i := range vmInstanceCatalog {
-		t := &vmInstanceCatalog[i]
+	for i := range catalog {
+		t := &catalog[i]
+		if t.GPUs > 0 {
+			continue
+		}
 		if t.Series != series {
 			continue
 		}
@@ -91,21 +94,38 @@ func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB in
 	return best
 }
 
+func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
+	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB)
+}
+
+func matchInCatalog(catalog []InstanceType, recommendedVCPU, recommendedMemoryGiB int32, preferredSeries string) *InstanceType {
+	if len(catalog) == 0 {
+		return nil
+	}
+	if match := smallestFitInCatalog(catalog, preferredSeries, recommendedVCPU, recommendedMemoryGiB); match != nil {
+		return match
+	}
+	if preferredSeries != vmSeriesGeneralPurpose {
+		return smallestFitInCatalog(catalog, vmSeriesGeneralPurpose, recommendedVCPU, recommendedMemoryGiB)
+	}
+	return nil
+}
+
 // MatchInstanceType finds the smallest instance type that fits the recommended vCPU and memory.
-// It prefers the series that best matches the workload profile, then falls back to general-purpose.
+// It prefers clusterTypes when provided, then falls back to the global OpenShift Virtualization catalog.
 // Returns nil if no suitable type is found. GPU types are never matched.
 // Callers should skip this when instance type matching is disabled.
-func MatchInstanceType(recommendedVCPU, recommendedMemoryGiB int32, preferredSeries string) *InstanceType {
+func MatchInstanceType(recommendedVCPU, recommendedMemoryGiB int32, preferredSeries string, clusterTypes []InstanceType) *InstanceType {
 	if recommendedVCPU < 1 {
 		recommendedVCPU = 1
 	}
 	recMemMiB := recommendedMemoryMiB(recommendedMemoryGiB)
 
-	if match := smallestFitInSeries(preferredSeries, recommendedVCPU, recMemMiB); match != nil {
+	if match := matchInCatalog(clusterTypes, recommendedVCPU, recMemMiB, preferredSeries); match != nil {
 		return match
 	}
-	if preferredSeries != vmSeriesGeneralPurpose {
-		return smallestFitInSeries(vmSeriesGeneralPurpose, recommendedVCPU, recMemMiB)
+	if match := matchInCatalog(vmInstanceCatalog, recommendedVCPU, recMemMiB, preferredSeries); match != nil {
+		return match
 	}
 	return nil
 }

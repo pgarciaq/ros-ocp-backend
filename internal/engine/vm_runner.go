@@ -44,6 +44,14 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		return nil
 	}
 
+	clusterTypes, err := QueryClusterInstanceTypes(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("load cluster instance types: %w", err)
+	}
+	if len(clusterTypes) > 0 {
+		log.Infof("vm recs: using %d cluster instance types for matching", len(clusterTypes))
+	}
+
 	type vmKey struct {
 		VMName    string
 		Namespace string
@@ -58,7 +66,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 	for _, vmDigests := range grouped {
 		for _, term := range terms {
 			for _, eng := range vmEngines {
-				rec, recErr := RecommendVM(vmDigests, cfg, term, eng)
+				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes)
 				if recErr != nil {
 					return fmt.Errorf("recommend VM %s/%s: %w", vmDigests[0].Namespace, vmDigests[0].VMName, recErr)
 				}

@@ -11,14 +11,14 @@ import (
 )
 
 func TestInstanceType_ExactFit(t *testing.T) {
-	match := MatchInstanceType(2, 8, vmSeriesGeneralPurpose)
+	match := MatchInstanceType(2, 8, vmSeriesGeneralPurpose, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "u1.large", match.Name)
 	assert.Equal(t, vmSeriesGeneralPurpose, match.Series)
 }
 
 func TestInstanceType_UpsizeNeeded(t *testing.T) {
-	match := MatchInstanceType(3, 10, vmSeriesGeneralPurpose)
+	match := MatchInstanceType(3, 10, vmSeriesGeneralPurpose, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "u1.xlarge", match.Name)
 	assert.Equal(t, int32(4), match.VCPU)
@@ -26,34 +26,34 @@ func TestInstanceType_UpsizeNeeded(t *testing.T) {
 }
 
 func TestInstanceType_ComputeOptimizedPreferred(t *testing.T) {
-	match := MatchInstanceType(4, 6, vmSeriesComputeOptimized)
+	match := MatchInstanceType(4, 6, vmSeriesComputeOptimized, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "cx1.xlarge", match.Name)
 	assert.Equal(t, vmSeriesComputeOptimized, match.Series)
 }
 
 func TestInstanceType_MemoryOptimizedPreferred(t *testing.T) {
-	match := MatchInstanceType(2, 12, vmSeriesMemoryOptimized)
+	match := MatchInstanceType(2, 12, vmSeriesMemoryOptimized, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "m1.large", match.Name)
 	assert.Equal(t, vmSeriesMemoryOptimized, match.Series)
 }
 
 func TestInstanceType_ExceedsCatalog(t *testing.T) {
-	match := MatchInstanceType(64, 8, vmSeriesGeneralPurpose)
+	match := MatchInstanceType(64, 8, vmSeriesGeneralPurpose, nil)
 	assert.Nil(t, match)
 }
 
 func TestInstanceType_FallbackToGeneralPurpose(t *testing.T) {
 	// m-series tops out at 16 vCPU; fall back to u-series for larger CPU needs.
-	match := MatchInstanceType(17, 10, vmSeriesMemoryOptimized)
+	match := MatchInstanceType(17, 10, vmSeriesMemoryOptimized, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "u1.8xlarge", match.Name)
 	assert.Equal(t, vmSeriesGeneralPurpose, match.Series)
 }
 
 func TestInstanceType_TinyVM(t *testing.T) {
-	match := MatchInstanceType(1, 0, vmSeriesGeneralPurpose)
+	match := MatchInstanceType(1, 0, vmSeriesGeneralPurpose, nil)
 	require.NotNil(t, match)
 	assert.Equal(t, "u1.nano", match.Name)
 }
@@ -70,7 +70,7 @@ func TestInstanceType_DisabledLeavesNilInRecommender(t *testing.T) {
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.RecommendedInstanceType)
