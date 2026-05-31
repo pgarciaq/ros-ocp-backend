@@ -12,6 +12,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -866,6 +867,19 @@ func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 				return fmt.Errorf("VM ingest: %w", err)
 			}
 			return nil
+		}
+		if plugin.EnabledFor("vm") {
+			clusterID, parseErr := uuid.Parse(clusterUUID)
+			if parseErr != nil {
+				log.Errorf("native VM engine: invalid cluster UUID: %v", parseErr)
+				return nil
+			}
+			if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, engine.VMRecConfigResolved()); recErr != nil {
+				log.Errorf("native VM engine: recommendations failed: %v", recErr)
+				if isTransientKafkaProcessingError(recErr) {
+					return fmt.Errorf("VM recommendations: %w", recErr)
+				}
+			}
 		}
 	}
 	return nil

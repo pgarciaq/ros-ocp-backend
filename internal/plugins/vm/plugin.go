@@ -8,6 +8,7 @@
 //
 //   - [plugin.CSVIngestor] — parses "vm" CSV type
 //   - [plugin.RetentionProvider] — sweeps daily_vm_digests and vm_recommendations
+//   - [plugin.TermProvider] — short/medium/long term windows for VM sizing
 package vm
 
 import (
@@ -16,9 +17,11 @@ import (
 	"io"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -67,8 +70,27 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d VM digests", len(digests))
+
+	clusterID, parseErr := uuid.Parse(clusterUUID)
+	if parseErr != nil {
+		return nil, fmt.Errorf("parse cluster UUID: %w", parseErr)
+	}
+	if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, engine.VMRecConfigResolved()); recErr != nil {
+		return nil, fmt.Errorf("run VM recommendations: %w", recErr)
+	}
+
 	return nil, nil
 }
+
+func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
+	return []plugin.TermConfig{
+		{Name: "short_term", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 0},
+		{Name: "medium_term", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 0},
+		{Name: "long_term", WindowDays: 30, MinDataDays: 15, DecayHalfLifeHours: 0},
+	}
+}
+
+func (p *VMPlugin) MaxWindowDays() int { return 90 }
 
 func (p *VMPlugin) RetentionTables() []string {
 	return []string{"daily_vm_digests", "vm_recommendations"}
