@@ -13,8 +13,9 @@ type VMRecConfig struct {
 	CPUPercentilePerf float64 // default 0.99
 
 	// Margins
-	CPUMarginMin float64 // default 0.15 (15%)
-	CPUMarginMax float64 // default 0.50 (50%)
+	CPUMarginMin             float64 // default 0.15 (15%)
+	CPUMarginMax             float64 // default 0.50 (50%)
+	CPUAdaptiveMarginEnabled bool    // default true — cost engine uses CV-based margin
 	MemMarginMin float64 // default 0.20 (20%)
 
 	// Downsize hysteresis
@@ -72,6 +73,7 @@ func DefaultVMRecConfig() VMRecConfig {
 		CPUPercentilePerf:          0.99,
 		CPUMarginMin:               0.15,
 		CPUMarginMax:               0.50,
+		CPUAdaptiveMarginEnabled:   true,
 		MemMarginMin:               0.20,
 		DownsizeHysteresisRatio:    0.60,
 		MinVCPUChange:              2,
@@ -127,6 +129,9 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_CPU_MARGIN_MAX"); ok {
 		base.CPUMarginMax = cfg.VMCPUMarginMax
+	}
+	if _, ok := os.LookupEnv("ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED"); ok {
+		base.CPUAdaptiveMarginEnabled = cfg.VMCPUAdaptiveMarginEnabled
 	}
 	if _, ok := os.LookupEnv("ROS_VM_MEM_MARGIN_MIN"); ok {
 		base.MemMarginMin = cfg.VMMemMarginMin
