@@ -1,8 +1,8 @@
 // Package vm implements OpenShift Virtualization VM recommendation ingestion.
 //
 // The plugin ingests ros-openshift-vm-usage CSV reports (15-minute samples),
-// aggregates them into daily_vm_digests, and will later drive recommendVM() and
-// HTTP APIs behind ROS_ENABLE_VM_RECS.
+// aggregates them into daily_vm_digests, runs engine.RunVMRecommendations on
+// every ingest, and exposes results via HTTP APIs when ROS_ENABLE_VM_RECS is true.
 //
 // # Traits Implemented
 //

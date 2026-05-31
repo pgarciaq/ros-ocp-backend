@@ -36,7 +36,8 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
 | Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Notifications 18, 19, 37–43 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| Notifications 18, 19, 37–49 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| GPU classification + `gn1` matching + notifications 50–53 | ✅ | [`internal/engine/vm_gpu.go`](../../internal/engine/vm_gpu.go), API filters `has_gpu` / `gpu_classification` |
 | Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
@@ -251,6 +252,10 @@ All notifications are JSON objects in the `notifications` array:
 | **47** | `NotifVMWindowsUpdateSpike` | `info` | Windows P99≫P95 CPU or memory spread |
 | **48** | `NotifVMCrashLoop` | `warning` | `restart_count_sum` ≥ threshold in window |
 | **49** | `NotifVMDownsizeHeld` | `info` | Performance engine: unstable downsize (N-day P95 check) |
+| **50** | `NotifVMGPUIdle` | `warning` | GPU idle — remove GPU assignment |
+| **51** | `NotifVMGPUUnderutilized` | `info` | GPU underutilized — smaller MIG or vGPU/MIG |
+| **52** | `NotifVMGPUMemorySaturated` | `warning` | GPU memory saturated — larger GPU |
+| **53** | `NotifVMGPUComputeSaturated` | `warning` | GPU compute saturated — more powerful GPU |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
@@ -460,12 +465,18 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | Item | Notes |
 |------|-------|
 | **Savings estimation** | No dollar fields in API; Koku VM cost rates not wired |
-| **GPU / MIG VMs** | `gn1` catalog reference only; no GPU metrics or recommendations |
+| **Live migration recommendations** | No awareness of migration in progress |
+| **NUMA-aware placement** | Not modeled |
+| **SR-IOV network recommendations** | Not implemented |
+| **Power management / suspend** | No suspend or power-state recommendations |
+| **n-series active recommendations** | `n1` catalog is recognition-only until network metrics exist |
 | **koku-ui** | No dedicated VM optimizations view |
 | **`current_instance_type`** | Column exists; not populated from operator/`kubevirt_vmi_info` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 | **Recommendation history** | Upsert keeps latest row only |
 | **OpenAPI spec** | VM paths not in [`openapi.json`](../../openapi.json) yet |
+
+**GPU limitations (implemented with constraints):** multi-GPU VMs use count-aware matching only (no per-device analysis); vGPU fractional sharing gets classification and coarse MIG step-down, not full vGPU profile recommendations; DCGM Exporter required on cluster for GPU metrics.
 
 ---
 

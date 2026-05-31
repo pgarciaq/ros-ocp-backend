@@ -278,6 +278,10 @@ All codes appear in the `notifications` array on list and detail responses:
 | **47** | info | Windows update spike (P99−P95 spread &gt; 50% CPU or &gt; 30% memory) |
 | **48** | warning | Crash loop (`restart_count` sum ≥ threshold in term window) |
 | **49** | info | Performance engine: downsize held (unstable N-day P95 pattern) |
+| **50** | warning | GPU idle — remove GPU assignment |
+| **51** | info | GPU underutilized — smaller MIG profile or consider vGPU/MIG |
+| **52** | warning | GPU memory saturated — larger GPU / more frame buffer |
+| **53** | warning | GPU compute saturated — more powerful GPU |
 
 Abandoned VMs emit **43** only (not **18**).
 
@@ -429,8 +433,14 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | Gap | Notes |
 |-----|-------|
 | **No dollar savings** | `estimated_monthly_savings` not populated; Koku VM cost rates not wired |
-| **No GPU VMs** | `gn1` catalog entries exist but are excluded from matching — see [GPU MIG](gpu-mig.md) |
+| **Multi-GPU VMs** | Count-aware matching only; no per-device utilization analysis |
+| **vGPU fractional sharing** | Classification + coarse MIG step-down only; not full vGPU profile recommendations |
+| **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
+| **n-series (network-optimized)** | `n1` types are recognition-only until network metrics exist — not active recommendations |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
+| **NUMA-aware placement** | Not modeled |
+| **SR-IOV network recommendations** | Not implemented |
+| **Power management / suspend** | No suspend or power-state recommendations |
 | **`current_instance_type`** | Column exists; not yet populated from operator |
 | **No per-mountpoint disk** | Single filesystem aggregate |
 | **No recommendation history** | Latest row per VM/term/engine only |
