@@ -101,7 +101,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				recommended_instance_type, recommended_series,
 				guest_agent_detected, confidence, term, engine,
 				is_idle, is_abandoned, is_oversized, is_network_bound,
-				io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
+				io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint, io_pattern,
 				disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 				notifications,
 				gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
@@ -116,11 +116,11 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				$13, $14,
 				$15, $16, $17, $18,
 				$19, $20, $21, $22,
-				$23, $24, $25, $26, $27,
-				$28, $29, $30,
-				$31,
-				$32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
-				$42, now()
+				$23, $24, $25, $26, $27, $28,
+				$29, $30, $31,
+				$32,
+				$33, $34, $35, $36, $37, $38, $39, $40, $41, $42,
+				$43, now()
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
 				guest_os = EXCLUDED.guest_os,
@@ -144,6 +144,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				io_read_bps_p95 = EXCLUDED.io_read_bps_p95,
 				io_write_bps_p95 = EXCLUDED.io_write_bps_p95,
 				io_hint = EXCLUDED.io_hint,
+				io_pattern = EXCLUDED.io_pattern,
 				disk_days_until_full = EXCLUDED.disk_days_until_full,
 				disk_growth_gib_per_day = EXCLUDED.disk_growth_gib_per_day,
 				disk_recommended_expand_gib = EXCLUDED.disk_recommended_expand_gib,
@@ -166,7 +167,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 			r.RecommendedInstanceType, r.RecommendedSeries,
 			r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
 			r.IsIdle, r.IsAbandoned, r.IsOversized, r.IsNetworkBound,
-			r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint,
+			r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint, r.IOPattern,
 			r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
 			r.Notifications,
 			r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,

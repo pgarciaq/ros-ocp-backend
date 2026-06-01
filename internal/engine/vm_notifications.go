@@ -46,6 +46,8 @@ const (
 	NotifVMVGPUProfileRecommended int16 = 56
 	NotifVMGPUTimeSliceUnsafeFB   int16 = 57
 	NotifVMNetworkSaturated       int16 = 55
+	NotifVMIOSequential           int16 = 58
+	NotifVMIORandom               int16 = 59
 )
 
 type vmNotificationParams struct {
@@ -57,6 +59,7 @@ type vmNotificationParams struct {
 	AgentInterrupted         bool
 	LowConfidence            bool
 	IOHint                   *string
+	IOPattern                string
 	DiskDaysUntilFull        *int32
 	DiskGrowthGiBPerDay      *float64
 	HypervisorDiskGrowth     bool
@@ -126,6 +129,20 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 			Code:    NotifVMHighIO,
 			Type:    vmNotifTypeWarning,
 			Message: "High disk I/O detected: consider storage-optimized instance type or faster storage class",
+		})
+	}
+	switch p.IOPattern {
+	case VMIOPatternSequential:
+		out = append(out, VMNotification{
+			Code:    NotifVMIOSequential,
+			Type:    vmNotifTypeInfo,
+			Message: "Sequential I/O pattern detected — consider storage optimized for throughput",
+		})
+	case VMIOPatternRandom:
+		out = append(out, VMNotification{
+			Code:    NotifVMIORandom,
+			Type:    vmNotifTypeInfo,
+			Message: "Random I/O pattern detected — consider storage optimized for IOPS",
 		})
 	}
 	if p.DiskDaysUntilFull != nil && *p.DiskDaysUntilFull < 90 && p.GuestAgentDetected {

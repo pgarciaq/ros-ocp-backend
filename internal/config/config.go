@@ -245,14 +245,18 @@ type Config struct {
 	VMDiskHeadroomPct            float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
 	VMDiskRoundStepGiB           int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
 	VMDiskMinGrowthMiBPerDay     int64   `mapstructure:"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"`
-	VMHighIOPSThreshold          int64   `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
+	VMHighIOPSThreshold            int64 `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
+	VMIOSequentialThresholdBytes   int64 `mapstructure:"ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES"`
+	VMIORandomThresholdBytes       int64 `mapstructure:"ROS_VM_IO_RANDOM_THRESHOLD_BYTES"`
+	VMIOMinIOPSClassification     int64 `mapstructure:"ROS_VM_IO_MIN_IOPS_CLASSIFICATION"`
 	VMEnableInstanceTypeMatching bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
 	VMAbandonedMinDays           int32   `mapstructure:"ROS_VM_ABANDONED_MIN_DAYS"`
 	VMWindowsKernelReserveGiB    float64 `mapstructure:"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB"`
 	VMDownsizeStabilityDays      int     `mapstructure:"ROS_VM_DOWNSIZE_STABILITY_DAYS"`
 	VMCrashLoopRestartThreshold  int32   `mapstructure:"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"`
-	VMGPUIdleThreshold           float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
-	VMGPUUnderutilThreshold      float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
+	VMGPUIdleThreshold              float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
+	VMGPUUnderutilThreshold         float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
+	VMGPUFBSaturationMiB            float64 `mapstructure:"ROS_VM_GPU_FB_SATURATION_MIB"`
 	VMGPUComputeSaturationThreshold float64 `mapstructure:"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"`
 	VMGPUTimeSliceMinReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"`
 	VMGPUTimeSliceMaxReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS"`
@@ -627,6 +631,9 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_DISK_ROUND_STEP_GIB", 10)
 	viper.SetDefault("ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY", 100)
 	viper.SetDefault("ROS_VM_HIGH_IOPS_THRESHOLD", 3000)
+	viper.SetDefault("ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES", 65536)
+	viper.SetDefault("ROS_VM_IO_RANDOM_THRESHOLD_BYTES", 16384)
+	viper.SetDefault("ROS_VM_IO_MIN_IOPS_CLASSIFICATION", 100)
 	viper.SetDefault("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING", true)
 	viper.SetDefault("ROS_VM_ABANDONED_MIN_DAYS", 3)
 	viper.SetDefault("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", 1.5)
@@ -634,6 +641,7 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_CRASH_LOOP_RESTART_THRESHOLD", 3)
 	viper.SetDefault("ROS_VM_GPU_IDLE_THRESHOLD", 0.05)
 	viper.SetDefault("ROS_VM_GPU_UNDERUTIL_THRESHOLD", 0.30)
+	viper.SetDefault("ROS_VM_GPU_FB_SATURATION_MIB", 0)
 	viper.SetDefault("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD", 0.85)
 	viper.SetDefault("ROS_VM_GPU_TIMESLICE_MIN_REPLICAS", 2)
 	viper.SetDefault("ROS_VM_GPU_TIMESLICE_MAX_REPLICAS", 16)

@@ -53,6 +53,7 @@ type vmIOProfile struct {
 	ReadBPSP95   *int64  `json:"read_bps_p95"`
 	WriteBPSP95  *int64  `json:"write_bps_p95"`
 	Hint         *string `json:"hint"`
+	Pattern      string  `json:"pattern,omitempty"`
 }
 
 type vmDiskProjection struct {
@@ -465,6 +466,7 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			ReadBPSP95:   r.IOReadBPS95,
 			WriteBPSP95:  r.IOWriteBPS95,
 			Hint:         r.IOHint,
+			Pattern:      r.IOPattern,
 		},
 		DiskProjection: vmDiskProjection{
 			DaysUntilFull:        r.DiskDaysUntilFull,

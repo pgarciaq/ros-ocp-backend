@@ -1424,6 +1424,9 @@ Defaults are from `internal/config/config.go` (Viper). Set on **both API and pro
 | `ROS_VM_ABANDONED_MIN_DAYS` | `3` | Abandoned detection |
 | `ROS_VM_DISK_PROJECTION_DAYS` | `30` | Disk projection horizon |
 | `ROS_VM_HIGH_IOPS_THRESHOLD` | `3000` | High I/O notification **39** |
+| `ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES` | `65536` | Sequential I/O pattern (**58**) |
+| `ROS_VM_IO_RANDOM_THRESHOLD_BYTES` | `16384` | Random I/O pattern (**59**) |
+| `ROS_VM_IO_MIN_IOPS_CLASSIFICATION` | `100` | Below this → `low-io` pattern |
 | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `true` | Instance type CR matching |
 | `ROS_VM_GPU_IDLE_THRESHOLD` | `0.05` | VM GPU idle (**50**) |
 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | `0.30` | VM GPU underutil (**51**) |
@@ -1596,6 +1599,7 @@ Use `examples/ocp_vm/vm_static_data.yml` scenarios. Map VM names to expected beh
 | 5 | CPU/memory sizing sensible | Compare `current` vs `recommended` for oversized VM | Downsize only if hysteresis met; whole vCPU/GiB |
 | 6 | Disk growth projection | VMs with filesystem or allocation growth | `disk_projection.days_until_full` or `growth_gib_per_day`; **40** / **37** |
 | 7 | I/O profiling | `high_io` scenario VM | `io_profile.hint`, notification **39** |
+| 7b | I/O pattern | `sequential_io` / `random_io` VMs | `io_profile.pattern` `sequential` or `random`; notifications **58** / **59** |
 | 8 | Instance type matching | `oversized_for_instance_type` or large idle VM | `recommended.instance_type`, notification **41** |
 | 9 | GPU VM recommendations | GPU scenarios in YAML | `gpu` object; filters `has_gpu`, `gpu_classification`; **50–53** |
 | 10 | Notifications meaningful | List/detail `notifications[]` | Codes match `docs-site/features/virtual-machines.md` table |

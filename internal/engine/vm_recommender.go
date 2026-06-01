@@ -161,6 +161,7 @@ func RecommendVM(
 	isNetworkBound := cfg.EnableNetworkSeries && vmClassifySeriesNetwork(windowed, cfg) && vmCPUMemRatioBalanced(recommendedVCPU, recommendedMemGiB)
 
 	ioRead, ioWrite, ioReadBPS, ioWriteBPS, ioHint := vmIOProfile(windowed, cfg)
+	ioPattern := ClassifyIOPattern(windowed, cfg)
 
 	var diskDaysUntilFull *int32
 	var diskGrowthGiBPerDay *float64
@@ -213,6 +214,7 @@ func RecommendVM(
 		AgentInterrupted:        agentInterrupted,
 		LowConfidence:           confidence == "low",
 		IOHint:                  ioHint,
+		IOPattern:               ioPattern,
 		DiskDaysUntilFull:       diskDaysUntilFull,
 		DiskGrowthGiBPerDay:     diskGrowthGiBPerDay,
 		HypervisorDiskGrowth:    hypervisorDiskGrowth,
@@ -257,6 +259,7 @@ func RecommendVM(
 		IOReadBPS95:              ioReadBPS,
 		IOWriteBPS95:             ioWriteBPS,
 		IOHint:                   ioHint,
+		IOPattern:                ioPattern,
 		DiskDaysUntilFull:        diskDaysUntilFull,
 		DiskGrowthGiBPerDay:      diskGrowthGiBPerDay,
 		DiskRecommendedExpandGiB: diskExpandGiB,

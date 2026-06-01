@@ -211,6 +211,8 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 55 | `NotifVMNetworkSaturated` | [`RecommendVM`](../../internal/engine/vm_recommender.go) — network-bound n1 recommendation |
 | 56 | `NotifVMVGPUProfileRecommended` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) — vGPU profile in `recommended_vgpu_profile` |
 | 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm_gpu_timeslicing.go) — FB above safety threshold |
+| 58 | `NotifVMIOSequential` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
+| 59 | `NotifVMIORandom` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications).
 

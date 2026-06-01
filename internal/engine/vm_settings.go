@@ -42,7 +42,10 @@ type VMDiskSettingsAPI struct {
 
 // VMIOSettingsAPI is the I/O block in VM settings responses.
 type VMIOSettingsAPI struct {
-	HighIOPSThreshold int64 `json:"high_iops_threshold"`
+	HighIOPSThreshold          int64 `json:"high_iops_threshold"`
+	SequentialThresholdBytes   int64 `json:"sequential_threshold_bytes"`
+	RandomThresholdBytes       int64 `json:"random_threshold_bytes"`
+	MinIOPSForClassification   int64 `json:"min_iops_for_classification"`
 }
 
 // VMNetworkSettingsAPI holds n1 network-optimized classification thresholds.
@@ -54,8 +57,12 @@ type VMNetworkSettingsAPI struct {
 	EnableNetworkSeries    bool  `json:"enable_network_series"`
 }
 
-// VMGPUSettingsAPI holds vGPU time-slicing tunables for VM recommendations.
+// VMGPUSettingsAPI holds GPU classification thresholds and vGPU time-slicing tunables for VM recommendations.
 type VMGPUSettingsAPI struct {
+	IdleThresholdBP              int32 `json:"idle_threshold_bp"`
+	UnderutilThresholdBP         int32 `json:"underutil_threshold_bp"`
+	FBSaturationMiB              int32 `json:"fb_saturation_mib"`
+	ComputeSaturationThresholdBP int32 `json:"compute_saturation_threshold_bp"`
 	TimeSliceMinReplicas         int32 `json:"gpu_timeslice_min_replicas"`
 	TimeSliceMaxReplicas         int32 `json:"gpu_timeslice_max_replicas"`
 	TimeSliceFBSafetyThresholdBP int32 `json:"gpu_timeslice_fb_safety_threshold_bp"`
@@ -125,16 +132,23 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_DISK_HEADROOM_PCT":             "disk.headroom_pct",
 		"ROS_VM_DISK_ROUND_STEP_GIB":           "disk.round_step_gib",
 		"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY":   "disk.min_growth_mib_per_day",
-		"ROS_VM_HIGH_IOPS_THRESHOLD":           "io.high_iops_threshold",
+		"ROS_VM_HIGH_IOPS_THRESHOLD":                "io.high_iops_threshold",
+		"ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES":      "io.sequential_threshold_bytes",
+		"ROS_VM_IO_RANDOM_THRESHOLD_BYTES":          "io.random_threshold_bytes",
+		"ROS_VM_IO_MIN_IOPS_CLASSIFICATION":         "io.min_iops_for_classification",
 		"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING":     "instance_type_matching",
 		"ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED":       "cpu_adaptive_margin_enabled",
 		"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB":    "memory_floors.windows_kernel_reserve_gib",
 		"ROS_VM_DOWNSIZE_STABILITY_DAYS":       "stability.downsize_stability_days",
 		"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD":  "stability.crash_loop_restart_threshold",
-		"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS":    "gpu.gpu_timeslice_min_replicas",
-		"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS":    "gpu.gpu_timeslice_max_replicas",
-		"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP":     "gpu.gpu_timeslice_fb_safety_threshold_bp",
-		"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP": "gpu.gpu_timeslice_dram_penalty_threshold_bp",
+		"ROS_VM_GPU_IDLE_THRESHOLD":              "gpu.idle_threshold_bp",
+		"ROS_VM_GPU_UNDERUTIL_THRESHOLD":         "gpu.underutil_threshold_bp",
+		"ROS_VM_GPU_FB_SATURATION_MIB":           "gpu.fb_saturation_mib",
+		"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD": "gpu.compute_saturation_threshold_bp",
+		"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS":      "gpu.gpu_timeslice_min_replicas",
+		"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS":      "gpu.gpu_timeslice_max_replicas",
+		"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP":       "gpu.gpu_timeslice_fb_safety_threshold_bp",
+		"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP":   "gpu.gpu_timeslice_dram_penalty_threshold_bp",
 		"ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS": "network.throughput_threshold_bps",
 		"ROS_VM_NETWORK_PPS_THRESHOLD":              "network.pps_threshold",
 		"ROS_VM_NETWORK_DROP_RATIO_BP":              "network.drop_ratio_bp",
@@ -175,7 +189,12 @@ func vmRecConfigToDiskAPI(cfg VMRecConfig) VMDiskSettingsAPI {
 }
 
 func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
-	return VMIOSettingsAPI{HighIOPSThreshold: cfg.HighIOPSThreshold}
+	return VMIOSettingsAPI{
+		HighIOPSThreshold:        cfg.HighIOPSThreshold,
+		SequentialThresholdBytes: cfg.IOSequentialThresholdBytes,
+		RandomThresholdBytes:     cfg.IORandomThresholdBytes,
+		MinIOPSForClassification: cfg.IOMinIOPSForClassification,
+	}
 }
 
 func vmRecConfigToNetworkAPI(cfg VMRecConfig) VMNetworkSettingsAPI {
@@ -188,8 +207,20 @@ func vmRecConfigToNetworkAPI(cfg VMRecConfig) VMNetworkSettingsAPI {
 	}
 }
 
+func vmFractionToBasisPoints(f float64) int32 {
+	return int32(f * 10000)
+}
+
+func vmBasisPointsToThresholdFraction(bp int32) float64 {
+	return vmBasisPointsToFraction(bp)
+}
+
 func vmRecConfigToGPUAPI(cfg VMRecConfig) VMGPUSettingsAPI {
 	return VMGPUSettingsAPI{
+		IdleThresholdBP:                 vmFractionToBasisPoints(cfg.GPUIdleThreshold),
+		UnderutilThresholdBP:            vmFractionToBasisPoints(cfg.GPUUnderutilThreshold),
+		FBSaturationMiB:                 int32(cfg.GPUFBSaturationMiB),
+		ComputeSaturationThresholdBP:    vmFractionToBasisPoints(cfg.GPUComputeSaturationThreshold),
 		TimeSliceMinReplicas:            cfg.GPUTimeSliceMinReplicas,
 		TimeSliceMaxReplicas:            cfg.GPUTimeSliceMaxReplicas,
 		TimeSliceFBSafetyThresholdBP:    cfg.GPUTimeSliceFBSafetyThresholdBP,
@@ -333,6 +364,9 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 	}
 	if stored.IO != nil {
 		dest.HighIOPSThreshold = stored.IO.HighIOPSThreshold
+		dest.IOSequentialThresholdBytes = stored.IO.SequentialThresholdBytes
+		dest.IORandomThresholdBytes = stored.IO.RandomThresholdBytes
+		dest.IOMinIOPSForClassification = stored.IO.MinIOPSForClassification
 	}
 	if stored.Network != nil {
 		n := stored.Network
@@ -343,10 +377,15 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.EnableNetworkSeries = n.EnableNetworkSeries
 	}
 	if stored.GPU != nil {
-		dest.GPUTimeSliceMinReplicas = stored.GPU.TimeSliceMinReplicas
-		dest.GPUTimeSliceMaxReplicas = stored.GPU.TimeSliceMaxReplicas
-		dest.GPUTimeSliceFBSafetyThresholdBP = stored.GPU.TimeSliceFBSafetyThresholdBP
-		dest.GPUTimeSliceDRAMPenaltyThresholdBP = stored.GPU.TimeSliceDRAMPenaltyThresholdBP
+		g := stored.GPU
+		dest.GPUIdleThreshold = vmBasisPointsToThresholdFraction(g.IdleThresholdBP)
+		dest.GPUUnderutilThreshold = vmBasisPointsToThresholdFraction(g.UnderutilThresholdBP)
+		dest.GPUFBSaturationMiB = float64(g.FBSaturationMiB)
+		dest.GPUComputeSaturationThreshold = vmBasisPointsToThresholdFraction(g.ComputeSaturationThresholdBP)
+		dest.GPUTimeSliceMinReplicas = g.TimeSliceMinReplicas
+		dest.GPUTimeSliceMaxReplicas = g.TimeSliceMaxReplicas
+		dest.GPUTimeSliceFBSafetyThresholdBP = g.TimeSliceFBSafetyThresholdBP
+		dest.GPUTimeSliceDRAMPenaltyThresholdBP = g.TimeSliceDRAMPenaltyThresholdBP
 	}
 	if stored.InstanceTypeMatching != nil {
 		dest.EnableInstanceTypeMatching = *stored.InstanceTypeMatching
@@ -542,11 +581,28 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt64("disk.min_growth_mib_per_day", resp.Disk.MinGrowthMiBPerDay, 1, 1048576)
 
 	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
+	v.addRangeInt64("io.sequential_threshold_bytes", resp.IO.SequentialThresholdBytes, 4096, 1048576)
+	v.addRangeInt64("io.random_threshold_bytes", resp.IO.RandomThresholdBytes, 512, 524288)
+	if resp.IO.RandomThresholdBytes >= resp.IO.SequentialThresholdBytes {
+		v.addConstraint("io.random_threshold_bytes", "must be less than sequential_threshold_bytes")
+	}
+	v.addRangeInt64("io.min_iops_for_classification", resp.IO.MinIOPSForClassification, 1, 1000000)
 
 	v.addRangeInt64("network.throughput_threshold_bps", resp.Network.ThroughputThresholdBPS, 1, 1_000_000_000_000)
 	v.addRangeInt64("network.pps_threshold", resp.Network.PPSThreshold, 1, 100_000_000)
 	v.addRangeInt("network.drop_ratio_bp", int(resp.Network.DropRatioBP), 0, 10000)
 	v.addRangeInt("network.sustained_days", resp.Network.SustainedDays, 1, 90)
+
+	v.addRangeInt("gpu.idle_threshold_bp", int(resp.GPU.IdleThresholdBP), 0, 10000)
+	v.addRangeInt("gpu.underutil_threshold_bp", int(resp.GPU.UnderutilThresholdBP), 0, 10000)
+	v.addRangeInt("gpu.fb_saturation_mib", int(resp.GPU.FBSaturationMiB), 0, 1048576)
+	v.addRangeInt("gpu.compute_saturation_threshold_bp", int(resp.GPU.ComputeSaturationThresholdBP), 0, 10000)
+	if resp.GPU.IdleThresholdBP > resp.GPU.UnderutilThresholdBP {
+		v.addConstraint("gpu.idle_threshold_bp", "must be less than or equal to underutil_threshold_bp")
+	}
+	if resp.GPU.UnderutilThresholdBP > resp.GPU.ComputeSaturationThresholdBP {
+		v.addConstraint("gpu.underutil_threshold_bp", "must be less than or equal to compute_saturation_threshold_bp")
+	}
 
 	v.addRangeInt("gpu.gpu_timeslice_min_replicas", int(resp.GPU.TimeSliceMinReplicas), 1, 16)
 	v.addRangeInt("gpu.gpu_timeslice_max_replicas", int(resp.GPU.TimeSliceMaxReplicas), 1, 32)

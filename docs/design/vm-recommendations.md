@@ -304,6 +304,8 @@ Strategy A runs only when **≥ 2 days** have filesystem metrics; otherwise Stra
 
 p95 read/write IOPS and throughput from digests. When read+write p95 exceeds `io.high_iops_threshold` (default 3000), sets `io_profile.hint` and notification **39**.
 
+**Sequential vs random classification** ([`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go)): peak combined BPS ÷ peak combined IOPS yields average I/O size. Below `io.min_iops_for_classification` (default 100) → `io_pattern` **`low-io`**. At or above `io.sequential_threshold_bytes` (default 64 KiB) → **`sequential`** (notification **58**). Below `io.random_threshold_bytes` (default 16 KiB) → **`random`** (notification **59**). Between those thresholds → **`mixed`**. Exposed as `io_profile.pattern` in list and detail APIs; stored in `vm_recommendations.io_pattern`.
+
 ---
 
 ## Notifications
@@ -339,10 +341,12 @@ All notifications are JSON objects in the `notifications` array:
 | **55** | `NotifVMNetworkSaturated` | `warning` | Network-saturated workload — n1 network-optimized instance type |
 | **56** | `NotifVMVGPUProfileRecommended` | `info` | vGPU profile recommended — see `recommended_vgpu_profile` |
 | **57** | `NotifVMGPUTimeSliceUnsafeFB` | `warning` | Time-slicing unsafe — frame-buffer usage above safety threshold |
+| **58** | `NotifVMIOSequential` | `info` | `io_pattern == sequential` — throughput-oriented storage |
+| **59** | `NotifVMIORandom` | `info` | `io_pattern == random` — IOPS-oriented storage |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
-**Full catalog (all plugins, codes 1–57):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**57**),
+**Full catalog (all plugins, codes 1–59):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**59**),
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
 
 ---
@@ -442,6 +446,10 @@ env vars still override compiled defaults on read. See
     "enable_network_series": true
   },
   "gpu": {
+    "idle_threshold_bp": 500,
+    "underutil_threshold_bp": 3000,
+    "fb_saturation_mib": 0,
+    "compute_saturation_threshold_bp": 8500,
     "gpu_timeslice_min_replicas": 2,
     "gpu_timeslice_max_replicas": 16,
     "gpu_timeslice_fb_safety_threshold_bp": 8000,
@@ -489,6 +497,10 @@ When the platform locks VM settings, `settings_locked` is `true` and `locked_fie
 | `ROS_VM_NETWORK_DROP_RATIO_BP` | `10` | `network.drop_ratio_bp` |
 | `ROS_VM_NETWORK_SUSTAINED_DAYS` | `7` | `network.sustained_days` |
 | `ROS_VM_ENABLE_NETWORK_SERIES` | `true` | `network.enable_network_series` |
+| `ROS_VM_GPU_IDLE_THRESHOLD` | `0.05` | `gpu.idle_threshold_bp` |
+| `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | `0.30` | `gpu.underutil_threshold_bp` |
+| `ROS_VM_GPU_FB_SATURATION_MIB` | `0` | `gpu.fb_saturation_mib` |
+| `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | `0.85` | `gpu.compute_saturation_threshold_bp` |
 | `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `2` | `gpu.gpu_timeslice_min_replicas` |
 | `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `16` | `gpu.gpu_timeslice_max_replicas` |
 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `8000` | `gpu.gpu_timeslice_fb_safety_threshold_bp` |
@@ -560,7 +572,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
         "is_oversized": true,
         "is_network_bound": false
       },
-      "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },
+      "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null, "pattern": "mixed" },
       "disk_projection": { "days_until_full": null, "growth_gib_per_day": 2.1, "recommended_expand_gib": 100 },
       "notifications": [
         { "code": 19, "type": "warning", "message": "VM is oversized: recommended resources are significantly below current allocation" },

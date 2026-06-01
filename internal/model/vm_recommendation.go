@@ -46,6 +46,7 @@ type VMRecommendation struct {
 	IOReadBPS95    *int64  `db:"io_read_bps_p95"`
 	IOWriteBPS95   *int64  `db:"io_write_bps_p95"`
 	IOHint         *string `db:"io_hint"`
+	IOPattern      string  `db:"io_pattern"` // sequential, random, mixed, low-io, or empty
 
 	// Disk projection
 	DiskDaysUntilFull        *int32   `db:"disk_days_until_full"`

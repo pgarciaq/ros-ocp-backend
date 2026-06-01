@@ -561,6 +561,9 @@ Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_c
 | Disk round step (GiB) <br><em>Round disk recommendations to 10 GiB steps.</em> | 10 | `ROS_VM_DISK_ROUND_STEP_GIB` | `/settings/vm` | `disk.round_step_gib` | Yes |
 | Disk min growth (MiB/day) <br><em>Minimum slope to treat disk as growing (100 MiB/day).</em> | 100 | `ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY` | `/settings/vm` | `disk.min_growth_mib_per_day` | Yes |
 | High IOPS threshold <br><em>Average IOPS above 3000 flags IO-sensitive VM.</em> | 3000 | `ROS_VM_HIGH_IOPS_THRESHOLD` | `/settings/vm` | `io.high_iops_threshold` | Yes |
+| Sequential I/O threshold (bytes) <br><em>Peak BPS/IOPS average at or above 64 KiB → sequential pattern.</em> | 65536 | `ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES` | `/settings/vm` | `io.sequential_threshold_bytes` | Yes |
+| Random I/O threshold (bytes) <br><em>Peak BPS/IOPS average below 16 KiB → random pattern.</em> | 16384 | `ROS_VM_IO_RANDOM_THRESHOLD_BYTES` | `/settings/vm` | `io.random_threshold_bytes` | Yes |
+| Min IOPS for I/O classification <br><em>Combined peak IOPS below 100 → low-io pattern.</em> | 100 | `ROS_VM_IO_MIN_IOPS_CLASSIFICATION` | `/settings/vm` | `io.min_iops_for_classification` | Yes |
 | Instance type matching <br><em>Map vCPU/RAM to nearest instance type when true.</em> | true | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `/settings/vm` | `instance_type_matching` | Yes |
 GET also returns top-level `enabled` (derived from `ROS_ENABLE_VM_RECS` + plugin registry; not stored per tenant). PUT accepts partial JSON objects for `thresholds`, `memory_floors`, `stability`, `disk`, `io`, and `instance_type_matching`.
 
@@ -582,13 +585,14 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Enable VM recommendations <br><em>Master VM plugin gate; also requires `vm` not denied.</em> | true | `ROS_ENABLE_VM_RECS` | — | — | No |
 | CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | `PUT /settings/vm` | `cpu_adaptive_margin_enabled` | Yes |
 | VM recommendation history retention (days) <br><em>VM-specific history retention (90d). Read-only in GET /settings/vm.</em> | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `GET /settings/vm` | `history_retention_days` | No |
-| VM GPU idle threshold <br><em>vGPU SM below 5% → idle.</em> | 0.05 | `ROS_VM_GPU_IDLE_THRESHOLD` | — | — | No |
-| VM GPU underutilized threshold <br><em>vGPU SM below 30% → underutilized.</em> | 0.30 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | — | — | No |
-| VM GPU compute saturation threshold <br><em>vGPU SM above 85% → saturated; avoid downsize.</em> | 0.85 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | — | — | No |
 | VM GPU time-slice min replicas <br><em>Minimum `recommended_time_slice_count` when time-slicing is advised.</em> | 2 | `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_min_replicas` | Yes |
 | VM GPU time-slice max replicas <br><em>Upper cap on slice count; reduced when DRAM exceeds penalty threshold.</em> | 16 | `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_max_replicas` | Yes |
 | VM GPU time-slice FB safety (basis points) <br><em>Do not recommend time-slicing when FB fraction ≥ this (8000 = 80%).</em> | 8000 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_fb_safety_threshold_bp` | Yes |
 | VM GPU time-slice DRAM penalty (basis points) <br><em>When DRAM ≥ this, max replicas is halved (5000 = 50%).</em> | 5000 | `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` | Yes |
+| VM GPU idle threshold (basis points) <br><em>vGPU SM below 5% → idle.</em> | 500 | `ROS_VM_GPU_IDLE_THRESHOLD` | `PUT /settings/vm` | `gpu.idle_threshold_bp` | Yes |
+| VM GPU underutilized threshold (basis points) <br><em>vGPU SM below 30% → underutilized.</em> | 3000 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | `PUT /settings/vm` | `gpu.underutil_threshold_bp` | Yes |
+| VM GPU frame-buffer saturation (MiB) <br><em>FB usage above this → memory saturated; 0 auto-detects 90% of catalog GPU memory.</em> | 0 | `ROS_VM_GPU_FB_SATURATION_MIB` | `PUT /settings/vm` | `gpu.fb_saturation_mib` | Yes |
+| VM GPU compute saturation threshold (basis points) <br><em>vGPU SM at or above 85% → compute saturated.</em> | 8500 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | `PUT /settings/vm` | `gpu.compute_saturation_threshold_bp` | Yes |
 | Network throughput P95 threshold (bytes/sec) <br><em>Sustained aggregate rx+tx above this → network-optimized series (62_500_000 ≈ 500 Mbps).</em> | 62500000 | `ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS` | `PUT /settings/vm` | `network.throughput_threshold_bps` | Yes |
 | Network PPS P95 threshold <br><em>Used with drop ratio for alternate network-bound path.</em> | 100000 | `ROS_VM_NETWORK_PPS_THRESHOLD` | `PUT /settings/vm` | `network.pps_threshold` | Yes |
 | Network drop ratio (basis points) <br><em>Max daily drop ratio must exceed this (10 = 0.1%) with high PPS.</em> | 10 | `ROS_VM_NETWORK_DROP_RATIO_BP` | `PUT /settings/vm` | `network.drop_ratio_bp` | Yes |

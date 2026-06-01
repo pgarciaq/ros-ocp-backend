@@ -51,7 +51,10 @@ type VMRecConfig struct {
 	DiskMinGrowthMiBPerDay   int64   // default 100 — hypervisor-only trending threshold
 
 	// I/O
-	HighIOPSThreshold int64 // default 3000
+	HighIOPSThreshold            int64 // default 3000
+	IOSequentialThresholdBytes   int64 // default 65536 (64 KiB)
+	IORandomThresholdBytes       int64 // default 16384 (16 KiB)
+	IOMinIOPSForClassification   int64 // default 100
 
 	// Instance type
 	EnableInstanceTypeMatching bool // default true
@@ -104,7 +107,10 @@ func DefaultVMRecConfig() VMRecConfig {
 		DiskHeadroomPct:            0.25,
 		DiskRoundStepGiB:           10,
 		DiskMinGrowthMiBPerDay:     100,
-		HighIOPSThreshold:          3000,
+		HighIOPSThreshold:            3000,
+		IOSequentialThresholdBytes:   65536,
+		IORandomThresholdBytes:       16384,
+		IOMinIOPSForClassification:   100,
 		EnableInstanceTypeMatching: true,
 		AbandonedMinDays:           3,
 		GPUIdleThreshold:              0.05,
@@ -200,6 +206,15 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	if _, ok := os.LookupEnv("ROS_VM_HIGH_IOPS_THRESHOLD"); ok {
 		base.HighIOPSThreshold = cfg.VMHighIOPSThreshold
 	}
+	if _, ok := os.LookupEnv("ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES"); ok {
+		base.IOSequentialThresholdBytes = cfg.VMIOSequentialThresholdBytes
+	}
+	if _, ok := os.LookupEnv("ROS_VM_IO_RANDOM_THRESHOLD_BYTES"); ok {
+		base.IORandomThresholdBytes = cfg.VMIORandomThresholdBytes
+	}
+	if _, ok := os.LookupEnv("ROS_VM_IO_MIN_IOPS_CLASSIFICATION"); ok {
+		base.IOMinIOPSForClassification = cfg.VMIOMinIOPSClassification
+	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"); ok {
 		base.EnableInstanceTypeMatching = cfg.VMEnableInstanceTypeMatching
 	}
@@ -223,6 +238,9 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"); ok {
 		base.GPUComputeSaturationThreshold = cfg.VMGPUComputeSaturationThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_FB_SATURATION_MIB"); ok {
+		base.GPUFBSaturationMiB = cfg.VMGPUFBSaturationMiB
 	}
 	if _, ok := os.LookupEnv("ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"); ok {
 		base.GPUTimeSliceMinReplicas = cfg.VMGPUTimeSliceMinReplicas
