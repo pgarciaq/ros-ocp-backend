@@ -158,6 +158,11 @@ type NodeThresholdSettings struct {
 	PerfTargetUtilization               float64 `json:"perf_target_utilization"`
 	PerfConsolidationHeadroomMultiplier float64 `json:"perf_consolidation_headroom_multiplier"`
 	TrendMinDays                        int     `json:"trend_min_days"`
+	ZombieCPUP95MC                      int64   `json:"zombie_cpu_p95_mc"`
+	ZombieMaxPods                       int64   `json:"zombie_max_pods"`
+	IdleCPUUtilPct                      int64   `json:"idle_cpu_util_pct"`
+	IdleMemUtilPct                      int64   `json:"idle_mem_util_pct"`
+	IdleMaxPods                         int64   `json:"idle_max_pods"`
 }
 
 // NodeThresholdSettingsResponse is the API GET response for node thresholds.
@@ -295,6 +300,11 @@ func DefaultNodeThresholdSettings() NodeThresholdSettings {
 		PerfTargetUtilization:               0.55,
 		PerfConsolidationHeadroomMultiplier: 2.0,
 		TrendMinDays:                        3,
+		ZombieCPUP95MC:                      200,
+		ZombieMaxPods:                       5,
+		IdleCPUUtilPct:                      10,
+		IdleMemUtilPct:                      10,
+		IdleMaxPods:                         10,
 	}
 }
 
@@ -473,6 +483,21 @@ func applyNodeEnvLocks(base NodeThresholdSettings, cfg *config.Config) NodeThres
 	}
 	if _, ok := os.LookupEnv("ROS_NODE_TREND_MIN_DAYS"); ok {
 		base.TrendMinDays = cfg.NodeTrendMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_ZOMBIE_CPU_MC"); ok {
+		base.ZombieCPUP95MC = cfg.NodeZombieCPUP95MC
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_ZOMBIE_MAX_PODS"); ok {
+		base.ZombieMaxPods = cfg.NodeZombieMaxPods
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_IDLE_CPU_UTIL_PCT"); ok {
+		base.IdleCPUUtilPct = cfg.NodeIdleCPUUtilPct
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_IDLE_MEM_UTIL_PCT"); ok {
+		base.IdleMemUtilPct = cfg.NodeIdleMemUtilPct
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_IDLE_MAX_PODS"); ok {
+		base.IdleMaxPods = cfg.NodeIdleMaxPods
 	}
 	return base
 }

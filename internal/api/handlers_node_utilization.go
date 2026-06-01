@@ -12,8 +12,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -26,8 +26,8 @@ const defaultNodeUtilLimit = 10
 const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cost-management/v1/recommendations/openshift/nodes for node CPU/memory utilization recommendations.`
 
 var nodeUtilAllowedOrderBy = map[string]string{
-	"node":                        "f.node",
-	"estimated_monthly_savings":   "sort_savings",
+	"node":                          "f.node",
+	"estimated_monthly_savings":     "sort_savings",
 	"estimated_monthly_savings_usd": "sort_savings", // deprecated alias
 }
 
@@ -50,6 +50,7 @@ type nodeUtilRow struct {
 	CPUOvercommitRatio      float32
 	IsUnderutilized         bool
 	IsOvercommitted         bool
+	IdleState               string
 	StrandedResource        *string
 	PodCount                int64
 	TrendSlope              float32
@@ -160,6 +161,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	underutilFilter := queryparams.FirstFilter(c, "is_underutilized")
 	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted")
+	idleStateVals := queryparams.IncludeValues(c, "idle_state")
 
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
@@ -201,6 +203,15 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		baseFrom += " AND nr.is_overcommitted = true"
 	} else if overcommitFilter == "false" {
 		baseFrom += " AND nr.is_overcommitted = false"
+	}
+	if len(idleStateVals) > 0 {
+		states, idleErr := model.IdleStateFilterValues(strings.Join(idleStateVals, ","))
+		if idleErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": idleErr.Error()})
+		}
+		baseFrom += " AND nr.idle_state = ANY($" + strconv.Itoa(argIdx) + ")"
+		args = append(args, states)
+		argIdx++
 	}
 
 	if config.TagsFeatureEnabled() {
@@ -260,6 +271,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			COALESCE(f.mem_util_p50, 0), COALESCE(f.mem_util_p95, 0),
 			COALESCE(f.cpu_overcommit_ratio, 0),
 			COALESCE(f.is_underutilized, false), COALESCE(f.is_overcommitted, false),
+			COALESCE(f.idle_state, 'active'),
 			f.stranded_resource, COALESCE(f.pod_count, 0),
 			COALESCE(f.trend_slope, 0), COALESCE(f.notification_codes, '{}'),
 			f.recommended_cpu_cores, f.recommended_memory_gib, COALESCE(f.node_count_reduction, 0),
@@ -291,6 +303,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			&row.MemUtilP50, &row.MemUtilP95,
 			&row.CPUOvercommitRatio,
 			&row.IsUnderutilized, &row.IsOvercommitted,
+			&row.IdleState,
 			&row.StrandedResource, &row.PodCount,
 			&row.TrendSlope, &row.NotificationCodes,
 			&row.RecommendedCPUCores, &row.RecommendedMemoryGiB, &row.NodeCountReduction,
@@ -407,9 +420,14 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 		g.rec.Node = p.Node
 		g.rec.ClusterUUID = p.ClusterUUID
 		g.rec.RecommendationType = "cpu_memory_utilization"
+		idleState := p.IdleState
+		if idleState == "" {
+			idleState = "active"
+		}
 		g.rec.Classification = model.NodeUtilizationClassification{
 			IsUnderutilized:  p.IsUnderutilized,
 			IsOvercommitted:  p.IsOvercommitted,
+			IdleState:        idleState,
 			StrandedResource: p.StrandedResource,
 		}
 		g.rec.Metrics = model.NodeUtilizationMetrics{

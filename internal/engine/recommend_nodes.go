@@ -62,6 +62,7 @@ type NodeRec struct {
 	CPUOvercommitRatio           float32
 	IsUnderutilized              bool
 	IsOvercommitted              bool
+	IdleState                    IdleState
 	StrandedResource             *string
 	PodCount                     int64
 	TrendSlope                   float32
@@ -86,6 +87,7 @@ type nodeClassification struct {
 	CPUOvercommitRatio float32
 	IsUnderutilized    bool
 	IsOvercommitted    bool
+	IdleState          IdleState
 	StrandedResource   *string
 	TrendSlope         float32
 	CurrentCPUMC       int64
@@ -119,6 +121,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				continue
 			}
 			class := classifyNode(node, windowDays, cfg, nodeSettings.TrendMinDays)
+			applyNodeIdleClassification(&class, nodeSettings)
 			if classesByNodeTerm[tc.Name] == nil {
 				classesByNodeTerm[tc.Name] = make(map[string]nodeClassification)
 			}
@@ -151,6 +154,7 @@ func nodeRecFromClassification(class nodeClassification) NodeRec {
 		CPUOvercommitRatio: class.CPUOvercommitRatio,
 		IsUnderutilized:    class.IsUnderutilized,
 		IsOvercommitted:    class.IsOvercommitted,
+		IdleState:          class.IdleState,
 		StrandedResource:   class.StrandedResource,
 		TrendSlope:         class.TrendSlope,
 		CurrentCPUMC:       class.CurrentCPUMC,
@@ -349,6 +353,13 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, trendMin
 	}
 
 	return class
+}
+
+func applyNodeIdleClassification(class *nodeClassification, nodeSettings NodeThresholdSettings) {
+	class.IdleState = ClassifyNodeIdleState(*class, nodeSettings)
+	if class.IdleState == IdleStateIdle || class.IdleState == IdleStateZombie {
+		class.NotificationCodes = append(class.NotificationCodes, NotifAIdle)
+	}
 }
 
 // sizeNodeForEngine derives engine-specific recommended capacity and consolidation flag.
@@ -786,12 +797,12 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
 				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-				cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+				cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 				stranded_resource, pod_count, trend_slope, notification_codes,
 				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 				estimated_monthly_savings_usd,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
@@ -800,6 +811,7 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				cpu_overcommit_ratio = EXCLUDED.cpu_overcommit_ratio,
 				is_underutilized = EXCLUDED.is_underutilized,
 				is_overcommitted = EXCLUDED.is_overcommitted,
+				idle_state = EXCLUDED.idle_state,
 				stranded_resource = EXCLUDED.stranded_resource,
 				pod_count = EXCLUDED.pod_count,
 				trend_slope = EXCLUDED.trend_slope,
@@ -811,7 +823,7 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				updated_at = now()`,
 			orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
-			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted,
+			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted, idleStateForWrite(r.IdleState),
 			r.StrandedResource, r.PodCount, r.TrendSlope, r.NotificationCodes,
 			recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
 			r.EstimatedMonthlySavingsCents,

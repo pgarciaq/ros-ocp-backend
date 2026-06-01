@@ -151,6 +151,99 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 	})
 }
 
+func TestNodeIdleState_PipelineIntegration(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		 VALUES (1, $1, 'idle-test-cluster', 'src-idle', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	ensureDailyNodeDigestPartitions(t, pool, start, 4)
+
+	type nodeProfile struct {
+		node             string
+		cpuUsageP95      int64
+		memUsageP95      int64
+		maxCPUAllocMC    int64
+		maxMemAllocKiB   int64
+		maxCPURequestMC  int64
+		maxMemRequestKiB int64
+		maxPodCount      int64
+	}
+
+	profiles := []nodeProfile{
+		{node: "zombie-node", cpuUsageP95: 100, memUsageP95: 1000, maxCPUAllocMC: 16000, maxMemAllocKiB: 65536, maxCPURequestMC: 500, maxMemRequestKiB: 4096, maxPodCount: 2},
+		{node: "idle-node", cpuUsageP95: 800, memUsageP95: 4000, maxCPUAllocMC: 16000, maxMemAllocKiB: 65536, maxCPURequestMC: 2000, maxMemRequestKiB: 16384, maxPodCount: 8},
+		{node: "active-node", cpuUsageP95: 4000, memUsageP95: 16000, maxCPUAllocMC: 16000, maxMemAllocKiB: 65536, maxCPURequestMC: 4000, maxMemRequestKiB: 32768, maxPodCount: 8},
+	}
+
+	for _, p := range profiles {
+		for i := 0; i < 4; i++ {
+			date := start.AddDate(0, 0, i)
+			_, err = pool.Exec(ctx, `
+				INSERT INTO daily_node_digests (
+					bucket_date, org_id, cluster_uuid, node,
+					cpu_usage_p50_mc, cpu_usage_p95_mc,
+					mem_usage_p50_kib, mem_usage_p95_kib,
+					max_cpu_allocatable_mc, max_mem_allocatable_kib,
+					max_cpu_requests_mc, max_mem_requests_kib,
+					max_pod_count, sample_count
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO NOTHING`,
+				date, orgID, clusterUUID, p.node,
+				p.cpuUsageP95-50, p.cpuUsageP95,
+				p.memUsageP95-200, p.memUsageP95,
+				p.maxCPUAllocMC, p.maxMemAllocKiB,
+				p.maxCPURequestMC, p.maxMemRequestKiB,
+				p.maxPodCount, int64(24),
+			)
+			require.NoError(t, err)
+		}
+	}
+
+	end := start.AddDate(0, 0, 4)
+	digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end)
+	require.NoError(t, err)
+
+	cfg := engine.NodeRecConfigFromThresholds(engine.DefaultNodeThresholdSettings())
+	terms := []engine.TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
+	recs := engine.RecommendNodes(digests, cfg, engine.DefaultNodeThresholdSettings(), terms)
+	require.NotEmpty(t, recs)
+
+	recByNode := map[string]engine.NodeRec{}
+	for _, r := range recs {
+		if r.Engine == "cost" && r.Term == "medium" {
+			recByNode[r.Node] = r
+		}
+	}
+
+	require.Equal(t, engine.IdleStateZombie, recByNode["zombie-node"].IdleState)
+	assert.Contains(t, recByNode["zombie-node"].NotificationCodes, engine.NotifAIdle)
+	require.Equal(t, engine.IdleStateIdle, recByNode["idle-node"].IdleState)
+	assert.Contains(t, recByNode["idle-node"].NotificationCodes, engine.NotifAIdle)
+	require.Equal(t, engine.IdleStateActive, recByNode["active-node"].IdleState)
+	assert.True(t, recByNode["active-node"].IsUnderutilized)
+
+	err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, []string{"medium"})
+	require.NoError(t, err)
+
+	var idleState string
+	err = pool.QueryRow(ctx,
+		`SELECT idle_state FROM node_recommendations WHERE org_id = $1 AND node = $2 AND engine = 'cost'`,
+		orgID, "zombie-node").Scan(&idleState)
+	require.NoError(t, err)
+	assert.Equal(t, "zombie", idleState)
+}
+
 // seedNodeDigests inserts test data into daily_node_digests for three nodes
 // with distinct profiles: underutilized, overcommitted, and healthy.
 func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string, start time.Time, days int) {

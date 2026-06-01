@@ -9,6 +9,7 @@ import (
 type NodeUtilizationClassification struct {
 	IsUnderutilized  bool    `json:"is_underutilized"`
 	IsOvercommitted  bool    `json:"is_overcommitted"`
+	IdleState        string  `json:"idle_state"`
 	StrandedResource *string `json:"stranded_resource"`
 }
 
@@ -22,12 +23,12 @@ type NodeUtilizationMetrics struct {
 
 // NodeUtilizationEngineRec holds engine-specific sizing and savings for a node term.
 type NodeUtilizationEngineRec struct {
-	RecommendedCPUCores        float32                                    `json:"recommended_cpu_cores,omitempty"`
-	RecommendedMemoryGiB       float32                                    `json:"recommended_memory_gib,omitempty"`
-	NodeCountReduction         int                                        `json:"node_count_reduction"`
+	RecommendedCPUCores     float32                                    `json:"recommended_cpu_cores,omitempty"`
+	RecommendedMemoryGiB    float32                                    `json:"recommended_memory_gib,omitempty"`
+	NodeCountReduction      int                                        `json:"node_count_reduction"`
 	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
-	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	UpdatedAt                  string                                     `json:"updated_at,omitempty"`
+	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	UpdatedAt               string                                     `json:"updated_at,omitempty"`
 }
 
 // NodeUtilizationEngines groups cost and performance engine recommendations.

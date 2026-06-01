@@ -184,6 +184,11 @@ type Config struct {
 	NodePerfTargetUtilization               float64 `mapstructure:"ROS_NODE_PERF_TARGET_UTILIZATION"`
 	NodePerfConsolidationHeadroomMultiplier float64 `mapstructure:"ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER"`
 	NodeTrendMinDays                        int     `mapstructure:"ROS_NODE_TREND_MIN_DAYS"`
+	NodeZombieCPUP95MC                      int64   `mapstructure:"ROS_NODE_ZOMBIE_CPU_MC"`
+	NodeZombieMaxPods                       int64   `mapstructure:"ROS_NODE_ZOMBIE_MAX_PODS"`
+	NodeIdleCPUUtilPct                      int64   `mapstructure:"ROS_NODE_IDLE_CPU_UTIL_PCT"`
+	NodeIdleMemUtilPct                      int64   `mapstructure:"ROS_NODE_IDLE_MEM_UTIL_PCT"`
+	NodeIdleMaxPods                         int64   `mapstructure:"ROS_NODE_IDLE_MAX_PODS"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`
@@ -597,6 +602,11 @@ func initConfig() {
 	viper.SetDefault("ROS_NODE_PERF_TARGET_UTILIZATION", 0.55)
 	viper.SetDefault("ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER", 2.0)
 	viper.SetDefault("ROS_NODE_TREND_MIN_DAYS", 3)
+	viper.SetDefault("ROS_NODE_ZOMBIE_CPU_MC", 200)
+	viper.SetDefault("ROS_NODE_ZOMBIE_MAX_PODS", 5)
+	viper.SetDefault("ROS_NODE_IDLE_CPU_UTIL_PCT", 10)
+	viper.SetDefault("ROS_NODE_IDLE_MEM_UTIL_PCT", 10)
+	viper.SetDefault("ROS_NODE_IDLE_MAX_PODS", 10)
 	viper.SetDefault("ROS_GPU_IDLE_THRESHOLD", 0.02)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_SM_THRESHOLD", 0.25)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD", 0.15)
