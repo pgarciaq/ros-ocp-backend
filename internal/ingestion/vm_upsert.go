@@ -29,7 +29,8 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				sample_count, agent_sample_count, restart_count_sum,
 				gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
 				gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
-				gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
+				gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu,
+				net_throughput_p95_bps, net_pps_p95, net_drop_ratio_max_bp
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10, $11, $12, $13,
@@ -39,7 +40,8 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				$22, $23,
 				$24, $25, $26, $27,
 				$28, $29, $30,
-				$31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
+				$31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42,
+				$43, $44, $45
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, bucket_date)
 			DO UPDATE SET
@@ -79,7 +81,10 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 				gpu_dram_avg_bp = EXCLUDED.gpu_dram_avg_bp,
 				gpu_mig_profile = EXCLUDED.gpu_mig_profile,
 				gpu_max_slices = EXCLUDED.gpu_max_slices,
-				has_gpu = EXCLUDED.has_gpu
+				has_gpu = EXCLUDED.has_gpu,
+				net_throughput_p95_bps = EXCLUDED.net_throughput_p95_bps,
+				net_pps_p95 = EXCLUDED.net_pps_p95,
+				net_drop_ratio_max_bp = EXCLUDED.net_drop_ratio_max_bp
 			RETURNING id`,
 			orgID, clusterUUID, d.VMName, d.Namespace, d.NodeName, d.GuestOS, d.BucketDate,
 			d.CPUUsageP50MC, d.CPUUsageP95MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
@@ -94,6 +99,7 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 			d.GPUCount, d.GPUModel, d.GPUUtilAvgBP, d.GPUUtilMaxBP,
 			d.GPUFBUsedAvgMiB, d.GPUFBUsedMaxMiB, d.GPUSMActiveAvgBP,
 			d.GPUTensorAvgBP, d.GPUDRAMAvgBP, d.GPUMIGProfile, d.GPUMaxSlices, d.HasGPU,
+			d.NetThroughputP95BPS, d.NetPPSP95, d.NetDropRatioMaxBP,
 		).Scan(&digestID)
 		if err != nil {
 			return fmt.Errorf("upserting VM digest %s/%s: %w", d.Namespace, d.VMName, err)

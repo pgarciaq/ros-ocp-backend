@@ -117,7 +117,7 @@ Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance
 | **u1** | `general-purpose` | `u1.nano` … `u1.8xlarge` |
 | **cx1** | `compute-optimized` | `cx1.medium` … `cx1.8xlarge` |
 | **m1** | `memory-optimized` | `m1.large` … `m1.4xlarge` |
-| **n1** | `network-optimized` | `n1.medium` … `n1.2xlarge` — **recognition only** (`Selectable: false`) |
+| **n1** | `network-optimized` | `n1.medium` … `n1.2xlarge` — active when `network.enable_network_series` is true (default) |
 | **gn1** | `gpu` | `gn1.xlarge` … `gn1.16xlarge` — GPU memory capacity per size |
 
 ### GPU analysis
@@ -140,11 +140,28 @@ Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_TH
 
 1. Compute recommended vCPU and GiB from usage + margins.
 2. Run GPU analysis when `has_gpu` is true on daily digests.
-3. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose; **GPU VMs → `gpu` series**).
+3. Classify preferred series via `vmClassifySeries()` (CPU:memory ratio; idle → general-purpose; **network-saturated + balanced ratio → `network-optimized`**; **GPU VMs → `gpu` series**).
 4. If the VM has a `VirtualMachine.spec.preference` mapping in `cluster_instance_types.json`, override the series using the preference’s class label (**preference wins over ratio**). See [VirtualMachinePreference integration](#virtualmachinepreference-integration).
 5. If `instance_type_matching` is enabled (`ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`, default **true**), call `MatchInstanceType()` — smallest type that fits vCPU, memory, and (when applicable) GPU count + GPU memory.
 6. Fall back to general-purpose series if no match in preferred series (non-GPU VMs never receive `gn1.*`).
 7. Emit notification **41** when a type is recommended.
+
+### Network-optimized classification (n1)
+
+When the operator includes KubeVirt network metrics on `ros-openshift-vm-usage-*.csv` (`net_*_per_sec` columns), ROS aggregates daily:
+
+- `net_throughput_p95_bps` — P95 of (rx + tx) bytes/sec across 15-minute samples
+- `net_pps_p95` — P95 of (rx + tx) packets/sec
+- `net_drop_ratio_max_bp` — max drop ratio (drops / total packets × 10 000) for the day
+
+[`vmClassifySeriesNetwork()`](../../internal/engine/vm_network_classification.go) returns true when **either**:
+
+1. **Throughput:** `net_throughput_p95_bps` ≥ threshold (default **62 500 000** B/s ≈ 500 Mbps) on ≥ `network_sustained_days` (default **7**) days in the term window, **or**
+2. **PPS + drops:** `net_pps_p95` ≥ **100 000** and `net_drop_ratio_max_bp` > **10** (0.1%) on ≥ **7** sustained days.
+
+`vmClassifySeries()` then maps to `network-optimized` only when network classification is true **and** recommended vCPU:GiB ratio is balanced (0.5–2.0, same band as compute/memory). `MatchInstanceType()` selects **n1.*** when the series is `network-optimized` and `ROS_VM_ENABLE_NETWORK_SERIES` (Settings API `network.enable_network_series`, default **true**) is enabled. Recommendations set `is_network_bound=true` and may emit notification **55**.
+
+Tunables: `GET/PUT /settings/vm` → `network` block or env `ROS_VM_NETWORK_*`.
 
 Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference` CRs are exported in `cluster_instance_types.json` by the metrics operator and persisted for matching.
 

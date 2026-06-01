@@ -73,6 +73,7 @@ var Definitions = map[int16]notifDef{
 	52: {"WARNING", "GPU memory saturated — consider a larger GPU or additional GPU"},
 	53: {"WARNING", "GPU compute saturated — workload may benefit from a more powerful GPU"},
 	54: {"WARNING", "One or more GPUs are idle while others are active"},
+	55: {"WARNING", "Network-saturated workload: recommend n1 network-optimized instance type"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

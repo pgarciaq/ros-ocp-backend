@@ -119,20 +119,20 @@ func TestVMGPU_NoGPU_SkipsAnalysis(t *testing.T) {
 }
 
 func TestInstanceType_GPUMatching(t *testing.T) {
-	match := MatchInstanceType(8, 32, vmSeriesGPU, nil, true, 1, 16)
+	match := MatchInstanceType(8, 32, vmSeriesGPU, nil, true, 1, 16, true)
 	require.NotNil(t, match)
 	assert.Equal(t, "gn1.2xlarge", match.Name)
 	assert.Equal(t, int32(1), match.GPUs)
 }
 
 func TestInstanceType_GPUMemoryFit(t *testing.T) {
-	match := MatchInstanceType(16, 64, vmSeriesGPU, nil, true, 1, 50)
+	match := MatchInstanceType(16, 64, vmSeriesGPU, nil, true, 1, 50, true)
 	require.NotNil(t, match)
 	assert.GreaterOrEqual(t, match.GPUMemoryGiB, int32(50))
 }
 
 func TestInstanceType_NoGPU_ExcludesGN1(t *testing.T) {
-	match := MatchInstanceType(4, 16, vmSeriesGeneralPurpose, nil, false, 0, 0)
+	match := MatchInstanceType(4, 16, vmSeriesGeneralPurpose, nil, false, 0, 0, true)
 	require.NotNil(t, match)
 	assert.NotEqual(t, vmSeriesGPU, match.Series)
 }

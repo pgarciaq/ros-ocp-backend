@@ -703,16 +703,19 @@ func TestVMRecommend_HighIOProfile(t *testing.T) {
 }
 
 func TestVMClassifySeries_ComputeOptimized(t *testing.T) {
-	assert.Equal(t, vmSeriesComputeOptimized, vmClassifySeries(8, 2, false))
+	cfg := DefaultVMRecConfig()
+	assert.Equal(t, vmSeriesComputeOptimized, vmClassifySeries(nil, 8, 2, false, cfg))
 }
 
 func TestVMClassifySeries_MemoryOptimized(t *testing.T) {
-	assert.Equal(t, vmSeriesMemoryOptimized, vmClassifySeries(2, 32, false))
+	cfg := DefaultVMRecConfig()
+	assert.Equal(t, vmSeriesMemoryOptimized, vmClassifySeries(nil, 2, 32, false, cfg))
 }
 
 func TestVMClassifySeries_GeneralPurpose(t *testing.T) {
-	assert.Equal(t, vmSeriesGeneralPurpose, vmClassifySeries(4, 8, false))
-	assert.Equal(t, vmSeriesGeneralPurpose, vmClassifySeries(2, 4, true))
+	cfg := DefaultVMRecConfig()
+	assert.Equal(t, vmSeriesGeneralPurpose, vmClassifySeries(nil, 4, 8, false, cfg))
+	assert.Equal(t, vmSeriesGeneralPurpose, vmClassifySeries(nil, 2, 4, true, cfg))
 }
 
 func TestVMRecommend_NoGuestAgentNotification(t *testing.T) {

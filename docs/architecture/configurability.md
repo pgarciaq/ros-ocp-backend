@@ -589,6 +589,11 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | VM GPU time-slice max replicas <br><em>Upper cap on slice count; reduced when DRAM exceeds penalty threshold.</em> | 16 | `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_max_replicas` | Yes |
 | VM GPU time-slice FB safety (basis points) <br><em>Do not recommend time-slicing when FB fraction ≥ this (8000 = 80%).</em> | 8000 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_fb_safety_threshold_bp` | Yes |
 | VM GPU time-slice DRAM penalty (basis points) <br><em>When DRAM ≥ this, max replicas is halved (5000 = 50%).</em> | 5000 | `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` | Yes |
+| Network throughput P95 threshold (bytes/sec) <br><em>Sustained aggregate rx+tx above this → network-optimized series (62_500_000 ≈ 500 Mbps).</em> | 62500000 | `ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS` | `PUT /settings/vm` | `network.throughput_threshold_bps` | Yes |
+| Network PPS P95 threshold <br><em>Used with drop ratio for alternate network-bound path.</em> | 100000 | `ROS_VM_NETWORK_PPS_THRESHOLD` | `PUT /settings/vm` | `network.pps_threshold` | Yes |
+| Network drop ratio (basis points) <br><em>Max daily drop ratio must exceed this (10 = 0.1%) with high PPS.</em> | 10 | `ROS_VM_NETWORK_DROP_RATIO_BP` | `PUT /settings/vm` | `network.drop_ratio_bp` | Yes |
+| Network sustained days <br><em>Days in term window meeting throughput or PPS+drop criteria.</em> | 7 | `ROS_VM_NETWORK_SUSTAINED_DAYS` | `PUT /settings/vm` | `network.sustained_days` | Yes |
+| Enable n1 network series matching <br><em>When false, n1 types are skipped; falls back to u1.</em> | true | `ROS_VM_ENABLE_NETWORK_SERIES` | `PUT /settings/vm` | `network.enable_network_series` | Yes |
 See [VM recommendations design](../design/vm-recommendations.md).
 
 ---

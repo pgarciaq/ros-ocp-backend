@@ -46,7 +46,7 @@ flowchart TD
 
 | Step | What happens |
 |------|----------------|
-| **Collection** | Operator queries Prometheus/Thanos for VM CPU, memory, disk, I/O, and optional guest-agent filesystem metrics. |
+| **Collection** | Operator queries Prometheus/Thanos for VM CPU, memory, disk, I/O, optional guest-agent filesystem metrics, and KubeVirt network rates (bytes/sec, packets/sec, drops). |
 | **Ingestion** | `vm` plugin (Produce phase, priority **40**) parses `ros-openshift-vm-usage-*.csv`, builds `daily_vm_digests`. |
 | **Recommendation** | `recommendVM()` applies percentiles, margins, classification, disk projection, and instance-type matching per term × engine. |
 | **API** | List and detail endpoints return current vs recommended sizing, metadata flags, notifications, and optional daily digest history. |
@@ -185,18 +185,32 @@ From daily digest P95 read/write IOPS and throughput:
 
 Built-in catalog (OpenShift Virtualization defaults): **u1** (general-purpose),
 **cx1** (compute-optimized), **m1** (memory-optimized), **gn1** (GPU, when DCGM metrics
-are present), and **n1** (network-optimized, **recognition only** until network metrics
-are ingested).
+are present), and **n1** (network-optimized, when KubeVirt network columns are present and
+`network.enable_network_series` is true).
 
 **Algorithm:**
 
 1. Compute recommended vCPU and GiB from usage + margins.
 2. Run GPU classification when DCGM metrics are present (see [GPU recommendations](#gpu-recommendations)).
-3. Classify preferred series via CPU:memory ratio (`vmClassifySeries`); idle → general-purpose; **GPU VMs → `gpu` series**.
+3. Classify preferred series via CPU:memory ratio (`vmClassifySeries`); idle → general-purpose; **network-saturated + balanced ratio → `network-optimized`**; **GPU VMs → `gpu` series**.
 4. If the VM has a `VirtualMachine.spec.preference` in `cluster_instance_types.json`, **preference class overrides ratio**.
 5. If `instance_type_matching` is enabled (default **true**), `MatchInstanceType()` picks the smallest fitting type (vCPU, memory, and GPU memory when applicable).
 6. Fall back to **u1** / general-purpose if no match in preferred series (non-GPU VMs never receive `gn1.*`).
 7. Notification **41** when a type is recommended.
+
+### Network-optimized (n1)
+
+When `ros-openshift-vm-usage-*.csv` includes `net_rx_bytes_per_sec`, `net_tx_bytes_per_sec`,
+and related packet/drop columns (KubeVirt `kubevirt_vmi_network_*` rates from the operator),
+ROS computes daily P95 throughput and PPS plus max drop ratio. A VM is **network-bound** when
+sustained throughput (default ≥ 500 Mbps aggregate) **or** sustained high PPS with drops exceeds
+thresholds for `network_sustained_days` (default **7**) and the recommended vCPU:memory ratio
+is balanced (0.5–2.0). `MatchInstanceType()` then recommends **n1.*** sizes and sets
+`is_network_bound=true` (notification **55**).
+
+Configure via `GET/PUT .../settings/vm` → `network` (`throughput_threshold_bps`,
+`pps_threshold`, `drop_ratio_bp`, `sustained_days`, `enable_network_series`) or admin env
+`ROS_VM_NETWORK_*`. Older CSVs without network columns still parse (fields default to zero).
 
 ## GPU recommendations
 
@@ -301,6 +315,7 @@ All VM codes below appear in the `notifications` array on list and detail respon
 | **51** | info | GPU underutilized — smaller MIG profile or consider vGPU/MIG |
 | **52** | warning | GPU memory saturated — larger GPU / more frame buffer |
 | **53** | warning | GPU compute saturated — more powerful GPU |
+| **55** | warning | Network-saturated workload — recommend **n1** network-optimized instance type |
 | **56** | info | vGPU profile recommended (`recommended_vgpu_profile`) |
 | **57** | warning | GPU time-slicing not safe — frame-buffer pressure |
 

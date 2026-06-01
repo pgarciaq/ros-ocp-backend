@@ -66,6 +66,12 @@ type vmHeaderIdx struct {
 	gpuDRAMActiveAvg        int
 	gpuMIGProfile           int
 	gpuMaxSlices            int
+	netRxBytesPerSec        int
+	netTxBytesPerSec        int
+	netRxPacketsPerSec      int
+	netTxPacketsPerSec      int
+	netRxDropsPerSec        int
+	netTxDropsPerSec        int
 }
 
 func newVMHeaderIdx() vmHeaderIdx {
@@ -102,6 +108,12 @@ func newVMHeaderIdx() vmHeaderIdx {
 		gpuDRAMActiveAvg:        -1,
 		gpuMIGProfile:           -1,
 		gpuMaxSlices:            -1,
+		netRxBytesPerSec:        -1,
+		netTxBytesPerSec:        -1,
+		netRxPacketsPerSec:      -1,
+		netTxPacketsPerSec:      -1,
+		netRxDropsPerSec:        -1,
+		netTxDropsPerSec:        -1,
 	}
 }
 
@@ -173,6 +185,18 @@ func buildVMColumnIndex(header []string) (vmHeaderIdx, error) {
 			idx.gpuMIGProfile = i
 		case "gpu_max_slices":
 			idx.gpuMaxSlices = i
+		case "net_rx_bytes_per_sec":
+			idx.netRxBytesPerSec = i
+		case "net_tx_bytes_per_sec":
+			idx.netTxBytesPerSec = i
+		case "net_rx_packets_per_sec":
+			idx.netRxPacketsPerSec = i
+		case "net_tx_packets_per_sec":
+			idx.netTxPacketsPerSec = i
+		case "net_rx_drops_per_sec":
+			idx.netRxDropsPerSec = i
+		case "net_tx_drops_per_sec":
+			idx.netTxDropsPerSec = i
 		}
 	}
 
@@ -234,7 +258,7 @@ func vmColumnPresent(idx vmHeaderIdx, col string) bool {
 }
 
 // CanonicalVMUsageCSVHeader returns the comma-separated base column header for ros-openshift-vm-usage CSV.
-// Optional columns (restart_count, GPU metrics) may be appended by newer operators.
+// Optional columns (restart_count, GPU metrics, network metrics) may be appended by newer operators.
 func CanonicalVMUsageCSVHeader() string {
 	return strings.Join(vmCSVExpectedColumns, ",")
 }
@@ -407,6 +431,31 @@ func parseVMRecord(record []string, idx vmHeaderIdx) (VMRow, error) {
 	row.GPUMaxSlices, err = parseOptionalInt32(fieldAt(record, idx.gpuMaxSlices))
 	if err != nil {
 		return row, fmt.Errorf("parse gpu_max_slices: %w", err)
+	}
+
+	row.NetRxBytesPerSec, err = parseOptionalFloat(fieldAt(record, idx.netRxBytesPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_rx_bytes_per_sec: %w", err)
+	}
+	row.NetTxBytesPerSec, err = parseOptionalFloat(fieldAt(record, idx.netTxBytesPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_tx_bytes_per_sec: %w", err)
+	}
+	row.NetRxPacketsPerSec, err = parseOptionalFloat(fieldAt(record, idx.netRxPacketsPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_rx_packets_per_sec: %w", err)
+	}
+	row.NetTxPacketsPerSec, err = parseOptionalFloat(fieldAt(record, idx.netTxPacketsPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_tx_packets_per_sec: %w", err)
+	}
+	row.NetRxDropsPerSec, err = parseOptionalFloat(fieldAt(record, idx.netRxDropsPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_rx_drops_per_sec: %w", err)
+	}
+	row.NetTxDropsPerSec, err = parseOptionalFloat(fieldAt(record, idx.netTxDropsPerSec))
+	if err != nil {
+		return row, fmt.Errorf("parse net_tx_drops_per_sec: %w", err)
 	}
 
 	return row, nil

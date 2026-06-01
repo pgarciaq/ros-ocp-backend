@@ -51,4 +51,12 @@ type VMRow struct {
 	GPUDRAMActiveAvg   *float64 // 0-1
 	GPUMIGProfile      *string  // e.g. "3g.20gb", empty for passthrough
 	GPUMaxSlices       *int32   // 0 for non-MIG
+
+	// Network (optional; nil when operator CSV lacks network columns)
+	NetRxBytesPerSec   *float64
+	NetTxBytesPerSec   *float64
+	NetRxPacketsPerSec *float64
+	NetTxPacketsPerSec *float64
+	NetRxDropsPerSec   *float64
+	NetTxDropsPerSec   *float64
 }

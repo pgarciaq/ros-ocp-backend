@@ -10,7 +10,7 @@ For operator-facing explanations and remediation steps, see
 | Layer | Location | Role |
 |-------|----------|------|
 | **Database** | `notification_code_definitions` (`code`, `name`, `severity`, `description`) | Source of truth for names and default messages |
-| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–54) | Emitters reference numeric codes |
+| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–55) | Emitters reference numeric codes |
 | **API mapping** | [`internal/notifications/mapping.go`](../../internal/notifications/mapping.go) `Definitions` | Converts `SMALLINT[]` → Kruize-shaped `notifications` map for container/namespace/node/PVC/snapshot list APIs |
 | **VM JSONB** | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) `vmBuildNotifications` | VM list/detail use lowercase `type` (`info`/`warning`/`critical`) in `vm_recommendations.notifications` |
 
@@ -103,6 +103,7 @@ VM JSONB uses lowercase equivalents.
 | 52 | `VM_GPU_MEMORY_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
 | 53 | `VM_GPU_COMPUTE_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
 | 54 | `VM_GPU_MIXED_IDLE` | WARNING | VM | Yes | Some GPUs idle, others active |
+| 55 | `VM_NETWORK_SATURATED` | WARNING | VM | Yes | Network-saturated workload; recommend n1 network-optimized instance type |
 
 ---
 
@@ -205,6 +206,7 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 48 | `NotifVMCrashLoop` | `restart_count_sum` ≥ threshold |
 | 49 | `NotifVMDownsizeHeld` | Performance engine: downsize suppressed for stability |
 | 50–54 | `NotifVMGPU*` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) / mixed-idle |
+| 55 | `NotifVMNetworkSaturated` | [`RecommendVM`](../../internal/engine/vm_recommender.go) — network-bound n1 recommendation |
 | 56 | `NotifVMVGPUProfileRecommended` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) — vGPU profile in `recommended_vgpu_profile` |
 | 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm_gpu_timeslicing.go) — FB above safety threshold |
 

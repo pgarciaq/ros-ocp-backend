@@ -80,6 +80,10 @@ type VMDigestResult struct {
 	GPUMaxSlices    int32
 	HasGPU     bool
 	GPUDevices []ingestGPUDeviceDigest
+
+	NetThroughputP95BPS int64
+	NetPPSP95           int64
+	NetDropRatioMaxBP   int32
 }
 
 func vmBucketDate(t time.Time) time.Time {
@@ -130,6 +134,10 @@ type vmDigestAccumulator struct {
 	gpuMaxSlices    int32
 
 	gpuDevices map[string]*vmGPUDeviceAccumulator
+
+	netThroughput []float64
+	netPPS        []float64
+	netDropBP     []int32
 }
 
 type vmGPUDeviceAccumulator struct {
@@ -213,6 +221,8 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 			acc.ingestGPURow(r)
 		}
 
+		acc.ingestNetworkRow(r)
+
 		acc.sampleCount++
 	}
 
@@ -287,6 +297,16 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		d.DiskWriteBPS95 = &p95
 	}
 
+	if len(acc.netThroughput) > 0 {
+		d.NetThroughputP95BPS = roundFloat64ToInt64(percentileFloat(sortedCopy(acc.netThroughput), 0.95))
+	}
+	if len(acc.netPPS) > 0 {
+		d.NetPPSP95 = roundFloat64ToInt64(percentileFloat(sortedCopy(acc.netPPS), 0.95))
+	}
+	if len(acc.netDropBP) > 0 {
+		d.NetDropRatioMaxBP = maxInt32Slice(acc.netDropBP)
+	}
+
 	if acc.gpuCountSamples > 0 {
 		d.HasGPU = true
 		d.GPUCount = acc.gpuCountSamples
@@ -304,6 +324,45 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 	}
 
 	return d
+}
+
+func (acc *vmDigestAccumulator) ingestNetworkRow(r VMRow) {
+	var rxBps, txBps, rxPps, txPps, rxDrop, txDrop float64
+	hasBytes := r.NetRxBytesPerSec != nil || r.NetTxBytesPerSec != nil
+	hasPackets := r.NetRxPacketsPerSec != nil || r.NetTxPacketsPerSec != nil
+	if !hasBytes && !hasPackets {
+		return
+	}
+	if r.NetRxBytesPerSec != nil {
+		rxBps = *r.NetRxBytesPerSec
+	}
+	if r.NetTxBytesPerSec != nil {
+		txBps = *r.NetTxBytesPerSec
+	}
+	acc.netThroughput = append(acc.netThroughput, rxBps+txBps)
+
+	if r.NetRxPacketsPerSec != nil {
+		rxPps = *r.NetRxPacketsPerSec
+	}
+	if r.NetTxPacketsPerSec != nil {
+		txPps = *r.NetTxPacketsPerSec
+	}
+	acc.netPPS = append(acc.netPPS, rxPps+txPps)
+
+	if r.NetRxDropsPerSec != nil {
+		rxDrop = *r.NetRxDropsPerSec
+	}
+	if r.NetTxDropsPerSec != nil {
+		txDrop = *r.NetTxDropsPerSec
+	}
+	totalPackets := rxPps + txPps
+	if totalPackets > 0 {
+		dropRatioBP := int32(math.Round((rxDrop + txDrop) / totalPackets * 10000))
+		if dropRatioBP < 0 {
+			dropRatioBP = 0
+		}
+		acc.netDropBP = append(acc.netDropBP, dropRatioBP)
+	}
 }
 
 func (acc *vmDigestAccumulator) ingestGPURow(r VMRow) {
@@ -398,6 +457,19 @@ func maxInt32(a, b int32) int32 {
 		return b
 	}
 	return a
+}
+
+func maxInt32Slice(values []int32) int32 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }
 
 func avgFloatSlice(values []float64) float64 {

@@ -50,7 +50,7 @@ func TestMapToKruizeFormat_UnknownCode_Skipped(t *testing.T) {
 }
 
 func TestNotificationDefinitionsComplete(t *testing.T) {
-	for code := int16(1); code <= 54; code++ {
+	for code := int16(1); code <= 55; code++ {
 		_, ok := Definitions[code]
 		assert.True(t, ok, "notification code %d should be defined", code)
 	}
@@ -58,7 +58,7 @@ func TestNotificationDefinitionsComplete(t *testing.T) {
 
 func TestMapToKruizeFormat_AllDefinedCodes(t *testing.T) {
 	var allCodes []int16
-	for code := int16(1); code <= 54; code++ {
+	for code := int16(1); code <= 55; code++ {
 		allCodes = append(allCodes, code)
 	}
 

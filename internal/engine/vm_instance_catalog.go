@@ -192,14 +192,13 @@ func MatchInstanceType(
 	if recommendedVCPU < 1 {
 		recommendedVCPU = 1
 	}
-	recMemMiB := recommendedMemoryMiB(recommendedMemoryGiB)
 
 	catalogs := [][]InstanceType{clusterTypes, vmInstanceCatalog}
 	if requireGPU {
 		catalogs = append([][]InstanceType{vmInstanceCatalogGPU}, catalogs...)
 	}
 	for _, catalog := range catalogs {
-		if match := matchInCatalog(catalog, recommendedVCPU, recMemMiB, preferredSeries, true, requireGPU, gpuCount, minGPUMemoryGiB, enableNetworkSeries); match != nil {
+		if match := matchInCatalog(catalog, recommendedVCPU, recommendedMemoryGiB, preferredSeries, true, requireGPU, gpuCount, minGPUMemoryGiB, enableNetworkSeries); match != nil {
 			return match
 		}
 	}
