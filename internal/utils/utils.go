@@ -449,7 +449,9 @@ func DetermineCSVType(fileName string) types.PayloadType {
 	rules := []rule{
 		{"ros-openshift-cluster-quota-", types.PayloadTypeClusterQuota},
 		{"ros-openshift-namespace-", types.PayloadTypeNamespace},
+		{"ros-openshift-vm-gpu-device-", types.PayloadTypeVMGPU},
 		{"ros-openshift-vm-usage-", types.PayloadTypeVM},
+		{"ocp_ros_vm_gpu_device", types.PayloadTypeVMGPU},
 		{"ros-openshift-snapshot-", types.PayloadTypeSnapshot},
 		{"ros-openshift-storage-", types.PayloadTypeStorage},
 		{"ocp_ros_cluster_quota", types.PayloadTypeClusterQuota},

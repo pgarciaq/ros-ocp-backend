@@ -37,6 +37,7 @@ func TestDetermineCSVType_NiseMonthlyOutput(t *testing.T) {
 		{"ros-openshift-namespace-20260501.csv", types.PayloadTypeNamespace},
 		{"ros-openshift-storage-20260501.csv", types.PayloadTypeStorage},
 		{"ros-openshift-snapshot-inventory-20260501.csv", types.PayloadTypeSnapshot},
+		{"ros-openshift-vm-gpu-device-20260501.csv", types.PayloadTypeVMGPU},
 		{"ros-openshift-vm-usage-20260501.csv", types.PayloadTypeVM},
 		{"ocp_ros_usage.csv", types.PayloadTypeContainer},
 		{"ocp_ros_namespace_usage.csv", types.PayloadTypeNamespace},

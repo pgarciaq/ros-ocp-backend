@@ -506,11 +506,8 @@ func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
 			MemUsageMaxKiB: d.MemUsageMaxKiB,
 			SampleCount:    d.SampleCount,
 		}
-		if len(d.GPUDevices) > 0 {
-			var devs []model.GPUDeviceDigest
-			if err := json.Unmarshal(d.GPUDevices, &devs); err == nil {
-				item.GPUDevices = devs
-			}
+		if len(d.Devices) > 0 {
+			item.GPUDevices = d.Devices
 		}
 		out = append(out, item)
 	}

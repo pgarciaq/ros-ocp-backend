@@ -444,6 +444,17 @@ func parseRequiredFloat(s, field string) (float64, error) {
 	return f, nil
 }
 
+func optionalFloatValue(s string) (float64, error) {
+	v, err := parseOptionalFloat(s)
+	if err != nil {
+		return 0, err
+	}
+	if v == nil {
+		return 0, nil
+	}
+	return *v, nil
+}
+
 func parseOptionalFloat(s string) (*float64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

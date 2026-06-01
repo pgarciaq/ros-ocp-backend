@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -15,19 +14,19 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-// ingestGPUDeviceDigest mirrors model.GPUDeviceDigest for JSON storage (avoids import cycle).
+// ingestGPUDeviceDigest holds per-GPU metrics for digest upsert (avoids model import cycle).
 type ingestGPUDeviceDigest struct {
-	UUID          string  `json:"uuid"`
-	Model         string  `json:"model"`
-	UtilAvgBP     int32   `json:"util_avg_bp"`
-	UtilMaxBP     int32   `json:"util_max_bp"`
-	FBUsedAvgMiB  float64 `json:"fb_used_avg_mib"`
-	FBUsedMaxMiB  float64 `json:"fb_used_max_mib"`
-	SMActiveAvgBP int32   `json:"sm_active_avg_bp"`
-	TensorAvgBP   int32   `json:"tensor_avg_bp"`
-	DRAMAvgBP     int32   `json:"dram_avg_bp"`
-	MIGProfile    string  `json:"mig_profile,omitempty"`
-	MaxSlices     int32   `json:"max_slices,omitempty"`
+	UUID          string
+	Model         string
+	UtilAvgBP     int32
+	UtilMaxBP     int32
+	FBUsedAvgMiB  float64
+	FBUsedMaxMiB  float64
+	SMActiveAvgBP int32
+	TensorAvgBP   int32
+	DRAMAvgBP     int32
+	MIGProfile    string
+	MaxSlices     int32
 }
 
 // VMDigestResult is a daily aggregated VM digest ready for database upsert.
@@ -79,8 +78,13 @@ type VMDigestResult struct {
 	GPUDRAMAvgBP    int32
 	GPUMIGProfile   string
 	GPUMaxSlices    int32
-	HasGPU          bool
-	GPUDevices      []byte
+	HasGPU     bool
+	GPUDevices []ingestGPUDeviceDigest
+}
+
+func vmBucketDate(t time.Time) time.Time {
+	u := t.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // VMDigestKey identifies a single VM-day digest group.
@@ -148,12 +152,7 @@ func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
 	groups := make(map[VMDigestKey]*vmDigestAccumulator)
 
 	for _, r := range rows {
-		bucketDate := time.Date(
-			r.IntervalStart.UTC().Year(),
-			r.IntervalStart.UTC().Month(),
-			r.IntervalStart.UTC().Day(),
-			0, 0, 0, 0, time.UTC,
-		)
+		bucketDate := vmBucketDate(r.IntervalStart)
 		key := VMDigestKey{
 			VMName:     r.VMName,
 			Namespace:  r.Namespace,
@@ -301,7 +300,7 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		d.GPUDRAMAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuDRAMAvg))
 		d.GPUMIGProfile = acc.gpuMIGProfile
 		d.GPUMaxSlices = acc.gpuMaxSlices
-		d.GPUDevices = acc.finalizeGPUDevicesJSON()
+		d.GPUDevices = acc.finalizeGPUDevices()
 	}
 
 	return d
@@ -383,31 +382,15 @@ func (acc *vmDigestAccumulator) ingestGPURow(r VMRow) {
 	}
 }
 
-func (acc *vmDigestAccumulator) finalizeGPUDevicesJSON() []byte {
+func (acc *vmDigestAccumulator) finalizeGPUDevices() []ingestGPUDeviceDigest {
 	if len(acc.gpuDevices) == 0 {
-		return []byte("[]")
+		return nil
 	}
 	devs := make([]ingestGPUDeviceDigest, 0, len(acc.gpuDevices))
 	for _, d := range acc.gpuDevices {
-		devs = append(devs, ingestGPUDeviceDigest{
-			UUID:          d.uuid,
-			Model:         d.model,
-			UtilAvgBP:     ratioToBasisPoints(avgFloatSlice(d.utilAvg)),
-			UtilMaxBP:     ratioToBasisPoints(maxFloatSlice(d.utilMax)),
-			FBUsedAvgMiB:  avgFloatSlice(d.fbAvg),
-			FBUsedMaxMiB:  maxFloatSlice(d.fbMax),
-			SMActiveAvgBP: ratioToBasisPoints(avgFloatSlice(d.smAvg)),
-			TensorAvgBP:   ratioToBasisPoints(avgFloatSlice(d.tensorAvg)),
-			DRAMAvgBP:     ratioToBasisPoints(avgFloatSlice(d.dramAvg)),
-			MIGProfile:    d.migProfile,
-			MaxSlices:     d.maxSlices,
-		})
+		devs = append(devs, d.toIngestGPUDeviceDigest())
 	}
-	b, err := json.Marshal(devs)
-	if err != nil {
-		return []byte("[]")
-	}
-	return b
+	return devs
 }
 
 func maxInt32(a, b int32) int32 {

@@ -208,8 +208,7 @@ func QueryDailyVMDigestsForVM(
 			sample_count, agent_sample_count, restart_count_sum,
 			gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
 			gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
-			gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu,
-			gpu_devices
+			gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
 		  AND bucket_date >= $5::date
@@ -238,7 +237,6 @@ func QueryDailyVMDigestsForVM(
 			&d.GPUCount, &d.GPUModel, &d.GPUUtilAvgBP, &d.GPUUtilMaxBP,
 			&d.GPUFBUsedAvgMiB, &d.GPUFBUsedMaxMiB, &d.GPUSMActiveAvgBP,
 			&d.GPUTensorAvgBP, &d.GPUDRAMAvgBP, &d.GPUMIGProfile, &d.GPUMaxSlices, &d.HasGPU,
-			&d.GPUDevices,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan VM digest: %w", err)
@@ -247,6 +245,9 @@ func QueryDailyVMDigestsForVM(
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate VM digests: %w", err)
+	}
+	if err := AttachGPUDevicesToDigests(ctx, pool, result); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

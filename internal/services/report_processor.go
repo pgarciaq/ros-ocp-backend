@@ -182,9 +182,9 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			}
 			continue
 		}
-		if useNativeCSVIngest && csvType == types.PayloadTypeVM {
+		if useNativeCSVIngest && (csvType == types.PayloadTypeVM || csvType == types.PayloadTypeVMGPU) {
 			if config.GetConfig().EnableVMRecs {
-				if err := processVMCsvNative(file, kafkaMsg); err != nil {
+				if err := processVMCsvNative(file, kafkaMsg, csvType); err != nil {
 					reportProcessingFailed = true
 					recordKafkaTransient(err)
 				}
@@ -870,7 +870,7 @@ func processClusterInstanceTypesNative(fileURL string, kafkaMsg types.KafkaMsg) 
 	return nil
 }
 
-func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -889,7 +889,7 @@ func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	ctx := context.Background()
 	pool := db.GetPool()
 
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeVM))
+	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(csvType))
 	if err != nil {
 		log.Errorf("native VM engine: ingest failed: %v", err)
 		if isTransientKafkaProcessingError(err) {

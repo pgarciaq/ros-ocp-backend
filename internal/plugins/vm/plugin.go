@@ -12,9 +12,11 @@
 package vm
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,11 +50,28 @@ func (p *VMPlugin) Enabled() bool {
 func (p *VMPlugin) Priority() int { return 40 }
 
 func (p *VMPlugin) SupportedCSVTypes() []string {
-	return []string{string(types.PayloadTypeVM)}
+	return []string{
+		string(types.PayloadTypeVM),
+		string(types.PayloadTypeVMGPU),
+	}
 }
 
 func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]ingestion.MetricRow, error) {
-	rows, err := ingestion.ParseVMCSVRows(r)
+	buf := bufio.NewReader(r)
+	header, err := buf.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("reading VM CSV header: %w", err)
+	}
+	body := io.MultiReader(strings.NewReader(header), buf)
+	if isVMGPUDeviceCSVHeader(header) {
+		if err := ingestion.IngestVMGPUDeviceCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			return nil, fmt.Errorf("ingesting VM GPU device CSV: %w", err)
+		}
+		logging.ForOrg(orgID, clusterUUID).Info("VMPlugin.IngestCSV: upserted VM GPU device rows")
+		return nil, nil
+	}
+
+	rows, err := ingestion.ParseVMCSVRows(body)
 	if err != nil {
 		return nil, fmt.Errorf("parsing VM CSV: %w", err)
 	}
@@ -86,6 +105,11 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	}
 
 	return nil, nil
+}
+
+func isVMGPUDeviceCSVHeader(header string) bool {
+	lower := strings.ToLower(header)
+	return strings.Contains(lower, "gpu_uuid") && !strings.Contains(lower, "cpu_usage_mc")
 }
 
 func (p *VMPlugin) RegisterRoutes(g *echo.Group) {

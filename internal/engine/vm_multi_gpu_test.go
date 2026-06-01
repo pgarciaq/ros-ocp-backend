@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -11,18 +10,13 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-func gpuDevicesJSON(devs []model.GPUDeviceDigest) []byte {
-	b, _ := json.Marshal(devs)
-	return b
-}
-
 func TestMultiGPU_AllActive(t *testing.T) {
 	digests := []model.DailyVMDigest{{
 		HasGPU: true, GPUCount: 2,
-		GPUDevices: gpuDevicesJSON([]model.GPUDeviceDigest{
+		Devices: []model.GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 5000, TensorAvgBP: 4000, UtilAvgBP: 6000},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 5500, TensorAvgBP: 4500, UtilAvgBP: 6500},
-		}),
+		},
 	}}
 	analysis := analyzeVMGPU(digests, DefaultVMRecConfig())
 	assert.Equal(t, int32(2), analysis.GPUCount)
@@ -32,10 +26,10 @@ func TestMultiGPU_AllActive(t *testing.T) {
 func TestMultiGPU_SomeIdle_ReduceCount(t *testing.T) {
 	digests := []model.DailyVMDigest{{
 		HasGPU: true, GPUCount: 2,
-		GPUDevices: gpuDevicesJSON([]model.GPUDeviceDigest{
+		Devices: []model.GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 100, TensorAvgBP: 100, UtilAvgBP: 200},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 6000, TensorAvgBP: 5000, UtilAvgBP: 7000},
-		}),
+		},
 	}}
 	analysis := analyzeVMGPU(digests, DefaultVMRecConfig())
 	assert.Contains(t, analysis.NotificationCodes, NotifVMGPUMixedIdle)
@@ -45,10 +39,10 @@ func TestMultiGPU_SomeIdle_ReduceCount(t *testing.T) {
 func TestMultiGPU_AllIdle(t *testing.T) {
 	digests := []model.DailyVMDigest{{
 		HasGPU: true, GPUCount: 2,
-		GPUDevices: gpuDevicesJSON([]model.GPUDeviceDigest{
+		Devices: []model.GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 100, TensorAvgBP: 100},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 200, TensorAvgBP: 150},
-		}),
+		},
 	}}
 	analysis := analyzeVMGPU(digests, DefaultVMRecConfig())
 	assert.Equal(t, "idle", analysis.Classification)
@@ -58,11 +52,11 @@ func TestMultiGPU_AllIdle(t *testing.T) {
 func TestMultiGPU_MixedModels(t *testing.T) {
 	digests := []model.DailyVMDigest{{
 		HasGPU: true, GPUCount: 2,
-		GPUDevices: gpuDevicesJSON([]model.GPUDeviceDigest{
+		Devices: []model.GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA T4", SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 2000},
 			{UUID: "g2", Model: "NVIDIA A100-SXM4-40GB", MaxSlices: 7, MIGProfile: "7g.40gb",
 				SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 1500, FBUsedMaxMiB: 4096},
-		}),
+		},
 	}}
 	analysis := analyzeVMGPU(digests, DefaultVMRecConfig())
 	require.Len(t, analysis.GPUDevices, 2)

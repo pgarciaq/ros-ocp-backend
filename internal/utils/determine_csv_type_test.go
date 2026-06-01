@@ -23,6 +23,7 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"ros-openshift-snapshot-20260501.csv", types.PayloadTypeSnapshot},
 		{"ocp_snapshot_inventory.csv", types.PayloadTypeSnapshot},
 		{"ros-openshift-storage-20260501.csv", types.PayloadTypeStorage},
+		{"ros-openshift-vm-gpu-device-20260501.csv", types.PayloadTypeVMGPU},
 		{"ros-openshift-vm-usage-20260501.csv", types.PayloadTypeVM},
 		{"ocp_ros_vm_usage.csv", types.PayloadTypeVM},
 		{"ocp_storage_usage.csv", types.PayloadTypeStorage},

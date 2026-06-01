@@ -124,11 +124,8 @@ func vmWindowHasGPU(digests []model.DailyVMDigest) bool {
 		if d.HasGPU && d.GPUCount > 0 {
 			return true
 		}
-		if len(d.GPUDevices) > 0 {
-			var devs []model.GPUDeviceDigest
-			if json.Unmarshal(d.GPUDevices, &devs) == nil && len(devs) > 0 {
-				return true
-			}
+		if len(d.Devices) > 0 {
+			return true
 		}
 	}
 	return false
@@ -208,11 +205,8 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 }
 
 func vmParseGPUDevices(d model.DailyVMDigest) []model.GPUDeviceDigest {
-	if len(d.GPUDevices) > 0 {
-		var devs []model.GPUDeviceDigest
-		if err := json.Unmarshal(d.GPUDevices, &devs); err == nil && len(devs) > 0 {
-			return devs
-		}
+	if len(d.Devices) > 0 {
+		return d.Devices
 	}
 	if !d.HasGPU || d.GPUCount <= 0 {
 		return nil
@@ -232,7 +226,15 @@ func vmParseGPUDevices(d model.DailyVMDigest) []model.GPUDeviceDigest {
 	}}
 }
 
+func vmCanonicalGPUModel(modelName string) string {
+	if spec := MatchGPUModel(modelName); spec != nil {
+		return spec.Name
+	}
+	return modelName
+}
+
 func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig) vmDeviceClassification {
+	dev.Model = vmCanonicalGPUModel(dev.Model)
 	idleThresholdBP := int32(cfg.GPUIdleThreshold * 10000)
 	underutilBP := int32(cfg.GPUUnderutilThreshold * 10000)
 	computeSatBP := int32(cfg.GPUComputeSaturationThreshold * 10000)
