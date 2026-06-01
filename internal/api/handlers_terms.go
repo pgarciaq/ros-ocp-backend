@@ -25,6 +25,11 @@ type termSettingsItem struct {
 type termSettingsResponse struct {
 	RecommendationType string                     `json:"recommendation_type"`
 	Terms              []termSettingsResponseItem `json:"terms"`
+	SettingsLocked     bool                       `json:"settings_locked,omitempty"`
+}
+
+func termsSettingsLocked(recommendationType string) bool {
+	return engine.IsSettingsLocked(recommendationType) || engine.IsSettingsLocked("terms")
 }
 
 type termSettingsResponseItem struct {
@@ -107,15 +112,13 @@ func GetTermSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, termSettingsResponse{
 		RecommendationType: rt,
 		Terms:              items,
+		SettingsLocked:     termsSettingsLocked(rt),
 	})
 }
 
 func PutTermSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
-	}
-	if engine.IsSettingsLocked("terms") {
-		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -127,6 +130,9 @@ func PutTermSettings(c echo.Context) error {
 	rt, err := getRecommendationType(c)
 	if err != nil {
 		return nil
+	}
+	if termsSettingsLocked(rt) {
+		return respondSettingsLockedForbidden(c)
 	}
 
 	var req termSettingsRequest
@@ -258,9 +264,6 @@ func DeleteTermSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
-	if engine.IsSettingsLocked("terms") {
-		return respondSettingsLockedForbidden(c)
-	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -271,6 +274,9 @@ func DeleteTermSettings(c echo.Context) error {
 	rt, err := getRecommendationType(c)
 	if err != nil {
 		return nil
+	}
+	if termsSettingsLocked(rt) {
+		return respondSettingsLockedForbidden(c)
 	}
 
 	// Check if ALL terms are locked — if so, delete is a no-op but not an error.
