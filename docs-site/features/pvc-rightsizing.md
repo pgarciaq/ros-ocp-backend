@@ -1,12 +1,13 @@
 # PVC Right-Sizing
 
 !!! info "Quick Facts"
+    **What it does:** Identifies over-provisioned, under-provisioned (near-full), and orphaned PersistentVolumeClaims  
+    **Data source:** koku-metrics-operator storage CSV (Prometheus: `kubelet_volume_stats_capacity_bytes`, `kubelet_volume_stats_used_bytes`)  
+    **Update frequency:** Once per day (each ROS report ingestion cycle)  
+    **Plugin:** `pvc` (priority 30, on by default in the native engine)  
     **API:** `GET /api/cost-management/v1/recommendations/openshift/pvcs`  
-    **Plugin:** `pvc` (priority 45, on by default in the native engine)  
-    **Data source:** `cm-openshift-storage-usage-*.csv` from koku-metrics-operator  
-    **Update frequency:** Each ROS report ingestion cycle (typically daily)  
     **Configurable:** Yes — per-org Settings API + admin env vars (`ROS_PVC_*`)  
-    **Key thresholds:** oversized &lt; 20% utilization, near-full &gt; 85%, orphaned zero usage 3+ days  
+    **Key thresholds:** oversized when max usage &lt; 20% of capacity (default), near-full &gt; 85%, orphaned zero usage 3+ days  
     **Savings:** Yes on **oversized** rows when `KOKU_MASU_URL` and savings estimates are enabled
 
 ## Overview

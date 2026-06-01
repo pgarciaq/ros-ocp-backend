@@ -71,29 +71,46 @@ Quality rows are written on each recommendation cycle to `recommendation_quality
 
 | Metric | Meaning |
 |--------|---------|
-| **stability_pct** | How much CPU/memory recommendations changed vs the previous generation (1.0 = unchanged) |
+| **stability_pct** | How much CPU/memory recommendations changed vs the **previous generation** (1.0 = unchanged) — see below |
 | **adoption_detected** | Current cluster config matches prior recommendation within 5% tolerance |
 | **oom_events_after_rec** | OOM kills since the recommendation was issued |
 | **recommendation_age_hours** | Hours since the recommendation was last updated |
 
+### What “previous generation” means
+
+**Previous generation** is the recommendation from the **last ingestion run**
+before the current one — not a calendar “yesterday” label, but the prior
+`recommendation_sets` row that existed immediately before `WriteRecommendations`
+overwrote it. In typical daily deployments that is effectively **today’s run
+vs. yesterday’s run**: each day’s short-term / cost recommendation is compared
+against the previous day’s values to measure drift and quality.
+
+The engine reads those prior values with `ReadClusterOldRecommendations()` in
+[`internal/engine/quality.go`](../internal/engine/quality.go) **before** writing
+new rows. Archived snapshots also land in `recommendation_history` for trend
+APIs, but stability and adoption metrics use the pre-overwrite `recommendation_sets`
+comparison.
+
 ### Stability
 
-Stability scores how much recommended CPU and memory changed compared to the
-**previous generation**:
+Stability scores how much recommended CPU and memory changed compared to that
+previous generation:
 
 ```
 stability = max(0, 1.0 − |cpu_variation|/100 × 0.5 − |mem_variation|/100 × 0.5)
 ```
 
-A score of **1.0** means no change; lower scores indicate larger shifts. Use
-stability to detect **flip-flopping** recommendations that may erode operator
-trust. Variation within ~10% on both resources yields high stability (~0.9+).
+A score of **1.0** means no change since the last run; lower scores indicate
+larger shifts. Use stability to detect **flip-flopping** recommendations that
+may erode operator trust. Variation within ~10% on both resources yields high
+stability (~0.9+).
 
 ### Adoption
 
 Adoption is detected when the workload's **current** CPU and memory requests
-match the **previous** recommendation within **5% tolerance** on both dimensions.
-Useful for verifying that teams applied ROS guidance.
+match the **previous generation** recommendation (same prior-run snapshot as
+stability) within **5% tolerance** on both dimensions. Useful for verifying
+that teams applied ROS guidance before the latest recalculation.
 
 ### OOM events
 

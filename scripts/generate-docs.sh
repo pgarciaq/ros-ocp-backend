@@ -52,11 +52,9 @@ done
 mkdir -p "$DOCS_DIR/operations"
 [ -f "$ROOT_DIR/docs/upgrade-runbook.md" ] && cp "$ROOT_DIR/docs/upgrade-runbook.md" "$DOCS_DIR/operations/upgrade-runbook.md"
 
-# Feature docs
+# Feature docs — pvc-rightsizing, business-hours, gpu-time-slicing, and snapshot-staleness
+# are maintained in docs-site/features/ (not copied from docs/)
 mkdir -p "$DOCS_DIR/features"
-[ -f "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" ] && cp "$ROOT_DIR/docs/features-f27-pvc-rightsizing.md" "$DOCS_DIR/features/pvc-rightsizing.md"
-# gpu-time-slicing and snapshot-staleness are maintained in docs-site/features/ (not copied from docs/)
-[ -f "$ROOT_DIR/docs/business-hours-admin-guide.md" ] && cp "$ROOT_DIR/docs/business-hours-admin-guide.md" "$DOCS_DIR/features/business-hours.md"
 
 # Top-level docs
 [ -f "$ROOT_DIR/docs/known-issues.md" ] && cp "$ROOT_DIR/docs/known-issues.md" "$DOCS_DIR/known-issues.md"

@@ -1,5 +1,8 @@
 # Business Hours Recommendations
 
+> **Public docs:** Canonical user-facing page is
+> [`docs-site/features/business-hours.md`](../docs-site/features/business-hours.md).
+
 **Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E)
 
 ## Overview
@@ -25,7 +28,7 @@ Full design rationale: [features-business-hours.md](features-business-hours.md).
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   Admin[Admin UI / API] -->|PUT schedule| ROSAPI[ros-api Settings]
   ROSAPI --> Sched[(business_hours_schedules)]
   ROSAPI -->|async reship_ros| Masu[koku masu]

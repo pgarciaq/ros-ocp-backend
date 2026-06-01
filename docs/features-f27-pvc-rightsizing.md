@@ -1,4 +1,8 @@
-# F27: PVC Right-Sizing
+# PVC Right-Sizing
+
+> **Public docs:** Canonical user-facing page is
+> [`docs-site/features/pvc-rightsizing.md`](../docs-site/features/pvc-rightsizing.md).
+> Do not copy this file into the MkDocs site (`generate-docs.sh` no longer overwrites it).
 
 ## Overview
 
