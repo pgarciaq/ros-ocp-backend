@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-05-24 (dual node engines, fleet savings summary, currency field)
+Last updated: 2026-06-01 (GPU time-slicing future-work items)
 
 ---
 
@@ -505,24 +505,16 @@ deferred until prerequisites or customer scale justify the investment.
 | **1** | **GPUs per node** — add `node_gpu_count` to ROS data from `kube_node_status_allocatable{resource='nvidia.com/gpu'}` | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only. | Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin |
 | **2** | **Multi-GPU container consolidation** — per-device DCGM correlation for containers requesting multiple GPUs ("request fewer GPUs") | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3 | Rare outside dedicated ML clusters (<5% of GPU workloads). Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; engine + notification changes |
 | **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` with SQL page keys (as time-slicing uses) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have dozens to low-hundreds of GPU containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
+| **4** | **MIG + time-slicing combined strategy** — time-slicing within MIG partitions instead of mutually exclusive strategies in `partitionContainers` (MIG recs currently exclude time-slicing candidates) | Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node | Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand. | MIG instance scheduling model; operator partition telemetry |
+| **5** | **UI for GPU time-slicing recommendations** — frontend views for `GET /recommendations/openshift/gpu/timeslicing` and `GET /recommendations/openshift/gpu/mig` | Cluster admins who want visual guidance on GPU sharing without using the API directly | All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in [ui-integration-guide.md](ui-integration-guide.md). | koku-ui GPU optimizations pages |
+| **6** | **Materialized time-slicing results (performance)** — persist time-slicing recommendations during the recommendation pipeline instead of computing at read-time | Large GPU fleets (1000+ node×model triples) where read-time computation adds latency | Current scale is well within acceptable latency (<50 ms). Materialization adds write-path complexity and staleness concerns. Revisit when GPU fleet sizes grow ~10×. | Pipeline write path; recompute on term or threshold changes |
+| **7** | **Multi-GPU container awareness for time-slicing** — per-device analysis instead of assuming one GPU per container (e.g., 4-GPU ML training pods) | Dedicated ML training clusters with multi-GPU pods | Same prerequisites as deferred item **2** (per-device operator data). Rare workload pattern. Inference workloads remain covered by the 1-GPU assumption. | See deferred item **2**; operator per-device DCGM or `gpu_request_count` |
+| **8** | **GPU summary `timeslicing.count` accuracy** — summary count reflects telemetry triples, not actionable list rows | Dashboards or automation that badge summary counts as “N recommendations ready” | **Intentional trade-off**, not a bug to fix: full engine on every summary request would add significant cost. See [GPU Summary `timeslicing.count` Divergence](#gpu-summary-timeslicingcount-divergence). Use list `meta.count` or notification **36** for actionable items. | Product/UI requirement to align counts (rename, engine-on-summary, or copy-only) |
 
-## GPU: MIG + Time-Slicing Combined Recommendations Not Supported
-
-The current GPU recommendation engine treats MIG partitioning and time-slicing as
-mutually exclusive strategies. In `partitionContainers`, workloads with a MIG
-recommendation (non-`full_gpu` profile) are excluded from time-slicing candidates.
-
-In practice, NVIDIA GPUs support combining both: a physical GPU can be partitioned
-into MIG instances, and each MIG instance can then be time-sliced among multiple
-pods. This combined approach could further improve GPU utilization.
-
-**Current behavior:** If container A is recommended for a 3g.20gb MIG slice, it will
-NOT appear as a time-slicing candidate, even if multiple containers could share that
-MIG instance.
-
-**Future enhancement:** Model time-slicing within MIG partitions. This would require
-the engine to reason about MIG instance scheduling — which instances exist, their
-sizes, and which pods could share them. Tracked as a deferred enhancement.
+**Current behavior (items 4 and 7):** In `partitionContainers`, a container recommended
+for a non-`full_gpu` MIG profile is excluded from time-slicing candidates even if
+multiple pods could share that MIG instance. Time-slicing math assumes one GPU per
+container unless item **2** / **7** prerequisites land.
 
 ### Replica Count Display
 
@@ -873,6 +865,8 @@ Prioritize when:
 
 ## GPU Summary `timeslicing.count` Divergence
 
+Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **8** — not a defect backlog item.
+
 **Severity:** Cosmetic / semantic gap (not a bug)
 
 The `/recommendations/openshift/gpu` summary endpoint returns
@@ -905,9 +899,11 @@ for actionable items.
 
 ### Resolution options (if product requires alignment later)
 
+Deferred item **8** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) catalogs these paths:
+
 1. **Rename field** to `gpu_node_groups` and document as monitored groups only
 2. **Run the engine** on all triples during summary (adds query cost)
-3. **Keep divergence** and document in OpenAPI + UI copy (current choice)
+3. **Keep divergence** and document in OpenAPI + UI copy (**current choice** — intentional trade-off)
 
 ### When to change behavior
 
