@@ -390,6 +390,9 @@ memory_request_container_avg,memory_limit_container_avg,memory_usage_container_a
 
 ## Database
 
+For schema design (JSONB vs normalized tables, decision matrix, codebase examples), see
+[docs/architecture/database-conventions.md](docs/architecture/database-conventions.md).
+
 ### Migrations
 
 Migrations are in `migrations/` using [golang-migrate](https://github.com/golang-migrate/migrate):
