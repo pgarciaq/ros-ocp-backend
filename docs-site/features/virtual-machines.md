@@ -24,6 +24,14 @@ exposes results through the REST API. Koku continues to consume hourly
 
 Technical design (maintainers): [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
 
+### Cost reporting vs optimization UI
+
+**Cost reporting** for VMs is available in koku-ui via
+`reports/openshift/resources/virtual-machines/` (historical cost and usage from
+the Cost Management pipeline). **ROS VM optimization recommendations** (list,
+detail, settings, GPU actions) are API-ready; a dedicated recommendations
+experience in koku-ui is planned for a future release.
+
 ## How it works
 
 ```mermaid
@@ -445,7 +453,8 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 |-----|-------|
 | **No dollar savings** | `estimated_monthly_savings` not populated; Koku VM cost rates not wired |
 | **Multi-GPU VMs** | Per-device `gpu_devices` digest and notification **54** when some GPUs are idle |
-| **vGPU fractional sharing** | MIG profile (`use_mig_profile`) and time-slicing (`enable_time_slicing`) with catalog-based `OptimalMIGProfile()` |
+| **MIG optimization** | Coarse **next-smaller MIG profile** step-down from utilization (`OptimalMIGProfile()`), not a full multi-objective vGPU optimizer across all catalog profiles |
+| **vGPU fractional depth** | Classification and action hints (idle/underutilized/saturated, `enable_time_slicing`) only — full vGPU profile catalog recommendations are a future enhancement |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **n-series (network-optimized)** | `n1` types are recognition-only until network metrics exist — not active recommendations |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
@@ -454,8 +463,8 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Power management / suspend** | No suspend or power-state recommendations |
 | **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
-| **Recommendation history** | `GET /recommendations/openshift/vms/{vm_name}/history` (retention configurable) |
-| **No koku-ui VM page** | API-only today |
+| **Recommendation history** | `GET /recommendations/openshift/vms/{vm_name}/history`; retention days read-only on `GET .../settings/vm` as `history_retention_days` (env `ROS_VM_REC_HISTORY_RETENTION_DAYS`, default 90) |
+| **No koku-ui VM page** | Cost reports in koku-ui; ROS recommendation UI API-only today |
 
 ## Related documentation
 

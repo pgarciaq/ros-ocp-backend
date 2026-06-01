@@ -105,6 +105,23 @@ func TestGetVMSettingsForAPI_IncludesCPUAdaptiveMarginEnabled(t *testing.T) {
 	assert.True(t, resp.CPUAdaptiveMarginEnabled)
 }
 
+func TestGetVMSettingsForAPI_IncludesHistoryRetentionDays(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-vm-history-retention-api"
+
+	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 90, resp.HistoryRetentionDays)
+
+	t.Setenv("ROS_VM_REC_HISTORY_RETENTION_DAYS", "45")
+	config.ResetForTest()
+
+	resp, err = GetVMSettingsForAPI(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 45, resp.HistoryRetentionDays)
+}
+
 func TestUpdateVMSettings_CPUAdaptiveMarginEnabled(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

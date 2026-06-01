@@ -62,6 +62,7 @@ type VMStabilitySettingsAPI struct {
 type VMSettingsResponse struct {
 	Enabled                  bool                      `json:"enabled"`
 	CPUAdaptiveMarginEnabled bool                      `json:"cpu_adaptive_margin_enabled"`
+	HistoryRetentionDays     int                       `json:"history_retention_days"`
 	Thresholds               VMThresholdSettingsAPI    `json:"thresholds"`
 	MemoryFloors         VMMemoryFloorsSettingsAPI `json:"memory_floors"`
 	Stability            VMStabilitySettingsAPI    `json:"stability"`
@@ -162,11 +163,20 @@ func vmRecConfigToStabilityAPI(cfg VMRecConfig) VMStabilitySettingsAPI {
 	}
 }
 
+func vmHistoryRetentionDaysFromConfig() int {
+	cfg := config.GetConfig()
+	if cfg == nil || cfg.VMRecHistoryRetentionDays < 1 {
+		return 90
+	}
+	return cfg.VMRecHistoryRetentionDays
+}
+
 func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 	envLocked := lockedVMFieldsFromEnv()
 	return VMSettingsResponse{
 		Enabled:                  vmFeatureEnabled(),
 		CPUAdaptiveMarginEnabled: cfg.CPUAdaptiveMarginEnabled,
+		HistoryRetentionDays:     vmHistoryRetentionDaysFromConfig(),
 		Thresholds:               vmRecConfigToThresholdAPI(cfg),
 		MemoryFloors:         vmRecConfigToMemoryFloorsAPI(cfg),
 		Stability:            vmRecConfigToStabilityAPI(cfg),

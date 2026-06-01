@@ -1,7 +1,7 @@
 # VM Recommendations — Test Plan
 
-**Status:** Implemented (phase11) — unit, E2E, and IQE coverage in place; gaps noted below  
-**Related:** [VM Recommendations Design](vm-recommendations.md)
+**Status:** Production-ready (phase11) — unit, default CI, extended E2E, and IQE coverage  
+**Related:** [VM Recommendations Design](vm-recommendations.md) · [Public VM feature doc](../docs-site/features/virtual-machines.md)
 
 ---
 
@@ -10,11 +10,12 @@
 | Layer | Originally planned | Implemented | Notes |
 |-------|-------------------|-------------|-------|
 | **Unit** (ros-ocp-backend) | ~25–30 | **~70** test functions | Ingestion, engine, catalog, notifications, API, settings, plugin |
-| **E2E** (cost-onprem-chart) | ~12–15 | **~44** | ROS + settings + extended + enhancements + GPU + MVP promotions |
-| **IQE** | ~10–12 | **~59** | Full API contract in `test_ros_vm_recommendations.py` |
-| **Nise** | 4 scenarios | ✅ | `ocp_report_vm.yml` (chart + IQE) |
+| **E2E default CI** (cost-onprem-chart) | ~12–15 | **~12** | `tests/suites/ros/test_vm_*.py` (no `@extended`) |
+| **E2E extended** (cost-onprem-chart) | — | **~44** | Flow, GPU, enhancements, notifications matrix, MVP promotions |
+| **IQE** | ~10–12 | **~62** | `test_ros_vm_recommendations.py` |
+| **Nise** | 4 scenarios | ✅ | VM profiles + notification matrix templates |
 
-Legend: ✅ implemented · ⬜ not implemented / pending
+Legend: ✅ implemented · ⬜ not implemented / deferred
 
 ---
 
@@ -60,6 +61,7 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Series classification (cx/m/u) | ✅ `TestVMClassifySeries_*` |
 | Config defaults and env overrides | ✅ `vm_config_test.go` |
 | Settings validation | ✅ `vm_settings_test.go` |
+| History retention prune | ✅ `vm_history_retention_test.go` |
 
 ### Phase 11 MVP enhancements (`vm_recommender_test.go`, `vm_instance_catalog_test.go`)
 
@@ -81,118 +83,64 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | Detail missing params | ✅ |
 | Settings GET | ✅ `TestVMSettings_GET_ReturnsConfig` |
 | Settings PUT (valid, invalid JSON, out of range, partial) | ✅ `handlers_vm_settings_test.go` |
+| Settings DELETE reset | ✅ `handlers_vm_settings_test.go` |
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
 | `filter[is_abandoned]` | ✅ `TestVMRecommendations_ListFilterAbandoned` |
 | `filter[has_gpu]`, `filter[gpu_classification]` | ✅ | Unit `handlers_vm_recs_integration_test.go` + IQE + E2E |
 | Detail `gpu_devices` array | ✅ | `TestVMDetail_Success_WithGPUDevices` |
 
-### Integration (`vm_lifecycle_integration_test.go`)
+### Integration (`vm_lifecycle_integration_test.go`, `vm_integration_test.go`)
 
 | Test | Status |
 |------|--------|
-| CSV → digests → recommendations | ⬜ | No dedicated DB integration test file; covered by E2E flow |
+| CSV → digests → recommendations (notification matrix VMs) | ✅ | `vm_integration_test.go` |
+| History retention prune (DB) | ✅ | `vm_history_retention_test.go` |
+
+### OpenAPI contract
+
+| Test | Status |
+|------|--------|
+| VM paths and schemas match live handlers | ✅ | `internal/api/openapi_contract_test.go` |
 
 ---
 
 ## Layer B — cost-onprem-chart E2E
 
-### ROS (`tests/suites/ros/test_vm_recommendations.py`) — 5 tests ✅
+### Default CI — ROS (`tests/suites/ros/`) ✅
 
-| Test | Status |
-|------|--------|
-| `test_vm_list_envelope` | ✅ |
-| `test_vm_list_required_fields` | ✅ |
-| `test_vm_list_current_and_recommended` | ✅ |
-| `test_vm_filter_by_vm_name` | ✅ |
-| `test_vm_filter_by_namespace` | ✅ |
-| Filter cluster / status / confidence | ⬜ | Covered in IQE, not chart ROS suite |
-| Skip if plugin disabled | ✅ (via `skip_if_vm_plugin_disabled`) |
+| File | Tests | Status |
+|------|-------|--------|
+| [`test_vm_recommendations.py`](../../../cost-onprem-chart/tests/suites/ros/test_vm_recommendations.py) | List envelope, fields, filters, `test_vm_recommendations_exist` | ✅ |
+| [`test_vm_settings.py`](../../../cost-onprem-chart/tests/suites/ros/test_vm_settings.py) | GET defaults, PUT, DELETE settings/terms, adaptive margin, kernel reserve, history retention | ✅ |
 
-### Settings (`tests/suites/ros/test_vm_settings.py`) — 2 tests ✅
+These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `--extended`).
 
-| Test | Status |
-|------|--------|
-| `test_vm_settings_get_defaults` | ✅ |
-| `test_vm_settings_put_optional` | ✅ |
-| DELETE reset / locked fields 403 | ⬜ | IQE partial coverage |
+### Extended E2E (`tests/suites/e2e/`) ✅
 
-### Extended E2E (`tests/suites/e2e/test_vm_recommendations_flow.py`) — 6 tests ✅
+| Test file | Status |
+|-----------|--------|
+| `test_vm_recommendations_flow.py` | ✅ |
+| `test_vm_enhancements_flow.py` | ✅ |
+| `test_vm_gpu_flow.py` | ✅ |
+| `test_vm_instance_types_flow.py` | ✅ |
+| `test_vm_notifications_matrix.py` | ✅ codes 37–42 |
+| `test_vm_mvp_promotions_flow.py` | ✅ |
+| `test_vm_preference_flow.py` | ✅ preference metadata ingest (extended) |
 
-| Test | Status |
-|------|--------|
-| `test_vm_data_ingestion` | ✅ |
-| `test_vm_recommendations_generated` | ✅ |
-| `test_vm_recommendation_detail` | ✅ |
-| `test_vm_idle_detection` | ✅ |
-| `test_vm_settings_endpoint` | ✅ |
-| `test_vm_guest_agent_confidence` | ✅ |
-| Explicit notification 18/19 subtests | ⬜ | Idle/oversized asserted via metadata; not code-level assert |
+### Nise templates ✅
 
-### Extended E2E — MVP enhancements (`test_vm_enhancements_flow.py`) — 9 tests ✅
-
-| Test | Status |
-|------|--------|
-| `test_windows_kernel_reserve_reflected` | ✅ |
-| `test_crash_loop_notification_present` | ✅ |
-| `test_unknown_os_notification` | ✅ |
-| `test_instance_type_catalog_gn1_recognized` | ✅ |
-| `test_settings_api_kernel_reserve` | ✅ |
-| `test_settings_api_downsize_stability_days` | ✅ |
-| `test_windows_update_spike_notification` | ✅ |
-| `test_downsize_held_notification` | ✅ |
-| `test_non_selectable_instance_types_not_recommended` | ✅ |
-
-Template: `tests/data/nise_templates/ocp_report_vm_enhancements.yml`. Run:
-`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_enhancements_flow`.
-
-### Nise template ✅
-
-`tests/data/nise_templates/ocp_report_vm.yml` — idle Linux/Windows, guest-agent VM, legacy profiles.
-
-### Extended E2E — GPU (`test_vm_gpu_flow.py`) — 10 tests ✅
-
-| Test | Status |
-|------|--------|
-| `test_vm_gpu_csv_ingestion` | ✅ |
-| `test_vm_gpu_idle_classification_and_notification` | ✅ |
-| `test_vm_gpu_filter_has_gpu` | ✅ |
-| `test_vm_gpu_filter_classification_idle` | ✅ |
-| `test_vm_gpu_detail_response_shape` | ✅ |
-| `test_vm_gpu_underutil_notification_51` | ✅ |
-| `test_vm_gpu_memory_saturated_notification_52` | ✅ |
-| `test_vm_gpu_compute_saturated_notification_53` | ✅ |
-| `test_vm_gpu_instance_type_gn1_match` | ✅ |
-| `test_vm_no_gpu_excludes_gn1` | ✅ |
-
-Template: `tests/data/nise_templates/ocp_report_vm_gpu.yml`. Run:
-`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow`.
-
-### Extended E2E — MVP promotions (`test_vm_mvp_promotions_flow.py`) — 7 tests ✅
-
-| Test | Status |
-|------|--------|
-| `test_01_adaptive_margin_applied` | ✅ |
-| `test_02_current_instance_type_populated` | ✅ |
-| `test_03_time_slicing_recommendation` | ✅ |
-| `test_04_multi_gpu_partial_idle` (notification 54) | ✅ |
-| `test_05_mig_optimal_profile` | ✅ |
-| `test_06_disk_projection_30_days` | ✅ |
-| `test_07_recommendation_history_api` | ✅ |
-
-Template: `tests/data/nise_templates/ocp_report_vm_mvp_promotions.yml`. Run:
-`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_mvp_promotions_flow`.
-
-### GPU device CSV (unit + routing)
-
-| Test | Status |
-|------|--------|
-| `vm_gpu_device_csv_test.go` (ros-ocp-backend) | ✅ |
-| Koku `ROS_EXTRA_PATTERNS` / `is_ros_vm_filename` for `ros-openshift-vm-gpu-device`, `ocp_ros_vm_gpu_device` | ✅ `test_kafka_msg_handler.py`, `test_common.py` |
+| Template | Purpose |
+|----------|---------|
+| `ocp_report_vm.yml` | Default VM E2E + downsize-unstable seed |
+| `ocp_report_vm_notifications.yml` | Notification matrix 37–42 |
+| `ocp_report_vm_enhancements.yml` | Codes 46–49, kernel reserve |
+| `ocp_report_vm_gpu.yml` | GPU 50–53 |
+| `ocp_report_vm_mvp_promotions.yml` | Adaptive margin, history, MIG |
 
 ---
 
-## Layer C — IQE (`test_ros_vm_recommendations.py`) — ~59 tests ✅
+## Layer C — IQE (`test_ros_vm_recommendations.py`) — ~62 tests ✅
 
 Paths (constants):
 
@@ -200,84 +148,33 @@ Paths (constants):
 RECOMMENDATIONS_VM = "/recommendations/openshift/vm"
 RECOMMENDATIONS_VM_DETAIL = "/recommendations/openshift/vm/detail"
 RECOMMENDATIONS_SETTINGS_VM = "/recommendations/openshift/settings/vm"
-RECOMMENDATIONS_SETTINGS_VM_TERMS = "/recommendations/openshift/settings/vm/terms"
+RECOMMENDATIONS_VM_HISTORY = "/recommendations/openshift/vm/{vm_name}/history"
 ```
-
-| Area | Tests | Status |
-|------|-------|--------|
-| List envelope, pagination, filters (namespace, cluster, idle, oversized, term, engine, confidence) | 11 | ✅ |
-| Ordering | 1 | ✅ |
-| Detail 200, digests, 404, guest agent confidence | 4 | ✅ |
-| Settings GET/PUT/partial, terms GET/PUT | 5 | ✅ |
-| Current/recommended allocation, notifications, IO, disk projection | 5 | ✅ |
-| Auth 401 / forbidden | 2 | ✅ |
-| Known nise VM names (optional) | 1 | ✅ |
-
-**New vs original plan:** disk projection, notifications structure, settings terms, `memory_floors` / `min_growth_mib_per_day` validated in settings tests.
-
-### IQE — notification codes 46–49
-
-| Test | Status |
-|------|--------|
-| `test_vm_notification_code_46_unknown_os` | ✅ |
-| `test_vm_notification_code_47_windows_spike` | ✅ |
-| `test_vm_notification_code_48_crash_loop` | ✅ |
-| `test_vm_notification_code_49_downsize_held` | ✅ |
-| `test_vm_filter_by_restart_count` | ✅ |
-| `test_vm_windows_kernel_reserve_vs_linux` | ✅ |
-| `test_vm_settings_kernel_reserve` / `test_vm_settings_downsize_stability_days` | ✅ |
-| `test_vm_instance_type_non_selectable_not_recommended` | ✅ |
-
-Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (namespace `vm-enhancements`).
-
-### IQE — GPU notifications and filters (codes 50–53)
-
-| Test | Status |
-|------|--------|
-| `test_vm_gpu_list_filter_has_gpu` | ✅ |
-| `test_vm_gpu_list_filter_classification` | ✅ |
-| `test_vm_gpu_detail_response_shape` | ✅ |
-| `test_vm_gpu_idle_notification_code_50` | ✅ |
-| `test_vm_gpu_underutil_notification_code_51` | ✅ |
-| `test_vm_gpu_memory_saturated_code_52` | ✅ |
-| `test_vm_gpu_compute_saturated_code_53` | ✅ |
-| `test_vm_gpu_instance_type_gn1_match` | ✅ |
-| `test_vm_no_gpu_excludes_gn1` | ✅ |
-
-GPU VMs are defined in `ocp_report_ros_vm.yml` (`ml-training`, `inference` namespaces).
-
-### IQE — MVP promotion scenarios
 
 | Area | Status |
 |------|--------|
-| Adaptive margin, `current_instance_type`, time-slicing, multi-GPU notification 54 | ✅ Covered in IQE VM/GPU tests + chart E2E `test_vm_mvp_promotions_flow.py` |
-| Recommendation history API | ✅ IQE + E2E `test_07_recommendation_history_api` |
+| List, detail, settings, terms, filters, auth | ✅ |
+| Notifications 18–19, 37–49, 50–54 | ✅ |
+| Notification **41** instance type rec | ✅ `test_vm_notification_code_41_instance_type_rec` |
+| Preference metadata in detail | ✅ `test_vm_preference_metadata_in_detail` |
+| History API + `history_retention_days` in settings | ✅ |
+| Adaptive margin in settings GET | ✅ `test_vm_settings_cpu_adaptive_margin_enabled` |
+| `current.instance_type` + notification 41 | ✅ `test_vm_current_instance_type_populated` |
+
+Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (includes `downsize-unstable-vm-01`, `instance-type-rec-01`, `high-io-vm-01`).
 
 ---
 
-## Layer D — Nise
+## Layer D — Nise ✅
 
 | Scenario | Status |
 |----------|--------|
-| Oversized Linux VM | ✅ `web-server-linux-01` / similar in templates |
-| Idle Linux / Windows | ✅ `idle-vm-linux-01`, `idle-windows-legacy-01` |
-| Windows + guest agent | ✅ `db-server-windows-01` |
-| High I/O / upsize | ⬜ | Partial via legacy-app profiles |
-| GPU idle / underutil / saturated | ✅ | `gpu-idle-vm`, `gpu-underutil-mig-vm`, `gpu-memory-saturated-vm`, `gpu-compute-saturated-vm` in nise templates |
-
-Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `cost-onprem-chart/tests/data/nise_templates/ocp_report_vm.yml`, `ocp_report_vm_gpu.yml` (GPU E2E).
-
----
-
-## Suggested follow-up tests (not in original plan)
-
-| Test | Priority |
-|------|----------|
-| Koku routing regression for new ROS filename patterns | Low — covered in Masu unit tests |
-| DB lifecycle integration test | Medium |
-| E2E assert notification codes 37–42 on seeded VMs | ✅ `test_vm_notifications_matrix.py` |
-| OpenAPI contract entries for VM paths | Medium |
-| IQE: `memory_floors` and `disk.min_growth_mib_per_day` in PUT body | Low |
+| Oversized / idle / Windows / guest agent | ✅ |
+| High I/O (2× default IOPS threshold) | ✅ `high_io` → 6000 read/write IOPS |
+| Instance type rec profile | ✅ `oversized_for_instance_type` |
+| Downsize unstable | ✅ `downsize_unstable` / `downsize-unstable-vm-01` |
+| GPU idle / MIG / saturated | ✅ |
+| Preference VM name (with `cluster_instance_types.json`) | ✅ `preference-server-vm` documented |
 
 ---
 
@@ -288,12 +185,15 @@ Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `co
 cd ros-ocp-backend
 go test ./internal/engine/... ./internal/ingestion/... ./internal/api/... -run 'VM|Vm|vm' -count=1
 
-# E2E (cluster required)
+# E2E default CI (cluster required)
 cd cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm
-NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_recommendations_flow
-NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow
-NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_mvp_promotions_flow
+
+# E2E extended
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm
+
+# IQE (on-prem)
+ENV_FOR_DYNACONF=local iqe tests plugin cost_management -k test_ros_vm_recommendations
 ```
 
 ---
