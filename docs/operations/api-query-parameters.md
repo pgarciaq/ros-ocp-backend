@@ -95,6 +95,29 @@ Equivalent flat parameters:
 | `is_overcommitted` | `is_overcommitted` | `filter[is_overcommitted]` |
 | `recommendation_type` | `recommendation_type` | `filter[recommendation_type]` |
 
+**PVC list filters** (`GET .../recommendations/openshift/pvcs`):
+
+- `filter[term]` — `short`, `medium`, `long` (default `medium`; one row per PVC per term)
+- `filter[recommendation_type]` — `oversized`, `near_full`, `orphaned`, `healthy`
+- `filter[storageclass]` — exact StorageClass name match
+- Flat aliases: `term`, `recommendation_type`, plus `cluster` / `cluster_uuid`, `project` / `namespace`
+
+**PVC list ordering** (flat `order_by` + `order_how`; default `usage_ratio` desc):
+
+- `usage_ratio`, `estimated_monthly_savings` (alias `estimated_monthly_savings_usd`)
+- `pvc_name`, `persistentvolumeclaim`, `capacity_bytes`
+
+**PVC detail** (`GET .../recommendations/openshift/pvcs/detail`):
+
+Required identity params (flat or bracket): cluster, namespace, PVC name.
+
+```
+?cluster_uuid=<uuid>&namespace=team-a&persistentvolumeclaim=data-pvc
+?filter[cluster]=<uuid>&filter[project]=team-a&persistentvolumeclaim=data-pvc
+```
+
+Response: `terms` (all configured terms), `historical_usage` (daily digests), `mounted_by`.
+
 **Node utilization filters** (`GET .../recommendations/openshift/nodes`):
 
 - `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.

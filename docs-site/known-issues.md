@@ -680,6 +680,7 @@ days-to-full for capacity planning.
 `filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[term]`,
 `filter[storageclass]`, `order_by`/`order_how`, and pagination.
 `GET /recommendations/openshift/pvcs/detail` returns all terms plus daily usage history.
+List and detail responses include `mounted_by` (last observed mounting pod from storage CSV).
 Responses include `estimated_monthly_savings` when Masu storage rates are available.
 
 **VM–PVC correlation (known limitation):** The koku-metrics-operator **cost** VM CSV

@@ -153,42 +153,102 @@ near-full recommendation implies expansion (negative savings = additional monthl
 
 ## API
 
+### List
+
 `GET /api/cost-management/v1/recommendations/openshift/pvcs`
 
-### Query Parameters
+Returns one row per PVC for the selected **term** (default `medium`). Use the detail
+endpoint for all terms plus daily usage history.
+
+### Detail
+
+`GET /api/cost-management/v1/recommendations/openshift/pvcs/detail`
+
+Required query parameters: `cluster_uuid` (or `filter[cluster]`), `namespace` (or
+`filter[project]`), `persistentvolumeclaim` (or `pvc_name`). Response includes a
+`terms` map (`short`, `medium`, `long`) and `historical_usage` (daily min/max/avg
+from `daily_pvc_digests`).
+
+### Query Parameters (list)
+
+Bracket syntax is preferred; flat ROS aliases are also accepted. See
+[API query parameters](../../docs/operations/api-query-parameters.md).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cluster_uuid` | UUID | Filter by cluster |
-| `namespace` | string | Filter by namespace |
-| `recommendation_type` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `limit` | int | Results per page (1-100, default 20) |
+| `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
+| `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
+| `filter[recommendation_type]` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
+| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`) |
+| `filter[storageclass]` | string | Filter by StorageClass name |
+| `filter[tag:<key>]` | string | Tag filter (when `ROS_TAGS_ENABLED=true`) |
+| `order_by` | string | Sort column (default `usage_ratio`) |
+| `order_how` | string | `asc` or `desc` (default `desc`) |
+| `limit` | int | Results per page (1–100, default 20) |
 | `offset` | int | Pagination offset |
 
-### Response
+**Allowed `order_by` values:** `usage_ratio`, `estimated_monthly_savings` (alias
+`estimated_monthly_savings_usd`), `pvc_name` / `persistentvolumeclaim`,
+`capacity_bytes`.
+
+### List response
 
 ```json
 {
   "meta": { "count": 3, "limit": 20, "offset": 0, "currency": "USD" },
+  "links": { },
   "data": [
     {
       "cluster_uuid": "aaaaaaaa-...",
       "namespace": "production",
       "persistentvolumeclaim": "old-logs",
+      "mounted_by": "virt-launcher-old-logs-x9y8z",
       "persistentvolume": "pv-123",
       "storageclass": "gp3",
       "capacity_bytes": 107374182400,
       "usage_bytes_max": 0,
       "usage_ratio": 0.0,
       "recommendation_type": "orphaned",
+      "recommended_bytes": null,
       "days_to_full": null,
       "growth_bytes_per_day": 0,
+      "estimated_monthly_savings": { "value": "12.50", "units": "USD" },
       "notifications": {
         "20": { "type": "WARNING", "message": "PVC has zero usage...", "code": 20 }
       },
       "data_days": 14,
-      "estimated_monthly_savings_usd": 12.50,
+      "term": "medium",
       "resize_note": "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
+    }
+  ]
+}
+```
+
+`mounted_by` is the most recently observed pod that mounted the PVC (from the storage
+CSV `pod` column, persisted as `last_seen_pod`). It is display context only — not a
+stable workload identity for VM correlation (see [known issues](../known-issues.md#pvc-storage-rightsizing-req-63)).
+
+### Detail response (excerpt)
+
+```json
+{
+  "cluster_uuid": "aaaaaaaa-...",
+  "namespace": "production",
+  "persistentvolumeclaim": "old-logs",
+  "mounted_by": "virt-launcher-old-logs-x9y8z",
+  "storageclass": "gp3",
+  "capacity_bytes": 107374182400,
+  "terms": {
+    "short": { "recommendation_type": "healthy", "usage_ratio": 0.45, "term": "short" },
+    "medium": { "recommendation_type": "orphaned", "usage_ratio": 0.0, "term": "medium" }
+  },
+  "historical_usage": [
+    {
+      "date": "2026-05-01",
+      "capacity_bytes": 107374182400,
+      "usage_bytes_min": 0,
+      "usage_bytes_max": 0,
+      "usage_bytes_avg": 0
     }
   ]
 }
@@ -216,6 +276,9 @@ Overwritten on each ingestion cycle.
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
 | `migrations/000048_add_pvc_notification_codes.up.sql` | Notification seed |
 | `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_monthly_savings_usd` column |
+| `migrations/000113_fix_pvc_recommendation_term_unique.up.sql` | Per-term unique key on `pvc_recommendation_sets` |
+| `migrations/000114_add_pvc_last_seen_pod.up.sql` | `last_seen_pod` on digests and recommendations (`mounted_by` in API) |
+| `internal/api/handlers_pvc_detail.go` | Detail handler (multi-term + historical usage) |
 
 ## Manual QE Verification
 

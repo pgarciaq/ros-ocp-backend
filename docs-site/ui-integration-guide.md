@@ -537,17 +537,28 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 ```http
 GET /recommendations/openshift/pvcs
+GET /recommendations/openshift/pvcs/detail
 ```
 
-### Query parameters
+### Query parameters (list)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `cluster_uuid` | — | Filter by cluster |
-| `namespace` | — | Filter by namespace |
-| `recommendation_type` | — | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `term` | `medium` | `short`, `medium`, or `long` |
+| `filter[cluster]` | — | Cluster UUID (`cluster`, `cluster_uuid`) |
+| `filter[project]` | — | Namespace (`namespace`, `project`) |
+| `filter[recommendation_type]` | — | `oversized`, `near_full`, `orphaned`, `healthy` |
+| `filter[term]` | `medium` | `short`, `medium`, or `long` |
+| `filter[storageclass]` | — | Storage tier / class name (e.g. `gp3-csi`, `ocs-storagecluster-ceph-rbd`) |
+| `filter[tag:<key>]` | — | Tag filter when tags are enabled |
+| `order_by` | `usage_ratio` | `usage_ratio`, `estimated_monthly_savings`, `pvc_name`, `capacity_bytes` |
+| `order_how` | `desc` | `asc` or `desc` |
 | `offset`, `limit` | 0, 20 | Max limit 100 |
+
+### Query parameters (detail)
+
+Required: `cluster_uuid`, `namespace`, `persistentvolumeclaim` (flat or
+`filter[cluster]` / `filter[project]`). Returns all terms plus `historical_usage`
+for charts. Use for row drill-down from the list table.
 
 ### Response structure
 
@@ -560,6 +571,7 @@ GET /recommendations/openshift/pvcs
       "cluster_uuid": "...",
       "namespace": "team-a",
       "persistentvolumeclaim": "data-pvc",
+      "mounted_by": "virt-launcher-data-pvc-abc12",
       "persistentvolume": "pv-abc",
       "storageclass": "gp3",
       "capacity_bytes": 107374182400,
@@ -605,7 +617,10 @@ current usage is below 85%.
 
 ### UI Integration Recommendations
 
-- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
+- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings. Wire column sort to `order_by` + `order_how` (server-side).
+- Show `mounted_by` as workload context (e.g. "Mounted by: virt-launcher-…") when non-empty; omit when empty.
+- Add a **Storage class** filter dropdown bound to `filter[storageclass]` for tier-specific views.
+- Open detail on row click via `GET .../pvcs/detail` — render `terms` side-by-side and `historical_usage` as a usage-over-time chart.
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
 - When `growth_bytes_per_day` and `days_to_full` are available, show a growth projection line or "full in N days" callout.
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
@@ -616,6 +631,7 @@ current usage is below 85%.
 - Surface notification codes 20, 29, 30 inline with severity-appropriate badges.
 - Link PVC rows to namespace and cluster context; group by namespace in fleet views when helpful.
 - Default term to `medium`; expose term selector when comparing short vs long observation windows.
+- **No koku-ui PVC view yet** — API-only until UI catches up; see [known issues](known-issues.md#pvc--storage-rightsizing-req-63).
 
 ---
 

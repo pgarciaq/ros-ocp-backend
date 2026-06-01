@@ -442,3 +442,38 @@ exposed as `classification.idle_state` and `filter[idle_state]` on
 - Values populate on the **next ingestion cycle** after deploy.
 - Pair with operator ROS CSV columns `instance_type`, `node_allocatable_cpu_cores`, and
   `node_allocatable_memory_bytes` for Level 3 consolidation and accurate allocatable ratios.
+
+---
+
+## PVC per-term unique key (migration 000113)
+
+### What it fixes
+
+Migration **000113** drops stale auto-generated unique constraints on
+`pvc_recommendation_sets` and ensures the correct five-column key:
+`(org_id, cluster_uuid, namespace, persistentvolumeclaim, term)`. Required for
+short/medium/long term rows to coexist after phase 12 multi-term PVC output.
+
+### Deploy notes
+
+- Idempotent DDL — safe on live deployments; no worker stop required.
+- If upgrade fails on constraint names, check for orphaned duplicates before retry.
+- Rollback restores prior constraint names only when down migration is run.
+
+---
+
+## PVC last-seen pod / `mounted_by` (migration 000114)
+
+### What it adds
+
+Migration **000114** adds `last_seen_pod TEXT NOT NULL DEFAULT ''` to
+`daily_pvc_digests` and `pvc_recommendation_sets`. Ingestion copies the storage CSV
+`pod` column; the API exposes it as `mounted_by` on list and detail responses.
+
+### Deploy notes
+
+- Additive — no worker stop required.
+- Values populate on the **next ingestion cycle** after deploy (no historical backfill).
+- Empty string when the operator did not report a pod name for that PVC/day.
+- `mounted_by` is display context only; VM–PVC correlation still uses namespace heuristics
+  until VM CSV PVC columns are ingested (see [known-issues.md](known-issues.md)).
