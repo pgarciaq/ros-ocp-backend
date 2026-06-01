@@ -238,6 +238,78 @@ func TestGetQuotaRecommendations_Unauthorized_Returns401(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+func TestGetQuotaRecommendations_OrderByUtilizationDesc(t *testing.T) {
+	orgID := "org-quota-order-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440040"
+	e := setupQuotaRecommendationsHandler(t, orgID)
+	ctx := context.Background()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace,
+			cpu_request_hard_millicores, cpu_request_utilization_bp,
+			recommendation_type, risk_level, last_observed_at
+		) VALUES ($1, $2::uuid, 'low-util', 100000, 1000, 'optimal', 'low', NOW()),
+		       ($1, $2::uuid, 'high-util', 100000, 9000, 'raise', 'high', NOW())`,
+		orgID, clusterUUID,
+	)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?order_by=utilization&order_how=desc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp QuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 2)
+	assert.Equal(t, "high-util", resp.Data[0].Namespace)
+}
+
+func TestGetQuotaRecommendations_InvalidOrderBy(t *testing.T) {
+	orgID := "org-quota-bad-order-" + uuid.New().String()[:8]
+	e := setupQuotaRecommendationsHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?order_by=invalid", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestGetQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
+	orgID := "org-quota-detail-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440050"
+	e := setupQuotaRecommendationsHandler(t, orgID)
+	insertQuotaRecommendation(t, orgID, clusterUUID, "detail-ns")
+
+	ctx := context.Background()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_history (
+			org_id, cluster_uuid, namespace, recommendation_type, risk_level, recorded_at
+		) VALUES ($1, $2::uuid, 'detail-ns', 'tighten', 'low', NOW() - INTERVAL '2 days')`,
+		orgID, clusterUUID,
+	)
+	require.NoError(t, err)
+
+	v1 := e.Group("/api/cost-management/v1")
+	v1.GET("/recommendations/openshift/quota/detail", GetQuotaRecommendationDetail)
+
+	url := "/api/cost-management/v1/recommendations/openshift/quota/detail" +
+		"?cluster_uuid=" + clusterUUID + "&namespace=detail-ns"
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var detail QuotaRecommendationDetailResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, "detail-ns", detail.Namespace)
+	assert.Equal(t, "tighten", detail.RecommendationType)
+	require.Len(t, detail.History, 1)
+}
+
 func TestQuotaUtilFromNullBP(t *testing.T) {
 	assert.Nil(t, quotaUtilFromNullBP(sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}))
 	util := quotaUtilFromNullBP(

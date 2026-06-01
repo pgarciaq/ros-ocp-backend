@@ -154,6 +154,15 @@ Distinct prefix from namespace `ROS_QUOTA_*`. PUT on env-locked fields returns *
 
 ---
 
+## Operator dependencies (v1 limitations)
+
+| Gap | Why |
+|-----|-----|
+| **Per-CRQ namespace selector** | `ros-openshift-cluster-quota-*.csv` has no selector/namespace membership columns. The engine sums all namespace `quota_recommendation_sets` per cluster and applies that aggregate to **every** CRQ row until the operator exports selector labels (see comment in [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go)). |
+| **Storage / pods / object counts** | Same as namespace quota — operator PromQL only covers CPU/memory request/limit on `openshift_clusterresourcequota_usage`. |
+
+---
+
 ## Related documentation
 
 - [Namespace ResourceQuota recommendations](quota-recommendations.md)

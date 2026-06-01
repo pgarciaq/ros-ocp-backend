@@ -160,9 +160,11 @@ See [cluster-resource-quota.md](cluster-resource-quota.md) for API, operator CSV
 
 | Gap | Notes |
 |-----|-------|
-| **Storage / object counts** | PVC/service/configmap quota resources not in namespace CSV |
-| **Per-quota object identity** | Aggregated per namespace; multiple ResourceQuotas per namespace are not split |
-| **Notification codes** | API returns types/risk only; no Kruize-style notification catalog yet |
+| **Storage / object counts** | Operator `kube_resourcequota` queries only collect CPU/memory request/limit hard and used. No `requests.storage`, `pods`, or `count/*` in the namespace ROS CSV — requires [koku-metrics-operator](https://github.com/project-koku/koku-metrics-operator) query/CSV changes before ros-ocp-backend can ingest them. |
+| **Per-quota object identity** | Operator sums `kube_resourcequota` **by namespace** only (no `resourcequota` label in PromQL). Multiple `ResourceQuota` objects per namespace are merged — per-object `quota_name` needs operator CSV columns. |
+| **CRQ namespace selector** | Cluster quota CSV has hard/used per CRQ name only; no namespace selector labels. CRQ recommendations apply one cluster-wide namespace-quota aggregate to every CRQ row until the operator exports selector membership. |
+
+Implemented in this plugin: `order_by` / `order_how`, detail endpoints with `history[]`, notification codes **70–72**, and append-only `quota_recommendation_history` (90-day retention).
 
 ---
 

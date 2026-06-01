@@ -26,7 +26,7 @@ For operator-facing explanations and remediation steps, see
 | PVC | `pvc_recommendation_sets.notification_codes` | `SMALLINT[]` |
 | Snapshot | `snapshot_recommendation_sets.notification_codes` | `SMALLINT[]` |
 | VM | `vm_recommendations.notifications` | JSONB array of `{code,type,message}` |
-| Quota / ClusterResourceQuota | — | **No notification codes** |
+| Quota / ClusterResourceQuota | 70–73 | Near capacity, oversized/tighten, blocking, CRQ at capacity |
 
 **Planned API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` is described in requirements; catalog is seeded in DB migrations today.
 

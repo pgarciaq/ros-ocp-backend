@@ -623,8 +623,7 @@ The **`quota`** plugin (Phase 1, priority 35) compares ResourceQuota **hard** an
 API: `GET /api/cost-management/v1/recommendations/openshift/quota/`. See
 [quota-recommendations.md](features/quota-recommendations.md).
 
-**Still future (namespace quota):** Storage/pod/object-count quota resources and per-ResourceQuota
-object identity when multiple quotas exist in one namespace.
+**Operator dependency (namespace quota):** Non-compute quota resources (`requests.storage`, `pods`, `count/*`) and per-`ResourceQuota` object name are **not** in the operator CSV today — PromQL sums by namespace only. See [quota-recommendations.md](features/quota-recommendations.md#future-work-namespace-quota).
 
 ### ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
 
@@ -640,8 +639,7 @@ CSV arrives in a cycle, recommended-hard sums may reflect the **previous** names
 until container and namespace/quota processing complete. Expect one report cycle after first
 deployment for signals to fully align.
 
-**Still future (CRQ v1 gaps):** Per-CRQ namespace selector membership for recommended-hard sums;
-selector labels in API; storage/pod/object-count CRQ resources.
+**Operator dependency (CRQ):** Per-CRQ namespace selector membership requires selector labels in `ros-openshift-cluster-quota-*.csv` (not collected today). v1 applies one cluster-wide namespace-quota aggregate to every CRQ row. Storage/pod/object-count CRQ resources need the same operator query work as namespace quota.
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
