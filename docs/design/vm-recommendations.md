@@ -333,8 +333,20 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
 |--------|------|---------|
 | GET | `/api/cost-management/v1/recommendations/openshift/settings/vm` | Thresholds, memory floors, disk, I/O, instance type matching |
 | PUT | `/api/cost-management/v1/recommendations/openshift/settings/vm` | Partial update of allowed blocks |
+| DELETE | `/api/cost-management/v1/recommendations/openshift/settings/vm` | Reset VM settings to compiled defaults (`204`) |
 | GET | `/api/cost-management/v1/recommendations/openshift/settings/vm/terms` | Term windows |
 | PUT | `/api/cost-management/v1/recommendations/openshift/settings/vm/terms` | Replace term windows (1–3 terms) |
+| DELETE | `/api/cost-management/v1/recommendations/openshift/settings/vm/terms` | Reset VM term windows to plugin defaults (`204`) |
+
+Term windows can also be read/written via the generic endpoint
+`GET/PUT/DELETE .../settings/terms?recommendation_type=vm` (same lock rules: type-specific `vm` lock,
+then generic `terms` lock — see [configurability.md](../architecture/configurability.md#generic-terms-lock-alignment)).
+
+**Global settings lock:** When `ROS_SETTINGS_LOCKED=true` and `ROS_SETTINGS_LOCKED_VM` is true (default),
+VM settings GET responses include `settings_locked: true` and `locked_fields: ["*"]`; PUT/DELETE return
+`403`. Opt out with `ROS_SETTINGS_LOCKED_VM=false` while keeping other features frozen. Admin `ROS_VM_*`
+env vars still override compiled defaults on read. See
+[Global Settings Lock](../architecture/configurability.md#global-settings-lock).
 
 **GET settings response shape** ([`VMSettingsResponse`](../../internal/engine/vm_settings.go)):
 
@@ -366,9 +378,12 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
   },
   "io": { "high_iops_threshold": 3000 },
   "instance_type_matching": true,
-  "locked_fields": []
+  "locked_fields": [],
+  "settings_locked": false
 }
 ```
+
+When the platform locks VM settings, `settings_locked` is `true` and `locked_fields` is `["*"]`.
 
 ### Environment variables
 

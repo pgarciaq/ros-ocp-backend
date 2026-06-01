@@ -93,7 +93,11 @@ Settings (separate from the unified thresholds API):
 ```http
 GET /api/cost-management/v1/recommendations/openshift/settings/snapshot
 PUT /api/cost-management/v1/recommendations/openshift/settings/snapshot
+DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot
 ```
+
+DELETE returns `204` and clears per-org snapshot threshold overrides. Blocked when
+`ROS_SETTINGS_LOCKED_SNAPSHOT` is true under global lock (GET includes `settings_locked: true`).
 
 ### Example (abbreviated)
 
@@ -131,7 +135,7 @@ snapshot totals in `by_plugin.snapshot` as **recoverable cost**, not savings.
 
 ## Configurable thresholds
 
-`GET/PUT .../settings/snapshot`
+`GET/PUT/DELETE .../settings/snapshot`
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|

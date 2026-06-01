@@ -25,11 +25,21 @@ You can view it interactively using:
 | Quota | `/recommendations/openshift/quota` | GET | Namespace ResourceQuota right-sizing (`quota` plugin) |
 | Namespaces | `/recommendations/openshift/namespaces` | GET | Namespace quota recommendations |
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
-| Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration |
+| Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration (`?recommendation_type=<plugin>`) |
 | Settings | `/recommendations/openshift/settings/capabilities` | GET | Plugin capabilities |
-| Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT/DELETE | Snapshot staleness threshold |
+| Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT/DELETE | Snapshot staleness thresholds; DELETE resets tenant overrides |
+| Settings | `/recommendations/openshift/settings/thresholds` | GET/PUT/DELETE | Per-plugin sizing thresholds (`?recommendation_type=<plugin>`) |
+| Settings | `/recommendations/openshift/settings/vm` | GET/PUT/DELETE | VM rightsizing thresholds (`vm` plugin) |
+| Settings | `/recommendations/openshift/settings/vm/terms` | GET/PUT/DELETE | VM term windows |
 | Settings | `/recommendations/openshift/settings/idle-detection` | GET/PUT/DELETE | Idle/zombie classification thresholds |
 | Settings | `/recommendations/openshift/settings/quota` | GET/PUT/DELETE | ResourceQuota headroom and risk thresholds (`quota` plugin) |
+| Settings | `/recommendations/openshift/settings/cluster-quota` | GET/PUT/DELETE | ClusterResourceQuota thresholds (`cluster-quota` plugin) |
+| Settings | `/recommendations/openshift/settings/business-hours` | GET/PUT/DELETE | Org default business-hours schedule |
+| VMs | `/recommendations/openshift/vm` | GET | VM rightsizing list |
+| VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests |
+
+When `ROS_SETTINGS_LOCKED=true`, settings GET responses include `settings_locked: true`; PUT/DELETE
+return `403`. See [Configuration — Global Settings Lock](configuration.md#global-settings-lock).
 
 ## Authentication
 

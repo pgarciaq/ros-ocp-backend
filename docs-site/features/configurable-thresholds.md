@@ -65,6 +65,10 @@ DELETE /api/cost-management/v1/recommendations/openshift/settings/thresholds?rec
 Returns `204 No Content`. Removes tier-2 overrides; effective values revert to
 compiled defaults (unless admin env vars are set).
 
+When `ROS_SETTINGS_LOCKED=true` (or the plugin type is locked via `ROS_SETTINGS_LOCKED_<TYPE>`),
+DELETE returns `403` with `settings are locked by platform administrator`. GET still returns
+`settings_locked: true`. See [Global Settings Lock](../configuration.md#global-settings-lock).
+
 ## Async recalculation
 
 After a successful PUT, ROS re-runs recommendation engines for **all clusters

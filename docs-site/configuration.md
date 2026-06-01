@@ -15,11 +15,44 @@ variables below are the ones operators most often tune explicitly.
 
 Set `ROS_SETTINGS_LOCKED=true` to freeze **all** tenant Settings API overrides at compiled
 defaults (same effect as clearing every org's settings rows). PUT and DELETE on settings routes
-return `403`; GET responses include `settings_locked: true` and `locked_fields: ["*"]`.
+return `403 Forbidden` with `{"error":"settings are locked by platform administrator","locked":true}`.
+GET responses include `settings_locked: true` and `locked_fields: ["*"]`.
 
 Per-feature opt-outs (`ROS_SETTINGS_LOCKED_VM=false`, etc.) apply only when the global lock is on.
 Individual admin env vars (for example `ROS_CONTAINER_CPU_COST_PERCENTILE`) still override defaults
 on read even under the global lock.
+
+### Startup log
+
+When the API or processor starts with the global lock enabled, ROS logs a warning and lists any
+per-feature opt-outs, for example:
+
+```
+ROS_SETTINGS_LOCKED=true: all tenant settings overrides will be ignored; compiled defaults enforced
+ROS_SETTINGS_LOCKED: per-feature opt-out (tenant API allowed): vm
+```
+
+### Reset to defaults (DELETE)
+
+When settings are **not** locked, `DELETE` removes tenant overrides for that route and returns
+`204 No Content`. Examples:
+
+| DELETE path | Effect |
+|-------------|--------|
+| `/recommendations/openshift/settings/snapshot` | Clear snapshot staleness overrides |
+| `/recommendations/openshift/settings/vm` | Clear VM threshold / disk / I/O overrides |
+| `/recommendations/openshift/settings/vm/terms` | Clear VM term-window overrides |
+| `/recommendations/openshift/settings/thresholds?recommendation_type=container` | Clear container threshold overrides |
+| `/recommendations/openshift/settings/terms?recommendation_type=<plugin>` | Clear generic term overrides for that plugin |
+
+Other settings routes (quota, cluster-quota, idle-detection, business-hours) support DELETE as documented in
+[Configurability — Settings API Routes](architecture/configurability.md#settings-api-routes).
+
+### Generic terms lock
+
+`GET/PUT/DELETE .../settings/terms?recommendation_type=<plugin>` is blocked when **either** the
+plugin type is locked (e.g. `ROS_SETTINGS_LOCKED_VM` for `recommendation_type=vm`) **or** the generic
+`ROS_SETTINGS_LOCKED_TERMS` lock is on. VM-only term windows at `/settings/vm/terms` use only the `vm` lock.
 
 See [Configurability — Global Settings Lock](architecture/configurability.md#global-settings-lock)
 for the full variable list and business-hours behavior.

@@ -152,6 +152,47 @@ On service start, when the global lock is enabled, ROS logs a warning listing an
 See [`settings_locked_startup.go`](../../internal/engine/settings_locked_startup.go) and
 [`IsSettingsLocked`](../../internal/engine/settings_locked.go).
 
+Example log lines:
+
+```
+ROS_SETTINGS_LOCKED=true: all tenant settings overrides will be ignored; compiled defaults enforced
+ROS_SETTINGS_LOCKED: per-feature opt-out (tenant API allowed): vm, terms
+```
+
+### DELETE — reset tenant overrides
+
+When settings are **not** locked, `DELETE` on a settings route removes tier-2 PostgreSQL overrides for that org
+and returns **`204 No Content`**. Effective values revert to compiled defaults (tier 3), still subject to
+admin env-var locks on read. The in-process settings cache is invalidated for that org and type.
+
+| Route | DELETE clears |
+|-------|----------------|
+| `/settings/snapshot` | Per-org snapshot staleness overrides |
+| `/settings/vm` | VM threshold / disk / I/O / instance-type overrides |
+| `/settings/vm/terms` | VM term-window overrides (separate from generic terms table) |
+| `/settings/terms?recommendation_type=<plugin>` | Generic term rows for that plugin |
+| `/settings/thresholds?recommendation_type=<plugin>` | Threshold JSON for that plugin |
+| `/settings/quota`, `/settings/cluster-quota`, `/settings/idle-detection` | Respective override rows |
+| Business-hours routes | Schedule override at that scope |
+
+Under global lock (or per-feature lock), DELETE returns **`403 Forbidden`** with
+`{"error":"settings are locked by platform administrator","locked":true}`.
+
+### Generic terms lock alignment
+
+`/settings/terms?recommendation_type=<plugin>` evaluates **two** locks (either blocks PUT/DELETE and sets
+`settings_locked: true` on GET):
+
+1. **Type-specific** — `IsSettingsLocked(<plugin>)` (e.g. `vm` via `ROS_SETTINGS_LOCKED_VM`)
+2. **Generic terms** — `IsSettingsLocked("terms")` via `ROS_SETTINGS_LOCKED_TERMS`
+
+Example: with `ROS_SETTINGS_LOCKED=true`, `ROS_SETTINGS_LOCKED_TERMS=false`, and
+`ROS_SETTINGS_LOCKED_VM=true`, container terms remain editable on the generic endpoint while
+`recommendation_type=vm` is frozen. VM term windows on **`/settings/vm/terms`** consult only the **`vm`**
+lock (not the generic `terms` lock).
+
+Implementation: [`termsSettingsLocked()`](../../internal/api/handlers_terms.go).
+
 ### Business hours under global lock
 
 When `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` is true (default under global lock), all business-hours

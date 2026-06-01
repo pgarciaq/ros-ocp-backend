@@ -19,11 +19,62 @@ ROS-OCP uses a **three-tier precedence model** for every configurable parameter:
 | **2 — Tenant Settings API** | Per-`org_id` database record | Single tenant | Applied when no admin env var is set. Stored in PostgreSQL (`org_recommendation_terms`, snapshot settings, business-hours schedules, etc.). |
 | **3 — Compiled default** | Hardcoded in plugin or engine | Fallback | Used when neither tier 1 nor tier 2 provides a value. Defined in `DefaultTerms()`, `DefaultCPUConfig()`, plugin constants, etc. |
 
-**Resolution order:** Tier 1 → Tier 2 → Tier 3. Admin env vars always win.
+**Resolution order:** Tier 1 → Tier 2 → Tier 3. Admin env vars always win on both
+**read** and **write**.
+
+On **read**, the engine starts from compiled defaults (already patched from env at
+process init where applicable), overlays per-tenant values from PostgreSQL, then
+**re-applies any set admin env vars** so a stale tenant override cannot mask a
+platform lock. Container, namespace, node, GPU, and PVC threshold plugins use
+`resolveSizingThresholds()`; VM, quota, cluster-quota, and idle-detection settings
+use the same pattern in their respective resolve functions.
+
+On **write**, locked fields are rejected with `422 Unprocessable Entity` when the
+corresponding `ROS_*` env var is set.
 
 Term-specific env vars (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`) lock individual term
 fields. Threshold env vars (`ROS_CONTAINER_*`, `ROS_GPU_*`, etc.) lock the
 corresponding sizing or classification parameter platform-wide.
+
+### Current Implementation
+
+Settings resolution is implemented **per plugin** today. Each settings type has its
+own resolve function and matching `applyXxxEnvLocks` helper:
+
+| Settings type | Resolve function | Env-lock helper |
+|---------------|------------------|-----------------|
+| Container / namespace sizing | `resolveSizingThresholds()` | `applyContainerEnvLocks`, `applyNamespaceEnvLocks` |
+| Node / GPU / PVC thresholds | `ResolveNodeThresholdSettings`, etc. | `applyNodeEnvLocks`, `applyGPUEnvLocks`, `applyPVCEnvLocks` |
+| VM rightsizing | `ResolveVMSettings` | `applyVMEnvLocks` |
+| ResourceQuota | `ResolveQuotaSettings` | `applyQuotaEnvLocks` |
+| ClusterResourceQuota | `ResolveClusterQuotaSettings` | `applyClusterQuotaEnvLocks` |
+| Idle detection | `ResolveIdleDetectionSettings` | `applyIdleEnvLocks` |
+
+Each path follows the same three steps manually: start from compiled defaults,
+overlay tenant values from PostgreSQL, then re-apply any set admin env vars on read.
+This pattern was kept for the env-lock-on-read fix (Option A): a small, targeted
+change per plugin rather than refactoring every resolver at once. See
+[Future Enhancement: Generic Settings Resolver](#future-enhancement-generic-settings-resolver)
+for the planned centralized alternative (Option B).
+
+Implementation references:
+[`threshold_settings.go`](../../internal/engine/threshold_settings.go),
+[`vm_settings.go`](../../internal/engine/vm_settings.go),
+[`quota_settings.go`](../../internal/engine/quota_settings.go),
+[`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go),
+[`idle_settings.go`](../../internal/engine/idle_settings.go).
+
+### In-process settings cache (60 seconds)
+
+All settings resolution paths share a single in-process cache keyed by
+`(org_id, recommendation_type)` with a **60-second TTL**. Repeated resolves within
+the same minute reuse the merged result without querying PostgreSQL. Cache entries
+are invalidated immediately on successful Settings API PUT or DELETE for that org
+and type (via `InvalidateThresholdCache`).
+
+Cached recommendation types: `container`, `namespace`, `node`, `gpu`, `pvc`, `vm`,
+`quota`, `cluster-quota`, and `idle_detection`. The Prometheus gauge
+`ros_threshold_cache_entries` reports the number of entries currently held.
 
 ---
 
@@ -34,11 +85,15 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | Route | Methods | Status | Purpose |
 |-------|---------|--------|---------|
 | `/settings/terms?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant term windows (short / medium / long). Valid plugins: `container`, `namespace`, `node`, `gpu`, `pvc`. |
-| `/settings/snapshot` | GET, PUT | **Existing** | Snapshot staleness thresholds (orphan age, never-restored days, stale days, redundant count, cost per GiB/month). |
+| `/settings/snapshot` | GET, PUT, DELETE | **Existing** | Snapshot staleness thresholds (orphan age, never-restored days, stale days, redundant count, cost per GiB/month). |
+| `/settings/vm` | GET, PUT, DELETE | **Existing** | VM rightsizing thresholds, memory floors, disk, I/O, instance-type matching (`vm` plugin). |
+| `/settings/vm/terms` | GET, PUT, DELETE | **Existing** | VM recommendation term windows (`vm` plugin). |
 | `/settings/business-hours` | GET, PUT, DELETE | **Existing** | Org-default business-hours schedule. |
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
 | `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
+| `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
+| `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
 
 When a parameter is locked by an admin env var, the Settings API marks it `"locked": true`
 in GET responses and rejects PUT attempts for that field.
@@ -52,10 +107,97 @@ recommendations typically appear within seconds. Disable with
 
 Implementation references: [`handlers_terms.go`](../../internal/api/handlers_terms.go),
 [`handlers_snapshot_settings.go`](../../internal/api/handlers_snapshot_settings.go),
+[`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go),
 [`handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go),
 [`handlers_threshold_settings.go`](../../internal/api/handlers_threshold_settings.go),
 [`term_config.go`](../../internal/engine/term_config.go),
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go).
+
+---
+
+## Global Settings Lock
+
+When `ROS_SETTINGS_LOCKED=true`, ROS behaves as if **every** tenant Settings API override were cleared:
+compiled defaults are enforced on read and resolve paths, and PUT/DELETE on settings routes return
+`403 Forbidden` with `{"error":"settings are locked by platform administrator","locked":true}`.
+
+This reuses the existing `locked_fields` mechanism on GET responses (`locked_fields: ["*"]`) plus
+`settings_locked: true` on API envelopes. Individual admin env vars (`ROS_CONTAINER_*`, `ROS_VM_*`, etc.)
+still override compiled defaults on read/resolve even under the global lock.
+
+### Environment variables
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `ROS_SETTINGS_LOCKED` | `false` | Master switch: freeze all tenant settings overrides platform-wide. |
+| `ROS_SETTINGS_LOCKED_CONTAINER` | `true` | When global lock is on, lock container threshold settings (opt-out with `false`). |
+| `ROS_SETTINGS_LOCKED_GPU` | `true` | Lock GPU threshold settings. |
+| `ROS_SETTINGS_LOCKED_NODE` | `true` | Lock node threshold settings. |
+| `ROS_SETTINGS_LOCKED_NAMESPACE` | `true` | Lock namespace threshold settings. |
+| `ROS_SETTINGS_LOCKED_PVC` | `true` | Lock PVC threshold settings. |
+| `ROS_SETTINGS_LOCKED_VM` | `true` | Lock VM settings and VM terms. |
+| `ROS_SETTINGS_LOCKED_QUOTA` | `true` | Lock ResourceQuota settings. |
+| `ROS_SETTINGS_LOCKED_CLUSTER_QUOTA` | `true` | Lock ClusterResourceQuota settings. |
+| `ROS_SETTINGS_LOCKED_IDLE` | `true` | Lock idle-detection settings. |
+| `ROS_SETTINGS_LOCKED_SNAPSHOT` | `true` | Lock snapshot staleness settings. |
+| `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` | `true` | Lock business-hours schedules; GET returns `enabled: false`. |
+| `ROS_SETTINGS_LOCKED_TERMS` | `true` | Lock generic `/settings/terms` overrides (container, namespace, node, gpu, pvc). |
+
+Per-feature opt-outs apply **only** when `ROS_SETTINGS_LOCKED=true`. Example: with global lock on and
+`ROS_SETTINGS_LOCKED_VM=false`, tenants may PUT/DELETE VM settings while container thresholds remain frozen.
+
+### Startup logging
+
+On service start, when the global lock is enabled, ROS logs a warning listing any per-feature opt-outs.
+See [`settings_locked_startup.go`](../../internal/engine/settings_locked_startup.go) and
+[`IsSettingsLocked`](../../internal/engine/settings_locked.go).
+
+Example log lines:
+
+```
+ROS_SETTINGS_LOCKED=true: all tenant settings overrides will be ignored; compiled defaults enforced
+ROS_SETTINGS_LOCKED: per-feature opt-out (tenant API allowed): vm, terms
+```
+
+### DELETE — reset tenant overrides
+
+When settings are **not** locked, `DELETE` on a settings route removes tier-2 PostgreSQL overrides for that org
+and returns **`204 No Content`**. Effective values revert to compiled defaults (tier 3), still subject to
+admin env-var locks on read. The in-process settings cache is invalidated for that org and type.
+
+| Route | DELETE clears |
+|-------|----------------|
+| `/settings/snapshot` | Per-org snapshot staleness overrides |
+| `/settings/vm` | VM threshold / disk / I/O / instance-type overrides |
+| `/settings/vm/terms` | VM term-window overrides (separate from generic terms table) |
+| `/settings/terms?recommendation_type=<plugin>` | Generic term rows for that plugin |
+| `/settings/thresholds?recommendation_type=<plugin>` | Threshold JSON for that plugin |
+| `/settings/quota`, `/settings/cluster-quota`, `/settings/idle-detection` | Respective override rows |
+| Business-hours routes | Schedule override at that scope |
+
+Under global lock (or per-feature lock), DELETE returns **`403 Forbidden`** with
+`{"error":"settings are locked by platform administrator","locked":true}`.
+
+### Generic terms lock alignment
+
+`/settings/terms?recommendation_type=<plugin>` evaluates **two** locks (either blocks PUT/DELETE and sets
+`settings_locked: true` on GET):
+
+1. **Type-specific** — `IsSettingsLocked(<plugin>)` (e.g. `vm` via `ROS_SETTINGS_LOCKED_VM`)
+2. **Generic terms** — `IsSettingsLocked("terms")` via `ROS_SETTINGS_LOCKED_TERMS`
+
+Example: with `ROS_SETTINGS_LOCKED=true`, `ROS_SETTINGS_LOCKED_TERMS=false`, and
+`ROS_SETTINGS_LOCKED_VM=true`, container terms remain editable on the generic endpoint while
+`recommendation_type=vm` is frozen. VM term windows on **`/settings/vm/terms`** consult only the **`vm`**
+lock (not the generic `terms` lock).
+
+Implementation: [`termsSettingsLocked()`](../../internal/api/handlers_terms.go).
+
+### Business hours under global lock
+
+When `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` is true (default under global lock), all business-hours
+PUT/DELETE routes return `403`, schedules are not applied during recommendation ingestion, and GET
+returns `{"enabled": false, "settings_locked": true}`.
 
 ---
 
@@ -253,17 +395,38 @@ because storage growth is slow.
 
 Namespace **ResourceQuota** hard-limit recommendations (`quota` plugin). Compares
 configured quota hard/used metrics from the namespace CSV against aggregated container
-`term=medium` / `engine=cost` sums. Not tenant-configurable via Settings API — admin
-env vars only.
+`term=medium` / `engine=cost` sums. Tenant overrides via `GET/PUT/DELETE /settings/quota`;
+env vars lock fields for operator-controlled deployments.
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
-| `ROS_QUOTA_HEADROOM_PERCENT` | 20 | int | Headroom on recommended hard limits. <br><em>Expanded: Added to 100% before multiplying container recommendation sums. 20 means recommended quota hard = sum × 1.20 (12000 basis points). Applies to CPU/memory request and limit recommendations derived from container rec totals.</em> | No | New |
-| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 80 | int | High utilization / raise signal. <br><em>Expanded: When max utilization (greater of quota used or container rec sum vs hard) reaches this percent of hard, recommendation_type is `raise` and risk_level is `high`. Default 80% warns before admission failures.</em> | No | New |
-| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 60 | int | Medium risk band. <br><em>Expanded: Utilization at or above this percent (and below high threshold) sets risk_level to `medium`. Does not alone trigger `raise` — that requires the high-risk threshold.</em> | No | New |
+| `ROS_QUOTA_HEADROOM_PERCENT` | 10 | int | Headroom on recommended hard limits. <br><em>Expanded: Added to 100% before multiplying container recommendation sums. 10 means recommended quota hard = sum × 1.10 (11000 basis points). Applies to CPU/memory request and limit recommendations derived from container rec totals.</em> | Yes* | New |
+| `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 90 | int | High utilization / raise signal. <br><em>Expanded: When max utilization (greater of quota used or container rec sum vs hard) reaches this percent of hard, recommendation_type is `raise` and risk_level is `high`. Default 90% warns before admission failures.</em> | Yes* | New |
+| `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 70 | int | Medium risk band. <br><em>Expanded: Utilization at or above this percent (and below high threshold) sets risk_level to `medium`. Does not alone trigger `raise` — that requires the high-risk threshold.</em> | Yes* | New |
+
+\* Configurable via `PUT /settings/quota` unless the matching `ROS_QUOTA_*` env var is set (field locked).
 
 See [quota-recommendations.md](../features/quota-recommendations.md) for ingestion timing,
 one-cycle lag, and API fields.
+
+---
+
+## ClusterResourceQuota
+
+OpenShift **ClusterResourceQuota** recommendations (`cluster-quota` plugin). Compares CRQ
+hard/used from the cluster-quota ROS CSV against aggregated namespace quota recommendation
+totals. Tenant overrides via `GET/PUT/DELETE /settings/cluster-quota`; env vars lock fields.
+
+| Env var | Default | Type | Description | Tenant-configurable | Status |
+|---------|---------|------|-------------|---------------------|--------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | 10 | int | Headroom on recommended CRQ hard limits (same semantics as `ROS_QUOTA_HEADROOM_PERCENT`). | Yes* | New |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | 90 | int | High utilization / `raise` signal vs CRQ hard. | Yes* | New |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | 70 | int | Medium risk band. | Yes* | New |
+
+\* Configurable via `PUT /settings/cluster-quota` unless the matching `ROS_CLUSTER_QUOTA_*` env var is set (field locked).
+
+See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for ingestion timing,
+one-cycle lag (same as namespace quota), and API fields.
 
 ---
 
@@ -391,6 +554,91 @@ too many volumes as oversized.
 | `ROS_PVC_OVERSIZED_THRESHOLD` | 0.40 | Allow 40% utilization before oversized |
 | `ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER` | 3 | Larger headroom for burst writes |
 | `ROS_TERMS_PVC_LONG_WINDOW_DAYS` | 120 | Slow growth needs longer observation |
+
+---
+
+## Future Enhancement: Generic Settings Resolver
+
+> **Status:** Not implemented — documented as Option B for a future cleanup PR.
+> Do not mix this refactor with feature work.
+
+### Problem
+
+Each plugin implements its own resolve path: load compiled defaults → overlay
+tenant values from the database → re-apply admin env locks on read. The algorithm
+is correct but scattered. Every new settings type must remember to add its own
+env-lock-on-read step after the DB overlay. Forgetting that step caused an
+inconsistency bug where VM and quota settings could return stale tenant overrides
+even when the corresponding `ROS_*` env var was set (platform lock not enforced on
+read).
+
+### Proposed Solution (Option B)
+
+A generic `ResolveSettings[T]` function using Go generics that encapsulates the
+full three-tier resolution for any settings struct:
+
+```go
+func ResolveSettings[T any](
+    ctx context.Context,
+    pool *pgxpool.Pool,
+    orgID, recType string,
+    defaults T,
+    lockMap map[string]string,
+) (T, []string, error) {
+    result := defaults
+    if err := overlayFromDB(ctx, pool, orgID, recType, &result); err != nil {
+        return result, nil, err
+    }
+    locked := applyEnvLocks(&result, lockMap)
+    return result, locked, nil
+}
+```
+
+`applyEnvLocks` would use reflection or a field-tag-based approach to:
+
+1. Iterate the lock map (`env var name` → `struct field name`)
+2. For each env var that is present (`os.LookupEnv`), override the corresponding
+   struct field with the parsed config value
+3. Return the list of locked field names (for Settings API `"locked": true` responses)
+
+Plugins would register only `defaults` + `lockMap`; the resolver owns the algorithm.
+
+### Benefits
+
+- **Impossible to forget env re-application** — it is built into the resolver, not
+  duplicated per plugin
+- **Single point of maintenance** for the three-tier resolution algorithm
+- **Self-documenting** — each plugin declares defaults and which env vars lock which
+  fields
+- **Locked fields as a side effect** — no separate `lockedFieldsFromEnvMap` call;
+  the resolver returns the locked field list from the same pass
+
+### Considerations
+
+- Requires Go generics (1.18+; already available in this codebase)
+- Reflection for field mapping adds runtime complexity; alternative is
+  code-generated `applyEnvLocks` per struct (more boilerplate, zero reflection)
+- DB overlay via `overlayFromDB` assumes settings stored in
+  `recommendation_thresholds` JSONB — plugins with dedicated tables (snapshot
+  settings, term windows, business-hours schedules) need adapters or separate
+  overlay hooks
+- Should ship as a **standalone cleanup PR**, not mixed with feature work
+
+### Migration Path
+
+1. Implement `ResolveSettings[T]` with reflection-based `applyEnvLocks`
+2. Migrate one plugin first (e.g., container sizing thresholds) and verify behavior
+   matches the existing `resolveSizingThresholds` + `applyContainerEnvLocks` path
+3. Run full unit and integration tests; confirm locked-field lists in GET responses
+4. Migrate remaining plugins one at a time (namespace, node, GPU, PVC, VM, quota,
+   cluster-quota, idle-detection)
+5. Remove per-plugin `applyXxxEnvLocks` functions and consolidate env lock maps
+
+Until that migration completes, new settings types should follow the existing
+per-plugin pattern documented in [Current Implementation](#current-implementation)
+and mirror the env re-apply step used in
+[`resolveSizingThresholds`](../../internal/engine/threshold_settings.go) and
+[`ResolveQuotaSettings`](../../internal/engine/quota_settings.go).
 
 ---
 

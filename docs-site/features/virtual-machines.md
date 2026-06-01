@@ -4,7 +4,7 @@
     **Status:** Preview (Beta) — enabled by default (`ROS_ENABLE_VM_RECS=true`)  
     **API:** `GET /api/cost-management/v1/recommendations/openshift/vm` (list),
     `GET .../vm/detail` (detail with daily digests)  
-    **Settings:** `GET/PUT .../settings/vm`, `GET/PUT .../settings/vm/terms`  
+    **Settings:** `GET/PUT/DELETE .../settings/vm`, `GET/PUT/DELETE .../settings/vm/terms`  
     **Configurable:** Yes (Settings API + env-var locks)  
     **Engines:** cost, performance (`filter[engine]=cost|performance`)  
     **Savings:** Not yet — no dollar fields in API
@@ -301,8 +301,15 @@ Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Setti
 |--------|------|---------|
 | GET | `/recommendations/openshift/settings/vm` | Thresholds, memory floors, disk, I/O, instance type matching |
 | PUT | `/recommendations/openshift/settings/vm` | Partial update of allowed blocks |
+| DELETE | `/recommendations/openshift/settings/vm` | Reset VM settings to compiled defaults (`204`) |
 | GET | `/recommendations/openshift/settings/vm/terms` | Term windows |
 | PUT | `/recommendations/openshift/settings/vm/terms` | Replace term windows (1–3 terms) |
+| DELETE | `/recommendations/openshift/settings/vm/terms` | Reset VM term windows to plugin defaults (`204`) |
+
+**Platform lock:** With `ROS_SETTINGS_LOCKED=true` (and `ROS_SETTINGS_LOCKED_VM=true`, the default),
+PUT/DELETE return `403` and GET includes `settings_locked: true` plus `locked_fields: ["*"]`. Set
+`ROS_SETTINGS_LOCKED_VM=false` to allow tenant VM settings while other features stay frozen.
+Generic `.../settings/terms?recommendation_type=vm` also honors `ROS_SETTINGS_LOCKED_TERMS` when set.
 
 ??? example "GET settings (abbreviated)"
     ```json
@@ -333,7 +340,8 @@ Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Setti
       },
       "io": { "high_iops_threshold": 3000 },
       "instance_type_matching": true,
-      "locked_fields": []
+      "locked_fields": [],
+      "settings_locked": false
     }
     ```
 
