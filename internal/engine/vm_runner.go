@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -90,6 +92,14 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		log.Info("vm recs: no recommendations produced")
 		return nil
 	}
+
+	appCfg := config.GetConfig()
+	var costData *costdata.ClusterCostData
+	if appCfg.SavingsEstimatesEnabled {
+		start, end := recalcDateRange()
+		costData = fetchRecalcCostData(ctx, orgID, clusterUUID.String(), start, end)
+	}
+	ApplyVMSavings(recs, costData, appCfg.SavingsEstimatesEnabled)
 
 	validTerms := make([]string, len(terms))
 	for i, t := range terms {

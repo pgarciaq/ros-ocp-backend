@@ -179,6 +179,7 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 		"settings_locked":         {}, // omitted when false (json omitempty) on settings GET responses
 		"locked_fields":           {}, // omitted when no env-locked VM settings fields
 		"gpu":                     {}, // omitted when VM has no GPU recommendation block
+		"savings":                 {}, // null when savings estimates disabled or rates unavailable
 		"daily_digests":           {}, // omitted on list; detail should include when digest data exists
 	}
 

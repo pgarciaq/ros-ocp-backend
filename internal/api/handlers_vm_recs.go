@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // VM sizing resource blocks for API responses.
@@ -92,6 +93,7 @@ type VMRecommendationItem struct {
 	DiskProjection    vmDiskProjection    `json:"disk_projection"`
 	Notifications     []any               `json:"notifications"`
 	GPU               *vmGPURecommendation `json:"gpu,omitempty"`
+	Savings           *money.SavingsObject `json:"savings"`
 	LastRecommendedAt string              `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
 }
@@ -480,6 +482,7 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			RecommendedExpandGiB: r.DiskRecommendedExpandGiB,
 		},
 		Notifications:     parseVMNotifications(r.Notifications),
+		Savings:           vmRecSavingsObject(r.SavingsAmount, r.SavingsCurrency),
 		LastRecommendedAt: r.LastRecommendedAt.UTC().Format(time.RFC3339),
 	}
 	if r.GPUCount > 0 || r.GPUClassification != "" {
@@ -497,6 +500,18 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 		}
 	}
 	return item
+}
+
+func vmRecSavingsObject(amount *float64, currency *string) *money.SavingsObject {
+	if amount == nil {
+		return nil
+	}
+	cur := money.DefaultCurrency
+	if currency != nil && *currency != "" {
+		cur = *currency
+	}
+	s := money.FormatUSDToSavings(*amount, cur)
+	return &s
 }
 
 func parseVMNotifications(raw []byte) []any {

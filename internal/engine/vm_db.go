@@ -109,6 +109,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				recommended_gpu_profile, recommended_time_slice_count,
 				gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 				gpu_utilization_avg_bp,
+				savings_amount, savings_currency,
 				last_recommended_at, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5,
@@ -121,7 +122,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				$32, $33, $34,
 				$35,
 				$36, $37, $38, $39, $40, $41, $42, $43, $44, $45,
-				$46, now()
+				$46, $47, $48, now()
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
 				guest_os = EXCLUDED.guest_os,
@@ -163,6 +164,8 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				gpu_timeslice_rationale = EXCLUDED.gpu_timeslice_rationale,
 				recommended_vgpu_profile = EXCLUDED.recommended_vgpu_profile,
 				gpu_utilization_avg_bp = EXCLUDED.gpu_utilization_avg_bp,
+				savings_amount = EXCLUDED.savings_amount,
+				savings_currency = EXCLUDED.savings_currency,
 				last_recommended_at = EXCLUDED.last_recommended_at,
 				updated_at = now()`,
 			r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
@@ -179,6 +182,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 			r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
 			r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
 			r.GPUUtilizationAvgBP,
+			r.SavingsAmount, r.SavingsCurrency,
 			r.LastRecommendedAt,
 		)
 		if err != nil {

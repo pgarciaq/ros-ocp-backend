@@ -7,7 +7,7 @@
     **Settings:** `GET/PUT/DELETE .../settings/vm`, `GET/PUT/DELETE .../settings/vm/terms`  
     **Configurable:** Yes (Settings API + env-var locks)  
     **Engines:** cost, performance (`filter[engine]=cost|performance`) — native only; Kruize does not support VMs  
-    **Savings:** Not yet — no dollar fields in API
+    **Savings:** `savings` object on list/detail when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Koku rates are available; otherwise `null`
 
 ## Overview
 
@@ -540,7 +540,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 
 | Gap | Notes |
 |-----|-------|
-| **No dollar savings** | `estimated_monthly_savings` not populated; Koku VM cost rates not wired |
+| **Savings fleet rollup** | Per-VM `savings` on list/detail; not included in `GET .../savings-summary` yet |
 | **Multi-GPU VMs** | Per-device `gpu_devices` digest and notification **54** when some GPUs are idle |
 | **MIG optimization** | Coarse **next-smaller MIG profile** step-down from utilization (`OptimalMIGProfile()`), not a full multi-objective vGPU optimizer across all catalog profiles |
 | **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
@@ -564,7 +564,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Storage tiering (hot/cold)** | Volume class recommendations |
 | **Power management / consolidation** | Suspend and cluster consolidation guidance |
 | **Live migration recommendations** | Migration-in-progress awareness |
-| **Savings estimate ($)** | Koku cost rate integration |
+| **Savings in fleet summary** | Aggregate VM savings alongside container/node/PVC totals |
 
 ## Related documentation
 

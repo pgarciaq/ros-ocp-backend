@@ -71,6 +71,10 @@ type VMRecommendation struct {
 	RecommendedVGPUProfile   string `db:"recommended_vgpu_profile" json:"recommended_vgpu_profile"`
 	GPUUtilizationAvgBP      int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
 
+	// Monthly savings estimate (nullable; populated when ROS_SAVINGS_ESTIMATES_ENABLED and Koku rates exist)
+	SavingsAmount   *float64 `db:"savings_amount"`
+	SavingsCurrency *string  `db:"savings_currency"`
+
 	// Timestamps
 	LastRecommendedAt time.Time `db:"last_recommended_at"`
 	CreatedAt         time.Time `db:"created_at"`

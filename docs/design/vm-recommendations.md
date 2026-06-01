@@ -53,7 +53,7 @@ VM recommendations are **always** produced by the built-in Go engine ([`recommen
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
 | Operator Strategy 3 dual-CSV | ✅ | koku-metrics-operator (`ros-openshift-vm-usage`, `cm-openshift-vm-usage`, `ros-openshift-vm-gpu-device`) |
 | OpenAPI spec (VM list/detail/history/settings) | ✅ | [`openapi.json`](../../openapi.json) |
-| Savings ($) in API | ⬜ | — |
+| Savings ($) in API | ✅ | [`vm_savings.go`](../../internal/engine/vm_savings.go), `savings` on list/detail |
 | `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
 | vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
@@ -636,7 +636,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Storage tiering (hot/cold)** | No hot/cold volume class recommendations |
 | **Power management / consolidation** | No suspend or cluster consolidation guidance |
 | **Live migration recommendations** | No awareness of migration in progress |
-| **Savings estimation ($)** | No dollar fields; requires Koku cost rate integration |
+| **Savings in fleet summary** | VM savings persist on `vm_recommendations` but are not rolled into `GET .../savings-summary` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Network metrics dependency** | **n1** requires KubeVirt `net_*` on `ros-openshift-vm-usage-*.csv` |
@@ -660,13 +660,31 @@ Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, te
 
 ---
 
+## Savings estimates
+
+When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches Koku [`effective_rates`](../../internal/costdata/provider.go) and [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) persists `savings_amount` / `savings_currency` on each row.
+
+**Rate selection:** CPU and memory use the **effective** configured rate — `max(cpu_core_request_per_hour, cpu_core_usage_per_hour)` and the memory GB equivalents (infrastructure + supplementary per metric). GPU uses `gpu_cost_per_month` (monthly, not hourly).
+
+| Scenario | Formula (monthly USD) |
+|----------|------------------------|
+| **Downsize** | `(current_vCPU − rec_vCPU) × cpu_rate × 730 + (current_mem_GiB − rec_mem_GiB) × mem_rate × 730` plus GPU reduction when applicable |
+| **Idle / abandoned** | `current_vCPU × cpu_rate × 730 + current_mem_GiB × mem_rate × 730 + gpu_count × gpu_monthly_rate` |
+| **GPU remove / MIG** | Same patterns as container GPU: full card on `remove_gpu`; `(1 − rec_slices/total_slices) × gpu_monthly_rate × gpu_count` for MIG profiles |
+
+**API:** `savings` is a [`SavingsObject`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
+
+**Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` — no masu fetch; `savings` is always `null`.
+
+---
+
 ## Database
 
-Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_recommendations.up.sql), GPU fields `000097`, device table `000100`, notification seeds in `000090`/`000091`.
+Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_recommendations.up.sql), GPU fields `000097`, device table `000100`, savings columns `000106`, notification seeds in `000090`/`000091`.
 
 - `daily_vm_digests` — daily percentile and I/O columns; aggregate GPU fields; `has_gpu`
 - `vm_gpu_device_digests` — per-GPU rows keyed by `vm_digest_id` + `gpu_uuid`
-- `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB
+- `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB, nullable `savings_amount` / `savings_currency`
 - `vm_recommendation_history` — append-only history; retention via `ROS_VM_REC_HISTORY_RETENTION_DAYS`
 
 ---

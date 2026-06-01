@@ -88,6 +88,17 @@ func TestVMRecommendations_ListInvalidLimit_Returns400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestVMRecSavingsObject(t *testing.T) {
+	assert.Nil(t, vmRecSavingsObject(nil, nil))
+
+	amt := 123.45
+	cur := "EUR"
+	got := vmRecSavingsObject(&amt, &cur)
+	require.NotNil(t, got)
+	assert.Equal(t, "EUR", got.Units)
+	assert.Equal(t, "123.450000", got.Value)
+}
+
 func TestParseVMRecBoolFilter_InvalidValue(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/?filter%5Bguest_agent_detected%5D=maybe", nil)

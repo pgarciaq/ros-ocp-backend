@@ -1,6 +1,10 @@
 package engine
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+import (
+	"math"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+)
 
 // combinedConfiguredRate returns infrastructure + supplementary for a metric.
 func combinedConfiguredRate(costData *costdata.ClusterCostData, metric string) float64 {
@@ -27,6 +31,20 @@ func MemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
 // NodeCostPerMonth returns the combined node_cost_per_month rate.
 func NodeCostPerMonth(costData *costdata.ClusterCostData) float64 {
 	return combinedConfiguredRate(costData, "node_cost_per_month")
+}
+
+// EffectiveCPUCoreHourlyRate returns max(request, usage) combined rates for CPU.
+func EffectiveCPUCoreHourlyRate(costData *costdata.ClusterCostData) float64 {
+	return effectiveConfiguredRate(costData, "cpu_core_request_per_hour", "cpu_core_usage_per_hour")
+}
+
+// EffectiveMemoryGBHourlyRate returns max(request, usage) combined rates for memory.
+func EffectiveMemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
+	return effectiveConfiguredRate(costData, "memory_gb_request_per_hour", "memory_gb_usage_per_hour")
+}
+
+func effectiveConfiguredRate(costData *costdata.ClusterCostData, requestMetric, usageMetric string) float64 {
+	return math.Max(combinedConfiguredRate(costData, requestMetric), combinedConfiguredRate(costData, usageMetric))
 }
 
 // StorageRequestPerMonth returns storage_gb_request_per_month, falling back to
