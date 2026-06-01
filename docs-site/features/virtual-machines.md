@@ -315,6 +315,7 @@ All VM codes below appear in the `notifications` array on list and detail respon
 | **51** | info | GPU underutilized — smaller MIG profile or consider vGPU/MIG |
 | **52** | warning | GPU memory saturated — larger GPU / more frame buffer |
 | **53** | warning | GPU compute saturated — more powerful GPU |
+| **54** | warning | Mixed idle/active GPUs — reduce GPU count |
 | **55** | warning | Network-saturated workload — recommend **n1** network-optimized instance type |
 | **56** | info | vGPU profile recommended (`recommended_vgpu_profile`) |
 | **57** | warning | GPU time-slicing not safe — frame-buffer pressure |
@@ -422,7 +423,11 @@ GET /api/cost-management/v1/recommendations/openshift/vm
 | `filter[engine]` | `cost` or `performance` |
 | `filter[confidence]` | `high`, `moderate`, `low` |
 | `filter[is_idle]` / `filter[is_abandoned]` / `filter[is_oversized]` | Boolean |
+| `filter[is_network_bound]` | Boolean — network-saturated VMs eligible for **n1** |
+| `filter[guest_os]` | Case-insensitive substring (comma-separated OR) |
 | `filter[guest_agent_detected]` | Boolean |
+| `filter[has_gpu]` | Boolean |
+| `filter[gpu_classification]` | Comma-separated (`idle`, `underutilized`, `well_utilized`, `saturated`, …) |
 
 ??? example "List response (abbreviated)"
     ```json
@@ -493,9 +498,9 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **No dollar savings** | `estimated_monthly_savings` not populated; Koku VM cost rates not wired |
 | **Multi-GPU VMs** | Per-device `gpu_devices` digest and notification **54** when some GPUs are idle |
 | **MIG optimization** | Coarse **next-smaller MIG profile** step-down from utilization (`OptimalMIGProfile()`), not a full multi-objective vGPU optimizer across all catalog profiles |
-| **vGPU fractional depth** | Classification and action hints (idle/underutilized/saturated, `enable_time_slicing`) only — full vGPU profile catalog recommendations are a future enhancement |
+| **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
-| **n-series (network-optimized)** | `n1` types are recognition-only until network metrics exist — not active recommendations |
+| **Network metrics dependency** | **n1** active recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv`; without them, `is_network_bound` stays false |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
 | **NUMA-aware placement** | Not modeled |
 | **SR-IOV network recommendations** | Not implemented |

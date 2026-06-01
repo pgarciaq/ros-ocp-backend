@@ -345,7 +345,7 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 | Node consolidation | `/settings/node` | `ROS_NODE_*` |
 | GPU classification | `/settings/gpu` | `ROS_GPU_*` |
 | PVC right-sizing | `/settings/pvc` | `ROS_PVC_*` |
-| OpenShift Virtualization | `/settings/vm`, `/settings/vm/terms` | `ROS_VM_*`, `ROS_TERMS_VM_*` |
+| OpenShift Virtualization | `/settings/vm`, `/settings/vm/terms` | `ROS_VM_*`, `ROS_TERMS_VM_*` (includes `ROS_VM_NETWORK_*`, `ROS_VM_GPU_TIMESLICE_*`, `ROS_VM_ENABLE_NETWORK_SERIES`) |
 | ResourceQuota | `/settings/quota` | `ROS_QUOTA_*` |
 | ClusterResourceQuota | `/settings/cluster-quota` | `ROS_CLUSTER_QUOTA_*` |
 | Snapshot staleness | `/settings/snapshot` | `ROS_SNAPSHOT_*` |

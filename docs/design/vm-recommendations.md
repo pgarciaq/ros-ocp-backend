@@ -36,7 +36,7 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
 | Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Notifications 18, 19, 37–49 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) |
+| Notifications 18, 19, 37–57 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go), [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
 | GPU classification + `gn1` matching + notifications 50–53 | ✅ | [`internal/engine/vm_gpu.go`](../../internal/engine/vm_gpu.go), API filters `has_gpu` / `gpu_classification` |
 | Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
@@ -311,7 +311,7 @@ All notifications are JSON objects in the `notifications` array:
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
-**Full catalog (all plugins, codes 1–57):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer),
+**Full catalog (all plugins, codes 1–57):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**57**),
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
 
 ---
@@ -403,6 +403,19 @@ env vars still override compiled defaults on read. See
     "min_growth_mib_per_day": 100
   },
   "io": { "high_iops_threshold": 3000 },
+  "network": {
+    "throughput_threshold_bps": 62500000,
+    "pps_threshold": 100000,
+    "drop_ratio_bp": 10,
+    "sustained_days": 7,
+    "enable_network_series": true
+  },
+  "gpu": {
+    "gpu_timeslice_min_replicas": 2,
+    "gpu_timeslice_max_replicas": 16,
+    "gpu_timeslice_fb_safety_threshold_bp": 8000,
+    "gpu_timeslice_dram_penalty_threshold_bp": 5000
+  },
   "instance_type_matching": true,
   "locked_fields": [],
   "settings_locked": false
@@ -440,8 +453,17 @@ When the platform locks VM settings, `settings_locked` is `true` and `locked_fie
 | `ROS_VM_WINDOWS_KERNEL_RESERVE_GIB` | `1.5` | `memory_floors.windows_kernel_reserve_gib` |
 | `ROS_VM_DOWNSIZE_STABILITY_DAYS` | `3` | `stability.downsize_stability_days` |
 | `ROS_VM_CRASH_LOOP_RESTART_THRESHOLD` | `3` | `stability.crash_loop_restart_threshold` |
+| `ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS` | `62500000` | `network.throughput_threshold_bps` |
+| `ROS_VM_NETWORK_PPS_THRESHOLD` | `100000` | `network.pps_threshold` |
+| `ROS_VM_NETWORK_DROP_RATIO_BP` | `10` | `network.drop_ratio_bp` |
+| `ROS_VM_NETWORK_SUSTAINED_DAYS` | `7` | `network.sustained_days` |
+| `ROS_VM_ENABLE_NETWORK_SERIES` | `true` | `network.enable_network_series` |
+| `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `2` | `gpu.gpu_timeslice_min_replicas` |
+| `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `16` | `gpu.gpu_timeslice_max_replicas` |
+| `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `8000` | `gpu.gpu_timeslice_fb_safety_threshold_bp` |
+| `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `5000` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` |
 
-Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm_config.go`](../../internal/engine/vm_config.go).
+Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm_config.go`](../../internal/engine/vm_config.go). Full table: [configurability.md](../architecture/configurability.md).
 
 ---
 
@@ -504,7 +526,8 @@ curl -s -H "x-rh-identity: $IDENTITY" \
         "engine": "cost",
         "is_idle": false,
         "is_abandoned": false,
-        "is_oversized": true
+        "is_oversized": true,
+        "is_network_bound": false
       },
       "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },
       "disk_projection": { "days_until_full": null, "growth_gib_per_day": 2.1, "recommended_expand_gib": 100 },
@@ -543,10 +566,11 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **NUMA-aware placement** | Not modeled |
 | **SR-IOV network recommendations** | Not implemented |
 | **Power management / suspend** | No suspend or power-state recommendations |
-| **n-series active recommendations** | `n1` catalog is recognition-only until network metrics exist |
+| **Network metrics dependency** | **n1** recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv` (operator); CSVs without network fields never classify as network-bound |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
-**GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (replica count + rationale), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
+
+**GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (`recommended_time_slice_count`, `recommended_vgpu_profile`, notifications **56**–**57**), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../../docs-site/features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 
 ---
 

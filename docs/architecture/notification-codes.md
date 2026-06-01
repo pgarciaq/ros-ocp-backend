@@ -37,12 +37,12 @@ When adding a code:
 1. Add `INSERT` in a new migration under `migrations/`.
 2. Add `Notif*` constant in `internal/engine/notifications.go` or domain file (`vm_notifications.go`, `gpu_timeslicing.go`).
 3. Emit from the appropriate engine function (see table below).
-4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–54** are VM-only JSONB today and are **not** in `Definitions`; extend through **54** when container APIs need them).
+4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–57** are VM-only JSONB today and are **not** in `Definitions`; extend through **57** when container APIs need them).
 5. Run `go test ./internal/notifications/...` (`TestDefinitionsMatchDB` catches DB/Go drift).
 
 ---
 
-## Master table (codes 1–54)
+## Master table (codes 1–57)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.

@@ -498,6 +498,12 @@ Source: `~/dev/koku/nise/examples/ocp_vm/vm_static_data.yml`. Extend `end_date` 
 | `instance-type-rec-01` | `oversized_for_instance_type` | **41** | `recommended.instance_type` set |
 | `high-io-vm-01` | `high_io: true` | **39** | `io_profile.hint` in detail |
 | `preference-server-vm` | fixed usage | — | preference fields when `cluster_instance_types.json` uploaded |
+| `network-heavy-vm-01` | `network_heavy: true` (chart template) | **55** | `metadata.is_network_bound=true`; `recommended.instance_type` `n1.*`; `filter[is_network_bound]=true` |
+| `network-baseline-vm-01` | control (chart template) | — | not network-bound |
+| `gpu-timeslice-underutil-vm` | low GPU util (chart template) | **56** (when profile set) | `gpu_timeslice_confidence`, `recommended_vgpu_profile` |
+| `gpu-fb-saturated-vm` | high FB util (chart template) | **57** | time-slicing suppressed; FB safety path |
+
+**Extended E2E templates** (cost-onprem-chart): `ocp_report_vm_network.yml`, `ocp_report_vm_gpu_timeslicing.yml` — run with `./scripts/run-pytest.sh --extended -k vm_network` or `vm_gpu_timeslic`.
 
 Full matrix with confidence and engine columns: [Expected behavior matrix](#expected-behavior-matrix-nise-vm-scenarios) below.
 
@@ -1307,12 +1313,12 @@ Bruno: `PUT Settings VM.bru`, `DELETE Settings VM.bru`, `GET Settings Thresholds
 
 ## Notification codes
 
-ROS attaches integer **notification codes** to recommendations. There are **54 codes** across all plugins.
+ROS attaches integer **notification codes** to recommendations. There are **57 codes** across all plugins.
 
 - **Full catalog (all codes, severity, UI hints):** [Notification Codes](../architecture/notification-codes.md) (`docs-site/architecture/notification-codes.md`)
 - **Maintainer emitters:** `docs/architecture/notification-codes.md` in the repository
 
-### VM notification quick reference (codes 18–19, 37–54)
+### VM notification quick reference (codes 18–19, 37–57)
 
 | Code | Severity | Summary | Typical NISE VM (`vm_static_data.yml`) |
 |------|----------|---------|----------------------------------------|
@@ -1336,8 +1342,13 @@ ROS attaches integer **notification codes** to recommendations. There are **54 c
 | 52 | WARNING | VM GPU memory saturated | `gpu-saturated-vm` (memory-bound) |
 | 53 | WARNING | VM GPU compute saturated | `gpu-saturated-vm` (compute-bound) |
 | 54 | WARNING | Mixed idle/active GPUs | `multi-gpu-mixed-vm` |
+| 55 | WARNING | Network-saturated — n1 instance type | `network-heavy-vm-01` (chart E2E) |
+| 56 | INFO | vGPU profile recommended | `gpu-timeslice-underutil-vm` (chart E2E) |
+| 57 | WARNING | Time-slicing unsafe (frame buffer) | `gpu-fb-saturated-vm` (chart E2E) |
 
-API: VM list/detail return `notifications` as a JSON array (`type`: `info` | `warning` | `critical`). Containers use `notification_codes` + `notifications` map.
+**VM list filters (phase11):** `filter[is_network_bound]=true|false`, `filter[guest_os]=windows` (substring, comma OR), plus existing `filter[has_gpu]`, `filter[gpu_classification]`.
+
+API: VM list/detail return `notifications` as a JSON array (`type`: `info` | `warning` | `critical`). List `metadata.is_network_bound` mirrors notification **55** eligibility. Containers use `notification_codes` + `notifications` map.
 
 ---
 
@@ -1429,6 +1440,15 @@ Defaults are from `internal/config/config.go` (Viper). Set on **both API and pro
 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | `0.30` | VM GPU underutil (**51**) |
 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | `0.85` | VM GPU compute sat (**53**) |
 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | History retention |
+| `ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS` | `62500000` | `network.throughput_threshold_bps` (~500 Mbps) |
+| `ROS_VM_NETWORK_PPS_THRESHOLD` | `100000` | `network.pps_threshold` |
+| `ROS_VM_NETWORK_DROP_RATIO_BP` | `10` | `network.drop_ratio_bp` (0.1%) |
+| `ROS_VM_NETWORK_SUSTAINED_DAYS` | `7` | `network.sustained_days` |
+| `ROS_VM_ENABLE_NETWORK_SERIES` | `true` | `network.enable_network_series` |
+| `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `2` | `gpu.gpu_timeslice_min_replicas` |
+| `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `16` | `gpu.gpu_timeslice_max_replicas` |
+| `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `8000` | `gpu.gpu_timeslice_fb_safety_threshold_bp` (80%) |
+| `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `5000` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` (50%) |
 
 ### Quota (`ROS_QUOTA_*` / `ROS_CLUSTER_QUOTA_*`)
 
