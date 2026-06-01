@@ -504,7 +504,8 @@ dedicated **koku-ui views are deferred** (large effort; ResourceQuota status rep
 |------------|-----------|
 | Quota list (utilization, risk level, savings) | `GET /recommendations/openshift/quota/` |
 | Quota detail / breakdown | `GET /recommendations/openshift/quota/detail` |
-| ClusterResourceQuota aggregate view | `GET /recommendations/openshift/cluster-quota/` |
+| ClusterResourceQuota list | `GET /recommendations/openshift/cluster-quota/` |
+| ClusterResourceQuota detail | `GET /recommendations/openshift/cluster-quota/detail` |
 | Notification integration (codes **70–73**) | Emitted on quota / cluster-quota rows |
 | Historical trend visualization | `history[]` on detail endpoints |
 
@@ -656,8 +657,7 @@ CSV arrives in a cycle, recommended-hard sums may reflect the **previous** names
 until container and namespace/quota processing complete. Expect one report cycle after first
 deployment for signals to fully align.
 
-**Still future (CRQ v1 gaps):** Per-CRQ namespace selector membership for recommended-hard sums;
-selector labels in API; storage/pod/object-count CRQ resources.
+**Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 

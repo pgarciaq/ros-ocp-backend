@@ -71,7 +71,10 @@ sequenceDiagram
 3. Apply headroom and utilization thresholds from [Configuration](#configuration) (same semantics as namespace `quota`).
 4. Classify `recommendation_type` and `risk_level`; on `tighten`, estimate monthly savings when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
 
-**v1 limitation:** Without CRQ-to-namespace membership mapping, the same cluster-wide namespace-quota sum is applied to **each** CRQ row on the cluster. Per-CRQ recommended-hard sums using selector membership are a future enhancement.
+**Namespace membership:** The operator exports a comma-separated `namespaces` column on
+`ros-openshift-cluster-quota-*.csv`. The engine sums namespace `quota_recommendation_sets`
+only for namespaces in that list. When membership is empty (older operator builds), the
+engine falls back to a cluster-wide aggregate.
 
 **FinOps note:** Do not add namespace `quota` savings and CRQ `tighten` savings in one fleet total without deduplication — CRQ is a team-pool view; namespace quota is a project view.
 
@@ -111,7 +114,17 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `filter[cluster_quota_name]`, `filter[cluster_resource_quota]`, or `filter[crq]` | `cluster_quota_name` |
 | `filter[recommendation_type]` | `tighten` \| `raise` \| `optimal` \| `none` |
 | `filter[risk_level]` | `high` \| `medium` \| `low` \| `none` |
+| `filter[namespace]` or `filter[project]` | CRQs whose namespace membership includes the value |
+| `order_by`, `order_how` | Sort (see namespace quota API) |
 | `limit`, `offset` | Pagination (default limit 20, max 100) |
+
+**Detail:**
+
+```
+GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail?cluster_uuid=...&cluster_quota_name=...
+```
+
+Returns the same fields as a list row plus `history[]` (90-day append-only snapshots per resource).
 
 **Settings:**
 
@@ -154,12 +167,16 @@ Distinct prefix from namespace `ROS_QUOTA_*`. PUT on env-locked fields returns *
 
 ---
 
-## Operator dependencies (v1 limitations)
+## Operator CSV columns
 
-| Gap | Why |
-|-----|-----|
-| **Per-CRQ namespace selector** | `ros-openshift-cluster-quota-*.csv` has no selector/namespace membership columns. The engine sums all namespace `quota_recommendation_sets` per cluster and applies that aggregate to **every** CRQ row until the operator exports selector labels (see comment in [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go)). |
-| **Storage / pods / object counts** | Same as namespace quota — operator PromQL only covers CPU/memory request/limit on `openshift_clusterresourcequota_usage`. |
+Beyond CPU/memory request and limit hard/used, the operator also collects:
+
+| Column | PromQL resource |
+|--------|-----------------|
+| `storage_request_hard` / `storage_request_used` | `requests.storage` |
+| `pods_hard` / `pods_used` | `pods` |
+| `object_count_hard` / `object_count_used` | Sum of `count/*` resources |
+| `namespaces` | Distinct namespaces with `type=used` > 0 |
 
 ---
 
