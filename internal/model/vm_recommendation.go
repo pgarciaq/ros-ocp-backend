@@ -37,6 +37,8 @@ type VMRecommendation struct {
 	// Status flags
 	IsIdle       bool `db:"is_idle"`
 	IsAbandoned  bool `db:"is_abandoned"`
+	IsPowerOffCandidate bool   `db:"is_power_off_candidate"`
+	PowerOffIdleRatio   *int32 `db:"power_off_idle_ratio"`
 	IsOversized     bool `db:"is_oversized"`
 	IsNetworkBound       bool `db:"is_network_bound"`
 	IsRedundantPlacement bool `db:"is_redundant_placement"`

@@ -100,6 +100,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		costData = fetchRecalcCostData(ctx, orgID, clusterUUID.String(), start, end)
 	}
 	ApplyVMSavings(recs, costData, appCfg.SavingsEstimatesEnabled)
+	AppendVMPowerOffNotifications(recs)
 
 	validTerms := make([]string, len(terms))
 	for i, t := range terms {

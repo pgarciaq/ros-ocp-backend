@@ -27,6 +27,8 @@ func ComputeVMSavings(rec *model.VMRecommendation, costData *costdata.ClusterCos
 	switch {
 	case rec.IsAbandoned, rec.IsIdle:
 		total = vmIdleOrAbandonedSavings(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
+	case rec.IsPowerOffCandidate:
+		total = vmPowerOffScheduleSavings(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
 	default:
 		total = vmDownsizeSavings(rec, cpuRate, memRate)
 		total += vmGPUReductionSavings(rec, gpuRate)
@@ -66,6 +68,15 @@ func vmDownsizeSavings(rec *model.VMRecommendation, cpuRate, memRate float64) fl
 		memDelta = 0
 	}
 	return cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth
+}
+
+func vmPowerOffScheduleSavings(rec *model.VMRecommendation, cpuRate, memRate, gpuRate, vmMonthlyRate float64) float64 {
+	base := vmIdleOrAbandonedSavings(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
+	if rec.PowerOffIdleRatio == nil || *rec.PowerOffIdleRatio <= 0 {
+		return base
+	}
+	multiplier := float64(*rec.PowerOffIdleRatio) / 10000.0
+	return base * multiplier
 }
 
 func vmIdleOrAbandonedSavings(rec *model.VMRecommendation, cpuRate, memRate, gpuRate, vmMonthlyRate float64) float64 {

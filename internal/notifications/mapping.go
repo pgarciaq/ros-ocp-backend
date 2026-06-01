@@ -82,6 +82,7 @@ var Definitions = map[int16]notifDef{
 	61: {"INFO", "Uneven VM distribution across nodes — consider topologySpreadConstraints"},
 	62: {"INFO", "VM shares storage with other VMs — correlated workload group detected"},
 	63: {"WARNING", "VM memory exceeds single NUMA node capacity — NUMA pinning not possible"},
+	64: {"INFO", "VM is idle on many observed days — consider scheduling power-off during inactive periods"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

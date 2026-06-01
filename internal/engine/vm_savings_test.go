@@ -95,6 +95,20 @@ func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 	assert.InDelta(t, 37408.0, *got, 0.01)
 }
 
+func TestComputeVMSavings_PowerOffCandidate(t *testing.T) {
+	rec := vmRecForSavings()
+	rec.IsPowerOffCandidate = true
+	bp := int32(7000)
+	rec.PowerOffIdleRatio = &bp
+	cd := vmCostData(1.0, 2.0, 0)
+
+	got := ComputeVMSavings(rec, cd)
+	require.NotNil(t, got)
+	// downsize base would apply if not power-off; power-off uses idle base * 0.7
+	// idle base: 8*0.6*730 + 32*1.4*730 = 36208 → *0.7 = 25345.6
+	assert.InDelta(t, 25345.6, *got, 0.01)
+}
+
 func TestComputeVMSavings_GPURemove(t *testing.T) {
 	rec := vmRecForSavings()
 	rec.RecommendedVCPU = 8

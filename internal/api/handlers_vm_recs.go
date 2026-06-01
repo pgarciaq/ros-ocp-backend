@@ -42,6 +42,8 @@ type vmRecMetadata struct {
 	Engine             string  `json:"engine"`
 	IsIdle             bool    `json:"is_idle"`
 	IsAbandoned        bool    `json:"is_abandoned"`
+	IsPowerOffCandidate bool   `json:"is_power_off_candidate"`
+	PowerOffIdlePct     *int32 `json:"power_off_idle_pct,omitempty"`
 	IsOversized        bool    `json:"is_oversized"`
 	IsNetworkBound       bool    `json:"is_network_bound"`
 	IsRedundantPlacement bool    `json:"is_redundant_placement"`
@@ -461,8 +463,10 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			Term:               r.Term,
 			Engine:             r.Engine,
 			IsIdle:             r.IsIdle,
-			IsAbandoned:        r.IsAbandoned,
-			IsOversized:        r.IsOversized,
+			IsAbandoned:         r.IsAbandoned,
+			IsPowerOffCandidate: r.IsPowerOffCandidate,
+			PowerOffIdlePct:     vmPowerOffIdlePctForAPI(r.PowerOffIdleRatio),
+			IsOversized:         r.IsOversized,
 			IsNetworkBound:       r.IsNetworkBound,
 			IsRedundantPlacement: r.IsRedundantPlacement,
 			HasSharedStorage:     r.HasSharedStorage,
@@ -500,6 +504,14 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 		}
 	}
 	return item
+}
+
+func vmPowerOffIdlePctForAPI(bp *int32) *int32 {
+	if bp == nil {
+		return nil
+	}
+	pct := engine.PowerOffIdlePercentFromBasisPoints(*bp)
+	return &pct
 }
 
 func vmRecSavingsObject(amount *float64, currency *string) *money.SavingsObject {

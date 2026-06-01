@@ -62,6 +62,11 @@ type VMRecConfig struct {
 	// Abandoned: minimum consecutive days of zero CPU and memory max usage in the term window
 	AbandonedMinDays int32 // default 3 (≈72h at daily digest granularity)
 
+	// Power-off scheduling (periodically idle VMs)
+	EnablePowerSchedule         bool    // default true
+	PowerOffMinIdleDays         int32   // default 14 — minimum digest history for detection
+	PowerOffIdleRatioThreshold  float64 // default 0.7 — fraction of days that must be idle
+
 	// GPU thresholds for VM passthrough/vGPU recommendations
 	GPUIdleThreshold              float64 // default 0.05 (5%)
 	GPUUnderutilThreshold         float64 // default 0.30 (30%)
@@ -119,6 +124,9 @@ func DefaultVMRecConfig() VMRecConfig {
 		IOMinIOPSForClassification:   100,
 		EnableInstanceTypeMatching: true,
 		AbandonedMinDays:           3,
+		EnablePowerSchedule:        true,
+		PowerOffMinIdleDays:        14,
+		PowerOffIdleRatioThreshold: 0.7,
 		GPUIdleThreshold:              0.05,
 		GPUUnderutilThreshold:         0.30,
 		GPUFBSaturationMiB:            0,
@@ -290,6 +298,15 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_NUMA_NODE_MEMORY_GIB"); ok {
 		base.NUMANodeMemoryGiB = cfg.VMNUMANodeMemoryGiB
+	}
+	if _, ok := os.LookupEnv("ROS_VM_ENABLE_POWER_SCHEDULE"); ok {
+		base.EnablePowerSchedule = cfg.VMEnablePowerSchedule
+	}
+	if _, ok := os.LookupEnv("ROS_VM_POWER_OFF_MIN_IDLE_DAYS"); ok {
+		base.PowerOffMinIdleDays = cfg.VMPowerOffMinIdleDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD"); ok {
+		base.PowerOffIdleRatioThreshold = cfg.VMPowerOffIdleRatioThreshold
 	}
 	return base
 }

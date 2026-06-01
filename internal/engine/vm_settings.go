@@ -76,6 +76,13 @@ type VMMemoryFloorsSettingsAPI struct {
 	WindowsKernelReserveGiB float64 `json:"windows_kernel_reserve_gib"`
 }
 
+// VMPowerScheduleSettingsAPI holds power-off scheduling detection thresholds.
+type VMPowerScheduleSettingsAPI struct {
+	Enabled             bool    `json:"enabled"`
+	MinIdleDays         int32   `json:"min_idle_days"`
+	IdleRatioThreshold  float64 `json:"idle_ratio_threshold"`
+}
+
 // VMPlacementSettingsAPI holds cluster placement, correlated workload, and NUMA checks.
 type VMPlacementSettingsAPI struct {
 	EnablePlacementChecks      bool    `json:"enable_placement_checks"`
@@ -103,6 +110,7 @@ type VMSettingsResponse struct {
 	Network              VMNetworkSettingsAPI      `json:"network"`
 	GPU                  VMGPUSettingsAPI          `json:"gpu"`
 	Placement            VMPlacementSettingsAPI    `json:"placement"`
+	PowerSchedule        VMPowerScheduleSettingsAPI `json:"power_schedule"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
 	LockedFields         []string                  `json:"locked_fields,omitempty"`
 	SettingsLocked       bool                      `json:"settings_locked,omitempty"`
@@ -117,6 +125,7 @@ type vmSettingsStored struct {
 	Network              *VMNetworkSettingsAPI      `json:"network,omitempty"`
 	GPU                  *VMGPUSettingsAPI          `json:"gpu,omitempty"`
 	Placement            *VMPlacementSettingsAPI    `json:"placement,omitempty"`
+	PowerSchedule        *VMPowerScheduleSettingsAPI `json:"power_schedule,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
 	Stability            *VMStabilitySettingsAPI    `json:"stability,omitempty"`
 }
@@ -168,6 +177,9 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_PLACEMENT_SKEW_RATIO":              "placement.placement_skew_ratio",
 		"ROS_VM_ENABLE_SHARED_PVC_CORRELATION":     "placement.enable_shared_pvc_correlation",
 		"ROS_VM_NUMA_NODE_MEMORY_GIB":              "placement.numa_node_memory_gib",
+		"ROS_VM_ENABLE_POWER_SCHEDULE":             "power_schedule.enabled",
+		"ROS_VM_POWER_OFF_MIN_IDLE_DAYS":           "power_schedule.min_idle_days",
+		"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD":    "power_schedule.idle_ratio_threshold",
 	}
 }
 
@@ -208,6 +220,14 @@ func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
 		SequentialThresholdBytes: cfg.IOSequentialThresholdBytes,
 		RandomThresholdBytes:     cfg.IORandomThresholdBytes,
 		MinIOPSForClassification: cfg.IOMinIOPSForClassification,
+	}
+}
+
+func vmRecConfigToPowerScheduleAPI(cfg VMRecConfig) VMPowerScheduleSettingsAPI {
+	return VMPowerScheduleSettingsAPI{
+		Enabled:            cfg.EnablePowerSchedule,
+		MinIdleDays:        cfg.PowerOffMinIdleDays,
+		IdleRatioThreshold: cfg.PowerOffIdleRatioThreshold,
 	}
 }
 
@@ -288,6 +308,7 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		Network:              vmRecConfigToNetworkAPI(cfg),
 		GPU:                  vmRecConfigToGPUAPI(cfg),
 		Placement:            vmRecConfigToPlacementAPI(cfg),
+		PowerSchedule:        vmRecConfigToPowerScheduleAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
 		LockedFields:         LockedFieldsForAPI(vmRecommendationType, envLocked),
 		SettingsLocked:       IsSettingsLocked(vmRecommendationType),
@@ -407,6 +428,12 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.EnableSharedPVCCorrelation = p.EnableSharedPVCCorrelation
 		dest.NUMANodeMemoryGiB = p.NUMANodeMemoryGiB
 	}
+	if stored.PowerSchedule != nil {
+		ps := stored.PowerSchedule
+		dest.EnablePowerSchedule = ps.Enabled
+		dest.PowerOffMinIdleDays = ps.MinIdleDays
+		dest.PowerOffIdleRatioThreshold = ps.IdleRatioThreshold
+	}
 	if stored.GPU != nil {
 		g := stored.GPU
 		dest.GPUIdleThreshold = vmBasisPointsToThresholdFraction(g.IdleThresholdBP)
@@ -485,6 +512,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid placement: %w", err)
 		}
 	}
+	if raw, ok := patch["power_schedule"]; ok {
+		if err := json.Unmarshal(raw, &resp.PowerSchedule); err != nil {
+			return fmt.Errorf("invalid power_schedule: %w", err)
+		}
+	}
 	if raw, ok := patch["instance_type_matching"]; ok {
 		if err := json.Unmarshal(raw, &resp.InstanceTypeMatching); err != nil {
 			return fmt.Errorf("invalid instance_type_matching: %w", err)
@@ -524,6 +556,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.Placement); err == nil {
 		overrides["placement"] = b
+	}
+	if b, err := json.Marshal(resp.PowerSchedule); err == nil {
+		overrides["power_schedule"] = b
 	}
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
@@ -575,7 +610,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {}, "power_schedule": {},
 		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -653,6 +688,9 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 
 	v.addRangeInt("placement.placement_skew_ratio", resp.Placement.PlacementSkewRatio, 2, 20)
 	v.addRangeFloat("placement.numa_node_memory_gib", resp.Placement.NUMANodeMemoryGiB, 1.0, 2048.0)
+
+	v.addRangeInt("power_schedule.min_idle_days", int(resp.PowerSchedule.MinIdleDays), 1, 90)
+	v.addRangeFloat("power_schedule.idle_ratio_threshold", resp.PowerSchedule.IdleRatioThreshold, 0.01, 1.0)
 
 	return v.result()
 }

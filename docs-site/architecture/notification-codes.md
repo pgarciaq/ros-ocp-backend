@@ -2,7 +2,7 @@
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
-Use this page as a single lookup for **all 63 codes** across containers, namespaces, nodes,
+Use this page as a single lookup for **all 64 codes** across containers, namespaces, nodes,
 GPUs, PVCs, snapshots, and virtual machines.
 
 **Maintainer reference** (emitters, constants, migrations): `docs/architecture/notification-codes.md` in the repository.
@@ -105,6 +105,7 @@ having no actionable savings.
 | 61 | INFO | VM | Uneven VM spread across nodes | Consider `topologySpreadConstraints` |
 | 62 | INFO | VM | Correlated workload group (shared profile) | Review HA pairs; true PVC correlation pending operator field |
 | 63 | WARNING | VM | Memory exceeds single NUMA node | Reduce memory or use hosts with larger NUMA nodes |
+| 64 | INFO | VM | Periodically idle (power-off schedule) | Schedule power-off during inactive periods; see `is_power_off_candidate` |
 
 ---
 
@@ -143,10 +144,11 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–63**. Full VM notification table also appears in
+Codes **18–19**, **37–64**. Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#placement-and-numa).
-Abandoned VMs use **43** only (not **18**). Placement flags: `is_redundant_placement` (**60**),
-`has_shared_storage` (**62**), `numa_oversized` (**63**).
+Abandoned VMs use **43** only (not **18**). Power-off scheduling: **64** (`is_power_off_candidate`,
+`power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Placement flags:
+`is_redundant_placement` (**60**), `has_shared_storage` (**62**), `numa_oversized` (**63**).
 
 ### Quotas
 

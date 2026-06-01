@@ -634,12 +634,58 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Smart co-location** | Requires network flow data to recommend affinity |
 | **Network QoS (SR-IOV, DPDK)** | SR-IOV and DPDK-specific sizing not modeled |
 | **Storage tiering (hot/cold)** | See [Storage tiering](#future-storage-tiering) below |
-| **Power management / consolidation** | No suspend or cluster consolidation guidance |
+| **Power-off scheduling (simplified)** | **Implemented** — notification **64**, `is_power_off_candidate`, `power_off_idle_pct`; daily digest idle-day ratio (not per-hour). See [Power-off scheduling](#power-off-scheduling-simplified) |
+| **Node consolidation** | Detect low-utilization nodes and bin-pack VMs to free nodes — see [Node consolidation](#node-consolidation-future) |
+| **Full power-off scheduling** | Per-hour idle tracking, cron expressions, business hours — see [Full power-off scheduling](#full-power-off-scheduling-future) |
 | **Live migration recommendations** | No awareness of migration in progress |
 | **Savings in fleet summary** | VM savings persist on `vm_recommendations` but are not rolled into `GET .../savings-summary` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Network metrics dependency** | **n1** requires KubeVirt `net_*` on `ros-openshift-vm-usage-*.csv` |
+
+### Power-off scheduling (simplified) {#power-off-scheduling-simplified}
+
+Detects VMs that are **mostly idle** on observed days but **not permanently idle** (abandoned). These workloads may follow business-hours or weekend patterns where scheduling power-off during inactive periods saves cost without decommissioning the VM.
+
+| Signal | Implementation |
+|--------|----------------|
+| Detection | [`DetectPowerOffCandidate`](../../internal/engine/vm_power_schedule.go) — idle-day ratio ≥ `power_schedule.idle_ratio_threshold` (default 0.7) with at least one active day |
+| Per-day idle | CPU/memory **P95** below Linux/Windows idle thresholds (same as notification **18**) |
+| History | ≥ `power_schedule.min_idle_days` digests (default 14) in the term window |
+| Precedence | **Abandoned (43)** supersedes power-off — zero max CPU+memory on all days → `is_abandoned`, not `is_power_off_candidate` |
+| Notification | **64** (`info`) — includes idle % and estimated monthly savings when rates exist |
+| API metadata | `is_power_off_candidate`, `power_off_idle_pct` (from `power_off_idle_ratio` basis points) |
+| Savings | `idle_ratio ×` full monthly VM cost (CPU, memory, GPU, `vm_cost_per_month`) |
+
+Settings: `GET/PUT /settings/vm` → `power_schedule` (`enabled`, `min_idle_days`, `idle_ratio_threshold`). Env: `ROS_VM_ENABLE_POWER_SCHEDULE`, `ROS_VM_POWER_OFF_MIN_IDLE_DAYS`, `ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD`.
+
+Migration: `000107_vm_power_schedule.up.sql`.
+
+### Node consolidation (future) {#node-consolidation-future}
+
+Detect nodes where **total VM resource utilization is very low** and recommend migrating VMs onto fewer nodes to free entire nodes for scale-down.
+
+**Prerequisites (not available today):**
+
+- Bin-packing algorithm (greedy heuristic for VM→node assignment given CPU/memory/GPU/affinity constraints)
+- Per-node total utilization aggregation (sum of all VM resource requests per node)
+- Integration with placement features (anti-affinity must be respected)
+- Node cost attribution from Koku (`node_cost_per_month`)
+- Live migration feasibility check (GPU passthrough, local storage block migration)
+- Cluster autoscaler awareness (can freed nodes actually be removed?)
+
+**Estimated effort:** High (3–4 weeks)  
+**Estimated value:** High for large clusters (50+ nodes)  
+**Key challenge:** Bin-packing is NP-hard; need a greedy heuristic. Must not violate HA constraints.
+
+### Full power-off scheduling (future) {#full-power-off-scheduling-future}
+
+Extends the simplified power-off recommendation with time-of-day precision:
+
+- Per-hour utilization tracking (requires operator to emit hourly idle flags or per-hour digests)
+- Automatic cron expression generation (e.g., stop at 20:00 UTC, start at 06:00 UTC on weekdays)
+- Integration with business hours configuration (user-defined “must be on” windows)
+- Weekend detection (VMs idle every Saturday+Sunday → recommend weekend power-off)
 
 **GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (`recommended_time_slice_count`, `recommended_vgpu_profile`, notifications **56**–**57**), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../../docs-site/features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 

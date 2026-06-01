@@ -64,6 +64,18 @@ func RecommendVM(
 	}
 	isAbandoned := DetectVMAbandoned(windowed, abandonedMinDays)
 
+	var (
+		isPowerOffCandidate bool
+		powerOffIdleRatioBP *int32
+	)
+	if !isAbandoned {
+		if candidate, idleRatio := DetectPowerOffCandidate(windowed, cfg); candidate && idleRatio != nil {
+			isPowerOffCandidate = true
+			bp := PowerOffIdleRatioBasisPoints(*idleRatio)
+			powerOffIdleRatioBP = &bp
+		}
+	}
+
 	idleCPUThreshold := cfg.IdleCPUMC
 	idleMemKiB := cfg.IdleMemoryMiB * 1024
 	if isWindows {
@@ -269,6 +281,8 @@ func RecommendVM(
 		Engine:                   engine,
 		IsIdle:                   isIdle,
 		IsAbandoned:              isAbandoned,
+		IsPowerOffCandidate:      isPowerOffCandidate,
+		PowerOffIdleRatio:        powerOffIdleRatioBP,
 		IsOversized:              isOversized,
 		IsNetworkBound:           isNetworkBound,
 		IsRedundantPlacement:     isRedundantPlacement,

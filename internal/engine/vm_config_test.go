@@ -41,6 +41,9 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.Equal(t, 3, cfg.PlacementSkewRatio)
 	assert.True(t, cfg.EnableSharedPVCCorrelation)
 	assert.InDelta(t, 64.0, cfg.NUMANodeMemoryGiB, 1e-9)
+	assert.True(t, cfg.EnablePowerSchedule)
+	assert.Equal(t, int32(14), cfg.PowerOffMinIdleDays)
+	assert.InDelta(t, 0.7, cfg.PowerOffIdleRatioThreshold, 1e-9)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {
