@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -112,6 +113,12 @@ func PutVMSettings(c echo.Context) error {
 				"status":        "error",
 				"message":       "one or more fields are locked by environment configuration and cannot be modified via the API",
 				"locked_fields": engine.LockedFieldsFromError(err),
+			})
+		}
+		if isVMSettingsClientError(err) {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": err.Error(),
 			})
 		}
 		hlog.Errorf("put VM settings failed: %v", err)
@@ -316,6 +323,21 @@ func PutVMTermSettings(c echo.Context) error {
 
 	engine.InvalidateTermCache(orgID, vmRecommendationType)
 	return GetVMTermSettings(c)
+}
+
+func isVMSettingsClientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "invalid request body") ||
+		strings.Contains(msg, "invalid thresholds") ||
+		strings.Contains(msg, "invalid memory_floors") ||
+		strings.Contains(msg, "invalid stability") ||
+		strings.Contains(msg, "invalid disk") ||
+		strings.Contains(msg, "invalid io") ||
+		strings.Contains(msg, "invalid instance_type_matching") ||
+		strings.Contains(msg, "unknown field")
 }
 
 func vmTermNameToEngine(name string) (string, error) {

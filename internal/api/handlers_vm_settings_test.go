@@ -1,0 +1,98 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func setupVMSettingsPUTHandler(t *testing.T, orgID string) *echo.Echo {
+	t.Helper()
+	e := setupVMRecommendationsHandler(t, orgID)
+	v1 := e.Group("/api/cost-management/v1")
+	v1.PUT("/recommendations/openshift/settings/vm", PutVMSettings)
+	return e
+}
+
+func TestVMSettings_PUT_ValidUpdate(t *testing.T) {
+	orgID := "org-vm-settings-put-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	body := bytes.NewReader([]byte(`{"disk": {"projection_window_days": 21}}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	disk, ok := resp["disk"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(21), disk["projection_window_days"])
+}
+
+func TestVMSettings_PUT_InvalidJSON(t *testing.T) {
+	orgID := "org-vm-settings-badjson-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	body := bytes.NewReader([]byte(`{not json`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVMSettings_PUT_OutOfRangeValues(t *testing.T) {
+	orgID := "org-vm-settings-range-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	body := bytes.NewReader([]byte(`{"thresholds": {"cpu_percentile_cost": 2.0}}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "error", resp["status"])
+}
+
+func TestVMSettings_PUT_PartialUpdate(t *testing.T) {
+	orgID := "org-vm-settings-partial-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/vm", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var before map[string]any
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &before))
+	beforeThresholds := before["thresholds"]
+
+	patch := bytes.NewReader([]byte(`{"io": {"high_iops_threshold": 9999}}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", patch)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code, putRec.Body.String())
+
+	var after map[string]any
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &after))
+	io, ok := after["io"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(9999), io["high_iops_threshold"])
+	assert.Equal(t, beforeThresholds, after["thresholds"])
+}

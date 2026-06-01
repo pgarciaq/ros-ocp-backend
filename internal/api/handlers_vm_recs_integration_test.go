@@ -114,3 +114,201 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 	assert.Equal(t, "abandoned-vm", resp.Data[0].VMName)
 	assert.True(t, resp.Data[0].Metadata.IsAbandoned)
 }
+
+func seedVMGPUListFixtures(t *testing.T, orgID string) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	seedVMRecCluster(t, orgID)
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	now := time.Now().UTC()
+
+	gpuRec := model.VMRecommendation{
+		OrgID: orgID, ClusterUUID: clusterID,
+		VMName: "gpu-idle-vm", Namespace: "inference",
+		GuestOS: "linux", CurrentVCPU: 8, CurrentMemoryGiB: 32,
+		RecommendedVCPU: 8, RecommendedMemoryGiB: 32,
+		Confidence: "moderate", Term: "medium_term", Engine: "cost",
+		GPUCount: 1, GPUModel: "A100", GPUClassification: "idle",
+		Notifications: []byte(`[]`),
+		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	noGPU := gpuRec
+	noGPU.VMName = "cpu-only-vm"
+	noGPU.Namespace = "batch"
+	noGPU.GPUCount = 0
+	noGPU.GPUClassification = ""
+	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{gpuRec, noGPU}, nil))
+}
+
+func TestVMList_Filter_HasGPU(t *testing.T) {
+	orgID := "org-vm-has-gpu-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMGPUListFixtures(t, orgID)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter[has_gpu]=true&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp struct {
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+		Data []struct {
+			VMName string `json:"vm_name"`
+			GPU    any    `json:"gpu"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "gpu-idle-vm", resp.Data[0].VMName)
+	assert.NotNil(t, resp.Data[0].GPU)
+}
+
+func TestVMList_Filter_GPUClassification(t *testing.T) {
+	orgID := "org-vm-gpu-class-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMGPUListFixtures(t, orgID)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter[gpu_classification]=idle&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp struct {
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+		Data []struct {
+			VMName string `json:"vm_name"`
+			GPU    struct {
+				GPUClassification string `json:"gpu_classification"`
+			} `json:"gpu"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "gpu-idle-vm", resp.Data[0].VMName)
+	assert.Equal(t, "idle", resp.Data[0].GPU.GPUClassification)
+}
+
+func TestVMDetail_Success_WithGPUDevices(t *testing.T) {
+	orgID := "org-vm-detail-gpu-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMRecCluster(t, orgID)
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	ctx := context.Background()
+	bucket := time.Now().UTC().Truncate(24 * time.Hour)
+
+	var digestID int64
+	err := pool.QueryRow(ctx, `
+		INSERT INTO daily_vm_digests (
+			org_id, cluster_uuid, vm_name, namespace, bucket_date,
+			sample_count, gpu_count, gpu_model, has_gpu
+		) VALUES ($1, $2, 'detail-gpu-vm', 'ml', $3, 4, 2, 'A100', true)
+		RETURNING id`,
+		orgID, clusterID, bucket,
+	).Scan(&digestID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO vm_gpu_device_digests (vm_digest_id, gpu_uuid, gpu_model, util_avg_bp, util_max_bp)
+		VALUES ($1, 'GPU-ONE', 'A100', 500, 800), ($1, 'GPU-TWO', 'A100', 1500, 2000)`,
+		digestID,
+	)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	vmRec := model.VMRecommendation{
+		OrgID: orgID, ClusterUUID: clusterID,
+		VMName: "detail-gpu-vm", Namespace: "ml",
+		GuestOS: "linux", CurrentVCPU: 4, CurrentMemoryGiB: 16,
+		RecommendedVCPU: 4, RecommendedMemoryGiB: 16,
+		Confidence: "moderate", Term: "medium_term", Engine: "cost",
+		GPUCount: 2, GPUModel: "A100", GPUClassification: "well_utilized",
+		Notifications: []byte(`[]`),
+		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{vmRec}, nil))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm/detail", api.GetVMRecommendationDetail)
+
+	url := "/api/cost-management/v1/recommendations/openshift/vm/detail" +
+		"?cluster_uuid=" + testutil.TestClusterUUID +
+		"&vm_name=detail-gpu-vm&namespace=ml&term=medium_term&engine=cost"
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var body struct {
+		GPU struct {
+			GPUDevices []struct {
+				UUID string `json:"uuid"`
+			} `json:"gpu_devices"`
+		} `json:"gpu"`
+		DailyDigests []struct {
+			GPUDevices []struct {
+				UUID string `json:"uuid"`
+			} `json:"gpu_devices"`
+		} `json:"daily_digests"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.NotNil(t, body.GPU.GPUDevices)
+	assert.Len(t, body.GPU.GPUDevices, 2)
+	uuids := []string{body.GPU.GPUDevices[0].UUID, body.GPU.GPUDevices[1].UUID}
+	assert.ElementsMatch(t, []string{"GPU-ONE", "GPU-TWO"}, uuids)
+	require.NotEmpty(t, body.DailyDigests)
+	assert.Len(t, body.DailyDigests[0].GPUDevices, 2)
+}

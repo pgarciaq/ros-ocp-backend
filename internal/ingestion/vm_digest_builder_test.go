@@ -170,3 +170,66 @@ func TestVMDigestBuilder_RestartCountSum(t *testing.T) {
 	}
 	assert.Equal(t, int32(3), d.RestartCountSum)
 }
+
+func vmSampleRowWithGPU(start time.Time, vm, ns, gpuUUID string, utilAvg float64) VMRow {
+	gpuCount := int32(1)
+	model := "A100"
+	return vmSampleRow(start, vm, ns, 100, 1024, func(r *VMRow) {
+		r.GPUCount = &gpuCount
+		r.GPUUUID = &gpuUUID
+		r.GPUModel = &model
+		r.GPUUtilizationAvg = &utilAvg
+		max := utilAvg + 0.05
+		r.GPUUtilizationMax = &max
+	})
+}
+
+func TestBuildDailyVMDigests_WithGPUDevices(t *testing.T) {
+	base := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	rows := []VMRow{
+		vmSampleRowWithGPU(base, "gpu-vm", "ml", "GPU-1111", 0.10),
+		vmSampleRowWithGPU(base.Add(15*time.Minute), "gpu-vm", "ml", "GPU-2222", 0.20),
+	}
+	digests := BuildDailyVMDigests(rows)
+	require.Len(t, digests, 1)
+
+	var d VMDigestResult
+	for _, v := range digests {
+		d = v
+	}
+	require.Len(t, d.GPUDevices, 2)
+	uuids := []string{d.GPUDevices[0].UUID, d.GPUDevices[1].UUID}
+	assert.ElementsMatch(t, []string{"GPU-1111", "GPU-2222"}, uuids)
+}
+
+func TestBuildDailyVMDigests_GPUDeviceAveraging(t *testing.T) {
+	base := time.Date(2026, 5, 10, 8, 0, 0, 0, time.UTC)
+	rows := []VMRow{
+		vmSampleRowWithGPU(base, "avg-vm", "ns", "GPU-AAAA", 0.10),
+		vmSampleRowWithGPU(base.Add(15*time.Minute), "avg-vm", "ns", "GPU-AAAA", 0.30),
+	}
+	digests := BuildDailyVMDigests(rows)
+	require.Len(t, digests, 1)
+
+	var d VMDigestResult
+	for _, v := range digests {
+		d = v
+	}
+	require.Len(t, d.GPUDevices, 1)
+	// avg(0.10, 0.30) = 0.20 → 2000 basis points
+	assert.Equal(t, int32(2000), d.GPUDevices[0].UtilAvgBP)
+}
+
+func TestBuildDailyVMDigests_NoGPU_EmptyDevices(t *testing.T) {
+	base := time.Date(2026, 5, 10, 6, 0, 0, 0, time.UTC)
+	rows := []VMRow{vmSampleRow(base, "plain-vm", "ns", 50, 512, nil)}
+	digests := BuildDailyVMDigests(rows)
+	require.Len(t, digests, 1)
+
+	var d VMDigestResult
+	for _, v := range digests {
+		d = v
+	}
+	assert.Empty(t, d.GPUDevices)
+	assert.Equal(t, int32(0), d.GPUCount)
+}

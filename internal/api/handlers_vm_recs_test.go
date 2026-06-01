@@ -42,6 +42,7 @@ func setupVMRecommendationsHandler(t *testing.T, orgID string) *echo.Echo {
 	v1.GET("/recommendations/openshift/vm", GetVMRecommendations)
 	v1.GET("/recommendations/openshift/vm/detail", GetVMRecommendationDetail)
 	v1.GET("/recommendations/openshift/settings/vm", GetVMSettings)
+	v1.GET("/recommendations/openshift/vm/detail", GetVMRecommendationDetail)
 	return e
 }
 

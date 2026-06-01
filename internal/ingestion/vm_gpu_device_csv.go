@@ -154,6 +154,9 @@ func ParseVMGPUDeviceCSVRows(r io.Reader) ([]VMGPUDeviceRow, error) {
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()
+	if err == io.EOF {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reading VM GPU device CSV header: %w", err)
 	}
