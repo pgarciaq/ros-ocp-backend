@@ -92,6 +92,7 @@ ros-ocp-backend runs as 4 separate processes (same binary, different subcommands
 | **`internal/plugins/`** | **Plugin implementations:** |
 | `internal/plugins/container/` | Container CPU/memory recommendations |
 | `internal/plugins/gpu/` | GPU MIG + time-slicing recommendations |
+| `internal/plugins/vm/` | OpenShift Virtualization VM right-sizing (usage + per-GPU device CSV) |
 | `internal/plugins/node/` | Node utilization recommendations |
 | `internal/plugins/namespace/` | Namespace-level aggregates |
 | `internal/plugins/pvc/` | PVC storage recommendations |
