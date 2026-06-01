@@ -28,7 +28,8 @@ You can view it interactively using:
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration (`?recommendation_type=<plugin>`) |
 | Settings | `/recommendations/openshift/settings/capabilities` | GET | Plugin capabilities |
 | Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT/DELETE | Snapshot staleness thresholds; DELETE resets tenant overrides |
-| Settings | `/recommendations/openshift/settings/thresholds` | GET/PUT/DELETE | Per-plugin sizing thresholds (`?recommendation_type=<plugin>`) |
+| Settings | `/recommendations/openshift/settings/{container,namespace,node,gpu,pvc}` | GET/PUT/DELETE | Per-plugin sizing thresholds (canonical) |
+| Settings | `/recommendations/openshift/settings/thresholds` | GET/PUT/DELETE | Deprecated alias (`?recommendation_type=<plugin>`) |
 | Settings | `/recommendations/openshift/settings/vm` | GET/PUT/DELETE | VM rightsizing thresholds (`vm` plugin) |
 | Settings | `/recommendations/openshift/settings/vm/terms` | GET/PUT/DELETE | VM term windows |
 | Settings | `/recommendations/openshift/settings/idle-detection` | GET/PUT/DELETE | Idle/zombie classification thresholds |

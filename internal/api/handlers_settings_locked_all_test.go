@@ -74,32 +74,32 @@ func allSettingsLockedEndpointCases() []settingsLockedEndpointCase {
 	return []settingsLockedEndpointCase{
 		{
 			name:    "thresholds_container",
-			getPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container",
-			putPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container",
+			getPath: "/api/cost-management/v1/recommendations/openshift/settings/container",
+			putPath: "/api/cost-management/v1/recommendations/openshift/settings/container",
 			putBody: `{"min_margin": 1.25}`,
 		},
 		{
 			name:    "thresholds_gpu",
-			getPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu",
-			putPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu",
+			getPath: "/api/cost-management/v1/recommendations/openshift/settings/gpu",
+			putPath: "/api/cost-management/v1/recommendations/openshift/settings/gpu",
 			putBody: `{"min_margin": 1.25}`,
 		},
 		{
 			name:    "thresholds_node",
-			getPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node",
-			putPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node",
+			getPath: "/api/cost-management/v1/recommendations/openshift/settings/node",
+			putPath: "/api/cost-management/v1/recommendations/openshift/settings/node",
 			putBody: `{"min_margin": 1.25}`,
 		},
 		{
 			name:    "thresholds_namespace",
-			getPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace",
-			putPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=namespace",
+			getPath: "/api/cost-management/v1/recommendations/openshift/settings/namespace",
+			putPath: "/api/cost-management/v1/recommendations/openshift/settings/namespace",
 			putBody: `{"min_margin": 1.25}`,
 		},
 		{
 			name:    "thresholds_pvc",
-			getPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc",
-			putPath: "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=pvc",
+			getPath: "/api/cost-management/v1/recommendations/openshift/settings/pvc",
+			putPath: "/api/cost-management/v1/recommendations/openshift/settings/pvc",
 			putBody: `{"min_margin": 1.25}`,
 		},
 		{

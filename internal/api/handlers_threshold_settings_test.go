@@ -40,9 +40,7 @@ func setupThresholdTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *ech
 		}
 	})
 	v1 := e.Group("/api/cost-management/v1")
-	v1.GET("/recommendations/openshift/settings/thresholds", GetThresholdSettings)
-	v1.PUT("/recommendations/openshift/settings/thresholds", PutThresholdSettings)
-	v1.DELETE("/recommendations/openshift/settings/thresholds", DeleteThresholdSettings)
+	RegisterThresholdSettingsRoutes(v1)
 	return e
 }
 
@@ -491,4 +489,83 @@ func TestDeleteThresholdSettings_NoContent(t *testing.T) {
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
 	assert.InDelta(t, 1.15, resp["min_margin"].(float64), 1e-9)
+}
+
+func TestGetDedicatedThresholdSettings_AllTypes(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	e := setupThresholdTestEcho(t, pool, "org-threshold-dedicated-get")
+
+	for _, recType := range thresholdRecommendationTypes {
+		t.Run(recType, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/api/cost-management/v1/recommendations/openshift/settings/"+recType,
+				nil,
+			)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			assert.Empty(t, rec.Header().Get("Deprecation"))
+
+			var resp map[string]interface{}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.Contains(t, resp, "locked_fields")
+		})
+	}
+}
+
+func TestPutDeleteDedicatedThresholdSettings_Container(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	e := setupThresholdTestEcho(t, pool, "org-threshold-dedicated-crud")
+
+	putBody := bytes.NewReader([]byte(`{"cpu_cost_percentile": 0.71}`))
+	putReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/cost-management/v1/recommendations/openshift/settings/container",
+		putBody,
+	)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+	assert.Empty(t, putRec.Header().Get("Deprecation"))
+
+	getReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/container",
+		nil,
+	)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.71, resp["cpu_cost_percentile"].(float64), 1e-9)
+
+	delReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/api/cost-management/v1/recommendations/openshift/settings/container",
+		nil,
+	)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code)
+}
+
+func TestGetThresholdSettings_DeprecatedAlias_ReturnsDeprecationHeaders(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	e := setupThresholdTestEcho(t, pool, "org-threshold-deprecated-alias")
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=gpu",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	assert.Equal(t, "true", rec.Header().Get("Deprecation"))
+	assert.Equal(t, thresholdSuccessorLink("gpu"), rec.Header().Get("Link"))
 }

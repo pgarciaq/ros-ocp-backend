@@ -19,6 +19,10 @@ func validateThresholdRecommendationType(c echo.Context) (string, error) {
 			"message": "recommendation_type query parameter is required",
 		})
 	}
+	return validateThresholdRecommendationTypeValue(rt)
+}
+
+func validateThresholdRecommendationTypeValue(rt string) (string, error) {
 	switch rt {
 	case "container", "namespace", "node", "gpu", "pvc":
 		return rt, nil
@@ -30,19 +34,26 @@ func validateThresholdRecommendationType(c echo.Context) (string, error) {
 	}
 }
 
-// GetThresholdSettings handles GET /recommendations/openshift/settings/thresholds.
+// GetThresholdSettings handles GET /recommendations/openshift/settings/thresholds (deprecated alias).
 func GetThresholdSettings(c echo.Context) error {
+	rt, err := validateThresholdRecommendationType(c)
+	if err != nil {
+		return err
+	}
+	return respondGetThresholdSettings(c, rt, true)
+}
+
+func respondGetThresholdSettings(c echo.Context, rt string, deprecated bool) error {
+	if deprecated {
+		setThresholdDeprecationHeaders(c, rt)
+	}
+
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
 	hlog := requestLogger(c, orgID)
-
-	rt, err := validateThresholdRecommendationType(c)
-	if err != nil {
-		return err
-	}
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -64,13 +75,21 @@ func GetThresholdSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// PutThresholdSettings handles PUT /recommendations/openshift/settings/thresholds.
+// PutThresholdSettings handles PUT /recommendations/openshift/settings/thresholds (deprecated alias).
 func PutThresholdSettings(c echo.Context) error {
-	if err := requireSettingsWrite(c); err != nil {
-		return err
-	}
 	rt, err := validateThresholdRecommendationType(c)
 	if err != nil {
+		return err
+	}
+	return respondPutThresholdSettings(c, rt, true)
+}
+
+func respondPutThresholdSettings(c echo.Context, rt string, deprecated bool) error {
+	if deprecated {
+		setThresholdDeprecationHeaders(c, rt)
+	}
+
+	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
 	if engine.IsSettingsLocked(rt) {
@@ -136,8 +155,20 @@ func PutThresholdSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// DeleteThresholdSettings handles DELETE /recommendations/openshift/settings/thresholds.
+// DeleteThresholdSettings handles DELETE /recommendations/openshift/settings/thresholds (deprecated alias).
 func DeleteThresholdSettings(c echo.Context) error {
+	rt, err := validateThresholdRecommendationType(c)
+	if err != nil {
+		return err
+	}
+	return respondDeleteThresholdSettings(c, rt, true)
+}
+
+func respondDeleteThresholdSettings(c echo.Context, rt string, deprecated bool) error {
+	if deprecated {
+		setThresholdDeprecationHeaders(c, rt)
+	}
+
 	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
@@ -148,10 +179,6 @@ func DeleteThresholdSettings(c echo.Context) error {
 	orgID := xrhid.Identity.OrgID
 	hlog := requestLogger(c, orgID)
 
-	rt, err := validateThresholdRecommendationType(c)
-	if err != nil {
-		return err
-	}
 	if engine.IsSettingsLocked(rt) {
 		return respondSettingsLockedForbidden(c)
 	}

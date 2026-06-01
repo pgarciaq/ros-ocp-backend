@@ -403,11 +403,16 @@ func TestOpenAPI_ThresholdSettings_ResponseFields(t *testing.T) {
 	e := setupContractTestEcho(t, pool, orgID)
 
 	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/thresholds?recommendation_type=container")
+		apiV1Prefix+"/recommendations/openshift/settings/container")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/thresholds", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/container", http.MethodGet, "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	deprecatedRec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/thresholds?recommendation_type=container")
+	require.Equal(t, http.StatusOK, deprecatedRec.Code, "body: %s", deprecatedRec.Body.String())
+	assert.Equal(t, "true", deprecatedRec.Header().Get("Deprecation"))
 }
 
 func TestOpenAPI_SavingsSummary_ResponseFields(t *testing.T) {

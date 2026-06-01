@@ -49,7 +49,7 @@ When settings are **not** locked, `DELETE` removes tenant overrides for that rou
 | `/recommendations/openshift/settings/snapshot` | Clear snapshot staleness overrides |
 | `/recommendations/openshift/settings/vm` | Clear VM threshold / disk / I/O overrides |
 | `/recommendations/openshift/settings/vm/terms` | Clear VM term-window overrides |
-| `/recommendations/openshift/settings/thresholds?recommendation_type=container` | Clear container threshold overrides |
+| `/recommendations/openshift/settings/container` | Clear container threshold overrides |
 | `/recommendations/openshift/settings/terms?recommendation_type=<plugin>` | Clear generic term overrides for that plugin |
 
 Other settings routes (quota, cluster-quota, idle-detection, business-hours) support DELETE as documented in
@@ -340,11 +340,11 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 
 | Category | Settings API | Variable prefix |
 |----------|--------------|-----------------|
-| Container sizing | `/settings/thresholds?recommendation_type=container` | `ROS_CONTAINER_*` |
-| Namespace sizing | `...&recommendation_type=namespace` | `ROS_NAMESPACE_*` |
-| Node consolidation | `...&recommendation_type=node` | `ROS_NODE_*` |
-| GPU classification | `...&recommendation_type=gpu` | `ROS_GPU_*` |
-| PVC right-sizing | `...&recommendation_type=pvc` | `ROS_PVC_*` |
+| Container sizing | `/settings/container` | `ROS_CONTAINER_*` |
+| Namespace sizing | `/settings/namespace` | `ROS_NAMESPACE_*` |
+| Node consolidation | `/settings/node` | `ROS_NODE_*` |
+| GPU classification | `/settings/gpu` | `ROS_GPU_*` |
+| PVC right-sizing | `/settings/pvc` | `ROS_PVC_*` |
 | OpenShift Virtualization | `/settings/vm`, `/settings/vm/terms` | `ROS_VM_*`, `ROS_TERMS_VM_*` |
 | ResourceQuota | `/settings/quota` | `ROS_QUOTA_*` |
 | ClusterResourceQuota | `/settings/cluster-quota` | `ROS_CLUSTER_QUOTA_*` |

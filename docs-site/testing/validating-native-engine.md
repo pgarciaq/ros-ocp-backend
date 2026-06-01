@@ -49,7 +49,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Savings summary | `GET .../savings-summary?engine=cost` |
 | History & quality | `GET .../history`, `GET .../quality` |
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
-| Per-plugin thresholds | `GET/PUT/DELETE .../settings/thresholds?recommendation_type=...` |
+| Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
 | Dual engine (cost vs performance) | Nested `cost` / `performance` on containers; `filter[engine]` on VM/node |
 
@@ -895,7 +895,7 @@ Handlers: `internal/api/handlers_node_recs.go`. Feature doc: [Node recommendatio
 | 4 | Overcommitted nodes | High pod density scenarios in NISE | Notifications per node feature doc |
 | 5 | Utilization endpoint | `GET .../nodes/utilization` | Per-node CPU/memory util for charts |
 | 6 | DB consistency | `node_recommendations` table | Rows per node × term × engine |
-| 7 | Term settings | `GET .../settings/thresholds?recommendation_type=node` | PUT changes reflected after recalc |
+| 7 | Node thresholds | `GET .../settings/node` | PUT changes reflected after recalc |
 
 Logs: `node recs:` (success or `persist failed`).
 
@@ -1212,7 +1212,7 @@ Precedence: **admin env var (locks)** → **tenant Settings API (PostgreSQL)** �
 BASE='http://localhost:8000/api/cost-management/v1'
 
 curl -s -H "x-rh-identity: $IDENTITY" \
-  "${BASE}/recommendations/openshift/settings/thresholds?recommendation_type=container" | jq .
+  "${BASE}/recommendations/openshift/settings/container" | jq .
 
 curl -s -H "x-rh-identity: $IDENTITY" \
   "${BASE}/recommendations/openshift/settings/vm" | jq .
@@ -1276,7 +1276,7 @@ curl -s -X DELETE -H "x-rh-identity: $IDENTITY" \
 |-------------|--------|
 | `/settings/vm` | Clear VM threshold overrides |
 | `/settings/vm/terms` | Clear VM term windows |
-| `/settings/thresholds?recommendation_type=container` | Clear container thresholds |
+| `/settings/container` | Clear container thresholds |
 | `/settings/quota` | Clear quota settings |
 | `/settings/cluster-quota` | Clear CRQ settings |
 | `/settings/snapshot` | Clear snapshot settings |
@@ -1289,11 +1289,11 @@ Bruno: `PUT Settings VM.bru`, `DELETE Settings VM.bru`, `GET Settings Thresholds
 
 | Type | GET/PUT/DELETE path |
 |------|---------------------|
-| Container thresholds | `/settings/thresholds?recommendation_type=container` |
-| Namespace thresholds | `/settings/thresholds?recommendation_type=namespace` |
-| Node thresholds | `/settings/thresholds?recommendation_type=node` |
-| GPU thresholds | `/settings/thresholds?recommendation_type=gpu` |
-| PVC thresholds | `/settings/thresholds?recommendation_type=pvc` |
+| Container thresholds | `/settings/container` |
+| Namespace thresholds | `/settings/namespace` |
+| Node thresholds | `/settings/node` |
+| GPU thresholds | `/settings/gpu` |
+| PVC thresholds | `/settings/pvc` |
 | VM thresholds | `/settings/vm` |
 | VM terms | `/settings/vm/terms` |
 | Quota | `/settings/quota` |

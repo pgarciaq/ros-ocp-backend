@@ -91,7 +91,8 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/business-hours` | GET, PUT, DELETE | **Existing** | Org-default business-hours schedule. |
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
-| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
+| `/settings/container`, `/settings/namespace`, `/settings/node`, `/settings/gpu`, `/settings/pvc` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds for each plugin (canonical paths). |
+| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Deprecated** | Alias for the five paths above; responses include `Deprecation: true` and a `Link` successor header. |
 | `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
 | `/settings/cluster-quota` | GET, PUT, DELETE | **Existing** | ClusterResourceQuota headroom and risk thresholds (`cluster-quota` plugin). |
 | `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
@@ -185,7 +186,8 @@ admin env-var locks on read. The in-process settings cache is invalidated for th
 | `/settings/vm` | VM threshold / disk / I/O / instance-type overrides |
 | `/settings/vm/terms` | VM term-window overrides (separate from generic terms table) |
 | `/settings/terms?recommendation_type=<plugin>` | Generic term rows for that plugin |
-| `/settings/thresholds?recommendation_type=<plugin>` | Threshold JSON for that plugin |
+| `/settings/container`, `/settings/namespace`, `/settings/node`, `/settings/gpu`, `/settings/pvc` | Threshold JSON for that plugin |
+| `/settings/thresholds?recommendation_type=<plugin>` | Same as dedicated path (deprecated alias) |
 | `/settings/quota`, `/settings/cluster-quota`, `/settings/idle-detection` | Respective override rows |
 | Business-hours routes | Schedule override at that scope |
 
@@ -324,7 +326,7 @@ Per-term overrides: `PUT` body `{"terms":[{"name":"medium","window_days":10,"min
 ## Container
 
 Sizing, classification, and notification thresholds for per-container CPU/memory
-recommendations via **`GET/PUT/DELETE /settings/thresholds?recommendation_type=container`**. Cost and performance engines share these parameters with different percentile values.
+recommendations via **`GET/PUT/DELETE /settings/container`** (or the deprecated `/settings/thresholds?recommendation_type=container` alias). Cost and performance engines share these parameters with different percentile values.
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|

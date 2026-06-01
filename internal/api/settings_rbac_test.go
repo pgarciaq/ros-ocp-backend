@@ -49,9 +49,7 @@ func setupSettingsRBACEcho(t *testing.T, pool *pgxpool.Pool, orgID string, perms
 		}
 	})
 	v1 := e.Group("/api/cost-management/v1")
-	v1.GET("/recommendations/openshift/settings/thresholds", GetThresholdSettings)
-	v1.PUT("/recommendations/openshift/settings/thresholds", PutThresholdSettings)
-	v1.DELETE("/recommendations/openshift/settings/thresholds", DeleteThresholdSettings)
+	RegisterThresholdSettingsRoutes(v1)
 	v1.GET("/recommendations/openshift/settings/terms", GetTermSettings)
 	v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
 	v1.GET("/recommendations/openshift/settings/snapshot", GetSnapshotSettings)

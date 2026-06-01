@@ -824,9 +824,9 @@ Default max windows: 90 days (container/namespace/node/gpu), 365 days (pvc).
 Per-tenant sizing and classification thresholds (native engine only).
 
 ```http
-GET    /recommendations/openshift/settings/thresholds?recommendation_type={type}
-PUT    /recommendations/openshift/settings/thresholds?recommendation_type={type}
-DELETE /recommendations/openshift/settings/thresholds?recommendation_type={type}
+GET    /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
+PUT    /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
+DELETE /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
 ```
 
 `recommendation_type`: `container`, `namespace`, `node`, `gpu`, `pvc`.
