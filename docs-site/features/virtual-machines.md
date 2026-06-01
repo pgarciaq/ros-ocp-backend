@@ -184,8 +184,9 @@ From daily digest P95 read/write IOPS and throughput:
 ## Instance type matching
 
 Built-in catalog (OpenShift Virtualization defaults): **u1** (general-purpose),
-**cx1** (compute-optimized), **m1** (memory-optimized). **n1** (network-optimized) and
-**gn1** (GPU) types are **recommended** when VM GPU metrics are present. **n1** (network-optimized) remains recognition-only until network metrics exist.
+**cx1** (compute-optimized), **m1** (memory-optimized), **gn1** (GPU, when DCGM metrics
+are present), and **n1** (network-optimized, **recognition only** until network metrics
+are ingested).
 
 **Algorithm:**
 
@@ -204,12 +205,17 @@ When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher
 | Classification | Action | Notification |
 |----------------|--------|--------------|
 | Idle | Remove GPU assignment | **50** |
-| Underutilized | Smaller MIG profile or consider vGPU/MIG | **51** |
+| Underutilized | `use_mig_profile`, `enable_time_slicing`, or legacy `consider_vgpu_or_mig` | **51** |
 | Memory saturated | Larger GPU / more frame buffer | **52** |
 | Compute saturated | More powerful GPU | **53** |
 | Well utilized | No change | — |
 
-List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
+For **underutilized** GPUs:
+
+- **MIG-capable** (A100, A30, H100, …): `recommended_gpu_profile` from frame-buffer headroom (`OptimalMIGProfile()`); may step down to a smaller partition.
+- **Non-MIG** (e.g. T4): `recommended_gpu_action=enable_time_slicing` and `recommended_time_slice_count` (roughly `ceil(1 / avg_utilization)`, capped at 16). This is **coarse** guidance — not a node-level `nvidia.com/gpu.replicas` plan like container [GPU time-slicing](gpu-mig.md).
+
+List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, `recommended_gpu_profile`, `recommended_time_slice_count`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
 
 Container GPU MIG profiling is documented in [GPU MIG Profiling](gpu-mig.md).
 
