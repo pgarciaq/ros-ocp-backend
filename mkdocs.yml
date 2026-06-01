@@ -101,6 +101,7 @@ nav:
       - Kafka Schema: architecture/kafka-schema.md
       - Cost Integration: architecture/cost-integration.md
       - API Versioning: architecture/api-versioning.md
+      - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md

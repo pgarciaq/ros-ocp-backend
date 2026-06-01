@@ -259,7 +259,10 @@ See [Dual Engine](dual-engine.md) for the shared cost/performance model.
 
 ## Notifications
 
-All codes appear in the `notifications` array on list and detail responses:
+For the full cross-system catalog (containers, nodes, GPU, PVC, snapshots, and reserved codes),
+see [Notification codes](../architecture/notification-codes.md).
+
+All VM codes below appear in the `notifications` array on list and detail responses:
 
 | Code | Type | When |
 |------|------|------|

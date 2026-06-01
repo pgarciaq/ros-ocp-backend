@@ -30,6 +30,7 @@ docs-site/plugin-reference/vm.md
 docs-site/plugin-reference/example.md
 # Copied from docs/ by generate-docs.sh
 docs-site/architecture/
+!docs-site/architecture/notification-codes.md
 docs-site/operations/
 docs-site/features/
 !docs-site/features/seasonality.md

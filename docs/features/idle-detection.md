@@ -496,6 +496,9 @@ No extra database round trips.
 
 ### Notifications
 
+Container idle/abandoned codes **5** and **8** are documented in
+[notification-codes.md](../architecture/notification-codes.md).
+
 Extend [`EvaluateContainerNotifications()`](../../internal/engine/notifications.go):
 
 | Code | When |

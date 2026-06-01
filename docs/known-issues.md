@@ -44,7 +44,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Fleet** | Fleet summary (cross-cluster container health aggregate) | **Shipping** |
 | **Fleet** | Fleet savings summary (cross-plugin persisted savings, `?engine=`) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
-| **Platform** | Notification system (~35 codes: confidence, OOM, idle, stale, GPU, PVC, snapshot) | **Shipping** |
+| **Platform** | Notification system (**54** codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM) — [reference](architecture/notification-codes.md) | **Shipping** |
 | **Platform** | Per-plugin configurable recommendation terms (TermProvider trait) | **Shipping** |
 | **Platform** | Admin env-var locking of term settings (per-term, per-plugin) | **Shipping** |
 | **Platform** | Plugin capabilities endpoint (`GET /settings/capabilities`) | **Shipping** |

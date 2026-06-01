@@ -280,7 +280,8 @@ Notifications use a Kruize-compatible map:
 }
 ```
 
-See [Section 16 — Notification codes](#notification-codes-reference) for the full table.
+See [Notification codes reference](architecture/notification-codes.md) for the complete catalog (codes 1–54).
+The table below is a summary; VM codes 37–54 and reserved codes are in the full reference.
 
 ### Confidence score
 
@@ -1383,4 +1384,4 @@ These patterns apply across multiple feature sections above. See each feature's 
 
 ## Appendix: Notification codes endpoint
 
-`GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are also documented in [Section 16 — Notification codes](#notification-codes-reference).
+`GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are documented in [Notification codes](architecture/notification-codes.md).

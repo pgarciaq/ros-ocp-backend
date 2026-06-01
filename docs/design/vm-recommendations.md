@@ -288,6 +288,9 @@ All notifications are JSON objects in the `notifications` array:
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
+**Full catalog (all plugins, codes 1–54):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer),
+[`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
+
 ---
 
 ## Plugin and pipeline

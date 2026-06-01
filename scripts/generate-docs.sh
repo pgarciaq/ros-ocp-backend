@@ -45,6 +45,8 @@ echo "Assembling site content..."
 # Architecture docs
 mkdir -p "$DOCS_DIR/architecture"
 for f in "$ROOT_DIR/docs/architecture/"*.md; do
+    # Operator-facing notification catalog is maintained in docs-site/ (not copied from docs/).
+    [ "$(basename "$f")" = "notification-codes.md" ] && continue
     [ -f "$f" ] && cp "$f" "$DOCS_DIR/architecture/"
 done
 

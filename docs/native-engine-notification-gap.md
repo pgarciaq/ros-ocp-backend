@@ -44,8 +44,8 @@ keyed by numeric code strings:
 
 The native Go engine has a `notification_codes SMALLINT[]` column in
 `recommendation_sets`, populated by `EvaluateNotifications()` in
-`internal/engine/notifications.go`. These codes are **integers** (1–24), not the
-Kruize 6-digit codes.
+`internal/engine/notifications.go`. These codes are **integers** (currently **1–54** in `notification_code_definitions`), not the
+Kruize 6-digit codes. See [notification-codes.md](architecture/notification-codes.md).
 
 As of Phase 3:
 - `WriteRecommendations` persists `notification_codes` in the INSERT and

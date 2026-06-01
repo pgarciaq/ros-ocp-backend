@@ -124,6 +124,8 @@ near-full recommendation implies expansion (negative savings = additional monthl
 | 29 | INFO | PVC capacity significantly exceeds sustained usage — consider shrinking |
 | 30 | WARNING | PVC usage approaching capacity — consider expanding or investigate growth |
 
+See [notification-codes.md](architecture/notification-codes.md) for triggers, emitters, and the full system catalog.
+
 ## API
 
 `GET /api/cost-management/v1/recommendations/openshift/pvcs`
