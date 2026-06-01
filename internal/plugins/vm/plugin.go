@@ -143,5 +143,8 @@ func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, older
 		return err
 	}
 	_, err = pool.Exec(ctx, `DELETE FROM vm_recommendations WHERE last_recommended_at < $1`, olderThan)
-	return err
+	if err != nil {
+		return err
+	}
+	return engine.PruneVMRecommendationHistory(ctx, pool)
 }
