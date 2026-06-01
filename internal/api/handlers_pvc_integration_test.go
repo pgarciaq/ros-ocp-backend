@@ -3,9 +3,11 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -126,4 +128,78 @@ func TestGetPVCRecommendations_OrderByEstimatedSavingsAsc(t *testing.T) {
 	require.GreaterOrEqual(t, len(resp.Data), 2)
 	assert.Equal(t, "pvc-low", resp.Data[0].PersistentVolumeClaim)
 	assert.Equal(t, "pvc-high", resp.Data[len(resp.Data)-1].PersistentVolumeClaim)
+}
+
+func TestGetPVCRecommendationDetail_AllTermsAndHistory(t *testing.T) {
+	orgID := "org-pvc-detail-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `
+		DELETE FROM pvc_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = 'apps' AND persistentvolumeclaim = 'detail-pvc'`,
+		orgID, testutil.TestClusterUUID,
+	)
+	require.NoError(t, err)
+
+	for _, term := range []string{"short", "medium", "long"} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO pvc_recommendation_sets (
+				org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+				recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+				days_to_full, growth_bytes_per_day, notification_codes, data_days, updated_at
+			) VALUES ($1, $2, 'apps', 'detail-pvc', $3, 'near_full', 0.9, 10737418240, 9663676416, 14, 104857600, '{1}', 30, NOW())`,
+			orgID, testutil.TestClusterUUID, term,
+		)
+		require.NoError(t, err)
+	}
+
+	bucketDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := bucketDate.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("daily_pvc_digests_%s", bucketDate.Format("200601"))
+	_, err = pool.Exec(ctx, fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_pvc_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, bucketDate.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	))
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO daily_pvc_digests (
+			bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim,
+			capacity_bytes, usage_bytes_min, usage_bytes_max, usage_bytes_avg, sample_count
+		) VALUES ($1::date, $2, $3, 'apps', 'detail-pvc', 10737418240, 5000000000, 9000000000, 7000000000, 24)
+		ON CONFLICT (cluster_uuid, namespace, persistentvolumeclaim, bucket_date) DO NOTHING`,
+		bucketDate.Format("2006-01-02"), orgID, testutil.TestClusterUUID,
+	)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs/detail", api.GetPVCRecommendationDetail)
+
+	url := "/api/cost-management/v1/recommendations/openshift/pvcs/detail" +
+		"?cluster_uuid=" + testutil.TestClusterUUID +
+		"&namespace=apps&persistentvolumeclaim=detail-pvc"
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var detail api.PVCRecommendationDetailResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, "detail-pvc", detail.PersistentVolumeClaim)
+	assert.Len(t, detail.Terms, 3)
+	assert.Contains(t, detail.Terms, "medium")
+	assert.NotNil(t, detail.Terms["medium"].DaysToFull)
+	assert.NotNil(t, detail.Terms["medium"].GrowthBytesPerDay)
+	assert.NotEmpty(t, detail.Terms["medium"].Notifications)
+	require.Len(t, detail.HistoricalUsage, 1)
+	assert.Equal(t, "2026-05-01", detail.HistoricalUsage[0].Date)
+	assert.Equal(t, int64(9000000000), detail.HistoricalUsage[0].UsageBytesMax)
 }

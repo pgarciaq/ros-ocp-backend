@@ -88,6 +88,7 @@ func (p *PVCPlugin) RegisterRoutes(g *echo.Group) {
 		return
 	}
 	g.GET("/recommendations/openshift/pvcs", rosapi.GetPVCRecommendations)
+	g.GET("/recommendations/openshift/pvcs/detail", rosapi.GetPVCRecommendationDetail)
 }
 
 func (p *PVCPlugin) RetentionTables() []string {

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -116,12 +115,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		})
 	}
 
-	query := `
-		SELECT cluster_uuid, namespace, persistentvolumeclaim, persistentvolume,
-			storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
-			recommendation_type, recommended_bytes, days_to_full,
-			growth_bytes_per_day, notification_codes, data_days, term,
-			estimated_monthly_savings_usd
+	query := pvcRecommendationSelectSQL + `
 		FROM pvc_recommendation_sets
 		WHERE org_id = $1` + filterSQL
 
@@ -140,36 +134,13 @@ func GetPVCRecommendations(c echo.Context) error {
 
 	var data []PVCRecommendationResponse
 	for rows.Next() {
-		var r PVCRecommendationResponse
-		var codes []int16
-		var growth sql.NullInt64
-		var savings sql.NullInt64
-		if err := rows.Scan(
-			&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.PersistentVolume,
-			&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
-			&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
-			&growth, &codes, &r.DataDays, &r.Term,
-			&savings,
-		); err != nil {
-			hlog.Errorf("scanning PVC recommendation row: %v", err)
+		r, scanErr := scanPVCRecommendationRow(rows)
+		if scanErr != nil {
+			hlog.Errorf("scanning PVC recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to read PVC recommendation rows",
 			})
-		}
-		if growth.Valid {
-			v := growth.Int64
-			r.GrowthBytesPerDay = &v
-		}
-		if savings.Valid {
-			r.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&savings.Int64, money.DefaultCurrency)
-		}
-		r.Notifications = notifications.MapToKruizeFormat(codes)
-		switch r.RecommendationType {
-		case "oversized":
-			r.ResizeNote = "Kubernetes does not support in-place PVC shrinking. Reducing this PVC requires creating a smaller volume, migrating data, and deleting the original."
-		case "orphaned":
-			r.ResizeNote = "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
 		}
 		data = append(data, r)
 	}
