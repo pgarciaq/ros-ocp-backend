@@ -149,14 +149,48 @@ Env vars: `ROS_NODE_*` — see [Configurability](../architecture/configurability
 
 ## Roadmap / deferred
 
+### Intentionally out of scope (Tier 1)
+
 | Item | Rationale |
 |------|-----------|
-| **Business hours for nodes** | Intentionally skipped. Nodes are always-on infrastructure; `idle_state` covers decommissioning without schedule complexity. Container and namespace recommendations retain business-hours support. |
-| **Tier 2 — MachineSet** | Future work. Requires metrics-operator MachineSet label collection, ingest/schema changes, engine grouping by MachineSet, API filters, and UI. |
-| **Tier 3 — MachineAutoscaler** | Future work after Tier 2. Autoscaler-aware consolidation and scale-down guidance tied to MachineSet/MachineAutoscaler resources. |
+| **Business hours for nodes** | Nodes are always-on infrastructure; `idle_state` (`active` / `idle` / `zombie`) covers decommissioning without schedule complexity. Container and namespace recommendations retain business-hours support. |
+
+### Planned future work (Tier 2 & Tier 3)
+
+Tier 1 (this document) is **implemented**. The next tiers target the **actionable unit** in managed OpenShift: the **MachineSet**, then the **MachineAutoscaler**.
+
+Full design, prerequisites, effort estimates, and schema notes:
+**[Node recommendations roadmap — Tier 2 & Tier 3](../architecture/node-recommendations-roadmap.md)**.
+
+#### Tier 2 — MachineSet right-sizing (~2–3 weeks)
+
+**Goal:** Group nodes by MachineSet and recommend replica count and instance family/size at the MachineSet level.
+
+| Deliverable | Summary |
+|-------------|---------|
+| Operator | Emit `machineset_name` from `machine.openshift.io/machine-set` (and replica counts for Tier 3) on ROS node CSV |
+| Ingestion | Populate existing `machineset_name` on `daily_node_digests` |
+| Engine | New `machineset` plugin: aggregate per-MachineSet, optimal replicas + instance type via **cloud instance catalog** |
+| API | `GET /recommendations/openshift/machinesets` + `machineset_recommendations` table |
+| Catalog | AWS/Azure/GCP instance specs (and optional pricing) for family/size recommendations |
+
+**Limitation:** Only clusters using MachineSets (IPI). Bare metal, SNO, and UPI without Machine API stay on Tier 1 only (`machineset_name` NULL).
+
+#### Tier 3 — MachineAutoscaler optimization (~4–6 weeks after Tier 2)
+
+**Goal:** Analyze historical replica counts vs demand; recommend tighter `minReplicas`/`maxReplicas`; flag saturated, idle, or flapping autoscalers; optional scaling-policy guidance.
+
+| Prerequisite | Why |
+|--------------|-----|
+| Tier 2 complete | MachineSet identity and replica metadata |
+| Operator | MachineAutoscaler min/max/current + scaling history or hourly snapshots |
+| Engine | Time-series analysis (not just point-in-time utilization) |
+
+**Complexity:** More research-oriented than Tiers 1–2 (scheduling bursts, PDB/drain safety). Notification codes **14**, **16–17** are reserved — see [notification codes](../architecture/notification-codes.md).
 
 ## Related
 
+- [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — MachineSet and MachineAutoscaler planned work
 - [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
 - [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals
 - [GPU Time-Slicing](gpu-time-slicing.md) — Separate node-level GPU feature

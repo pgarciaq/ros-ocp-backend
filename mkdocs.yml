@@ -101,6 +101,7 @@ nav:
       - GPU Catalogs: architecture/gpu-catalogs.md
       - Kafka Schema: architecture/kafka-schema.md
       - Cost Integration: architecture/cost-integration.md
+      - Node Recs Roadmap (Tier 2/3): architecture/node-recommendations-roadmap.md
       - API Versioning: architecture/api-versioning.md
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md

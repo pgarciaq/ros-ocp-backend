@@ -87,6 +87,21 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | Keyset pagination | — | Cursor-based pagination for large orgs (see below) | Low | Low |
 | ~~Replica count from operator~~ | ~~REQ-7.1~~ | **DONE** — Operator now emits `desired_replicas` and `available_replicas`; backend stores and exposes via API. | — | — |
 
+### Planned Future Work (Node Tier 2 & Tier 3)
+
+These are **planned releases**, not open defects. Tier 1 node recommendations are shipping; MachineSet and MachineAutoscaler tiers are documented in [architecture/node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md).
+
+| Tier | Feature | REQs | Est. effort | Status |
+|------|---------|------|-------------|--------|
+| **2** | MachineSet right-sizing (replica count + instance family via cloud catalog) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | ~2–3 weeks | Planned |
+| **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
+
+**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` → `machineset` engine plugin → `GET .../machinesets` API → `machineset_recommendations` table + instance catalog.
+
+**Tier 3 prerequisites:** Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.
+
+**Scope limit:** MachineSets only (IPI). No Tier 2/3 for bare metal, SNO, or clusters without Machine API (`machineset_name` NULL).
+
 ### Not Planned for Current MVP
 
 These features are documented in `requirements.md` but are explicitly
@@ -100,8 +115,6 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
-| Cloud instance catalog | REQ-8c.6 | External API integration (AWS/Azure/GCP pricing); required for MachineSet Tier 2 |
-| MachineAutoscaler (Tier 3) | REQ-8c.7 | Cloud-only; depends on Tier 2 MachineSet implementation |
 | Multi-GPU awareness | REQ-5.5 | Needs per-device utilization from operator; niche ML workloads |
 | Confidence bounds | ~~REQ-1.4~~ | Statistical methodology not designed; cost/performance dual-model provides range |
 | QoS class recommendations | ~~REQ-6.2~~ | Implicit from request/limit values; revisit if user research demands |
@@ -415,12 +428,12 @@ the decommissioning case without schedule complexity. Container and namespace
 recommendations retain business-hours support where usage patterns are
 time-of-day dependent.
 
-**Roadmap / deferred (Tier 2+):**
+**Planned future work (Tier 2+):** See [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md) for full Tier 2 (MachineSet right-sizing, ~2–3 weeks) and Tier 3 (MachineAutoscaler optimization, ~4–6 weeks) design, prerequisites, and limitations. Summary:
 
 | Tier | Scope | Status |
 |------|--------|--------|
-| Tier 2 — MachineSet | Group recommendations by OpenShift MachineSet; requires operator collection of MachineSet labels, new ingest fields, engine grouping, API filters, and persistence | Future work |
-| Tier 3 — MachineAutoscaler | Autoscaler-aware consolidation (scale-down hints tied to MachineSet/MachineAutoscaler) | Future work; depends on Tier 2 |
+| Tier 2 — MachineSet | Replica count + instance family at MachineSet level; `.../machinesets` API; `machineset_recommendations` table; cloud catalog | **Planned** (not a defect) |
+| Tier 3 — MachineAutoscaler | Historical scaling analysis; min/max bounds; saturated/idle/flapping | **Planned**; depends on Tier 2 |
 
 ### GPU Recommendations
 
@@ -596,12 +609,9 @@ count up or down.) **Not planned for current MVP.**
 matching), and dedicated API endpoints. Gated by `ROS_ENABLE_VM_RECS` (default
 `true`). Remaining gap: MachineSet-level VM placement optimization.
 
-### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5)
+### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
 
-Node Tier 1 (utilization visibility) is implemented. MachineSet Tier 2
-(right-sizing with cloud catalog) and Tier 3 (MachineAutoscaler) are not.
-Requires MachineSet queries in the operator, cloud instance catalog
-integration, and new API endpoints. **Planned for future release.**
+Node Tier 1 is implemented. Tier 2 (MachineSet) and Tier 3 (MachineAutoscaler) are **planned future work** — see [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md). Not tracked as product defects.
 
 ### Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED
 
