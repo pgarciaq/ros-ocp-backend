@@ -93,7 +93,21 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
 | `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
 | `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
+| `/settings/cluster-quota` | GET, PUT, DELETE | **Existing** | ClusterResourceQuota headroom and risk thresholds (`cluster-quota` plugin). |
 | `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
+
+### Reference table columns
+
+| Column | Meaning |
+|--------|---------|
+| **Setting** | What the value controls |
+| **Default** | Compiled default (tier 3) from [`config.go`](../../internal/config/config.go) or plugin defaults |
+| **Env var** | Tier 1; when set in the environment, locks the field platform-wide (`422` on PUT, `locked_fields` on GET) |
+| **API endpoint** | Settings API path (`GET`/`PUT`/`DELETE`); `—` if not tenant-configurable |
+| **JSON field** | PUT/GET field (dot notation for nested objects) |
+| **Lockable** | `Yes` = tenant PUT when env unset and not globally locked; `No` = admin only; `Global` = `ROS_SETTINGS_LOCKED` blocks PUT (unless feature opt-out) |
+
+**Term env vars:** `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` — e.g. `ROS_TERMS_CONTAINER_MEDIUM_WINDOW_DAYS`, `ROS_TERMS_VM_SHORT_TERM_WINDOW_DAYS`.
 
 When a parameter is locked by an admin env var, the Settings API marks it `"locked": true`
 in GET responses and rejects PUT attempts for that field.
@@ -201,9 +215,86 @@ returns `{"enabled": false, "settings_locked": true}`.
 
 ---
 
+## General / Infrastructure
+
+Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings API** — configure on API, processor, and poller Deployments.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Service name (logs) | `rosocp` | `SERVICE_NAME` | — | — | No |
+| Log level | `INFO` | `LOG_LEVEL` | — | — | No |
+| Log format | `text` (local) / `json` (Clowder) | `LogFormater` | — | — | No |
+| API listen port | `8000` | `API_PORT` | — | — | No |
+| Prometheus metrics port | `5005` (local) / Clowder | `PROMETHEUS_PORT` | — | — | No |
+| HTTP read-header timeout (s) | 15 | `READ_HEADER_TIMEOUT` | — | — | No |
+| Outbound HTTP client timeout (s) | 30 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | — | — | No |
+| Max values per repeated query param | 5 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | — | — | No |
+| CSV export row batch | 1000 | `RECORD_LIMIT_CSV` | — | — | No |
+| CSV stream flush interval (rows) | 100 | `CSV_STREAM_INTERVAL` | — | — | No |
+| PostgreSQL host | `localhost` | `DB_HOST` | — | — | No |
+| PostgreSQL port | `15432` | `DB_PORT` | — | — | No |
+| PostgreSQL database | `postgres` | `DB_NAME` | — | — | No |
+| PostgreSQL user | `postgres` | `DB_USER` | — | — | No |
+| PostgreSQL password | `postgres` | `DB_PASSWORD` | — | — | No |
+| PostgreSQL SSL mode | `disable` | `DB_SSL` | — | — | No |
+| PostgreSQL CA cert path | (empty) | `DB_CA_CERT` | — | — | No |
+| pgxpool max connections | 10 | `ROS_DB_MAX_CONNS` | — | — | No |
+| pgxpool min connections | 2 | `ROS_DB_MIN_CONNS` | — | — | No |
+| Connection max lifetime (minutes) | 30 | `ROS_DB_MAX_CONN_LIFETIME` | — | — | No |
+| Connection max idle (minutes) | 5 | `ROS_DB_MAX_CONN_IDLE_TIME` | — | — | No |
+| Statement cache mode | `describe` | `ROS_DB_STATEMENT_CACHE_MODE` | — | — | No |
+| Pool acquire timeout (s); 0 = none | 5 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | — | — | No |
+| Kafka bootstrap servers | `localhost:29092` | `KAFKA_BOOTSTRAP_SERVERS` | — | — | No |
+| Kafka consumer group | `ros-ocp` | `KAFKA_CONSUMER_GROUP_ID` | — | — | No |
+| Kafka auto-commit | false | `KAFKA_AUTO_COMMIT` | — | — | No |
+| Upload topic | `hccm.ros.events` | `UPLOAD_TOPIC` | — | — | No |
+| Recommendation topic (Kruize) | `rosocp.kruize.recommendations` | `RECOMMENDATION_TOPIC` | — | — | No |
+| Sources event topic | `platform.sources.event-stream` | `SOURCES_EVENT_TOPIC` | — | — | No |
+| Parallel Kafka processing | true | `ROS_KAFKA_PARALLEL` | — | — | No |
+| Kafka worker goroutines | 3 | `ROS_KAFKA_WORKERS` | — | — | No |
+| RBAC enabled | false (local) / true (Clowder) | `RBAC_ENABLE` | — | — | No |
+| RBAC cache TTL (s); 0 = off | 60 | `ROS_RBAC_CACHE_TTL` | — | — | No |
+| Kruize URL | `http://localhost:8080` | `KRUIZE_URL` | — | — | No |
+| Kruize wait time (s) | 30 | `KRUIZE_WAIT_TIME` | — | — | No |
+| Kruize bulk chunk size | 100 | `KRUIZE_MAX_BULK_CHUNK_SIZE` | — | — | No |
+| Kruize performance profile version | `v2.0` | `KRUIZE_PERFORMANCE_PROFILE_VERSION` | — | — | No |
+| Recommendation poller interval (h) | 24 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | — | — | No |
+| Legacy data retention period | 15 | `DATA_RETENTION_PERIOD` | — | — | No |
+| Deprecated native-engine flag | true | `ROS_USE_NATIVE_ENGINE` | — | — | No |
+| Plugin allowlist (CSV); empty = all native | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
+| Plugin denylist (CSV) | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
+| Tag filtering enabled | false | `ROS_TAGS_ENABLED` | — | — | No |
+| Tag source (`db` or `api`) | `db` | `ROS_TAGS_SOURCE` | — | — | No |
+| Tag sync allowed service accounts | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
+| Tag sync dev bearer token | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
+| Tag sync max body (MiB) | 10 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | — | — | No |
+| CSV download max body (bytes) | 524288000 | `ROS_CSV_MAX_BODY_BYTES` | — | — | No |
+| CSV download timeout (s) | 120 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | — | — | No |
+| CSV allowed hosts (CSV) | (empty) | `ROS_CSV_ALLOWED_HOSTS` | — | — | No |
+| K8s SA token path (tag sync) | `/var/run/secrets/.../token` | `KUBERNETES_SA_TOKEN_PATH` | — | — | No |
+| K8s TokenReview URL | cluster default | `KUBERNETES_TOKEN_REVIEW_URL` | — | — | No |
+| Sources API base URL | platform / `http://127.0.0.1:8002` | `SOURCES_API_BASE_URL` | — | — | No |
+| Sources API prefix | `/api/sources/v3.1` | `SOURCES_API_PREFIX` | — | — | No |
+
+Deployment-focused subsets are also summarized in [Configuration](../configuration.md) (database, Kafka, performance tuning, tags).
+
+---
+
 ## Global / Platform
 
-Platform-wide settings. Most are **admin-only** (not tenant-configurable via API).
+Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings API** for these rows.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Staleness threshold (hours) | 72 | `ROS_STALENESS_THRESHOLD_HOURS` | — | — | No |
+| Max digest lookback (days) | 90 | `ROS_MAX_LOOKBACK_DAYS` | — | — | No |
+| OOM memory bump base factor | 0.15 | `ROS_OOM_BASE_BUMP` | — | — | No |
+| OOM memory bump max multiplier | 1.60 | `ROS_OOM_MAX_BUMP` | — | — | No |
+| Recommendation history retention (days) | 90 | `ROS_HISTORY_RETENTION_DAYS` | — | — | No |
+| Stale recommendation archive (days) | 30 | `ROS_STALE_ARCHIVE_DAYS` | — | — | No |
+| Digest partition retention (months) | 6 | `ROS_RETENTION_MONTHS` | — | — | No |
+
+Legacy expanded descriptions (staleness, OOM, retention):
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
@@ -219,11 +310,25 @@ Platform-wide settings. Most are **admin-only** (not tenant-configurable via API
 
 ---
 
+## Term windows (all plugins)
+
+| Plugin | API endpoint | Term names | Default windows (days) / min-data / decay (h) |
+|--------|--------------|------------|--------------------------------------------------|
+| `container` | `/settings/terms?recommendation_type=container` | `short`, `medium`, `long` | 1/1/0 · 7/3/168 · 15/7/360 |
+| `namespace` | `...&recommendation_type=namespace` | same | same as container |
+| `node` | `...&recommendation_type=node` | same | same as container |
+| `gpu` | `...&recommendation_type=gpu` | same | same as container |
+| `pvc` | `...&recommendation_type=pvc` | same | 7/3/0 · 30/14/0 · 90/30/0 |
+| `vm` | `/settings/vm/terms` | `short_term`, `medium_term`, `long_term` | 7/3/0 · 15/7/0 · 30/15/0 |
+
+Per-term overrides: `PUT` body `{"terms":[{"name":"medium","window_days":10,"min_data_days":5,"decay_halflife_hours":168}]}`. Env locks per field; also `ROS_SETTINGS_LOCKED_TERMS` (generic route only) or type-specific lock under global lock.
+
+---
+
 ## Container
 
 Sizing, classification, and notification thresholds for per-container CPU/memory
-recommendations. Cost and performance engines share these parameters with different
-percentile values.
+recommendations via **`GET/PUT/DELETE /settings/thresholds?recommendation_type=container`**. Cost and performance engines share these parameters with different percentile values.
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
@@ -393,10 +498,15 @@ because storage growth is slow.
 
 ## ResourceQuota
 
-Namespace **ResourceQuota** hard-limit recommendations (`quota` plugin). Compares
-configured quota hard/used metrics from the namespace CSV against aggregated container
-`term=medium` / `engine=cost` sums. Tenant overrides via `GET/PUT/DELETE /settings/quota`;
-env vars lock fields for operator-controlled deployments.
+Namespace **ResourceQuota** recommendations (`quota` plugin). **`GET/PUT/DELETE /settings/quota`**.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Headroom on recommended hard limits (%) | 10 | `ROS_QUOTA_HEADROOM_PERCENT` | `/settings/quota` | `headroom_percent` | Yes |
+| High risk / raise threshold (%) | 90 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `/settings/quota` | `high_risk_threshold_percent` | Yes |
+| Medium risk threshold (%) | 70 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `/settings/quota` | `medium_risk_threshold_percent` | Yes |
+
+Legacy detail:
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
@@ -413,9 +523,15 @@ one-cycle lag, and API fields.
 
 ## ClusterResourceQuota
 
-OpenShift **ClusterResourceQuota** recommendations (`cluster-quota` plugin). Compares CRQ
-hard/used from the cluster-quota ROS CSV against aggregated namespace quota recommendation
-totals. Tenant overrides via `GET/PUT/DELETE /settings/cluster-quota`; env vars lock fields.
+OpenShift **ClusterResourceQuota** recommendations (`cluster-quota` plugin). **`GET/PUT/DELETE /settings/cluster-quota`**.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Headroom on recommended CRQ hard limits (%) | 10 | `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `/settings/cluster-quota` | `headroom_percent` | Yes |
+| High risk / raise threshold (%) | 90 | `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `/settings/cluster-quota` | `high_risk_threshold_percent` | Yes |
+| Medium risk threshold (%) | 70 | `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `/settings/cluster-quota` | `medium_risk_threshold_percent` | Yes |
+
+Legacy detail:
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
@@ -427,6 +543,70 @@ totals. Tenant overrides via `GET/PUT/DELETE /settings/cluster-quota`; env vars 
 
 See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for ingestion timing,
 one-cycle lag (same as namespace quota), and API fields.
+
+---
+
+## OpenShift Virtualization (VM)
+
+OpenShift Virtualization rightsizing (`vm` plugin). Requires `ROS_ENABLE_VM_RECS=true` (default) and `vm` not in `ROS_DISABLED_PLUGINS`. Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
+
+Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
+
+### VM thresholds, disk, I/O, stability (`/settings/vm`)
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| CPU cost percentile | 0.95 | `ROS_VM_CPU_PERCENTILE_COST` | `/settings/vm` | `thresholds.cpu_percentile_cost` | Yes |
+| CPU performance percentile | 0.99 | `ROS_VM_CPU_PERCENTILE_PERF` | `/settings/vm` | `thresholds.cpu_percentile_perf` | Yes |
+| CPU margin minimum | 0.15 | `ROS_VM_CPU_MARGIN_MIN` | `/settings/vm` | `thresholds.cpu_margin_min` | Yes |
+| CPU margin maximum | 0.50 | `ROS_VM_CPU_MARGIN_MAX` | `/settings/vm` | `thresholds.cpu_margin_max` | Yes |
+| Memory margin minimum | 0.20 | `ROS_VM_MEM_MARGIN_MIN` | `/settings/vm` | `thresholds.mem_margin_min` | Yes |
+| Downsize hysteresis ratio | 0.60 | `ROS_VM_DOWNSIZE_HYSTERESIS_RATIO` | `/settings/vm` | `thresholds.downsize_hysteresis_ratio` | Yes |
+| Minimum vCPU change | 2 | `ROS_VM_MIN_VCPU_CHANGE` | `/settings/vm` | `thresholds.min_vcpu_change` | Yes |
+| Minimum GiB change | 2 | `ROS_VM_MIN_GIB_CHANGE` | `/settings/vm` | `thresholds.min_gib_change` | Yes |
+| Idle CPU (Linux), millicores | 50 | `ROS_VM_IDLE_CPU_MC` | `/settings/vm` | `thresholds.idle_cpu_mc` | Yes |
+| Idle memory (Linux), MiB | 512 | `ROS_VM_IDLE_MEMORY_MIB` | `/settings/vm` | `thresholds.idle_memory_mib` | Yes |
+| Idle CPU (Windows), millicores | 200 | `ROS_VM_IDLE_CPU_MC_WINDOWS` | `/settings/vm` | `thresholds.idle_cpu_mc_windows` | Yes |
+| Idle memory (Windows), MiB | 3072 | `ROS_VM_IDLE_MEMORY_MIB_WINDOWS` | `/settings/vm` | `thresholds.idle_memory_mib_windows` | Yes |
+| Abandoned VM min days | 3 | `ROS_VM_ABANDONED_MIN_DAYS` | `/settings/vm` | `thresholds.abandoned_min_days` | Yes |
+| Linux memory floor (GiB) | 1 | `ROS_VM_LINUX_MEMORY_FLOOR_GIB` | `/settings/vm` | `memory_floors.linux_gib` | Yes |
+| Windows memory floor (GiB) | 2 | `ROS_VM_WINDOWS_MEMORY_FLOOR_GIB` | `/settings/vm` | `memory_floors.windows_gib` | Yes |
+| Windows kernel reserve (GiB) | 1.5 | `ROS_VM_WINDOWS_KERNEL_RESERVE_GIB` | `/settings/vm` | `memory_floors.windows_kernel_reserve_gib` | Yes |
+| Downsize stability days | 3 | `ROS_VM_DOWNSIZE_STABILITY_DAYS` | `/settings/vm` | `stability.downsize_stability_days` | Yes |
+| Crash-loop restart threshold | 3 | `ROS_VM_CRASH_LOOP_RESTART_THRESHOLD` | `/settings/vm` | `stability.crash_loop_restart_threshold` | Yes |
+| Disk projection window (days) | 30 | `ROS_VM_DISK_PROJECTION_DAYS` | `/settings/vm` | `disk.projection_window_days` | Yes |
+| Disk headroom fraction | 0.25 | `ROS_VM_DISK_HEADROOM_PCT` | `/settings/vm` | `disk.headroom_pct` | Yes |
+| Disk round step (GiB) | 10 | `ROS_VM_DISK_ROUND_STEP_GIB` | `/settings/vm` | `disk.round_step_gib` | Yes |
+| Disk min growth (MiB/day) | 100 | `ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY` | `/settings/vm` | `disk.min_growth_mib_per_day` | Yes |
+| High IOPS threshold | 3000 | `ROS_VM_HIGH_IOPS_THRESHOLD` | `/settings/vm` | `io.high_iops_threshold` | Yes |
+| Instance type matching | true | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `/settings/vm` | `instance_type_matching` | Yes |
+
+GET also returns top-level `enabled` (derived from `ROS_ENABLE_VM_RECS` + plugin registry; not stored per tenant). PUT accepts partial JSON objects for `thresholds`, `memory_floors`, `stability`, `disk`, `io`, and `instance_type_matching`.
+
+### VM term windows (`/settings/vm/terms`)
+
+Plugin defaults (`internal/plugins/vm/plugin.go`): `short_term` 7d/3 min-data, `medium_term` 15d/7, `long_term` 30d/15 (no decay on VM terms by default).
+
+| Setting | Default (short / medium / long) | Env var pattern | API endpoint | JSON field | Lockable |
+|---------|--------------------------------|-----------------|--------------|------------|----------|
+| Window days | 7 / 15 / 30 | `ROS_TERMS_VM_SHORT_TERM_WINDOW_DAYS`, `ROS_TERMS_VM_MEDIUM_TERM_WINDOW_DAYS`, `ROS_TERMS_VM_LONG_TERM_WINDOW_DAYS` | `/settings/vm/terms` | `terms[].window_days` | Yes |
+| Min data days | 3 / 7 / 15 | `ROS_TERMS_VM_*_MIN_DATA_DAYS` | `/settings/vm/terms` | `terms[].min_data_days` | Yes |
+| Decay half-life (hours) | 0 / 0 / 0 | `ROS_TERMS_VM_*_DECAY_HALFLIFE_HOURS` | `/settings/vm/terms` | `terms[].decay_halflife_hours` | Yes |
+
+Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when any env var is set for that term or when `ROS_SETTINGS_LOCKED_VM=true` under global lock (generic `ROS_SETTINGS_LOCKED_TERMS` does **not** apply to this route).
+
+### VM — admin-only (no Settings API field)
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Enable VM recommendations | true | `ROS_ENABLE_VM_RECS` | — | — | No |
+| CPU adaptive margin (cost engine) | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | — | — | No |
+| VM recommendation history retention (days) | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | — | — | No |
+| VM GPU idle threshold | 0.05 | `ROS_VM_GPU_IDLE_THRESHOLD` | — | — | No |
+| VM GPU underutilized threshold | 0.30 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | — | — | No |
+| VM GPU compute saturation threshold | 0.85 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | — | — | No |
+
+See [VM recommendations design](../design/vm-recommendations.md).
 
 ---
 
@@ -444,14 +624,63 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 | `ROS_SNAPSHOT_COST_PER_GIB_MONTH` | 0.05 | float64 | Fallback $/GiB/month. <br><em>Expanded: Fallback storage cost rate (USD per GiB per month) used when no cost model rate is available from Koku. This is used to estimate the monthly cost of keeping a snapshot. The resolution chain is: Koku effective-rates `storage_gb_usage_per_month` (dynamic) → tenant DB override → this env var → $0.05 default. Set this to match your actual block storage provider's snapshot pricing.</em> | Yes* | Already exists |
 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | 6 | int | Recent-ingest window. <br><em>Expanded: Operations tuning parameter: how recently snapshot inventory data must have been ingested for the snapshot plugin to run classification. If the last inventory report is older than this many hours, snapshot recommendations are skipped to avoid acting on stale inventory. 6 hours ensures recommendations reflect the current cluster state.</em> | No | New |
 
-\* Configurable via `PUT /settings/snapshot`.
+### Snapshot — admin-only (no Settings API field)
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Snapshot inventory freshness (hours) | 6 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | — | — | No |
+| Snapshot inventory retention (hours) | 48 | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | — | — | No |
+| Snapshot stale grace without fresh inventory (hours) | 48 | `ROS_SNAPSHOT_STALE_GRACE_HOURS` | — | — | No |
+
+\* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
+
+---
+
+## Idle / zombie detection
+
+Inline idle and zombie classification during container/GPU recommendation runs.
+
+**API:** `GET/PUT/DELETE /settings/idle-detection` — body `{"idle_detection":{...}}`.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Idle detection enabled | true | `ROS_IDLE_DETECTION_ENABLED` | `/settings/idle-detection` | `idle_detection.enabled` | Yes |
+| CPU utilization % (idle) | 2 | `ROS_IDLE_CPU_UTILIZATION_PCT` | `/settings/idle-detection` | `idle_detection.thresholds.cpu_utilization_percent` | Yes |
+| Memory utilization % (idle) | 5 | `ROS_IDLE_MEMORY_UTILIZATION_PCT` | `/settings/idle-detection` | `idle_detection.thresholds.memory_utilization_percent` | Yes |
+| Burst ratio (stay active) | 10 | `ROS_IDLE_BURST_RATIO` | `/settings/idle-detection` | `idle_detection.thresholds.burst_ratio` | Yes |
+| Min observation days | 14 | `ROS_IDLE_MIN_OBSERVATION_DAYS` | `/settings/idle-detection` | `idle_detection.thresholds.minimum_observation_days` | Yes |
+| GPU SM active (basis points) | 500 | `ROS_IDLE_GPU_SM_ACTIVE_BP` | `/settings/idle-detection` | `idle_detection.thresholds.gpu_sm_active_basis_points` | Yes |
+| GPU DRAM active (basis points) | 500 | `ROS_IDLE_GPU_DRAM_ACTIVE_BP` | `/settings/idle-detection` | `idle_detection.thresholds.gpu_dram_active_basis_points` | Yes |
+| Exclude namespaces (CSV globs) | `kube-system,openshift-*` | `ROS_IDLE_EXCLUDE_NAMESPACES` | `/settings/idle-detection` | `idle_detection.exclusions.namespaces` | Yes |
+| Exclude workload types (CSV) | `DaemonSet` | `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `/settings/idle-detection` | `idle_detection.exclusions.workload_types` | Yes |
+
+### Idle — admin-only (env overrides, not in PUT body)
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Zombie CPU P95 (millicores) | 1 | `ROS_IDLE_ZOMBIE_CPU_MILLICORES` | — | — | No |
+| Zombie CPU peak (millicores) | 10 | `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` | — | — | No |
+
+See [Idle / zombie detection](../features/idle-detection.md).
 
 ---
 
 ## Business Hours
 
-Platform feature gate and reship behavior. Not tenant-configurable via thresholds API;
-schedules are managed through the business-hours Settings API routes.
+**API routes:** `/settings/business-hours`, `/settings/business-hours/clusters/:cluster_id`, `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` — `GET`/`PUT`/`DELETE`.
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Business hours feature | true | `ROS_BUSINESS_HOURS_ENABLED` | — (gates routes) | `enabled` on GET when disabled | No |
+| Reship forward-only fallback | false | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | — | — | No |
+| Timezone | tenant | — | org/cluster/namespace routes | `timezone` | Global |
+| Schedule days | tenant | — | same | `schedule.days` | Global |
+| Schedule start | tenant | — | same | `schedule.start_time` | Global |
+| Schedule end | tenant | — | same | `schedule.end_time` | Global |
+| Off-hours weight | tenant | — | same | `off_hours_weight` | Global |
+| Schedule enabled flag | tenant | — | same | `enabled` | Global |
+
+`Global` under `ROS_SETTINGS_LOCKED` + `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` (default true): PUT/DELETE return `403`; GET returns `enabled: false`, `settings_locked: true`.
 
 | Env var | Default | Type | Description | Tenant-configurable | Status |
 |---------|---------|------|-------------|---------------------|--------|
@@ -658,6 +887,9 @@ and mirror the env re-apply step used in
 | Area | Primary files |
 |------|---------------|
 | Config loading | [`config.go`](../../internal/config/config.go) |
+| VM settings | [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go) |
+| Idle detection | [`idle_settings.go`](../../internal/engine/idle_settings.go) |
+| Quota / cluster-quota | [`quota_settings.go`](../../internal/engine/quota_settings.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
 | Term resolution | [`term_config.go`](../../internal/engine/term_config.go) |
 | Container sizing | [`types.go`](../../internal/engine/types.go), [`recommend_all.go`](../../internal/engine/recommend_all.go) |
 | Node sizing | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |

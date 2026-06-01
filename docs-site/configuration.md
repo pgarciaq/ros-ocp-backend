@@ -5,6 +5,13 @@ Environment variables for ROS-OCP Backend deployments. Set these on the
 each process reads the same config struct but uses different subsets (for
 example, Kafka variables apply to the processor; RBAC cache applies to the API).
 
+!!! tip "Authoritative reference"
+    For **every** default, env var, Settings API endpoint, JSON field name, and
+    lock behavior (container, namespace, node, GPU, PVC, VM, quota, cluster-quota,
+    snapshot, idle, business hours, global lock, infrastructure), use the
+    **[Configurability Reference](architecture/configurability.md)**. This page
+    focuses on deployment-oriented subsets.
+
 In Red Hat OpenShift with the cost-onprem Helm chart or Clowder, database,
 Kafka, and RBAC connection settings are usually injected by the platform. The
 variables below are the ones operators most often tune explicitly.
@@ -327,23 +334,24 @@ See [ClusterResourceQuota Recommendations](features/cluster-resource-quota.md).
 ## Engine Thresholds
 
 Platform-wide defaults for recommendation algorithms. When set, they **lock**
-the corresponding tenant Settings API field. For full semantics, defaults, and
-workload-specific tuning examples, see
+the corresponding tenant Settings API field. For full semantics, defaults, API
+paths, JSON fields, VM settings, and workload-specific tuning examples, see
 [Configurability Reference](architecture/configurability.md).
 
-| Category | Variable prefix |
-|----------|-----------------|
-| Container sizing | `ROS_CONTAINER_*` |
-| Namespace sizing | `ROS_NAMESPACE_*` |
-| Node consolidation | `ROS_NODE_*` |
-| GPU classification | `ROS_GPU_*` |
-| PVC right-sizing | `ROS_PVC_*` |
-| ResourceQuota | `ROS_QUOTA_HEADROOM_PERCENT`, `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`, `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` |
-| ClusterResourceQuota | `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT`, `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`, `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` |
-| Snapshot staleness | `ROS_SNAPSHOT_*` |
-| Term windows | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
-| OOM feedback | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
-| Idle / zombie | `ROS_IDLE_*` (see section above) |
+| Category | Settings API | Variable prefix |
+|----------|--------------|-----------------|
+| Container sizing | `/settings/thresholds?recommendation_type=container` | `ROS_CONTAINER_*` |
+| Namespace sizing | `...&recommendation_type=namespace` | `ROS_NAMESPACE_*` |
+| Node consolidation | `...&recommendation_type=node` | `ROS_NODE_*` |
+| GPU classification | `...&recommendation_type=gpu` | `ROS_GPU_*` |
+| PVC right-sizing | `...&recommendation_type=pvc` | `ROS_PVC_*` |
+| OpenShift Virtualization | `/settings/vm`, `/settings/vm/terms` | `ROS_VM_*`, `ROS_TERMS_VM_*` |
+| ResourceQuota | `/settings/quota` | `ROS_QUOTA_*` |
+| ClusterResourceQuota | `/settings/cluster-quota` | `ROS_CLUSTER_QUOTA_*` |
+| Snapshot staleness | `/settings/snapshot` | `ROS_SNAPSHOT_*` |
+| Term windows (generic) | `/settings/terms?recommendation_type=<plugin>` | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
+| OOM feedback | — (admin only) | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
+| Idle / zombie | `/settings/idle-detection` | `ROS_IDLE_*` (see section above) |
 
 ---
 
