@@ -393,8 +393,8 @@ and **performance** (55% target) engine rows, mirroring container
 is shared; sizing and savings differ per engine.
 
 **API status:** Canonical **`GET /recommendations/openshift/nodes`** returns one
-object per node with shared classification/metrics and nested
-`recommendation_terms.<term>.recommendation_engines.{cost,performance}`.
+object per node with shared classification/metrics, `instance_type` when known,
+and nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`.
 Optional `?engine=cost|performance` filters which engine blocks are returned.
 Pagination counts distinct nodes; default sort is medium-term
 `estimated_monthly_savings` (structured object; cost engine unless filtered).
@@ -408,6 +408,19 @@ reflects the Koku cost model unit. Deprecated alias:
 
 **UI status:** Not implemented. Requires a node recommendations view and a null
 state for the 3-day cold start period.
+
+**Business hours for nodes: Intentionally skipped.** Nodes are always-on
+infrastructure; `idle_state` classification (`active` / `idle` / `zombie`) covers
+the decommissioning case without schedule complexity. Container and namespace
+recommendations retain business-hours support where usage patterns are
+time-of-day dependent.
+
+**Roadmap / deferred (Tier 2+):**
+
+| Tier | Scope | Status |
+|------|--------|--------|
+| Tier 2 — MachineSet | Group recommendations by OpenShift MachineSet; requires operator collection of MachineSet labels, new ingest fields, engine grouping, API filters, and persistence | Future work |
+| Tier 3 — MachineAutoscaler | Autoscaler-aware consolidation (scale-down hints tied to MachineSet/MachineAutoscaler) | Future work; depends on Tier 2 |
 
 ### GPU Recommendations
 

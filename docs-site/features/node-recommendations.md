@@ -1,153 +1,37 @@
-# Node Consolidation & Right-Sizing
+# Node recommendations
 
-!!! info "Quick Facts"
-    **API:** `GET /api/cost-management/v1/recommendations/openshift/nodes`  
-    **Configurable:** Yes  
-    **Engines:** cost, performance (filter with `?engine=cost` or `?engine=performance`)  
-    **Savings:** Yes — `estimated_monthly_savings` (`value` + `units`) per engine row
-
-## Overview
-
-Node recommendations analyze cluster-level CPU and memory utilization to identify
-waste and sizing opportunities. Each node receives a **classification** (shared
-across engines) plus **engine-specific sizing** and optional **consolidation**
-guidance — recommending fewer nodes when workloads fit at a target utilization.
-
-This is distinct from [GPU Time-Slicing](gpu-time-slicing.md), which covers
-software GPU sharing at `GET .../gpu/timeslicing`.
-
-## How it works
-
-```mermaid
-flowchart TD
-  ND[Node daily digests] --> Class[classifyNode]
-  Class --> Shared[Shared classification]
-  Shared --> Cost[cost engine: 80% target]
-  Shared --> Perf[performance engine: 55% target]
-  Cost --> Out[recommended_cpu_cores, node_count_reduction]
-  Perf --> Out
-```
-
-1. **Digest aggregation** — Node allocatable capacity, P95 usage, and pod
-   request totals are computed per day within the term window.
-2. **Classification** — Each node is labeled once (see table below).
-3. **Dual-engine sizing** — Recommended capacity =
-   `max(usage_p95, requests) / target_utilization`.
-4. **Consolidation (Level 3)** — When underutilized, engines compute a per-node
-   consolidation flag, then [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
-   groups nodes by `instance_type` (from operator ROS CSV) and distributes
-   `node_count_reduction` across the fleet. Nodes without `instance_type` keep
-   legacy per-node binary reduction (0 or 1).
-5. **Savings** — Dollar estimates compare current vs recommended node CPU, memory,
-   and monthly node cost. See [Cost Integration — Node Savings](../architecture/cost-integration.md#node-savings-cpumemory-utilization).
-
-## Classification types
-
-| Type | Condition |
-|------|-----------|
-| **underutilized** | CPU P95 **and** memory P95 < 30% of allocatable |
-| **overcommitted** | CPU requests / allocatable > 150% |
-| **stranded_cpu** | EMA-smoothed CPU/memory imbalance > 0.6, CPU higher |
-| **stranded_memory** | Same imbalance threshold, memory higher |
-| **well_utilized** | None of the above |
-
-Stranded-resource nodes have one dimension heavily used while the other sits idle
-— a signal that instance type or workload placement may be mismatched.
-
-## Dual engine behavior
-
-| Aspect | Cost engine | Performance engine |
-|--------|-------------|---------------------|
-| Target utilization | 80% | 55% |
-| Consolidation | Fleet-aware by `instance_type` when operator provides it | Same headroom guard; may assign `node_count_reduction = 0` when group cannot consolidate |
-| Savings | More aggressive consolidation | Conservative; preserves headroom |
-
-Filter list results: `?engine=cost` (default for sorting) or `?engine=performance`.
-
-## Sizing output
-
-| Field | Meaning |
-|-------|---------|
-| `recommended_cpu_cores` | Target CPU capacity for the node (or cluster slice) |
-| `recommended_memory_gib` | Target memory capacity (GiB) |
-| `node_count_reduction` | Suggested nodes to remove in this engine/term (0 or 1 per row; fleet sum may exceed 1) |
-| `classification.idle_state` | `active`, `idle`, or `zombie` (node idle detection; migration **000111**) |
-| `estimated_monthly_savings` | Dollar delta vs current allocation (`value` + `units`) |
-
-## Term support
-
-Short, medium, and long terms use the same defaults as container (1d / 7d / 15d).
-List API defaults to **medium** term for classification display; all terms are
-nested under `recommendation_terms`.
+Node CPU/memory utilization recommendations identify underutilized,
+overcommitted, and stranded worker capacity, with optional fleet consolidation
+hints when multiple nodes share the same instance type.
 
 ## API
 
-```http
-GET /api/cost-management/v1/recommendations/openshift/nodes
-```
+Canonical endpoint: `GET /api/cost-management/v1/recommendations/openshift/nodes`
 
-Query parameters include `cluster_uuid`, `node`, `engine`, `term`,
-`filter[idle_state]` (`active`, `idle`, `zombie`; comma-separated),
-`is_underutilized`, `is_overcommitted`, `order_by` (default
-`estimated_monthly_savings`; alias `estimated_monthly_savings_usd`), and pagination.
+- One object per node with nested `recommendation_terms` and per-engine sizing
+- `filter[idle_state]=idle|zombie|active` for decommissioning workflows
+- `filter[is_underutilized]`, `filter[cluster]`, `engine=cost|performance`
+- `instance_type` on each row when the operator supplies it in ROS metrics
 
-### Example (abbreviated)
+See [UI integration — node recommendations](../ui-integration-guide.md#3-node-recommendations)
+and [validating native engine — node recommendations](../testing/validating-native-engine.md#node-recommendations-validation).
 
-```json
-{
-  "meta": { "count": 12, "currency": "USD" },
-  "data": [{
-    "node": "worker-3.example.com",
-    "cluster_uuid": "...",
-    "recommendation_type": "underutilized",
-    "recommendation_terms": {
-      "medium_term": {
-        "recommendation_engines": {
-          "cost": {
-            "recommended_cpu_cores": 8,
-            "recommended_memory_gib": 32,
-            "node_count_reduction": 1,
-            "estimated_monthly_savings": {
-              "value": "850.000000",
-              "units": "USD"
-            }
-          },
-          "performance": {
-            "recommended_cpu_cores": 12,
-            "recommended_memory_gib": 48,
-            "node_count_reduction": 0,
-            "estimated_monthly_savings": {
-              "value": "200.000000",
-              "units": "USD"
-            }
-          }
-        }
-      }
-    }
-  }]
-}
-```
+## Engine behavior
 
-## Configurable thresholds
+- **Classification:** Underutilized, overcommitted, stranded resources, trend slope
+- **Idle state:** `active`, `idle`, or `zombie` (notification code **15**)
+- **Consolidation:** `node_count_reduction` per engine/term; Level 3 groups by
+  `instance_type` when present, otherwise per-node binary hints for underutilized nodes
+- **Dual engines:** `cost` (higher target utilization) and `performance` (more headroom)
 
-`GET/PUT/DELETE .../settings/thresholds?recommendation_type=node`
+## Roadmap / deferred
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `underutil_threshold` | 0.30 | P95 util below → underutilized |
-| `overcommit_threshold` | 1.50 | Request/allocatable ratio alert |
-| `allocatable_factor` | 0.93 | Fallback when allocatable unknown |
-| `stranded_imbalance_threshold` | 0.60 | CPU/memory imbalance detection |
-| `ema_alpha` | 0.30 | EMA smoothing for trends |
-| `cost_target_utilization` | 0.80 | Cost engine sizing target |
-| `perf_target_utilization` | 0.55 | Performance engine sizing target |
-| `perf_consolidation_headroom_multiplier` | 2.0 | Performance consolidation guard |
-| `trend_min_days` | 3 | Min days for CPU trend slope |
+| Item | Rationale |
+|------|-----------|
+| **Business hours for nodes** | Intentionally skipped. Nodes are always-on; `idle_state` covers the important decommissioning signal without schedule complexity. |
+| **Tier 2 — MachineSet** | Future work. Requires metrics-operator MachineSet label collection, ingest/schema changes, engine grouping, API filters, and UI. |
+| **Tier 3 — MachineAutoscaler** | Future work after Tier 2. Autoscaler-aware consolidation and scale-down guidance. |
 
-Env vars: `ROS_NODE_*` — see [Configurability](../architecture/configurability.md#node).
-
-## Related
-
-- [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
-- [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals
-- [GPU Time-Slicing](gpu-time-slicing.md) — Separate node-level GPU feature
+Implementation references: [`RecommendNodes()`](../../internal/engine/recommend_nodes.go),
+[`PersistNodeRecommendations()`](../../internal/engine/recommend_nodes.go),
+[`GetNodeUtilizationRecs`](../../internal/api/handlers_node_utilization.go).
