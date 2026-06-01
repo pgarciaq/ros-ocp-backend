@@ -17,12 +17,16 @@ type ClusterQuotaResourceValues struct {
 	CPULimitMillicores   *int64 `json:"cpu_limit_millicores,omitempty"`
 	MemoryRequestBytes   *int64 `json:"memory_request_bytes,omitempty"`
 	MemoryLimitBytes     *int64 `json:"memory_limit_bytes,omitempty"`
+	StorageRequestBytes  *int64 `json:"storage_request_bytes,omitempty"`
+	Pods                 *int64 `json:"pods,omitempty"`
 }
 
 // ClusterQuotaUtilizationPercents exposes utilization as human-readable percentages.
 type ClusterQuotaUtilizationPercents struct {
-	CPURequestPercent    *int `json:"cpu_request_percent,omitempty"`
-	MemoryRequestPercent *int `json:"memory_request_percent,omitempty"`
+	CPURequestPercent     *int `json:"cpu_request_percent,omitempty"`
+	MemoryRequestPercent  *int `json:"memory_request_percent,omitempty"`
+	StorageRequestPercent *int `json:"storage_request_percent,omitempty"`
+	PodsPercent           *int `json:"pods_percent,omitempty"`
 }
 
 // ClusterQuotaCapacityFreedResponse is capacity that could be reclaimed by tightening CRQ.
@@ -103,6 +107,10 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	}
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
 	riskFilter := queryparams.FirstFilter(c, "risk_level")
+	namespaceFilter := queryparams.FirstFilter(c, "namespace")
+	if namespaceFilter == "" {
+		namespaceFilter = queryparams.FirstFilter(c, "project")
+	}
 
 	ctx := c.Request().Context()
 	filterSQL := ""
@@ -129,6 +137,14 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		args = append(args, riskFilter)
 		argIdx++
 	}
+	if namespaceFilter != "" {
+		filterSQL += ` AND EXISTS (
+			SELECT 1 FROM unnest(string_to_array(COALESCE(namespaces, ''), ',')) AS member(ns)
+			WHERE trim(both ' ' from member.ns) = $` + strconv.Itoa(argIdx) + `
+		)`
+		args = append(args, namespaceFilter)
+		argIdx++
+	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
 	if orderErr != nil {
@@ -150,7 +166,10 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			memory_request_used, memory_limit_used,
 			cpu_request_recommended, cpu_limit_recommended,
 			memory_request_recommended, memory_limit_recommended,
+			storage_request_hard, storage_request_used, storage_request_recommended,
+			pods_hard, pods_used, pods_recommended,
 			utilization_cpu_request_percent, utilization_memory_request_percent,
+			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_dollars_monthly, notification_codes
 		FROM cluster_quota_recommendation_sets
@@ -200,7 +219,9 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
 	var cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed sql.NullInt64
 	var cpuReqRec, cpuLimRec, memReqRec, memLimRec sql.NullInt64
-	var cpuReqUtil, memReqUtil sql.NullInt64
+	var storageHard, storageUsed, storageRec sql.NullInt64
+	var podsHard, podsUsed, podsRec sql.NullInt64
+	var cpuReqUtil, memReqUtil, storageUtil, podsUtil sql.NullInt64
 	var cpuCoresFreed, memFreed sql.NullInt64
 	var savings sql.NullInt64
 	var notifCodes []int16
@@ -210,17 +231,19 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		&cpuReqHard, &cpuLimHard, &memReqHard, &memLimHard,
 		&cpuReqUsed, &cpuLimUsed, &memReqUsed, &memLimUsed,
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
-		&cpuReqUtil, &memReqUtil,
+		&storageHard, &storageUsed, &storageRec,
+		&podsHard, &podsUsed, &podsRec,
+		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
 		&cpuCoresFreed, &memFreed, &savings, &notifCodes,
 	)
 	if err != nil {
 		return item, err
 	}
 
-	item.QuotaHard = clusterQuotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard)
-	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed)
-	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec)
-	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil)
+	item.QuotaHard = clusterQuotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard, storageHard, podsHard)
+	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
+	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
+	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
 	if cpuCoresFreed.Valid || memFreed.Valid {
 		item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
 			CPUCoresFreed: nullInt64Val(cpuCoresFreed),
@@ -237,8 +260,8 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	return item, nil
 }
 
-func clusterQuotaValuesFromNull(cpuReq, cpuLim, memReq, memLim sql.NullInt64) *ClusterQuotaResourceValues {
-	if !cpuReq.Valid && !cpuLim.Valid && !memReq.Valid && !memLim.Valid {
+func clusterQuotaValuesFromNull(cpuReq, cpuLim, memReq, memLim, storage, pods sql.NullInt64) *ClusterQuotaResourceValues {
+	if !cpuReq.Valid && !cpuLim.Valid && !memReq.Valid && !memLim.Valid && !storage.Valid && !pods.Valid {
 		return nil
 	}
 	return &ClusterQuotaResourceValues{
@@ -246,11 +269,13 @@ func clusterQuotaValuesFromNull(cpuReq, cpuLim, memReq, memLim sql.NullInt64) *C
 		CPULimitMillicores:   nullInt64Ptr(cpuLim),
 		MemoryRequestBytes:   nullInt64Ptr(memReq),
 		MemoryLimitBytes:     nullInt64Ptr(memLim),
+		StorageRequestBytes:  nullInt64Ptr(storage),
+		Pods:                 nullInt64Ptr(pods),
 	}
 }
 
-func clusterQuotaUtilFromNull(cpuReq, memReq sql.NullInt64) *ClusterQuotaUtilizationPercents {
-	if !cpuReq.Valid && !memReq.Valid {
+func clusterQuotaUtilFromNull(cpuReq, memReq, storage, pods sql.NullInt64) *ClusterQuotaUtilizationPercents {
+	if !cpuReq.Valid && !memReq.Valid && !storage.Valid && !pods.Valid {
 		return nil
 	}
 	out := &ClusterQuotaUtilizationPercents{}
@@ -261,6 +286,14 @@ func clusterQuotaUtilFromNull(cpuReq, memReq sql.NullInt64) *ClusterQuotaUtiliza
 	if memReq.Valid {
 		v := int(memReq.Int64)
 		out.MemoryRequestPercent = &v
+	}
+	if storage.Valid {
+		v := int(storage.Int64)
+		out.StorageRequestPercent = &v
+	}
+	if pods.Valid {
+		v := int(pods.Int64)
+		out.PodsPercent = &v
 	}
 	return out
 }
