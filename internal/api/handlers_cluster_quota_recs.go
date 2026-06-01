@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // ClusterQuotaResourceValues groups quota metrics for cluster-quota API responses.
@@ -58,7 +59,8 @@ type ClusterQuotaRecommendationListItem struct {
 	QuotaRecommended     *ClusterQuotaResourceValues      `json:"quota_recommended,omitempty"`
 	Utilization          *ClusterQuotaUtilizationPercents `json:"utilization,omitempty"`
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *ClusterQuotaSavingsMonthly      `json:"estimated_savings,omitempty"`
+	EstimatedSavings     *ClusterQuotaSavingsMonthly                  `json:"estimated_savings,omitempty"`
+	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // GetClusterQuotaRecommendations handles GET /recommendations/openshift/cluster-quota/.
@@ -128,6 +130,11 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
 	countQuery := `SELECT COUNT(*) FROM cluster_quota_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -145,10 +152,10 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			memory_request_recommended, memory_limit_recommended,
 			utilization_cpu_request_percent, utilization_memory_request_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
-			savings_dollars_monthly
+			savings_dollars_monthly, notification_codes
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL +
-		` ORDER BY cluster_quota_name LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+		` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
 	pageArgs := append(args, limit, offset)
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
@@ -196,6 +203,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	var cpuReqUtil, memReqUtil sql.NullInt64
 	var cpuCoresFreed, memFreed sql.NullInt64
 	var savings sql.NullInt64
+	var notifCodes []int16
 
 	err := rows.Scan(
 		&item.ClusterUUID, &item.ClusterQuotaName, &item.RecommendationType, &item.RiskLevel,
@@ -203,7 +211,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		&cpuReqUsed, &cpuLimUsed, &memReqUsed, &memLimUsed,
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
 		&cpuReqUtil, &memReqUtil,
-		&cpuCoresFreed, &memFreed, &savings,
+		&cpuCoresFreed, &memFreed, &savings, &notifCodes,
 	)
 	if err != nil {
 		return item, err
@@ -225,6 +233,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 			Units: "USD",
 		}
 	}
+	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	return item, nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // QuotaResourceValues groups quota metrics for API responses.
@@ -62,8 +63,9 @@ type QuotaRecommendationListItem struct {
 	Utilization        *QuotaUtilizationPercents   `json:"utilization,omitempty"`
 	CapacityFreed      *QuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
 	EstimatedSavings   *money.SavingsObject        `json:"estimated_savings,omitempty"`
-	LastObservedAt     string                      `json:"last_observed_at,omitempty"`
-	Count              int                         `json:"count,omitempty"`
+	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
+	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
+	Count              int                                         `json:"count,omitempty"`
 }
 
 // GetQuotaRecommendations handles GET /recommendations/openshift/quota/.
@@ -140,6 +142,11 @@ func GetQuotaRecommendations(c echo.Context) error {
 		return getQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, groupByCluster, clusterFilter)
 	}
 
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, quotaAllowedOrderBy, quotaDefaultOrderBy, quotaDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
 	countQuery := `SELECT COUNT(*) FROM quota_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -158,10 +165,10 @@ func GetQuotaRecommendations(c echo.Context) error {
 			cpu_request_utilization_bp, cpu_limit_utilization_bp,
 			memory_request_utilization_bp, memory_limit_utilization_bp,
 			cpu_freed_millicores, memory_freed_bytes,
-			estimated_savings_cents, currency, last_observed_at
+			estimated_savings_cents, currency, notification_codes, last_observed_at
 		FROM quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL +
-		` ORDER BY namespace LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+		` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
 	pageArgs := append(args, limit, offset)
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
@@ -300,6 +307,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	var cpuFreed, memFreed sql.NullInt64
 	var savings sql.NullInt64
 	var currency string
+	var notifCodes []int16
 	var lastObserved sql.NullTime
 
 	err := rows.Scan(
@@ -309,7 +317,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
 		&cpuReqUtil, &cpuLimUtil, &memReqUtil, &memLimUtil,
 		&cpuFreed, &memFreed,
-		&savings, &currency, &lastObserved,
+		&savings, &currency, &notifCodes, &lastObserved,
 	)
 	if err != nil {
 		return item, err
@@ -329,6 +337,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	if lastObserved.Valid {
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
 	}
+	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	return item, nil
 }
 
