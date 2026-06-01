@@ -36,6 +36,34 @@ Term-specific env vars (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`) lock individual ter
 fields. Threshold env vars (`ROS_CONTAINER_*`, `ROS_GPU_*`, etc.) lock the
 corresponding sizing or classification parameter platform-wide.
 
+### Current Implementation
+
+Settings resolution is implemented **per plugin** today. Each settings type has its
+own resolve function and matching `applyXxxEnvLocks` helper:
+
+| Settings type | Resolve function | Env-lock helper |
+|---------------|------------------|-----------------|
+| Container / namespace sizing | `resolveSizingThresholds()` | `applyContainerEnvLocks`, `applyNamespaceEnvLocks` |
+| Node / GPU / PVC thresholds | `ResolveNodeThresholdSettings`, etc. | `applyNodeEnvLocks`, `applyGPUEnvLocks`, `applyPVCEnvLocks` |
+| VM rightsizing | `ResolveVMSettings` | `applyVMEnvLocks` |
+| ResourceQuota | `ResolveQuotaSettings` | `applyQuotaEnvLocks` |
+| ClusterResourceQuota | `ResolveClusterQuotaSettings` | `applyClusterQuotaEnvLocks` |
+| Idle detection | `ResolveIdleDetectionSettings` | `applyIdleEnvLocks` |
+
+Each path follows the same three steps manually: start from compiled defaults,
+overlay tenant values from PostgreSQL, then re-apply any set admin env vars on read.
+This pattern was kept for the env-lock-on-read fix (Option A): a small, targeted
+change per plugin rather than refactoring every resolver at once. See
+[Future Enhancement: Generic Settings Resolver](#future-enhancement-generic-settings-resolver)
+for the planned centralized alternative (Option B).
+
+Implementation references:
+[`threshold_settings.go`](../../internal/engine/threshold_settings.go),
+[`vm_settings.go`](../../internal/engine/vm_settings.go),
+[`quota_settings.go`](../../internal/engine/quota_settings.go),
+[`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go),
+[`idle_settings.go`](../../internal/engine/idle_settings.go).
+
 ---
 
 ## Settings API Routes
@@ -425,6 +453,91 @@ too many volumes as oversized.
 | `ROS_PVC_OVERSIZED_THRESHOLD` | 0.40 | Allow 40% utilization before oversized |
 | `ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER` | 3 | Larger headroom for burst writes |
 | `ROS_TERMS_PVC_LONG_WINDOW_DAYS` | 120 | Slow growth needs longer observation |
+
+---
+
+## Future Enhancement: Generic Settings Resolver
+
+> **Status:** Not implemented — documented as Option B for a future cleanup PR.
+> Do not mix this refactor with feature work.
+
+### Problem
+
+Each plugin implements its own resolve path: load compiled defaults → overlay
+tenant values from the database → re-apply admin env locks on read. The algorithm
+is correct but scattered. Every new settings type must remember to add its own
+env-lock-on-read step after the DB overlay. Forgetting that step caused an
+inconsistency bug where VM and quota settings could return stale tenant overrides
+even when the corresponding `ROS_*` env var was set (platform lock not enforced on
+read).
+
+### Proposed Solution (Option B)
+
+A generic `ResolveSettings[T]` function using Go generics that encapsulates the
+full three-tier resolution for any settings struct:
+
+```go
+func ResolveSettings[T any](
+    ctx context.Context,
+    pool *pgxpool.Pool,
+    orgID, recType string,
+    defaults T,
+    lockMap map[string]string,
+) (T, []string, error) {
+    result := defaults
+    if err := overlayFromDB(ctx, pool, orgID, recType, &result); err != nil {
+        return result, nil, err
+    }
+    locked := applyEnvLocks(&result, lockMap)
+    return result, locked, nil
+}
+```
+
+`applyEnvLocks` would use reflection or a field-tag-based approach to:
+
+1. Iterate the lock map (`env var name` → `struct field name`)
+2. For each env var that is present (`os.LookupEnv`), override the corresponding
+   struct field with the parsed config value
+3. Return the list of locked field names (for Settings API `"locked": true` responses)
+
+Plugins would register only `defaults` + `lockMap`; the resolver owns the algorithm.
+
+### Benefits
+
+- **Impossible to forget env re-application** — it is built into the resolver, not
+  duplicated per plugin
+- **Single point of maintenance** for the three-tier resolution algorithm
+- **Self-documenting** — each plugin declares defaults and which env vars lock which
+  fields
+- **Locked fields as a side effect** — no separate `lockedFieldsFromEnvMap` call;
+  the resolver returns the locked field list from the same pass
+
+### Considerations
+
+- Requires Go generics (1.18+; already available in this codebase)
+- Reflection for field mapping adds runtime complexity; alternative is
+  code-generated `applyEnvLocks` per struct (more boilerplate, zero reflection)
+- DB overlay via `overlayFromDB` assumes settings stored in
+  `recommendation_thresholds` JSONB — plugins with dedicated tables (snapshot
+  settings, term windows, business-hours schedules) need adapters or separate
+  overlay hooks
+- Should ship as a **standalone cleanup PR**, not mixed with feature work
+
+### Migration Path
+
+1. Implement `ResolveSettings[T]` with reflection-based `applyEnvLocks`
+2. Migrate one plugin first (e.g., container sizing thresholds) and verify behavior
+   matches the existing `resolveSizingThresholds` + `applyContainerEnvLocks` path
+3. Run full unit and integration tests; confirm locked-field lists in GET responses
+4. Migrate remaining plugins one at a time (namespace, node, GPU, PVC, VM, quota,
+   cluster-quota, idle-detection)
+5. Remove per-plugin `applyXxxEnvLocks` functions and consolidate env lock maps
+
+Until that migration completes, new settings types should follow the existing
+per-plugin pattern documented in [Current Implementation](#current-implementation)
+and mirror the env re-apply step used in
+[`resolveSizingThresholds`](../../internal/engine/threshold_settings.go) and
+[`ResolveQuotaSettings`](../../internal/engine/quota_settings.go).
 
 ---
 
