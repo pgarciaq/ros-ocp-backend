@@ -9,10 +9,10 @@
 
 | Layer | Originally planned | Implemented | Notes |
 |-------|-------------------|-------------|-------|
-| **Unit** (ros-ocp-backend) | ~25–30 | **~70** test functions | Ingestion, engine, catalog, notifications, API, settings, plugin |
-| **E2E default CI** (cost-onprem-chart) | ~12–15 | **~12** | `tests/suites/ros/test_vm_*.py` (no `@extended`) |
-| **E2E extended** (cost-onprem-chart) | — | **~52** | Flow, GPU, network, GPU time-slicing, enhancements, notifications matrix, MVP promotions |
-| **IQE** | ~10–12 | **~75** | `test_ros_vm_recommendations.py` (network + GPU time-slicing) |
+| **Unit** (ros-ocp-backend) | ~25–30 | **252** test functions | Ingestion, engine, catalog, notifications, API, settings, plugin (`vm_*` test files) |
+| **E2E default CI** (cost-onprem-chart) | ~12–15 | **20** | `tests/suites/ros/test_vm_*.py` (no `@extended`) |
+| **E2E extended** (cost-onprem-chart) | — | **67** | Flow, GPU, network, GPU time-slicing, enhancements, notifications matrix (37–57), MVP promotions |
+| **IQE** | ~10–12 | **89** | `test_ros_vm_recommendations.py` (network + GPU time-slicing) |
 | **Nise** | 4 scenarios | ✅ | VM profiles + notification matrix templates |
 
 Legend: ✅ implemented · ⬜ not implemented / deferred
@@ -127,7 +127,7 @@ These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `
 | `test_vm_enhancements_flow.py` | ✅ |
 | `test_vm_gpu_flow.py` | ✅ |
 | `test_vm_instance_types_flow.py` | ✅ |
-| `test_vm_notifications_matrix.py` | ✅ codes 37–42 |
+| `test_vm_notifications_matrix.py` | ✅ codes 37–57 (37–42 direct; 43–57 cross-ref) |
 | `test_vm_mvp_promotions_flow.py` | ✅ |
 | `test_vm_preference_flow.py` | ✅ preference metadata ingest (extended) |
 | `test_vm_network_flow.py` | ✅ n1 network-bound, notification **55**, `network` settings API |
@@ -138,7 +138,7 @@ These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `
 | Template | Purpose |
 |----------|---------|
 | `ocp_report_vm.yml` | Default VM E2E + downsize-unstable seed |
-| `ocp_report_vm_notifications.yml` | Notification matrix 37–42 |
+| `ocp_report_vm_notifications.yml` | Notification matrix direct scenarios (37–42) |
 | `ocp_report_vm_enhancements.yml` | Codes 46–49, kernel reserve |
 | `ocp_report_vm_gpu.yml` | GPU 50–53 |
 | `ocp_report_vm_mvp_promotions.yml` | Adaptive margin, history, MIG |
@@ -147,7 +147,7 @@ These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `
 
 ---
 
-## Layer C — IQE (`test_ros_vm_recommendations.py`) — ~75 tests ✅
+## Layer C — IQE (`test_ros_vm_recommendations.py`) — 89 tests ✅
 
 Paths (constants):
 
