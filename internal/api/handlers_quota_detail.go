@@ -45,6 +45,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse          `json:"capacity_freed,omitempty"`
 	EstimatedSavings     *ClusterQuotaSavingsMonthly                 `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
+	Namespaces           []string                                      `json:"namespaces,omitempty"`
 	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
 }
 
@@ -216,7 +217,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes
+			savings_dollars_monthly, notification_codes, namespaces
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND cluster_quota_name = $3`
 
@@ -257,6 +258,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		CapacityFreed:      item.CapacityFreed,
 		EstimatedSavings:   item.EstimatedSavings,
 		Notifications:      notifications.MapToKruizeFormat(codes),
+		Namespaces:         item.Namespaces,
 		History:            history,
 	}
 	if detail.History == nil {
@@ -323,6 +325,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 	var cpuReqUtil, memReqUtil, storageUtil, podsUtil sql.NullInt64
 	var cpuCoresFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
+	var namespacesRaw sql.NullString
 
 	err := rows.Scan(
 		&item.ClusterUUID, &item.ClusterQuotaName, &item.RecommendationType, &item.RiskLevel,
@@ -332,7 +335,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 		&storageHard, &storageUsed, &storageRec,
 		&podsHard, &podsUsed, &podsRec,
 		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
-		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &codes,
+		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &codes, &namespacesRaw,
 	)
 	if err != nil {
 		return item, nil, err
@@ -356,5 +359,6 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 			Units: "USD",
 		}
 	}
+	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
 	return item, codes, nil
 }

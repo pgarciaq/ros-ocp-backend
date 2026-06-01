@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
@@ -67,6 +68,7 @@ type ClusterQuotaRecommendationListItem struct {
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
 	EstimatedSavings     *ClusterQuotaSavingsMonthly                  `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	Namespaces           []string                                     `json:"namespaces,omitempty"`
 }
 
 // GetClusterQuotaRecommendations handles GET /recommendations/openshift/cluster-quota/.
@@ -174,7 +176,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes
+			savings_dollars_monthly, notification_codes, namespaces
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL +
 		` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
@@ -228,6 +230,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	var cpuCoresFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 	var notifCodes []int16
+	var namespacesRaw sql.NullString
 
 	err := rows.Scan(
 		&item.ClusterUUID, &item.ClusterQuotaName, &item.RecommendationType, &item.RiskLevel,
@@ -237,7 +240,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		&storageHard, &storageUsed, &storageRec,
 		&podsHard, &podsUsed, &podsRec,
 		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
-		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &notifCodes,
+		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &notifCodes, &namespacesRaw,
 	)
 	if err != nil {
 		return item, err
@@ -262,7 +265,23 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		}
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
+	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
 	return item, nil
+}
+
+func clusterQuotaNamespacesFromDB(raw sql.NullString) []string {
+	if !raw.Valid {
+		return nil
+	}
+	parts := strings.Split(raw.String, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func clusterQuotaValuesFromNull(cpuReq, cpuLim, memReq, memLim, storage, pods sql.NullInt64) *ClusterQuotaResourceValues {
