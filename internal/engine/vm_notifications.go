@@ -48,6 +48,10 @@ const (
 	NotifVMNetworkSaturated       int16 = 55
 	NotifVMIOSequential           int16 = 58
 	NotifVMIORandom               int16 = 59
+	NotifVMRedundantColocation    int16 = 60
+	NotifVMUnevenNodeDistribution int16 = 61
+	NotifVMSharedStorage          int16 = 62
+	NotifVMNUMAOversized          int16 = 63
 )
 
 type vmNotificationParams struct {

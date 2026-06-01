@@ -38,7 +38,10 @@ type VMRecommendation struct {
 	IsIdle       bool `db:"is_idle"`
 	IsAbandoned  bool `db:"is_abandoned"`
 	IsOversized     bool `db:"is_oversized"`
-	IsNetworkBound  bool `db:"is_network_bound"`
+	IsNetworkBound       bool `db:"is_network_bound"`
+	IsRedundantPlacement bool `db:"is_redundant_placement"`
+	HasSharedStorage     bool `db:"has_shared_storage"`
+	NUMAOversized        bool `db:"numa_oversized"`
 
 	// I/O profile (nullable JSON or individual columns)
 	IOReadIOPSP95  *int64  `db:"io_read_iops_p95"`

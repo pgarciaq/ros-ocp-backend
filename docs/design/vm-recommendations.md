@@ -45,7 +45,8 @@ VM recommendations are **always** produced by the built-in Go engine ([`recommen
 | Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
 | Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Notifications 18, 19, 37–57 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go), [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
+| Notifications 18, 19, 37–63 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go), [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_placement.go`](../../internal/engine/vm_placement.go) |
+| Placement / shared storage / NUMA flags (60–63) | ✅ | [`vm_placement.go`](../../internal/engine/vm_placement.go), [`vm_pvc_correlation.go`](../../internal/engine/vm_pvc_correlation.go), [`vm_numa_check.go`](../../internal/engine/vm_numa_check.go) |
 | GPU classification + `gn1` matching + notifications 50–53 | ✅ | [`internal/engine/vm_gpu.go`](../../internal/engine/vm_gpu.go), API filters `has_gpu` / `gpu_classification` |
 | Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
@@ -609,18 +610,36 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 
 ---
 
-## Not yet implemented (future work)
+## Placement, correlated workloads, and NUMA (codes 60–63)
+
+Implemented in phase11 with pragmatic signals until the operator exposes app labels, per-VM PVC names, and per-node NUMA topology on `ros-openshift-vm-usage-*.csv`.
+
+| Code | Flag | Detection today | Operator enhancement |
+|------|------|-----------------|----------------------|
+| **60** | `is_redundant_placement` | Same namespace + matching vCPU/memory/disk profile on one node | `app` (or workload) label on VM CSV |
+| **61** | — | Uneven node spread for that profile (skew ratio, default 3:1) | Same as **60** |
+| **62** | `has_shared_storage` | Correlated peers in namespace with matching profile | `persistentvolumeclaim_name` per VM (already on `cm-openshift-vm-usage`) |
+| **63** | `numa_oversized` | Recommended memory > `ROS_VM_NUMA_NODE_MEMORY_GIB` (default 64 GiB) | Per-node NUMA memory from node metrics |
+
+Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks`, `placement_skew_ratio`, `enable_shared_pvc_correlation`, `numa_node_memory_gib`).
+
+---
+
+## Future enhancements
 
 | Item | Notes |
 |------|-------|
-| **Savings estimation** | No dollar fields in API; Koku VM cost rates not wired |
+| **Network flow correlation** | Requires OVN flow logs or eBPF telemetry between VMs |
+| **Full NUMA optimization** | Requires LLC miss rate / perf counters per NUMA node |
+| **Smart co-location** | Requires network flow data to recommend affinity |
+| **Network QoS (SR-IOV, DPDK)** | SR-IOV and DPDK-specific sizing not modeled |
+| **Storage tiering (hot/cold)** | No hot/cold volume class recommendations |
+| **Power management / consolidation** | No suspend or cluster consolidation guidance |
 | **Live migration recommendations** | No awareness of migration in progress |
-| **NUMA-aware placement** | Not modeled |
-| **SR-IOV network recommendations** | Not implemented |
-| **Power management / suspend** | No suspend or power-state recommendations |
-| **Network metrics dependency** | **n1** recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv` (operator); CSVs without network fields never classify as network-bound |
-| **koku-ui** | No dedicated VM optimizations view |
+| **Savings estimation ($)** | No dollar fields; requires Koku cost rate integration |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
+| **koku-ui** | No dedicated VM optimizations view |
+| **Network metrics dependency** | **n1** requires KubeVirt `net_*` on `ros-openshift-vm-usage-*.csv` |
 
 **GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (`recommended_time_slice_count`, `recommended_vgpu_profile`, notifications **56**–**57**), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../../docs-site/features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 

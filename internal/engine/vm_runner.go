@@ -69,12 +69,13 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		k := vmKey{VMName: d.VMName, Namespace: d.Namespace}
 		grouped[k] = append(grouped[k], d)
 	}
+	clusterLatest := buildClusterLatestDigests(digests)
 
 	var recs []model.VMRecommendation
 	for _, vmDigests := range grouped {
 		for _, term := range terms {
 			for _, eng := range vmEngines {
-				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx)
+				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterLatest)
 				if recErr != nil {
 					return fmt.Errorf("recommend VM %s/%s: %w", vmDigests[0].Namespace, vmDigests[0].VMName, recErr)
 				}

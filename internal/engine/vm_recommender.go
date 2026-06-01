@@ -35,6 +35,7 @@ func RecommendVM(
 	engine string,
 	clusterTypes []InstanceType,
 	prefCtx *VMPreferenceContext,
+	clusterLatest []model.DailyVMDigest,
 ) (*model.VMRecommendation, error) {
 	if len(digests) == 0 {
 		return nil, fmt.Errorf("recommend VM: no digests")
@@ -230,6 +231,22 @@ func RecommendVM(
 	})
 	notifications = appendVMGPUNotifications(notifications, gpuAnalysis.NotificationCodes)
 
+	var placementNotifs []VMNotification
+	isRedundantPlacement := false
+	hasSharedStorage := false
+	numaOversized := false
+	if len(clusterLatest) > 0 {
+		placementNotifs = append(placementNotifs, DetectSameNodeRedundancy(clusterLatest, latest, cfg)...)
+		pvcNotifs, shared := DetectSharedPVCs(clusterLatest, latest, cfg)
+		placementNotifs = append(placementNotifs, pvcNotifs...)
+		hasSharedStorage = shared
+		if n := CheckNUMAFit(float64(recommendedMemGiB), cfg.NUMANodeMemoryGiB); n != nil {
+			placementNotifs = append(placementNotifs, *n)
+		}
+		isRedundantPlacement, hasSharedStorage, numaOversized = vmPlacementFlagsFromNotifications(placementNotifs)
+	}
+	notifications = appendVMPlacementNotifications(notifications, placementNotifs)
+
 	now := time.Now().UTC()
 	rec := &model.VMRecommendation{
 		OrgID:                    orgID,
@@ -254,6 +271,9 @@ func RecommendVM(
 		IsAbandoned:              isAbandoned,
 		IsOversized:              isOversized,
 		IsNetworkBound:           isNetworkBound,
+		IsRedundantPlacement:     isRedundantPlacement,
+		HasSharedStorage:         hasSharedStorage,
+		NUMAOversized:            numaOversized,
 		IOReadIOPSP95:            ioRead,
 		IOWriteIOPSP95:           ioWrite,
 		IOReadBPS95:              ioReadBPS,

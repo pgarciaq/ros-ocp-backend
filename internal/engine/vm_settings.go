@@ -76,6 +76,14 @@ type VMMemoryFloorsSettingsAPI struct {
 	WindowsKernelReserveGiB float64 `json:"windows_kernel_reserve_gib"`
 }
 
+// VMPlacementSettingsAPI holds cluster placement, correlated workload, and NUMA checks.
+type VMPlacementSettingsAPI struct {
+	EnablePlacementChecks      bool    `json:"enable_placement_checks"`
+	PlacementSkewRatio         int     `json:"placement_skew_ratio"`
+	EnableSharedPVCCorrelation bool    `json:"enable_shared_pvc_correlation"`
+	NUMANodeMemoryGiB          float64 `json:"numa_node_memory_gib"`
+}
+
 // VMStabilitySettingsAPI holds performance-engine downsize stability settings.
 type VMStabilitySettingsAPI struct {
 	DownsizeStabilityDays     int   `json:"downsize_stability_days"`
@@ -94,6 +102,7 @@ type VMSettingsResponse struct {
 	IO                   VMIOSettingsAPI           `json:"io"`
 	Network              VMNetworkSettingsAPI      `json:"network"`
 	GPU                  VMGPUSettingsAPI          `json:"gpu"`
+	Placement            VMPlacementSettingsAPI    `json:"placement"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
 	LockedFields         []string                  `json:"locked_fields,omitempty"`
 	SettingsLocked       bool                      `json:"settings_locked,omitempty"`
@@ -107,6 +116,7 @@ type vmSettingsStored struct {
 	IO                   *VMIOSettingsAPI           `json:"io,omitempty"`
 	Network              *VMNetworkSettingsAPI      `json:"network,omitempty"`
 	GPU                  *VMGPUSettingsAPI          `json:"gpu,omitempty"`
+	Placement            *VMPlacementSettingsAPI    `json:"placement,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
 	Stability            *VMStabilitySettingsAPI    `json:"stability,omitempty"`
 }
@@ -154,6 +164,10 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_NETWORK_DROP_RATIO_BP":              "network.drop_ratio_bp",
 		"ROS_VM_NETWORK_SUSTAINED_DAYS":             "network.sustained_days",
 		"ROS_VM_ENABLE_NETWORK_SERIES":              "network.enable_network_series",
+		"ROS_VM_ENABLE_PLACEMENT_CHECKS":           "placement.enable_placement_checks",
+		"ROS_VM_PLACEMENT_SKEW_RATIO":              "placement.placement_skew_ratio",
+		"ROS_VM_ENABLE_SHARED_PVC_CORRELATION":     "placement.enable_shared_pvc_correlation",
+		"ROS_VM_NUMA_NODE_MEMORY_GIB":              "placement.numa_node_memory_gib",
 	}
 }
 
@@ -194,6 +208,15 @@ func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
 		SequentialThresholdBytes: cfg.IOSequentialThresholdBytes,
 		RandomThresholdBytes:     cfg.IORandomThresholdBytes,
 		MinIOPSForClassification: cfg.IOMinIOPSForClassification,
+	}
+}
+
+func vmRecConfigToPlacementAPI(cfg VMRecConfig) VMPlacementSettingsAPI {
+	return VMPlacementSettingsAPI{
+		EnablePlacementChecks:      cfg.EnablePlacementChecks,
+		PlacementSkewRatio:         cfg.PlacementSkewRatio,
+		EnableSharedPVCCorrelation: cfg.EnableSharedPVCCorrelation,
+		NUMANodeMemoryGiB:          cfg.NUMANodeMemoryGiB,
 	}
 }
 
@@ -264,6 +287,7 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		IO:                   vmRecConfigToIOAPI(cfg),
 		Network:              vmRecConfigToNetworkAPI(cfg),
 		GPU:                  vmRecConfigToGPUAPI(cfg),
+		Placement:            vmRecConfigToPlacementAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
 		LockedFields:         LockedFieldsForAPI(vmRecommendationType, envLocked),
 		SettingsLocked:       IsSettingsLocked(vmRecommendationType),
@@ -376,6 +400,13 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.NetworkSustainedDays = n.SustainedDays
 		dest.EnableNetworkSeries = n.EnableNetworkSeries
 	}
+	if stored.Placement != nil {
+		p := stored.Placement
+		dest.EnablePlacementChecks = p.EnablePlacementChecks
+		dest.PlacementSkewRatio = p.PlacementSkewRatio
+		dest.EnableSharedPVCCorrelation = p.EnableSharedPVCCorrelation
+		dest.NUMANodeMemoryGiB = p.NUMANodeMemoryGiB
+	}
 	if stored.GPU != nil {
 		g := stored.GPU
 		dest.GPUIdleThreshold = vmBasisPointsToThresholdFraction(g.IdleThresholdBP)
@@ -449,6 +480,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid network: %w", err)
 		}
 	}
+	if raw, ok := patch["placement"]; ok {
+		if err := json.Unmarshal(raw, &resp.Placement); err != nil {
+			return fmt.Errorf("invalid placement: %w", err)
+		}
+	}
 	if raw, ok := patch["instance_type_matching"]; ok {
 		if err := json.Unmarshal(raw, &resp.InstanceTypeMatching); err != nil {
 			return fmt.Errorf("invalid instance_type_matching: %w", err)
@@ -485,6 +521,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.Network); err == nil {
 		overrides["network"] = b
+	}
+	if b, err := json.Marshal(resp.Placement); err == nil {
+		overrides["placement"] = b
 	}
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
@@ -536,7 +575,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {},
 		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -611,6 +650,9 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	}
 	v.addRangeInt("gpu.gpu_timeslice_fb_safety_threshold_bp", int(resp.GPU.TimeSliceFBSafetyThresholdBP), 1000, 10000)
 	v.addRangeInt("gpu.gpu_timeslice_dram_penalty_threshold_bp", int(resp.GPU.TimeSliceDRAMPenaltyThresholdBP), 1000, 10000)
+
+	v.addRangeInt("placement.placement_skew_ratio", resp.Placement.PlacementSkewRatio, 2, 20)
+	v.addRangeFloat("placement.numa_node_memory_gib", resp.Placement.NUMANodeMemoryGiB, 1.0, 2048.0)
 
 	return v.result()
 }

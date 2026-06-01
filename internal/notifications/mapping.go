@@ -78,6 +78,10 @@ var Definitions = map[int16]notifDef{
 	57: {"WARNING", "GPU time-slicing not safe — frame-buffer usage too high for shared vGPU"},
 	58: {"INFO", "Sequential disk I/O pattern detected — consider storage optimized for throughput"},
 	59: {"INFO", "Random disk I/O pattern detected — consider storage optimized for IOPS"},
+	60: {"WARNING", "Redundant VMs co-located on same node — consider adding anti-affinity rules"},
+	61: {"INFO", "Uneven VM distribution across nodes — consider topologySpreadConstraints"},
+	62: {"INFO", "VM shares storage with other VMs — correlated workload group detected"},
+	63: {"WARNING", "VM memory exceeds single NUMA node capacity — NUMA pinning not possible"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

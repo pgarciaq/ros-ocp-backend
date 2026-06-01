@@ -42,8 +42,11 @@ type vmRecMetadata struct {
 	IsIdle             bool    `json:"is_idle"`
 	IsAbandoned        bool    `json:"is_abandoned"`
 	IsOversized        bool    `json:"is_oversized"`
-	IsNetworkBound     bool    `json:"is_network_bound"`
-	PreferenceName     *string `json:"preference_name,omitempty"`
+	IsNetworkBound       bool    `json:"is_network_bound"`
+	IsRedundantPlacement bool    `json:"is_redundant_placement"`
+	HasSharedStorage     bool    `json:"has_shared_storage"`
+	NUMAOversized        bool    `json:"numa_oversized"`
+	PreferenceName       *string `json:"preference_name,omitempty"`
 	PreferenceClass    *string `json:"preference_class,omitempty"`
 }
 
@@ -458,7 +461,10 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			IsIdle:             r.IsIdle,
 			IsAbandoned:        r.IsAbandoned,
 			IsOversized:        r.IsOversized,
-			IsNetworkBound:     r.IsNetworkBound,
+			IsNetworkBound:       r.IsNetworkBound,
+			IsRedundantPlacement: r.IsRedundantPlacement,
+			HasSharedStorage:     r.HasSharedStorage,
+			NUMAOversized:        r.NUMAOversized,
 		},
 		IOProfile: vmIOProfile{
 			ReadIOPSP95:  r.IOReadIOPSP95,

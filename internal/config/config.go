@@ -268,6 +268,10 @@ type Config struct {
 	VMNetworkSustainedDays          int     `mapstructure:"ROS_VM_NETWORK_SUSTAINED_DAYS"`
 	VMEnableNetworkSeries           bool    `mapstructure:"ROS_VM_ENABLE_NETWORK_SERIES"`
 	VMRecHistoryRetentionDays       int     `mapstructure:"ROS_VM_REC_HISTORY_RETENTION_DAYS"`
+	VMEnablePlacementChecks         bool    `mapstructure:"ROS_VM_ENABLE_PLACEMENT_CHECKS"`
+	VMPlacementSkewRatio            int     `mapstructure:"ROS_VM_PLACEMENT_SKEW_RATIO"`
+	VMEnableSharedPVCCorrelation    bool    `mapstructure:"ROS_VM_ENABLE_SHARED_PVC_CORRELATION"`
+	VMNUMANodeMemoryGiB             float64 `mapstructure:"ROS_VM_NUMA_NODE_MEMORY_GIB"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -653,6 +657,10 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_NETWORK_SUSTAINED_DAYS", 7)
 	viper.SetDefault("ROS_VM_ENABLE_NETWORK_SERIES", true)
 	viper.SetDefault("ROS_VM_REC_HISTORY_RETENTION_DAYS", 90)
+	viper.SetDefault("ROS_VM_ENABLE_PLACEMENT_CHECKS", true)
+	viper.SetDefault("ROS_VM_PLACEMENT_SKEW_RATIO", 3)
+	viper.SetDefault("ROS_VM_ENABLE_SHARED_PVC_CORRELATION", true)
+	viper.SetDefault("ROS_VM_NUMA_NODE_MEMORY_GIB", 64.0)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

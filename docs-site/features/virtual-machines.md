@@ -520,14 +520,25 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **Network metrics dependency** | **n1** active recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv`; without them, `is_network_bound` stays false |
+| **Placement / NUMA (60–63)** | Same-node redundancy and skew use namespace + resource profile (not app labels). Shared-storage uses profile peers until `persistentvolumeclaim_name` is on ROS VM CSV. NUMA uses `numa_node_memory_gib` default until per-node topology is ingested |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
-| **NUMA-aware placement** | Not modeled |
-| **SR-IOV network recommendations** | Not implemented |
-| **Power management / suspend** | No suspend or power-state recommendations |
 | **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
 | **Recommendation history** | `GET /recommendations/openshift/vms/{vm_name}/history`; retention days read-only on `GET .../settings/vm` as `history_retention_days` (env `ROS_VM_REC_HISTORY_RETENTION_DAYS`, default 90) |
 | **No koku-ui VM page** | Cost reports in koku-ui; ROS recommendation UI API-only today |
+
+## Future enhancements
+
+| Item | Notes |
+|------|-------|
+| **Network flow correlation** | OVN flow logs or eBPF between VMs |
+| **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
+| **Smart co-location** | Affinity hints from network flow data |
+| **Network QoS (SR-IOV, DPDK)** | Dedicated network QoS sizing |
+| **Storage tiering (hot/cold)** | Volume class recommendations |
+| **Power management / consolidation** | Suspend and cluster consolidation guidance |
+| **Live migration recommendations** | Migration-in-progress awareness |
+| **Savings estimate ($)** | Koku cost rate integration |
 
 ## Related documentation
 

@@ -80,6 +80,12 @@ type VMRecConfig struct {
 	NetworkDropRatioBP            int32 // default 10 (0.1%)
 	NetworkSustainedDays          int   // default 7
 	EnableNetworkSeries           bool  // default true
+
+	// Placement / NUMA (cluster-wide checks; no app labels in VM CSV today)
+	EnablePlacementChecks       bool    // default true
+	PlacementSkewRatio          int     // default 3 — max:min VM count per node before skew notification
+	EnableSharedPVCCorrelation  bool    // default true — namespace profile peers until PVC column exists
+	NUMANodeMemoryGiB           float64 // default 64 — per-NUMA-node cap until operator exposes topology
 }
 
 // DefaultVMRecConfig returns the compiled defaults for VM recommendations.
@@ -126,6 +132,10 @@ func DefaultVMRecConfig() VMRecConfig {
 		NetworkDropRatioBP:            10,
 		NetworkSustainedDays:          7,
 		EnableNetworkSeries:           true,
+		EnablePlacementChecks:       true,
+		PlacementSkewRatio:          3,
+		EnableSharedPVCCorrelation:  true,
+		NUMANodeMemoryGiB:           64,
 	}
 }
 
@@ -268,6 +278,18 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_NETWORK_SERIES"); ok {
 		base.EnableNetworkSeries = cfg.VMEnableNetworkSeries
+	}
+	if _, ok := os.LookupEnv("ROS_VM_ENABLE_PLACEMENT_CHECKS"); ok {
+		base.EnablePlacementChecks = cfg.VMEnablePlacementChecks
+	}
+	if _, ok := os.LookupEnv("ROS_VM_PLACEMENT_SKEW_RATIO"); ok {
+		base.PlacementSkewRatio = cfg.VMPlacementSkewRatio
+	}
+	if _, ok := os.LookupEnv("ROS_VM_ENABLE_SHARED_PVC_CORRELATION"); ok {
+		base.EnableSharedPVCCorrelation = cfg.VMEnableSharedPVCCorrelation
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NUMA_NODE_MEMORY_GIB"); ok {
+		base.NUMANodeMemoryGiB = cfg.VMNUMANodeMemoryGiB
 	}
 	return base
 }

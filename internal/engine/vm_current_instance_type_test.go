@@ -22,7 +22,7 @@ func TestRecommendVM_PopulatesCurrentInstanceType(t *testing.T) {
 		d.OrgID = "1234567"
 		d.ClusterUUID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.CurrentInstanceType)
