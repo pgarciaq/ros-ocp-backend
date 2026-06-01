@@ -71,7 +71,7 @@ func TestMapToKruizeFormat_VMPlacementCodes60to63(t *testing.T) {
 }
 
 func TestNotificationDefinitionsComplete(t *testing.T) {
-	for code := int16(1); code <= 66; code++ {
+	for code := int16(1); code <= 69; code++ {
 		_, ok := Definitions[code]
 		assert.True(t, ok, "notification code %d should be defined", code)
 	}
@@ -79,17 +79,17 @@ func TestNotificationDefinitionsComplete(t *testing.T) {
 
 func TestMapToKruizeFormat_AllDefinedCodes(t *testing.T) {
 	var allCodes []int16
-	for code := int16(1); code <= 66; code++ {
+	for code := int16(1); code <= 69; code++ {
 		allCodes = append(allCodes, code)
 	}
 
 	result := MapToKruizeFormat(allCodes)
-	require.Len(t, result, 66)
+	require.Len(t, result, 69)
 
 	for _, entry := range result {
 		assert.NotEmpty(t, entry.Type)
 		assert.NotEmpty(t, entry.Message)
-		assert.True(t, entry.Code >= 1 && entry.Code <= 66)
+		assert.True(t, entry.Code >= 1 && entry.Code <= 69)
 	}
 }
 

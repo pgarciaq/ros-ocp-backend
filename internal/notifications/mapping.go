@@ -85,6 +85,9 @@ var Definitions = map[int16]notifDef{
 	64: {"INFO", "VM is idle on many observed days — consider scheduling power-off during inactive periods"},
 	65: {"INFO", "Network-bound VM with high throughput or packet drops — SR-IOV may improve performance"},
 	66: {"INFO", "Network-bound VM with high PPS and small packets — DPDK userspace networking may reduce latency"},
+	67: {"INFO", "VM disk has sustained minimal I/O — consider lower-cost storage tier"},
+	68: {"INFO", "VM disk shows sustained random high IOPS — IOPS-optimized storage recommended"},
+	69: {"INFO", "VM disk shows sustained sequential high throughput — throughput-optimized storage recommended"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

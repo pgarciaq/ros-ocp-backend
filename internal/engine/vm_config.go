@@ -92,6 +92,15 @@ type VMRecConfig struct {
 	NetworkQoSSRIOVThroughputBPS int64   // default 5_000_000_000 (5 Gbps)
 	NetworkQoSDPDKPPSThreshold   int64   // default 500_000
 
+	// Storage tiering hints (notifications 67–69)
+	StorageTieringEnabled           bool  // default true
+	StorageTieringMinDays           int   // default 7 — minimum digest history
+	StorageTieringColdMinDays       int   // default 14 — low-io days for cold tier hint
+	StorageTieringIOPSMinDays       int   // default 7 — random high-IOPS days
+	StorageTieringThroughputMinDays int   // default 7 — sequential high-throughput days
+	StorageTieringHighIOPSThreshold int64 // default 5000
+	StorageTieringHighThroughputBPS int64 // default 104857600 (100 MiB/s)
+
 	// Placement / NUMA (cluster-wide checks; no app labels in VM CSV today)
 	EnablePlacementChecks       bool    // default true
 	PlacementSkewRatio          int     // default 3 — max:min VM count per node before skew notification
@@ -150,6 +159,13 @@ func DefaultVMRecConfig() VMRecConfig {
 		NetworkQoSSRIOVDropThreshold:  0.01,
 		NetworkQoSSRIOVThroughputBPS:  5_000_000_000,
 		NetworkQoSDPDKPPSThreshold:    500_000,
+		StorageTieringEnabled:           true,
+		StorageTieringMinDays:           7,
+		StorageTieringColdMinDays:       14,
+		StorageTieringIOPSMinDays:       7,
+		StorageTieringThroughputMinDays: 7,
+		StorageTieringHighIOPSThreshold: 5000,
+		StorageTieringHighThroughputBPS: 104857600,
 		EnablePlacementChecks:       true,
 		PlacementSkewRatio:          3,
 		EnableSharedPVCCorrelation:  true,
@@ -308,6 +324,27 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"); ok {
 		base.NetworkQoSDPDKPPSThreshold = cfg.VMNetworkQoSDPDKPPSThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_ENABLED"); ok {
+		base.StorageTieringEnabled = cfg.VMStorageTieringEnabled
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_MIN_DAYS"); ok {
+		base.StorageTieringMinDays = cfg.VMStorageTieringMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS"); ok {
+		base.StorageTieringColdMinDays = cfg.VMStorageTieringColdMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS"); ok {
+		base.StorageTieringIOPSMinDays = cfg.VMStorageTieringIOPSMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS"); ok {
+		base.StorageTieringThroughputMinDays = cfg.VMStorageTieringThroughputMinDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD"); ok {
+		base.StorageTieringHighIOPSThreshold = cfg.VMStorageTieringHighIOPSThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS"); ok {
+		base.StorageTieringHighThroughputBPS = cfg.VMStorageTieringHighThroughputBPS
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_PLACEMENT_CHECKS"); ok {
 		base.EnablePlacementChecks = cfg.VMEnablePlacementChecks

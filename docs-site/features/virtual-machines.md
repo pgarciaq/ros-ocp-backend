@@ -576,7 +576,8 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity hints from network flow data |
 | **Network QoS (simplified)** | Notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block |
-| **Storage tiering (hot/cold)** | Classify hot/warm/cold I/O over weeks; compare StorageClass vs recommended tier; migration + savings notification. **Effort:** medium (2–3 weeks). **Value:** medium (50+ VMs, mixed tiers). **Blockers:** no historical access frequency, no StorageClass on ROS VM CSV, no per-class cost or standard tier labels — [design doc](../../../docs/design/vm-recommendations.md#future-storage-tiering) |
+| **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; Settings `storage_tiering` block — [Storage tiering hints](#storage-tiering-hints-6769) |
+| **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](../../../docs/design/vm-recommendations.md#full-storage-tiering-future) |
 | **Power-off scheduling (simplified)** | Notification **64** for VMs idle on most days with occasional activity; Settings `power_schedule` block |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes to free hosts — see design doc |
 | **Full power-off scheduling** | Per-hour idle, cron stop/start, business hours — future |
@@ -594,6 +595,20 @@ When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest
 | **66** | Very high PPS with small average packet size (&lt;256 B) — consider **DPDK** |
 
 Tune via `GET/PUT .../settings/vm` → `network_qos` or env vars `ROS_VM_NETWORK_QOS_*` (see [configuration](../configuration.md)).
+
+### Storage tiering hints (67–69)
+
+When enough daily digests exist in the term window, ROS classifies each day’s disk I/O (same rules as aggregate `io_pattern`) and may emit:
+
+| Code | When |
+|------|------|
+| **67** | Many days with minimal I/O (`low-io`) — consider a **lower-cost** storage tier |
+| **68** | Many days with **random** I/O and high peak IOPS — **IOPS-optimized** storage |
+| **69** | Many days with **sequential** I/O and high peak throughput — **throughput-optimized** storage |
+
+These hints do not name a StorageClass or compute dollar savings; full tiering is [future work](../../../docs/design/vm-recommendations.md#full-storage-tiering-future).
+
+Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STORAGE_TIERING_*` (see [configuration](../configuration.md)).
 
 ## Related documentation
 

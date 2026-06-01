@@ -249,6 +249,12 @@ func RecommendVM(
 		)
 	}
 
+	if cfg.StorageTieringEnabled {
+		notifications = appendVMPlacementNotifications(
+			notifications, EvaluateStorageTiering(windowed, cfg),
+		)
+	}
+
 	var placementNotifs []VMNotification
 	isRedundantPlacement := false
 	hasSharedStorage := false

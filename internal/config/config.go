@@ -279,6 +279,13 @@ type Config struct {
 	VMNetworkQoSSRIOVDropThreshold  float64 `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD"`
 	VMNetworkQoSSRIOVThroughputBPS  int64   `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS"`
 	VMNetworkQoSDPDKPPSThreshold    int64   `mapstructure:"ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"`
+	VMStorageTieringEnabled           bool  `mapstructure:"ROS_VM_STORAGE_TIERING_ENABLED"`
+	VMStorageTieringMinDays           int   `mapstructure:"ROS_VM_STORAGE_TIERING_MIN_DAYS"`
+	VMStorageTieringColdMinDays       int   `mapstructure:"ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS"`
+	VMStorageTieringIOPSMinDays       int   `mapstructure:"ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS"`
+	VMStorageTieringThroughputMinDays int   `mapstructure:"ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS"`
+	VMStorageTieringHighIOPSThreshold int64 `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD"`
+	VMStorageTieringHighThroughputBPS int64 `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -675,6 +682,13 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD", 0.01)
 	viper.SetDefault("ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS", 5000000000)
 	viper.SetDefault("ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD", 500000)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_ENABLED", true)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_MIN_DAYS", 7)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS", 14)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS", 7)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS", 7)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD", 5000)
+	viper.SetDefault("ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS", 104857600)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

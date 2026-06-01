@@ -48,6 +48,13 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.InDelta(t, 0.01, cfg.NetworkQoSSRIOVDropThreshold, 1e-9)
 	assert.Equal(t, int64(5_000_000_000), cfg.NetworkQoSSRIOVThroughputBPS)
 	assert.Equal(t, int64(500_000), cfg.NetworkQoSDPDKPPSThreshold)
+	assert.True(t, cfg.StorageTieringEnabled)
+	assert.Equal(t, 7, cfg.StorageTieringMinDays)
+	assert.Equal(t, 14, cfg.StorageTieringColdMinDays)
+	assert.Equal(t, 7, cfg.StorageTieringIOPSMinDays)
+	assert.Equal(t, 7, cfg.StorageTieringThroughputMinDays)
+	assert.Equal(t, int64(5000), cfg.StorageTieringHighIOPSThreshold)
+	assert.Equal(t, int64(104857600), cfg.StorageTieringHighThroughputBPS)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {

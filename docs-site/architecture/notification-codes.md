@@ -2,7 +2,7 @@
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
-Use this page as a single lookup for **all 64 codes** across containers, namespaces, nodes,
+Use this page as a single lookup for **all 69 codes** across containers, namespaces, nodes,
 GPUs, PVCs, snapshots, and virtual machines.
 
 **Maintainer reference** (emitters, constants, migrations): `docs/architecture/notification-codes.md` in the repository.
@@ -106,6 +106,11 @@ having no actionable savings.
 | 62 | INFO | VM | Correlated workload group (shared profile) | Review HA pairs; true PVC correlation pending operator field |
 | 63 | WARNING | VM | Memory exceeds single NUMA node | Reduce memory or use hosts with larger NUMA nodes |
 | 64 | INFO | VM | Periodically idle (power-off schedule) | Schedule power-off during inactive periods; see `is_power_off_candidate` |
+| 65 | INFO | VM | Network-bound — SR-IOV may help | High throughput or packet drops on network-bound VM |
+| 66 | INFO | VM | Network-bound — DPDK may help | High PPS with small packets on network-bound VM |
+| 67 | INFO | VM | Sustained minimal disk I/O | Consider lower-cost storage tier |
+| 68 | INFO | VM | Sustained random high IOPS | IOPS-optimized storage recommended |
+| 69 | INFO | VM | Sustained sequential high throughput | Throughput-optimized storage recommended |
 
 ---
 
@@ -144,11 +149,12 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–66**. Full VM notification table also appears in
+Codes **18–19**, **37–69**. Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#placement-and-numa).
 Abandoned VMs use **43** only (not **18**). Power-off scheduling: **64** (`is_power_off_candidate`,
 `power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Network QoS hints:
 **65** (SR-IOV), **66** (DPDK) when `is_network_bound` — see [Network QoS hints](../features/virtual-machines.md#network-qos-hints-6566).
+Storage tiering hints: **67**–**69** from multi-day disk I/O — see [Storage tiering hints](../features/virtual-machines.md#storage-tiering-hints-6769).
 Placement flags:
 `is_redundant_placement` (**60**), `has_shared_storage` (**62**), `numa_oversized` (**63**).
 
