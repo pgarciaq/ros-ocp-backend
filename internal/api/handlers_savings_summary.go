@@ -27,6 +27,7 @@ type FleetSavingsByPlugin struct {
 	Node      float64 `json:"node"`
 	PVC       float64 `json:"pvc"`
 	Snapshot  float64 `json:"snapshot"`
+	VM        float64 `json:"vm"`
 }
 
 // FleetClusterSavings aggregates savings for a single cluster.
@@ -222,7 +223,7 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	}
 	resp.ByPlugin = byPlugin
 	totalUSD := roundUSD(
-		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot,
+		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot + byPlugin.VM,
 	)
 	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, currency)
 
@@ -260,9 +261,14 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 				SELECT SUM(estimated_monthly_cost_usd)
 				FROM snapshot_recommendation_sets
 				WHERE org_id = $1`+clusterFilter+`
+			), 0),
+			COALESCE((
+				SELECT SUM(savings_amount)
+				FROM vm_recommendations
+				WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
 			), 0)`,
 		args...,
-	).Scan(&out.Container, &out.Node, &out.PVC, &out.Snapshot)
+	).Scan(&out.Container, &out.Node, &out.PVC, &out.Snapshot, &out.VM)
 	if err != nil {
 		return out, err
 	}
@@ -271,6 +277,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	out.Node = roundUSD(out.Node)
 	out.PVC = roundUSD(out.PVC)
 	out.Snapshot = roundUSD(out.Snapshot)
+	out.VM = roundUSD(out.VM)
 	return out, nil
 }
 
@@ -299,6 +306,10 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 			SELECT DISTINCT cluster_uuid::text
 			FROM snapshot_recommendation_sets
 			WHERE org_id = $1`+clusterFilter+`
+			UNION
+			SELECT DISTINCT cluster_uuid::text
+			FROM vm_recommendations
+			WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
 		),
 		container_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
@@ -328,6 +339,13 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 			WHERE org_id = $1`+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
+		vm_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(savings_amount), 0) AS savings
+			FROM vm_recommendations
+			WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
+			GROUP BY cluster_uuid
+		),
 		cost_recs AS (
 			SELECT cluster_uuid::text AS cluster_uuid, notification_codes
 			FROM recommendation_sets
@@ -350,7 +368,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		)
 		SELECT rc.cluster_uuid,
 		       COALESCE(c.cluster_alias, rc.cluster_uuid) AS cluster_alias,
-		       COALESCE(cs.savings, 0) + COALESCE(ns.savings, 0) + COALESCE(ps.savings, 0) + COALESCE(ss.savings, 0) AS savings,
+		       COALESCE(cs.savings, 0) + COALESCE(ns.savings, 0) + COALESCE(ps.savings, 0) + COALESCE(ss.savings, 0) + COALESCE(vs.savings, 0) AS savings,
 		       COALESCE(cd.total_recs, 0) > 0
 		           AND COALESCE(cd.no_cost_recs, 0) < COALESCE(cd.total_recs, 0) AS has_cost_data
 		FROM rec_clusters rc
@@ -360,6 +378,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		LEFT JOIN node_savings ns ON ns.cluster_uuid = rc.cluster_uuid
 		LEFT JOIN pvc_savings ps ON ps.cluster_uuid = rc.cluster_uuid
 		LEFT JOIN snapshot_savings ss ON ss.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN vm_savings vs ON vs.cluster_uuid = rc.cluster_uuid
 		LEFT JOIN cost_data cd ON cd.cluster_uuid = rc.cluster_uuid`,
 		args...,
 	)

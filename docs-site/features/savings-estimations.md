@@ -3,7 +3,7 @@
 !!! info "Quick Facts"
     **Fleet API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  
     **Per-rec field:** `estimated_monthly_savings` (`{"value": "12.340000", "units": "USD"}`)  
-    **Plugins with savings:** container, node, PVC, snapshot (GPU: API read only)  
+    **Plugins with savings:** container, node, PVC, snapshot, VM (GPU: API read only)  
     **Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED` (default `true`)
 
 ## Overview
@@ -44,6 +44,7 @@ Full formulas: [Cost Integration](../architecture/cost-integration.md).
 | **Node** | Ingestion | Per engine row; includes `node_cost_per_month` on consolidation |
 | **PVC** | Ingestion | Oversized PVCs only; storage rate from cost model |
 | **Snapshot** | Ingestion | Recoverable **cost** (not savings) — `estimated_monthly_cost_usd` |
+| **VM** | Ingestion | `savings` on list/detail; fleet `by_plugin.vm` at `medium_term` |
 | **Namespace** | — | No USD field today |
 | **GPU** | API read | Excluded from fleet summary (`by_plugin.gpu = 0`) |
 
@@ -71,9 +72,10 @@ See [Cost Integration — Negative savings](../architecture/cost-integration.md#
 }
 ```
 
-Present on container list items, node engine rows, PVC recommendations, and GPU
-blocks (`estimated_monthly_gpu_savings`, `estimated_monthly_timeslicing_savings`).
-Idle/abandoned containers use 100% of current allocation as recoverable savings.
+Present on container list items, node engine rows, PVC recommendations, VM list/detail
+(`savings`), and GPU blocks (`estimated_monthly_gpu_savings`,
+`estimated_monthly_timeslicing_savings`). Idle/abandoned containers and VMs use 100% of
+current allocation (plus flat `vm_cost_per_month` when configured) as recoverable savings.
 
 ### Node recommendations
 
@@ -143,6 +145,7 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
     "node": 3000.0,
     "pvc": 1500.0,
     "snapshot": 500.0,
+    "vm": 1200.0,
     "gpu": 0.0
   },
   "by_cluster": [
@@ -161,7 +164,7 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
 
 | Query param | Default | Description |
 |-------------|---------|-------------|
-| `engine` | `cost` | `cost` or `performance` — affects container and node totals |
+| `engine` | `cost` | `cost` or `performance` — affects container, node, and VM totals |
 
 ### Fleet summary (counts + savings)
 

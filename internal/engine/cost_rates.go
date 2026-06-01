@@ -33,6 +33,11 @@ func NodeCostPerMonth(costData *costdata.ClusterCostData) float64 {
 	return combinedConfiguredRate(costData, "node_cost_per_month")
 }
 
+// VMCostPerMonth returns the combined vm_cost_per_month rate (flat monthly VM charge).
+func VMCostPerMonth(costData *costdata.ClusterCostData) float64 {
+	return combinedConfiguredRate(costData, "vm_cost_per_month")
+}
+
 // EffectiveCPUCoreHourlyRate returns max(request, usage) combined rates for CPU.
 func EffectiveCPUCoreHourlyRate(costData *costdata.ClusterCostData) float64 {
 	return effectiveConfiguredRate(costData, "cpu_core_request_per_hour", "cpu_core_usage_per_hour")

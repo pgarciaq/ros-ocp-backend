@@ -23,15 +23,23 @@ func vmRecForSavings() *model.VMRecommendation {
 }
 
 func vmCostData(cpuRate, memRate, gpuRate float64) *costdata.ClusterCostData {
+	return vmCostDataWithVMRate(cpuRate, memRate, gpuRate, 0)
+}
+
+func vmCostDataWithVMRate(cpuRate, memRate, gpuRate, vmMonthlyRate float64) *costdata.ClusterCostData {
+	rates := map[string]costdata.RatePair{
+		"cpu_core_request_per_hour":  {Supplementary: cpuRate * 0.4},
+		"cpu_core_usage_per_hour":      {Supplementary: cpuRate * 0.6},
+		"memory_gb_request_per_hour":   {Supplementary: memRate * 0.3},
+		"memory_gb_usage_per_hour":     {Supplementary: memRate * 0.7},
+		"gpu_cost_per_month":           {Infrastructure: gpuRate},
+	}
+	if vmMonthlyRate > 0 {
+		rates["vm_cost_per_month"] = costdata.RatePair{Infrastructure: vmMonthlyRate}
+	}
 	return &costdata.ClusterCostData{
-		Currency: "EUR",
-		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_request_per_hour":    {Supplementary: cpuRate * 0.4},
-			"cpu_core_usage_per_hour":      {Supplementary: cpuRate * 0.6},
-			"memory_gb_request_per_hour":   {Supplementary: memRate * 0.3},
-			"memory_gb_usage_per_hour":     {Supplementary: memRate * 0.7},
-			"gpu_cost_per_month":           {Infrastructure: gpuRate},
-		},
+		Currency:        "EUR",
+		ConfiguredRates: rates,
 	}
 }
 
@@ -63,6 +71,16 @@ func TestComputeVMSavings_Idle(t *testing.T) {
 	require.NotNil(t, got)
 	// 8*0.6*730 + 32*1.4*730 = 3504 + 32704 = 36208
 	assert.InDelta(t, 36208.0, *got, 0.01)
+}
+
+func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
+	rec := vmRecForSavings()
+	rec.IsIdle = true
+	cd := vmCostDataWithVMRate(0, 0, 0, 250)
+
+	got := ComputeVMSavings(rec, cd)
+	require.NotNil(t, got)
+	assert.InDelta(t, 250.0, *got, 0.01)
 }
 
 func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {

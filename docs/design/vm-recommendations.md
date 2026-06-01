@@ -669,12 +669,16 @@ When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, 
 | Scenario | Formula (monthly USD) |
 |----------|------------------------|
 | **Downsize** | `(current_vCPU − rec_vCPU) × cpu_rate × 730 + (current_mem_GiB − rec_mem_GiB) × mem_rate × 730` plus GPU reduction when applicable |
-| **Idle / abandoned** | `current_vCPU × cpu_rate × 730 + current_mem_GiB × mem_rate × 730 + gpu_count × gpu_monthly_rate` |
+| **Idle / abandoned** | `current_vCPU × cpu_rate × 730 + current_mem_GiB × mem_rate × 730 + vm_cost_per_month (when configured) + gpu_count × gpu_monthly_rate` |
 | **GPU remove / MIG** | Same patterns as container GPU: full card on `remove_gpu`; `(1 − rec_slices/total_slices) × gpu_monthly_rate × gpu_count` for MIG profiles |
 
 **API:** `savings` is a [`SavingsObject`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
 
 **Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` — no masu fetch; `savings` is always `null`.
+
+**Stale values:** Savings are computed at recommendation generation time using cost model rates available at that moment. If Koku is temporarily unavailable, `savings` is `null` until the next recommendation cycle. If cost model rates change, previously stored recommendations retain their original `savings_amount` / `savings_currency` until recomputed. Currency changes in the cost model are not retroactively applied to existing rows.
+
+**Fleet rollup:** `GET /recommendations/openshift/savings-summary` includes `by_plugin.vm` (sum of `savings_amount` for `medium_term` rows matching the `engine` filter).
 
 ---
 

@@ -18,14 +18,15 @@ func ComputeVMSavings(rec *model.VMRecommendation, costData *costdata.ClusterCos
 	cpuRate := EffectiveCPUCoreHourlyRate(costData)
 	memRate := EffectiveMemoryGBHourlyRate(costData)
 	gpuRate := GPUMonthlyRate(costData)
-	if cpuRate == 0 && memRate == 0 && gpuRate == 0 {
+	vmMonthlyRate := VMCostPerMonth(costData)
+	if cpuRate == 0 && memRate == 0 && gpuRate == 0 && vmMonthlyRate == 0 {
 		return nil
 	}
 
 	var total float64
 	switch {
 	case rec.IsAbandoned, rec.IsIdle:
-		total = vmIdleOrAbandonedSavings(rec, cpuRate, memRate, gpuRate)
+		total = vmIdleOrAbandonedSavings(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
 	default:
 		total = vmDownsizeSavings(rec, cpuRate, memRate)
 		total += vmGPUReductionSavings(rec, gpuRate)
@@ -67,10 +68,13 @@ func vmDownsizeSavings(rec *model.VMRecommendation, cpuRate, memRate float64) fl
 	return cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth
 }
 
-func vmIdleOrAbandonedSavings(rec *model.VMRecommendation, cpuRate, memRate, gpuRate float64) float64 {
+func vmIdleOrAbandonedSavings(rec *model.VMRecommendation, cpuRate, memRate, gpuRate, vmMonthlyRate float64) float64 {
 	cpu := float64(rec.CurrentVCPU)
 	mem := float64(rec.CurrentMemoryGiB)
 	base := cpu*cpuRate*hoursPerMonth + mem*memRate*hoursPerMonth
+	if vmMonthlyRate > 0 {
+		base += vmMonthlyRate
+	}
 	if rec.GPUCount > 0 && gpuRate > 0 {
 		base += float64(rec.GPUCount) * gpuRate
 	}

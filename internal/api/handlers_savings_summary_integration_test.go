@@ -73,6 +73,20 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
+	_, err = pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+		) VALUES (
+			$1, $2, 'idle-vm', 'vm-ns', 'linux',
+			4, 16, 2, 8,
+			true, 'high', 'medium_term', 'cost',
+			true, false, false, 250.50, 'USD', now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
 	// dev-1: recommendations exist but all lack cost data (NotifNoCostData)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
@@ -97,7 +111,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "USD", summary.Currency)
-	assert.Equal(t, "1034.560000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "1285.060000", summary.EstimatedMonthlySavings.Value)
 	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.NotEmpty(t, summary.GPUSavingsNote)
 
@@ -106,6 +120,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	assert.InDelta(t, 150.00, summary.ByPlugin.Node, 0.01)
 	assert.InDelta(t, 84.56, summary.ByPlugin.PVC, 0.01)
 	assert.Equal(t, 0.00, summary.ByPlugin.Snapshot)
+	assert.InDelta(t, 250.50, summary.ByPlugin.VM, 0.01)
 
 	require.Len(t, summary.ByCluster, 2)
 
@@ -117,7 +132,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	prod, ok := byUUID[testutil.TestClusterUUID]
 	require.True(t, ok)
 	assert.Equal(t, "prod-1", prod.ClusterAlias)
-	assert.Equal(t, "1034.560000", prod.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "1285.060000", prod.EstimatedMonthlySavings.Value)
 	assert.True(t, prod.HasCostData)
 
 	dev, ok := byUUID[savingsSummaryCluster2]

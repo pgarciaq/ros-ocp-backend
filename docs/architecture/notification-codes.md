@@ -74,6 +74,8 @@ VM JSONB uses lowercase equivalents.
 | 23 | `INSTANCE_TYPE_NOT_IN_CATALOG` | INFO | Node | **No** | Reserved — cloud catalog |
 | 24 | `INSTANCE_TYPE_DEPRECATED` | INFO | Node | **No** | Reserved |
 | 25 | `NO_COST_DATA` | INFO | Container, Node, PVC | Yes | [`savings.go`](../../internal/engine/savings.go), [`node_savings.go`](../../internal/engine/node_savings.go), [`pvc_savings.go`](../../internal/engine/pvc_savings.go) |
+
+VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=false` or masu rates are missing, API `savings` is JSON `null` and fleet `by_plugin.vm` is `0` until the next ingestion cycle with rates.
 | 26 | `GPU_IDLE` | INFO | GPU | Yes | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) `GPUClassIdle` |
 | 27 | `GPU_MEMORY_BOUND` | INFO | GPU | Yes | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) `GPUClassMemoryBound` |
 | 28 | `GPU_NO_PROFILING_DATA` | INFO | GPU | Yes | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) no DCGM profiling |

@@ -713,8 +713,8 @@ Dollar estimate integration with Koku Masu `effective_rates`. See
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, each recommendation includes an estimated monthly savings (or cost) based on Koku cost model rates. When disabled, recommendations show resource changes (CPU, memory, storage) without dollar amounts. Useful when cost model rates aren't configured or savings calculations aren't needed.</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
-| Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, GPU pricing). Masu provides the `effective_rates` API that ROS uses to convert resource recommendations into dollar savings. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty disables dynamic rate lookup—fallback rates are used instead.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
+| Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, container, node, PVC, snapshot, and VM plugins persist monthly savings (or recoverable cost for snapshots) from Koku `effective_rates`. When disabled, resource recommendations still run but dollar fields are null/zero (containers/nodes/PVCs may include notification code **25**; VM list/detail `savings` is always `null`).</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
+| Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, node, VM, GPU pricing). Masu provides the `effective_rates` API that ROS uses for `savings` on VM recommendations and fleet `by_plugin.vm`. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty skips dynamic rate lookup.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
 
 ---
 

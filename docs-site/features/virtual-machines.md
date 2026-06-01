@@ -517,6 +517,22 @@ pairs without `app` labels on the VM CSV today).
 
 Tune via `GET/PUT .../settings/vm` → `placement` block or env vars listed above.
 
+### Savings estimates
+
+When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` points at a reachable
+Koku masu instance, list and detail responses include a `savings` object (`value` + `units`) or
+`null` when rates are unavailable. Idle and abandoned VMs may also include a flat
+`vm_cost_per_month` from the cost model in addition to CPU, memory, and GPU monthly charges.
+
+Savings estimates are computed at recommendation generation time using the cost model rates
+available at that moment. If Koku is temporarily unavailable, savings will be null until the
+next recommendation cycle. If cost model rates change, previously stored recommendations retain
+their original savings values until recomputed. Currency changes in the cost model are also not
+retroactively applied to existing recommendations.
+
+Fleet totals: `GET /recommendations/openshift/savings-summary` aggregates VM savings under
+`by_plugin.vm` (medium term, same `engine` filter as container and node).
+
 ### Cluster instance types
 
 ```http
@@ -540,7 +556,6 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 
 | Gap | Notes |
 |-----|-------|
-| **Savings fleet rollup** | Per-VM `savings` on list/detail; not included in `GET .../savings-summary` yet |
 | **Multi-GPU VMs** | Per-device `gpu_devices` digest and notification **54** when some GPUs are idle |
 | **MIG optimization** | Coarse **next-smaller MIG profile** step-down from utilization (`OptimalMIGProfile()`), not a full multi-objective vGPU optimizer across all catalog profiles |
 | **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
@@ -564,7 +579,6 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Storage tiering (hot/cold)** | Volume class recommendations |
 | **Power management / consolidation** | Suspend and cluster consolidation guidance |
 | **Live migration recommendations** | Migration-in-progress awareness |
-| **Savings in fleet summary** | Aggregate VM savings alongside container/node/PVC totals |
 
 ## Related documentation
 

@@ -196,7 +196,7 @@ ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
 |----------|---------|-------------|
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours feature, dual-stream ingestion, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Recalculate recommendations when tenant thresholds change. |
-| `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch dollar savings from Koku masu. |
+| `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch dollar savings from Koku masu (container, node, PVC, snapshot, VM). When `false`, VM API `savings` is always `null`. |
 
 ---
 
@@ -221,7 +221,7 @@ Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the conta
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KOKU_MASU_URL` | (empty) | Koku masu API base URL. |
+| `KOKU_MASU_URL` | (empty) | Koku masu API base URL for `effective_rates` (required for non-null VM `savings` and fleet `by_plugin.vm`). |
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Business-hours reship retry interval. |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Max consecutive reship failures. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel reship calls (see Performance Tuning). |
