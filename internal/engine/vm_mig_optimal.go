@@ -6,6 +6,7 @@ import (
 )
 
 // OptimalMIGProfile selects the smallest MIG profile with frame buffer at least
+// observedMaxFBMiB * headroom. MIG profile definitions come from gpu_catalog.yaml via MatchGPUModel.
 // observedMaxFBMiB * headroomFactor (default 1.2). Returns current profile when already
 // optimal, or a larger profile when the workload needs more memory.
 func OptimalMIGProfile(modelName, currentProfile string, observedMaxFBMiB float64, avgUtilBP int32) string {
