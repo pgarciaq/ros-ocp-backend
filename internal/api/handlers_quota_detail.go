@@ -45,6 +45,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse          `json:"capacity_freed,omitempty"`
 	EstimatedSavings     *ClusterQuotaSavingsMonthly                 `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
+	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
 }
 
 type quotaDetailIdentity struct {
@@ -209,7 +210,10 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			memory_request_used, memory_limit_used,
 			cpu_request_recommended, cpu_limit_recommended,
 			memory_request_recommended, memory_limit_recommended,
+			storage_request_hard, storage_request_used, storage_request_recommended,
+			pods_hard, pods_used, pods_recommended,
 			utilization_cpu_request_percent, utilization_memory_request_percent,
+			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_dollars_monthly, notification_codes
 		FROM cluster_quota_recommendation_sets
@@ -231,6 +235,15 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
+	history, histErr := engine.ListClusterQuotaRecommendationHistory(ctx, pool, orgID, id.clusterUUID, id.clusterQuotaName, 30)
+	if histErr != nil {
+		hlog.Errorf("cluster-quota detail history failed: %v", histErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch cluster-quota recommendation history",
+		})
+	}
+
 	detail := ClusterQuotaRecommendationDetailResponse{
 		ClusterUUID:        item.ClusterUUID,
 		ClusterQuotaName:   item.ClusterQuotaName,
@@ -243,6 +256,10 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		CapacityFreed:      item.CapacityFreed,
 		EstimatedSavings:   item.EstimatedSavings,
 		Notifications:      notifications.MapToKruizeFormat(codes),
+		History:            history,
+	}
+	if detail.History == nil {
+		detail.History = []engine.ClusterQuotaRecommendationHistoryRow{}
 	}
 	return c.JSON(http.StatusOK, detail)
 }
@@ -300,7 +317,9 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
 	var cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed sql.NullInt64
 	var cpuReqRec, cpuLimRec, memReqRec, memLimRec sql.NullInt64
-	var cpuReqUtil, memReqUtil sql.NullInt64
+	var storageHard, storageUsed, storageRec sql.NullInt64
+	var podsHard, podsUsed, podsRec sql.NullInt64
+	var cpuReqUtil, memReqUtil, storageUtil, podsUtil sql.NullInt64
 	var cpuCoresFreed, memFreed sql.NullInt64
 	var savings sql.NullInt64
 
@@ -309,17 +328,19 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 		&cpuReqHard, &cpuLimHard, &memReqHard, &memLimHard,
 		&cpuReqUsed, &cpuLimUsed, &memReqUsed, &memLimUsed,
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
-		&cpuReqUtil, &memReqUtil,
+		&storageHard, &storageUsed, &storageRec,
+		&podsHard, &podsUsed, &podsRec,
+		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
 		&cpuCoresFreed, &memFreed, &savings, &codes,
 	)
 	if err != nil {
 		return item, nil, err
 	}
 
-	item.QuotaHard = clusterQuotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard)
-	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed)
-	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec)
-	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil)
+	item.QuotaHard = clusterQuotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard, storageHard, podsHard)
+	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
+	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
+	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
 	if cpuCoresFreed.Valid || memFreed.Valid {
 		item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
 			CPUCoresFreed: nullInt64Val(cpuCoresFreed),

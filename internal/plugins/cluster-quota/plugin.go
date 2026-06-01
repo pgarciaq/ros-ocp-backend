@@ -50,7 +50,11 @@ func (p *ClusterQuotaPlugin) RegisterRoutes(g *echo.Group) {
 }
 
 func (p *ClusterQuotaPlugin) RetentionTables() []string {
-	return []string{"cluster_quota_recommendation_sets", "daily_cluster_quota_digests"}
+	return []string{
+		"cluster_quota_recommendation_sets",
+		"cluster_quota_recommendation_history",
+		"daily_cluster_quota_digests",
+	}
 }
 
 func (p *ClusterQuotaPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {

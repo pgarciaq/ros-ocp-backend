@@ -42,6 +42,12 @@ func RunClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, org
 	if err := WriteClusterQuotaRecommendations(ctx, pool, recs); err != nil {
 		return fmt.Errorf("write cluster-quota recommendations: %w", err)
 	}
+	if err := AppendClusterQuotaRecommendationHistory(ctx, pool, recs); err != nil {
+		return fmt.Errorf("append cluster-quota history: %w", err)
+	}
+	if err := PruneClusterQuotaRecommendationHistory(ctx, pool); err != nil {
+		return fmt.Errorf("prune cluster-quota history: %w", err)
+	}
 	metrics.IncRecommendationsWritten("cluster-quota", len(recs))
 	log.Infof("cluster-quota recs: wrote %d recommendations", len(recs))
 	return nil
