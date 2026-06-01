@@ -275,7 +275,7 @@ Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `co
 |------|----------|
 | Koku routing regression for new ROS filename patterns | Low — covered in Masu unit tests |
 | DB lifecycle integration test | Medium |
-| E2E assert notification codes 37–42 on seeded VMs | Medium |
+| E2E assert notification codes 37–42 on seeded VMs | ✅ `test_vm_notifications_matrix.py` |
 | OpenAPI contract entries for VM paths | Medium |
 | IQE: `memory_floors` and `disk.min_growth_mib_per_day` in PUT body | Low |
 

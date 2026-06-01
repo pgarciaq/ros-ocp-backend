@@ -1,7 +1,7 @@
 # OpenShift Virtualization Recommendations
 
 **Status:** Implemented (phase11) — backend plugin, engine, API, and settings  
-**Last updated:** 2026-05-31  
+**Last updated:** 2026-06-01  
 **Public overview:** [Virtual Machine Recommendations (docs-site)](../../docs-site/features/virtual-machines.md)
 
 **Related requirements:** [requirements.md §12b (Phase 8b)](../architecture/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)  
@@ -41,7 +41,8 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
-| Operator Strategy 3 dual-CSV | ⬜ (operator) | koku-metrics-operator |
+| Operator Strategy 3 dual-CSV | ✅ | koku-metrics-operator (`ros-openshift-vm-usage`, `cm-openshift-vm-usage`, `ros-openshift-vm-gpu-device`) |
+| OpenAPI spec (VM list/detail/history/settings) | ✅ | [`openapi.json`](../../openapi.json) |
 | Savings ($) in API | ⬜ | — |
 | `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
@@ -519,8 +520,6 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **n-series active recommendations** | `n1` catalog is recognition-only until network metrics exist |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
-| **OpenAPI spec** | VM paths not in [`openapi.json`](../../openapi.json) yet |
-
 **GPU limitations (implemented with constraints):** vGPU fractional sharing gets classification and coarse MIG step-down, not full vGPU profile recommendations; DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 
 ---
