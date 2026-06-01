@@ -136,7 +136,8 @@ All metrics use the `rosocp_` prefix.
 
 ### Resolution
 
-See [GPU Catalog Maintenance](gpu-catalog.md) for the update procedure.
+See [GPU Catalog Maintenance](gpu-catalog.md) for the update procedure and
+[GPU Catalogs — Data Sources and Validation](../architecture/gpu-catalogs.md) for NVIDIA references.
 
 ---
 

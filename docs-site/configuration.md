@@ -353,6 +353,10 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 | OOM feedback | — (admin only) | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
 | Idle / zombie | `/settings/idle-detection` | `ROS_IDLE_*` (see section above) |
 
+Embedded GPU hardware catalogs (`gpu_catalog.yaml`, `vgpu_profiles.yaml`) are validated against
+official NVIDIA documentation. See [GPU Catalogs](architecture/gpu-catalogs.md) for data sources
+and update procedures.
+
 ---
 
 ## Tag Sync

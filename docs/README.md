@@ -22,6 +22,7 @@
 | [database-conventions.md](architecture/database-conventions.md) | **Schema design** — when to use JSONB vs normalized tables, decision matrix, anti-patterns |
 | [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — decay weighting, adaptive margin, trend detection |
 | [gpu-classification.md](architecture/gpu-classification.md) | GPU utilization classification thresholds and MIG profile selection |
+| [gpu-catalogs.md](architecture/gpu-catalogs.md) | `gpu_catalog.yaml` / `vgpu_profiles.yaml` data sources and validation |
 | [cost-integration.md](architecture/cost-integration.md) | Cost/savings integration with Koku — `effective_rates`, kill-switch, currency field, fleet savings summary, node/PVC/container/GPU formulas, plugin matrix |
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |
 | [api-versioning.md](architecture/api-versioning.md) | API versioning strategy and compatibility policy |

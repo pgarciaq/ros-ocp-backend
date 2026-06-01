@@ -98,6 +98,7 @@ nav:
       - Configurability Reference: architecture/configurability.md
       - Recommendation Math: architecture/recommendation-math.md
       - GPU Classification: architecture/gpu-classification.md
+      - GPU Catalogs: architecture/gpu-catalogs.md
       - Kafka Schema: architecture/kafka-schema.md
       - Cost Integration: architecture/cost-integration.md
       - API Versioning: architecture/api-versioning.md

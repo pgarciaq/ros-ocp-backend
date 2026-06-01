@@ -230,6 +230,8 @@ ROS uses **different mechanisms** per workload type. VM recommendations are not 
 - **Q-series** (graphics / VDI) profiles are not recommended today; see the design doc for planned workload-type detection.
 
 Maintainers: [GPU sharing by workload type](../../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+GPU catalogs are validated against official NVIDIA documentation — see
+[GPU Catalogs](../architecture/gpu-catalogs.md) for data sources and update procedures.
 
 | Classification | Action | Notification |
 |----------------|--------|--------------|

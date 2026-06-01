@@ -1130,9 +1130,26 @@ Exceptions (hand-maintained, committed via `git add -f`):
 or Go source), edit the **source** — not the generated copy. If a file is hand-maintained
 in `docs-site/` directly, it needs a `!` exception in `.gitignore` or a force-add.
 
+## Maintaining embedded data files
+
+GPU hardware catalogs are compiled into the binary via `go:embed`:
+
+- `internal/engine/gpu_catalog.yaml` — MIG profiles and model specs (containers and VMs)
+- `internal/engine/vgpu_profiles.yaml` — vGPU C-series profiles (VMs only)
+
+Before changing either file, read [GPU Catalogs — Data Sources and Validation](docs/architecture/gpu-catalogs.md)
+for NVIDIA documentation links, validation steps, and common pitfalls. Run:
+
+```bash
+go test ./internal/engine/ -run 'TestGPUCatalog|TestMatchGPUModel|TestGPUModelMIG|TestVGPUProfile'
+```
+
+Day-to-day monitoring (`rosocp_gpu_model_unrecognized_total`): [GPU Catalog Maintenance](docs/operations/gpu-catalog.md).
+
 ## Further Reading
 
 - [Plugin architecture](docs/architecture/plugin-architecture.md)
+- [GPU catalogs (data sources and validation)](docs/architecture/gpu-catalogs.md)
 - [GPU classification algorithm](docs/architecture/gpu-classification.md)
 - [Recommendation math](docs/architecture/recommendation-math.md)
 - [Kafka message schema](docs/architecture/kafka-schema.md)

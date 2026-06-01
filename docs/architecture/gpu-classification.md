@@ -4,6 +4,8 @@ This document describes how ROS-OCP-Backend classifies GPU workload utilization 
 
 For **how sharing mechanisms differ by workload type** (containers vs KubeVirt VMs, catalogs, API fields), see [GPU sharing mechanisms by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type). VM guests additionally use `vgpu_profiles.yaml` (VM-only) for `recommended_vgpu_profile`.
 
+For **NVIDIA documentation sources and catalog validation** when editing `gpu_catalog.yaml` or `vgpu_profiles.yaml`, see [GPU Catalogs — Data Sources and Validation](gpu-catalogs.md).
+
 For the full cross-plugin parameter reference (including time-slicing and term defaults),
 see [Recommendation Engine Reference](recommendation-engines.md).
 

@@ -1,5 +1,8 @@
 # GPU Model Catalog
 #
+# See docs/architecture/gpu-catalogs.md for data sources, validation process,
+# and instructions on how to update this file.
+#
 # This file defines the hardware specifications for all recognized NVIDIA GPU
 # models. It is embedded at compile time via go:embed and parsed on startup.
 #

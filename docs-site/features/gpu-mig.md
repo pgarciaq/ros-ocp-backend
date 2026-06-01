@@ -113,6 +113,7 @@ Summary counts and links: `GET .../recommendations/openshift/gpu`.
 
 ## Related
 
+- [GPU Catalogs](../architecture/gpu-catalogs.md) — NVIDIA data sources and catalog validation
 - [GPU Time-Slicing](gpu-time-slicing.md) — Software sharing alternative
 - [Savings Estimations](savings-estimations.md) — GPU savings limitations in fleet summary
 - [Recommendation Engines — GPU](../architecture/recommendation-engines.md#gpu-recommendations)

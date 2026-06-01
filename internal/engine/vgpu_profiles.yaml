@@ -1,5 +1,8 @@
 # NVIDIA vGPU (GRID) profile catalog for OpenShift Virtualization VM recommendations ONLY.
 #
+# See docs/architecture/gpu-catalogs.md for data sources, validation process,
+# and instructions on how to update this file.
+#
 # Scope:
 #   - Used by vm_gpu_timeslicing.go / vm_gpu.go when setting recommended_vgpu_profile (API + notification 56).
 #   - NOT loaded by the container gpu plugin. Container GPU uses gpu_catalog.yaml for MIG profiles and

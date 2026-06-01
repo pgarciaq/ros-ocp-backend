@@ -1,16 +1,22 @@
 # GPU Catalog Maintenance
 
-The ROS-OCP backend maintains a catalog of NVIDIA GPU hardware specs used for
-MIG partitioning recommendations, utilization scoring, and time-slicing savings
-calculations. This document explains how to keep it current.
+The ROS-OCP backend maintains catalogs of NVIDIA GPU hardware specs used for
+MIG partitioning, vGPU profile hints (VMs), utilization scoring, and time-slicing
+savings calculations. This document explains day-to-day maintenance.
+
+**Data sources, validation checklist, profile family choice (C-series vs Q-series),
+and validation history:** [GPU Catalogs — Data Sources and Validation](../architecture/gpu-catalogs.md).
 
 ## File Locations
 
 | File | Purpose |
 |------|---------|
-| [`internal/engine/gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) | GPU specs (VRAM, SM count, MIG profiles) — edit this to add models |
-| [`internal/engine/gpu_metadata.go`](../../internal/engine/gpu_metadata.go) | DCGM string matching + YAML loader + Prometheus counter |
+| [`internal/engine/gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) | GPU specs (VRAM, SM count, MIG profiles) — containers and VMs |
+| [`internal/engine/vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) | vGPU C-series profiles — **VM-only** |
+| [`internal/engine/gpu_metadata.go`](../../internal/engine/gpu_metadata.go) | DCGM string matching + `gpu_catalog.yaml` loader |
+| [`internal/engine/vgpu_profiles.go`](../../internal/engine/vgpu_profiles.go) | `vgpu_profiles.yaml` loader |
 | [`internal/engine/gpu_metadata_test.go`](../../internal/engine/gpu_metadata_test.go) | Test coverage for model matching |
+| [`internal/engine/vgpu_profiles_test.go`](../../internal/engine/vgpu_profiles_test.go) | Test coverage for vGPU profiles |
 
 ## How to Know When an Update Is Needed
 
