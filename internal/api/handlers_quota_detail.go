@@ -215,6 +215,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			utilization_cpu_request_percent, utilization_memory_request_percent,
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
+			savings_storage_bytes_freed, savings_pods_freed,
 			savings_dollars_monthly, notification_codes
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND cluster_quota_name = $3`
@@ -320,7 +321,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 	var storageHard, storageUsed, storageRec sql.NullInt64
 	var podsHard, podsUsed, podsRec sql.NullInt64
 	var cpuReqUtil, memReqUtil, storageUtil, podsUtil sql.NullInt64
-	var cpuCoresFreed, memFreed sql.NullInt64
+	var cpuCoresFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 
 	err := rows.Scan(
@@ -331,7 +332,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 		&storageHard, &storageUsed, &storageRec,
 		&podsHard, &podsUsed, &podsRec,
 		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
-		&cpuCoresFreed, &memFreed, &savings, &codes,
+		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &codes,
 	)
 	if err != nil {
 		return item, nil, err
@@ -341,10 +342,12 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
-	if cpuCoresFreed.Valid || memFreed.Valid {
+	if cpuCoresFreed.Valid || memFreed.Valid || storageFreed.Valid || podsFreed.Valid {
 		item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
-			CPUCoresFreed: nullInt64Val(cpuCoresFreed),
-			MemoryBytes:   nullInt64Val(memFreed),
+			CPUCoresFreed:       nullInt64Val(cpuCoresFreed),
+			MemoryBytes:         nullInt64Val(memFreed),
+			StorageRequestBytes: nullInt64Val(storageFreed),
+			PodsFreed:           nullInt64Val(podsFreed),
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {

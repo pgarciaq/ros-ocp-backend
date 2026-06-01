@@ -102,9 +102,12 @@ type QuotaUtilizationBP struct {
 }
 
 // QuotaCapacityFreed holds capacity that could be reclaimed by tightening quota.
+// StorageBytes and PodsFreed are populated for cluster-quota recommendations only.
 type QuotaCapacityFreed struct {
 	CPUMillicores int64
 	MemoryBytes   int64
+	StorageBytes  int64
+	PodsFreed     int64
 }
 
 // RecommendQuotas produces per-namespace quota recommendations for a cluster.

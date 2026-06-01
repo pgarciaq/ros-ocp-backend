@@ -3,6 +3,7 @@ package engine
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,6 +90,58 @@ func TestComputeClusterQuotaRecommendation_ZeroUsedZeroAgg_OptimalNotTighten(t *
 
 	assert.Equal(t, QuotaRecTypeOptimal, rec.RecommendationType)
 	assert.Equal(t, int64(0), rec.Recommended.CPURequestMillicores)
+}
+
+func TestComputeClusterQuotaRecommendation_StorageTighten_CapacityFreed(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   11000,
+		HighRiskThresholdBP:   9000,
+		MediumRiskThresholdBP: 7000,
+	}
+	const gib = 1024 * 1024 * 1024
+	snap := ClusterQuotaSnapshot{
+		ClusterQuotaName:        "team-storage",
+		StorageRequestHardBytes: 10 * gib,
+		StorageRequestUsedBytes: 2 * gib,
+	}
+	rec := computeClusterQuotaRecommendation("org1", "cluster1", snap, NamespaceQuotaClusterAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRecTypeTighten, rec.RecommendationType)
+	assert.Equal(t, int64(2*gib*11000/10000), rec.StorageRecommendedBytes)
+	assert.Equal(t, int64(10*gib-rec.StorageRecommendedBytes), rec.CapacityFreed.StorageBytes)
+	assert.Equal(t, int64(0), rec.CapacityFreed.MemoryBytes)
+}
+
+func TestApplyClusterQuotaSavings_Storage(t *testing.T) {
+	const gib = 1024 * 1024 * 1024
+	recs := []ClusterQuotaRec{{
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed: QuotaCapacityFreed{
+			StorageBytes: 5 * gib,
+		},
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10},
+		},
+	}
+	ApplyClusterQuotaSavings(recs, cd)
+	assert.Equal(t, 50, recs[0].SavingsDollarsMonthly)
+}
+
+func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
+	recs := []ClusterQuotaRec{{
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed:      QuotaCapacityFreed{PodsFreed: 20},
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_usage_per_hour": {Infrastructure: 1, Supplementary: 0},
+		},
+	}
+	ApplyClusterQuotaSavings(recs, cd)
+	assert.Equal(t, 0, recs[0].SavingsDollarsMonthly)
+	assert.Equal(t, int64(20), recs[0].CapacityFreed.PodsFreed)
 }
 
 func TestRecommendClusterQuotas_SkipsZeroHardLimit(t *testing.T) {

@@ -226,7 +226,10 @@ func classifyClusterQuotaRecommendation(
 		freed.MemoryBytes = snap.MemoryRequestHardBytes - recommended.MemoryRequestBytes
 	}
 	if storageTighten {
-		freed.MemoryBytes += snap.StorageRequestHardBytes - storageRecommended
+		freed.StorageBytes = snap.StorageRequestHardBytes - storageRecommended
+	}
+	if podsTighten {
+		freed.PodsFreed = snap.PodsHard - podsRecommended
 	}
 
 	if needsRaise {
@@ -242,12 +245,15 @@ func classifyClusterQuotaRecommendation(
 }
 
 // ApplyClusterQuotaSavings computes estimated monthly savings in whole dollars.
+// CPU and memory use hourly rates; storage uses storage_gb_request_per_month (or usage fallback).
+// Pods have no cost-model metric — capacity_freed.pods is reported but not monetized.
 func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.ClusterCostData) {
 	if costData == nil {
 		return
 	}
 	cpuRate := CPUCoreHourlyRate(costData)
 	memRate := MemoryGBHourlyRate(costData)
+	storageRate := StorageRequestPerMonth(costData)
 
 	for i := range recs {
 		if recs[i].RecommendationType != QuotaRecTypeTighten {
@@ -255,7 +261,8 @@ func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.Cluster
 		}
 		cpuDelta := float64(recs[i].CapacityFreed.CPUMillicores) / 1000.0
 		memDelta := float64(recs[i].CapacityFreed.MemoryBytes) / (1024.0 * 1024.0 * 1024.0)
-		savings := cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth
+		storageGiB := float64(recs[i].CapacityFreed.StorageBytes) / (1024.0 * 1024.0 * 1024.0)
+		savings := cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth + storageGiB*storageRate
 		if savings < 0 {
 			savings = 0
 		}
@@ -394,7 +401,9 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				pods_hard, pods_used, pods_recommended,
 				utilization_cpu_request_percent, utilization_memory_request_percent,
 				utilization_storage_request_percent, utilization_pods_percent,
-				savings_cpu_cores_freed, savings_memory_bytes_freed, savings_dollars_monthly,
+				savings_cpu_cores_freed, savings_memory_bytes_freed,
+				savings_storage_bytes_freed, savings_pods_freed,
+				savings_dollars_monthly,
 				notification_codes, updated_at
 			) VALUES (
 				$1, $2::uuid, $3, $4,
@@ -406,8 +415,8 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				$19, $20, $21,
 				$22, $23, $24,
 				$25, $26, $27, $28,
-				$29, $30, $31,
-				$32,
+				$29, $30, $31, $32, $33,
+				$34,
 				NOW()
 			)
 			ON CONFLICT (org_id, cluster_uuid, cluster_quota_name)
@@ -439,6 +448,8 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				utilization_pods_percent = EXCLUDED.utilization_pods_percent,
 				savings_cpu_cores_freed = EXCLUDED.savings_cpu_cores_freed,
 				savings_memory_bytes_freed = EXCLUDED.savings_memory_bytes_freed,
+				savings_storage_bytes_freed = EXCLUDED.savings_storage_bytes_freed,
+				savings_pods_freed = EXCLUDED.savings_pods_freed,
 				savings_dollars_monthly = EXCLUDED.savings_dollars_monthly,
 				notification_codes = EXCLUDED.notification_codes,
 				updated_at = NOW()`,
@@ -452,7 +463,9 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 			nullableInt64(s.PodsHard), nullableInt64(s.PodsUsed), nullableInt64(r.PodsRecommended),
 			r.UtilizationCPURequestPercent, r.UtilizationMemoryRequestPercent,
 			r.UtilizationStorageRequestPercent, r.UtilizationPodsPercent,
-			nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes), nullableInt64(int64(r.SavingsDollarsMonthly)),
+			nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes),
+			nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
+			nullableInt64(int64(r.SavingsDollarsMonthly)),
 			r.NotificationCodes,
 		)
 		if err != nil {

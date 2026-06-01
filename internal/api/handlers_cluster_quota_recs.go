@@ -31,8 +31,10 @@ type ClusterQuotaUtilizationPercents struct {
 
 // ClusterQuotaCapacityFreedResponse is capacity that could be reclaimed by tightening CRQ.
 type ClusterQuotaCapacityFreedResponse struct {
-	CPUCoresFreed int64 `json:"cpu_cores_freed"`
-	MemoryBytes   int64 `json:"memory_bytes"`
+	CPUCoresFreed       int64 `json:"cpu_cores_freed"`
+	MemoryBytes         int64 `json:"memory_bytes"`
+	StorageRequestBytes int64 `json:"storage_request_bytes,omitempty"`
+	PodsFreed           int64 `json:"pods_freed,omitempty"`
 }
 
 // ClusterQuotaSavingsMonthly is estimated monthly savings in whole dollars.
@@ -171,6 +173,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			utilization_cpu_request_percent, utilization_memory_request_percent,
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
+			savings_storage_bytes_freed, savings_pods_freed,
 			savings_dollars_monthly, notification_codes
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL +
@@ -222,7 +225,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	var storageHard, storageUsed, storageRec sql.NullInt64
 	var podsHard, podsUsed, podsRec sql.NullInt64
 	var cpuReqUtil, memReqUtil, storageUtil, podsUtil sql.NullInt64
-	var cpuCoresFreed, memFreed sql.NullInt64
+	var cpuCoresFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 	var notifCodes []int16
 
@@ -234,7 +237,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		&storageHard, &storageUsed, &storageRec,
 		&podsHard, &podsUsed, &podsRec,
 		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
-		&cpuCoresFreed, &memFreed, &savings, &notifCodes,
+		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &notifCodes,
 	)
 	if err != nil {
 		return item, err
@@ -244,10 +247,12 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
-	if cpuCoresFreed.Valid || memFreed.Valid {
+	if cpuCoresFreed.Valid || memFreed.Valid || storageFreed.Valid || podsFreed.Valid {
 		item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
-			CPUCoresFreed: nullInt64Val(cpuCoresFreed),
-			MemoryBytes:   nullInt64Val(memFreed),
+			CPUCoresFreed:       nullInt64Val(cpuCoresFreed),
+			MemoryBytes:         nullInt64Val(memFreed),
+			StorageRequestBytes: nullInt64Val(storageFreed),
+			PodsFreed:           nullInt64Val(podsFreed),
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
