@@ -37,6 +37,7 @@ docs-site/features/
 !docs-site/features/virtual-machines.md
 !docs-site/features/java-jvm.md
 !docs-site/features/network.md
+!docs-site/features/node-recommendations.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output
