@@ -116,9 +116,10 @@ predictable spikes (month-end batch, weekly surges, holiday traffic). See the
 internal design: [`docs/design/seasonality-plugin.md`](../../../docs/design/seasonality-plugin.md).
 
 **[Virtual Machine Recommendations](virtual-machines.md)** — *Preview (Beta).* Right-size
-KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (cx1, m1,
-u1, …), idle and abandoned VM detection, disk growth projection, I/O profiling,
-graduated confidence with guest agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
+KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (u1, cx1,
+m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth projection,
+I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduated
+confidence with guest-agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
 Technical design: [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
 
 **[Java & JVM Optimization](java-jvm.md)** — *Planned.* JVM-specific tuning on top of container

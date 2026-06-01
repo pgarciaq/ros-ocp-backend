@@ -30,10 +30,10 @@ and can theoretically run in parallel.
 | pvc | PVC storage rightsizing |
 | quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([quota-recommendations.md](../features/quota-recommendations.md)) |
 | cluster-quota | OpenShift ClusterResourceQuota right-sizing from `openshift_clusterresourcequota_*` metrics ([cluster-resource-quota.md](../features/cluster-resource-quota.md)) |
-| snapshot | Staleness detection for recommendation freshness |
+| snapshot | VolumeSnapshot staleness and recoverable cost |
+| vm | OpenShift Virtualization VM rightsizing (CPU, memory, disk, I/O, instance types, idle/abandoned, guest GPU) |
 | kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
-| vm (future) | OpenShift Virtualization VM rightsizing |
-| instance-type (future) | Cloud instance type optimization for nodes |
+| instance-type (future) | Cloud instance type optimization for worker nodes |
 
 ## Phase 2: Enrich
 
@@ -61,7 +61,7 @@ Cross-entity aggregation requiring a global view of all recommendations.
 ## Execution model
 
 ```
-Phase 1: [container → gpu → node → pvc → quota → cluster-quota → snapshot → namespace]  (by Priority, then Name)
+Phase 1: [container → gpu → node → pvc → quota → cluster-quota → snapshot → vm → namespace]  (by Priority, then Name)
          ↓ barrier
 Phase 2: [java, golang, hpa, vpa, ...]  (future)
          ↓ barrier
@@ -101,7 +101,8 @@ All production plugins today use Phase 1 via embedded [`BasePlugin`](../../inter
 | pvc | 1 | 30 | Independent; owns storage CSV ingest |
 | quota | 1 | 35 | After PVC ingest; compares quota hard/used limits to namespace usage and container rec aggregates |
 | cluster-quota | 1 | 36 | After namespace `quota`; ingests CRQ CSV; compares CRQ hard/used to namespace quota rec aggregates |
-| snapshot | 1 | 40 | Reads recommendation freshness after core recommendations exist |
+| snapshot | 1 | 40 | VolumeSnapshot staleness after core recommendations exist |
+| vm | 1 | 40 | VM digests and recommendations; same priority as snapshot (name tie-break: snapshot before vm) |
 | example (`_example`) | 1 | 50 | Template default (`BasePlugin`); always disabled in production |
 | namespace | 1 | 90 | Aggregates namespace idle after container/GPU (and related) rows exist |
 
@@ -165,8 +166,7 @@ documented here so phase and priority slots stay stable when implementations lan
 
 | Plugin | Phase | Priority (planned) | Domain |
 |--------|-------|-------------------|--------|
-| vm | 1 | (TBD) | OpenShift Virtualization VM rightsizing |
-| instance-type | 1 | (TBD) | Cloud instance type for nodes |
+| instance-type | 1 | (TBD) | Cloud instance type optimization for worker nodes |
 | java | 2 | (TBD) | JVM heap / GC |
 | golang | 2 | (TBD) | GOMAXPROCS, GOMEMLIMIT |
 | python | 2 | (TBD) | Gunicorn/uWSGI workers |

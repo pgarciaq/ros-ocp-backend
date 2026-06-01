@@ -178,7 +178,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Used only when the allowlist is empty; removes plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
 | `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated** — use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
 
-**Available plugins** (sorted by execution order): `container`, `kruize`, `gpu`, `node`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `namespace`
+**Available plugins** (sorted by execution order): `container`, `kruize`, `gpu`, `node`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `vm`, `namespace`
 
 - **`kruize`** is mutually exclusive with native plugins (Kruize-only when enabled).
 - Listing **`kruize` together with native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** — the process exits before serving traffic.
@@ -189,7 +189,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 ```bash
 ROS_DISABLED_PLUGINS=namespace
 # or
-ROS_ENABLED_PLUGINS=container,gpu,node,pvc,snapshot
+ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
 ```
 
 | Variable | Default | Description |

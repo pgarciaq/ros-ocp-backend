@@ -7,82 +7,156 @@ ROS-OCP-Backend supports two recommendation engines:
 - **Kruize** (legacy): External Java service, writes to `workload_metrics` + `recommendation_sets` via JSONB
 - **Native** (current): Built-in Go engine, writes to `daily_*_digests` + `recommendation_sets` via relational columns
 
-The native engine is the default for all new deployments. This guide covers transitioning an existing Kruize-based deployment to native.
+The native engine is the **default** for all new deployments. It covers containers, namespaces, nodes, GPUs, PVCs, ResourceQuotas, ClusterResourceQuotas, VolumeSnapshots, and OpenShift Virtualization VMs. This guide covers transitioning an existing Kruize-based deployment to native.
 
-## Migration Steps
+## Native plugins (current)
 
-### 1. Enable Native Engine
+When `ROS_ENABLED_PLUGINS` is empty, every native plugin is enabled except `kruize` (mutually exclusive). Plugins are sorted at runtime by [phase, priority, and name](plugin-phases.md)—not by the order in the env var.
 
-The plugin architecture controls which engine is active:
+| Plugin | Phase | Priority | Primary outputs |
+|--------|-------|----------|-----------------|
+| **container** | Produce | 10 | CPU/memory recs; inline idle/zombie; OOM bump; cost + performance engines |
+| **gpu** | Produce | 20 | MIG profiles, time-slicing, classification; `gpu_catalog.yaml` model metadata |
+| **node** | Produce | 30 | Node consolidation and sizing; cost + performance engines |
+| **pvc** | Produce | 30 | PVC right-sizing and growth projection |
+| **quota** | Produce | 35 | ResourceQuota tighten/raise/optimal |
+| **cluster-quota** | Produce | 36 | ClusterResourceQuota vs namespace quota aggregates |
+| **vm** | Produce | 40 | VM vCPU/GiB, disk, I/O, instance types, idle/abandoned, guest GPU (`ROS_ENABLE_VM_RECS`) |
+| **snapshot** | Produce | 40 | VolumeSnapshot staleness and cost |
+| **namespace** | Produce | 90 | Namespace quota targets; aggregates namespace idle after container/GPU |
+
+**Not separate plugins:** idle/zombie detection runs inside container (and GPU) produce paths with shared settings at `GET/PUT .../settings/idle-detection`. **Business hours** is a platform feature (`ROS_BUSINESS_HOURS_ENABLED`) that maintains dual metric streams for container and namespace analysis.
+
+**Planned (not registered today):** java, golang, python, nodejs, hpa, vpa, binpacking, machineset, seasonality — see [Plugin Execution Phases](plugin-phases.md).
+
+### Example allowlists
 
 ```bash
-# Default (native only):
-ROS_ENABLED_PLUGINS=container,namespace,node,gpu,pvc,snapshot
+# Default (native only — all plugins above except kruize):
+# ROS_ENABLED_PLUGINS=   (empty)
+
+# Explicit minimal set (order does not matter):
+ROS_ENABLED_PLUGINS=container,namespace,node,gpu,pvc,quota,cluster-quota,snapshot,vm
 
 # Legacy Kruize only:
 ROS_ENABLED_PLUGINS=kruize
 
-# Both (not recommended — writes duplicate data):
+# Invalid — fatal at startup (mutually exclusive):
 ROS_ENABLED_PLUGINS=kruize,container,namespace,node,gpu,pvc,snapshot
 ```
 
-### 2. Data Separation
+Disable individual domains without an allowlist:
 
-The two engines write to completely separate tables:
+```bash
+ROS_DISABLED_PLUGINS=vm,namespace
+```
+
+## Platform capabilities (native only)
+
+| Capability | Kruize | Native |
+|------------|--------|--------|
+| Notification codes | Limited set | **54+ codes** — [notification-codes.md](notification-codes.md) |
+| Settings API (per-tenant) | No | **Yes** — thresholds, terms, idle, VM, quota, snapshot, business hours |
+| Three-tier config | No | Admin `ROS_*` locks → Settings API → compiled defaults — [configurability.md](configurability.md) |
+| Custom term windows | Fixed short/medium/long | **1–90 days** per plugin via `TermProvider` + `ROS_TERMS_*` |
+| Recommendation history | Limited | **Yes** — container history + quality endpoints |
+| Dollar savings | No | **Yes** — container, node, PVC, GPU, snapshot, quota tighten; fleet `savings-summary` |
+| Adaptive CPU margins | No | **Yes** — variability-driven margins on container and VM CPU |
+| OOM detection & memory bump | Partial | **Yes** — logarithmic bump from OOM events in window |
+| GPU hardware catalog | N/A | **`internal/engine/gpu_catalog.yaml`** — VRAM, MIG profiles, model matching |
+| VM instance type catalog | N/A | Built-in u1/cx1/m1 (+ gn1 when GPU metrics); cluster CRs via `cluster_instance_types.json` |
+| OpenShift Virtualization | No | **vm** plugin — CPU, memory, disk, I/O, idle, abandoned, crash loop, GPU on guest |
+| ResourceQuota / CRQ | No | **quota**, **cluster-quota** plugins |
+| Tag-based list filters | No | **Yes** — `filter[tag:key]` on container recommendations |
+| Box plots | Pre-computed by Kruize | On-the-fly from usage samples |
+
+## Migration steps
+
+### 1. Enable native engine
+
+```bash
+# Prefer empty allowlist (all native plugins) or explicit list including vm when needed:
+export ROS_ENABLE_VM_RECS=true   # required for VM routes and processing (default true in many deployments)
+export ROS_USE_NATIVE_ENGINE=true   # deprecated; strips kruize from allowlist if present
+```
+
+See the [Configuration Reference](../configuration.md) for `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`, and per-plugin kill switches.
+
+### 2. Data separation
+
+The two engines write to separate tables and shapes:
 
 | Data | Kruize | Native |
 |------|--------|--------|
-| Raw metrics | `workload_metrics` (JSONB) | `container_usage_samples`, `daily_container_digests` |
-| Recommendations | `recommendation_sets` (JSONB `recommendations` column) | `recommendation_sets` (relational columns) |
-| GPU | Not supported | `gpu_container_digests` |
+| Raw metrics | `workload_metrics` (JSONB) | `container_usage_samples`, `daily_*_digests` per domain |
+| Recommendations | `recommendation_sets` (JSONB `recommendations`) | `recommendation_sets` (relational columns, `engine = 'native'`) |
+| GPU | Not supported | `gpu_container_digests`, GPU fields on recommendations |
 | Node | Not supported | `daily_node_digests`, `node_recommendations` |
-| Namespace | `recommendation_sets` (partial) | `daily_namespace_digests` |
+| Namespace | Partial via Kruize JSON | `daily_namespace_digests`, namespace rows |
+| PVC / snapshot | Not supported | `daily_pvc_digests`, snapshot recommendation tables |
+| Quota / CRQ | Not supported | `quota_recommendations`, `cluster_quota_recommendations` |
+| VM | Not supported | `daily_vm_digests`, `vm_recommendations` |
+| History / quality | Limited | `recommendation_history`, quality metrics (container-led) |
 
-### 3. Cleanup After Transition
+### 3. Cleanup after transition
 
 Once native engine is confirmed working:
 
-1. **Kruize-era tables can be dropped** — the retention sweep (`RunRetentionSweep`) handles this automatically over time as partitions age out
-2. **Background cleanup** — migration `000058` runs a background delete of Kruize-era `workload_metrics` rows before the CASCADE constraint activates
-3. **`recommendation_sets` rows** — old Kruize-format rows (with `engine = 'kruize'`) coexist safely; the native engine writes `engine = 'native'`
+1. **Kruize-era tables** age out via retention (`RunRetentionSweep`) as partitions expire
+2. **Background cleanup** — migration `000058` deletes legacy `workload_metrics` before CASCADE constraints apply
+3. **`recommendation_sets`** — rows with `engine = 'kruize'` coexist safely; native writes `engine = 'native'`
 
-### 4. Verification Checklist
+### 4. Verification checklist
 
-After enabling native engine:
+After enabling native plugins:
 
-- [ ] `GET /recommendations/openshift` returns results with relational fields (not JSONB blobs)
-- [ ] `GET /recommendations/openshift/{id}` returns `DetailResponse` shape
-- [ ] GPU classifications appear in list responses (`gpu_classification` field)
-- [ ] Savings estimates are non-zero (requires `KOKU_MASU_URL` configured)
-- [ ] History endpoint (`GET .../history`) shows new entries being recorded
-- [ ] Quality endpoint (`GET .../quality`) shows stability/adoption metrics
+- [ ] `GET /recommendations/openshift` returns relational fields (not opaque JSONB blobs)
+- [ ] `GET /recommendations/openshift/{id}` returns native `DetailResponse` shape with `notification_codes`
+- [ ] Container: cost and performance engines via `filter[engine]=cost|performance`
+- [ ] Container: idle/zombie via `filter[idle_state]`; savings non-zero when `KOKU_MASU_URL` is set
+- [ ] GPU: `gpu_classification`, MIG and time-slicing fields on list responses
+- [ ] Node: nested cost/performance node recommendations
+- [ ] PVC, snapshot, quota, cluster-quota: domain list endpoints return rows (when metrics exist)
+- [ ] VM: `GET .../recommendations/openshift/vm` when `ROS_ENABLE_VM_RECS=true` and VM CSV is ingested
+- [ ] History: `GET .../history` records new entries
+- [ ] Quality: `GET .../quality` shows stability/adoption metrics
+- [ ] Settings: `GET .../settings/capabilities` lists enabled plugins and locked fields
+- [ ] Fleet: `GET .../savings-summary` aggregates cross-plugin savings (when cost integration enabled)
 
 ### 5. Rollback
-
-To revert to Kruize:
 
 ```bash
 ROS_ENABLED_PLUGINS=kruize
 ```
 
-Native-era data remains in the database but is not served. The native tables will age out via retention. No data loss occurs in either direction.
+Native-era data remains in the database but is not served. Tables age out via retention. No data loss in either direction.
 
-## Stale Data Handling
+## Stale data handling
 
 When switching engines, recommendations from the disabled engine stop receiving updates. They will:
 
-1. Be marked `stale = true` after `ROS_STALENESS_THRESHOLD_HOURS` (72h)
-2. Be deleted after `ROS_STALE_ARCHIVE_DAYS` (30 days)
+1. Be marked `stale = true` after `ROS_STALENESS_THRESHOLD_HOURS` (default 72h)
+2. Be deleted after `ROS_STALE_ARCHIVE_DAYS` (default 30 days)
 
-This is the intended lifecycle — no manual cleanup is needed.
+No manual cleanup is required.
 
-## API Response Differences
+## API response differences
 
 | Aspect | Kruize | Native |
 |--------|--------|--------|
-| `monitoring_start_time` / `monitoring_end_time` | From Kruize result JSON | Computed from digest window |
-| Notification codes | Limited set | Full set (20+ codes) |
-| GPU recommendations | Not available | Full classification + MIG + time-slicing |
+| `monitoring_start_time` / `monitoring_end_time` | From Kruize result JSON | Computed from digest analysis window |
+| Notification codes | Limited set | Full set — see [notification-codes.md](notification-codes.md) |
+| GPU recommendations | Not available | Classification, MIG, time-slicing, savings |
+| VM recommendations | Not available | Full VM plugin API (Preview Beta) |
+| Quota / CRQ | Not available | Tighten/raise/optimal with risk levels |
 | Box plots | Pre-computed by Kruize | Computed on-the-fly from samples |
-| Term support | Fixed (short/medium/long) | Configurable via settings API |
-| Savings | Not available | Computed from Koku cost data |
+| Term support | Fixed (short/medium/long) | Configurable per tenant; admin env locks |
+| Savings | Not available | Koku `effective_rates` + fleet summary |
+| Idle / tags | Not available | Idle state, tag filters, idle-detection settings |
+
+## Related documentation
+
+- [Plugin Execution Phases](plugin-phases.md) — execution order and future plugins
+- [Configurability Reference](configurability.md) — env vars, Settings API, locks
+- [Recommendation Engines](recommendation-engines.md) — percentiles, thresholds, terms
+- [Features overview](../features/index.md) — per-domain feature pages
