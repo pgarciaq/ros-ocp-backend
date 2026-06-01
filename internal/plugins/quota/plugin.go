@@ -40,15 +40,22 @@ func (p *QuotaPlugin) RegisterRoutes(g *echo.Group) {
 		return
 	}
 	g.GET("/recommendations/openshift/quota", rosapi.GetQuotaRecommendations)
+	g.GET("/recommendations/openshift/quota/detail", rosapi.GetQuotaRecommendationDetail)
 }
 
 func (p *QuotaPlugin) RetentionTables() []string {
-	return []string{"quota_recommendation_sets"}
+	return []string{"quota_recommendation_sets", "quota_recommendation_history"}
 }
 
 func (p *QuotaPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
-	_, err := pool.Exec(ctx,
+	if _, err := pool.Exec(ctx,
 		`DELETE FROM quota_recommendation_sets WHERE last_observed_at < $1`,
+		olderThan,
+	); err != nil {
+		return err
+	}
+	_, err := pool.Exec(ctx,
+		`DELETE FROM quota_recommendation_history WHERE recorded_at < $1`,
 		olderThan,
 	)
 	return err

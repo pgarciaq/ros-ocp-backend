@@ -46,6 +46,7 @@ func (p *ClusterQuotaPlugin) RegisterRoutes(g *echo.Group) {
 		return
 	}
 	g.GET("/recommendations/openshift/cluster-quota", rosapi.GetClusterQuotaRecommendations)
+	g.GET("/recommendations/openshift/cluster-quota/detail", rosapi.GetClusterQuotaRecommendationDetail)
 }
 
 func (p *ClusterQuotaPlugin) RetentionTables() []string {
