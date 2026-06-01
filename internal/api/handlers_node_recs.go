@@ -78,6 +78,22 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
+	if clusterFilterMiss {
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
+			Meta: model.NodeRecommendationMeta{
+				Count:  0,
+				Limit:  opts.Limit,
+				Offset: opts.Offset,
+			},
+			Data:     []model.NodeGPURecommendation{},
+			Links:    buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
+			Currency: costdata.DefaultCurrency,
+		})
+	}
+
 	nodeNameFilter := queryparams.FirstFilter(c, "node")
 	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model")
 	termFilter := queryparams.FirstFilter(c, "term")
@@ -88,7 +104,10 @@ func GetNodeRecommendations(c echo.Context) error {
 		len(clusterUUIDs) > 0
 
 	if useTripleSQL {
-		return respondNodeGPURecommendationsTripleSQL(c, ctx, pool, orgIDStr, userPerms, opts, terms, clusterUUIDs, start, now, nodeNameFilter, gpuModelFilter)
+		return respondNodeGPURecommendationsTripleSQL(
+			c, ctx, pool, orgIDStr, userPerms, opts, terms, clusterUUIDs, start, now,
+			clusterFilter, nodeNameFilter, gpuModelFilter,
+		)
 	}
 
 	costProvider := getGPUCostProvider()
@@ -167,7 +186,9 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	setRecommendationNoStore(c)
 	nodeCurrency := costdata.DefaultCurrency
-	if len(clusterUUIDs) > 0 {
+	if clusterFilter != "" {
+		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
+	} else if len(clusterUUIDs) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterUUIDs[0])
 	}
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
@@ -184,6 +205,21 @@ func GetNodeRecommendations(c echo.Context) error {
 	})
 }
 
+// restrictClustersToQueryFilter narrows clusterUUIDs when filter[cluster] or the
+// cluster_uuid flat alias is set. The second return value is true when the
+// requested cluster is not in the allowed (RBAC-filtered) set.
+func restrictClustersToQueryFilter(clusterUUIDs []string, clusterFilter string) ([]string, bool) {
+	if clusterFilter == "" {
+		return clusterUUIDs, false
+	}
+	for _, u := range clusterUUIDs {
+		if u == clusterFilter {
+			return []string{clusterFilter}, false
+		}
+	}
+	return nil, true
+}
+
 func respondNodeGPURecommendationsTripleSQL(
 	c echo.Context,
 	ctx context.Context,
@@ -194,7 +230,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	terms []engine.TermConfig,
 	clusterUUIDs []string,
 	start, now time.Time,
-	nodeNameFilter, gpuModelFilter string,
+	clusterFilter, nodeNameFilter, gpuModelFilter string,
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
@@ -291,7 +327,9 @@ func respondNodeGPURecommendationsTripleSQL(
 
 	setRecommendationNoStore(c)
 	nodeCurrency := costdata.DefaultCurrency
-	if len(triples) > 0 {
+	if clusterFilter != "" {
+		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
+	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
 	}
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{

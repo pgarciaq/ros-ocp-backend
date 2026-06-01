@@ -457,6 +457,60 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	}
 }
 
+func TestGetNodeRecommendations_FilterByCluster(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	cluster1, cluster2 := seedTwoClustersWithGPUData(t, pool)
+	app := setupNodeRecsEcho(pool)
+
+	reqAll := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
+	reqAll.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	recAll := httptest.NewRecorder()
+	app.ServeHTTP(recAll, reqAll)
+	require.Equal(t, http.StatusOK, recAll.Code)
+
+	var allResp model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(recAll.Body.Bytes(), &allResp))
+	require.Greater(t, allResp.Meta.Count, 0, "expected time-slicing recs across seeded clusters")
+
+	clustersSeen := map[string]bool{}
+	for _, r := range allResp.Data {
+		clustersSeen[r.ClusterUUID] = true
+	}
+	require.True(t, clustersSeen[cluster1] || clustersSeen[cluster2],
+		"unfiltered response should include seeded cluster data")
+
+	reqFiltered := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bcluster%5D="+cluster1, nil)
+	reqFiltered.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	recFiltered := httptest.NewRecorder()
+	app.ServeHTTP(recFiltered, reqFiltered)
+	require.Equal(t, http.StatusOK, recFiltered.Code)
+
+	var filteredResp model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(recFiltered.Body.Bytes(), &filteredResp))
+	require.Greater(t, filteredResp.Meta.Count, 0)
+	for _, r := range filteredResp.Data {
+		assert.Equal(t, cluster1, r.ClusterUUID)
+	}
+
+	reqUnknown := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?cluster_uuid=00000000-0000-0000-0000-000000000099", nil)
+	reqUnknown.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	recUnknown := httptest.NewRecorder()
+	app.ServeHTTP(recUnknown, reqUnknown)
+	require.Equal(t, http.StatusOK, recUnknown.Code)
+
+	var unknownResp model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(recUnknown.Body.Bytes(), &unknownResp))
+	assert.Equal(t, 0, unknownResp.Meta.Count)
+	assert.Empty(t, unknownResp.Data)
+}
+
 // --- RBAC integration tests for GPU time-slicing (/gpu/timeslicing) endpoint ---
 
 // setupNodeRecsEchoWithRBAC creates an Echo app with the Identity middleware

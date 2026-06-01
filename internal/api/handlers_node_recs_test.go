@@ -67,6 +67,28 @@ func TestFilterNodeRecs_BothFilters(t *testing.T) {
 	assert.Equal(t, "T4", result[0].GPUModel)
 }
 
+func TestRestrictClustersToQueryFilter(t *testing.T) {
+	clusters := []string{"c1", "c2", "c3"}
+
+	t.Run("no filter", func(t *testing.T) {
+		out, miss := restrictClustersToQueryFilter(clusters, "")
+		assert.Equal(t, clusters, out)
+		assert.False(t, miss)
+	})
+
+	t.Run("matching filter", func(t *testing.T) {
+		out, miss := restrictClustersToQueryFilter(clusters, "c2")
+		assert.Equal(t, []string{"c2"}, out)
+		assert.False(t, miss)
+	})
+
+	t.Run("unknown cluster", func(t *testing.T) {
+		out, miss := restrictClustersToQueryFilter(clusters, "missing")
+		assert.Nil(t, out)
+		assert.True(t, miss)
+	})
+}
+
 func TestFilterNodeRecs_NoMatch(t *testing.T) {
 	recs := []model.NodeGPURecommendation{
 		{NodeName: "node-1", GPUModel: "T4"},
