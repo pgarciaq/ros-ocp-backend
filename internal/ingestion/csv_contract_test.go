@@ -220,6 +220,13 @@ var OperatorRosClusterQuotaCSVHeader = []string{
 	"memory_request_used",
 	"memory_limit_hard",
 	"memory_limit_used",
+	"storage_request_hard",
+	"storage_request_used",
+	"pods_hard",
+	"pods_used",
+	"object_count_hard",
+	"object_count_used",
+	"namespaces",
 }
 
 func TestCSVContract_OperatorClusterQuotaHeaderParseable(t *testing.T) {

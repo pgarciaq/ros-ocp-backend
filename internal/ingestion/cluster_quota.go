@@ -15,17 +15,24 @@ import (
 
 // ClusterQuotaMetricRow is one interval row from a cluster-quota ROS CSV.
 type ClusterQuotaMetricRow struct {
-	IntervalStart      time.Time
-	IntervalEnd        time.Time
-	ClusterQuotaName   string
-	CPURequestHardMC   int64
-	CPURequestUsedMC   int64
-	CPULimitHardMC     int64
-	CPULimitUsedMC     int64
-	MemoryRequestHard  int64
-	MemoryRequestUsed  int64
-	MemoryLimitHard    int64
-	MemoryLimitUsed    int64
+	IntervalStart        time.Time
+	IntervalEnd          time.Time
+	ClusterQuotaName     string
+	CPURequestHardMC     int64
+	CPURequestUsedMC     int64
+	CPULimitHardMC       int64
+	CPULimitUsedMC       int64
+	MemoryRequestHard    int64
+	MemoryRequestUsed    int64
+	MemoryLimitHard      int64
+	MemoryLimitUsed      int64
+	StorageRequestHard   int64
+	StorageRequestUsed   int64
+	PodsHard             int64
+	PodsUsed             int64
+	ObjectCountHard      int64
+	ObjectCountUsed      int64
+	Namespaces           string
 }
 
 type crqColumnIndex struct {
@@ -36,10 +43,17 @@ type crqColumnIndex struct {
 	cpuRequestUsed   int
 	cpuLimitHard     int
 	cpuLimitUsed     int
-	memRequestHard   int
-	memRequestUsed   int
-	memLimitHard     int
-	memLimitUsed     int
+	memRequestHard     int
+	memRequestUsed     int
+	memLimitHard       int
+	memLimitUsed       int
+	storageRequestHard int
+	storageRequestUsed int
+	podsHard           int
+	podsUsed           int
+	objectCountHard    int
+	objectCountUsed    int
+	namespaces         int
 }
 
 func buildCRQColumnIndex(header []string) (crqColumnIndex, error) {
@@ -49,6 +63,10 @@ func buildCRQColumnIndex(header []string) (crqColumnIndex, error) {
 		cpuLimitHard: -1, cpuLimitUsed: -1,
 		memRequestHard: -1, memRequestUsed: -1,
 		memLimitHard: -1, memLimitUsed: -1,
+		storageRequestHard: -1, storageRequestUsed: -1,
+		podsHard: -1, podsUsed: -1,
+		objectCountHard: -1, objectCountUsed: -1,
+		namespaces: -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -74,6 +92,20 @@ func buildCRQColumnIndex(header []string) (crqColumnIndex, error) {
 			idx.memLimitHard = i
 		case "memory_limit_used", "memory_limit_cluster_used":
 			idx.memLimitUsed = i
+		case "storage_request_hard":
+			idx.storageRequestHard = i
+		case "storage_request_used":
+			idx.storageRequestUsed = i
+		case "pods_hard":
+			idx.podsHard = i
+		case "pods_used":
+			idx.podsUsed = i
+		case "object_count_hard":
+			idx.objectCountHard = i
+		case "object_count_used":
+			idx.objectCountUsed = i
+		case "namespaces":
+			idx.namespaces = i
 		}
 	}
 	if idx.intervalStart < 0 {
@@ -191,6 +223,45 @@ func parseCRQRecord(record []string, idx crqColumnIndex) (ClusterQuotaMetricRow,
 			return row, err
 		}
 	}
+	if idx.storageRequestHard >= 0 && idx.storageRequestHard < len(record) && record[idx.storageRequestHard] != "" {
+		row.StorageRequestHard, err = parseInt64Field(record[idx.storageRequestHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.storageRequestUsed >= 0 && idx.storageRequestUsed < len(record) && record[idx.storageRequestUsed] != "" {
+		row.StorageRequestUsed, err = parseInt64Field(record[idx.storageRequestUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.podsHard >= 0 && idx.podsHard < len(record) && record[idx.podsHard] != "" {
+		row.PodsHard, err = parseInt64Field(record[idx.podsHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.podsUsed >= 0 && idx.podsUsed < len(record) && record[idx.podsUsed] != "" {
+		row.PodsUsed, err = parseInt64Field(record[idx.podsUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.objectCountHard >= 0 && idx.objectCountHard < len(record) && record[idx.objectCountHard] != "" {
+		row.ObjectCountHard, err = parseInt64Field(record[idx.objectCountHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.objectCountUsed >= 0 && idx.objectCountUsed < len(record) && record[idx.objectCountUsed] != "" {
+		row.ObjectCountUsed, err = parseInt64Field(record[idx.objectCountUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.namespaces >= 0 && idx.namespaces < len(record) {
+		row.Namespaces = strings.TrimSpace(record[idx.namespaces])
+	}
 	return row, nil
 }
 
@@ -226,6 +297,13 @@ type clusterQuotaDigestAgg struct {
 	memoryRequestUsed  int64
 	memoryLimitHard    int64
 	memoryLimitUsed    int64
+	storageRequestHard int64
+	storageRequestUsed int64
+	podsHard           int64
+	podsUsed           int64
+	objectCountHard    int64
+	objectCountUsed    int64
+	namespaces         string
 }
 
 func groupClusterQuotaRows(rows []ClusterQuotaMetricRow, orgID, clusterUUID string) map[clusterQuotaDigestKey]*clusterQuotaDigestAgg {
@@ -251,6 +329,15 @@ func groupClusterQuotaRows(rows []ClusterQuotaMetricRow, orgID, clusterUUID stri
 		agg.memoryRequestUsed = maxInt64(agg.memoryRequestUsed, row.MemoryRequestUsed)
 		agg.memoryLimitHard = maxInt64(agg.memoryLimitHard, row.MemoryLimitHard)
 		agg.memoryLimitUsed = maxInt64(agg.memoryLimitUsed, row.MemoryLimitUsed)
+		agg.storageRequestHard = maxInt64(agg.storageRequestHard, row.StorageRequestHard)
+		agg.storageRequestUsed = maxInt64(agg.storageRequestUsed, row.StorageRequestUsed)
+		agg.podsHard = maxInt64(agg.podsHard, row.PodsHard)
+		agg.podsUsed = maxInt64(agg.podsUsed, row.PodsUsed)
+		agg.objectCountHard = maxInt64(agg.objectCountHard, row.ObjectCountHard)
+		agg.objectCountUsed = maxInt64(agg.objectCountUsed, row.ObjectCountUsed)
+		if row.Namespaces != "" {
+			agg.namespaces = row.Namespaces
+		}
 	}
 	return out
 }
@@ -287,10 +374,15 @@ func upsertClusterQuotaDigest(ctx context.Context, pool *pgxpool.Pool, agg *clus
 			cpu_request_hard, cpu_request_used,
 			cpu_limit_hard, cpu_limit_used,
 			memory_request_hard, memory_request_used,
-			memory_limit_hard, memory_limit_used
+			memory_limit_hard, memory_limit_used,
+			storage_request_hard, storage_request_used,
+			pods_hard, pods_used,
+			object_count_hard, object_count_used,
+			namespaces
 		) VALUES (
 			$1, $2::uuid, $3, $4,
-			$5, $6, $7, $8, $9, $10, $11, $12
+			$5, $6, $7, $8, $9, $10, $11, $12,
+			$13, $14, $15, $16, $17, $18, $19
 		)
 		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name, report_date)
 		DO UPDATE SET
@@ -301,12 +393,23 @@ func upsertClusterQuotaDigest(ctx context.Context, pool *pgxpool.Pool, agg *clus
 			memory_request_hard = GREATEST(COALESCE(daily_cluster_quota_digests.memory_request_hard, 0), COALESCE(EXCLUDED.memory_request_hard, 0)),
 			memory_request_used = GREATEST(COALESCE(daily_cluster_quota_digests.memory_request_used, 0), COALESCE(EXCLUDED.memory_request_used, 0)),
 			memory_limit_hard = GREATEST(COALESCE(daily_cluster_quota_digests.memory_limit_hard, 0), COALESCE(EXCLUDED.memory_limit_hard, 0)),
-			memory_limit_used = GREATEST(COALESCE(daily_cluster_quota_digests.memory_limit_used, 0), COALESCE(EXCLUDED.memory_limit_used, 0))`,
+			memory_limit_used = GREATEST(COALESCE(daily_cluster_quota_digests.memory_limit_used, 0), COALESCE(EXCLUDED.memory_limit_used, 0)),
+			storage_request_hard = GREATEST(COALESCE(daily_cluster_quota_digests.storage_request_hard, 0), COALESCE(EXCLUDED.storage_request_hard, 0)),
+			storage_request_used = GREATEST(COALESCE(daily_cluster_quota_digests.storage_request_used, 0), COALESCE(EXCLUDED.storage_request_used, 0)),
+			pods_hard = GREATEST(COALESCE(daily_cluster_quota_digests.pods_hard, 0), COALESCE(EXCLUDED.pods_hard, 0)),
+			pods_used = GREATEST(COALESCE(daily_cluster_quota_digests.pods_used, 0), COALESCE(EXCLUDED.pods_used, 0)),
+			object_count_hard = GREATEST(COALESCE(daily_cluster_quota_digests.object_count_hard, 0), COALESCE(EXCLUDED.object_count_hard, 0)),
+			object_count_used = GREATEST(COALESCE(daily_cluster_quota_digests.object_count_used, 0), COALESCE(EXCLUDED.object_count_used, 0)),
+			namespaces = COALESCE(NULLIF(EXCLUDED.namespaces, ''), daily_cluster_quota_digests.namespaces)`,
 		agg.key.orgID, agg.key.clusterUUID, agg.key.clusterQuotaName, agg.key.reportDate,
 		nullableInt64Digest(agg.cpuRequestHard), nullableInt64Digest(agg.cpuRequestUsed),
 		nullableInt64Digest(agg.cpuLimitHard), nullableInt64Digest(agg.cpuLimitUsed),
 		nullableInt64Digest(agg.memoryRequestHard), nullableInt64Digest(agg.memoryRequestUsed),
 		nullableInt64Digest(agg.memoryLimitHard), nullableInt64Digest(agg.memoryLimitUsed),
+		nullableInt64Digest(agg.storageRequestHard), nullableInt64Digest(agg.storageRequestUsed),
+		nullableInt64Digest(agg.podsHard), nullableInt64Digest(agg.podsUsed),
+		nullableInt64Digest(agg.objectCountHard), nullableInt64Digest(agg.objectCountUsed),
+		nullableStringDigest(agg.namespaces),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert cluster quota digest %s: %w", agg.key.clusterQuotaName, err)
@@ -316,6 +419,13 @@ func upsertClusterQuotaDigest(ctx context.Context, pool *pgxpool.Pool, agg *clus
 
 func nullableInt64Digest(v int64) any {
 	if v == 0 {
+		return nil
+	}
+	return v
+}
+
+func nullableStringDigest(v string) any {
+	if v == "" {
 		return nil
 	}
 	return v
