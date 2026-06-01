@@ -67,9 +67,12 @@ sequenceDiagram
 ## Recommendation algorithm (v1)
 
 1. Load latest CRQ hard/used per `cluster_quota_name` from `daily_cluster_quota_digests`.
-2. Load **cluster-wide** aggregate of namespace quota recommendations from `quota_recommendation_sets` (sum across all namespaces on the cluster).
+2. Sum namespace quota recommendations from `quota_recommendation_sets` for namespaces in the
+   operator `namespaces` column (cluster-wide when empty).
 3. Apply headroom and utilization thresholds from [Configuration](#configuration) (same semantics as namespace `quota`).
-4. Classify `recommendation_type` and `risk_level`; on `tighten`, estimate monthly savings when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
+4. Classify `recommendation_type` and `risk_level`; on `tighten`, estimate monthly savings when
+   `ROS_SAVINGS_ESTIMATES_ENABLED=true` (CPU, memory, and storage when cost rates exist; pods
+   report `capacity_freed` only).
 
 **Namespace membership:** The operator exports a comma-separated `namespaces` column on
 `ros-openshift-cluster-quota-*.csv`. The engine sums namespace `quota_recommendation_sets`
@@ -177,6 +180,22 @@ Beyond CPU/memory request and limit hard/used, the operator also collects:
 | `pods_hard` / `pods_used` | `pods` |
 | `object_count_hard` / `object_count_used` | Sum of `count/*` resources |
 | `namespaces` | Distinct namespaces with `type=used` > 0 |
+
+### Object-count quotas (ingest only)
+
+`object_count_*` columns are persisted in digests for visibility but **do not** drive
+tighten/raise/optimal recommendations. Object counts are discrete limits without a utilization
+curve or cost-model rate; the actionable signal when a team hits the limit is **blocking**,
+already covered by notification code **72** (namespace quota) and **73** (CRQ at capacity).
+ROS ingests object-count metrics for reporting consistency only.
+
+### Savings by resource
+
+| Resource | Monthly savings | Capacity freed |
+|----------|-----------------|----------------|
+| CPU / memory request | Yes (hourly rates × 730 h/month) | `cpu_cores_freed`, `memory_bytes` |
+| Storage request | Yes when `storage_gb_request_per_month` (or usage fallback) is in effective rates | `storage_request_bytes` |
+| Pods | No monetary estimate | `pods_freed` on tighten only |
 
 ---
 
