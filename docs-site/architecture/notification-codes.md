@@ -2,7 +2,7 @@
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
-Use this page as a single lookup for **all 57 codes** across containers, namespaces, nodes,
+Use this page as a single lookup for **all 59 codes** across containers, namespaces, nodes,
 GPUs, PVCs, snapshots, and virtual machines.
 
 **Maintainer reference** (emitters, constants, migrations): `docs/architecture/notification-codes.md` in the repository.
@@ -99,6 +99,8 @@ having no actionable savings.
 | 55 | WARNING | VM | Network-saturated workload | Consider **n1** network-optimized instance type |
 | 56 | INFO | VM | vGPU profile recommended | Apply `recommended_vgpu_profile` on guest |
 | 57 | WARNING | VM | GPU time-slicing unsafe (frame buffer) | Do not time-slice; resize GPU or reduce FB pressure |
+| 58 | INFO | VM | Sequential I/O pattern | Consider storage optimized for throughput |
+| 59 | INFO | VM | Random I/O pattern | Consider storage optimized for IOPS |
 
 ---
 
@@ -137,7 +139,7 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–57**. Full VM notification table also appears in
+Codes **18–19**, **37–59**. Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#notifications).
 Abandoned VMs use **43** only (not **18**).
 

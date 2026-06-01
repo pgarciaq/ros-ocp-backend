@@ -37,12 +37,12 @@ When adding a code:
 1. Add `INSERT` in a new migration under `migrations/`.
 2. Add `Notif*` constant in `internal/engine/notifications.go` or domain file (`vm_notifications.go`, `gpu_timeslicing.go`).
 3. Emit from the appropriate engine function (see table below).
-4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–57** are VM-only JSONB today and are **not** in `Definitions`; extend through **57** when container APIs need them).
+4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–59** are VM-only JSONB today and are **not** in `Definitions`; extend through **59** when container APIs need them).
 5. Run `go test ./internal/notifications/...` (`TestDefinitionsMatchDB` catches DB/Go drift).
 
 ---
 
-## Master table (codes 1–57)
+## Master table (codes 1–59)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.
@@ -106,6 +106,8 @@ VM JSONB uses lowercase equivalents.
 | 55 | `VM_NETWORK_SATURATED` | WARNING | VM | Yes | Network-saturated workload; recommend n1 network-optimized instance type |
 | 56 | `VM_VGPU_PROFILE_RECOMMENDED` | INFO | VM | Yes | vGPU profile recommended — see `recommended_vgpu_profile` |
 | 57 | `VM_GPU_TIMESLICE_UNSAFE_FB` | WARNING | VM | Yes | GPU time-slicing not safe — frame-buffer usage too high for shared vGPU |
+| 58 | `VM_IO_SEQUENTIAL` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
+| 59 | `VM_IO_RANDOM` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
 
 ---
 
