@@ -574,7 +574,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 |------|-------|
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
-| **Smart co-location** | Affinity hints from network flow data |
+| **Smart co-location** | Affinity for communicating VMs — [Smart co-location (future)](#smart-co-location-future) |
 | **Network QoS (simplified)** | Notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block |
 | **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; Settings `storage_tiering` block — [Storage tiering hints](#storage-tiering-hints-6769) |
 | **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](../../../docs/design/vm-recommendations.md#full-storage-tiering-future) |
@@ -609,6 +609,40 @@ When enough daily digests exist in the term window, ROS classifies each day’s 
 These hints do not name a StorageClass or compute dollar savings; full tiering is [future work](../../../docs/design/vm-recommendations.md#full-storage-tiering-future).
 
 Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STORAGE_TIERING_*` (see [configuration](../configuration.md)).
+
+### Smart co-location (future) {#smart-co-location-future}
+
+**Goal:** Recommend that communicating VMs be placed on the same node (or rack/failure domain) to reduce network latency and bandwidth consumption.
+
+**Core requirement:** Knowledge of which VMs talk to each other and how much traffic flows between them. This is the fundamental signal that no simplified proxy can reliably replace.
+
+**Why no simplified version is feasible today:**
+
+| Proxy approach | Why it doesn't work well |
+|----------------|--------------------------|
+| Shared PVC | Already implemented (notification **62**). Co-location doesn't reduce PVC latency — storage is network-attached regardless of VM placement. |
+| Same-namespace + both network-heavy | Weak signal — two network-heavy VMs may talk to external services, not each other. |
+| Correlated CPU/network activity | Requires sub-daily (hourly) metric resolution. Daily digests are too coarse — trivial day/night correlation in all business VMs would generate false positives. |
+| Label-based grouping (`app=X`, `tier=Y`) | Good signal, but `app` labels are not on the ROS VM CSV today. |
+
+**What's already covered:** Notification **62** (`has_shared_storage`) provides the best available proxy for coupled VMs with current data. See [Placement and NUMA](#placement-and-numa).
+
+**Prerequisites to implement fully:**
+
+1. **App/service labels on ROS VM CSV** (operator enhancement) — cheapest unlock; enables label-based service group detection. Also improves same-node redundancy detection (notification **60**).
+2. **OVN flow logs or NetworkPolicy audit data** — real per-destination traffic volumes (high effort).
+3. **Per-destination network metrics** — custom eBPF exporter or OVN conntrack Prometheus exporter.
+4. **Sub-daily metric resolution** — hourly digests for meaningful activity correlation.
+
+**Algorithm (when data is available):** Build a weighted VM graph from traffic volumes → identify communicating clusters → if spread across nodes, recommend affinity → respect HA anti-affinity.
+
+**Shared unlock:** Exporting the `app` label on the ROS VM CSV also improves notifications **60** and **62**, not only co-location.
+
+**Estimated effort:** Medium-High (2–3 weeks including operator label export)  
+**Estimated value:** High for multi-tier applications (database + app + cache)  
+**Key blocker:** No per-destination traffic data from standard Prometheus metrics
+
+Maintainers: full analysis in [design doc](../../../docs/design/vm-recommendations.md#smart-co-location-future).
 
 ## Related documentation
 

@@ -631,7 +631,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 |------|-------|
 | **Network flow correlation** | Requires OVN flow logs or eBPF telemetry between VMs |
 | **Full NUMA optimization** | Requires LLC miss rate / perf counters per NUMA node |
-| **Smart co-location** | Requires network flow data to recommend affinity |
+| **Smart co-location** | See [Smart co-location (future)](#smart-co-location-future) below |
 | **Network QoS (simplified)** | **Implemented** — notifications **65**–**66** for network-bound VMs; see [Network QoS (simplified)](#network-qos-simplified) |
 | **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; see [Storage tiering (simplified)](#storage-tiering-simplified) |
 | **Storage tiering (full)** | See [Full storage tiering](#full-storage-tiering-future) below |
@@ -710,6 +710,48 @@ Beyond notifications, provide concrete NIC type change recommendations:
 **Estimated effort:** 2–3 weeks (including operator changes)  
 **Estimated value:** High for telecom/NFV workloads, medium for general enterprise  
 **Key challenge:** SR-IOV VFs are scarce hardware resources; must check availability before recommending
+
+### Smart co-location (future) {#smart-co-location-future}
+
+**Goal:** Recommend that communicating VMs be placed on the same node (or rack/failure domain) to reduce network latency and bandwidth consumption.
+
+**Core requirement:** Knowledge of which VMs talk to each other and how much traffic flows between them. This is the fundamental signal that no simplified proxy can reliably replace.
+
+**Why no simplified version is feasible today:**
+
+| Proxy approach | Why it doesn't work well |
+|----------------|--------------------------|
+| Shared PVC | Already implemented (notification **62**). Co-location doesn't reduce PVC latency — storage is network-attached regardless of VM placement. |
+| Same-namespace + both network-heavy | Weak signal — two network-heavy VMs may talk to external services, not each other. |
+| Correlated CPU/network activity | Requires sub-daily (hourly) metric resolution. Daily digests are too coarse — trivial day/night correlation in all business VMs would generate false positives. |
+| Label-based grouping (`app=X`, `tier=Y`) | Good signal, but `app` labels are not on the ROS VM CSV today. |
+
+**What's already covered:** Notification **62** (`has_shared_storage`, shared PVC / workload correlation) provides the best available proxy for coupled VMs with current data. See [Placement, correlated workloads, and NUMA (codes 60–63)](#placement-correlated-workloads-and-numa-codes-6063).
+
+**Prerequisites to implement fully:**
+
+1. **App/service labels on ROS VM CSV** (operator enhancement) — cheapest unlock; enables label-based service group detection. Also improves same-node redundancy detection (notification **60**).
+2. **OVN flow logs or NetworkPolicy audit data** — provides real per-destination traffic volumes. High effort (OVN integration or eBPF-based connection tracking).
+3. **Per-destination network metrics** — requires custom eBPF exporter or OVN conntrack Prometheus exporter.
+4. **Sub-daily metric resolution** — hourly digests would enable meaningful activity correlation analysis.
+
+**Algorithm (when data is available):**
+
+- Build a weighted graph: VMs as nodes, edge weight = traffic volume between them
+- Identify clusters of heavily-communicating VMs
+- For each cluster, check if members are spread across nodes
+- If spread: recommend co-location (affinity rule)
+- Respect anti-affinity constraints from HA requirements
+
+**Shared unlock with other features:** The `app` label on the ROS VM CSV would simultaneously improve:
+
+- Same-node redundancy detection (notification **60**) — group by real app identity instead of resource profile
+- Shared PVC correlation (notification **62**) — distinguish app-level coupling from coincidental profile matches
+- Smart co-location — identify service groups directly
+
+**Estimated effort:** Medium-High (2–3 weeks including operator label export)  
+**Estimated value:** High for multi-tier applications (database + app + cache patterns)  
+**Key blocker:** No per-destination traffic data available from standard Prometheus metrics
 
 ### Node consolidation (future) {#node-consolidation-future}
 
