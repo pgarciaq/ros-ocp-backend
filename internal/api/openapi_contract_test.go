@@ -533,6 +533,7 @@ func TestOpenAPI_VMSettings_ResponseFields(t *testing.T) {
 	assertObjectHasSpecProperties(t, resp["stability"].(map[string]interface{}), spec.componentSchema("VMStabilitySettings"), "stability")
 	assertObjectHasSpecProperties(t, resp["disk"].(map[string]interface{}), spec.componentSchema("VMDiskSettings"), "disk")
 	assertObjectHasSpecProperties(t, resp["io"].(map[string]interface{}), spec.componentSchema("VMIOSettings"), "io")
+	assertObjectHasSpecProperties(t, resp["gpu"].(map[string]interface{}), spec.componentSchema("VMGPUSettings"), "gpu")
 	_, ok := resp["cpu_adaptive_margin_enabled"].(bool)
 	assert.True(t, ok, "cpu_adaptive_margin_enabled must be a boolean")
 }

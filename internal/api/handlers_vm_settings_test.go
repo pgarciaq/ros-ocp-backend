@@ -69,6 +69,55 @@ func TestVMSettings_PUT_OutOfRangeValues(t *testing.T) {
 	assert.Equal(t, "error", resp["status"])
 }
 
+func TestVMSettings_GET_IncludesGPUClassificationThresholds(t *testing.T) {
+	orgID := "org-vm-settings-gpu-get-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/vm", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	gpu, ok := resp["gpu"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(500), gpu["idle_threshold_bp"])
+	assert.Equal(t, float64(3000), gpu["underutil_threshold_bp"])
+	assert.Equal(t, float64(0), gpu["fb_saturation_mib"])
+	assert.Equal(t, float64(8500), gpu["compute_saturation_threshold_bp"])
+}
+
+func TestVMSettings_PUT_GPUClassificationThresholds(t *testing.T) {
+	orgID := "org-vm-settings-gpu-put-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	body := bytes.NewReader([]byte(`{
+		"gpu": {
+			"idle_threshold_bp": 600,
+			"underutil_threshold_bp": 3500,
+			"fb_saturation_mib": 8192,
+			"compute_saturation_threshold_bp": 8800
+		}
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	gpu, ok := resp["gpu"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(600), gpu["idle_threshold_bp"])
+	assert.Equal(t, float64(3500), gpu["underutil_threshold_bp"])
+	assert.Equal(t, float64(8192), gpu["fb_saturation_mib"])
+	assert.Equal(t, float64(8800), gpu["compute_saturation_threshold_bp"])
+}
+
 func TestVMSettings_PUT_PartialUpdate(t *testing.T) {
 	orgID := "org-vm-settings-partial-" + uuid.New().String()[:8]
 	e := setupVMSettingsPUTHandler(t, orgID)

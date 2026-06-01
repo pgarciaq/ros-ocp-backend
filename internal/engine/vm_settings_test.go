@@ -164,6 +164,89 @@ func TestResolveVMSettings_EnvLocksCPUAdaptiveMargin(t *testing.T) {
 	assert.Contains(t, resp.LockedFields, "cpu_adaptive_margin_enabled")
 }
 
+func TestGetVMSettingsForAPI_IncludesGPUClassificationThresholds(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-vm-gpu-classification-api"
+
+	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(500), resp.GPU.IdleThresholdBP)
+	assert.Equal(t, int32(3000), resp.GPU.UnderutilThresholdBP)
+	assert.Equal(t, int32(0), resp.GPU.FBSaturationMiB)
+	assert.Equal(t, int32(8500), resp.GPU.ComputeSaturationThresholdBP)
+}
+
+func TestUpdateVMSettings_GPUClassificationThresholds(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-vm-gpu-classification-put"
+
+	require.NoError(t, UpdateVMSettings(ctx, pool, orgID, json.RawMessage(`{
+		"gpu": {
+			"idle_threshold_bp": 800,
+			"underutil_threshold_bp": 4000,
+			"fb_saturation_mib": 16384,
+			"compute_saturation_threshold_bp": 9000
+		}
+	}`)))
+
+	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.08, got.GPUIdleThreshold, 1e-9)
+	assert.InDelta(t, 0.40, got.GPUUnderutilThreshold, 1e-9)
+	assert.InDelta(t, 16384, got.GPUFBSaturationMiB, 1e-9)
+	assert.InDelta(t, 0.90, got.GPUComputeSaturationThreshold, 1e-9)
+
+	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(800), resp.GPU.IdleThresholdBP)
+	assert.Equal(t, int32(4000), resp.GPU.UnderutilThresholdBP)
+	assert.Equal(t, int32(16384), resp.GPU.FBSaturationMiB)
+	assert.Equal(t, int32(9000), resp.GPU.ComputeSaturationThresholdBP)
+}
+
+func TestValidateVMSettingsResponse_RejectsInvalidGPUClassificationOrder(t *testing.T) {
+	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp.GPU.IdleThresholdBP = 5000
+	resp.GPU.UnderutilThresholdBP = 3000
+
+	err := validateVMSettingsResponse(resp)
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "idle_threshold_bp")
+}
+
+func TestResolveVMSettings_EnvLocksGPUClassification(t *testing.T) {
+	saved := defaultVMRecConfig
+	t.Cleanup(func() { defaultVMRecConfig = saved })
+
+	t.Setenv("ROS_VM_GPU_IDLE_THRESHOLD", "0.10")
+	config.ResetForTest()
+	InitVMRecDefaults(config.GetConfig())
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-vm-gpu-classification-env"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'vm', '{"gpu": {"idle_threshold_bp": 200}}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.10, got.GPUIdleThreshold, 1e-9)
+
+	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(1000), resp.GPU.IdleThresholdBP)
+	assert.Contains(t, resp.LockedFields, "gpu.idle_threshold_bp")
+}
+
 func TestResolveVMSettings_NoEnv_DBWins(t *testing.T) {
 	saved := defaultVMRecConfig
 	t.Cleanup(func() { defaultVMRecConfig = saved })
