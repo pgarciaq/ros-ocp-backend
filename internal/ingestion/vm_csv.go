@@ -233,6 +233,12 @@ func vmColumnPresent(idx vmHeaderIdx, col string) bool {
 	}
 }
 
+// CanonicalVMUsageCSVHeader returns the comma-separated base column header for ros-openshift-vm-usage CSV.
+// Optional columns (restart_count, GPU metrics) may be appended by newer operators.
+func CanonicalVMUsageCSVHeader() string {
+	return strings.Join(vmCSVExpectedColumns, ",")
+}
+
 // ParseVMCSVRows parses ros-openshift-vm-usage CSV content into VMRow values.
 func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 	reader := csv.NewReader(r)

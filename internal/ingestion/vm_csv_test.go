@@ -78,6 +78,18 @@ not-a-timestamp,2026-05-01T12:15:00Z,bad-vm,ns,node,linux,100,200,300,1024,2048,
 	assert.Equal(t, "good-vm", rows[0].VMName)
 }
 
+func TestVMParseCSVRows_OldFormatWithoutRestartCount(t *testing.T) {
+	// Legacy operator CSV: 18 required columns only (no restart_count or GPU columns).
+	csv := vmCSVHeader() + `
+2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,legacy-vm,apps,node-a,linux,500,1000,2000,524288,1048576,1572864,10737418240,53687091200,107374182400,120,80,1048576,524288
+`
+	rows, err := ParseVMCSVRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Nil(t, rows[0].RestartCount)
+	assert.Equal(t, "legacy-vm", rows[0].VMName)
+}
+
 func TestVMParseCSVRows_WrongHeader(t *testing.T) {
 	csv := `interval_start,interval_end,vm_name
 2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,vm1
