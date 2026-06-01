@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,7 +13,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/platform-go-middlewares/identity"
@@ -25,6 +29,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 
@@ -144,6 +149,23 @@ func schemaPropertyNames(schema map[string]interface{}) []string {
 	return names
 }
 
+func (spec openAPISpecDoc) componentSchema(name string) map[string]interface{} {
+	raw, ok := spec.Components.Schemas[name]
+	if !ok {
+		return nil
+	}
+	return spec.resolveSchema(raw)
+}
+
+func assertObjectHasSpecProperties(t *testing.T, obj map[string]interface{}, schema map[string]interface{}, label string) {
+	t.Helper()
+	require.NotNil(t, schema, "%s schema must be resolved from openapi.json", label)
+	for _, prop := range schemaPropertyNames(schema) {
+		_, ok := obj[prop]
+		assert.True(t, ok, "%s missing spec-defined property %q", label, prop)
+	}
+}
+
 func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[string]interface{}) {
 	t.Helper()
 	require.NotNil(t, schema, "response schema must be resolved from openapi.json")
@@ -153,8 +175,11 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 
 	// Fields documented in OpenAPI but omitted from JSON when empty.
 	optionalFields := map[string]struct{}{
-		"warnings":          {},
-		"settings_locked":   {}, // omitted when false (json omitempty) on settings GET responses
+		"warnings":                {},
+		"settings_locked":         {}, // omitted when false (json omitempty) on settings GET responses
+		"locked_fields":           {}, // omitted when no env-locked VM settings fields
+		"gpu":                     {}, // omitted when VM has no GPU recommendation block
+		"daily_digests":           {}, // omitted on list; detail should include when digest data exists
 	}
 
 	if required, ok := schema["required"].([]interface{}); ok && len(required) > 0 {
@@ -174,6 +199,81 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 		_, ok := resp[prop]
 		assert.True(t, ok, "response missing spec-defined property %q", prop)
 	}
+}
+
+func assertResponseDataItemsHaveSpecProperties(t *testing.T, body []byte, itemSchema map[string]interface{}) {
+	t.Helper()
+	require.NotNil(t, itemSchema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	data, ok := resp["data"].([]interface{})
+	require.True(t, ok, "response must have data array")
+	require.NotEmpty(t, data, "data array must have at least one item for schema validation")
+
+	first, ok := data[0].(map[string]interface{})
+	require.True(t, ok)
+	assertObjectHasSpecProperties(t, first, itemSchema, "data[0]")
+}
+
+func seedOpenAPIVMRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (clusterUUID, vmName, namespace string) {
+	t.Helper()
+	ctx := context.Background()
+	clusterUUID = testutil.TestClusterUUID
+	vmName = "openapi-vm-01"
+	namespace = "openapi-ns"
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-vm', 'src-openapi', now()) ON CONFLICT DO NOTHING`,
+		clusterUUID,
+	)
+	require.NoError(t, err)
+
+	clusterID := uuid.MustParse(clusterUUID)
+	now := time.Now().UTC()
+	rec := model.VMRecommendation{
+		OrgID:                orgID,
+		ClusterUUID:          clusterID,
+		VMName:               vmName,
+		Namespace:            namespace,
+		GuestOS:              "linux",
+		CurrentVCPU:          4,
+		CurrentMemoryGiB:     8,
+		RecommendedVCPU:      4,
+		RecommendedMemoryGiB: 16,
+		Confidence:           "high",
+		Term:                 "short_term",
+		Engine:               "cost",
+		Notifications:        []byte(`[]`),
+		LastRecommendedAt:    now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
+
+	bucket := time.Now().UTC().Truncate(24 * time.Hour)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO daily_vm_digests (
+			org_id, cluster_uuid, vm_name, namespace, bucket_date, sample_count
+		) VALUES ($1, $2, $3, $4, $5, 4)
+		ON CONFLICT DO NOTHING`,
+		orgID, clusterUUID, vmName, namespace, bucket,
+	)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO vm_recommendation_history (
+			org_id, cluster_id, vm_name, namespace, term, engine,
+			recommended_vcpu, recommended_memory_gib, confidence
+		) VALUES ($1, $2, $3, $4, 'short_term', 'cost', 4, 16, 'high')`,
+		orgID, clusterUUID, vmName, namespace,
+	)
+	require.NoError(t, err)
+	return clusterUUID, vmName, namespace
 }
 
 func enableAllPluginsForContractTest(t *testing.T) {
@@ -359,6 +459,106 @@ func TestOpenAPI_VMRecommendations_ResponseFields(t *testing.T) {
 
 	schema := getResponseSchema(spec, "/recommendations/openshift/vm", http.MethodGet, "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_VMRecommendationDetail_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-vm-detail"
+	e := setupContractTestEcho(t, pool, orgID)
+	clusterUUID, vmName, namespace := seedOpenAPIVMRecommendation(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/vm/detail?cluster_uuid=%s&vm_name=%s&namespace=%s&term=short_term&engine=cost",
+			apiV1Prefix, clusterUUID, vmName, namespace))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/vm/detail", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var detail map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	digests, ok := detail["daily_digests"].([]interface{})
+	assert.True(t, ok && len(digests) > 0, "detail should include daily_digests when digest data is seeded")
+}
+
+func TestOpenAPI_VMRecommendationHistory_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-vm-history"
+	e := setupContractTestEcho(t, pool, orgID)
+	clusterUUID, vmName, namespace := seedOpenAPIVMRecommendation(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/vms/%s/history?cluster_uuid=%s&namespace=%s&term=short_term&engine=cost&limit=10&offset=0",
+			apiV1Prefix, vmName, clusterUUID, namespace))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/vms/{vm_name}/history", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("VMRecommendationHistoryRow"))
+}
+
+func TestOpenAPI_VMSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-vm-settings"
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/vm")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assertObjectHasSpecProperties(t, resp["thresholds"].(map[string]interface{}), spec.componentSchema("VMThresholdSettings"), "thresholds")
+	assertObjectHasSpecProperties(t, resp["memory_floors"].(map[string]interface{}), spec.componentSchema("VMMemoryFloorsSettings"), "memory_floors")
+	assertObjectHasSpecProperties(t, resp["stability"].(map[string]interface{}), spec.componentSchema("VMStabilitySettings"), "stability")
+	assertObjectHasSpecProperties(t, resp["disk"].(map[string]interface{}), spec.componentSchema("VMDiskSettings"), "disk")
+	assertObjectHasSpecProperties(t, resp["io"].(map[string]interface{}), spec.componentSchema("VMIOSettings"), "io")
+	_, ok := resp["cpu_adaptive_margin_enabled"].(bool)
+	assert.True(t, ok, "cpu_adaptive_margin_enabled must be a boolean")
+}
+
+func TestOpenAPI_VMTermSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-vm-terms"
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/vm/terms")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm/terms", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	terms, ok := resp["terms"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, terms)
+	first, ok := terms[0].(map[string]interface{})
+	require.True(t, ok)
+	for _, prop := range []string{"name", "window_days", "min_data_days", "decay_halflife_hours", "locked", "is_default"} {
+		_, exists := first[prop]
+		assert.True(t, exists, "terms[0] missing property %q", prop)
+	}
 }
 
 func TestOpenAPI_AllSpecPathsHaveRoutes(t *testing.T) {
