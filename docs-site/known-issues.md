@@ -677,8 +677,20 @@ Growth trend projection (linear regression on daily avg usage) estimates
 days-to-full for capacity planning.
 
 **API status:** `GET /recommendations/openshift/pvcs` with filters for
-`cluster_uuid`, `namespace`, `recommendation_type`, pagination. Responses include
-`estimated_monthly_savings` when Masu storage rates are available.
+`filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[term]`,
+`filter[storageclass]`, `order_by`/`order_how`, and pagination.
+`GET /recommendations/openshift/pvcs/detail` returns all terms plus daily usage history.
+Responses include `estimated_monthly_savings` when Masu storage rates are available.
+
+**VM–PVC correlation (known limitation):** The koku-metrics-operator **cost** VM CSV
+(`cm-openshift-vm-usage`) includes `vm_persistentvolumeclaim_name`, and the **storage**
+CSV includes a `pod` column (often a `virt-launcher-*` name). ROS does not ingest either
+field today: `ParseVMCSVRows` ignores PVC/pod columns on VM usage, and PVC ingestion
+did not persist `pod` until migration **000114**. VM shared-storage notifications
+([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) therefore use a
+namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
+requires ROS to ingest `pod` on storage digests and either `vm_persistentvolumeclaim_name`
+or `exported_pod` on VM digests (operator ROS VM CSV would need the latter column added).
 
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
