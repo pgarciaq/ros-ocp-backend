@@ -67,6 +67,9 @@ type vmGPURecommendation struct {
 	RecommendedGPUAction      string                   `json:"recommended_gpu_action,omitempty"`
 	RecommendedGPUProfile     string                   `json:"recommended_gpu_profile,omitempty"`
 	RecommendedTimeSliceCount int32                    `json:"recommended_time_slice_count,omitempty"`
+	GPUTimeSliceConfidence    string                   `json:"gpu_timeslice_confidence,omitempty"`
+	GPUTimeSliceRationale     string                   `json:"gpu_timeslice_rationale,omitempty"`
+	RecommendedVGPUProfile    string                   `json:"recommended_vgpu_profile,omitempty"`
 	GPUUtilizationAvgBP       int32                    `json:"gpu_utilization_avg_bp"`
 	GPUDevices                []model.GPUDeviceDigest  `json:"gpu_devices,omitempty"`
 }
@@ -471,6 +474,9 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			RecommendedGPUAction:      r.RecommendedGPUAction,
 			RecommendedGPUProfile:     r.RecommendedGPUProfile,
 			RecommendedTimeSliceCount: r.RecommendedTimeSliceCount,
+			GPUTimeSliceConfidence:    r.GPUTimeSliceConfidence,
+			GPUTimeSliceRationale:     r.GPUTimeSliceRationale,
+			RecommendedVGPUProfile:    r.RecommendedVGPUProfile,
 			GPUUtilizationAvgBP:       r.GPUUtilizationAvgBP,
 		}
 	}

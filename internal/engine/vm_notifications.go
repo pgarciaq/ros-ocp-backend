@@ -43,6 +43,9 @@ const (
 	NotifVMGPUMemorySaturated     int16 = 52
 	NotifVMGPUComputeSaturated    int16 = 53
 	NotifVMGPUMixedIdle           int16 = 54
+	NotifVMVGPUProfileRecommended int16 = 56
+	NotifVMGPUTimeSliceUnsafeFB   int16 = 57
+	NotifVMNetworkSaturated       int16 = 55
 )
 
 type vmNotificationParams struct {
@@ -65,6 +68,7 @@ type vmNotificationParams struct {
 	CrashLoopRestarts        int
 	DownsizeHeld             bool
 	DownsizeStabilityDays    int
+	IsNetworkBound           bool
 }
 
 func vmBuildNotifications(p vmNotificationParams) []byte {
@@ -205,6 +209,13 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 				"Downsize recommendation suppressed: usage not consistently below threshold for %d days",
 				days,
 			),
+		})
+	}
+	if p.IsNetworkBound {
+		out = append(out, VMNotification{
+			Code:    NotifVMNetworkSaturated,
+			Type:    vmNotifTypeWarning,
+			Message: "Network-saturated workload: recommend n1 network-optimized instance type",
 		})
 	}
 

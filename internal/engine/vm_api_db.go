@@ -101,7 +101,9 @@ func ListVMRecommendations(
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications,
 			gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
-			recommended_gpu_profile, recommended_time_slice_count, gpu_utilization_avg_bp,
+			recommended_gpu_profile, recommended_time_slice_count,
+			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
+			gpu_utilization_avg_bp,
 			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations` + where +
 		fmt.Sprintf(` ORDER BY %s %s LIMIT $%d OFFSET $%d`, orderCol, orderHow, argLimit, argOffset)
@@ -152,7 +154,9 @@ func GetVMRecommendationDetail(
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications,
 			gpu_count, gpu_model, gpu_classification, recommended_gpu_action,
-			recommended_gpu_profile, recommended_time_slice_count, gpu_utilization_avg_bp,
+			recommended_gpu_profile, recommended_time_slice_count,
+			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
+			gpu_utilization_avg_bp,
 			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
@@ -354,7 +358,9 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.DiskDaysUntilFull, &r.DiskGrowthGiBPerDay, &r.DiskRecommendedExpandGiB,
 		&r.Notifications,
 		&r.GPUCount, &r.GPUModel, &r.GPUClassification, &r.RecommendedGPUAction,
-		&r.RecommendedGPUProfile, &r.RecommendedTimeSliceCount, &r.GPUUtilizationAvgBP,
+		&r.RecommendedGPUProfile, &r.RecommendedTimeSliceCount,
+		&r.GPUTimeSliceConfidence, &r.GPUTimeSliceRationale, &r.RecommendedVGPUProfile,
+		&r.GPUUtilizationAvgBP,
 		&r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {

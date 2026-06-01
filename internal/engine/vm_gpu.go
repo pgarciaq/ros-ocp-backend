@@ -30,6 +30,9 @@ type vmGPUAnalysis struct {
 	GPUModel                  string
 	MIGProfile                string
 	RecommendedTimeSliceCount int32
+	GPUTimeSliceConfidence    string
+	GPUTimeSliceRationale     string
+	RecommendedVGPUProfile    string
 	GPUDevices                []model.GPUDeviceDigest
 	NotificationCodes         []int16
 	RequireGPUInstance        bool
@@ -37,11 +40,15 @@ type vmGPUAnalysis struct {
 }
 
 type vmDeviceClassification struct {
-	classification string
-	action         string
-	profile        string
-	timeSlices     int32
-	severity       int // higher = worse (more resource-hungry)
+	classification       string
+	action               string
+	profile              string
+	timeSlices           int32
+	timeSliceConfidence  string
+	timeSliceRationale   string
+	vgpuProfile          string
+	fbTimeSliceUnsafe    bool
+	severity             int // higher = worse (more resource-hungry)
 }
 
 // AnalyzeVMGPU runs GPU classification for API detail enrichment.
@@ -64,6 +71,8 @@ func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis 
 	out.GPUModel = vmLatestGPUModel(digests)
 	out.MIGProfile = vmLatestMIGProfile(digests)
 
+	obsDays := vmGPUObservationDays(digests)
+
 	var (
 		worst       vmDeviceClassification
 		idleCount   int
@@ -72,7 +81,7 @@ func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis 
 		sumUtilBP   int64
 	)
 	for i, dev := range devices {
-		cls := classifyGPUDevice(dev, cfg)
+		cls := classifyGPUDevice(dev, cfg, obsDays)
 		if cls.classification == "idle" {
 			idleCount++
 		} else {
@@ -93,19 +102,39 @@ func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis 
 	} else {
 		out.UtilizationAvgBP = vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUUtilAvgBP })
 		maxFBUsed = vmMaxFloat(digests, func(d model.DailyVMDigest) float64 { return d.GPUFBUsedMaxMiB })
-		worst = classifyGPULegacyAggregate(digests, cfg, maxFBUsed, out.UtilizationAvgBP)
+		worst = classifyGPULegacyAggregate(digests, cfg, maxFBUsed, out.UtilizationAvgBP, obsDays)
 	}
 
 	out.Classification = worst.classification
 	out.Action = worst.action
 	out.Profile = worst.profile
 	out.RecommendedTimeSliceCount = worst.timeSlices
+	out.GPUTimeSliceConfidence = worst.timeSliceConfidence
+	out.GPUTimeSliceRationale = worst.timeSliceRationale
+	out.RecommendedVGPUProfile = worst.vgpuProfile
+	if out.RecommendedVGPUProfile == "" && len(devices) > 0 && worst.classification == "underutilized" {
+		ts := RecommendVMTimeSlicing(devices, obsDays, cfg)
+		out.RecommendedVGPUProfile = ts.RecommendedVGPUProfile
+		if out.GPUTimeSliceConfidence == "" {
+			out.GPUTimeSliceConfidence = ts.Confidence
+		}
+		if out.GPUTimeSliceRationale == "" {
+			out.GPUTimeSliceRationale = ts.Rationale
+		}
+	}
 
 	if idleCount > 0 && activeCount > 0 {
 		out.NotificationCodes = append(out.NotificationCodes, NotifVMGPUMixedIdle)
 	}
 	for _, code := range vmGPUClassificationNotificationCodes(worst.classification) {
 		out.NotificationCodes = append(out.NotificationCodes, code)
+	}
+	if out.RecommendedVGPUProfile != "" &&
+		(worst.action == vmGPUActionEnableTimeSlicing || worst.action == vmGPUActionConsiderVGPUOrMIG) {
+		out.NotificationCodes = append(out.NotificationCodes, NotifVMVGPUProfileRecommended)
+	}
+	if worst.fbTimeSliceUnsafe {
+		out.NotificationCodes = append(out.NotificationCodes, NotifVMGPUTimeSliceUnsafeFB)
 	}
 
 	out.RequireGPUInstance = activeCount > 0 || out.GPUCount > 0
@@ -137,6 +166,7 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 		utilAvg   []int32
 		smAvg     []int32
 		tensorAvg []int32
+		dramAvg   []int32
 	}
 	byUUID := make(map[string]*acc)
 
@@ -164,6 +194,7 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 			a.utilAvg = append(a.utilAvg, dev.UtilAvgBP)
 			a.smAvg = append(a.smAvg, dev.SMActiveAvgBP)
 			a.tensorAvg = append(a.tensorAvg, dev.TensorAvgBP)
+			a.dramAvg = append(a.dramAvg, dev.DRAMAvgBP)
 			if dev.UtilMaxBP > a.UtilMaxBP {
 				a.UtilMaxBP = dev.UtilMaxBP
 			}
@@ -199,6 +230,13 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 			}
 			a.TensorAvgBP = int32(sum / int64(len(a.tensorAvg)))
 		}
+		if len(a.dramAvg) > 0 {
+			var sum int64
+			for _, v := range a.dramAvg {
+				sum += int64(v)
+			}
+			a.DRAMAvgBP = int32(sum / int64(len(a.dramAvg)))
+		}
 		out = append(out, a.GPUDeviceDigest)
 	}
 	return out
@@ -233,7 +271,7 @@ func vmCanonicalGPUModel(modelName string) string {
 	return modelName
 }
 
-func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig) vmDeviceClassification {
+func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig, observationDays int) vmDeviceClassification {
 	dev.Model = vmCanonicalGPUModel(dev.Model)
 	idleThresholdBP := int32(cfg.GPUIdleThreshold * 10000)
 	underutilBP := int32(cfg.GPUUnderutilThreshold * 10000)
@@ -267,12 +305,31 @@ func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig) vmDeviceClass
 				severity:       2,
 			}
 		}
-		slices := recommendedTimeSliceCount(dev.UtilAvgBP)
+		ts := RecommendVMTimeSlicingForDevice(dev, observationDays, cfg)
+		if ts.EnableTimeSlicing && ts.RecommendedSliceCount >= cfg.GPUTimeSliceMinReplicas {
+			return vmDeviceClassification{
+				classification:      "underutilized",
+				action:              vmGPUActionEnableTimeSlicing,
+				timeSlices:          ts.RecommendedSliceCount,
+				timeSliceConfidence: ts.Confidence,
+				timeSliceRationale:  ts.Rationale,
+				vgpuProfile:         ts.RecommendedVGPUProfile,
+				severity:            2,
+			}
+		}
+		action := vmGPUActionConsiderVGPUOrMIG
+		if ts.FBUnsafe {
+			action = vmGPUActionConsiderVGPUOrMIG
+		}
 		return vmDeviceClassification{
-			classification: "underutilized",
-			action:         vmGPUActionEnableTimeSlicing,
-			timeSlices:     slices,
-			severity:       2,
+			classification:      "underutilized",
+			action:              action,
+			profile:             ts.RecommendedVGPUProfile,
+			timeSliceConfidence: ts.Confidence,
+			timeSliceRationale:  ts.Rationale,
+			vgpuProfile:         ts.RecommendedVGPUProfile,
+			fbTimeSliceUnsafe:   ts.FBUnsafe,
+			severity:            2,
 		}
 	case fbSatMiB > 0 && dev.FBUsedMaxMiB >= fbSatMiB:
 		return vmDeviceClassification{classification: "memory_saturated", action: vmGPUActionLargerGPU, severity: 4}
@@ -283,7 +340,7 @@ func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig) vmDeviceClass
 	}
 }
 
-func classifyGPULegacyAggregate(digests []model.DailyVMDigest, cfg VMRecConfig, maxFB float64, avgUtil int32) vmDeviceClassification {
+func classifyGPULegacyAggregate(digests []model.DailyVMDigest, cfg VMRecConfig, maxFB float64, avgUtil int32, observationDays int) vmDeviceClassification {
 	dev := model.GPUDeviceDigest{
 		UUID:          "gpu-0",
 		Model:         vmLatestGPUModel(digests),
@@ -291,10 +348,11 @@ func classifyGPULegacyAggregate(digests []model.DailyVMDigest, cfg VMRecConfig, 
 		FBUsedMaxMiB:  maxFB,
 		SMActiveAvgBP: vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUSMActiveAvgBP }),
 		TensorAvgBP:   vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUTensorAvgBP }),
+		DRAMAvgBP:     vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUDRAMAvgBP }),
 		MIGProfile:    vmLatestMIGProfile(digests),
 		MaxSlices:     vmLatestMaxSlices(digests),
 	}
-	return classifyGPUDevice(dev, cfg)
+	return classifyGPUDevice(dev, cfg, observationDays)
 }
 
 func migProfileForSliceCount(modelName string, slices int32) string {
@@ -454,6 +512,18 @@ func vmNotificationForGPUCode(code int16) VMNotification {
 			Code:    NotifVMGPUMixedIdle,
 			Type:    vmNotifTypeWarning,
 			Message: "One or more GPUs are idle while others are active — consider reducing GPU count",
+		}
+	case NotifVMVGPUProfileRecommended:
+		return VMNotification{
+			Code:    NotifVMVGPUProfileRecommended,
+			Type:    vmNotifTypeInfo,
+			Message: "vGPU profile recommended — see recommended_vgpu_profile in GPU details",
+		}
+	case NotifVMGPUTimeSliceUnsafeFB:
+		return VMNotification{
+			Code:    NotifVMGPUTimeSliceUnsafeFB,
+			Type:    vmNotifTypeWarning,
+			Message: "GPU time-slicing not safe — frame-buffer usage too high for shared vGPU",
 		}
 	default:
 		return VMNotification{Code: code, Type: vmNotifTypeInfo, Message: "GPU recommendation"}

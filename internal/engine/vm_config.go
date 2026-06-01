@@ -64,6 +64,19 @@ type VMRecConfig struct {
 	GPUUnderutilThreshold         float64 // default 0.30 (30%)
 	GPUFBSaturationMiB            float64 // default 0 (auto-detect from model catalog)
 	GPUComputeSaturationThreshold float64 // default 0.85 (85%)
+
+	// vGPU time-slicing (non-MIG passthrough)
+	GPUTimeSliceMinReplicas            int32 // default 2
+	GPUTimeSliceMaxReplicas            int32 // default 16
+	GPUTimeSliceFBSafetyThresholdBP    int32 // default 8000 (80% FB → do not time-slice)
+	GPUTimeSliceDRAMPenaltyThresholdBP int32 // default 5000 (50% DRAM → reduce max slices)
+
+	// Network-optimized (n1) classification
+	NetworkThroughputThresholdBPS int64 // default 62_500_000 (~500 Mbps)
+	NetworkPPSThreshold           int64 // default 100_000
+	NetworkDropRatioBP            int32 // default 10 (0.1%)
+	NetworkSustainedDays          int   // default 7
+	EnableNetworkSeries           bool  // default true
 }
 
 // DefaultVMRecConfig returns the compiled defaults for VM recommendations.
@@ -97,7 +110,16 @@ func DefaultVMRecConfig() VMRecConfig {
 		GPUIdleThreshold:              0.05,
 		GPUUnderutilThreshold:         0.30,
 		GPUFBSaturationMiB:            0,
-		GPUComputeSaturationThreshold: 0.85,
+		GPUComputeSaturationThreshold:      0.85,
+		GPUTimeSliceMinReplicas:            2,
+		GPUTimeSliceMaxReplicas:            16,
+		GPUTimeSliceFBSafetyThresholdBP:    8000,
+		GPUTimeSliceDRAMPenaltyThresholdBP: 5000,
+		NetworkThroughputThresholdBPS: 62_500_000,
+		NetworkPPSThreshold:           100_000,
+		NetworkDropRatioBP:            10,
+		NetworkSustainedDays:          7,
+		EnableNetworkSeries:           true,
 	}
 }
 
@@ -201,6 +223,33 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"); ok {
 		base.GPUComputeSaturationThreshold = cfg.VMGPUComputeSaturationThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"); ok {
+		base.GPUTimeSliceMinReplicas = cfg.VMGPUTimeSliceMinReplicas
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_TIMESLICE_MAX_REPLICAS"); ok {
+		base.GPUTimeSliceMaxReplicas = cfg.VMGPUTimeSliceMaxReplicas
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP"); ok {
+		base.GPUTimeSliceFBSafetyThresholdBP = cfg.VMGPUTimeSliceFBSafetyBP
+	}
+	if _, ok := os.LookupEnv("ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP"); ok {
+		base.GPUTimeSliceDRAMPenaltyThresholdBP = cfg.VMGPUTimeSliceDRAMPenaltyBP
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS"); ok {
+		base.NetworkThroughputThresholdBPS = cfg.VMNetworkThroughputThresholdBPS
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_PPS_THRESHOLD"); ok {
+		base.NetworkPPSThreshold = cfg.VMNetworkPPSThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_DROP_RATIO_BP"); ok {
+		base.NetworkDropRatioBP = cfg.VMNetworkDropRatioBP
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_SUSTAINED_DAYS"); ok {
+		base.NetworkSustainedDays = cfg.VMNetworkSustainedDays
+	}
+	if _, ok := os.LookupEnv("ROS_VM_ENABLE_NETWORK_SERIES"); ok {
+		base.EnableNetworkSeries = cfg.VMEnableNetworkSeries
 	}
 	return base
 }

@@ -1,0 +1,75 @@
+# NVIDIA vGPU (GRID) profile catalog for OpenShift Virtualization recommendations.
+# Profiles are matched when a VM uses passthrough/vGPU on models that support GRID licensing.
+#
+# fb_mib: frame buffer per vGPU instance
+# max_instances: maximum concurrent vGPU instances per physical GPU (typical licensing limit)
+
+models:
+  A100_80GB:
+    supported_models: ["A100_80GB", "A100"]
+    profiles:
+      - name: grid_a100-1q
+        fb_mib: 1024
+        max_instances: 20
+      - name: grid_a100-2q
+        fb_mib: 2048
+        max_instances: 10
+      - name: grid_a100-3q
+        fb_mib: 3072
+        max_instances: 7
+      - name: grid_a100-4q
+        fb_mib: 4096
+        max_instances: 5
+      - name: grid_a100-6q
+        fb_mib: 6144
+        max_instances: 3
+      - name: grid_a100-10q
+        fb_mib: 10240
+        max_instances: 2
+      - name: grid_a100-20q
+        fb_mib: 20480
+        max_instances: 1
+      - name: grid_a100-40q
+        fb_mib: 40960
+        max_instances: 1
+
+  A30:
+    supported_models: ["A30"]
+    profiles:
+      - name: grid_a30-1q
+        fb_mib: 1024
+        max_instances: 24
+      - name: grid_a30-2q
+        fb_mib: 2048
+        max_instances: 12
+      - name: grid_a30-4q
+        fb_mib: 4096
+        max_instances: 6
+      - name: grid_a30-8q
+        fb_mib: 8192
+        max_instances: 3
+      - name: grid_a30-12q
+        fb_mib: 12288
+        max_instances: 2
+      - name: grid_a30-24q
+        fb_mib: 24576
+        max_instances: 1
+
+  T4:
+    supported_models: ["T4"]
+    profiles:
+      - name: grid_t4-1q
+        fb_mib: 1024
+        max_instances: 16
+      - name: grid_t4-2q
+        fb_mib: 2048
+        max_instances: 8
+      - name: grid_t4-4q
+        fb_mib: 4096
+        max_instances: 4
+      - name: grid_t4-8q
+        fb_mib: 8192
+        max_instances: 2
+      - name: grid_t4-16q
+        fb_mib: 16384
+        max_instances: 1

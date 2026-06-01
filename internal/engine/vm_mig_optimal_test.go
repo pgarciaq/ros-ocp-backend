@@ -60,7 +60,7 @@ func TestVGPU_MIGCapable_RecommendsProfile(t *testing.T) {
 		SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 1500, FBUsedMaxMiB: 4096,
 		MIGProfile: "7g.40gb",
 	}
-	cls := classifyGPUDevice(dev, DefaultVMRecConfig())
+	cls := classifyGPUDevice(dev, DefaultVMRecConfig(), 7)
 	assert.Equal(t, vmGPUActionUseMIGProfile, cls.action)
 	assert.NotEmpty(t, cls.profile)
 }
@@ -70,9 +70,11 @@ func TestVGPU_NotMIGCapable_RecommendsTimeSlicing(t *testing.T) {
 		UUID: "gpu-1", Model: "NVIDIA T4",
 		SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 2000,
 	}
-	cls := classifyGPUDevice(dev, DefaultVMRecConfig())
+	cls := classifyGPUDevice(dev, DefaultVMRecConfig(), 7)
 	assert.Equal(t, vmGPUActionEnableTimeSlicing, cls.action)
-	assert.Equal(t, int32(5), cls.timeSlices)
+	// SM 5% → ceil(1/0.05)=20, capped at max replicas (16) by production time-slicing logic.
+	assert.Equal(t, int32(16), cls.timeSlices)
+	assert.Equal(t, "high", cls.timeSliceConfidence)
 }
 
 func TestVGPU_HighUtil_NoSharing(t *testing.T) {
@@ -80,7 +82,7 @@ func TestVGPU_HighUtil_NoSharing(t *testing.T) {
 		UUID: "gpu-1", Model: "NVIDIA T4",
 		SMActiveAvgBP: 7000, TensorAvgBP: 6000, UtilAvgBP: 8500,
 	}
-	cls := classifyGPUDevice(dev, DefaultVMRecConfig())
+	cls := classifyGPUDevice(dev, DefaultVMRecConfig(), 7)
 	assert.Equal(t, vmGPUActionNoChange, cls.action)
 	assert.Equal(t, int32(0), cls.timeSlices)
 }

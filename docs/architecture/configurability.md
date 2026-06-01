@@ -585,6 +585,10 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | VM GPU idle threshold <br><em>vGPU SM below 5% → idle.</em> | 0.05 | `ROS_VM_GPU_IDLE_THRESHOLD` | — | — | No |
 | VM GPU underutilized threshold <br><em>vGPU SM below 30% → underutilized.</em> | 0.30 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | — | — | No |
 | VM GPU compute saturation threshold <br><em>vGPU SM above 85% → saturated; avoid downsize.</em> | 0.85 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | — | — | No |
+| VM GPU time-slice min replicas <br><em>Minimum `recommended_time_slice_count` when time-slicing is advised.</em> | 2 | `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_min_replicas` | Yes |
+| VM GPU time-slice max replicas <br><em>Upper cap on slice count; reduced when DRAM exceeds penalty threshold.</em> | 16 | `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_max_replicas` | Yes |
+| VM GPU time-slice FB safety (basis points) <br><em>Do not recommend time-slicing when FB fraction ≥ this (8000 = 80%).</em> | 8000 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_fb_safety_threshold_bp` | Yes |
+| VM GPU time-slice DRAM penalty (basis points) <br><em>When DRAM ≥ this, max replicas is halved (5000 = 50%).</em> | 5000 | `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` | Yes |
 See [VM recommendations design](../design/vm-recommendations.md).
 
 ---

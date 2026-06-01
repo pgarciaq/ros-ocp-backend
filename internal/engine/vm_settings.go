@@ -45,6 +45,23 @@ type VMIOSettingsAPI struct {
 	HighIOPSThreshold int64 `json:"high_iops_threshold"`
 }
 
+// VMNetworkSettingsAPI holds n1 network-optimized classification thresholds.
+type VMNetworkSettingsAPI struct {
+	ThroughputThresholdBPS int64 `json:"throughput_threshold_bps"`
+	PPSThreshold           int64 `json:"pps_threshold"`
+	DropRatioBP            int32 `json:"drop_ratio_bp"`
+	SustainedDays          int   `json:"sustained_days"`
+	EnableNetworkSeries    bool  `json:"enable_network_series"`
+}
+
+// VMGPUSettingsAPI holds vGPU time-slicing tunables for VM recommendations.
+type VMGPUSettingsAPI struct {
+	TimeSliceMinReplicas         int32 `json:"gpu_timeslice_min_replicas"`
+	TimeSliceMaxReplicas         int32 `json:"gpu_timeslice_max_replicas"`
+	TimeSliceFBSafetyThresholdBP int32 `json:"gpu_timeslice_fb_safety_threshold_bp"`
+	TimeSliceDRAMPenaltyThresholdBP int32 `json:"gpu_timeslice_dram_penalty_threshold_bp"`
+}
+
 // VMMemoryFloorsSettingsAPI is the memory floor block in VM settings responses.
 type VMMemoryFloorsSettingsAPI struct {
 	LinuxGiB              int32   `json:"linux_gib"`
@@ -68,6 +85,8 @@ type VMSettingsResponse struct {
 	Stability            VMStabilitySettingsAPI    `json:"stability"`
 	Disk                 VMDiskSettingsAPI         `json:"disk"`
 	IO                   VMIOSettingsAPI           `json:"io"`
+	Network              VMNetworkSettingsAPI      `json:"network"`
+	GPU                  VMGPUSettingsAPI          `json:"gpu"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
 	LockedFields         []string                  `json:"locked_fields,omitempty"`
 	SettingsLocked       bool                      `json:"settings_locked,omitempty"`
@@ -79,6 +98,8 @@ type vmSettingsStored struct {
 	MemoryFloors             *VMMemoryFloorsSettingsAPI `json:"memory_floors,omitempty"`
 	Disk                 *VMDiskSettingsAPI         `json:"disk,omitempty"`
 	IO                   *VMIOSettingsAPI           `json:"io,omitempty"`
+	Network              *VMNetworkSettingsAPI      `json:"network,omitempty"`
+	GPU                  *VMGPUSettingsAPI          `json:"gpu,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
 	Stability            *VMStabilitySettingsAPI    `json:"stability,omitempty"`
 }
@@ -110,6 +131,15 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB":    "memory_floors.windows_kernel_reserve_gib",
 		"ROS_VM_DOWNSIZE_STABILITY_DAYS":       "stability.downsize_stability_days",
 		"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD":  "stability.crash_loop_restart_threshold",
+		"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS":    "gpu.gpu_timeslice_min_replicas",
+		"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS":    "gpu.gpu_timeslice_max_replicas",
+		"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP":     "gpu.gpu_timeslice_fb_safety_threshold_bp",
+		"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP": "gpu.gpu_timeslice_dram_penalty_threshold_bp",
+		"ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS": "network.throughput_threshold_bps",
+		"ROS_VM_NETWORK_PPS_THRESHOLD":              "network.pps_threshold",
+		"ROS_VM_NETWORK_DROP_RATIO_BP":              "network.drop_ratio_bp",
+		"ROS_VM_NETWORK_SUSTAINED_DAYS":             "network.sustained_days",
+		"ROS_VM_ENABLE_NETWORK_SERIES":              "network.enable_network_series",
 	}
 }
 
@@ -148,6 +178,25 @@ func vmRecConfigToIOAPI(cfg VMRecConfig) VMIOSettingsAPI {
 	return VMIOSettingsAPI{HighIOPSThreshold: cfg.HighIOPSThreshold}
 }
 
+func vmRecConfigToNetworkAPI(cfg VMRecConfig) VMNetworkSettingsAPI {
+	return VMNetworkSettingsAPI{
+		ThroughputThresholdBPS: cfg.NetworkThroughputThresholdBPS,
+		PPSThreshold:           cfg.NetworkPPSThreshold,
+		DropRatioBP:            cfg.NetworkDropRatioBP,
+		SustainedDays:          cfg.NetworkSustainedDays,
+		EnableNetworkSeries:    cfg.EnableNetworkSeries,
+	}
+}
+
+func vmRecConfigToGPUAPI(cfg VMRecConfig) VMGPUSettingsAPI {
+	return VMGPUSettingsAPI{
+		TimeSliceMinReplicas:            cfg.GPUTimeSliceMinReplicas,
+		TimeSliceMaxReplicas:            cfg.GPUTimeSliceMaxReplicas,
+		TimeSliceFBSafetyThresholdBP:    cfg.GPUTimeSliceFBSafetyThresholdBP,
+		TimeSliceDRAMPenaltyThresholdBP: cfg.GPUTimeSliceDRAMPenaltyThresholdBP,
+	}
+}
+
 func vmRecConfigToMemoryFloorsAPI(cfg VMRecConfig) VMMemoryFloorsSettingsAPI {
 	return VMMemoryFloorsSettingsAPI{
 		LinuxGiB:              cfg.LinuxMemoryFloorGiB,
@@ -182,6 +231,8 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		Stability:            vmRecConfigToStabilityAPI(cfg),
 		Disk:                 vmRecConfigToDiskAPI(cfg),
 		IO:                   vmRecConfigToIOAPI(cfg),
+		Network:              vmRecConfigToNetworkAPI(cfg),
+		GPU:                  vmRecConfigToGPUAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
 		LockedFields:         LockedFieldsForAPI(vmRecommendationType, envLocked),
 		SettingsLocked:       IsSettingsLocked(vmRecommendationType),
@@ -283,6 +334,20 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 	if stored.IO != nil {
 		dest.HighIOPSThreshold = stored.IO.HighIOPSThreshold
 	}
+	if stored.Network != nil {
+		n := stored.Network
+		dest.NetworkThroughputThresholdBPS = n.ThroughputThresholdBPS
+		dest.NetworkPPSThreshold = n.PPSThreshold
+		dest.NetworkDropRatioBP = n.DropRatioBP
+		dest.NetworkSustainedDays = n.SustainedDays
+		dest.EnableNetworkSeries = n.EnableNetworkSeries
+	}
+	if stored.GPU != nil {
+		dest.GPUTimeSliceMinReplicas = stored.GPU.TimeSliceMinReplicas
+		dest.GPUTimeSliceMaxReplicas = stored.GPU.TimeSliceMaxReplicas
+		dest.GPUTimeSliceFBSafetyThresholdBP = stored.GPU.TimeSliceFBSafetyThresholdBP
+		dest.GPUTimeSliceDRAMPenaltyThresholdBP = stored.GPU.TimeSliceDRAMPenaltyThresholdBP
+	}
 	if stored.InstanceTypeMatching != nil {
 		dest.EnableInstanceTypeMatching = *stored.InstanceTypeMatching
 	}
@@ -335,6 +400,16 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid io: %w", err)
 		}
 	}
+	if raw, ok := patch["gpu"]; ok {
+		if err := json.Unmarshal(raw, &resp.GPU); err != nil {
+			return fmt.Errorf("invalid gpu: %w", err)
+		}
+	}
+	if raw, ok := patch["network"]; ok {
+		if err := json.Unmarshal(raw, &resp.Network); err != nil {
+			return fmt.Errorf("invalid network: %w", err)
+		}
+	}
 	if raw, ok := patch["instance_type_matching"]; ok {
 		if err := json.Unmarshal(raw, &resp.InstanceTypeMatching); err != nil {
 			return fmt.Errorf("invalid instance_type_matching: %w", err)
@@ -365,6 +440,12 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.IO); err == nil {
 		overrides["io"] = b
+	}
+	if b, err := json.Marshal(resp.GPU); err == nil {
+		overrides["gpu"] = b
+	}
+	if b, err := json.Marshal(resp.Network); err == nil {
+		overrides["network"] = b
 	}
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
@@ -416,7 +497,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {},
 		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -461,6 +542,19 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt64("disk.min_growth_mib_per_day", resp.Disk.MinGrowthMiBPerDay, 1, 1048576)
 
 	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
+
+	v.addRangeInt64("network.throughput_threshold_bps", resp.Network.ThroughputThresholdBPS, 1, 1_000_000_000_000)
+	v.addRangeInt64("network.pps_threshold", resp.Network.PPSThreshold, 1, 100_000_000)
+	v.addRangeInt("network.drop_ratio_bp", int(resp.Network.DropRatioBP), 0, 10000)
+	v.addRangeInt("network.sustained_days", resp.Network.SustainedDays, 1, 90)
+
+	v.addRangeInt("gpu.gpu_timeslice_min_replicas", int(resp.GPU.TimeSliceMinReplicas), 1, 16)
+	v.addRangeInt("gpu.gpu_timeslice_max_replicas", int(resp.GPU.TimeSliceMaxReplicas), 1, 32)
+	if resp.GPU.TimeSliceMinReplicas > resp.GPU.TimeSliceMaxReplicas {
+		v.addConstraint("gpu.gpu_timeslice_min_replicas", "must be less than or equal to gpu_timeslice_max_replicas")
+	}
+	v.addRangeInt("gpu.gpu_timeslice_fb_safety_threshold_bp", int(resp.GPU.TimeSliceFBSafetyThresholdBP), 1000, 10000)
+	v.addRangeInt("gpu.gpu_timeslice_dram_penalty_threshold_bp", int(resp.GPU.TimeSliceDRAMPenaltyThresholdBP), 1000, 10000)
 
 	return v.result()
 }

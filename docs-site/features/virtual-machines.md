@@ -212,10 +212,12 @@ When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher
 
 For **underutilized** GPUs:
 
-- **MIG-capable** (A100, A30, H100, …): `recommended_gpu_profile` from frame-buffer headroom (`OptimalMIGProfile()`); may step down to a smaller partition.
-- **Non-MIG** (e.g. T4): `recommended_gpu_action=enable_time_slicing` and `recommended_time_slice_count` (roughly `ceil(1 / avg_utilization)`, capped at 16). This is **coarse** guidance — not a node-level `nvidia.com/gpu.replicas` plan like container [GPU time-slicing](gpu-mig.md).
+- **MIG-capable** (A100, A30, H100, …): `recommended_gpu_profile` from frame-buffer headroom (`OptimalMIGProfile()`); MIG is preferred over time-slicing when the GPU supports it.
+- **Non-MIG** (e.g. T4): production time-slicing via `RecommendVMTimeSlicing()` — same multi-signal model as container [GPU time-slicing](gpu-time-slicing.md): peak of SM, DRAM, and frame-buffer utilization sets `recommended_time_slice_count`, with FB safety (default 80%), DRAM bandwidth penalty, and confidence (`gpu_timeslice_confidence`, `gpu_timeslice_rationale`). Optional `recommended_vgpu_profile` (e.g. `grid_t4-4q`) from `vgpu_profiles.yaml`.
 
-List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, `recommended_gpu_profile`, `recommended_time_slice_count`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
+List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, `recommended_gpu_profile`, `recommended_time_slice_count`, `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
+
+Configure time-slicing via `GET/PUT .../settings/vm` → `gpu` block (`gpu_timeslice_min_replicas`, `gpu_timeslice_max_replicas`, `gpu_timeslice_fb_safety_threshold_bp`, `gpu_timeslice_dram_penalty_threshold_bp`) or admin env vars `ROS_VM_GPU_TIMESLICE_*`.
 
 Container GPU MIG profiling is documented in [GPU MIG Profiling](gpu-mig.md).
 
@@ -299,6 +301,8 @@ All VM codes below appear in the `notifications` array on list and detail respon
 | **51** | info | GPU underutilized — smaller MIG profile or consider vGPU/MIG |
 | **52** | warning | GPU memory saturated — larger GPU / more frame buffer |
 | **53** | warning | GPU compute saturated — more powerful GPU |
+| **56** | info | vGPU profile recommended (`recommended_vgpu_profile`) |
+| **57** | warning | GPU time-slicing not safe — frame-buffer pressure |
 
 Abandoned VMs emit **43** only (not **18**).
 

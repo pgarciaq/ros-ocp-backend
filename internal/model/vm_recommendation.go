@@ -37,7 +37,8 @@ type VMRecommendation struct {
 	// Status flags
 	IsIdle       bool `db:"is_idle"`
 	IsAbandoned  bool `db:"is_abandoned"`
-	IsOversized  bool `db:"is_oversized"`
+	IsOversized     bool `db:"is_oversized"`
+	IsNetworkBound  bool `db:"is_network_bound"`
 
 	// I/O profile (nullable JSON or individual columns)
 	IOReadIOPSP95  *int64  `db:"io_read_iops_p95"`
@@ -61,7 +62,10 @@ type VMRecommendation struct {
 	RecommendedGPUAction  string `db:"recommended_gpu_action" json:"recommended_gpu_action"`
 	RecommendedGPUProfile      string `db:"recommended_gpu_profile" json:"recommended_gpu_profile"`
 	RecommendedTimeSliceCount  int32  `db:"recommended_time_slice_count" json:"recommended_time_slice_count"`
-	GPUUtilizationAvgBP        int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
+	GPUTimeSliceConfidence   string `db:"gpu_timeslice_confidence" json:"gpu_timeslice_confidence"`
+	GPUTimeSliceRationale    string `db:"gpu_timeslice_rationale" json:"gpu_timeslice_rationale"`
+	RecommendedVGPUProfile   string `db:"recommended_vgpu_profile" json:"recommended_vgpu_profile"`
+	GPUUtilizationAvgBP      int32  `db:"gpu_utilization_avg_bp" json:"gpu_utilization_avg_bp"`
 
 	// Timestamps
 	LastRecommendedAt time.Time `db:"last_recommended_at"`

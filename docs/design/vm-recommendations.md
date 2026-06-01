@@ -46,7 +46,7 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 | Savings ($) in API | ⬜ | — |
 | `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
-| vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
+| vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
 | Multi-GPU per-device analysis (notification **54**) | ✅ | `gpu_devices` JSONB on digests, [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go) |
 | Disk projection window from settings | ✅ | `vmComputeDiskExpandGiB()` uses `DiskProjectionWindowDays` |
 | VM recommendation history API | ✅ | `vm_recommendation_history` table, `GET .../vms/{vm_name}/history` |
@@ -133,6 +133,8 @@ When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launc
 | `well_utilized` | `no_change` | — |
 
 Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_THRESHOLD` (default 0.30), `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` (default 0.85). Frame-buffer saturation uses 90% of catalog GPU memory when `GPUFBSaturationMiB` is unset.
+
+**Time-slicing (non-MIG):** [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go) mirrors container [`computeReplicas()`](../../internal/engine/gpu_timeslicing.go): peak of SM, DRAM, and frame-buffer fractions drives `recommended_time_slice_count`, with FB safety (default 80% → no time-slice), DRAM penalty (halves max replicas above 50% DRAM), MIG-capable GPUs prefer MIG over time-slice, and confidence from observation days (`high` ≥ 7 days). Optional vGPU profiles come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) (`recommended_vgpu_profile`). Persisted fields: `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`. Tunables via `GET/PUT /settings/vm` → `gpu` block or env: `ROS_VM_GPU_TIMESLICE_*`.
 
 **Algorithm:**
 
@@ -286,10 +288,12 @@ All notifications are JSON objects in the `notifications` array:
 | **52** | `NotifVMGPUMemorySaturated` | `warning` | GPU memory saturated — larger GPU |
 | **53** | `NotifVMGPUComputeSaturated` | `warning` | GPU compute saturated — more powerful GPU |
 | **54** | `NotifVMGPUMixedIdle` | `warning` | Some GPUs idle while others are active — reduce GPU count |
+| **56** | `NotifVMVGPUProfileRecommended` | `info` | vGPU profile recommended — see `recommended_vgpu_profile` |
+| **57** | `NotifVMGPUTimeSliceUnsafeFB` | `warning` | Time-slicing unsafe — frame-buffer usage above safety threshold |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
-**Full catalog (all plugins, codes 1–54):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer),
+**Full catalog (all plugins, codes 1–57):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer),
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
 
 ---
@@ -520,7 +524,7 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **n-series active recommendations** | `n1` catalog is recognition-only until network metrics exist |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
-**GPU limitations (implemented with constraints):** vGPU fractional sharing gets classification and coarse MIG step-down, not full vGPU profile recommendations; DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
+**GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (replica count + rationale), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 
 ---
 

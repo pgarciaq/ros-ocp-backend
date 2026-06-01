@@ -158,6 +158,8 @@ func RecommendVM(
 
 	isOversized := rawRecommendedVCPU < currentVCPU || rawRecommendedMemGiB < currentMemGiB
 
+	isNetworkBound := cfg.EnableNetworkSeries && vmClassifySeriesNetwork(windowed, cfg) && vmCPUMemRatioBalanced(recommendedVCPU, recommendedMemGiB)
+
 	ioRead, ioWrite, ioReadBPS, ioWriteBPS, ioHint := vmIOProfile(windowed, cfg)
 
 	var diskDaysUntilFull *int32
@@ -176,7 +178,7 @@ func RecommendVM(
 		recommendedSeries       *string
 	)
 	if cfg.EnableInstanceTypeMatching {
-		preferredSeries := vmClassifySeries(recommendedVCPU, recommendedMemGiB, isIdle)
+		preferredSeries := vmClassifySeries(windowed, recommendedVCPU, recommendedMemGiB, isIdle, cfg)
 		if gpuAnalysis.RequireGPUInstance {
 			preferredSeries = vmSeriesGPU
 		}
@@ -188,6 +190,7 @@ func RecommendVM(
 		if match := MatchInstanceType(
 			recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes,
 			gpuAnalysis.RequireGPUInstance, gpuCountForMatch, gpuAnalysis.MinGPUMemoryGiB,
+			cfg.EnableNetworkSeries,
 		); match != nil {
 			recommendedInstanceType = &match.Name
 			recommendedSeries = &match.Series
@@ -215,6 +218,7 @@ func RecommendVM(
 		HypervisorDiskGrowth:    hypervisorDiskGrowth,
 		RecommendedInstanceType: recommendedInstanceType,
 		RecommendedSeries:       recommendedSeries,
+		IsNetworkBound:          isNetworkBound,
 		FilesystemUsedPct:       vmLatestFilesystemUsedPct(windowed),
 		UnknownOS:               unknownOS,
 		WindowsUpdateSpike:      windowsUpdateSpike,
@@ -247,6 +251,7 @@ func RecommendVM(
 		IsIdle:                   isIdle,
 		IsAbandoned:              isAbandoned,
 		IsOversized:              isOversized,
+		IsNetworkBound:           isNetworkBound,
 		IOReadIOPSP95:            ioRead,
 		IOWriteIOPSP95:           ioWrite,
 		IOReadBPS95:              ioReadBPS,
@@ -262,6 +267,9 @@ func RecommendVM(
 		RecommendedGPUAction:     gpuAnalysis.Action,
 		RecommendedGPUProfile:       gpuAnalysis.Profile,
 		RecommendedTimeSliceCount:   gpuAnalysis.RecommendedTimeSliceCount,
+		GPUTimeSliceConfidence:      gpuAnalysis.GPUTimeSliceConfidence,
+		GPUTimeSliceRationale:       gpuAnalysis.GPUTimeSliceRationale,
+		RecommendedVGPUProfile:      gpuAnalysis.RecommendedVGPUProfile,
 		GPUUtilizationAvgBP:         gpuAnalysis.UtilizationAvgBP,
 		LastRecommendedAt:        now,
 		CreatedAt:                now,
@@ -800,9 +808,12 @@ func sortVMDigestsByDate(days []model.DailyVMDigest) {
 	}
 }
 
-func vmClassifySeries(vcpu, memGiB int32, isIdle bool) string {
+func vmClassifySeries(digests []model.DailyVMDigest, vcpu, memGiB int32, isIdle bool, cfg VMRecConfig) string {
 	if isIdle || vcpu <= 0 || memGiB <= 0 {
 		return vmSeriesGeneralPurpose
+	}
+	if cfg.EnableNetworkSeries && vmClassifySeriesNetwork(digests, cfg) && vmCPUMemRatioBalanced(vcpu, memGiB) {
+		return vmSeriesNetworkOptimized
 	}
 	ratio := float64(vcpu) * 4.0 / float64(memGiB)
 	if ratio > 2.0 {

@@ -205,6 +205,8 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 48 | `NotifVMCrashLoop` | `restart_count_sum` ≥ threshold |
 | 49 | `NotifVMDownsizeHeld` | Performance engine: downsize suppressed for stability |
 | 50–54 | `NotifVMGPU*` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) / mixed-idle |
+| 56 | `NotifVMVGPUProfileRecommended` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) — vGPU profile in `recommended_vgpu_profile` |
+| 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm_gpu_timeslicing.go) — FB above safety threshold |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications).
 

@@ -15,7 +15,7 @@ type InstanceType struct {
 	MemoryGiB    int32 // nominal GiB; use memoryCapacityMiB for smallest-fit comparison
 	GPUs         int32
 	GPUMemoryGiB int32 // per-GPU frame buffer capacity (GiB); 0 when no GPU
-	Selectable   bool  // false = recognition only (n-series until network metrics exist)
+	Selectable   bool  // n-series gated at match time via EnableNetworkSeries
 }
 
 func memoryCapacityMiB(t InstanceType) int32 {
@@ -51,11 +51,11 @@ var vmInstanceCatalog = []InstanceType{
 	{Name: "m1.xlarge", Series: vmSeriesMemoryOptimized, VCPU: 4, MemoryGiB: 32, GPUs: 0, Selectable: true},
 	{Name: "m1.2xlarge", Series: vmSeriesMemoryOptimized, VCPU: 8, MemoryGiB: 64, GPUs: 0, Selectable: true},
 	{Name: "m1.4xlarge", Series: vmSeriesMemoryOptimized, VCPU: 16, MemoryGiB: 128, GPUs: 0, Selectable: true},
-	// Network optimized (n-series) — recognition only until network metrics exist
-	{Name: "n1.medium", Series: vmSeriesNetworkOptimized, VCPU: 1, MemoryGiB: 4, GPUs: 0, Selectable: false},
-	{Name: "n1.large", Series: vmSeriesNetworkOptimized, VCPU: 2, MemoryGiB: 8, GPUs: 0, Selectable: false},
-	{Name: "n1.xlarge", Series: vmSeriesNetworkOptimized, VCPU: 4, MemoryGiB: 16, GPUs: 0, Selectable: false},
-	{Name: "n1.2xlarge", Series: vmSeriesNetworkOptimized, VCPU: 8, MemoryGiB: 32, GPUs: 0, Selectable: false},
+	// Network optimized (n-series)
+	{Name: "n1.medium", Series: vmSeriesNetworkOptimized, VCPU: 1, MemoryGiB: 4, GPUs: 0, Selectable: true},
+	{Name: "n1.large", Series: vmSeriesNetworkOptimized, VCPU: 2, MemoryGiB: 8, GPUs: 0, Selectable: true},
+	{Name: "n1.xlarge", Series: vmSeriesNetworkOptimized, VCPU: 4, MemoryGiB: 16, GPUs: 0, Selectable: true},
+	{Name: "n1.2xlarge", Series: vmSeriesNetworkOptimized, VCPU: 8, MemoryGiB: 32, GPUs: 0, Selectable: true},
 }
 
 // vmInstanceCatalogGPU lists GPU-enabled OpenShift Virtualization instance types.
@@ -95,6 +95,7 @@ func smallestFitInCatalog(
 	requireGPU bool,
 	gpuCount int32,
 	minGPUMemoryGiB int32,
+	enableNetworkSeries bool,
 ) *InstanceType {
 	var best *InstanceType
 	var bestWaste int32 = math.MaxInt32
@@ -102,6 +103,9 @@ func smallestFitInCatalog(
 	for i := range catalog {
 		t := &catalog[i]
 		if selectableOnly && !t.Selectable {
+			continue
+		}
+		if selectableOnly && t.Series == vmSeriesNetworkOptimized && !enableNetworkSeries {
 			continue
 		}
 		if requireGPU {
@@ -148,26 +152,28 @@ func vmInstanceBetterFit(t InstanceType, waste int32, best *InstanceType, bestWa
 }
 
 func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
-	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB, true, false, 0, 0)
+	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB, true, false, 0, 0, true)
 }
 
 func matchInCatalog(
 	catalog []InstanceType,
-	recommendedVCPU, recommendedMemoryMiB int32,
+	recommendedVCPU, recommendedMemoryGiB int32,
 	preferredSeries string,
 	selectableOnly bool,
 	requireGPU bool,
 	gpuCount int32,
 	minGPUMemoryGiB int32,
+	enableNetworkSeries bool,
 ) *InstanceType {
 	if len(catalog) == 0 {
 		return nil
 	}
-	if match := smallestFitInCatalog(catalog, preferredSeries, recommendedVCPU, recommendedMemoryMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB); match != nil {
+	memMiB := recommendedMemoryMiB(recommendedMemoryGiB)
+	if match := smallestFitInCatalog(catalog, preferredSeries, recommendedVCPU, memMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB, enableNetworkSeries); match != nil {
 		return match
 	}
 	if preferredSeries != vmSeriesGeneralPurpose {
-		return smallestFitInCatalog(catalog, vmSeriesGeneralPurpose, recommendedVCPU, recommendedMemoryMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB)
+		return smallestFitInCatalog(catalog, vmSeriesGeneralPurpose, recommendedVCPU, memMiB, selectableOnly, requireGPU, gpuCount, minGPUMemoryGiB, enableNetworkSeries)
 	}
 	return nil
 }
@@ -181,6 +187,7 @@ func MatchInstanceType(
 	requireGPU bool,
 	gpuCount int32,
 	minGPUMemoryGiB int32,
+	enableNetworkSeries bool,
 ) *InstanceType {
 	if recommendedVCPU < 1 {
 		recommendedVCPU = 1
@@ -192,7 +199,7 @@ func MatchInstanceType(
 		catalogs = append([][]InstanceType{vmInstanceCatalogGPU}, catalogs...)
 	}
 	for _, catalog := range catalogs {
-		if match := matchInCatalog(catalog, recommendedVCPU, recMemMiB, preferredSeries, true, requireGPU, gpuCount, minGPUMemoryGiB); match != nil {
+		if match := matchInCatalog(catalog, recommendedVCPU, recMemMiB, preferredSeries, true, requireGPU, gpuCount, minGPUMemoryGiB, enableNetworkSeries); match != nil {
 			return match
 		}
 	}

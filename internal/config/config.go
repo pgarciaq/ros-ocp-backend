@@ -254,6 +254,15 @@ type Config struct {
 	VMGPUIdleThreshold           float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
 	VMGPUUnderutilThreshold      float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
 	VMGPUComputeSaturationThreshold float64 `mapstructure:"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"`
+	VMGPUTimeSliceMinReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"`
+	VMGPUTimeSliceMaxReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS"`
+	VMGPUTimeSliceFBSafetyBP        int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP"`
+	VMGPUTimeSliceDRAMPenaltyBP     int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP"`
+	VMNetworkThroughputThresholdBPS int64   `mapstructure:"ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS"`
+	VMNetworkPPSThreshold           int64   `mapstructure:"ROS_VM_NETWORK_PPS_THRESHOLD"`
+	VMNetworkDropRatioBP            int32   `mapstructure:"ROS_VM_NETWORK_DROP_RATIO_BP"`
+	VMNetworkSustainedDays          int     `mapstructure:"ROS_VM_NETWORK_SUSTAINED_DAYS"`
+	VMEnableNetworkSeries           bool    `mapstructure:"ROS_VM_ENABLE_NETWORK_SERIES"`
 	VMRecHistoryRetentionDays       int     `mapstructure:"ROS_VM_REC_HISTORY_RETENTION_DAYS"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
@@ -626,6 +635,15 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_GPU_IDLE_THRESHOLD", 0.05)
 	viper.SetDefault("ROS_VM_GPU_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD", 0.85)
+	viper.SetDefault("ROS_VM_GPU_TIMESLICE_MIN_REPLICAS", 2)
+	viper.SetDefault("ROS_VM_GPU_TIMESLICE_MAX_REPLICAS", 16)
+	viper.SetDefault("ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP", 8000)
+	viper.SetDefault("ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP", 5000)
+	viper.SetDefault("ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS", 62500000)
+	viper.SetDefault("ROS_VM_NETWORK_PPS_THRESHOLD", 100000)
+	viper.SetDefault("ROS_VM_NETWORK_DROP_RATIO_BP", 10)
+	viper.SetDefault("ROS_VM_NETWORK_SUSTAINED_DAYS", 7)
+	viper.SetDefault("ROS_VM_ENABLE_NETWORK_SERIES", true)
 	viper.SetDefault("ROS_VM_REC_HISTORY_RETENTION_DAYS", 90)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
