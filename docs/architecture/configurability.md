@@ -64,6 +64,18 @@ Implementation references:
 [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go),
 [`idle_settings.go`](../../internal/engine/idle_settings.go).
 
+### In-process settings cache (60 seconds)
+
+All settings resolution paths share a single in-process cache keyed by
+`(org_id, recommendation_type)` with a **60-second TTL**. Repeated resolves within
+the same minute reuse the merged result without querying PostgreSQL. Cache entries
+are invalidated immediately on successful Settings API PUT or DELETE for that org
+and type (via `InvalidateThresholdCache`).
+
+Cached recommendation types: `container`, `namespace`, `node`, `gpu`, `pvc`, `vm`,
+`quota`, `cluster-quota`, and `idle_detection`. The Prometheus gauge
+`ros_threshold_cache_entries` reports the number of entries currently held.
+
 ---
 
 ## Settings API Routes

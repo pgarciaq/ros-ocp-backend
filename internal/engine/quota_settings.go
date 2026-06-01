@@ -101,6 +101,10 @@ func quotaRecConfigFromSettings(s QuotaSettings) QuotaRecConfig {
 
 // ResolveQuotaSettings resolves quota thresholds: config/env defaults, then per-org DB overrides.
 func ResolveQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (QuotaSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, quotaRecommendationType, resolveQuotaSettingsUncached)
+}
+
+func resolveQuotaSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (QuotaSettings, error) {
 	result := quotaSettingsFromConfig(config.GetConfig())
 	overlay, err := loadQuotaSettingsStored(ctx, pool, orgID)
 	if err != nil {
@@ -219,7 +223,11 @@ func UpdateQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 	if b, err := json.Marshal(update.MediumRiskThresholdPercent); err == nil {
 		overrides["medium_risk_threshold_percent"] = b
 	}
-	return upsertThresholdOverrides(ctx, pool, orgID, quotaRecommendationType, overrides)
+	if err := upsertThresholdOverrides(ctx, pool, orgID, quotaRecommendationType, overrides); err != nil {
+		return err
+	}
+	InvalidateThresholdCache(orgID, quotaRecommendationType)
+	return nil
 }
 
 func lockedQuotaFieldsInUpdate(rawUpdate json.RawMessage) []string {
@@ -310,5 +318,6 @@ func DeleteQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) 
 	if err != nil {
 		return fmt.Errorf("delete quota settings: %w", err)
 	}
+	InvalidateThresholdCache(orgID, quotaRecommendationType)
 	return nil
 }

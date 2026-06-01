@@ -178,6 +178,10 @@ func GetIdleDetectionSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, org
 }
 
 func resolveIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (IdleDetectionSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, idleDetectionRecommendationType, resolveIdleDetectionSettingsUncached)
+}
+
+func resolveIdleDetectionSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (IdleDetectionSettings, error) {
 	result := defaultIdleDetectionSettings()
 	overlay, err := loadIdleDetectionStored(ctx, pool, orgID)
 	if err != nil {
@@ -351,7 +355,7 @@ func UpdateIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 	if err := upsertThresholdOverrides(ctx, pool, orgID, idleDetectionRecommendationType, overrides); err != nil {
 		return err
 	}
-	InvalidateThresholdCache(orgID, "container")
+	InvalidateThresholdCache(orgID, idleDetectionRecommendationType)
 	return nil
 }
 
@@ -519,6 +523,6 @@ func DeleteIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 	if err != nil {
 		return fmt.Errorf("delete idle detection settings: %w", err)
 	}
-	InvalidateThresholdCache(orgID, "container")
+	InvalidateThresholdCache(orgID, idleDetectionRecommendationType)
 	return nil
 }

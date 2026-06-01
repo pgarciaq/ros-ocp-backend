@@ -178,6 +178,10 @@ func vmFeatureEnabled() bool {
 
 // ResolveVMRecConfig returns effective VM recommendation config for an org.
 func ResolveVMRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (VMRecConfig, error) {
+	return resolveThresholdCached(ctx, pool, orgID, vmRecommendationType, resolveVMRecConfigUncached)
+}
+
+func resolveVMRecConfigUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (VMRecConfig, error) {
 	result := VMRecConfigResolved()
 	overlay, err := loadVMSettingsStored(ctx, pool, orgID)
 	if err != nil {
@@ -338,7 +342,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
 	}
-	return upsertThresholdOverrides(ctx, pool, orgID, vmRecommendationType, overrides)
+	if err := upsertThresholdOverrides(ctx, pool, orgID, vmRecommendationType, overrides); err != nil {
+		return err
+	}
+	InvalidateThresholdCache(orgID, vmRecommendationType)
+	return nil
 }
 
 func lockedVMFieldsInUpdate(rawUpdate json.RawMessage) []string {
@@ -435,5 +443,6 @@ func DeleteVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) err
 	if err != nil {
 		return fmt.Errorf("delete VM settings: %w", err)
 	}
+	InvalidateThresholdCache(orgID, vmRecommendationType)
 	return nil
 }

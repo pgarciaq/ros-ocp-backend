@@ -100,6 +100,10 @@ func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) QuotaRecConfig {
 
 // ResolveClusterQuotaSettings resolves thresholds: env defaults, then per-org DB overrides.
 func ResolveClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (ClusterQuotaSettings, error) {
+	return resolveThresholdCached(ctx, pool, orgID, clusterQuotaRecommendationType, resolveClusterQuotaSettingsUncached)
+}
+
+func resolveClusterQuotaSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (ClusterQuotaSettings, error) {
 	result := clusterQuotaSettingsFromConfig(config.GetConfig())
 	overlay, err := loadClusterQuotaSettingsStored(ctx, pool, orgID)
 	if err != nil {
@@ -218,7 +222,11 @@ func UpdateClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID s
 	if b, err := json.Marshal(update.MediumRiskThresholdPercent); err == nil {
 		overrides["medium_risk_threshold_percent"] = b
 	}
-	return upsertThresholdOverrides(ctx, pool, orgID, clusterQuotaRecommendationType, overrides)
+	if err := upsertThresholdOverrides(ctx, pool, orgID, clusterQuotaRecommendationType, overrides); err != nil {
+		return err
+	}
+	InvalidateThresholdCache(orgID, clusterQuotaRecommendationType)
+	return nil
 }
 
 func lockedClusterQuotaFieldsInUpdate(rawUpdate json.RawMessage) []string {
@@ -309,5 +317,6 @@ func DeleteClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID s
 	if err != nil {
 		return fmt.Errorf("delete cluster-quota settings: %w", err)
 	}
+	InvalidateThresholdCache(orgID, clusterQuotaRecommendationType)
 	return nil
 }
