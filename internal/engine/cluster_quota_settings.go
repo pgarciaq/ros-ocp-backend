@@ -106,7 +106,30 @@ func ResolveClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 		return result, err
 	}
 	applyClusterQuotaStoredOverlay(&result, overlay)
+	result = applyClusterQuotaEnvLocks(result, config.GetConfig())
 	return result, nil
+}
+
+func applyClusterQuotaEnvLocks(base ClusterQuotaSettings, cfg *config.Config) ClusterQuotaSettings {
+	if cfg == nil {
+		return base
+	}
+	if _, ok := os.LookupEnv("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT"); ok {
+		if cfg.ClusterQuotaHeadroomPercent >= 0 {
+			base.HeadroomPercent = cfg.ClusterQuotaHeadroomPercent
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"); ok {
+		if cfg.ClusterQuotaHighRiskThresholdPercent > 0 {
+			base.HighRiskThresholdPercent = cfg.ClusterQuotaHighRiskThresholdPercent
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"); ok {
+		if cfg.ClusterQuotaMediumRiskThresholdPercent > 0 {
+			base.MediumRiskThresholdPercent = cfg.ClusterQuotaMediumRiskThresholdPercent
+		}
+	}
+	return base
 }
 
 // ResolveClusterQuotaRecConfig resolves tenant settings into engine basis-point config.

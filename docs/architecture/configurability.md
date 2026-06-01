@@ -19,7 +19,18 @@ ROS-OCP uses a **three-tier precedence model** for every configurable parameter:
 | **2 — Tenant Settings API** | Per-`org_id` database record | Single tenant | Applied when no admin env var is set. Stored in PostgreSQL (`org_recommendation_terms`, snapshot settings, business-hours schedules, etc.). |
 | **3 — Compiled default** | Hardcoded in plugin or engine | Fallback | Used when neither tier 1 nor tier 2 provides a value. Defined in `DefaultTerms()`, `DefaultCPUConfig()`, plugin constants, etc. |
 
-**Resolution order:** Tier 1 → Tier 2 → Tier 3. Admin env vars always win.
+**Resolution order:** Tier 1 → Tier 2 → Tier 3. Admin env vars always win on both
+**read** and **write**.
+
+On **read**, the engine starts from compiled defaults (already patched from env at
+process init where applicable), overlays per-tenant values from PostgreSQL, then
+**re-applies any set admin env vars** so a stale tenant override cannot mask a
+platform lock. Container, namespace, node, GPU, and PVC threshold plugins use
+`resolveSizingThresholds()`; VM, quota, cluster-quota, and idle-detection settings
+use the same pattern in their respective resolve functions.
+
+On **write**, locked fields are rejected with `422 Unprocessable Entity` when the
+corresponding `ROS_*` env var is set.
 
 Term-specific env vars (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`) lock individual term
 fields. Threshold env vars (`ROS_CONTAINER_*`, `ROS_GPU_*`, etc.) lock the

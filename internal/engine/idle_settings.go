@@ -184,7 +184,54 @@ func resolveIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 		return result, err
 	}
 	applyIdleStoredOverlay(&result, overlay)
+	result = applyIdleEnvLocks(result, config.GetConfig())
 	return result, nil
+}
+
+func applyIdleEnvLocks(base IdleDetectionSettings, cfg *config.Config) IdleDetectionSettings {
+	if cfg == nil {
+		return base
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_DETECTION_ENABLED"); ok {
+		base.Enabled = cfg.IdleDetectionEnabled
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_CPU_UTILIZATION_PCT"); ok {
+		if cfg.IdleCPUUtilizationPct > 0 {
+			base.Thresholds.CPUUtilizationPercent = cfg.IdleCPUUtilizationPct
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_MEMORY_UTILIZATION_PCT"); ok {
+		if cfg.IdleMemUtilizationPct > 0 {
+			base.Thresholds.MemoryUtilizationPercent = cfg.IdleMemUtilizationPct
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_BURST_RATIO"); ok {
+		if cfg.IdleBurstRatio > 0 {
+			base.Thresholds.BurstRatio = cfg.IdleBurstRatio
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_MIN_OBSERVATION_DAYS"); ok {
+		if cfg.IdleMinObservationDays > 0 {
+			base.Thresholds.MinimumObservationDays = cfg.IdleMinObservationDays
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_GPU_SM_ACTIVE_BP"); ok {
+		if cfg.IdleGPUSMActiveBP > 0 {
+			base.Thresholds.GPUSMActiveBasisPoints = cfg.IdleGPUSMActiveBP
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_GPU_DRAM_ACTIVE_BP"); ok {
+		if cfg.IdleGPUDRAMActiveBP > 0 {
+			base.Thresholds.GPUDRAMActiveBasisPoints = cfg.IdleGPUDRAMActiveBP
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_EXCLUDE_NAMESPACES"); ok {
+		base.Exclusions.Namespaces = splitCSVList(cfg.IdleExcludeNamespaces)
+	}
+	if _, ok := os.LookupEnv("ROS_IDLE_EXCLUDE_WORKLOAD_TYPES"); ok {
+		base.Exclusions.WorkloadTypes = splitCSVList(cfg.IdleExcludeWorkloadTypes)
+	}
+	return base
 }
 
 func loadIdleDetectionStored(ctx context.Context, pool *pgxpool.Pool, orgID string) (*idleDetectionStored, error) {

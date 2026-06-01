@@ -107,3 +107,42 @@ func TestResolveQuotaSettings_EnvOverlayWhenNoDB(t *testing.T) {
 	assert.Equal(t, 95, settings.HighRiskThresholdPercent)
 	assert.Equal(t, 75, settings.MediumRiskThresholdPercent)
 }
+
+func TestResolveQuotaSettings_EnvOverridesDB(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_QUOTA_HEADROOM_PERCENT", "25")
+	_ = config.GetConfig()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-quota-settings-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'quota', '{"headroom_percent": 20}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := ResolveQuotaSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 25, settings.HeadroomPercent)
+}
+
+func TestResolveQuotaSettings_NoEnv_DBWins(t *testing.T) {
+	config.ResetForTest()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-quota-settings-no-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'quota', '{"headroom_percent": 22}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := ResolveQuotaSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 22, settings.HeadroomPercent)
+}

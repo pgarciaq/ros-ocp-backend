@@ -39,6 +39,45 @@ func TestClusterQuotaSettingsFromConfig(t *testing.T) {
 	assert.Equal(t, 15, s.HeadroomPercent)
 }
 
+func TestResolveClusterQuotaSettings_EnvOverridesDB(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", "25")
+	_ = config.GetConfig()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-cluster-quota-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'cluster-quota', '{"headroom_percent": 20}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := ResolveClusterQuotaSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 25, settings.HeadroomPercent)
+}
+
+func TestResolveClusterQuotaSettings_NoEnv_DBWins(t *testing.T) {
+	config.ResetForTest()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-cluster-quota-no-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'cluster-quota', '{"headroom_percent": 22}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := ResolveClusterQuotaSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, 22, settings.HeadroomPercent)
+}
+
 func TestUpdateClusterQuotaSettings_RejectsLockedField(t *testing.T) {
 	t.Setenv("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", "12")
 	config.ResetForTest()

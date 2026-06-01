@@ -1,11 +1,15 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestValidateIdleDetectionUpdate_RejectsUnknownField(t *testing.T) {
@@ -53,4 +57,43 @@ func TestGpuIdleConfigFromSettings(t *testing.T) {
 	})
 	assert.Equal(t, int64(400), cfg.IdleSMActiveBP)
 	assert.Equal(t, 10, cfg.MinObservationDays)
+}
+
+func TestResolveIdleSettings_EnvOverridesDB(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_IDLE_CPU_UTILIZATION_PCT", "5")
+	_ = config.GetConfig()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-idle-settings-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'idle_detection', '{"cpu_utilization_percent": 3}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := resolveIdleDetectionSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), settings.Thresholds.CPUUtilizationPercent)
+}
+
+func TestResolveIdleSettings_NoEnv_DBWins(t *testing.T) {
+	config.ResetForTest()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-idle-settings-no-env-db"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_thresholds (org_id, recommendation_type, thresholds)
+		VALUES ($1, 'idle_detection', '{"cpu_utilization_percent": 4}'::jsonb)
+		ON CONFLICT (org_id, recommendation_type)
+		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
+	require.NoError(t, err)
+
+	settings, err := resolveIdleDetectionSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), settings.Thresholds.CPUUtilizationPercent)
 }

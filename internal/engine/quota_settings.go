@@ -107,7 +107,30 @@ func ResolveQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string)
 		return result, err
 	}
 	applyQuotaStoredOverlay(&result, overlay)
+	result = applyQuotaEnvLocks(result, config.GetConfig())
 	return result, nil
+}
+
+func applyQuotaEnvLocks(base QuotaSettings, cfg *config.Config) QuotaSettings {
+	if cfg == nil {
+		return base
+	}
+	if _, ok := os.LookupEnv("ROS_QUOTA_HEADROOM_PERCENT"); ok {
+		if cfg.QuotaHeadroomPercent >= 0 {
+			base.HeadroomPercent = cfg.QuotaHeadroomPercent
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT"); ok {
+		if cfg.QuotaHighRiskThresholdPercent > 0 {
+			base.HighRiskThresholdPercent = cfg.QuotaHighRiskThresholdPercent
+		}
+	}
+	if _, ok := os.LookupEnv("ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"); ok {
+		if cfg.QuotaMediumRiskThresholdPercent > 0 {
+			base.MediumRiskThresholdPercent = cfg.QuotaMediumRiskThresholdPercent
+		}
+	}
+	return base
 }
 
 // ResolveQuotaRecConfig resolves tenant quota settings into engine basis-point config.

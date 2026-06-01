@@ -184,6 +184,7 @@ func ResolveVMRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (
 		return result, err
 	}
 	applyVMStoredOverlay(&result, overlay)
+	result = applyVMEnvLocks(result, config.GetConfig())
 	return result, nil
 }
 
