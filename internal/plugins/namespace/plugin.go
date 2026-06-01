@@ -103,6 +103,7 @@ func (p *NamespacePlugin) RegisterRoutes(g *echo.Group) {
 		g.GET("/recommendations/openshift/namespaces", rosapi.GetNamespaceRecommendationSetListWithFallback)
 		g.GET("/recommendations/openshift/namespace", rosapi.GetNamespaceRecommendationSetListWithFallback)
 		g.GET("/recommendations/openshift/namespaces/:recommendation-id", rosapi.GetNamespaceRecommendationSetWithFallback)
+		g.GET("/recommendations/openshift/namespaces/:recommendation-id/history", rosapi.GetNamespaceRecommendationHistoryWithFallback)
 		g.GET("/openshift/namespace/recommendations", rosapi.GetNamespaceRecommendationSetListWithFallback)
 		g.GET("/recommendations/openshift/namespace/:recommendation-id", rosapi.GetNamespaceRecommendationSetWithFallback)
 		return
@@ -110,6 +111,7 @@ func (p *NamespacePlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/namespaces", rosapi.GetNamespaceRecommendationSetList)
 	g.GET("/recommendations/openshift/namespace", rosapi.GetNamespaceRecommendationSetList)
 	g.GET("/recommendations/openshift/namespaces/:recommendation-id", rosapi.GetNamespaceRecommendationSet)
+	g.GET("/recommendations/openshift/namespaces/:recommendation-id/history", rosapi.GetNamespaceRecommendationHistory)
 	g.GET("/openshift/namespace/recommendations", rosapi.GetNamespaceRecommendationSetList)
 	g.GET("/recommendations/openshift/namespace/:recommendation-id", rosapi.GetNamespaceRecommendationSet)
 }

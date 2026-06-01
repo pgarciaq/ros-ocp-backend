@@ -594,6 +594,95 @@ func TestOpenAPI_AllSpecPathsHaveRoutes(t *testing.T) {
 	assert.Empty(t, missing, "OpenAPI paths without registered routes")
 }
 
+func seedOpenAPINamespaceRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (namespaceID string) {
+	t.Helper()
+	ctx := context.Background()
+	namespaceName := "openapi-ns-hist"
+
+	testutil.SeedNamespaceDigestSeries(t, pool, namespaceName, 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, results))
+	require.NoError(t, engine.WriteNamespaceRecommendationHistory(ctx, pool, results))
+
+	return model.NativeNamespaceID(testutil.TestClusterUUID, namespaceName)
+}
+
+func TestOpenAPI_NamespaceRecommendations_List_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-ns-list"
+	_ = seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/namespaces?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_NamespaceRecommendations_Detail_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-ns-detail"
+	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/namespaces/%s", apiV1Prefix, namespaceID))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_NamespaceRecommendations_History_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-ns-history"
+	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/namespaces/%s/history?filter[term]=short_term&filter[engine]=cost&limit=10",
+			apiV1Prefix, namespaceID))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}/history", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("NamespaceRecommendationHistoryRow"))
+}
+
+func TestOpenAPI_NamespaceSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-ns-settings"
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/namespace")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/namespace", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
 func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	enableAllPluginsForContractTest(t)
