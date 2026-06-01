@@ -51,6 +51,7 @@ Best for: production, latency-sensitive services, SLA-critical workloads.
 | **Container** | Both engines nested under every term; **no** server-side engine filter on list |
 | **Namespace** | Same as container |
 | **Node** | Both engines nested; optional `?engine=` filter on list |
+| **VM** | Both engines stored per VM × term; `filter[engine]=cost\|performance` on list/detail — **native only** (Kruize does not support VMs) |
 | **GPU, PVC, Snapshot** | Single engine only (no cost/performance split) |
 
 Business hours adds a second **schedule** dimension (all_hours vs business_hours)

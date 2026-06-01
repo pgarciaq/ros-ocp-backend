@@ -40,7 +40,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 
 - **Plugin-based**: Self-contained plugins implement trait interfaces (ingest, produce, API, terms, retention)
 - **Native Go engine (default)**: Replaces legacy Kruize; relational `recommendation_sets` and domain digest tables — [migration guide](architecture/native-migration.md)
-- **Dual engine**: Cost-minimizing vs headroom-maximizing perspectives for containers, namespaces, nodes, and VMs
+- **Dual engine**: Cost-minimizing vs headroom-maximizing perspectives for containers, namespaces, nodes, and VMs (VMs are native-only—Kruize never supported VMs; VM “dual engine” is cost vs performance within the native engine)
 - **Multi-tenant**: Isolated per organization via `org_id` scoping
 - **Prometheus-compatible**: Per-phase histograms and operational metrics
 - **Cost-aware savings**: Integrates with Koku Masu `effective_rates` — [Cost Integration](architecture/cost-integration.md)

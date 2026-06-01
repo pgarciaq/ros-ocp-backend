@@ -6,7 +6,7 @@
     `GET .../vm/detail` (detail with daily digests)  
     **Settings:** `GET/PUT/DELETE .../settings/vm`, `GET/PUT/DELETE .../settings/vm/terms`  
     **Configurable:** Yes (Settings API + env-var locks)  
-    **Engines:** cost, performance (`filter[engine]=cost|performance`)  
+    **Engines:** cost, performance (`filter[engine]=cost|performance`) — native only; Kruize does not support VMs  
     **Savings:** Not yet — no dollar fields in API
 
 ## Overview
@@ -17,8 +17,10 @@ containers: resources are **whole vCPUs and whole GiB**, changes often require a
 
 ROS analyzes **15-minute** VM usage samples from the
 [koku-metrics-operator](https://github.com/project-koku/koku-metrics-operator),
-aggregates them into daily digests, runs a native Go recommendation engine, and
-exposes results through the REST API. Koku continues to consume hourly
+aggregates them into daily digests, runs the **native Go engine only** (Kruize has
+no VM recommendation path), and exposes results through the REST API. **Cost** and
+**performance** are two native engine variants (`filter[engine]=cost|performance`),
+not a Kruize vs native choice. Koku continues to consume hourly
 `cm-openshift-vm-usage-*.csv` for **cost only**; ROS uses
 `ros-openshift-vm-usage-*.csv` for optimization.
 

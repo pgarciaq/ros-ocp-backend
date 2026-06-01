@@ -25,6 +25,15 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 
 **Gate:** `ROS_ENABLE_VM_RECS` (default **`true`**). If no VM CSV is present, the plugin no-ops silently.
 
+### Recommendation engine (native only)
+
+VM recommendations are **always** produced by the built-in Go engine ([`recommendVM()`](../../internal/engine/vm_recommender.go)). **Kruize does not support VMs** and never will—there is no legacy Kruize VM path to gate or migrate.
+
+| Term | Meaning for VMs |
+|------|-----------------|
+| **Dual engine** | Native **cost** vs **performance** sizing for the same VM (`vmEngineCost` / `vmEnginePerformance`); select with `filter[engine]=cost\|performance`. Not Kruize vs native. |
+| **Coexistence** | On default native deployments, the `vm` plugin runs alongside container/namespace/node plugins. Legacy `ROS_ENABLED_PLUGINS=kruize` disables all native plugins (including `vm`); VM recs require native mode. |
+
 ---
 
 ## Implementation status

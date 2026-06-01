@@ -51,7 +51,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
-| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers; `filter[engine]` on VM/node |
+| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers; `filter[engine]` on VM/node. VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. |
 
 ### Validation priority (suggested order)
 

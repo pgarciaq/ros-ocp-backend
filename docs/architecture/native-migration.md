@@ -65,7 +65,7 @@ ROS_DISABLED_PLUGINS=vm,namespace
 | OOM detection & memory bump | Partial | **Yes** — logarithmic bump from OOM events in window |
 | GPU hardware catalog | N/A | **`internal/engine/gpu_catalog.yaml`** — VRAM, MIG profiles, model matching |
 | VM instance type catalog | N/A | Built-in u1/cx1/m1 (+ gn1 when GPU metrics); cluster CRs via `cluster_instance_types.json` |
-| OpenShift Virtualization | No | **vm** plugin — CPU, memory, disk, I/O, idle, abandoned, crash loop, GPU on guest |
+| OpenShift Virtualization | No (never supported) | **vm** plugin — native-only; CPU, memory, disk, I/O, idle, abandoned, crash loop, GPU on guest. No Kruize VM path existed to migrate. |
 | ResourceQuota / CRQ | No | **quota**, **cluster-quota** plugins |
 | Tag-based list filters | No | **Yes** — `filter[tag:key]` on container recommendations |
 | Box plots | Pre-computed by Kruize | On-the-fly from usage samples |
@@ -95,7 +95,7 @@ The two engines write to separate tables and shapes:
 | Namespace | Partial via Kruize JSON | `daily_namespace_digests`, namespace rows |
 | PVC / snapshot | Not supported | `daily_pvc_digests`, snapshot recommendation tables |
 | Quota / CRQ | Not supported | `quota_recommendations`, `cluster_quota_recommendations` |
-| VM | Not supported | `daily_vm_digests`, `vm_recommendations` |
+| VM | Not supported (never existed in Kruize) | `daily_vm_digests`, `vm_recommendations` — always native |
 | History / quality | Limited | `recommendation_history`, quality metrics (container-led) |
 
 ### 3. Cleanup after transition
