@@ -89,6 +89,51 @@ func TestVMSettings_GET_IncludesGPUClassificationThresholds(t *testing.T) {
 	assert.Equal(t, float64(8500), gpu["compute_saturation_threshold_bp"])
 }
 
+func TestVMSettings_GET_IncludesPlacementBlock(t *testing.T) {
+	orgID := "org-vm-settings-placement-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/vm", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	placement, ok := resp["placement"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, placement["enable_placement_checks"])
+	assert.Equal(t, float64(3), placement["placement_skew_ratio"])
+	assert.Equal(t, true, placement["enable_shared_pvc_correlation"])
+	assert.Equal(t, float64(64), placement["numa_node_memory_gib"])
+}
+
+func TestVMSettings_PUT_PlacementBlock(t *testing.T) {
+	orgID := "org-vm-settings-placement-put-" + uuid.New().String()[:8]
+	e := setupVMSettingsPUTHandler(t, orgID)
+
+	body := bytes.NewReader([]byte(`{
+		"placement": {
+			"placement_skew_ratio": 4,
+			"numa_node_memory_gib": 48
+		}
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/vm", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	placement, ok := resp["placement"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(4), placement["placement_skew_ratio"])
+	assert.Equal(t, float64(48), placement["numa_node_memory_gib"])
+}
+
 func TestVMSettings_PUT_GPUClassificationThresholds(t *testing.T) {
 	orgID := "org-vm-settings-gpu-put-" + uuid.New().String()[:8]
 	e := setupVMSettingsPUTHandler(t, orgID)

@@ -11,7 +11,7 @@
 |-------|-------------------|-------------|-------|
 | **Unit** (ros-ocp-backend) | ~25–30 | **252** test functions | Ingestion, engine, catalog, notifications, API, settings, plugin (`vm_*` test files) |
 | **E2E default CI** (cost-onprem-chart) | ~12–15 | **20** | `tests/suites/ros/test_vm_*.py` (no `@extended`) |
-| **E2E extended** (cost-onprem-chart) | — | **67** | Flow, GPU, network, GPU time-slicing, enhancements, notifications matrix (37–57), MVP promotions |
+| **E2E extended** (cost-onprem-chart) | — | **70+** | Flow, GPU, network, GPU time-slicing, enhancements, notifications matrix (37–59), placement (60–63), MVP promotions |
 | **IQE** | ~10–12 | **89** | `test_ros_vm_recommendations.py` (network + GPU time-slicing) |
 | **Nise** | 4 scenarios | ✅ | VM profiles + notification matrix templates |
 
@@ -76,6 +76,7 @@ Legend: ✅ implemented · ⬜ not implemented / deferred
 | Downsize stability (code 49) | `TestDownsizeStability_AllDaysBelow_RecommendsDownsize`, `TestDownsizeStability_OneDayAbove_HoldsAtCurrent`, `TestDownsizeStability_OnlyPerformanceEngine` | ✅ |
 | Network classification (n1, code 55) | `vm_network_classification_test.go` (`TestVMClassifySeriesNetwork_*`, `TestVMClassifySeries_NetworkOptimizedWhenBalanced`) | ✅ |
 | GPU time-slicing (codes 56–57) | `vm_gpu_timeslicing_test.go` (`TestRecommendVMTimeSlicing_*`, `TestVMGPU_HighFB_TimeSliceUnsafeNotification`) | ✅ |
+| Placement / NUMA (codes 60–63) | `vm_placement_test.go`, `vm_pvc_correlation.go`, `vm_numa_check.go` | ✅ |
 
 ### API (`internal/api/handlers_vm_recs_test.go`)
 
@@ -83,8 +84,10 @@ Legend: ✅ implemented · ⬜ not implemented / deferred
 |------|--------|
 | List empty / filters / invalid limit | ✅ |
 | Detail missing params | ✅ |
-| Settings GET | ✅ `TestVMSettings_GET_ReturnsConfig` |
-| Settings PUT (valid, invalid JSON, out of range, partial) | ✅ `handlers_vm_settings_test.go` |
+| Settings GET | ✅ `TestVMSettings_GET_ReturnsConfig` (includes `placement`) |
+| Settings PUT (valid, invalid JSON, out of range, partial, placement) | ✅ `handlers_vm_settings_test.go` |
+| Placement metadata JSON fields | ✅ `TestVMRecMetadata_JSONIncludesPlacementFields` |
+| Notification codes 60–63 in mapping | ✅ `TestMapToKruizeFormat_VMPlacementCodes60to63` |
 | Settings DELETE reset | ✅ `handlers_vm_settings_test.go` |
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
@@ -132,6 +135,7 @@ These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `
 | `test_vm_preference_flow.py` | ✅ preference metadata ingest (extended) |
 | `test_vm_network_flow.py` | ✅ n1 network-bound, notification **55**, `network` settings API |
 | `test_vm_gpu_timeslicing_flow.py` | ✅ production time-slicing, notifications **56**–**57**, `gpu` settings API |
+| `test_vm_placement_flow.py` | ✅ notifications **60**, **63**, `placement` settings API |
 
 ### Nise templates ✅
 
@@ -144,6 +148,7 @@ These run with `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm` (no `
 | `ocp_report_vm_mvp_promotions.yml` | Adaptive margin, history, MIG |
 | `ocp_report_vm_network.yml` | `network-heavy-vm-01` → n1, notification **55** |
 | `ocp_report_vm_gpu_timeslicing.yml` | Underutilized + FB-saturated GPUs → **56**–**57** |
+| `ocp_report_vm_placement.yml` | HA pair on same node → **60**; 128 GiB VM → **63** |
 
 ---
 
@@ -161,7 +166,8 @@ RECOMMENDATIONS_VM_HISTORY = "/recommendations/openshift/vm/{vm_name}/history"
 | Area | Status |
 |------|--------|
 | List, detail, settings, terms, filters, auth | ✅ |
-| Notifications 18–19, 37–57, 50–54 | ✅ |
+| Notifications 18–19, 37–63, 50–54 | ✅ |
+| Placement flags + codes 60–63 | ✅ |
 | Notification **41** instance type rec | ✅ `test_vm_notification_code_41_instance_type_rec` |
 | Network-bound / n1 (code **55**) | ✅ `test_vm_network_bound_*`, `test_vm_notification_code_55_network_saturated`, `test_vm_filter_is_network_bound` |
 | GPU time-slicing / vGPU (codes **56**–**57**) | ✅ `test_vm_gpu_timeslice_*`, `test_vm_notification_code_56_vgpu_profile`, `test_vm_notification_code_57_fb_unsafe` |

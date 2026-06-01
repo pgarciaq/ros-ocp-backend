@@ -37,6 +37,10 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.InDelta(t, 1.5, cfg.WindowsKernelReserveGiB, 1e-9)
 	assert.Equal(t, 3, cfg.DownsizeStabilityDays)
 	assert.Equal(t, int32(3), cfg.CrashLoopRestartThreshold)
+	assert.True(t, cfg.EnablePlacementChecks)
+	assert.Equal(t, 3, cfg.PlacementSkewRatio)
+	assert.True(t, cfg.EnableSharedPVCCorrelation)
+	assert.InDelta(t, 64.0, cfg.NUMANodeMemoryGiB, 1e-9)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {

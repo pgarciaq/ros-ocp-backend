@@ -152,6 +152,28 @@ func TestVMSettings_GET_ReturnsConfig(t *testing.T) {
 	assert.Contains(t, resp, "memory_floors")
 	assert.Contains(t, resp, "disk")
 	assert.Contains(t, resp, "io")
+	assert.Contains(t, resp, "placement")
+	placement, ok := resp["placement"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, placement["enable_placement_checks"])
+	assert.Equal(t, float64(3), placement["placement_skew_ratio"])
+	assert.Equal(t, true, placement["enable_shared_pvc_correlation"])
+	assert.Equal(t, float64(64), placement["numa_node_memory_gib"])
+}
+
+func TestVMRecMetadata_JSONIncludesPlacementFields(t *testing.T) {
+	meta := vmRecMetadata{
+		IsRedundantPlacement: true,
+		HasSharedStorage:     true,
+		NUMAOversized:        true,
+	}
+	b, err := json.Marshal(meta)
+	require.NoError(t, err)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(b, &decoded))
+	assert.Equal(t, true, decoded["is_redundant_placement"])
+	assert.Equal(t, true, decoded["has_shared_storage"])
+	assert.Equal(t, true, decoded["numa_oversized"])
 }
 
 func TestParseVMNotifications_StructuredObjects(t *testing.T) {

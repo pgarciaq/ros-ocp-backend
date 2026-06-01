@@ -49,6 +49,27 @@ func TestMapToKruizeFormat_UnknownCode_Skipped(t *testing.T) {
 	assert.False(t, ok, "unknown code 99 should be skipped")
 }
 
+func TestMapToKruizeFormat_VMPlacementCodes60to63(t *testing.T) {
+	result := MapToKruizeFormat([]int16{60, 61, 62, 63})
+	require.Len(t, result, 4)
+
+	assert.Equal(t, "WARNING", result["60"].Type)
+	assert.Contains(t, result["60"].Message, "anti-affinity")
+	assert.Equal(t, int16(60), result["60"].Code)
+
+	assert.Equal(t, "INFO", result["61"].Type)
+	assert.Contains(t, result["61"].Message, "topologySpreadConstraints")
+	assert.Equal(t, int16(61), result["61"].Code)
+
+	assert.Equal(t, "INFO", result["62"].Type)
+	assert.Contains(t, result["62"].Message, "correlated")
+	assert.Equal(t, int16(62), result["62"].Code)
+
+	assert.Equal(t, "WARNING", result["63"].Type)
+	assert.Contains(t, result["63"].Message, "NUMA")
+	assert.Equal(t, int16(63), result["63"].Code)
+}
+
 func TestNotificationDefinitionsComplete(t *testing.T) {
 	for code := int16(1); code <= 63; code++ {
 		_, ok := Definitions[code]

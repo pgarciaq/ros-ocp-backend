@@ -37,12 +37,12 @@ When adding a code:
 1. Add `INSERT` in a new migration under `migrations/`.
 2. Add `Notif*` constant in `internal/engine/notifications.go` or domain file (`vm_notifications.go`, `gpu_timeslicing.go`).
 3. Emit from the appropriate engine function (see table below).
-4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–59** are VM-only JSONB today and are **not** in `Definitions`; extend through **59** when container APIs need them).
+4. Extend `internal/notifications/mapping.go` `Definitions` if the code applies to non-VM APIs (codes **43–63** are VM-only JSONB today and are **not** in `Definitions`; extend through **63** when container APIs need them).
 5. Run `go test ./internal/notifications/...` (`TestDefinitionsMatchDB` catches DB/Go drift).
 
 ---
 
-## Master table (codes 1–59)
+## Master table (codes 1–63)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.
@@ -108,6 +108,10 @@ VM JSONB uses lowercase equivalents.
 | 57 | `VM_GPU_TIMESLICE_UNSAFE_FB` | WARNING | VM | Yes | GPU time-slicing not safe — frame-buffer usage too high for shared vGPU |
 | 58 | `VM_IO_SEQUENTIAL` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
 | 59 | `VM_IO_RANDOM` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
+| 60 | `VM_REDUNDANT_COLOCATION` | WARNING | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — same-node peers with matching profile |
+| 61 | `VM_UNEVEN_NODE_DISTRIBUTION` | INFO | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — skew ratio across nodes for profile group |
+| 62 | `VM_SHARED_STORAGE` | INFO | VM | Yes | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated profile peers in namespace |
+| 63 | `VM_NUMA_OVERSIZED` | WARNING | VM | Yes | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory exceeds `numa_node_memory_gib` |
 
 ---
 
@@ -215,8 +219,12 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm_gpu_timeslicing.go) — FB above safety threshold |
 | 58 | `NotifVMIOSequential` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
 | 59 | `NotifVMIORandom` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
+| 60 | `NotifVMRedundantColocation` | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — co-located redundant peers (`is_redundant_placement`) |
+| 61 | `NotifVMUnevenNodeDistribution` | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — uneven node spread for profile group |
+| 62 | `NotifVMSharedStorage` | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated workload group (`has_shared_storage`) |
+| 63 | `NotifVMNUMAOversized` | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory &gt; single NUMA node cap (`numa_oversized`) |
 
-Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications).
+Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).
 
 ---
 

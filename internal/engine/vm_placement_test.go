@@ -76,6 +76,31 @@ func TestCheckNUMAFit_Oversized(t *testing.T) {
 	assert.Equal(t, NotifVMNUMAOversized, n.Code)
 }
 
+func TestCheckNUMAFit_WithinCapacity(t *testing.T) {
+	assert.Nil(t, CheckNUMAFit(32, 64))
+	assert.Nil(t, CheckNUMAFit(64, 64))
+}
+
+func TestDetectSharedPVCs_NoPeers(t *testing.T) {
+	cluster := []model.DailyVMDigest{
+		vmDigestForPlacement("solo", "apps", "node-1", 4000, 8<<20, 100<<30),
+	}
+	cfg := DefaultVMRecConfig()
+	notifs, shared := DetectSharedPVCs(cluster, cluster[0], cfg)
+	assert.Nil(t, notifs)
+	assert.False(t, shared)
+}
+
+func TestDetectSameNodeRedundancy_Disabled(t *testing.T) {
+	cluster := []model.DailyVMDigest{
+		vmDigestForPlacement("vm-a", "apps", "node-1", 4000, 8<<20, 100<<30),
+		vmDigestForPlacement("vm-b", "apps", "node-1", 4000, 8<<20, 100<<30),
+	}
+	cfg := DefaultVMRecConfig()
+	cfg.EnablePlacementChecks = false
+	assert.Nil(t, DetectSameNodeRedundancy(cluster, cluster[0], cfg))
+}
+
 func TestRecommendVM_PlacementFlags(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	disk := int64(100 << 30)

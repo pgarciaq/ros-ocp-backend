@@ -408,6 +408,12 @@ Generic `.../settings/terms?recommendation_type=vm` also honors `ROS_SETTINGS_LO
         "gpu_timeslice_fb_safety_threshold_bp": 8000,
         "gpu_timeslice_dram_penalty_threshold_bp": 5000
       },
+      "placement": {
+        "enable_placement_checks": true,
+        "placement_skew_ratio": 3,
+        "enable_shared_pvc_correlation": true,
+        "numa_node_memory_gib": 64
+      },
       "instance_type_matching": true,
       "locked_fields": [],
       "settings_locked": false
@@ -418,7 +424,9 @@ Key env vars (each maps to a Settings API field): `ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_IDLE_CPU_MC`, `ROS_VM_ABANDONED_MIN_DAYS`, `ROS_VM_DISK_*`,
 `ROS_VM_HIGH_IOPS_THRESHOLD`, `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`,
 `ROS_VM_WINDOWS_KERNEL_RESERVE_GIB`, `ROS_VM_DOWNSIZE_STABILITY_DAYS`,
-`ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, `ROS_VM_NETWORK_*`, `ROS_VM_GPU_TIMESLICE_*`, and others.
+`ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, `ROS_VM_NETWORK_*`, `ROS_VM_GPU_TIMESLICE_*`, `ROS_VM_ENABLE_PLACEMENT_CHECKS`,
+`ROS_VM_PLACEMENT_SKEW_RATIO`, `ROS_VM_ENABLE_SHARED_PVC_CORRELATION`,
+`ROS_VM_NUMA_NODE_MEMORY_GIB`, and others.
 Full list: [VM design doc](../../../docs/design/vm-recommendations.md#environment-variables) and
 [Configurability Reference](../architecture/configurability.md).
 
@@ -467,7 +475,10 @@ GET /api/cost-management/v1/recommendations/openshift/vm
           "is_idle": false,
           "is_abandoned": false,
           "is_oversized": true,
-          "is_network_bound": false
+          "is_network_bound": false,
+          "is_redundant_placement": false,
+          "has_shared_storage": false,
+          "numa_oversized": false
         },
         "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },
         "disk_projection": { "days_until_full": null, "growth_gib_per_day": 2.1, "recommended_expand_gib": 100 },
@@ -490,6 +501,21 @@ GET /api/cost-management/v1/recommendations/openshift/vm/detail
 **Optional:** `term` (default `medium_term`), `engine` (default `cost`)
 
 Adds `daily_digests[]` with per-day percentile fields for charts.
+
+### Placement and NUMA
+
+Cluster-wide placement checks run during `recommendVM()` when `placement.enable_placement_checks`
+is true (default). Peers are grouped by namespace and matching vCPU/memory/disk profile (HA-style
+pairs without `app` labels on the VM CSV today).
+
+| Code | Metadata flag | Meaning |
+|------|---------------|---------|
+| **60** | `is_redundant_placement` | Another VM with the same profile runs on the same node |
+| **61** | — | Uneven spread of profile VMs across nodes (skew ratio, default 3:1) |
+| **62** | `has_shared_storage` | Correlated peers in the namespace (true PVC mapping pending operator field) |
+| **63** | `numa_oversized` | Recommended memory exceeds `placement.numa_node_memory_gib` (default 64 GiB) |
+
+Tune via `GET/PUT .../settings/vm` → `placement` block or env vars listed above.
 
 ### Cluster instance types
 
@@ -520,7 +546,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **Network metrics dependency** | **n1** active recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv`; without them, `is_network_bound` stays false |
-| **Placement / NUMA (60–63)** | Same-node redundancy and skew use namespace + resource profile (not app labels). Shared-storage uses profile peers until `persistentvolumeclaim_name` is on ROS VM CSV. NUMA uses `numa_node_memory_gib` default until per-node topology is ingested |
+| **Placement / NUMA (60–63)** | Implemented; see [Placement and NUMA](#placement-and-numa) below. App labels and per-VM PVC names on ROS CSV are future operator enhancements |
 | **No live migration awareness** | Recommendations do not account for migration in progress |
 | **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
