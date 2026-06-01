@@ -63,7 +63,7 @@ VM JSONB uses lowercase equivalents.
 | 12 | `NODE_OVERCOMMITTED` | WARNING | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) request/allocatable ratio |
 | 13 | `STRANDED_RESOURCES` | INFO | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) CPU/mem imbalance EMA |
 | 14 | `AUTOSCALER_SATURATED` | WARNING | Node | **No** | Reserved — MachineAutoscaler Tier 3 |
-| 15 | `AUTOSCALER_IDLE` | INFO | Node | **No** | Reserved |
+| 15 | `AUTOSCALER_IDLE` | INFO | Node | Yes | [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) when `idle_state` is `idle` or `zombie` |
 | 16 | `AUTOSCALER_FLAPPING` | WARNING | Node | **No** | Reserved |
 | 17 | `AUTOSCALER_RECOMMENDED` | INFO | Node | **No** | Reserved |
 | 18 | `VM_IDLE` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) |
@@ -155,9 +155,10 @@ Emitter: [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/
 | 12 | `NotifNodeOvercommitted` | `max(requests) / allocatable CPU > OvercommitThreshold` |
 | 13 | `NotifStrandedResources` | EMA of CPU vs mem imbalance &gt; `StrandedImbalanceThreshold` (default 0.6) for ≥2 days |
 | 25 | `NotifNoCostData` | [`applyNodeSavings`](../../internal/engine/node_savings.go) |
-| 4, 14–17, 23–24 | — | Reserved |
+| 15 | `NotifAIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go)) |
+| 4, 14–17, 23–24 | — | Reserved (14–17 still MachineAutoscaler; code 15 DB name is legacy) |
 
-Emitter: [`classifyNode`](../../internal/engine/recommend_nodes.go) → persisted in [`WriteNodeRecommendations`](../../internal/engine/recommend_nodes.go).
+Emitter: [`classifyNode`](../../internal/engine/recommend_nodes.go) and [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) → persisted in [`WriteNodeRecommendations`](../../internal/engine/recommend_nodes.go).
 
 ### GPU plugin (`gpu`)
 
@@ -241,7 +242,7 @@ Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendation
 | Codes | Intended domain | Notes |
 |-------|-----------------|-------|
 | 4 | MachineSet / PDB | [`docs/known-issues.md`](../known-issues.md) |
-| 14–17 | MachineAutoscaler | Tier 3 node feature |
+| 14, 16–17 | MachineAutoscaler | Tier 3 MachineAutoscaler (not node idle) |
 | 21–22 | HPA | Replica display exists; scaling advice does not |
 | 23–24 | Cloud instance catalog | Node MachineSet tier 2 |
 

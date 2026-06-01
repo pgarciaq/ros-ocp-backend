@@ -352,6 +352,8 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - When engines diverge significantly (e.g., CPU recommendation differs by >50%), show a subtle **Alert**: "Performance engine recommends 2× more CPU for this workload."
 - On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
 - When `business_hours` is present, add tabs: "All hours" and "Business hours" with side-by-side comparison.
+- Namespace list/detail: `business_hours` is populated when BH is enabled and reship is complete
+  (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](../docs-site/features/namespace-recommendations.md#business-hours)).
 - Negative savings: phrase as "Additional resources needed" with absolute usage delta, not negative currency.
 
 ---
@@ -376,6 +378,7 @@ Deprecated alias: `GET /recommendations/openshift/nodes/utilization` (returns `D
 | `engine` | `cost` or `performance` — filters engine rows |
 | `is_underutilized` | `true` / `false` |
 | `is_overcommitted` | `true` / `false` |
+| `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`) |
 | `order_by` | `node` or `estimated_monthly_savings` (default; alias `estimated_monthly_savings_usd`) |
 | `order_how` | `asc` or `desc` (default `desc`) |
 | `offset`, `limit` | Pagination (default limit 10, max 1000) |
@@ -395,6 +398,7 @@ One object per node with nested terms and engines:
       "classification": {
         "is_underutilized": true,
         "is_overcommitted": false,
+        "idle_state": "active",
         "stranded_resource": "memory"
       },
       "metrics": {
@@ -437,12 +441,17 @@ One object per node with nested terms and engines:
 | `stranded_resource` | `"cpu"` or `"memory"` when CPU/memory utilization is imbalanced (stranded capacity) |
 | Neither flag | Effectively **well_utilized** for display purposes |
 
-Notification codes **11** (underutilized), **12** (overcommitted), **13** (stranded) align with these flags.
+Notification codes **11** (underutilized), **12** (overcommitted), **13** (stranded), and **15**
+(node `idle` or `zombie`) align with these flags. Code **15** reuses the legacy DB name
+`AUTOSCALER_IDLE`; the message in API responses describes node idle/zombie state.
 
 #### Savings fields
 
 `estimated_monthly_savings` on each engine reflects consolidation / right-sizing opportunity
-for that engine profile. `node_count_reduction` suggests how many nodes could be removed (cost engine).
+for that engine profile. `node_count_reduction` is the per-node consolidation hint for that
+engine/term. When the operator supplies `instance_type` on ROS container CSV rows, the cost
+engine groups nodes by instance type and may assign reduction across several underutilized
+nodes in the same group (not a single global binary flag).
 
 ### GPU time-slicing (separate endpoint)
 
@@ -490,7 +499,10 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 - Add a dashboard widget showing fleet health: X underutilized, Y overcommitted, Z well-utilized (derive from classification flags).
 - Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings.
-- Display `node_count_reduction` prominently: "You could save N nodes" on cost-engine rows.
+- Display `node_count_reduction` prominently on cost-engine rows; sum reductions by
+  `instance_type` when explaining fleet consolidation opportunity.
+- Add `filter[idle_state]=idle` or `zombie` tabs for decommissioning workflows; show
+  `classification.idle_state` with badges (active / idle / zombie).
 - Include per-node `estimated_monthly_savings` and cluster-level consolidation summary in a **Card** header.
 - Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).

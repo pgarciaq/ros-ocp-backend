@@ -315,6 +315,20 @@ override behavior: [configurability.md](../architecture/configurability.md).
 `ROS_NODE_PERF_TARGET_UTILIZATION`,
 `ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER`, `ROS_NODE_TREND_MIN_DAYS`
 
+Node idle/zombie classification (`classification.idle_state` on
+`GET .../recommendations/openshift/nodes`; migration **000111**):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_NODE_ZOMBIE_CPU_MC` | `200` | CPU P95 (millicores) below this with few pods → `zombie`. |
+| `ROS_NODE_ZOMBIE_MAX_PODS` | `5` | Max running pods for zombie classification. |
+| `ROS_NODE_IDLE_CPU_UTIL_PCT` | `10` | CPU utilization % of allocatable below this → `idle` candidate. |
+| `ROS_NODE_IDLE_MEM_UTIL_PCT` | `10` | Memory utilization % of allocatable below this → `idle` candidate. |
+| `ROS_NODE_IDLE_MAX_PODS` | `10` | Max running pods for idle classification. |
+
+See [`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go) and
+[Node recommendations](../docs-site/features/node-recommendations.md).
+
 ### GPU
 
 `ROS_GPU_IDLE_THRESHOLD`, `ROS_GPU_UNDERUTILIZED_SM_THRESHOLD`,

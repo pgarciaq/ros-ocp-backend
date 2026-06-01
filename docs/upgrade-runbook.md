@@ -404,3 +404,41 @@ These values are persisted at ingestion alongside `estimated_monthly_savings_usd
 - Additive `ADD COLUMN IF NOT EXISTS` — safe on live deployments.
 - Values populate on the **next ingestion cycle** after deploy (no historical backfill).
 - Rollback drops the three columns; values are recomputed on re-upgrade.
+
+---
+
+## Namespace business-hours rows (migration 000110)
+
+### What it adds
+
+Migration **000110** adds `schedule_type digest_schedule_type NOT NULL DEFAULT 'all_hours'`
+to `namespace_recommendation_sets` and `historical_namespace_recommendation_sets`, and
+rebuilds unique indexes to include `schedule_type`. The native engine writes
+`business_hours` rows via [`RecommendBusinessHoursNamespaces`](../../internal/engine/recommend_namespace.go);
+list APIs still read `all_hours` and enrich `business_hours` on the response.
+
+### Deploy notes
+
+- Additive DDL — safe on live deployments.
+- BH namespace rows appear after `ROS_BUSINESS_HOURS_ENABLED=true`, schedule PUT, and
+  successful masu reship (dual `daily_namespace_digests`).
+- Rollback (`000110` down) drops `schedule_type` and restores the prior unique index.
+
+---
+
+## Node idle state (migration 000111)
+
+### What it adds
+
+Migration **000111** adds `idle_state TEXT NOT NULL DEFAULT 'active'` to
+`node_recommendations` and index `idx_node_recommendations_idle_state` for
+non-active states. Populated at ingestion by [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go);
+exposed as `classification.idle_state` and `filter[idle_state]` on
+`GET /recommendations/openshift/nodes`. May emit notification code **15**.
+
+### Deploy notes
+
+- Additive — no worker stop required.
+- Values populate on the **next ingestion cycle** after deploy.
+- Pair with operator ROS CSV columns `instance_type`, `node_allocatable_cpu_cores`, and
+  `node_allocatable_memory_bytes` for Level 3 consolidation and accurate allocatable ratios.

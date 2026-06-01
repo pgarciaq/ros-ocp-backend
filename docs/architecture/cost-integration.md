@@ -153,8 +153,15 @@ Shared classification (underutilized, overcommitted, stranded) uses the same thr
 2. [`RecommendNodes()`](../../internal/engine/recommend_nodes.go) classifies once per (node, term), then sizes per engine via [`sizeNodeForEngine()`](../../internal/engine/recommend_nodes.go)
 3. [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) compares current vs recommended node CPU cores and memory GiB per engine row
 4. Rates from `configured_rates`: `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, `node_cost_per_month`
-5. When underutilized, `node_cost_per_month` is included once (`NodeCountReduction = 1`) as consolidation savings — cost engine always; performance engine only when headroom ≥ recommended capacity on both CPU and memory
+5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty.
 6. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_monthly_savings_usd`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
+
+**Node allocatable capacity:** Ingestion prefers **`node_allocatable_cpu_cores`** and
+**`node_allocatable_memory_bytes`** from koku-metrics-operator ROS container CSV rows
+(when present). These populate `daily_node_digests` allocatable columns used for
+utilization ratios. If absent, the pipeline falls back to
+`ROS_NODE_ALLOCATABLE_FACTOR` × observed request totals (default **0.93**), preserving
+backward compatibility with older operator builds.
 
 **List API:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Shared classification and metrics come from the medium-term cost row when present. Pagination and default sort (`order_by=estimated_monthly_savings_usd`) operate on distinct nodes.
 

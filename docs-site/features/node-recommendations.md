@@ -33,8 +33,11 @@ flowchart TD
 2. **Classification** — Each node is labeled once (see table below).
 3. **Dual-engine sizing** — Recommended capacity =
    `max(usage_p95, requests) / target_utilization`.
-4. **Consolidation** — When underutilized, the cost engine recommends removing
-   one node; the performance engine requires extreme headroom before consolidating.
+4. **Consolidation (Level 3)** — When underutilized, engines compute a per-node
+   consolidation flag, then [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
+   groups nodes by `instance_type` (from operator ROS CSV) and distributes
+   `node_count_reduction` across the fleet. Nodes without `instance_type` keep
+   legacy per-node binary reduction (0 or 1).
 5. **Savings** — Dollar estimates compare current vs recommended node CPU, memory,
    and monthly node cost. See [Cost Integration — Node Savings](../architecture/cost-integration.md#node-savings-cpumemory-utilization).
 
@@ -56,7 +59,7 @@ Stranded-resource nodes have one dimension heavily used while the other sits idl
 | Aspect | Cost engine | Performance engine |
 |--------|-------------|---------------------|
 | Target utilization | 80% | 55% |
-| Consolidation | When underutilized (`node_count_reduction = 1`) | Only when underutilized **and** current ≥ 2× recommended on **both** CPU and memory |
+| Consolidation | Fleet-aware by `instance_type` when operator provides it | Same headroom guard; may assign `node_count_reduction = 0` when group cannot consolidate |
 | Savings | More aggressive consolidation | Conservative; preserves headroom |
 
 Filter list results: `?engine=cost` (default for sorting) or `?engine=performance`.
@@ -67,7 +70,8 @@ Filter list results: `?engine=cost` (default for sorting) or `?engine=performanc
 |-------|---------|
 | `recommended_cpu_cores` | Target CPU capacity for the node (or cluster slice) |
 | `recommended_memory_gib` | Target memory capacity (GiB) |
-| `node_count_reduction` | Suggested nodes to remove (0 or 1 today) |
+| `node_count_reduction` | Suggested nodes to remove in this engine/term (0 or 1 per row; fleet sum may exceed 1) |
+| `classification.idle_state` | `active`, `idle`, or `zombie` (node idle detection; migration **000111**) |
 | `estimated_monthly_savings` | Dollar delta vs current allocation (`value` + `units`) |
 
 ## Term support
@@ -82,8 +86,10 @@ nested under `recommendation_terms`.
 GET /api/cost-management/v1/recommendations/openshift/nodes
 ```
 
-Query parameters include `cluster`, `engine`, `term`, `order_by`
-(default `estimated_monthly_savings`; alias `estimated_monthly_savings_usd`), and pagination.
+Query parameters include `cluster_uuid`, `node`, `engine`, `term`,
+`filter[idle_state]` (`active`, `idle`, `zombie`; comma-separated),
+`is_underutilized`, `is_overcommitted`, `order_by` (default
+`estimated_monthly_savings`; alias `estimated_monthly_savings_usd`), and pagination.
 
 ### Example (abbreviated)
 

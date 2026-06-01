@@ -359,10 +359,11 @@ evaluates daily node digests and produces per-node recommendations.
   spikes from batch jobs.
 - **Trend slope:** Linear regression on EMA-smoothed daily CPU utilization
 
-**Data pipeline:** Operator emits `node_capacity_cpu_cores` and
-`node_capacity_memory_bytes` in ROS CSVs → parser → `daily_node_digests` →
-engine → `node_recommendations` table. Falls back to request-based estimates
-when capacity data is unavailable.
+**Data pipeline:** Operator emits `node_allocatable_cpu_cores`,
+`node_allocatable_memory_bytes`, `node_capacity_cpu_cores`, `instance_type`,
+and related fields in ROS container CSVs → parser → `daily_node_digests` →
+engine → `node_recommendations` table. Prefer allocatable columns when present;
+otherwise falls back to `ROS_NODE_ALLOCATABLE_FACTOR` × request totals.
 
 **Configuration (env vars):**
 
@@ -373,6 +374,18 @@ when capacity data is unavailable.
 | `ROS_NODE_ALLOCATABLE_FACTOR` | 0.93 | Fraction of capacity considered allocatable |
 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed imbalance above this = stranded |
 | `ROS_NODE_EMA_ALPHA` | 0.3 | EMA smoothing alpha (higher = less smoothing) |
+| `ROS_NODE_ZOMBIE_CPU_MC` | 200 | Zombie: CPU P95 below this (millicores) with few pods |
+| `ROS_NODE_ZOMBIE_MAX_PODS` | 5 | Zombie: max pod count |
+| `ROS_NODE_IDLE_CPU_UTIL_PCT` | 10 | Idle: CPU util % of allocatable |
+| `ROS_NODE_IDLE_MEM_UTIL_PCT` | 10 | Idle: memory util % of allocatable |
+| `ROS_NODE_IDLE_MAX_PODS` | 10 | Idle: max pod count |
+
+**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
+groups underutilized nodes by `instance_type` and distributes `node_count_reduction`
+across the fleet (not per-node binary only).
+
+**Node idle state:** `idle_state` (`active` / `idle` / `zombie`) on each node row;
+`filter[idle_state]` on the nodes API; notification code **15** when idle or zombie.
 
 **Dual engines:** Each node/term stores separate **cost** (80% target utilization)
 and **performance** (55% target) engine rows, mirroring container
@@ -389,7 +402,7 @@ Pagination counts distinct nodes; default sort is medium-term
 reflects the Koku cost model unit. Deprecated alias:
 `GET .../nodes/utilization`.
 
-**Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 25 (`NotifNoCostData` when savings cannot be computed).
+**Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 15 (node idle/zombie), 25 (`NotifNoCostData` when savings cannot be computed).
 
 **Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
 

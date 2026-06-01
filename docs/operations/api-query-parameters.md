@@ -99,6 +99,7 @@ Equivalent flat parameters:
 
 - `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.
 - `is_overcommitted` — `true` / `false` / omit. When `true`, only nodes where pod CPU requests exceed the overcommit threshold × allocatable (default threshold 1.5).
+- `filter[idle_state]` — Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`). Maps to `node_recommendations.idle_state`.
 
 **Exact and exclude modes** (bracket only — container/namespace list endpoints):
 

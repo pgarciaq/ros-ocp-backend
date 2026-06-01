@@ -121,8 +121,16 @@ Term windows: `GET .../settings/terms?recommendation_type=namespace`.
 
 ## Business hours
 
-When business hours is enabled, namespace recommendations include both
-**all_hours** and **business_hours** streams — same as containers. See
+**Fully supported:** When `ROS_BUSINESS_HOURS_ENABLED=true` and a schedule is
+configured for the namespace (or inherited from cluster/org), the engine writes
+separate `namespace_recommendation_sets` rows per `schedule_type` (`all_hours` and
+`business_hours`; migration **000110**). List/detail APIs return **all_hours** in
+`recommendation_engines.{cost|performance}.config` and attach a
+`business_hours` block (same shape as containers) via
+[`EnrichNativeNamespaceResultsWithBusinessHours`](../../internal/engine/recommend_business_hours.go)
+after reship completes.
+
+Requires dual `daily_namespace_digests` rows and `reship_status: complete`. See
 [Business Hours](business-hours.md).
 
 ## Related

@@ -187,4 +187,6 @@ No koku-metrics-operator changes required.
 Prometheus metrics: `ros_reship_in_progress`, `ros_reship_files_processed`,
 `ros_reship_duration_seconds`, `ros_reship_failures_total`.
 
-E2E coverage: `cost-onprem-chart/tests/suites/ros/test_business_hours.py`.
+E2E coverage: `cost-onprem-chart/tests/suites/ros/test_business_hours.py`;
+extended namespace flow: `cost-onprem-chart/tests/suites/e2e/test_namespace_recommendations_flow.py`
+(`./scripts/run-pytest.sh --extended -k namespace_recommendations_flow`).
