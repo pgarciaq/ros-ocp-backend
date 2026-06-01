@@ -145,6 +145,29 @@ Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_TH
 
 Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference` CRs are exported in `cluster_instance_types.json` by the metrics operator and persisted for matching.
 
+### Per-GPU device metrics (`vm_gpu_device_digests`)
+
+Multi-GPU VMs store **one row per physical GPU per daily digest** in `vm_gpu_device_digests` (migration `000100`). Columns mirror the device CSV: `gpu_uuid`, `gpu_model`, utilization and frame-buffer stats (basis points / MiB), and optional MIG metadata (`mig_profile`, `max_slices`). Parent digest rows in `daily_vm_digests` keep aggregate GPU fields; normalized device rows power notification **54** (partial multi-GPU idle) and `gpu_devices` in the detail API.
+
+Ingestion: [`ParseVMGPUDeviceCSVRows()`](../../internal/ingestion/vm_gpu_device_csv.go) → [`MergeVMGPUDeviceRowsIntoDigests()`](../../internal/ingestion/vm_gpu_device_csv.go) → [`UpsertVMGPUDevices()`](../../internal/ingestion/vm_gpu_device_db.go). API reads attach devices via [`AttachGPUDevicesToDigests()`](../../internal/engine/vm_gpu_device_db.go).
+
+### `ros-openshift-vm-gpu-device` CSV (operator → ROS)
+
+The metrics operator emits **`ros-openshift-vm-gpu-device-*.csv`** (payload type `vm-gpu` / `ocp_ros_vm_gpu_device`) at the same 15-minute cadence as VM usage. Each row is one GPU on one VMI for one interval (14 columns: `interval_start`, `namespace`, `vm_name`, `gpu_uuid`, `gpu_model`, utilization and frame-buffer averages/maxima, SM/tensor/DRAM active averages, `mig_profile`, `max_slices`).
+
+Koku routes these filenames to ROS only (not cost): `ros-openshift-vm-gpu-device` and `ocp_ros_vm_gpu_device` substrings in Masu `ROS_EXTRA_PATTERNS` / `is_ros_vm_filename()`. Cost remains on hourly `cm-openshift-vm-usage-*.csv`.
+
+The VM plugin detects device CSVs by header (`gpu_uuid` present, no `cpu_usage_mc`) and calls [`IngestVMGPUDeviceCSV()`](../../internal/ingestion/vm_gpu_device_db.go) instead of the usage digest path.
+
+### GPU ↔ VMI name correlation (operator)
+
+DCGM metrics are collected on **virt-launcher pods**, not VMIs directly. The operator maps pod → VMI name before writing VM or device CSV rows:
+
+1. **Primary:** `kube_pod_labels` / label `vm.kubevirt.io/name` via Prometheus ([`fetchPodVMINameMap()`](../../../koku-metrics-operator/internal/collector/vm_pod_vmi_labels.go), [`vmiNameForGPURow()`](../../../koku-metrics-operator/internal/collector/vm_gpu_collector.go)).
+2. **Fallback:** Parse `virt-launcher-<vmi-name>-<hash>` when kube-state-metrics labels are unavailable.
+
+The same correlation applies to aggregated VM GPU columns and per-device CSV rows.
+
 ### VirtualMachinePreference integration
 
 OpenShift Virtualization lets admins attach a **cluster preference** to a VM (`spec.preference.name`). Preferences carry a **class** label (`instancetype.kubevirt.io/class` on the preference CR) that indicates intended series (for example memory-intensive for database workloads).
@@ -477,21 +500,21 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **Power management / suspend** | No suspend or power-state recommendations |
 | **n-series active recommendations** | `n1` catalog is recognition-only until network metrics exist |
 | **koku-ui** | No dedicated VM optimizations view |
-| **`current_instance_type`** | Column exists; not populated from operator/`kubevirt_vmi_info` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
-| **Recommendation history** | Upsert keeps latest row only |
 | **OpenAPI spec** | VM paths not in [`openapi.json`](../../openapi.json) yet |
 
-**GPU limitations (implemented with constraints):** multi-GPU VMs use count-aware matching only (no per-device analysis); vGPU fractional sharing gets classification and coarse MIG step-down, not full vGPU profile recommendations; DCGM Exporter required on cluster for GPU metrics.
+**GPU limitations (implemented with constraints):** vGPU fractional sharing gets classification and coarse MIG step-down, not full vGPU profile recommendations; DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
 
 ---
 
 ## Database
 
-Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_recommendations.up.sql), notification seeds in `000090`/`000091`.
+Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_recommendations.up.sql), GPU fields `000097`, device table `000100`, notification seeds in `000090`/`000091`.
 
-- `daily_vm_digests` — partitioned by `bucket_date`; percentile and I/O columns
+- `daily_vm_digests` — daily percentile and I/O columns; aggregate GPU fields; `has_gpu`
+- `vm_gpu_device_digests` — per-GPU rows keyed by `vm_digest_id` + `gpu_uuid`
 - `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB
+- `vm_recommendation_history` — append-only history; retention via `ROS_VM_REC_HISTORY_RETENTION_DAYS`
 
 ---
 
@@ -501,10 +524,10 @@ See [vm-test-plan.md](vm-test-plan.md). Summary:
 
 | Layer | Planned | Implemented (approx.) |
 |-------|---------|------------------------|
-| Unit (ros-ocp-backend) | ~30 | **~58** test functions |
-| E2E (cost-onprem-chart) | ~15 | **13** |
-| IQE | ~12 | **26** |
-| Nise templates | — | `ocp_report_vm.yml` (chart + IQE) |
+| Unit (ros-ocp-backend) | ~30 | **~70** test functions |
+| E2E (cost-onprem-chart) | ~15 | **~44** |
+| IQE | ~12 | **~59** |
+| Nise templates | — | `ocp_report_vm.yml`, `ocp_report_vm_gpu.yml`, `ocp_report_vm_mvp_promotions.yml` |
 
 ```bash
 cd ros-ocp-backend

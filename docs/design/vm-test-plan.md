@@ -9,9 +9,9 @@
 
 | Layer | Originally planned | Implemented | Notes |
 |-------|-------------------|-------------|-------|
-| **Unit** (ros-ocp-backend) | ~25–30 | **~58** test functions | Ingestion, engine, catalog, notifications, API, settings |
-| **E2E** (cost-onprem-chart) | ~12–15 | **32** | ROS + settings + extended + enhancements + GPU flow |
-| **IQE** | ~10–12 | **35** | Full API contract in `test_ros_vm_recommendations.py` |
+| **Unit** (ros-ocp-backend) | ~25–30 | **~70** test functions | Ingestion, engine, catalog, notifications, API, settings, plugin |
+| **E2E** (cost-onprem-chart) | ~12–15 | **~44** | ROS + settings + extended + enhancements + GPU + MVP promotions |
+| **IQE** | ~10–12 | **~59** | Full API contract in `test_ros_vm_recommendations.py` |
 | **Nise** | 4 scenarios | ✅ | `ocp_report_vm.yml` (chart + IQE) |
 
 Legend: ✅ implemented · ⬜ not implemented / pending
@@ -20,22 +20,28 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 
 ## Layer A — ros-ocp-backend unit tests
 
-### Plugin (`internal/plugins/vm/`)
+### Plugin (`internal/plugins/vm/plugin_test.go`)
 
-| Test (planned) | Status | Notes |
-|----------------|--------|-------|
-| Trait assertions (`CSVIngestor`, routes, retention) | ⬜ | No `plugin_test.go`; behavior covered indirectly via integration path in `plugin.go` |
-| Metadata name/phase/priority | ⬜ | |
-| Enabled / 404 when disabled | ✅ | [`disabled_plugin_route_guards_test.go`](../../internal/api/disabled_plugin_route_guards_test.go) |
+| Test | Status |
+|------|--------|
+| `TestVMPlugin_Implements_CSVIngestor` | ✅ |
+| `TestVMPlugin_Implements_RetentionProvider` | ✅ |
+| `TestVMPlugin_Priority_Is40` | ✅ |
+| `TestVMPlugin_Name` | ✅ |
+| `TestVMPlugin_RetentionTables_IncludesAllTables` | ✅ |
+| `TestVMPlugin_RegisterRoutes_WhenDisabled_NoRoutes` | ✅ |
+| Enabled / 404 when disabled (HTTP guards) | ✅ | [`disabled_plugin_route_guards_test.go`](../../internal/api/disabled_plugin_route_guards_test.go) |
 
-### Ingestion (`internal/ingestion/vm_csv_test.go`, `vm_digest_builder_test.go`)
+### Ingestion (`internal/ingestion/vm_csv_test.go`, `vm_digest_builder_test.go`, `vm_gpu_device_csv_test.go`)
 
 | Test | Status |
 |------|--------|
 | Valid all columns / 15-min rows | ✅ `TestVMParseCSVRows_ValidAllColumns` |
 | Guest agent null vs populated | ✅ `TestVMParseCSVRows_MissingGuestAgentColumns`, digest builder guest-agent tests |
 | Malformed row / wrong header | ✅ |
-| Single/multi VM, multi-day digests | ✅ `vm_digest_builder_test.go` (6 tests) |
+| Single/multi VM, multi-day digests | ✅ `vm_digest_builder_test.go` |
+| GPU device CSV parse (valid, empty, malformed, header-only, missing columns) | ✅ `vm_gpu_device_csv_test.go` |
+| Digest multi-GPU grouping and per-device averaging | ✅ `TestBuildDailyVMDigests_WithGPUDevices`, `GPUDeviceAveraging`, `NoGPU_EmptyDevices` |
 
 ### Engine (`internal/engine/vm_recommender_test.go`, `vm_instance_catalog_test.go`, `vm_config_test.go`, `vm_settings_test.go`)
 
@@ -74,10 +80,12 @@ Legend: ✅ implemented · ⬜ not implemented / pending
 | List empty / filters / invalid limit | ✅ |
 | Detail missing params | ✅ |
 | Settings GET | ✅ `TestVMSettings_GET_ReturnsConfig` |
+| Settings PUT (valid, invalid JSON, out of range, partial) | ✅ `handlers_vm_settings_test.go` |
 | Notification JSON parse (structured + legacy int array) | ✅ |
 | order_by allowlist | ✅ |
 | `filter[is_abandoned]` | ✅ `TestVMRecommendations_ListFilterAbandoned` |
-| `filter[has_gpu]`, `filter[gpu_classification]` | ✅ | IQE + E2E `test_vm_gpu_flow.py` |
+| `filter[has_gpu]`, `filter[gpu_classification]` | ✅ | Unit `handlers_vm_recs_integration_test.go` + IQE + E2E |
+| Detail `gpu_devices` array | ✅ | `TestVMDetail_Success_WithGPUDevices` |
 
 ### Integration (`vm_lifecycle_integration_test.go`)
 
@@ -160,9 +168,31 @@ Template: `tests/data/nise_templates/ocp_report_vm_enhancements.yml`. Run:
 Template: `tests/data/nise_templates/ocp_report_vm_gpu.yml`. Run:
 `NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow`.
 
+### Extended E2E — MVP promotions (`test_vm_mvp_promotions_flow.py`) — 7 tests ✅
+
+| Test | Status |
+|------|--------|
+| `test_01_adaptive_margin_applied` | ✅ |
+| `test_02_current_instance_type_populated` | ✅ |
+| `test_03_time_slicing_recommendation` | ✅ |
+| `test_04_multi_gpu_partial_idle` (notification 54) | ✅ |
+| `test_05_mig_optimal_profile` | ✅ |
+| `test_06_disk_projection_30_days` | ✅ |
+| `test_07_recommendation_history_api` | ✅ |
+
+Template: `tests/data/nise_templates/ocp_report_vm_mvp_promotions.yml`. Run:
+`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_mvp_promotions_flow`.
+
+### GPU device CSV (unit + routing)
+
+| Test | Status |
+|------|--------|
+| `vm_gpu_device_csv_test.go` (ros-ocp-backend) | ✅ |
+| Koku `ROS_EXTRA_PATTERNS` / `is_ros_vm_filename` for `ros-openshift-vm-gpu-device`, `ocp_ros_vm_gpu_device` | ✅ `test_kafka_msg_handler.py`, `test_common.py` |
+
 ---
 
-## Layer C — IQE (`test_ros_vm_recommendations.py`) — 35 tests ✅
+## Layer C — IQE (`test_ros_vm_recommendations.py`) — ~59 tests ✅
 
 Paths (constants):
 
@@ -216,6 +246,13 @@ Data: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (namespace `vm-
 
 GPU VMs are defined in `ocp_report_ros_vm.yml` (`ml-training`, `inference` namespaces).
 
+### IQE — MVP promotion scenarios
+
+| Area | Status |
+|------|--------|
+| Adaptive margin, `current_instance_type`, time-slicing, multi-GPU notification 54 | ✅ Covered in IQE VM/GPU tests + chart E2E `test_vm_mvp_promotions_flow.py` |
+| Recommendation history API | ✅ IQE + E2E `test_07_recommendation_history_api` |
+
 ---
 
 ## Layer D — Nise
@@ -236,7 +273,7 @@ Data file: `iqe_cost_management/data/openshift/ocp_report_ros_vm.yml` (IQE), `co
 
 | Test | Priority |
 |------|----------|
-| Plugin unit tests (`plugin_test.go`) | Low |
+| Koku routing regression for new ROS filename patterns | Low — covered in Masu unit tests |
 | DB lifecycle integration test | Medium |
 | E2E assert notification codes 37–42 on seeded VMs | Medium |
 | OpenAPI contract entries for VM paths | Medium |
@@ -256,6 +293,7 @@ cd cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros -k vm
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_recommendations_flow
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_gpu_flow
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended -k vm_mvp_promotions_flow
 ```
 
 ---
