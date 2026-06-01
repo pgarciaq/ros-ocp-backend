@@ -12,8 +12,9 @@ plugin, which recommends ideal CPU/memory totals from namespace usage digests. T
 `quota` plugin compares those aggregates (and actual quota consumption) against
 **configured** ResourceQuota hard limits and advises operators to tighten or raise them.
 
-**ClusterResourceQuota** (OpenShift team/tenant quotas) is **not** implemented yet — see
-[cluster-resource-quota.md](cluster-resource-quota.md) (design) and [future work](#future-work) below.
+**ClusterResourceQuota** (OpenShift team/tenant quotas) is **implemented** via the
+`cluster-quota` plugin — see [cluster-resource-quota.md](cluster-resource-quota.md) and
+`GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`.
 
 ---
 
@@ -21,8 +22,8 @@ plugin, which recommends ideal CPU/memory totals from namespace usage digests. T
 
 - **ResourceQuota:** Per-namespace caps on aggregate resource consumption
   (`requests.cpu`, `requests.memory`, `limits.*`, etc.).
-- **ClusterResourceQuota (planned):** OpenShift extension that applies quota across a
-  selector of namespaces — no metrics or recommendations yet.
+- **ClusterResourceQuota:** OpenShift extension that applies quota across a selector of
+  namespaces — implemented by the `cluster-quota` plugin (see [cluster-resource-quota.md](cluster-resource-quota.md)).
 
 Recommendations suggest adjusted hard limits with a configurable headroom margin, flag
 mismatches between quota and real usage, and surface admission risk when utilization
@@ -173,7 +174,7 @@ and [known issues](../known-issues.md#deferred-quota-ui).
 |-----|-------|
 | **Storage / object counts** | Operator `kube_resourcequota` queries only collect CPU/memory request/limit hard and used. No `requests.storage`, `pods`, or `count/*` in the namespace ROS CSV — requires [koku-metrics-operator](https://github.com/project-koku/koku-metrics-operator) query/CSV changes before ros-ocp-backend can ingest them. |
 | **Per-quota object identity** | Operator sums `kube_resourcequota` **by namespace** only (no `resourcequota` label in PromQL). Multiple `ResourceQuota` objects per namespace are merged — per-object `quota_name` needs operator CSV columns. |
-| **CRQ namespace selector** | Cluster quota CSV has hard/used per CRQ name only; no namespace selector labels. CRQ recommendations apply one cluster-wide namespace-quota aggregate to every CRQ row until the operator exports selector membership. |
+| **CRQ namespace selector** | Implemented: operator exports comma-separated `namespaces` on cluster-quota CSV; engine sums namespace quota recommendations for member namespaces only. |
 
 Implemented in this plugin: `order_by` / `order_how`, detail endpoints with `history[]`, notification codes **70–73**, and append-only `quota_recommendation_history` (90-day retention).
 
