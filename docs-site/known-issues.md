@@ -102,6 +102,34 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 
 **Scope limit:** MachineSets only (IPI). No Tier 2/3 for bare metal, SNO, or clusters without Machine API (`machineset_name` NULL).
 
+### Future: Seasonality / Proactive Recommendations
+
+**Status:** Planned / Future Work — **not implemented** and not scheduled for the
+current release train.
+
+Today's container, node, PVC, quota, and GPU recommendations are **reactive**:
+they compare recent usage to current limits and advise changes after utilization
+patterns are already visible. **Seasonality / proactive recommendations** would
+detect recurring CPU, memory, storage, and fleet-level patterns (for example
+Monday-morning login spikes, month-end batch jobs, holiday traffic, or steady PVC
+growth) and emit forward-looking guidance so operators can right-size **before**
+the next predictable peak.
+
+**Why deferred:**
+
+- Requires **90+ days** of daily aggregated metrics per entity before seasonal
+  signals are reliable; **two or more years** of history for annual patterns.
+- Needs a new metrics history pipeline, forecasting plugins, and API fields — not
+  an extension of the existing percentile-based container engine.
+- Statistical forecasting (classical decomposition / ETS per the design doc — not
+  foundation models) still demands substantial engineering, backtesting, and
+  confidence gating before customer-facing rollout.
+
+**Design references (planned only):**
+
+- [Seasonality plugin design](../docs/design/seasonality-plugin.md)
+- [Product overview](features/seasonality.md)
+
 ### Not Planned for Current MVP
 
 These features are documented in `requirements.md` but are explicitly
