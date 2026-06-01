@@ -80,7 +80,7 @@ func matchGPUModelKey(lower string) string {
 	// NVIDIA / Tesla product lines — order is explicit (specific before general).
 	switch {
 	case strings.Contains(lower, "b200"):
-		return "B200_192GB"
+		return "B200_180GB"
 	case strings.Contains(lower, "h200"):
 		return "H200_141GB"
 	case strings.Contains(lower, "h100") && strings.Contains(lower, "nvl"):

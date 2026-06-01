@@ -13,7 +13,7 @@ func TestMatchGPUModel(t *testing.T) {
 		{"H100 80GB", "NVIDIA H100 80GB HBM3", "H100_80GB"},
 		{"H100 NVL 94GB", "NVIDIA H100 NVL", "H100_94GB"},
 		{"H200", "NVIDIA H200", "H200_141GB"},
-		{"B200", "NVIDIA B200", "B200_192GB"},
+		{"B200", "NVIDIA B200", "B200_180GB"},
 		{"T4", "NVIDIA T4", "T4"},
 		{"V100 32GB", "Tesla V100-SXM2-32GB", "V100_32GB"},
 		{"V100 16GB", "Tesla V100-PCIE-16GB", "V100_16GB"},
@@ -54,9 +54,43 @@ func TestGPUModelCount(t *testing.T) {
 	}
 }
 
+func TestGPUCatalogMIGProfileNames(t *testing.T) {
+	// Profile names must match NVIDIA MIG User Guide (docs.nvidia.com/datacenter/tesla/mig-user-guide).
+	tests := []struct {
+		modelKey string
+		want     []string
+	}{
+		{
+			modelKey: "H100_94GB",
+			want:     []string{"1g.12gb", "1g.24gb", "2g.24gb", "3g.47gb", "4g.47gb", "7g.94gb"},
+		},
+		{
+			modelKey: "B200_180GB",
+			want:     []string{"1g.23gb", "1g.45gb", "2g.45gb", "3g.90gb", "4g.90gb", "7g.180gb"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.modelKey, func(t *testing.T) {
+			spec := gpuModels[tt.modelKey]
+			got := make([]string, len(spec.Profiles))
+			for i, p := range spec.Profiles {
+				got[i] = p.Name
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("profile count = %d, want %d: got %v want %v", len(got), len(tt.want), got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("profiles[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestGPUModelMIGProfiles(t *testing.T) {
 	// Verify MIG-capable models have profiles
-	migModels := []string{"A30", "A100_40GB", "A100_80GB", "H100_80GB", "H100_94GB", "H200_141GB", "B200_192GB"}
+	migModels := []string{"A30", "A100_40GB", "A100_80GB", "H100_80GB", "H100_94GB", "H200_141GB", "B200_180GB"}
 	for _, name := range migModels {
 		spec := gpuModels[name]
 		if !spec.MIGSupported {
