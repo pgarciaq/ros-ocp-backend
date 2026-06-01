@@ -578,7 +578,7 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
 | Enable VM recommendations <br><em>Master VM plugin gate; also requires `vm` not denied.</em> | true | `ROS_ENABLE_VM_RECS` | — | — | No |
-| CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | — | — | No |
+| CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | `PUT /settings/vm` | `cpu_adaptive_margin_enabled` | Yes |
 | VM recommendation history retention (days) <br><em>VM-specific history retention (90d).</em> | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | — | — | No |
 | VM GPU idle threshold <br><em>vGPU SM below 5% → idle.</em> | 0.05 | `ROS_VM_GPU_IDLE_THRESHOLD` | — | — | No |
 | VM GPU underutilized threshold <br><em>vGPU SM below 30% → underutilized.</em> | 0.30 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | — | — | No |

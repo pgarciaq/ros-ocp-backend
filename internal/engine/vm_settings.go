@@ -60,8 +60,9 @@ type VMStabilitySettingsAPI struct {
 
 // VMSettingsResponse is the API GET/PUT response for VM recommendation settings.
 type VMSettingsResponse struct {
-	Enabled              bool                      `json:"enabled"`
-	Thresholds           VMThresholdSettingsAPI    `json:"thresholds"`
+	Enabled                  bool                      `json:"enabled"`
+	CPUAdaptiveMarginEnabled bool                      `json:"cpu_adaptive_margin_enabled"`
+	Thresholds               VMThresholdSettingsAPI    `json:"thresholds"`
 	MemoryFloors         VMMemoryFloorsSettingsAPI `json:"memory_floors"`
 	Stability            VMStabilitySettingsAPI    `json:"stability"`
 	Disk                 VMDiskSettingsAPI         `json:"disk"`
@@ -72,8 +73,9 @@ type VMSettingsResponse struct {
 }
 
 type vmSettingsStored struct {
-	Thresholds           *VMThresholdSettingsAPI    `json:"thresholds,omitempty"`
-	MemoryFloors         *VMMemoryFloorsSettingsAPI `json:"memory_floors,omitempty"`
+	CPUAdaptiveMarginEnabled *bool                      `json:"cpu_adaptive_margin_enabled,omitempty"`
+	Thresholds               *VMThresholdSettingsAPI    `json:"thresholds,omitempty"`
+	MemoryFloors             *VMMemoryFloorsSettingsAPI `json:"memory_floors,omitempty"`
 	Disk                 *VMDiskSettingsAPI         `json:"disk,omitempty"`
 	IO                   *VMIOSettingsAPI           `json:"io,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
@@ -102,7 +104,8 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_DISK_ROUND_STEP_GIB":           "disk.round_step_gib",
 		"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY":   "disk.min_growth_mib_per_day",
 		"ROS_VM_HIGH_IOPS_THRESHOLD":           "io.high_iops_threshold",
-		"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING": "instance_type_matching",
+		"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING":     "instance_type_matching",
+		"ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED":       "cpu_adaptive_margin_enabled",
 		"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB":    "memory_floors.windows_kernel_reserve_gib",
 		"ROS_VM_DOWNSIZE_STABILITY_DAYS":       "stability.downsize_stability_days",
 		"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD":  "stability.crash_loop_restart_threshold",
@@ -162,8 +165,9 @@ func vmRecConfigToStabilityAPI(cfg VMRecConfig) VMStabilitySettingsAPI {
 func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 	envLocked := lockedVMFieldsFromEnv()
 	return VMSettingsResponse{
-		Enabled:              vmFeatureEnabled(),
-		Thresholds:           vmRecConfigToThresholdAPI(cfg),
+		Enabled:                  vmFeatureEnabled(),
+		CPUAdaptiveMarginEnabled: cfg.CPUAdaptiveMarginEnabled,
+		Thresholds:               vmRecConfigToThresholdAPI(cfg),
 		MemoryFloors:         vmRecConfigToMemoryFloorsAPI(cfg),
 		Stability:            vmRecConfigToStabilityAPI(cfg),
 		Disk:                 vmRecConfigToDiskAPI(cfg),
@@ -272,6 +276,9 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 	if stored.InstanceTypeMatching != nil {
 		dest.EnableInstanceTypeMatching = *stored.InstanceTypeMatching
 	}
+	if stored.CPUAdaptiveMarginEnabled != nil {
+		dest.CPUAdaptiveMarginEnabled = *stored.CPUAdaptiveMarginEnabled
+	}
 }
 
 // UpdateVMSettings validates and persists tenant VM settings overrides (partial updates allowed).
@@ -323,6 +330,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid instance_type_matching: %w", err)
 		}
 	}
+	if raw, ok := patch["cpu_adaptive_margin_enabled"]; ok {
+		if err := json.Unmarshal(raw, &resp.CPUAdaptiveMarginEnabled); err != nil {
+			return fmt.Errorf("invalid cpu_adaptive_margin_enabled: %w", err)
+		}
+	}
 
 	if err := validateVMSettingsResponse(resp); err != nil {
 		return err
@@ -346,6 +358,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
+	}
+	if b, err := json.Marshal(resp.CPUAdaptiveMarginEnabled); err == nil {
+		overrides["cpu_adaptive_margin_enabled"] = b
 	}
 	if err := upsertThresholdOverrides(ctx, pool, orgID, vmRecommendationType, overrides); err != nil {
 		return err
@@ -392,7 +407,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 	}
 	allowed := map[string]struct{}{
 		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {},
-		"instance_type_matching": {}, "locked_fields": {},
+		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
 	for key := range top {
