@@ -576,7 +576,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity hints from network flow data |
 | **Network QoS (SR-IOV, DPDK)** | Dedicated network QoS sizing |
-| **Storage tiering (hot/cold)** | Volume class recommendations |
+| **Storage tiering (hot/cold)** | Classify hot/warm/cold I/O over weeks; compare StorageClass vs recommended tier; migration + savings notification. **Effort:** medium (2–3 weeks). **Value:** medium (50+ VMs, mixed tiers). **Blockers:** no historical access frequency, no StorageClass on ROS VM CSV, no per-class cost or standard tier labels — [design doc](../../../docs/design/vm-recommendations.md#future-storage-tiering) |
 | **Power management / consolidation** | Suspend and cluster consolidation guidance |
 | **Live migration recommendations** | Migration-in-progress awareness |
 

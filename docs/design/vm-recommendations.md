@@ -633,7 +633,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Full NUMA optimization** | Requires LLC miss rate / perf counters per NUMA node |
 | **Smart co-location** | Requires network flow data to recommend affinity |
 | **Network QoS (SR-IOV, DPDK)** | SR-IOV and DPDK-specific sizing not modeled |
-| **Storage tiering (hot/cold)** | No hot/cold volume class recommendations |
+| **Storage tiering (hot/cold)** | See [Storage tiering](#future-storage-tiering) below |
 | **Power management / consolidation** | No suspend or cluster consolidation guidance |
 | **Live migration recommendations** | No awareness of migration in progress |
 | **Savings in fleet summary** | VM savings persist on `vm_recommendations` but are not rolled into `GET .../savings-summary` yet |
@@ -657,6 +657,57 @@ Planned approach (not implemented):
    - Tenant preference via Settings API (`/settings/vm` → `gpu` block)
 
 Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, tensor, DRAM) — correct for most OpenShift AI and batch GPU VMs, not for pure graphics guests.
+
+### Future: Storage tiering {#future-storage-tiering}
+
+VMs are often provisioned on expensive storage “just in case,” or grow into heavy workloads but remain on slow tiers. Today ROS has no automated detection of a **mismatched StorageClass vs actual I/O access pattern** over time.
+
+**Problem**
+
+- Over-provisioned hot tier: VM rarely exercises IOPS/latency but pays premium $/GiB.
+- Under-provisioned cold tier: sustained or bursty I/O on archive/HDD causes latency and operational pain.
+- Instantaneous daily BPS/IOPS snapshots (disk I/O profiling) do not reveal **access frequency** or multi-week seasonality.
+
+**What it would do**
+
+1. **Classify access patterns** over multiple days/weeks (not single-interval peaks):
+   - **Hot:** High sustained IOPS, low-latency sensitivity → high-performance tier (NVMe SSD, local fast path).
+   - **Warm:** Moderate or bursty I/O → standard tier (networked SSD, Ceph RBD default).
+   - **Cold:** Rarely accessed, capacity-dominated → archive/HDD or object-backed tier.
+2. **Compare** the VM’s current StorageClass (per PVC) against the recommended tier for that pattern.
+3. **Emit** a notification with migration guidance and a **savings estimate** (delta in $/GiB × provisioned capacity).
+
+Classification would complement existing signals:
+
+| Signal today | Tiering gap |
+|------------|-------------|
+| Disk I/O profile (`io_pattern`: sequential/random/mixed) | Describes **shape** of I/O, not **how often** storage is exercised |
+| PVC plugin | Capacity/usage; no StorageClass or tier label |
+| `storage_gb_request_per_month` (Koku) | Single blended rate; not per-StorageClass |
+
+**Prerequisites (not available today)**
+
+| Prerequisite | Status |
+|--------------|--------|
+| Historical I/O **access frequency** over weeks | Only daily BPS/IOPS aggregates on `daily_vm_digests`; no “days with meaningful I/O” counter |
+| VM **StorageClass** per volume | Not in `ros-openshift-vm-usage-*.csv`; available from PVC metadata (`persistentvolumeclaim` on cost/operator paths) |
+| Cluster **StorageClass catalog** with tier mapping | No standard Kubernetes label for hot/warm/cold; requires per-cluster admin config |
+| **Cost per GiB per tier** | Koku `storage_gb_request_per_month` only; no per-StorageClass rate in effective_rates |
+| **Safe migration path** | PVC tier change typically needs offline clone + swap; recommendations must surface downtime/risk |
+
+**Relationship to existing features**
+
+- **Disk I/O profiling** ([`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go), notifications **58**–**59**): use sequential vs random to pick *performance profile* within a tier; tiering adds *which tier* and *how often* the VM needs it.
+- **PVC plugin:** natural extension point for `storage_class`, `provisioned_gib`, and correlated VM namespace; tier recommendations could align PVC rightsizing with class migration.
+- **Savings** ([`vm_savings.go`](../../internal/engine/vm_savings.go)): extend formulas with `(current_tier_rate − recommended_tier_rate) × provisioned_gib` when per-class rates exist in masu/Koku.
+
+**Estimated effort:** Medium (**2–3 weeks**, including operator CSV or catalog export and settings schema for tier maps).
+
+**Estimated value:** Medium — highest impact on clusters with **50+ VMs** and **mixed** StorageClasses (e.g. `fast-ssd`, `standard-rbd`, `archive-hdd`).
+
+**Key challenge:** No standard StorageClass tier labeling — each cluster needs an admin-defined map (Settings API `storage.tier_classes` or operator-exported `storage_classes.json` with `tier: hot|warm|cold` and optional `cost_per_gib_month`).
+
+Planned notification (reserved): recommend tier migration when current class ≠ recommended class for ≥ `storage.tier_sustained_days` (default 14) with confidence from observation window length.
 
 ---
 
