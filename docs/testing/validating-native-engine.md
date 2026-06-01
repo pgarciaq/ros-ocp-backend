@@ -93,7 +93,7 @@ Use this order for a new native-engine QE cycle. **Containers and Kruize-compati
 ### High-level data flow
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph produce["Data production"]
     Op["koku-metrics-operator<br/>or NISE"]
     Tar["tar.gz + manifest.json"]
@@ -895,7 +895,7 @@ Handlers: `internal/api/handlers_node_recs.go`. Feature doc: [Node recommendatio
 | 4 | Overcommitted nodes | High pod density scenarios in NISE | Notifications per node feature doc |
 | 5 | Utilization endpoint | `GET .../nodes/utilization` | Per-node CPU/memory util for charts |
 | 6 | DB consistency | `node_recommendations` table | Rows per node × term × engine |
-| 7 | Term settings | `GET .../settings/thresholds?recommendation_type=node` | PUT changes reflected after recalc |
+| 7 | Node thresholds | `GET .../settings/node` | PUT changes reflected after recalc |
 
 Logs: `node recs:` (success or `persist failed`).
 

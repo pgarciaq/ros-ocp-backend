@@ -93,7 +93,7 @@ Use this order for a new native-engine QE cycle. **Containers and Kruize-compati
 ### High-level data flow
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph produce["Data production"]
     Op["koku-metrics-operator<br/>or NISE"]
     Tar["tar.gz + manifest.json"]
