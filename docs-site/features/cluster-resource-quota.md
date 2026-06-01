@@ -39,15 +39,58 @@ Clusters without any ClusterResourceQuota produce **zero API rows** (not an erro
 
 ---
 
+## Namespace membership
+
+The operator exports a comma-separated **`namespaces`** column on each CRQ CSV row. Membership
+is derived from Prometheus `openshift_clusterresourcequota_usage{type='used'}`: namespaces
+with a **non-zero used** value for that CRQ are included. This is **not** the CRQ
+`.spec.selector` label map evaluated server-side.
+
+The engine sums `quota_recommendation_sets` only for namespaces in that list. When `namespaces`
+is empty (older operator builds), the engine falls back to a **cluster-wide** namespace-quota
+aggregate.
+
+List and detail APIs support `filter[namespace]` and `filter[project]` to return CRQs whose
+membership includes a given namespace.
+
+---
+
 ## Timing and one-cycle lag
 
 Same pattern as [namespace/quota timing](quota-recommendations.md#timing-and-one-cycle-lag):
 
-- CRQ recommended-hard values sum **all** namespace quota recommendations on the cluster
-  (v1 does not map CRQs to namespace selectors yet).
 - If only a CRQ CSV arrives in a payload, namespace quota sums may reflect the **previous**
   cycle until container + `quota` processing completes.
 - On first deployment, expect **one report cycle** before tighten/raise signals fully align.
+
+---
+
+## Savings and capacity freed
+
+When `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Koku cost data is available, **tighten**
+recommendations include `estimated_savings` (whole USD per month):
+
+| Resource | Monetary savings | Capacity freed field |
+|----------|------------------|----------------------|
+| CPU request | Yes (hourly rate × 730 h) | `capacity_freed.cpu_cores_freed` |
+| Memory request | Yes | `capacity_freed.memory_bytes` |
+| Storage request | Yes (`storage_gb_request_per_month` or usage fallback) | `capacity_freed.storage_request_bytes` |
+| Pods | **No** — no cost-model metric for pod count | `capacity_freed.pods_freed` |
+
+**Object-count quotas** (`count/deployments.apps`, `count/services`, etc.) are ingested into
+digests for observability but **do not** produce right-sizing recommendations (see below).
+
+---
+
+## Object-count quotas (ingest only)
+
+Object-count hard/used columns are stored in `daily_cluster_quota_digests` for capacity
+visibility. ROS does **not** emit tighten/raise recommendations for them because:
+
+- Counts are discrete integers with no meaningful utilization curve for right-sizing.
+- There is no associated cost in the Koku cost model.
+- The useful operational signal is **at limit** (blocking), which is already surfaced via
+  notification code **72** on namespace quota rows and CRQ-at-capacity code **73**.
 
 ---
 
@@ -74,8 +117,9 @@ and [Configurability](../architecture/configurability.md).
 | Parameter | Maps to |
 |-----------|---------|
 | `filter[cluster]` | `cluster_uuid` |
-| `filter[cluster_quota_name]` / `filter[crq]` | CRQ name |
-| `filter[recommendation_type]` | `tighten` \| `raise` \| `optimal` |
+| `filter[cluster_quota_name]` / `filter[cluster_resource_quota]` / `filter[crq]` | CRQ name |
+| `filter[namespace]` / `filter[project]` | CRQs whose membership includes the namespace |
+| `filter[recommendation_type]` | `tighten` \| `raise` \| `optimal` \| `none` |
 | `filter[risk_level]` | `high` \| `medium` \| `low` \| `none` |
 
 Full schema: [`openapi.json`](../../openapi.json).

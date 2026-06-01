@@ -39,6 +39,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID |
 | `filter[cluster_quota_name]` | CRQ name (aliases: `filter[cluster_resource_quota]`, `filter[crq]`) |
+| `filter[namespace]` / `filter[project]` | CRQs whose `namespaces` membership includes the value |
 | `filter[recommendation_type]` | `tighten`, `raise`, `optimal`, `none` |
 | `filter[risk_level]` | `high`, `medium`, `low`, `none` |
 | `limit` | Page size (1–100, default 20) |
@@ -50,8 +51,8 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 - `recommendation_type`, `risk_level`
 - `quota_hard`, `quota_used`, `quota_recommended` — CPU/memory request and limit millicores/bytes
 - `utilization` — `cpu_request_percent`, `memory_request_percent`
-- `capacity_freed` — `cpu_cores_freed`, `memory_bytes` (on tighten)
-- `estimated_savings` — `value` (whole USD), `units` (when savings enabled)
+- `capacity_freed` — `cpu_cores_freed`, `memory_bytes`, `storage_request_bytes`, `pods_freed` (on tighten)
+- `estimated_savings` — `value` (whole USD), `units` (CPU/memory/storage when cost data exists; pods not monetized)
 
 Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_quota_recs.go).
 
