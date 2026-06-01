@@ -335,7 +335,7 @@ Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Setti
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/recommendations/openshift/settings/vm` | Thresholds, memory floors, disk, I/O, instance type matching |
+| GET | `/recommendations/openshift/settings/vm` | Thresholds, memory floors, disk, I/O, **network**, **gpu**, instance type matching |
 | PUT | `/recommendations/openshift/settings/vm` | Partial update of allowed blocks |
 | DELETE | `/recommendations/openshift/settings/vm` | Reset VM settings to compiled defaults (`204`) |
 | GET | `/recommendations/openshift/settings/vm/terms` | Term windows |
@@ -375,6 +375,19 @@ Generic `.../settings/terms?recommendation_type=vm` also honors `ROS_SETTINGS_LO
         "min_growth_mib_per_day": 100
       },
       "io": { "high_iops_threshold": 3000 },
+      "network": {
+        "throughput_threshold_bps": 62500000,
+        "pps_threshold": 100000,
+        "drop_ratio_bp": 10,
+        "sustained_days": 7,
+        "enable_network_series": true
+      },
+      "gpu": {
+        "gpu_timeslice_min_replicas": 2,
+        "gpu_timeslice_max_replicas": 16,
+        "gpu_timeslice_fb_safety_threshold_bp": 8000,
+        "gpu_timeslice_dram_penalty_threshold_bp": 5000
+      },
       "instance_type_matching": true,
       "locked_fields": [],
       "settings_locked": false
@@ -385,7 +398,7 @@ Key env vars (each maps to a Settings API field): `ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_IDLE_CPU_MC`, `ROS_VM_ABANDONED_MIN_DAYS`, `ROS_VM_DISK_*`,
 `ROS_VM_HIGH_IOPS_THRESHOLD`, `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING`,
 `ROS_VM_WINDOWS_KERNEL_RESERVE_GIB`, `ROS_VM_DOWNSIZE_STABILITY_DAYS`,
-`ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, and others.
+`ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, `ROS_VM_NETWORK_*`, `ROS_VM_GPU_TIMESLICE_*`, and others.
 Full list: [VM design doc](../../../docs/design/vm-recommendations.md#environment-variables) and
 [Configurability Reference](../architecture/configurability.md).
 
@@ -429,7 +442,8 @@ GET /api/cost-management/v1/recommendations/openshift/vm
           "engine": "cost",
           "is_idle": false,
           "is_abandoned": false,
-          "is_oversized": true
+          "is_oversized": true,
+          "is_network_bound": false
         },
         "io_profile": { "read_iops_p95": 1200, "write_iops_p95": 800, "hint": null },
         "disk_projection": { "days_until_full": null, "growth_gib_per_day": 2.1, "recommended_expand_gib": 100 },

@@ -10,7 +10,7 @@ For operator-facing explanations and remediation steps, see
 | Layer | Location | Role |
 |-------|----------|------|
 | **Database** | `notification_code_definitions` (`code`, `name`, `severity`, `description`) | Source of truth for names and default messages |
-| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–55) | Emitters reference numeric codes |
+| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–57) | Emitters reference numeric codes |
 | **API mapping** | [`internal/notifications/mapping.go`](../../internal/notifications/mapping.go) `Definitions` | Converts `SMALLINT[]` → Kruize-shaped `notifications` map for container/namespace/node/PVC/snapshot list APIs |
 | **VM JSONB** | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) `vmBuildNotifications` | VM list/detail use lowercase `type` (`info`/`warning`/`critical`) in `vm_recommendations.notifications` |
 
@@ -104,6 +104,8 @@ VM JSONB uses lowercase equivalents.
 | 53 | `VM_GPU_COMPUTE_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
 | 54 | `VM_GPU_MIXED_IDLE` | WARNING | VM | Yes | Some GPUs idle, others active |
 | 55 | `VM_NETWORK_SATURATED` | WARNING | VM | Yes | Network-saturated workload; recommend n1 network-optimized instance type |
+| 56 | `VM_VGPU_PROFILE_RECOMMENDED` | INFO | VM | Yes | vGPU profile recommended — see `recommended_vgpu_profile` |
+| 57 | `VM_GPU_TIMESLICE_UNSAFE_FB` | WARNING | VM | Yes | GPU time-slicing not safe — frame-buffer usage too high for shared vGPU |
 
 ---
 

@@ -305,6 +305,7 @@ All notifications are JSON objects in the `notifications` array:
 | **52** | `NotifVMGPUMemorySaturated` | `warning` | GPU memory saturated — larger GPU |
 | **53** | `NotifVMGPUComputeSaturated` | `warning` | GPU compute saturated — more powerful GPU |
 | **54** | `NotifVMGPUMixedIdle` | `warning` | Some GPUs idle while others are active — reduce GPU count |
+| **55** | `NotifVMNetworkSaturated` | `warning` | Network-saturated workload — n1 network-optimized instance type |
 | **56** | `NotifVMVGPUProfileRecommended` | `info` | vGPU profile recommended — see `recommended_vgpu_profile` |
 | **57** | `NotifVMGPUTimeSliceUnsafeFB` | `warning` | Time-slicing unsafe — frame-buffer usage above safety threshold |
 
