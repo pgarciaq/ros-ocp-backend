@@ -38,10 +38,46 @@ func GetSnapshotSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// DeleteSnapshotSettings handles DELETE /recommendations/openshift/settings/snapshot.
+func DeleteSnapshotSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
+	if engine.IsSettingsLocked("snapshot") {
+		return respondSettingsLockedForbidden(c)
+	}
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	if err := engine.DeleteSnapshotSettings(c.Request().Context(), pool, orgID); err != nil {
+		hlog.Errorf("delete snapshot settings failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to delete snapshot settings",
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 // PutSnapshotSettings handles PUT /recommendations/openshift/settings/snapshot.
 func PutSnapshotSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked("snapshot") {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {

@@ -40,6 +40,7 @@ type SnapshotSettingsResponse struct {
 	RedundantThreshold int      `json:"redundant_threshold"`
 	CostPerGiBMonthUSD float64  `json:"cost_per_gib_month_usd"`
 	LockedFields       []string `json:"locked_fields"`
+	SettingsLocked     bool     `json:"settings_locked,omitempty"`
 }
 
 // SnapshotSettingsUpdate is the API PUT request body.
@@ -111,24 +112,26 @@ func ResolveSnapshotSettings(
 	// Start with compiled-in defaults
 	result := SnapshotSettingsDefaults
 
-	// Override with DB values if a row exists
+	// Override with DB values if a row exists (skipped when platform settings lock is active).
 	var dbRow SnapshotSettingsRow
 	dbHasRow := false
-	err := pool.QueryRow(ctx, `
-		SELECT orphan_age_days, never_restored_days, stale_days,
-			redundant_threshold, cost_per_gib_month_usd
-		FROM snapshot_settings WHERE org_id = $1`, orgID,
-	).Scan(&dbRow.OrphanAgeDays, &dbRow.NeverRestoredDays, &dbRow.StaleDays,
-		&dbRow.RedundantThreshold, &dbRow.CostPerGiBMonthUSD)
+	if !IsSettingsLocked("snapshot") {
+		err := pool.QueryRow(ctx, `
+			SELECT orphan_age_days, never_restored_days, stale_days,
+				redundant_threshold, cost_per_gib_month_usd
+			FROM snapshot_settings WHERE org_id = $1`, orgID,
+		).Scan(&dbRow.OrphanAgeDays, &dbRow.NeverRestoredDays, &dbRow.StaleDays,
+			&dbRow.RedundantThreshold, &dbRow.CostPerGiBMonthUSD)
 
-	if err == nil {
-		dbHasRow = true
-		result.OrphanAgeDays = dbRow.OrphanAgeDays
-		result.NeverRestoredDays = dbRow.NeverRestoredDays
-		result.StaleDays = dbRow.StaleDays
-		result.RedundantThreshold = dbRow.RedundantThreshold
-	} else if err != pgx.ErrNoRows {
-		return result, fmt.Errorf("querying snapshot settings: %w", err)
+		if err == nil {
+			dbHasRow = true
+			result.OrphanAgeDays = dbRow.OrphanAgeDays
+			result.NeverRestoredDays = dbRow.NeverRestoredDays
+			result.StaleDays = dbRow.StaleDays
+			result.RedundantThreshold = dbRow.RedundantThreshold
+		} else if err != pgx.ErrNoRows {
+			return result, fmt.Errorf("querying snapshot settings: %w", err)
+		}
 	}
 
 	result.CostPerGiBMonth = resolveCostPerGiBMonth(cfg, dbHasRow, dbRow.CostPerGiBMonthUSD, costData)
@@ -207,8 +210,18 @@ func GetSnapshotSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID st
 		StaleDays:          settings.StaleDays,
 		RedundantThreshold: settings.RedundantThreshold,
 		CostPerGiBMonthUSD: settings.CostPerGiBMonth,
-		LockedFields:       GetLockedFields(),
+		LockedFields:       LockedFieldsForAPI("snapshot", GetLockedFields()),
+		SettingsLocked:     IsSettingsLocked("snapshot"),
 	}, nil
+}
+
+// DeleteSnapshotSettings removes tenant snapshot settings overrides.
+func DeleteSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) error {
+	_, err := pool.Exec(ctx, `DELETE FROM snapshot_settings WHERE org_id = $1`, orgID)
+	if err != nil {
+		return fmt.Errorf("delete snapshot settings: %w", err)
+	}
+	return nil
 }
 
 // UpdateSnapshotSettings applies a partial update to the org's settings.

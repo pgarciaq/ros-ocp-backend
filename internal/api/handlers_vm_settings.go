@@ -31,7 +31,8 @@ type vmTermSettingsItem struct {
 }
 
 type vmTermSettingsResponse struct {
-	Terms []vmTermSettingsResponseItem `json:"terms"`
+	Terms          []vmTermSettingsResponseItem `json:"terms"`
+	SettingsLocked bool                         `json:"settings_locked,omitempty"`
 }
 
 type vmTermSettingsResponseItem struct {
@@ -71,10 +72,46 @@ func GetVMSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// DeleteVMSettings handles DELETE /recommendations/openshift/settings/vm.
+func DeleteVMSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
+	if engine.IsSettingsLocked(vmRecommendationType) {
+		return respondSettingsLockedForbidden(c)
+	}
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	if err := engine.DeleteVMSettings(c.Request().Context(), pool, orgID); err != nil {
+		hlog.Errorf("delete VM settings failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to delete VM settings",
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 // PutVMSettings handles PUT /recommendations/openshift/settings/vm.
 func PutVMSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked(vmRecommendationType) {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -178,13 +215,52 @@ func GetVMTermSettings(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, vmTermSettingsResponse{Terms: items})
+	return c.JSON(http.StatusOK, vmTermSettingsResponse{
+		Terms:          items,
+		SettingsLocked: engine.IsSettingsLocked(vmRecommendationType),
+	})
+}
+
+// DeleteVMTermSettings handles DELETE /recommendations/openshift/settings/vm/terms.
+func DeleteVMTermSettings(c echo.Context) error {
+	if err := requireSettingsWrite(c); err != nil {
+		return err
+	}
+	if engine.IsSettingsLocked(vmRecommendationType) {
+		return respondSettingsLockedForbidden(c)
+	}
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+	hlog := requestLogger(c, orgID)
+
+	pool := db.GetPool()
+	if pool == nil {
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "database connection unavailable",
+		})
+	}
+
+	if err := engine.DeleteVMTermSettings(c.Request().Context(), pool, orgID); err != nil {
+		hlog.Errorf("delete VM term settings failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to delete VM term settings",
+		})
+	}
+	return GetVMTermSettings(c)
 }
 
 // PutVMTermSettings handles PUT /recommendations/openshift/settings/vm/terms.
 func PutVMTermSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked(vmRecommendationType) {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {

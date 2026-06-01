@@ -73,4 +73,5 @@ func (p *SnapshotPlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/snapshots", rosapi.GetSnapshotRecommendations)
 	g.GET("/recommendations/openshift/settings/snapshot", rosapi.GetSnapshotSettings)
 	g.PUT("/recommendations/openshift/settings/snapshot", rosapi.PutSnapshotSettings)
+	g.DELETE("/recommendations/openshift/settings/snapshot", rosapi.DeleteSnapshotSettings)
 }

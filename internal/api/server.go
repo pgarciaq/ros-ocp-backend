@@ -90,6 +90,7 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.GET("/recommendations/openshift/snapshots", disabledPluginRoute404("snapshot"))
 		v1.GET("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
 		v1.PUT("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
+		v1.DELETE("/recommendations/openshift/settings/snapshot", disabledPluginRoute404("snapshot"))
 	}
 	if !pluginRecommendationRoutesActive("quota") {
 		v1.GET("/recommendations/openshift/quota", disabledPluginRoute404("quota"))
@@ -109,8 +110,10 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.GET("/recommendations/openshift/instance-types", disabledPluginRoute404("vm"))
 		v1.GET("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
 		v1.PUT("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
+		v1.DELETE("/recommendations/openshift/settings/vm", disabledPluginRoute404("vm"))
 		v1.GET("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
 		v1.PUT("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
+		v1.DELETE("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
 	}
 	registerBusinessHoursRouteGuards(v1)
 }
@@ -228,8 +231,10 @@ func StartAPIServer(ctx context.Context) {
 		if pluginRecommendationRoutesActive("vm") {
 			v1.GET("/recommendations/openshift/settings/vm", GetVMSettings)
 			v1.PUT("/recommendations/openshift/settings/vm", PutVMSettings)
+			v1.DELETE("/recommendations/openshift/settings/vm", DeleteVMSettings)
 			v1.GET("/recommendations/openshift/settings/vm/terms", GetVMTermSettings)
 			v1.PUT("/recommendations/openshift/settings/vm/terms", PutVMTermSettings)
+			v1.DELETE("/recommendations/openshift/settings/vm/terms", DeleteVMTermSettings)
 		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}

@@ -68,6 +68,7 @@ type VMSettingsResponse struct {
 	IO                   VMIOSettingsAPI           `json:"io"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
 	LockedFields         []string                  `json:"locked_fields,omitempty"`
+	SettingsLocked       bool                      `json:"settings_locked,omitempty"`
 }
 
 type vmSettingsStored struct {
@@ -159,6 +160,7 @@ func vmRecConfigToStabilityAPI(cfg VMRecConfig) VMStabilitySettingsAPI {
 }
 
 func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
+	envLocked := lockedVMFieldsFromEnv()
 	return VMSettingsResponse{
 		Enabled:              vmFeatureEnabled(),
 		Thresholds:           vmRecConfigToThresholdAPI(cfg),
@@ -167,7 +169,8 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		Disk:                 vmRecConfigToDiskAPI(cfg),
 		IO:                   vmRecConfigToIOAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
-		LockedFields:         lockedVMFieldsFromEnv(),
+		LockedFields:         LockedFieldsForAPI(vmRecommendationType, envLocked),
+		SettingsLocked:       IsSettingsLocked(vmRecommendationType),
 	}
 }
 
@@ -183,11 +186,13 @@ func ResolveVMRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (
 
 func resolveVMRecConfigUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (VMRecConfig, error) {
 	result := VMRecConfigResolved()
-	overlay, err := loadVMSettingsStored(ctx, pool, orgID)
-	if err != nil {
-		return result, err
+	if !IsSettingsLocked(vmRecommendationType) {
+		overlay, err := loadVMSettingsStored(ctx, pool, orgID)
+		if err != nil {
+			return result, err
+		}
+		applyVMStoredOverlay(&result, overlay)
 	}
-	applyVMStoredOverlay(&result, overlay)
 	result = applyVMEnvLocks(result, config.GetConfig())
 	return result, nil
 }
@@ -433,6 +438,18 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
 
 	return v.result()
+}
+
+// DeleteVMTermSettings removes tenant VM term overrides.
+func DeleteVMTermSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) error {
+	_, err := pool.Exec(ctx,
+		`DELETE FROM org_recommendation_terms WHERE org_id = $1 AND recommendation_type = $2`,
+		orgID, vmRecommendationType)
+	if err != nil {
+		return fmt.Errorf("delete VM term settings: %w", err)
+	}
+	InvalidateTermCache(orgID, vmRecommendationType)
+	return nil
 }
 
 // DeleteVMSettings removes tenant VM settings overrides.
