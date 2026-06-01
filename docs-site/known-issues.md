@@ -881,30 +881,44 @@ Prioritize when:
 
 ## GPU Summary `timeslicing.count` Divergence
 
-**Severity:** Cosmetic (no UI consumers)
+**Severity:** Cosmetic / semantic gap (not a bug)
 
 The `/recommendations/openshift/gpu` summary endpoint returns
-`timeslicing.count` based on `CountNodeGPUTriples` (node×GPU-model pairs with
-fresh telemetry data). The `/recommendations/openshift/gpu/timeslicing` detail
-endpoint additionally runs `ComputeNodeTimeslicingRec`, which may reject groups
-where utilization is too high for sharing (replicas < 2), where no containers
-classify as underutilized, or where MIG takes precedence.
+`timeslicing.count` from `CountNodeGPUTriples`: distinct **node×GPU-model**
+groups with fresh rows in `gpu_container_digests` (areas with recent GPU
+telemetry — potential time-slicing candidates).
 
-This means `timeslicing.count` can be > 0 while the detail endpoint returns
-empty `data`. The count represents "GPU node groups with recent telemetry"
-rather than "actionable time-slicing recommendations."
+The `/recommendations/openshift/gpu/timeslicing` list runs
+`ComputeNodeTimeslicingRec` on each group and may return **no row** when
+utilization is too high for sharing (`recommended_replicas` &lt; 2), no
+containers classify as underutilized, workloads are memory-bound or idle, or
+MIG takes precedence.
+
+So `timeslicing.count` can be **greater than** `meta.count` on the list (or
+non-zero while `data` is empty). The summary count is **not** a badge count of
+actionable recommendations.
+
+### Why it is intentionally not aligned
+
+Running the full time-slicing engine for every triple on every summary request
+would add significant query and CPU cost (classification + replica math per
+group). The summary is designed as a cheap inventory of monitored GPU groups;
+the list endpoint is the source of truth for actionable node-level guidance.
 
 ### Impact
 
-None currently — no UI or external service consumes this endpoint.
+UI or automation that treats `timeslicing.count` as “N recommendations ready”
+will over-count. Use the list endpoint (or container notification code **36**)
+for actionable items.
 
-### Resolution Options
+### Resolution options (if product requires alignment later)
 
-1. **Rename field** to `gpu_node_groups` and document as "monitored groups"
+1. **Rename field** to `gpu_node_groups` and document as monitored groups only
 2. **Run the engine** on all triples during summary (adds query cost)
-3. **Accept the divergence** and document in OpenAPI (current choice)
+3. **Keep divergence** and document in OpenAPI + UI copy (current choice)
 
-### When to Fix
+### When to change behavior
 
-When a UI component or external consumer starts using this endpoint and the
-mismatch causes user confusion.
+When a shipped UI depends on the summary count matching list cardinality and
+the mismatch causes user confusion — prefer list `meta.count` or explicit
+empty-state copy over inflating summary cost.

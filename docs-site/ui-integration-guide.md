@@ -472,6 +472,7 @@ GET /recommendations/openshift/gpu/timeslicing
 
 | Parameter | Description |
 |-----------|-------------|
+| `filter[cluster]` | Filter by cluster UUID (exact match). Aliases: `cluster`, `cluster_uuid` |
 | `node_name` | Filter by node |
 | `gpu_model` | Filter by GPU model |
 | `term` | Term filter |
@@ -1147,6 +1148,14 @@ Lightweight entry point for GPU optimization views. Returns counts and links to 
 ```
 
 Use this endpoint for dashboard cards that link to MIG and time-slicing drill-downs.
+
+**`timeslicing.count` semantics:** Treat this number as “node×GPU-model groups
+with recent GPU activity” (telemetry in `gpu_container_digests`), not as a count
+of actionable time-slicing rows. It can exceed the length of
+`GET .../gpu/timeslicing` `data` because the list runs the full engine and drops
+groups that are well-utilized, memory-bound, or MIG-preferred. For badges or
+“N recommendations” copy, use the list endpoint’s `meta.count` or drill down
+into the list; do not equate summary `timeslicing.count` with actionable items.
 
 ### GPU MIG profile recommendations
 
