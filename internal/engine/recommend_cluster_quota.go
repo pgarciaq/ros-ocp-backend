@@ -46,6 +46,7 @@ type ClusterQuotaRec struct {
 	SavingsDollarsMonthly         int
 	RecommendationType            string
 	RiskLevel                     string
+	NotificationCodes             []int16
 }
 
 // RecommendClusterQuotas produces per-CRQ recommendations for a cluster.
@@ -113,6 +114,7 @@ func computeClusterQuotaRecommendation(
 	rec.UtilizationMemoryRequestPercent = bpToPercentInt(util.MemoryRequestBP)
 	rec.RiskLevel = classifyClusterQuotaRisk(util, cfg)
 	rec.RecommendationType, rec.CapacityFreed = classifyClusterQuotaRecommendation(snap, rec.Recommended, util, cfg)
+	rec.NotificationCodes = ClusterQuotaNotificationCodes(rec)
 
 	return rec
 }
@@ -285,7 +287,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				memory_limit_hard, memory_limit_used, memory_limit_recommended,
 				utilization_cpu_request_percent, utilization_memory_request_percent,
 				savings_cpu_cores_freed, savings_memory_bytes_freed, savings_dollars_monthly,
-				updated_at
+				notification_codes, updated_at
 			) VALUES (
 				$1, $2::uuid, $3,
 				$4, $5,
@@ -295,6 +297,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				$15, $16, $17,
 				$18, $19,
 				$20, $21, $22,
+				$23,
 				NOW()
 			)
 			ON CONFLICT (org_id, cluster_uuid, cluster_quota_name)
@@ -318,6 +321,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				savings_cpu_cores_freed = EXCLUDED.savings_cpu_cores_freed,
 				savings_memory_bytes_freed = EXCLUDED.savings_memory_bytes_freed,
 				savings_dollars_monthly = EXCLUDED.savings_dollars_monthly,
+				notification_codes = EXCLUDED.notification_codes,
 				updated_at = NOW()`,
 			r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
 			r.RecommendationType, r.RiskLevel,
@@ -327,6 +331,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 			nullableInt64(s.MemoryLimitHardBytes), nullableInt64(s.MemoryLimitUsedBytes), nullableInt64(r.Recommended.MemoryLimitBytes),
 			r.UtilizationCPURequestPercent, r.UtilizationMemoryRequestPercent,
 			nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes), nullableInt64(int64(r.SavingsDollarsMonthly)),
+			r.NotificationCodes,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert cluster quota recommendation %s: %w", r.ClusterQuotaName, err)

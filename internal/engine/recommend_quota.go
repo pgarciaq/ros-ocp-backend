@@ -82,6 +82,7 @@ type QuotaRec struct {
 	Currency              string
 	RecommendationType    string
 	RiskLevel             string
+	NotificationCodes     []int16
 }
 
 // QuotaResourceBundle holds quota hard, used, or recommended values.
@@ -167,6 +168,7 @@ func computeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSn
 
 	rec.RiskLevel = classifyQuotaRisk(rec.Utilization, cfg)
 	rec.RecommendationType, rec.CapacityFreed = classifyQuotaRecommendation(snap, rec.Recommended, rec.Utilization, cfg)
+	rec.NotificationCodes = QuotaNotificationCodes(snap, rec)
 
 	return rec
 }
@@ -380,7 +382,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				memory_request_utilization_bp, memory_limit_utilization_bp,
 				cpu_freed_millicores, memory_freed_bytes,
 				estimated_savings_cents, currency,
-				recommendation_type, risk_level,
+				recommendation_type, risk_level, notification_codes,
 				last_observed_at, updated_at
 			) VALUES (
 				$1, $2::uuid, $3,
@@ -391,8 +393,8 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				$17, $18, $19, $20,
 				$21, $22,
 				$23, $24,
-				$25, $26,
-				$27, NOW()
+				$25, $26, $27,
+				$28, NOW()
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace)
 			DO UPDATE SET
@@ -419,6 +421,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				currency = EXCLUDED.currency,
 				recommendation_type = EXCLUDED.recommendation_type,
 				risk_level = EXCLUDED.risk_level,
+				notification_codes = EXCLUDED.notification_codes,
 				last_observed_at = EXCLUDED.last_observed_at,
 				updated_at = NOW()`,
 			r.OrgID, r.ClusterUUID, r.Namespace,
@@ -433,7 +436,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 			r.Utilization.MemoryRequestBP, r.Utilization.MemoryLimitBP,
 			nullableInt64(r.CapacityFreed.CPUMillicores), nullableInt64(r.CapacityFreed.MemoryBytes),
 			nullableInt64(r.EstimatedSavingsCents), r.Currency,
-			r.RecommendationType, r.RiskLevel,
+			r.RecommendationType, r.RiskLevel, r.NotificationCodes,
 			s.LastObservedAt,
 		)
 		if err != nil {

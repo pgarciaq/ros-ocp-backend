@@ -88,6 +88,10 @@ var Definitions = map[int16]notifDef{
 	67: {"INFO", "VM disk has sustained minimal I/O — consider lower-cost storage tier"},
 	68: {"INFO", "VM disk shows sustained random high IOPS — IOPS-optimized storage recommended"},
 	69: {"INFO", "VM disk shows sustained sequential high throughput — throughput-optimized storage recommended"},
+	70: {"WARNING", "Namespace ResourceQuota utilization is at or above the high-risk threshold — consider raising limits"},
+	71: {"INFO", "Namespace ResourceQuota hard limits exceed recommended values — capacity can be reclaimed by tightening"},
+	72: {"CRITICAL", "Namespace ResourceQuota used equals hard limit on one or more resources — new workloads may fail admission"},
+	73: {"WARNING", "ClusterResourceQuota utilization is at or above the high-risk threshold"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

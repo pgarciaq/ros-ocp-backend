@@ -89,7 +89,7 @@ func TestMapToKruizeFormat_AllDefinedCodes(t *testing.T) {
 	for _, entry := range result {
 		assert.NotEmpty(t, entry.Type)
 		assert.NotEmpty(t, entry.Message)
-		assert.True(t, entry.Code >= 1 && entry.Code <= 69)
+		assert.True(t, entry.Code >= 1 && entry.Code <= 73)
 	}
 }
 
