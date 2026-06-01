@@ -103,6 +103,8 @@ nav:
       - API Versioning: architecture/api-versioning.md
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md
+  - Testing:
+      - Validating the Native Engine: testing/validating-native-engine.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md
