@@ -30,10 +30,15 @@ type MetricRow struct {
 	DesiredReplicas   int64
 	AvailableReplicas int64
 
-	// Node capacity fields (optional; from cost management pod CSV).
+	// Node capacity fields (optional; from operator ROS container CSV).
 	// Zero when the column is absent from the CSV.
 	NodeCapacityCPUMC  int64
 	NodeCapacityMemKiB int64
+
+	// Node allocatable fields (optional; from operator ROS container CSV).
+	// Zero when the column is absent (older operators derive allocatable at flush time).
+	NodeAllocatableCPUMC  int64
+	NodeAllocatableMemKiB int64
 
 	// InstanceType is the cloud instance type label for the node (optional).
 	// Empty when the column is absent from the CSV or the node is bare-metal.

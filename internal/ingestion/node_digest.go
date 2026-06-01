@@ -24,15 +24,17 @@ const nodeDayHours = 24
 // NodeDayAccumulator collects per-hour samples for a single node-day,
 // allowing computation of usage percentiles and request/capacity maximums.
 type NodeDayAccumulator struct {
-	intervalCPUReqs   [nodeDayHours]int64
-	intervalMemReqs   [nodeDayHours]int64
-	intervalCPUUse    [nodeDayHours]int64
-	intervalMemUse    [nodeDayHours]int64
-	intervalPods      [nodeDayHours]int64
-	intervalSeen      [nodeDayHours]bool
-	MaxCPUCapacityMC  int64
-	MaxMemCapacityKiB int64
-	InstanceType      string
+	intervalCPUReqs      [nodeDayHours]int64
+	intervalMemReqs      [nodeDayHours]int64
+	intervalCPUUse       [nodeDayHours]int64
+	intervalMemUse       [nodeDayHours]int64
+	intervalPods         [nodeDayHours]int64
+	intervalSeen         [nodeDayHours]bool
+	MaxCPUCapacityMC     int64
+	MaxMemCapacityKiB    int64
+	MaxCPUAllocatableMC  int64
+	MaxMemAllocatableKiB int64
+	InstanceType         string
 }
 
 func newNodeDayAccumulator() *NodeDayAccumulator {
@@ -59,6 +61,12 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	}
 	if r.NodeCapacityMemKiB > 0 && r.NodeCapacityMemKiB > a.MaxMemCapacityKiB {
 		a.MaxMemCapacityKiB = r.NodeCapacityMemKiB
+	}
+	if r.NodeAllocatableCPUMC > 0 && r.NodeAllocatableCPUMC > a.MaxCPUAllocatableMC {
+		a.MaxCPUAllocatableMC = r.NodeAllocatableCPUMC
+	}
+	if r.NodeAllocatableMemKiB > 0 && r.NodeAllocatableMemKiB > a.MaxMemAllocatableKiB {
+		a.MaxMemAllocatableKiB = r.NodeAllocatableMemKiB
 	}
 	if a.InstanceType == "" && r.InstanceType != "" {
 		a.InstanceType = r.InstanceType
@@ -212,15 +220,8 @@ func flushNodeDigestsOnSender(
 			key, acc := ent.key, ent.acc
 			cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
 
-			var allocCPU, allocMem *int64
-			if acc.MaxCPUCapacityMC > 0 {
-				v := int64(float64(acc.MaxCPUCapacityMC) * allocatableFactor)
-				allocCPU = &v
-			}
-			if acc.MaxMemCapacityKiB > 0 {
-				v := int64(float64(acc.MaxMemCapacityKiB) * allocatableFactor)
-				allocMem = &v
-			}
+			allocCPU := nodeDigestAllocatable(acc.MaxCPUAllocatableMC, acc.MaxCPUCapacityMC, allocatableFactor)
+			allocMem := nodeDigestAllocatable(acc.MaxMemAllocatableKiB, acc.MaxMemCapacityKiB, allocatableFactor)
 
 			var instanceType *string
 			if acc.InstanceType != "" {
@@ -258,6 +259,21 @@ func flushNodeDigestsOnSender(
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("upsert node digest: %w", err)
 		}
+	}
+	return nil
+}
+
+// nodeDigestAllocatable returns the allocatable value to persist in daily_node_digests.
+// Prefer operator-reported allocatable; fall back to capacity * ROS_NODE_ALLOCATABLE_FACTOR
+// for older operators that only emit capacity columns.
+func nodeDigestAllocatable(observedAlloc, maxCapacity int64, factor float64) *int64 {
+	if observedAlloc > 0 {
+		v := observedAlloc
+		return &v
+	}
+	if maxCapacity > 0 {
+		v := int64(float64(maxCapacity) * factor)
+		return &v
 	}
 	return nil
 }

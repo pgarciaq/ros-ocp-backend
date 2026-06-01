@@ -102,9 +102,12 @@ type csvColumnIndex struct {
 	availableReplicas int
 	// Node column (optional; -1 when header absent).
 	node int
-	// Node capacity columns (optional; from cost management pod CSV).
+	// Node capacity columns (optional; from operator ROS container CSV).
 	nodeCapacityCPUCores int
 	nodeCapacityMemBytes int
+	// Node allocatable columns (optional; from operator ROS container CSV).
+	nodeAllocatableCPUCores int
+	nodeAllocatableMemBytes int
 	// Instance type column (optional; from ROS container CSV).
 	instanceType int
 	// GPU columns (optional; -1 when header absent).
@@ -129,8 +132,10 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		intervalStart: -1, intervalEnd: -1, namespace: -1, workloadName: -1,
 		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
-		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1, instanceType: -1,
-		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
+		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
+		nodeAllocatableCPUCores: -1, nodeAllocatableMemBytes: -1,
+		instanceType: -1,
+		memUsage:     -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName:           -1,
 		acceleratorProfileName:         -1,
@@ -169,6 +174,10 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.nodeCapacityCPUCores = i
 		case "node_capacity_memory_bytes":
 			idx.nodeCapacityMemBytes = i
+		case "node_allocatable_cpu_cores":
+			idx.nodeAllocatableCPUCores = i
+		case "node_allocatable_memory_bytes":
+			idx.nodeAllocatableMemBytes = i
 		case "instance_type":
 			idx.instanceType = i
 		case "cpu_request_container_avg":
@@ -474,6 +483,18 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 		row.NodeCapacityMemKiB, err = BytesToKiB(record[idx.nodeCapacityMemBytes])
 		if err != nil {
 			row.NodeCapacityMemKiB = 0
+		}
+	}
+	if idx.nodeAllocatableCPUCores >= 0 && idx.nodeAllocatableCPUCores < len(record) && record[idx.nodeAllocatableCPUCores] != "" {
+		row.NodeAllocatableCPUMC, err = CoreToMillicores(record[idx.nodeAllocatableCPUCores])
+		if err != nil {
+			row.NodeAllocatableCPUMC = 0
+		}
+	}
+	if idx.nodeAllocatableMemBytes >= 0 && idx.nodeAllocatableMemBytes < len(record) && record[idx.nodeAllocatableMemBytes] != "" {
+		row.NodeAllocatableMemKiB, err = BytesToKiB(record[idx.nodeAllocatableMemBytes])
+		if err != nil {
+			row.NodeAllocatableMemKiB = 0
 		}
 	}
 

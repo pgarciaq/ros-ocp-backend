@@ -33,6 +33,9 @@ var OperatorRosContainerCSVHeader = []string{
 	"resource_id",
 	"node_capacity_cpu_cores",
 	"node_capacity_memory_bytes",
+	"node_allocatable_cpu_cores",
+	"node_allocatable_memory_bytes",
+	"instance_type",
 	"cpu_request_container_avg",
 	"cpu_request_container_sum",
 	"cpu_limit_container_avg",
@@ -107,6 +110,9 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 	assert.GreaterOrEqual(t, idx.node, 0, "node not found")
 	assert.GreaterOrEqual(t, idx.nodeCapacityCPUCores, 0, "node_capacity_cpu_cores not found")
 	assert.GreaterOrEqual(t, idx.nodeCapacityMemBytes, 0, "node_capacity_memory_bytes not found")
+	assert.GreaterOrEqual(t, idx.nodeAllocatableCPUCores, 0, "node_allocatable_cpu_cores not found")
+	assert.GreaterOrEqual(t, idx.nodeAllocatableMemBytes, 0, "node_allocatable_memory_bytes not found")
+	assert.GreaterOrEqual(t, idx.instanceType, 0, "instance_type not found")
 	assert.GreaterOrEqual(t, idx.cpuLimit, 0, "cpu_limit_container_avg not found")
 	assert.GreaterOrEqual(t, idx.cpuThrottle, 0, "cpu_throttle_container_avg not found")
 	assert.GreaterOrEqual(t, idx.memLimit, 0, "memory_limit_container_avg not found")
@@ -159,6 +165,16 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 			values[i] = "my-namespace"
 		case "node":
 			values[i] = "worker-0"
+		case "instance_type":
+			values[i] = "m5.xlarge"
+		case "node_capacity_cpu_cores":
+			values[i] = "8"
+		case "node_capacity_memory_bytes":
+			values[i] = "33554432000"
+		case "node_allocatable_cpu_cores":
+			values[i] = "7.5"
+		case "node_allocatable_memory_bytes":
+			values[i] = "32212254720"
 		case "accelerator_model_name":
 			values[i] = "NVIDIA A100"
 		case "accelerator_profile_name":
@@ -180,6 +196,9 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 	assert.Equal(t, "my-container", row.ContainerName)
 	assert.Equal(t, "my-pod-abc123", row.Pod)
 	assert.Equal(t, "worker-0", row.Node)
+	assert.Equal(t, "m5.xlarge", row.InstanceType)
+	assert.Equal(t, int64(8000), row.NodeCapacityCPUMC)
+	assert.Equal(t, int64(7500), row.NodeAllocatableCPUMC)
 	assert.Equal(t, "NVIDIA A100", row.AcceleratorModelName)
 	assert.Equal(t, int64(500), row.CPURequestMC, "0.5 cores = 500 millicores")
 	assert.Equal(t, int64(500), row.CPUUsageMC)

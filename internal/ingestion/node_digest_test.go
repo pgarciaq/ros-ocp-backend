@@ -129,6 +129,45 @@ func TestAggregateNodeDigests_CapacityTracked(t *testing.T) {
 	}
 }
 
+func TestNodeDigestAllocatable_PrefersObserved(t *testing.T) {
+	factor := 0.93
+	v := nodeDigestAllocatable(3500, 4000, factor)
+	require.NotNil(t, v)
+	assert.Equal(t, int64(3500), *v)
+}
+
+func TestNodeDigestAllocatable_FallsBackToCapacityFactor(t *testing.T) {
+	factor := 0.93
+	v := nodeDigestAllocatable(0, 4000, factor)
+	require.NotNil(t, v)
+	assert.Equal(t, int64(3720), *v)
+}
+
+func TestNodeDigestAllocatable_NoData(t *testing.T) {
+	assert.Nil(t, nodeDigestAllocatable(0, 0, 0.93))
+}
+
+func TestAggregateNodeDigests_AllocatableTracked(t *testing.T) {
+	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+
+	rows := []MetricRow{
+		{
+			IntervalStart:         interval,
+			Node:                  "node-a",
+			NodeAllocatableCPUMC:  3500,
+			NodeAllocatableMemKiB: 15000000,
+		},
+	}
+
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 1)
+
+	for _, acc := range result {
+		assert.Equal(t, int64(3500), acc.MaxCPUAllocatableMC)
+		assert.Equal(t, int64(15000000), acc.MaxMemAllocatableKiB)
+	}
+}
+
 func TestPercentileInt64(t *testing.T) {
 	assert.Equal(t, int64(0), percentileInt64(nil, 0.5))
 	assert.Equal(t, int64(0), percentileInt64([]int64{}, 0.5))

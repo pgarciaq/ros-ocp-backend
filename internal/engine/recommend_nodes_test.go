@@ -491,3 +491,15 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 	assert.Greater(t, recs[0].EstimatedMonthlySavingsCents, recs[1].EstimatedMonthlySavingsCents,
 		"cost engine should show higher savings than performance for underutilized node")
 }
+
+func TestResolveAllocatable_PrefersStored(t *testing.T) {
+	stored := int64(3500)
+	assert.Equal(t, int64(3500), resolveAllocatable(&stored, 8000, 0.93))
+	assert.Equal(t, int64(3500), resolveAllocatableMem(&stored, 32000, 0.93))
+}
+
+func TestResolveAllocatable_FallsBackToRequests(t *testing.T) {
+	factor := 0.93
+	assert.Equal(t, int64(8602), resolveAllocatable(nil, 8000, factor))
+	assert.Equal(t, int64(34408), resolveAllocatableMem(nil, 32000, factor))
+}

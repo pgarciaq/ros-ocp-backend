@@ -670,7 +670,9 @@ func ceilDivInt64(a, b int64) int64 {
 }
 
 // resolveAllocatable returns the effective allocatable CPU in millicores.
-// Prefers the stored allocatable value; falls back to request-based estimate.
+// Prefers max_cpu_allocatable_mc from daily_node_digests (operator allocatable when
+// present, otherwise capacity * ROS_NODE_ALLOCATABLE_FACTOR at ingest). When that
+// column is unset, falls back to a request-based estimate.
 func resolveAllocatable(storedAlloc *int64, maxRequests int64, factor float64) int64 {
 	if storedAlloc != nil && *storedAlloc > 0 {
 		return *storedAlloc
@@ -681,6 +683,8 @@ func resolveAllocatable(storedAlloc *int64, maxRequests int64, factor float64) i
 	return 0
 }
 
+// resolveAllocatableMem returns the effective allocatable memory in KiB.
+// See resolveAllocatable for precedence of stored vs fallback values.
 func resolveAllocatableMem(storedAlloc *int64, maxRequests int64, factor float64) int64 {
 	if storedAlloc != nil && *storedAlloc > 0 {
 		return *storedAlloc
