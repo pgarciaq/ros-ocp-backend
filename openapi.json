@@ -2391,6 +2391,20 @@
             }
           },
           {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter by recommendation term (`short`, `medium`, `long`). Default is `medium` when omitted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long"
+              ],
+              "default": "medium"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Maximum number of results (1-100, default 20)",
