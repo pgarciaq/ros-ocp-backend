@@ -108,6 +108,7 @@ type VMPlacementSettingsAPI struct {
 	PlacementSkewRatio         int     `json:"placement_skew_ratio"`
 	EnableSharedPVCCorrelation bool    `json:"enable_shared_pvc_correlation"`
 	NUMANodeMemoryGiB          float64 `json:"numa_node_memory_gib"`
+	NUMAAssumedSockets         int     `json:"numa_assumed_sockets"`
 }
 
 // VMStabilitySettingsAPI holds performance-engine downsize stability settings.
@@ -200,6 +201,7 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_PLACEMENT_SKEW_RATIO":              "placement.placement_skew_ratio",
 		"ROS_VM_ENABLE_SHARED_PVC_CORRELATION":     "placement.enable_shared_pvc_correlation",
 		"ROS_VM_NUMA_NODE_MEMORY_GIB":              "placement.numa_node_memory_gib",
+		"ROS_VM_NUMA_ASSUMED_SOCKETS":              "placement.numa_assumed_sockets",
 		"ROS_VM_ENABLE_POWER_SCHEDULE":             "power_schedule.enabled",
 		"ROS_VM_POWER_OFF_MIN_IDLE_DAYS":           "power_schedule.min_idle_days",
 		"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD":    "power_schedule.idle_ratio_threshold",
@@ -292,6 +294,7 @@ func vmRecConfigToPlacementAPI(cfg VMRecConfig) VMPlacementSettingsAPI {
 		PlacementSkewRatio:         cfg.PlacementSkewRatio,
 		EnableSharedPVCCorrelation: cfg.EnableSharedPVCCorrelation,
 		NUMANodeMemoryGiB:          cfg.NUMANodeMemoryGiB,
+		NUMAAssumedSockets:         cfg.NUMAAssumedSockets,
 	}
 }
 
@@ -484,6 +487,9 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.PlacementSkewRatio = p.PlacementSkewRatio
 		dest.EnableSharedPVCCorrelation = p.EnableSharedPVCCorrelation
 		dest.NUMANodeMemoryGiB = p.NUMANodeMemoryGiB
+		if p.NUMAAssumedSockets > 0 {
+			dest.NUMAAssumedSockets = p.NUMAAssumedSockets
+		}
 	}
 	if stored.PowerSchedule != nil {
 		ps := stored.PowerSchedule
@@ -778,6 +784,7 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 
 	v.addRangeInt("placement.placement_skew_ratio", resp.Placement.PlacementSkewRatio, 2, 20)
 	v.addRangeFloat("placement.numa_node_memory_gib", resp.Placement.NUMANodeMemoryGiB, 1.0, 2048.0)
+	v.addRangeInt("placement.numa_assumed_sockets", resp.Placement.NUMAAssumedSockets, 1, 64)
 
 	v.addRangeInt("power_schedule.min_idle_days", int(resp.PowerSchedule.MinIdleDays), 1, 90)
 	v.addRangeFloat("power_schedule.idle_ratio_threshold", resp.PowerSchedule.IdleRatioThreshold, 0.01, 1.0)

@@ -105,7 +105,8 @@ type VMRecConfig struct {
 	EnablePlacementChecks       bool    // default true
 	PlacementSkewRatio          int     // default 3 — max:min VM count per node before skew notification
 	EnableSharedPVCCorrelation  bool    // default true — namespace profile peers until PVC column exists
-	NUMANodeMemoryGiB           float64 // default 64 — per-NUMA-node cap until operator exposes topology
+	NUMANodeMemoryGiB           float64 // default 64 — per-NUMA-node cap when node digest memory is unavailable
+	NUMAAssumedSockets          int     // default 2 — divides node allocatable memory for per-NUMA estimate
 }
 
 // DefaultVMRecConfig returns the compiled defaults for VM recommendations.
@@ -170,6 +171,7 @@ func DefaultVMRecConfig() VMRecConfig {
 		PlacementSkewRatio:          3,
 		EnableSharedPVCCorrelation:  true,
 		NUMANodeMemoryGiB:           64,
+		NUMAAssumedSockets:          2,
 	}
 }
 
@@ -357,6 +359,9 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_NUMA_NODE_MEMORY_GIB"); ok {
 		base.NUMANodeMemoryGiB = cfg.VMNUMANodeMemoryGiB
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NUMA_ASSUMED_SOCKETS"); ok {
+		base.NUMAAssumedSockets = cfg.VMNUMAAssumedSockets
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_POWER_SCHEDULE"); ok {
 		base.EnablePowerSchedule = cfg.VMEnablePowerSchedule

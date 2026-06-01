@@ -69,7 +69,7 @@ func TestVMRecommend_HighIOStillFiresWithSequentialPattern(t *testing.T) {
 		digests[i].CPUUsageP95MC = 3000
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, VMIOPatternSequential, rec.IOPattern)
@@ -91,7 +91,7 @@ func TestVMRecommend_SequentialAndRandomNotifications(t *testing.T) {
 	for i := range seqDigests {
 		seqDigests[i].CPUUsageP95MC = 3000
 	}
-	seqRec, err := RecommendVM(seqDigests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	seqRec, err := RecommendVM(seqDigests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, seqRec)
 	assert.Equal(t, VMIOPatternSequential, seqRec.IOPattern)
@@ -104,7 +104,7 @@ func TestVMRecommend_SequentialAndRandomNotifications(t *testing.T) {
 	for i := range randDigests {
 		randDigests[i].CPUUsageP95MC = 3000
 	}
-	randRec, err := RecommendVM(randDigests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	randRec, err := RecommendVM(randDigests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, randRec)
 	assert.Equal(t, VMIOPatternRandom, randRec.IOPattern)

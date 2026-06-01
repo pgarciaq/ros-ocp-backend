@@ -27,6 +27,37 @@ func vmDigestForPlacement(vmName, ns, node string, vcpuMC, memKiB int64, diskByt
 	}
 }
 
+func TestExtractVMNamePrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"web-server-01", "web-server"},
+		{"db-replica-2", "db-replica"},
+		{"myapp-abc12def", "myapp"},
+		{"standalone-vm", "standalone-vm"},
+		{"a", "a"},
+		{"cache-node-a", "cache-node"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, extractVMNamePrefix(tc.name))
+		})
+	}
+}
+
+func TestDetectSameNodeRedundancy_NamePrefixColocation(t *testing.T) {
+	cluster := []model.DailyVMDigest{
+		vmDigestForPlacement("web-server-01", "apps", "node-1", 4000, 8<<20, 100<<30),
+		vmDigestForPlacement("web-server-02", "apps", "node-1", 8000, 16<<20, 200<<30),
+	}
+	cfg := DefaultVMRecConfig()
+	notifs := DetectSameNodeRedundancy(cluster, cluster[0], cfg)
+	require.Len(t, notifs, 1)
+	assert.Equal(t, NotifVMRedundantColocation, notifs[0].Code)
+	assert.Contains(t, notifs[0].Message, "web-server-02")
+}
+
 func TestDetectSameNodeRedundancy_Colocation(t *testing.T) {
 	cluster := []model.DailyVMDigest{
 		vmDigestForPlacement("vm-a", "apps", "node-1", 4000, 8<<20, 100<<30),
@@ -124,7 +155,7 @@ func TestRecommendVM_PlacementFlags(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.NUMANodeMemoryGiB = 4
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, cluster)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, cluster, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsRedundantPlacement)

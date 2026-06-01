@@ -272,6 +272,7 @@ type Config struct {
 	VMPlacementSkewRatio            int     `mapstructure:"ROS_VM_PLACEMENT_SKEW_RATIO"`
 	VMEnableSharedPVCCorrelation    bool    `mapstructure:"ROS_VM_ENABLE_SHARED_PVC_CORRELATION"`
 	VMNUMANodeMemoryGiB             float64 `mapstructure:"ROS_VM_NUMA_NODE_MEMORY_GIB"`
+	VMNUMAAssumedSockets            int     `mapstructure:"ROS_VM_NUMA_ASSUMED_SOCKETS"`
 	VMEnablePowerSchedule           bool    `mapstructure:"ROS_VM_ENABLE_POWER_SCHEDULE"`
 	VMPowerOffMinIdleDays           int32   `mapstructure:"ROS_VM_POWER_OFF_MIN_IDLE_DAYS"`
 	VMPowerOffIdleRatioThreshold    float64 `mapstructure:"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD"`
@@ -675,6 +676,7 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_PLACEMENT_SKEW_RATIO", 3)
 	viper.SetDefault("ROS_VM_ENABLE_SHARED_PVC_CORRELATION", true)
 	viper.SetDefault("ROS_VM_NUMA_NODE_MEMORY_GIB", 64.0)
+	viper.SetDefault("ROS_VM_NUMA_ASSUMED_SOCKETS", 2)
 	viper.SetDefault("ROS_VM_ENABLE_POWER_SCHEDULE", true)
 	viper.SetDefault("ROS_VM_POWER_OFF_MIN_IDLE_DAYS", 14)
 	viper.SetDefault("ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD", 0.7)

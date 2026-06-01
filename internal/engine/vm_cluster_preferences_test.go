@@ -76,7 +76,7 @@ func TestVMPreference_OverridesRatioClassification(t *testing.T) {
 		map[string]string{"production/cpu-heavy": "database"},
 	)
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, prefCtx, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, prefCtx, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedSeries)
@@ -100,7 +100,7 @@ func TestVMPreference_NoPreference_UsesRatio(t *testing.T) {
 		d.MemUsageMaxKiB = 1 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedSeries)
@@ -127,7 +127,7 @@ func TestVMPreference_UnknownPreference_FallsBackToRatio(t *testing.T) {
 		map[string]string{"production/cpu-heavy": "custom"},
 	)
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, prefCtx, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, prefCtx, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedSeries)

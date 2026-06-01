@@ -4,8 +4,8 @@ import "fmt"
 
 // CheckNUMAFit returns a notification when VM memory exceeds a single NUMA node's capacity.
 //
-// Per-host NUMA topology is not in the VM digest today; nodeNUMANodeMemGiB comes from
-// ROS_VM_NUMA_NODE_MEMORY_GIB (default 64) until the operator exposes per-node NUMA metrics.
+// nodeNUMANodeMemGiB is typically from resolveNUMANodeMemoryGiB (node allocatable memory /
+// ROS_VM_NUMA_ASSUMED_SOCKETS) with fallback to ROS_VM_NUMA_NODE_MEMORY_GIB (default 64).
 func CheckNUMAFit(vmMemoryGiB float64, nodeNUMANodeMemGiB float64) *VMNotification {
 	if nodeNUMANodeMemGiB <= 0 || vmMemoryGiB <= nodeNUMANodeMemGiB {
 		return nil
@@ -15,7 +15,7 @@ func CheckNUMAFit(vmMemoryGiB float64, nodeNUMANodeMemGiB float64) *VMNotificati
 		Type: vmNotifTypeWarning,
 		Message: fmt.Sprintf(
 			"VM memory request (%.0f GiB) exceeds single NUMA node capacity (%.0f GiB) — NUMA pinning not possible. "+
-				"Set ROS_VM_NUMA_NODE_MEMORY_GIB to match host topology when known.",
+				"Tune ROS_VM_NUMA_NODE_MEMORY_GIB or ensure daily_node_digests reflect host memory.",
 			vmMemoryGiB, nodeNUMANodeMemGiB,
 		),
 	}

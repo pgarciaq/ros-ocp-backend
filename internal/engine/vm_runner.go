@@ -73,11 +73,20 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 	}
 	clusterLatest := buildClusterLatestDigests(digests)
 
+	nodeMemGiBByNode := map[string]float64(nil)
+	end := time.Now().UTC()
+	if nodeDigests, nodeErr := QueryNodeDigests(ctx, pool, orgID, clusterUUID.String(), since, end); nodeErr != nil {
+		return fmt.Errorf("load node digests for VM NUMA: %w", nodeErr)
+	} else if len(nodeDigests) > 0 {
+		nodeMemGiBByNode = buildNodeMemoryGiBMap(nodeDigests)
+		log.Infof("vm recs: using node memory for NUMA checks on %d nodes", len(nodeMemGiBByNode))
+	}
+
 	var recs []model.VMRecommendation
 	for _, vmDigests := range grouped {
 		for _, term := range terms {
 			for _, eng := range vmEngines {
-				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterLatest)
+				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterLatest, nodeMemGiBByNode)
 				if recErr != nil {
 					return fmt.Errorf("recommend VM %s/%s: %w", vmDigests[0].Namespace, vmDigests[0].VMName, recErr)
 				}

@@ -36,6 +36,7 @@ func RecommendVM(
 	clusterTypes []InstanceType,
 	prefCtx *VMPreferenceContext,
 	clusterLatest []model.DailyVMDigest,
+	nodeMemGiBByNode map[string]float64,
 ) (*model.VMRecommendation, error) {
 	if len(digests) == 0 {
 		return nil, fmt.Errorf("recommend VM: no digests")
@@ -264,7 +265,8 @@ func RecommendVM(
 		pvcNotifs, shared := DetectSharedPVCs(clusterLatest, latest, cfg)
 		placementNotifs = append(placementNotifs, pvcNotifs...)
 		hasSharedStorage = shared
-		if n := CheckNUMAFit(float64(recommendedMemGiB), cfg.NUMANodeMemoryGiB); n != nil {
+		numaCapGiB := resolveNUMANodeMemoryGiB(latest.NodeName, nodeMemGiBByNode, cfg)
+		if n := CheckNUMAFit(float64(recommendedMemGiB), numaCapGiB); n != nil {
 			placementNotifs = append(placementNotifs, *n)
 		}
 		isRedundantPlacement, hasSharedStorage, numaOversized = vmPlacementFlagsFromNotifications(placementNotifs)

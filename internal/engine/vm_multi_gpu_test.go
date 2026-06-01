@@ -71,7 +71,7 @@ func TestRecommendVM_AdaptiveMarginCostEngine(t *testing.T) {
 	})
 	cfg := DefaultVMRecConfig()
 	cfg.CPUAdaptiveMarginEnabled = true
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.GreaterOrEqual(t, rec.RecommendedVCPU, int32(1))

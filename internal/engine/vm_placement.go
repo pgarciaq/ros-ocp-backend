@@ -2,10 +2,59 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
+
+// extractVMNamePrefix strips trailing instance identifiers from a VM name for HA grouping.
+func extractVMNamePrefix(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	parts := strings.Split(name, "-")
+	for len(parts) > 1 {
+		last := parts[len(parts)-1]
+		if isInstanceSuffix(last) {
+			parts = parts[:len(parts)-1]
+		} else {
+			break
+		}
+	}
+	return strings.Join(parts, "-")
+}
+
+func isInstanceSuffix(s string) bool {
+	if s == "" {
+		return false
+	}
+	if _, err := strconv.Atoi(s); err == nil {
+		return true
+	}
+	if len(s) == 1 && s[0] >= 'a' && s[0] <= 'z' {
+		return true
+	}
+	if len(s) >= 5 && len(s) <= 8 && isHexString(s) {
+		return true
+	}
+	return false
+}
+
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// vmPlacementPrefixGroupKey groups VMs by namespace and derived VM name prefix.
+func vmPlacementPrefixGroupKey(d model.DailyVMDigest) string {
+	return fmt.Sprintf("%s|%s", d.Namespace, extractVMNamePrefix(d.VMName))
+}
 
 // vmPlacementProfileKey groups VMs by namespace and matching resource profile.
 // App labels are not in the VM CSV today; identical vCPU/memory/disk sizing in the
@@ -48,13 +97,26 @@ func DetectSameNodeRedundancy(clusterLatest []model.DailyVMDigest, currentVM mod
 	if node == "" {
 		return nil
 	}
-	profile := vmPlacementProfileKey(currentVM)
+	profileKey := vmPlacementProfileKey(currentVM)
+	prefixKey := vmPlacementPrefixGroupKey(currentVM)
+	prefixPeers := 0
+	for _, d := range clusterLatest {
+		if vmPlacementPrefixGroupKey(d) == prefixKey {
+			prefixPeers++
+		}
+	}
+
 	var sameNodePeers []string
 	perNode := make(map[string]int)
 	var groupCount int
 
 	for _, d := range clusterLatest {
-		if vmPlacementProfileKey(d) != profile {
+		activeKey := vmPlacementPrefixGroupKey(d)
+		if prefixPeers >= 2 {
+			if activeKey != prefixKey {
+				continue
+			}
+		} else if vmPlacementProfileKey(d) != profileKey {
 			continue
 		}
 		groupCount++

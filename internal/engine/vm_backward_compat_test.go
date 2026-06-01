@@ -27,7 +27,7 @@ func TestVMRecommend_NoGPUDeviceData(t *testing.T) {
 	assert.Empty(t, analysis.Classification)
 	assert.Empty(t, analysis.GPUDevices)
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(0), rec.GPUCount)
@@ -55,7 +55,7 @@ func TestVMRecommend_NoClusterInstanceTypes(t *testing.T) {
 		d.CPURequestMC = 4000
 	})
 	cfg := DefaultVMRecConfig()
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedInstanceType)

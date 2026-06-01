@@ -505,15 +505,17 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 ### Placement and NUMA
 
 Cluster-wide placement checks run during `recommendVM()` when `placement.enable_placement_checks`
-is true (default). Peers are grouped by namespace and matching vCPU/memory/disk profile (HA-style
-pairs without `app` labels on the VM CSV today).
+is true (default). Redundant VMs are grouped primarily by namespace and derived VM name prefix
+(for example `web-server-01` / `web-server-02` → `web-server`); when no prefix peers exist, the
+engine falls back to matching vCPU/memory/disk profile (HA-style pairs without `app` labels on
+the VM CSV today).
 
 | Code | Metadata flag | Meaning |
 |------|---------------|---------|
-| **60** | `is_redundant_placement` | Another VM with the same profile runs on the same node |
-| **61** | — | Uneven spread of profile VMs across nodes (skew ratio, default 3:1) |
-| **62** | `has_shared_storage` | Correlated peers in the namespace (true PVC mapping pending operator field) |
-| **63** | `numa_oversized` | Recommended memory exceeds `placement.numa_node_memory_gib` (default 64 GiB) |
+| **60** | `is_redundant_placement` | Another VM in the same prefix (or profile) group runs on the same node |
+| **61** | — | Uneven spread of that group across nodes (skew ratio, default 3:1) |
+| **62** | `has_shared_storage` | Correlated peers in the namespace (profile proxy; true PVC mapping is future work) |
+| **63** | `numa_oversized` | Recommended memory exceeds per-NUMA cap from `daily_node_digests` when available (`node memory / numa_assumed_sockets`), else `placement.numa_node_memory_gib` (default 64 GiB) |
 
 Tune via `GET/PUT .../settings/vm` → `placement` block or env vars listed above.
 
@@ -572,6 +574,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 
 | Item | Notes |
 |------|-------|
+| **Shared PVC correlation (full accuracy)** | Notification **62** uses profile matching today; needs `persistentvolumeclaim_name` on ROS VM CSV — [design doc](../../../docs/design/vm-recommendations.md#shared-pvc-correlation-future) |
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity for communicating VMs — [Smart co-location (future)](#smart-co-location-future) |

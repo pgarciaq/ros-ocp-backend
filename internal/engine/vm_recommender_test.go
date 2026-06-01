@@ -91,7 +91,7 @@ func vmDigestDays(base time.Time, n int, mutate func(*model.DailyVMDigest)) []mo
 }
 
 func TestVMRecommend_EmptyDigests_ReturnsError(t *testing.T) {
-	rec, err := RecommendVM(nil, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(nil, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.Error(t, err)
 	require.Nil(t, rec)
 	assert.Contains(t, err.Error(), "no digests")
@@ -105,7 +105,7 @@ func TestVMRecommend_AllZeroCPU_TreatedAsIdle(t *testing.T) {
 		d.MemUsageP95KiB = 100 * 1024
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsIdle)
@@ -120,7 +120,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 		d.MemUsageP95KiB = 400 * 1024
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsIdle)
@@ -142,7 +142,7 @@ func TestVMRecommend_IdleWindows(t *testing.T) {
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsIdle)
@@ -158,7 +158,7 @@ func TestVMRecommend_NonIdleCostEngine(t *testing.T) {
 		d.MemUsageP95KiB = 6 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsIdle)
@@ -176,7 +176,7 @@ func TestVMRecommend_NonIdlePerformanceEngine(t *testing.T) {
 		d.MemUsageP99KiB = 5 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(3), rec.RecommendedVCPU)
@@ -244,7 +244,7 @@ func TestConfidence_AgentRemoved(t *testing.T) {
 		digests[i].MemAvailableP95KiB = nil
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "moderate", rec.Confidence)
@@ -266,7 +266,7 @@ func TestConfidence_Flapping(t *testing.T) {
 		d.MemAvailableP95KiB = &avail
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "moderate", rec.Confidence)
@@ -284,7 +284,7 @@ func TestConfidence_NeverHadAgent(t *testing.T) {
 		d.MemAvailableP95KiB = nil
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "moderate", rec.Confidence)
@@ -317,7 +317,7 @@ func TestConfidence_LessThanOneDay(t *testing.T) {
 	digests[2].SampleCount = 15
 	digests[2].AgentSampleCount = 0
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "low", rec.Confidence)
@@ -376,7 +376,7 @@ func TestSizingSource_HighConfidence_UsesAvailable(t *testing.T) {
 		d.AgentSampleCount = 96
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "high", rec.Confidence)
@@ -393,7 +393,7 @@ func TestSizingSource_ModerateConfidence_UsesUsage(t *testing.T) {
 		d.MemAvailableP95KiB = nil
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, "moderate", rec.Confidence)
@@ -409,7 +409,7 @@ func TestVMRecommend_GuestAgentHighConfidence(t *testing.T) {
 		d.MemAvailableP95KiB = &avail
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.GuestAgentDetected)
@@ -424,7 +424,7 @@ func TestVMRecommend_NoGuestAgentModerateConfidence(t *testing.T) {
 		d.MemAvailableP95KiB = nil
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.GuestAgentDetected)
@@ -438,7 +438,7 @@ func TestVMRecommend_DownsizeHysteresisBlocks(t *testing.T) {
 		d.CPUUsageP95MC = 5200
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(8), rec.CurrentVCPU)
@@ -452,7 +452,7 @@ func TestVMRecommend_DownsizeHysteresisAllows(t *testing.T) {
 		d.CPUUsageP95MC = 3000
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(10), rec.CurrentVCPU)
@@ -466,7 +466,7 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 		d.CPUUsageP95MC = 3000
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsOversized)
@@ -495,7 +495,7 @@ func TestVMRecommend_DiskProjectionGrowth(t *testing.T) {
 	digests[1].FilesystemUsedMaxBytes = &usedMid
 	digests[2].FilesystemUsedMaxBytes = &usedLate
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.DiskDaysUntilFull)
@@ -512,7 +512,7 @@ func TestVMRecommend_DiskProjectionNoFilesystem(t *testing.T) {
 		d.FilesystemCapacityBytes = nil
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskDaysUntilFull)
@@ -533,7 +533,7 @@ func TestDisk_HypervisorGrowthDetected(t *testing.T) {
 		digests[i].DiskAllocatedMaxBytes = gib
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskDaysUntilFull)
@@ -556,7 +556,7 @@ func TestDisk_HypervisorStable(t *testing.T) {
 		d.DiskAllocatedMaxBytes = gib
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskDaysUntilFull)
@@ -576,7 +576,7 @@ func TestDisk_HypervisorShrinking(t *testing.T) {
 		digests[i].DiskAllocatedMaxBytes = gib
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskGrowthGiBPerDay)
@@ -597,7 +597,7 @@ func TestDisk_HypervisorBelowMinGrowthThreshold(t *testing.T) {
 		digests[i].DiskAllocatedMaxBytes = baseBytes + step*int64(i)
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskGrowthGiBPerDay)
@@ -614,7 +614,7 @@ func TestDisk_HypervisorInsufficientData(t *testing.T) {
 	})
 	digests[0].DiskAllocatedMaxBytes = 200 * 1024 * 1024 * 1024
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskGrowthGiBPerDay)
@@ -636,7 +636,7 @@ func TestDisk_GuestAgentUnchanged(t *testing.T) {
 	digests[1].FilesystemUsedMaxBytes = &usedMid
 	digests[2].FilesystemUsedMaxBytes = &usedLate
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.DiskDaysUntilFull)
@@ -662,7 +662,7 @@ func TestDisk_GuestAgentOverridesHypervisor(t *testing.T) {
 		digests[i].DiskAllocatedMaxBytes = int64((100 + i*20) * 1024 * 1024 * 1024)
 	}
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, rec.DiskGrowthGiBPerDay, "flat guest-agent usage should not project growth")
@@ -695,7 +695,7 @@ func TestVMRecommend_HighIOProfile(t *testing.T) {
 		d.DiskReadIOPSP95 = &iops
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.IOHint)
@@ -726,7 +726,7 @@ func TestVMRecommend_NoGuestAgentNotification(t *testing.T) {
 		d.MemAvailableP95KiB = nil
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 
@@ -744,7 +744,7 @@ func TestVMRecommend_HighIONotification(t *testing.T) {
 		d.DiskReadIOPSP95 = &iops
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 
@@ -772,7 +772,7 @@ func TestVMRecommend_DiskFillingGuestAgentNotification(t *testing.T) {
 	digests[1].FilesystemUsedMaxBytes = &usedMid
 	digests[2].FilesystemUsedMaxBytes = &usedLate
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.DiskDaysUntilFull)
@@ -802,7 +802,7 @@ func TestVMRecommend_DiskGrowingHypervisorNotification(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.DiskMinGrowthMiBPerDay = 1
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.DiskGrowthGiBPerDay)
@@ -825,7 +825,7 @@ func TestVMRecommend_InstanceTypeNotification(t *testing.T) {
 		d.MemUsageP95KiB = 1 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedInstanceType)
@@ -849,7 +849,7 @@ func TestVMRecommend_DiskCriticalNotification(t *testing.T) {
 		d.FilesystemCapacityBytes = &capacity
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 
@@ -870,7 +870,7 @@ func TestVMRecommend_MultipleNotifications(t *testing.T) {
 		d.DiskReadIOPSP95 = &iops
 	})
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 
@@ -900,7 +900,7 @@ func TestVMRecommend_HappyPathEmptyNotifications(t *testing.T) {
 		d.FilesystemCapacityBytes = &capacity
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsIdle)
@@ -922,7 +922,7 @@ func TestVMRecommend_InstanceSeriesFromRecommendation(t *testing.T) {
 		d.MemUsageP95KiB = 1 * 1024 * 1024
 	})
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, rec.RecommendedSeries)
@@ -946,7 +946,7 @@ func TestVMAbandoned_AllZeroUsage(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	digests := vmDigestDaysAllZero(base, 5)
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsAbandoned)
@@ -967,7 +967,7 @@ func TestVMAbandoned_InsufficientDays(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	digests := vmDigestDaysAllZero(base, 2)
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.Nil(t, rec, "below MinDataDays for term")
 }
@@ -979,7 +979,7 @@ func TestVMAbandoned_PartialUsage(t *testing.T) {
 	digests[3].MemUsageMaxKiB = 0
 	digests[3].CPUUsageP95MC = 10
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsAbandoned)
@@ -989,7 +989,7 @@ func TestVMAbandoned_SupersedesIdle(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	digests := vmDigestDaysAllZero(base, 3)
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsAbandoned)
@@ -1006,7 +1006,7 @@ func TestVMAbandoned_RecommendsZero(t *testing.T) {
 	digests[0].CPURequestMC = 8000
 	digests[0].MemRequestKiB = 16 * 1024 * 1024
 
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(0), rec.RecommendedVCPU)
@@ -1020,7 +1020,7 @@ func TestVMAbandoned_ConfigurableThreshold(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.AbandonedMinDays = 5
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.False(t, rec.IsAbandoned)
@@ -1047,10 +1047,10 @@ func TestWindows_KernelReserveSubtracted(t *testing.T) {
 	})
 
 	cfg := DefaultVMRecConfig()
-	winRec, err := RecommendVM(winDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	winRec, err := RecommendVM(winDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, winRec)
-	linRec, err := RecommendVM(linDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	linRec, err := RecommendVM(linDigests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, linRec)
 	assert.Less(t, winRec.RecommendedMemoryGiB, linRec.RecommendedMemoryGiB)
@@ -1068,7 +1068,7 @@ func TestWindows_KernelReserveDoesNotGoBelowFloor(t *testing.T) {
 	})
 	cfg := DefaultVMRecConfig()
 	cfg.WindowsMemoryFloorGiB = 2
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.GreaterOrEqual(t, rec.RecommendedMemoryGiB, cfg.WindowsMemoryFloorGiB)
@@ -1091,7 +1091,7 @@ func TestWindowsUpdateSpike_NotificationTriggered(t *testing.T) {
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 2000
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
@@ -1107,7 +1107,7 @@ func TestWindowsUpdateSpike_NoNotificationWhenSmallSpread(t *testing.T) {
 		d.MemUsageP95KiB = 100 * 1024
 		d.MemUsageP99KiB = 110 * 1024
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMWindowsUpdateSpike))
@@ -1120,7 +1120,7 @@ func TestWindowsUpdateSpike_OnlyForWindows(t *testing.T) {
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 2000
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMWindowsUpdateSpike))
@@ -1131,7 +1131,7 @@ func TestCrashLoop_NotificationTriggered(t *testing.T) {
 	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
 		d.RestartCountSum = 2
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
@@ -1146,7 +1146,7 @@ func TestCrashLoop_BelowThreshold(t *testing.T) {
 		d.RestartCountSum = 1
 	})
 	term := TermWindow{Name: "short", LookbackDays: 7, MinDataDays: 2}
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), term, vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), term, vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMCrashLoop))
@@ -1155,7 +1155,7 @@ func TestCrashLoop_BelowThreshold(t *testing.T) {
 func TestCrashLoop_NilRestartCount(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	digests := vmDigestDays(base, 3, nil)
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMCrashLoop))
@@ -1166,7 +1166,7 @@ func TestUnknownOS_NotificationAdded(t *testing.T) {
 	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
 		d.GuestOS = ""
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	require.NotNil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMUnknownOS))
@@ -1179,7 +1179,7 @@ func TestUnknownOS_UsesLinuxDefaults(t *testing.T) {
 		d.CPUUsageP95MC = 40
 		d.MemUsageP95KiB = 400 * 1024
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsIdle)
@@ -1192,7 +1192,7 @@ func TestDownsizeStability_AllDaysBelow_RecommendsDownsize(t *testing.T) {
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Less(t, rec.RecommendedVCPU, rec.CurrentVCPU)
@@ -1212,7 +1212,7 @@ func TestDownsizeStability_OneDayAbove_HoldsAtCurrent(t *testing.T) {
 	digests[1].CPUUsageP99MC = 2600
 	digests[2].CPUUsageP95MC = 9000
 	digests[2].CPUUsageP99MC = 2600
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEnginePerformance, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(10), rec.CurrentVCPU)
@@ -1227,7 +1227,7 @@ func TestDownsizeStability_OnlyPerformanceEngine(t *testing.T) {
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100
 	})
-	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Less(t, rec.RecommendedVCPU, rec.CurrentVCPU)
@@ -1254,7 +1254,7 @@ func TestDownsizeStability_InsufficientDays(t *testing.T) {
 	})
 	cfg := DefaultVMRecConfig()
 	cfg.DownsizeStabilityDays = 3
-	rec, err := RecommendVM(digests, cfg, term, vmEnginePerformance, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, term, vmEnginePerformance, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, rec.CurrentVCPU, rec.RecommendedVCPU)

@@ -111,7 +111,7 @@ func TestVMGPU_NoGPU_SkipsAnalysis(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	analysis := analyzeVMGPU(digests, cfg)
 	assert.Empty(t, analysis.Classification)
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.Equal(t, int32(0), rec.GPUCount)
