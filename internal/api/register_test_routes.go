@@ -44,6 +44,14 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 			v1.PUT("/recommendations/openshift/settings/cluster-quota", PutClusterQuotaSettings)
 			v1.DELETE("/recommendations/openshift/settings/cluster-quota", DeleteClusterQuotaSettings)
 		}
+		if pluginRecommendationRoutesActive("vm") {
+			v1.GET("/recommendations/openshift/settings/vm", GetVMSettings)
+			v1.PUT("/recommendations/openshift/settings/vm", PutVMSettings)
+			v1.DELETE("/recommendations/openshift/settings/vm", DeleteVMSettings)
+			v1.GET("/recommendations/openshift/settings/vm/terms", GetVMTermSettings)
+			v1.PUT("/recommendations/openshift/settings/vm/terms", PutVMTermSettings)
+			v1.DELETE("/recommendations/openshift/settings/vm/terms", DeleteVMTermSettings)
+		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)

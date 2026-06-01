@@ -34,6 +34,68 @@ func TestRegisterDisabledPluginRouteGuards_GPUDisabled_Returns404(t *testing.T) 
 	require.Contains(t, msg, "plugin 'gpu' is not enabled")
 }
 
+func TestDisabledPlugin_DELETE_VMSettings_Returns404(t *testing.T) {
+	t.Setenv("ROS_ENABLE_VM_RECS", "false")
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	registerDisabledPluginRouteGuards(v1)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/vm", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "not_found", body["status"])
+	require.Contains(t, body["message"].(string), "plugin 'vm' is not enabled")
+}
+
+func TestDisabledPlugin_DELETE_VMTerms_Returns404(t *testing.T) {
+	t.Setenv("ROS_ENABLE_VM_RECS", "false")
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	registerDisabledPluginRouteGuards(v1)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/vm/terms", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "not_found", body["status"])
+	require.Contains(t, body["message"].(string), "plugin 'vm' is not enabled")
+}
+
+func TestDisabledPlugin_DELETE_Snapshot_Returns404(t *testing.T) {
+	t.Setenv("ROS_ENABLED_PLUGINS", "container")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	registerDisabledPluginRouteGuards(v1)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/snapshot", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "not_found", body["status"])
+	require.Contains(t, body["message"].(string), "plugin 'snapshot' is not enabled")
+}
+
 func TestRegisterDisabledPluginRouteGuards_VMDisabled_Returns404(t *testing.T) {
 	t.Setenv("ROS_ENABLE_VM_RECS", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
