@@ -29,7 +29,29 @@ func TestQuotaNotificationCodes_Oversized(t *testing.T) {
 }
 
 func TestClusterQuotaNotificationCodes_AtCapacity(t *testing.T) {
-	rec := ClusterQuotaRec{RiskLevel: QuotaRiskHigh}
+	rec := ClusterQuotaRec{
+		RiskLevel:          QuotaRiskHigh,
+		RecommendationType: QuotaRecTypeRaise,
+		Snapshot: ClusterQuotaSnapshot{
+			CPURequestHardMC: 1000,
+			CPURequestUsedMC: 950,
+		},
+	}
 	codes := ClusterQuotaNotificationCodes(rec)
-	assert.Equal(t, []int16{NotifClusterQuotaAtCapacity}, codes)
+	assert.Contains(t, codes, NotifQuotaNearCapacity)
+	assert.Contains(t, codes, NotifClusterQuotaAtCapacity)
+}
+
+func TestClusterQuotaNotificationCodes_BlockingAndOversized(t *testing.T) {
+	rec := ClusterQuotaRec{
+		Snapshot: ClusterQuotaSnapshot{
+			PodsHard: 10,
+			PodsUsed: 10,
+		},
+		RecommendationType: QuotaRecTypeTighten,
+		RiskLevel:          QuotaRiskLow,
+	}
+	codes := ClusterQuotaNotificationCodes(rec)
+	assert.Contains(t, codes, NotifQuotaBlocking)
+	assert.Contains(t, codes, NotifQuotaOversized)
 }
