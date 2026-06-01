@@ -95,6 +95,24 @@ func TestAggregateNodeDigests_PercentilesComputed(t *testing.T) {
 	}
 }
 
+func TestAggregateNodeDigests_InstanceTypePreserved(t *testing.T) {
+	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+
+	rows := []MetricRow{
+		{IntervalStart: interval, Node: "node-a", InstanceType: "m5.xlarge", CPUUsageMC: 100, MemUsageKiB: 500},
+		{IntervalStart: interval, Node: "node-a", InstanceType: "m5.xlarge", CPUUsageMC: 50, MemUsageKiB: 200},
+		{IntervalStart: interval, Node: "node-b", InstanceType: "", CPUUsageMC: 80, MemUsageKiB: 400},
+	}
+
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 2)
+
+	keyA := NodeDayKey{Node: "node-a", BucketDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)}
+	keyB := NodeDayKey{Node: "node-b", BucketDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)}
+	assert.Equal(t, "m5.xlarge", result[keyA].InstanceType)
+	assert.Equal(t, "", result[keyB].InstanceType)
+}
+
 func TestAggregateNodeDigests_CapacityTracked(t *testing.T) {
 	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
 

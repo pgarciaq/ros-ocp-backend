@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +37,7 @@ type NodeDigestRow struct {
 	MaxCPURequestsMC  int64
 	MaxMemRequestsKiB int64
 	MaxPodCount       int64
+	InstanceType      string
 	SampleCount       int64
 }
 
@@ -106,6 +108,8 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 	}
 
 	results := make([]NodeRec, 0, len(grouped)*len(terms)*len(nodeEngines))
+	classesByNodeTerm := make(map[string]map[string]nodeClassification)
+
 	for node, allDays := range grouped {
 		latest := latestNodeDigest(allDays)
 
@@ -115,6 +119,11 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				continue
 			}
 			class := classifyNode(node, windowDays, cfg, nodeSettings.TrendMinDays)
+			if classesByNodeTerm[tc.Name] == nil {
+				classesByNodeTerm[tc.Name] = make(map[string]nodeClassification)
+			}
+			classesByNodeTerm[tc.Name][node] = class
+
 			for _, eng := range nodeEngines {
 				rec := nodeRecFromClassification(class)
 				rec.Term = tc.Name
@@ -125,6 +134,9 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 			}
 		}
 	}
+
+	instanceTypes := nodeInstanceTypesFromDigests(digests)
+	applyInstanceTypeConsolidation(results, classesByNodeTerm, instanceTypes, nodeEngines, nodeSettings)
 	return results
 }
 
@@ -362,6 +374,236 @@ func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig, nodeSetti
 	return cpuMC, memKiB, nodeCountReduction
 }
 
+// resolveNodeInstanceType returns the most recent non-empty instance type for a node.
+func resolveNodeInstanceType(days []NodeDigestRow) string {
+	best := ""
+	var bestDate time.Time
+	for _, d := range days {
+		if d.InstanceType == "" {
+			continue
+		}
+		if d.BucketDate.After(bestDate) {
+			bestDate = d.BucketDate
+			best = d.InstanceType
+		}
+	}
+	return best
+}
+
+// nodeInstanceTypesFromDigests maps each node to its latest non-empty instance type.
+func nodeInstanceTypesFromDigests(digests []NodeDigestRow) map[string]string {
+	types := make(map[string]string)
+	dates := make(map[string]time.Time)
+	for _, d := range digests {
+		if d.InstanceType == "" {
+			continue
+		}
+		if prev, ok := dates[d.Node]; !ok || d.BucketDate.After(prev) {
+			dates[d.Node] = d.BucketDate
+			types[d.Node] = d.InstanceType
+		}
+	}
+	return types
+}
+
+// applyInstanceTypeConsolidation adjusts node_count_reduction using fleet-level grouping
+// by instance type (Level 3). Nodes without instance_type keep per-node binary logic.
+func applyInstanceTypeConsolidation(
+	recs []NodeRec,
+	classesByNodeTerm map[string]map[string]nodeClassification,
+	instanceTypes map[string]string,
+	nodeEngines []NodeEngineConfig,
+	nodeSettings NodeThresholdSettings,
+) {
+	if len(recs) == 0 {
+		return
+	}
+
+	engineByName := make(map[string]NodeEngineConfig, len(nodeEngines))
+	for _, eng := range nodeEngines {
+		engineByName[eng.Name] = eng
+	}
+
+	type termEngine struct {
+		term   string
+		engine string
+	}
+	groups := make(map[termEngine][]int)
+	for i, rec := range recs {
+		key := termEngine{term: rec.Term, engine: rec.Engine}
+		groups[key] = append(groups[key], i)
+	}
+
+	for key, indices := range groups {
+		eng, ok := engineByName[key.engine]
+		if !ok {
+			continue
+		}
+		classes := classesByNodeTerm[key.term]
+		if classes == nil {
+			continue
+		}
+
+		byInstanceType := make(map[string][]int)
+		var unknownIndices []int
+		for _, i := range indices {
+			rec := recs[i]
+			it := instanceTypes[rec.Node]
+			if it == "" {
+				unknownIndices = append(unknownIndices, i)
+				continue
+			}
+			byInstanceType[it] = append(byInstanceType[it], i)
+		}
+
+		for _, i := range unknownIndices {
+			recs[i].NodeCountReduction = binaryNodeCountReduction(recs[i], classes[recs[i].Node], eng, nodeSettings)
+		}
+
+		for _, groupIndices := range byInstanceType {
+			if len(groupIndices) == 1 {
+				i := groupIndices[0]
+				recs[i].NodeCountReduction = binaryNodeCountReduction(recs[i], classes[recs[i].Node], eng, nodeSettings)
+				continue
+			}
+			assignGroupNodeCountReduction(recs, groupIndices, classes, eng, nodeSettings)
+		}
+	}
+}
+
+func binaryNodeCountReduction(rec NodeRec, class nodeClassification, eng NodeEngineConfig, nodeSettings NodeThresholdSettings) int {
+	if !class.IsUnderutilized {
+		return 0
+	}
+	switch eng.Name {
+	case "cost":
+		return 1
+	case "performance":
+		if hasFullSpareNodeHeadroom(class.CurrentCPUMC, class.CurrentMemKiB, rec.RecommendedCPUMC, rec.RecommendedMemKiB, nodeSettings.PerfConsolidationHeadroomMultiplier) {
+			return 1
+		}
+	}
+	return 0
+}
+
+func nodeEligibleForConsolidation(rec NodeRec, class nodeClassification, eng NodeEngineConfig, nodeSettings NodeThresholdSettings) bool {
+	return binaryNodeCountReduction(rec, class, eng, nodeSettings) > 0
+}
+
+// assignGroupNodeCountReduction distributes fleet consolidation across eligible nodes in a group.
+func assignGroupNodeCountReduction(
+	recs []NodeRec,
+	indices []int,
+	classes map[string]nodeClassification,
+	eng NodeEngineConfig,
+	nodeSettings NodeThresholdSettings,
+) {
+	for _, i := range indices {
+		recs[i].NodeCountReduction = 0
+	}
+
+	var eligible []int
+	for _, i := range indices {
+		class := classes[recs[i].Node]
+		if nodeEligibleForConsolidation(recs[i], class, eng, nodeSettings) {
+			eligible = append(eligible, i)
+		}
+	}
+	if len(eligible) == 0 {
+		return
+	}
+
+	groupReduction := computeGroupNodeCountReduction(eligible, recs, classes, eng.TargetUtilization)
+	if groupReduction <= 0 {
+		return
+	}
+
+	sort.Slice(eligible, func(a, b int) bool {
+		utilA := nodeUnderutilScore(classes[recs[eligible[a]].Node])
+		utilB := nodeUnderutilScore(classes[recs[eligible[b]].Node])
+		return utilA < utilB
+	})
+
+	assigned := 0
+	for _, i := range eligible {
+		if assigned >= groupReduction {
+			break
+		}
+		recs[i].NodeCountReduction = 1
+		assigned++
+	}
+}
+
+func nodeUnderutilScore(class nodeClassification) float32 {
+	return max(class.CPUUtilP95, class.MemUtilP95)
+}
+
+// computeGroupNodeCountReduction estimates how many nodes can be removed from a homogeneous group.
+func computeGroupNodeCountReduction(
+	indices []int,
+	recs []NodeRec,
+	classes map[string]nodeClassification,
+	targetUtilization float64,
+) int {
+	n := len(indices)
+	if n <= 1 {
+		return 0
+	}
+
+	var totalCPUP95, totalMemP95 int64
+	var capCPU, capMem int64
+	for _, i := range indices {
+		class := classes[recs[i].Node]
+		totalCPUP95 += class.maxCPUUsageP95MC
+		totalMemP95 += class.maxMemUsageP95KiB
+		if class.CurrentCPUMC > capCPU {
+			capCPU = class.CurrentCPUMC
+		}
+		if class.CurrentMemKiB > capMem {
+			capMem = class.CurrentMemKiB
+		}
+	}
+
+	minNodes := minimumNodesForWorkload(totalCPUP95, totalMemP95, capCPU, capMem, targetUtilization)
+	if minNodes < 1 {
+		minNodes = 1
+	}
+	if minNodes > int64(n) {
+		minNodes = int64(n)
+	}
+	return n - int(minNodes)
+}
+
+// minimumNodesForWorkload returns the node count needed for summed P95 CPU and memory usage.
+func minimumNodesForWorkload(totalCPUP95, totalMemP95, nodeCPUMC, nodeMemKiB int64, targetUtilization float64) int64 {
+	targetScaled := int64(math.Round(targetUtilization * float64(MarginScale)))
+	if targetScaled <= 0 {
+		targetScaled = int64(0.8 * float64(MarginScale))
+	}
+
+	var nodesCPU, nodesMem int64 = 1, 1
+	if nodeCPUMC > 0 && totalCPUP95 > 0 {
+		capacity := nodeCPUMC * targetScaled / MarginScale
+		if capacity > 0 {
+			nodesCPU = ceilDivInt64(totalCPUP95, capacity)
+		}
+	}
+	if nodeMemKiB > 0 && totalMemP95 > 0 {
+		capacity := nodeMemKiB * targetScaled / MarginScale
+		if capacity > 0 {
+			nodesMem = ceilDivInt64(totalMemP95, capacity)
+		}
+	}
+	minNodes := nodesCPU
+	if nodesMem > minNodes {
+		minNodes = nodesMem
+	}
+	if minNodes < 1 {
+		minNodes = 1
+	}
+	return minNodes
+}
+
 // hasFullSpareNodeHeadroom reports whether freed capacity could fit another copy of the workload.
 func hasFullSpareNodeHeadroom(currentCPUmc, currentMemKiB, recCPUmc, recMemKiB int64, multiplier float64) bool {
 	if recCPUmc <= 0 || recMemKiB <= 0 || currentCPUmc <= 0 || currentMemKiB <= 0 || multiplier <= 0 {
@@ -482,7 +724,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			COALESCE(mem_usage_p50_kib, 0), COALESCE(mem_usage_p95_kib, 0),
 			max_cpu_allocatable_mc, max_mem_allocatable_kib,
 			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0),
-			COALESCE(max_pod_count, 0), COALESCE(sample_count, 0)
+			COALESCE(max_pod_count, 0), COALESCE(instance_type, ''), COALESCE(sample_count, 0)
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
@@ -503,7 +745,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			&d.MemUsageP50KiB, &d.MemUsageP95KiB,
 			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
 			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
-			&d.MaxPodCount, &d.SampleCount,
+			&d.MaxPodCount, &d.InstanceType, &d.SampleCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan node digest row: %w", err)

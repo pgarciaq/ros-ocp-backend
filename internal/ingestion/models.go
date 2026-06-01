@@ -35,6 +35,10 @@ type MetricRow struct {
 	NodeCapacityCPUMC  int64
 	NodeCapacityMemKiB int64
 
+	// InstanceType is the cloud instance type label for the node (optional).
+	// Empty when the column is absent from the CSV or the node is bare-metal.
+	InstanceType string
+
 	AcceleratorModelName   string
 	AcceleratorProfileName string
 	AcceleratorFBUsageMin  float64

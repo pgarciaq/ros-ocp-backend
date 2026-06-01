@@ -105,6 +105,8 @@ type csvColumnIndex struct {
 	// Node capacity columns (optional; from cost management pod CSV).
 	nodeCapacityCPUCores int
 	nodeCapacityMemBytes int
+	// Instance type column (optional; from ROS container CSV).
+	instanceType int
 	// GPU columns (optional; -1 when header absent).
 	acceleratorModelName           int
 	acceleratorProfileName         int
@@ -127,7 +129,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		intervalStart: -1, intervalEnd: -1, namespace: -1, workloadName: -1,
 		workloadType: -1, containerName: -1, pod: -1, cpuRequest: -1, cpuLimit: -1,
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
-		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
+		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1, instanceType: -1,
 		memUsage: -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName:           -1,
@@ -167,6 +169,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.nodeCapacityCPUCores = i
 		case "node_capacity_memory_bytes":
 			idx.nodeCapacityMemBytes = i
+		case "instance_type":
+			idx.instanceType = i
 		case "cpu_request_container_avg":
 			idx.cpuRequest = i
 		case "cpu_limit_container_avg":
@@ -472,6 +476,8 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			row.NodeCapacityMemKiB = 0
 		}
 	}
+
+	row.InstanceType = optionalStringField(record, idx.instanceType)
 
 	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
 	row.AcceleratorProfileName = optionalStringField(record, idx.acceleratorProfileName)

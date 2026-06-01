@@ -32,6 +32,7 @@ type NodeDayAccumulator struct {
 	intervalSeen      [nodeDayHours]bool
 	MaxCPUCapacityMC  int64
 	MaxMemCapacityKiB int64
+	InstanceType      string
 }
 
 func newNodeDayAccumulator() *NodeDayAccumulator {
@@ -58,6 +59,9 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	}
 	if r.NodeCapacityMemKiB > 0 && r.NodeCapacityMemKiB > a.MaxMemCapacityKiB {
 		a.MaxMemCapacityKiB = r.NodeCapacityMemKiB
+	}
+	if a.InstanceType == "" && r.InstanceType != "" {
+		a.InstanceType = r.InstanceType
 	}
 }
 
@@ -218,6 +222,11 @@ func flushNodeDigestsOnSender(
 				allocMem = &v
 			}
 
+			var instanceType *string
+			if acc.InstanceType != "" {
+				instanceType = &acc.InstanceType
+			}
+
 			batch.Queue(`
 			INSERT INTO daily_node_digests (
 				bucket_date, org_id, cluster_uuid, node,
@@ -225,8 +234,8 @@ func flushNodeDigestsOnSender(
 				mem_usage_p50_kib, mem_usage_p95_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
-				max_pod_count, sample_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+				max_pod_count, instance_type, sample_count
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
@@ -238,11 +247,12 @@ func flushNodeDigestsOnSender(
 				max_cpu_requests_mc = EXCLUDED.max_cpu_requests_mc,
 				max_mem_requests_kib = EXCLUDED.max_mem_requests_kib,
 				max_pod_count = EXCLUDED.max_pod_count,
+				instance_type = EXCLUDED.instance_type,
 				sample_count = EXCLUDED.sample_count`,
 				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
 				cpuP50, cpuP95, memP50, memP95,
 				allocCPU, allocMem,
-				maxCPUReq, maxMemReq, maxPods, sampleCount,
+				maxCPUReq, maxMemReq, maxPods, instanceType, sampleCount,
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
