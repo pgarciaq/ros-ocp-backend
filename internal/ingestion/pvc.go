@@ -20,6 +20,7 @@ type PVCRow struct {
 	IntervalStart         time.Time
 	IntervalEnd           time.Time
 	Namespace             string
+	Pod                   string
 	PersistentVolumeClaim string
 	PersistentVolume      string
 	StorageClass          string
@@ -32,6 +33,7 @@ type pvcHeaderIdx struct {
 	intervalStart         int
 	intervalEnd           int
 	namespace             int
+	pod                   int
 	persistentvolumeclaim int
 	persistentvolume      int
 	storageclass          int
@@ -46,6 +48,7 @@ func newPVCHeaderIdx() pvcHeaderIdx {
 		intervalStart:         -1,
 		intervalEnd:           -1,
 		namespace:             -1,
+		pod:                   -1,
 		persistentvolumeclaim: -1,
 		persistentvolume:      -1,
 		storageclass:          -1,
@@ -75,6 +78,8 @@ func ParsePVCRows(r io.Reader) ([]PVCRow, error) {
 			idx.intervalEnd = i
 		case "namespace":
 			idx.namespace = i
+		case "pod":
+			idx.pod = i
 		case "persistentvolumeclaim":
 			idx.persistentvolumeclaim = i
 		case "persistentvolume":
@@ -137,6 +142,9 @@ func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
 	}
 	if idx.namespace >= 0 && idx.namespace < len(record) {
 		row.Namespace = strings.TrimSpace(record[idx.namespace])
+	}
+	if idx.pod >= 0 && idx.pod < len(record) {
+		row.Pod = strings.TrimSpace(record[idx.pod])
 	}
 	if idx.persistentvolumeclaim >= 0 && idx.persistentvolumeclaim < len(record) {
 		row.PersistentVolumeClaim = strings.TrimSpace(record[idx.persistentvolumeclaim])
@@ -205,6 +213,7 @@ type PVCDigestResult struct {
 	BucketDate    time.Time
 	Namespace     string
 	PVC           string
+	LastSeenPod   string
 	PV            string
 	StorageClass  string
 	CapacityBytes int64
@@ -220,14 +229,16 @@ type PVCDigestResult struct {
 // by the interval duration (3600 seconds for hourly intervals).
 func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 	type accumulator struct {
-		pv           string
-		storageClass string
-		capacity     int64
-		request      int64
-		usageSum     int64
-		usageMin     int64
-		usageMax     int64
-		count        int
+		pv              string
+		storageClass    string
+		capacity        int64
+		request         int64
+		usageSum        int64
+		usageMin        int64
+		usageMax        int64
+		count           int
+		lastSeenPod     string
+		latestInterval  time.Time
 	}
 
 	groups := make(map[pvcDigestKey]*accumulator)
@@ -282,6 +293,10 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 		if r.StorageClass != "" {
 			acc.storageClass = r.StorageClass
 		}
+		if r.Pod != "" && (acc.latestInterval.IsZero() || !r.IntervalEnd.Before(acc.latestInterval)) {
+			acc.latestInterval = r.IntervalEnd
+			acc.lastSeenPod = r.Pod
+		}
 	}
 
 	results := make([]PVCDigestResult, 0, len(groups))
@@ -294,6 +309,7 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 			BucketDate:    key.Date,
 			Namespace:     key.Namespace,
 			PVC:           key.PVC,
+			LastSeenPod:   acc.lastSeenPod,
 			PV:            acc.pv,
 			StorageClass:  acc.storageClass,
 			CapacityBytes: acc.capacity,
@@ -343,12 +359,16 @@ func UpsertPVCDigests(ctx context.Context, pool *pgxpool.Pool, digests []PVCDige
 				persistentvolumeclaim, persistentvolume, storageclass,
 				capacity_bytes, request_bytes,
 				usage_bytes_min, usage_bytes_max, usage_bytes_avg,
-				sample_count
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+				sample_count, last_seen_pod
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			ON CONFLICT (cluster_uuid, namespace, persistentvolumeclaim, bucket_date)
 			DO UPDATE SET
 				persistentvolume = EXCLUDED.persistentvolume,
 				storageclass = EXCLUDED.storageclass,
+				last_seen_pod = CASE
+					WHEN EXCLUDED.last_seen_pod != '' THEN EXCLUDED.last_seen_pod
+					ELSE daily_pvc_digests.last_seen_pod
+				END,
 				capacity_bytes = GREATEST(daily_pvc_digests.capacity_bytes, EXCLUDED.capacity_bytes),
 				request_bytes = GREATEST(daily_pvc_digests.request_bytes, EXCLUDED.request_bytes),
 				usage_bytes_min = LEAST(daily_pvc_digests.usage_bytes_min, EXCLUDED.usage_bytes_min),
@@ -360,7 +380,7 @@ func UpsertPVCDigests(ctx context.Context, pool *pgxpool.Pool, digests []PVCDige
 			d.PVC, d.PV, d.StorageClass,
 			d.CapacityBytes, d.RequestBytes,
 			d.UsageBytesMin, d.UsageBytesMax, d.UsageBytesAvg,
-			d.SampleCount,
+			d.SampleCount, d.LastSeenPod,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting PVC digest %s/%s: %w", d.Namespace, d.PVC, err)

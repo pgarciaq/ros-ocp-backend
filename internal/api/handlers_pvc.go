@@ -16,6 +16,7 @@ type PVCRecommendationResponse struct {
 	ClusterUUID                string                                     `json:"cluster_uuid"`
 	Namespace                  string                                     `json:"namespace"`
 	PersistentVolumeClaim      string                                     `json:"persistentvolumeclaim"`
+	MountedBy                  string                                     `json:"mounted_by,omitempty"`
 	PersistentVolume           string                                     `json:"persistentvolume,omitempty"`
 	StorageClass               string                                     `json:"storageclass,omitempty"`
 	CapacityBytes              int64                                      `json:"capacity_bytes"`

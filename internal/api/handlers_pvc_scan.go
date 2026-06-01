@@ -14,7 +14,7 @@ func scanPVCRecommendationRow(row pgx.Row) (PVCRecommendationResponse, error) {
 	var growth sql.NullInt64
 	var savings sql.NullInt64
 	if err := row.Scan(
-		&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.PersistentVolume,
+		&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.MountedBy, &r.PersistentVolume,
 		&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
 		&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
 		&growth, &codes, &r.DataDays, &r.Term,
@@ -40,7 +40,7 @@ func scanPVCRecommendationRow(row pgx.Row) (PVCRecommendationResponse, error) {
 }
 
 const pvcRecommendationSelectSQL = `
-	SELECT cluster_uuid, namespace, persistentvolumeclaim, persistentvolume,
+	SELECT cluster_uuid, namespace, persistentvolumeclaim, last_seen_pod, persistentvolume,
 		storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
 		recommendation_type, recommended_bytes, days_to_full,
 		growth_bytes_per_day, notification_codes, data_days, term,

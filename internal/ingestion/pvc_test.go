@@ -21,6 +21,7 @@ func TestParsePVCRows_BasicCSV(t *testing.T) {
 
 	assert.Equal(t, "production", rows[0].Namespace)
 	assert.Equal(t, "data-pvc", rows[0].PersistentVolumeClaim)
+	assert.Equal(t, "app-pod-1", rows[0].Pod)
 	assert.Equal(t, "pv-data", rows[0].PersistentVolume)
 	assert.Equal(t, "gp3", rows[0].StorageClass)
 	assert.Equal(t, int64(10737418240), rows[0].CapacityBytes)
@@ -73,6 +74,7 @@ func TestComputePVCDigests_BasicAggregation(t *testing.T) {
 			IntervalStart:         mustParseTime("2026-05-01 01:00:00+00:00"),
 			IntervalEnd:           mustParseTime("2026-05-01 02:00:00+00:00"),
 			Namespace:             "prod",
+			Pod:                   "virt-launcher-my-vm-abc12",
 			PersistentVolumeClaim: "data-pvc",
 			PersistentVolume:      "pv-1",
 			StorageClass:          "gp3",
@@ -87,6 +89,7 @@ func TestComputePVCDigests_BasicAggregation(t *testing.T) {
 	d := digests[0]
 	assert.Equal(t, "prod", d.Namespace)
 	assert.Equal(t, "data-pvc", d.PVC)
+	assert.Equal(t, "virt-launcher-my-vm-abc12", d.LastSeenPod)
 	assert.Equal(t, 2, d.SampleCount)
 	// Min usage: 5 GiB, Max: 7 GiB
 	assert.Equal(t, int64(5e9), d.UsageBytesMin)
