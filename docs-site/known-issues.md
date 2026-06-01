@@ -115,7 +115,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
-| Multi-GPU awareness | REQ-5.5 | Needs per-device utilization from operator; niche ML workloads |
+| Multi-GPU awareness | REQ-5.5 | See [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **2** |
 | Confidence bounds | ~~REQ-1.4~~ | Statistical methodology not designed; cost/performance dual-model provides range |
 | QoS class recommendations | ~~REQ-6.2~~ | Implicit from request/limit values; revisit if user research demands |
 | Engine versioning | REQ-3.5 (full) | Unit tests exist; formal semantic versioning scheme deferred |
@@ -492,8 +492,19 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
   PostgreSQL locking makes this fail loud (write error) rather than corrupt.
   Normal operation (recent data + 6-month retention) is unaffected.
 
-See `docs/plans/gpu-recommendations.md` for detailed design and
-`docs/plans/gpu-recommendations-test-plan.md` for E2E testing guide.
+See `docs/archive/gpu-recommendations.md` for detailed design and
+`docs/archive/gpu-recommendations-test-plan.md` for E2E testing guide.
+
+### GPU: Deferred / Future Work
+
+The following items are **not** shipping defects. They are tracked enhancements
+deferred until prerequisites or customer scale justify the investment.
+
+| # | Item | Consumer | Why deferred | Prerequisites |
+|---|------|----------|--------------|---------------|
+| **1** | **GPUs per node** — add `node_gpu_count` to ROS data from `kube_node_status_allocatable{resource='nvidia.com/gpu'}` | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only. | Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin |
+| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation for containers requesting multiple GPUs ("request fewer GPUs") | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3 | Rare outside dedicated ML clusters (<5% of GPU workloads). Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; engine + notification changes |
+| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` with SQL page keys (as time-slicing uses) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have dozens to low-hundreds of GPU containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
 
 ## GPU: MIG + Time-Slicing Combined Recommendations Not Supported
 

@@ -1223,6 +1223,16 @@ memory_limit = max(memory_limit_from_percentile, last_oom_limit × backoff_multi
 
 **Code:** `internal/engine/gpu_timeslicing.go` — `ComputeNodeTimeslicingRec()`, `partitionContainers()`, `computeReplicas()`.
 
+### GPU deferred items (beyond REQ-5.5)
+
+Documented in [known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred--future-work). Summary:
+
+| # | Item | Consumer | Why deferred |
+|---|------|----------|--------------|
+| 1 | **Node GPU count** (`node_gpu_count` from node allocatable `nvidia.com/gpu`) | Node GPU savings; Tier 2 MachineSet GPU-aware consolidation | Informational-only until Tier 2 MachineSet + GPU-aware node consolidation engine exist |
+| 2 | **Multi-GPU container consolidation** (REQ-5.5 / F25) | ML training pods with 4–8 GPU requests and partial utilization | Niche (<5% of GPU workloads); per-device UUID collection not in operator; 1-GPU/container covers inference |
+| 3 | **MIG list SQL pagination** (`GET .../gpu/mig`) | 10k+ GPU container fleets | In-memory filter/sort/paginate is <50ms today; SQL page keys or materialized MIG table deferred until scale demands it |
+
 ---
 
 ## 10. Phase 6: New Recommendation Types — Tier 1 (Weeks 8–16)

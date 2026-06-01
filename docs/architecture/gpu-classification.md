@@ -90,6 +90,17 @@ The confidence score (0.0–1.0) is based on:
 | Tier 1 | Turing+ (T4, A100, H100, etc.) | SM Active, Tensor, DRAM, FB | Full 6-class classification |
 | Tier 2 | Volta, Pascal | Frame buffer only | `no_profiling` (FB-based MIG only) |
 
+## Deferred Items
+
+Enhancements documented but not implemented. Full rationale and prerequisites:
+[known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred--future-work).
+
+| # | Item | Consumer | Why deferred |
+|---|------|----------|--------------|
+| 1 | Node `node_gpu_count` (allocatable GPUs per node) | Tier 2 MachineSet GPU-aware consolidation; node GPU savings | No consumer until Tier 2 + GPU-aware node engine |
+| 2 | Multi-GPU container consolidation (per-device DCGM) | ML pods requesting 4–8 GPUs with low utilization | <5% of workloads; 1-GPU assumption covers inference; VMs have notification **54** |
+| 3 | MIG list API SQL-backed pagination | Fleets with 10k+ MIG-capable containers | In-memory path is <50ms at current scale |
+
 ## Source Files
 
 - Classification logic: [`internal/engine/gpu_recommender.go`](../../internal/engine/gpu_recommender.go)
