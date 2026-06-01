@@ -7,9 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -79,51 +77,14 @@ func GetPVCRecommendations(c echo.Context) error {
 		}
 	}
 
-	// Optional filters: filter[cluster], filter[project], filter[recommendation_type], filter[term]
-	clusterFilter := queryparams.FirstFilter(c, "cluster")
-	namespaceFilter := queryparams.FirstFilter(c, "project")
-	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
-	termFilter := queryparams.FirstFilter(c, "term")
-	if termFilter == "" {
-		termFilter = "medium"
-	}
+	// Optional filters: filter[cluster], filter[project], filter[recommendation_type], filter[term], filter[storageclass]
+	listFilters := parsePVCListFilters(c)
 
 	ctx := c.Request().Context()
 
-	filterSQL := " AND term = $2"
-	args := []interface{}{orgID, termFilter}
-	argIdx := 3
-
-	if clusterFilter != "" {
-		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
-		argIdx++
-	}
-	if namespaceFilter != "" {
-		filterSQL += ` AND namespace = $` + strconv.Itoa(argIdx)
-		args = append(args, namespaceFilter)
-		argIdx++
-	}
-	if typeFilter != "" {
-		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
-		args = append(args, typeFilter)
-		argIdx++
-	}
-
-	if config.TagsFeatureEnabled() {
-		tagFilters, tagErr := parseTagFiltersFromRequest(c)
-		if tagErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
-		}
-		if len(tagFilters) > 0 {
-			tagClause, tagArgs, nextIdx := model.TagFilterExistsClause(
-				orgID, "pvc_recommendation_sets.cluster_uuid", "pvc_recommendation_sets.namespace", tagFilters, argIdx)
-			if tagClause != "" {
-				filterSQL += " AND " + tagClause
-				args = append(args, tagArgs...)
-				argIdx = nextIdx
-			}
-		}
+	filterSQL, args, argIdx, tagErr := buildPVCRecommendationFilterSQL(c, orgID, listFilters)
+	if tagErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
 	}
 
 	countQuery := `SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1` + filterSQL
@@ -205,7 +166,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, listFilters.clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
 	if resp.Data == nil {

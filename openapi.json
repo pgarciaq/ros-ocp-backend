@@ -2405,6 +2405,14 @@
             }
           },
           {
+            "name": "filter[storageclass]",
+            "in": "query",
+            "description": "Filter by StorageClass name (exact match).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Maximum number of results (1-100, default 20)",
