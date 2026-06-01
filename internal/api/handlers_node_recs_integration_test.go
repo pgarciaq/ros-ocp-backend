@@ -975,3 +975,41 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 	assert.Equal(t, "zombie-worker", resp.Data[0].Node)
 	assert.Equal(t, "zombie", resp.Data[0].Classification.IdleState)
 }
+
+func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'instance-type-cluster', 'src-it', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+			estimated_monthly_savings_usd, instance_type
+		) VALUES
+			($1, $2::uuid, 'worker-m5', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 45000, 'm5.xlarge')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.Data)
+	assert.Equal(t, "m5.xlarge", resp.Data[0].InstanceType)
+}

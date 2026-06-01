@@ -47,6 +47,7 @@ type NodeUtilizationTermRec struct {
 type NodeUtilizationRec struct {
 	Node                string                            `json:"node"`
 	ClusterUUID         string                            `json:"cluster_uuid"`
+	InstanceType        string                            `json:"instance_type,omitempty"`
 	RecommendationType  string                            `json:"recommendation_type"`
 	Classification      NodeUtilizationClassification     `json:"classification"`
 	Metrics             NodeUtilizationMetrics            `json:"metrics"`

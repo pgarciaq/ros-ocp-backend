@@ -148,6 +148,67 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			orgID, clusterUUID).Scan(&count)
 		require.NoError(t, err)
 		assert.Equal(t, len(recs), count, "upsert should not duplicate rows")
+
+		var instanceType *string
+		err = pool.QueryRow(ctx,
+			`SELECT instance_type FROM node_recommendations
+			 WHERE org_id = $1 AND node = $2 AND engine = 'cost' AND term = 'medium'`,
+			orgID, "underutilized-node").Scan(&instanceType)
+		require.NoError(t, err)
+		// seedNodeDigests does not set instance_type; column should be empty/null.
+		if instanceType != nil {
+			assert.Empty(t, *instanceType)
+		}
+	})
+
+	t.Run("PersistNodeRecommendations stores instance_type from digests", func(t *testing.T) {
+		_, err := pool.Exec(ctx, `DELETE FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`,
+			orgID, clusterUUID)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `DELETE FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2`,
+			orgID, clusterUUID)
+		require.NoError(t, err)
+
+		ensureDailyNodeDigestPartitions(t, pool, start, 4)
+		for i := 0; i < 4; i++ {
+			date := start.AddDate(0, 0, i)
+			_, err = pool.Exec(ctx, `
+				INSERT INTO daily_node_digests (
+					bucket_date, org_id, cluster_uuid, node,
+					cpu_usage_p50_mc, cpu_usage_p95_mc,
+					mem_usage_p50_kib, mem_usage_p95_kib,
+					max_cpu_allocatable_mc, max_mem_allocatable_kib,
+					max_cpu_requests_mc, max_mem_requests_kib,
+					max_pod_count, instance_type, sample_count
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO NOTHING`,
+				date, orgID, clusterUUID, "typed-node",
+				int64(800), int64(1200), int64(3200), int64(4800),
+				int64(8000), int64(33554432), int64(2000), int64(8388608),
+				int64(5), "m5.2xlarge", int64(24),
+			)
+			require.NoError(t, err)
+		}
+
+		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, start.AddDate(0, 0, 5))
+		require.NoError(t, err)
+		recs := engine.RecommendNodes(digests, engine.NodeRecConfig{
+			UnderutilThreshold:  0.30,
+			OvercommitThreshold: 1.0,
+			AllocatableFactor:   0.90,
+		}, engine.DefaultNodeThresholdSettings(), []engine.TermConfig{
+			{Name: "medium", WindowDays: 30, MinDataDays: 3},
+		})
+		require.NotEmpty(t, recs)
+		require.NoError(t, engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, []string{"medium"}))
+
+		var stored string
+		err = pool.QueryRow(ctx,
+			`SELECT COALESCE(instance_type, '') FROM node_recommendations
+			 WHERE org_id = $1 AND node = $2 AND engine = 'cost' AND term = 'medium'`,
+			orgID, "typed-node").Scan(&stored)
+		require.NoError(t, err)
+		assert.Equal(t, "m5.2xlarge", stored)
 	})
 }
 

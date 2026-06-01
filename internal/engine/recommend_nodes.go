@@ -72,6 +72,7 @@ type NodeRec struct {
 	RecommendedMemKiB            int64
 	NodeCountReduction           int
 	EstimatedMonthlySavingsCents int64
+	InstanceType                 string
 	NotificationCodes            []int16
 }
 
@@ -111,6 +112,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 
 	results := make([]NodeRec, 0, len(grouped)*len(terms)*len(nodeEngines))
 	classesByNodeTerm := make(map[string]map[string]nodeClassification)
+	instanceTypes := nodeInstanceTypesFromDigests(digests)
 
 	for node, allDays := range grouped {
 		latest := latestNodeDigest(allDays)
@@ -131,6 +133,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				rec := nodeRecFromClassification(class)
 				rec.Term = tc.Name
 				rec.Engine = eng.Name
+				rec.InstanceType = instanceTypes[node]
 				rec.RecommendedCPUMC, rec.RecommendedMemKiB, rec.NodeCountReduction =
 					sizeNodeForEngine(class, eng, nodeSettings)
 				results = append(results, rec)
@@ -138,7 +141,6 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 		}
 	}
 
-	instanceTypes := nodeInstanceTypesFromDigests(digests)
 	applyInstanceTypeConsolidation(results, classesByNodeTerm, instanceTypes, nodeEngines, nodeSettings)
 	return results
 }
@@ -804,9 +806,9 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 				stranded_resource, pod_count, trend_slope, notification_codes,
 				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-				estimated_monthly_savings_usd,
+				estimated_monthly_savings_usd, instance_type,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
@@ -824,13 +826,14 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				recommended_memory_gib = EXCLUDED.recommended_memory_gib,
 				node_count_reduction = EXCLUDED.node_count_reduction,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
+				instance_type = EXCLUDED.instance_type,
 				updated_at = now()`,
 			orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
 			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted, idleStateForWrite(r.IdleState),
 			r.StrandedResource, r.PodCount, r.TrendSlope, r.NotificationCodes,
 			recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
-			r.EstimatedMonthlySavingsCents,
+			r.EstimatedMonthlySavingsCents, r.InstanceType,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)

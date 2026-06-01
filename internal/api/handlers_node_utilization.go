@@ -41,6 +41,7 @@ const (
 type nodeUtilRow struct {
 	Node                    string
 	ClusterUUID             string
+	InstanceType            sql.NullString
 	Term                    string
 	Engine                  string
 	CPUUtilP50              float32
@@ -266,7 +267,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			ORDER BY ` + orderFragment + `, f.node ASC
 			LIMIT $` + strconv.Itoa(argIdx+2) + ` OFFSET $` + strconv.Itoa(argIdx+3) + `
 		)
-		SELECT f.node, f.cluster_uuid, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
+		SELECT f.node, f.cluster_uuid, f.instance_type, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
 			COALESCE(f.cpu_util_p50, 0), COALESCE(f.cpu_util_p95, 0),
 			COALESCE(f.mem_util_p50, 0), COALESCE(f.mem_util_p95, 0),
 			COALESCE(f.cpu_overcommit_ratio, 0),
@@ -298,7 +299,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	for rows.Next() {
 		var row nodeUtilRow
 		err := rows.Scan(
-			&row.Node, &row.ClusterUUID, &row.Term, &row.Engine,
+			&row.Node, &row.ClusterUUID, &row.InstanceType, &row.Term, &row.Engine,
 			&row.CPUUtilP50, &row.CPUUtilP95,
 			&row.MemUtilP50, &row.MemUtilP95,
 			&row.CPUOvercommitRatio,
@@ -419,6 +420,9 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 		p := g.primary
 		g.rec.Node = p.Node
 		g.rec.ClusterUUID = p.ClusterUUID
+		if p.InstanceType.Valid {
+			g.rec.InstanceType = p.InstanceType.String
+		}
 		g.rec.RecommendationType = "cpu_memory_utilization"
 		idleState := p.IdleState
 		if idleState == "" {
