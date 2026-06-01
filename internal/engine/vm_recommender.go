@@ -243,6 +243,12 @@ func RecommendVM(
 	})
 	notifications = appendVMGPUNotifications(notifications, gpuAnalysis.NotificationCodes)
 
+	if cfg.NetworkQoSEnabled {
+		notifications = appendVMPlacementNotifications(
+			notifications, EvaluateNetworkQoS(latest, isNetworkBound, cfg),
+		)
+	}
+
 	var placementNotifs []VMNotification
 	isRedundantPlacement := false
 	hasSharedStorage := false

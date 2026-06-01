@@ -275,6 +275,10 @@ type Config struct {
 	VMEnablePowerSchedule           bool    `mapstructure:"ROS_VM_ENABLE_POWER_SCHEDULE"`
 	VMPowerOffMinIdleDays           int32   `mapstructure:"ROS_VM_POWER_OFF_MIN_IDLE_DAYS"`
 	VMPowerOffIdleRatioThreshold    float64 `mapstructure:"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD"`
+	VMNetworkQoSEnabled             bool    `mapstructure:"ROS_VM_NETWORK_QOS_ENABLED"`
+	VMNetworkQoSSRIOVDropThreshold  float64 `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD"`
+	VMNetworkQoSSRIOVThroughputBPS  int64   `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS"`
+	VMNetworkQoSDPDKPPSThreshold    int64   `mapstructure:"ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -667,6 +671,10 @@ func initConfig() {
 	viper.SetDefault("ROS_VM_ENABLE_POWER_SCHEDULE", true)
 	viper.SetDefault("ROS_VM_POWER_OFF_MIN_IDLE_DAYS", 14)
 	viper.SetDefault("ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD", 0.7)
+	viper.SetDefault("ROS_VM_NETWORK_QOS_ENABLED", true)
+	viper.SetDefault("ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD", 0.01)
+	viper.SetDefault("ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS", 5000000000)
+	viper.SetDefault("ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD", 500000)
 	viper.SetDefault("ROS_SNAPSHOT_ORPHAN_AGE_DAYS", 7)
 	viper.SetDefault("ROS_SNAPSHOT_NEVER_RESTORED_DAYS", 30)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_DAYS", 90)

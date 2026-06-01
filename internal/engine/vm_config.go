@@ -86,6 +86,12 @@ type VMRecConfig struct {
 	NetworkSustainedDays          int   // default 7
 	EnableNetworkSeries           bool  // default true
 
+	// Network QoS hints (SR-IOV / DPDK notifications 65–66)
+	NetworkQoSEnabled            bool    // default true
+	NetworkQoSSRIOVDropThreshold float64 // default 0.01 (1% drop rate)
+	NetworkQoSSRIOVThroughputBPS int64   // default 5_000_000_000 (5 Gbps)
+	NetworkQoSDPDKPPSThreshold   int64   // default 500_000
+
 	// Placement / NUMA (cluster-wide checks; no app labels in VM CSV today)
 	EnablePlacementChecks       bool    // default true
 	PlacementSkewRatio          int     // default 3 — max:min VM count per node before skew notification
@@ -140,6 +146,10 @@ func DefaultVMRecConfig() VMRecConfig {
 		NetworkDropRatioBP:            10,
 		NetworkSustainedDays:          7,
 		EnableNetworkSeries:           true,
+		NetworkQoSEnabled:             true,
+		NetworkQoSSRIOVDropThreshold:  0.01,
+		NetworkQoSSRIOVThroughputBPS:  5_000_000_000,
+		NetworkQoSDPDKPPSThreshold:    500_000,
 		EnablePlacementChecks:       true,
 		PlacementSkewRatio:          3,
 		EnableSharedPVCCorrelation:  true,
@@ -286,6 +296,18 @@ func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_NETWORK_SERIES"); ok {
 		base.EnableNetworkSeries = cfg.VMEnableNetworkSeries
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_QOS_ENABLED"); ok {
+		base.NetworkQoSEnabled = cfg.VMNetworkQoSEnabled
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD"); ok {
+		base.NetworkQoSSRIOVDropThreshold = cfg.VMNetworkQoSSRIOVDropThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS"); ok {
+		base.NetworkQoSSRIOVThroughputBPS = cfg.VMNetworkQoSSRIOVThroughputBPS
+	}
+	if _, ok := os.LookupEnv("ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"); ok {
+		base.NetworkQoSDPDKPPSThreshold = cfg.VMNetworkQoSDPDKPPSThreshold
 	}
 	if _, ok := os.LookupEnv("ROS_VM_ENABLE_PLACEMENT_CHECKS"); ok {
 		base.EnablePlacementChecks = cfg.VMEnablePlacementChecks

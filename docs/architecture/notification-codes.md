@@ -226,6 +226,8 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 62 | `NotifVMSharedStorage` | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated workload group (`has_shared_storage`) |
 | 63 | `NotifVMNUMAOversized` | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory &gt; single NUMA node cap (`numa_oversized`) |
 | 64 | `NotifVMPowerOffSchedule` | [`DetectPowerOffCandidate`](../../internal/engine/vm_power_schedule.go) — periodically idle VM (`is_power_off_candidate`) |
+| 65 | `NotifVMNetworkQoSSRIOV` | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — network-bound VM with high throughput or packet drops |
+| 66 | `NotifVMNetworkQoSDPDK` | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — network-bound VM with high PPS and small average packet size |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).
 

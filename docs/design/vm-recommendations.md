@@ -632,7 +632,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Network flow correlation** | Requires OVN flow logs or eBPF telemetry between VMs |
 | **Full NUMA optimization** | Requires LLC miss rate / perf counters per NUMA node |
 | **Smart co-location** | Requires network flow data to recommend affinity |
-| **Network QoS (SR-IOV, DPDK)** | SR-IOV and DPDK-specific sizing not modeled |
+| **Network QoS (simplified)** | **Implemented** — notifications **65**–**66** for network-bound VMs; see [Network QoS (simplified)](#network-qos-simplified) |
 | **Storage tiering (hot/cold)** | See [Storage tiering](#future-storage-tiering) below |
 | **Power-off scheduling (simplified)** | **Implemented** — notification **64**, `is_power_off_candidate`, `power_off_idle_pct`; daily digest idle-day ratio (not per-hour). See [Power-off scheduling](#power-off-scheduling-simplified) |
 | **Node consolidation** | Detect low-utilization nodes and bin-pack VMs to free nodes — see [Node consolidation](#node-consolidation-future) |
@@ -660,6 +660,38 @@ Detects VMs that are **mostly idle** on observed days but **not permanently idle
 Settings: `GET/PUT /settings/vm` → `power_schedule` (`enabled`, `min_idle_days`, `idle_ratio_threshold`). Env: `ROS_VM_ENABLE_POWER_SCHEDULE`, `ROS_VM_POWER_OFF_MIN_IDLE_DAYS`, `ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD`.
 
 Migration: `000107_vm_power_schedule.up.sql`.
+
+### Network QoS (simplified) {#network-qos-simplified}
+
+Extends **n1** network-bound classification (`is_network_bound`, notification **55**) with actionable hints when sustained KubeVirt network metrics indicate SR-IOV or DPDK may help. No `recommended_nic_type` field yet — notifications only.
+
+| Signal | Implementation |
+|--------|----------------|
+| Eligibility | VM must be **network-bound** (`vmClassifySeriesNetwork` + balanced CPU:GiB ratio) |
+| SR-IOV hint (**65**) | Latest digest: drop ratio ≥ `network_qos.sriov_drop_threshold` (default 1%) **or** throughput ≥ `network_qos.sriov_throughput_bps` (default 5 Gbps) |
+| DPDK hint (**66**) | PPS ≥ `network_qos.dpdk_pps_threshold` (default 500k) **and** average packet size &lt; 256 bytes (`throughput_p95 / pps_p95`) |
+| Engine | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — called from [`RecommendVM`](../../internal/engine/vm_recommender.go) after n1 classification |
+
+Settings: `GET/PUT /settings/vm` → `network_qos` (`enabled`, `sriov_drop_threshold`, `sriov_throughput_bps`, `dpdk_pps_threshold`). Env: `ROS_VM_NETWORK_QOS_ENABLED`, `ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD`, `ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS`, `ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD`.
+
+Migration: `000108_vm_network_qos.up.sql` (notification codes **65**, **66** only).
+
+### Full Network QoS recommendations (future) {#full-network-qos-future}
+
+Beyond notifications, provide concrete NIC type change recommendations:
+
+**Prerequisites (not available today):**
+
+- Operator: emit VM's current interface type (bridge/SR-IOV/DPDK) from `spec.domain.devices.interfaces`
+- Operator: emit SR-IOV VF availability per node from `SriovNetworkNodeState` CRD
+- Engine: **downgrade** detection — VM with SR-IOV but &lt;500 Mbps throughput → reclaim VF
+- Engine: **upgrade** with capacity check — only recommend SR-IOV if VFs are available on the node
+- Engine: DPDK feasibility check — verify CPU pinning and hugepage configuration exist
+- API: new recommendation type or field: `recommended_nic_type` with values `bridge` / `sriov` / `dpdk`
+
+**Estimated effort:** 2–3 weeks (including operator changes)  
+**Estimated value:** High for telecom/NFV workloads, medium for general enterprise  
+**Key challenge:** SR-IOV VFs are scarce hardware resources; must check availability before recommending
 
 ### Node consolidation (future) {#node-consolidation-future}
 

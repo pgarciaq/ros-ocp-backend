@@ -83,6 +83,14 @@ type VMPowerScheduleSettingsAPI struct {
 	IdleRatioThreshold  float64 `json:"idle_ratio_threshold"`
 }
 
+// VMNetworkQoSSettingsAPI holds simplified network QoS hint thresholds (notifications 65–66).
+type VMNetworkQoSSettingsAPI struct {
+	Enabled              bool    `json:"enabled"`
+	SRIOVDropThreshold   float64 `json:"sriov_drop_threshold"`
+	SRIOVThroughputBPS   int64   `json:"sriov_throughput_bps"`
+	DPDKPPSThreshold     int64   `json:"dpdk_pps_threshold"`
+}
+
 // VMPlacementSettingsAPI holds cluster placement, correlated workload, and NUMA checks.
 type VMPlacementSettingsAPI struct {
 	EnablePlacementChecks      bool    `json:"enable_placement_checks"`
@@ -111,6 +119,7 @@ type VMSettingsResponse struct {
 	GPU                  VMGPUSettingsAPI          `json:"gpu"`
 	Placement            VMPlacementSettingsAPI    `json:"placement"`
 	PowerSchedule        VMPowerScheduleSettingsAPI `json:"power_schedule"`
+	NetworkQoS           VMNetworkQoSSettingsAPI    `json:"network_qos"`
 	InstanceTypeMatching bool                      `json:"instance_type_matching"`
 	LockedFields         []string                  `json:"locked_fields,omitempty"`
 	SettingsLocked       bool                      `json:"settings_locked,omitempty"`
@@ -126,6 +135,7 @@ type vmSettingsStored struct {
 	GPU                  *VMGPUSettingsAPI          `json:"gpu,omitempty"`
 	Placement            *VMPlacementSettingsAPI    `json:"placement,omitempty"`
 	PowerSchedule        *VMPowerScheduleSettingsAPI `json:"power_schedule,omitempty"`
+	NetworkQoS           *VMNetworkQoSSettingsAPI    `json:"network_qos,omitempty"`
 	InstanceTypeMatching *bool                      `json:"instance_type_matching,omitempty"`
 	Stability            *VMStabilitySettingsAPI    `json:"stability,omitempty"`
 }
@@ -180,6 +190,10 @@ func vmEnvLockMap() map[string]string {
 		"ROS_VM_ENABLE_POWER_SCHEDULE":             "power_schedule.enabled",
 		"ROS_VM_POWER_OFF_MIN_IDLE_DAYS":           "power_schedule.min_idle_days",
 		"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD":    "power_schedule.idle_ratio_threshold",
+		"ROS_VM_NETWORK_QOS_ENABLED":               "network_qos.enabled",
+		"ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD":  "network_qos.sriov_drop_threshold",
+		"ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS":  "network_qos.sriov_throughput_bps",
+		"ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD":    "network_qos.dpdk_pps_threshold",
 	}
 }
 
@@ -228,6 +242,15 @@ func vmRecConfigToPowerScheduleAPI(cfg VMRecConfig) VMPowerScheduleSettingsAPI {
 		Enabled:            cfg.EnablePowerSchedule,
 		MinIdleDays:        cfg.PowerOffMinIdleDays,
 		IdleRatioThreshold: cfg.PowerOffIdleRatioThreshold,
+	}
+}
+
+func vmRecConfigToNetworkQoSAPI(cfg VMRecConfig) VMNetworkQoSSettingsAPI {
+	return VMNetworkQoSSettingsAPI{
+		Enabled:            cfg.NetworkQoSEnabled,
+		SRIOVDropThreshold: cfg.NetworkQoSSRIOVDropThreshold,
+		SRIOVThroughputBPS: cfg.NetworkQoSSRIOVThroughputBPS,
+		DPDKPPSThreshold:   cfg.NetworkQoSDPDKPPSThreshold,
 	}
 }
 
@@ -309,6 +332,7 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 		GPU:                  vmRecConfigToGPUAPI(cfg),
 		Placement:            vmRecConfigToPlacementAPI(cfg),
 		PowerSchedule:        vmRecConfigToPowerScheduleAPI(cfg),
+		NetworkQoS:           vmRecConfigToNetworkQoSAPI(cfg),
 		InstanceTypeMatching: cfg.EnableInstanceTypeMatching,
 		LockedFields:         LockedFieldsForAPI(vmRecommendationType, envLocked),
 		SettingsLocked:       IsSettingsLocked(vmRecommendationType),
@@ -434,6 +458,13 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 		dest.PowerOffMinIdleDays = ps.MinIdleDays
 		dest.PowerOffIdleRatioThreshold = ps.IdleRatioThreshold
 	}
+	if stored.NetworkQoS != nil {
+		nq := stored.NetworkQoS
+		dest.NetworkQoSEnabled = nq.Enabled
+		dest.NetworkQoSSRIOVDropThreshold = nq.SRIOVDropThreshold
+		dest.NetworkQoSSRIOVThroughputBPS = nq.SRIOVThroughputBPS
+		dest.NetworkQoSDPDKPPSThreshold = nq.DPDKPPSThreshold
+	}
 	if stored.GPU != nil {
 		g := stored.GPU
 		dest.GPUIdleThreshold = vmBasisPointsToThresholdFraction(g.IdleThresholdBP)
@@ -517,6 +548,11 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 			return fmt.Errorf("invalid power_schedule: %w", err)
 		}
 	}
+	if raw, ok := patch["network_qos"]; ok {
+		if err := json.Unmarshal(raw, &resp.NetworkQoS); err != nil {
+			return fmt.Errorf("invalid network_qos: %w", err)
+		}
+	}
 	if raw, ok := patch["instance_type_matching"]; ok {
 		if err := json.Unmarshal(raw, &resp.InstanceTypeMatching); err != nil {
 			return fmt.Errorf("invalid instance_type_matching: %w", err)
@@ -559,6 +595,9 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	}
 	if b, err := json.Marshal(resp.PowerSchedule); err == nil {
 		overrides["power_schedule"] = b
+	}
+	if b, err := json.Marshal(resp.NetworkQoS); err == nil {
+		overrides["network_qos"] = b
 	}
 	if b, err := json.Marshal(resp.InstanceTypeMatching); err == nil {
 		overrides["instance_type_matching"] = b
@@ -610,7 +649,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid request body: %w", err)
 	}
 	allowed := map[string]struct{}{
-		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {}, "power_schedule": {},
+		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {}, "power_schedule": {}, "network_qos": {},
 		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
 	v := &fieldValidator{}
@@ -691,6 +730,10 @@ func validateVMSettingsResponse(resp VMSettingsResponse) error {
 
 	v.addRangeInt("power_schedule.min_idle_days", int(resp.PowerSchedule.MinIdleDays), 1, 90)
 	v.addRangeFloat("power_schedule.idle_ratio_threshold", resp.PowerSchedule.IdleRatioThreshold, 0.01, 1.0)
+
+	v.addRangeFloat("network_qos.sriov_drop_threshold", resp.NetworkQoS.SRIOVDropThreshold, 0.0, 1.0)
+	v.addRangeInt64("network_qos.sriov_throughput_bps", resp.NetworkQoS.SRIOVThroughputBPS, 1, 1_000_000_000_000)
+	v.addRangeInt64("network_qos.dpdk_pps_threshold", resp.NetworkQoS.DPDKPPSThreshold, 1, 100_000_000)
 
 	return v.result()
 }

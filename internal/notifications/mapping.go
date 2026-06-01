@@ -83,6 +83,8 @@ var Definitions = map[int16]notifDef{
 	62: {"INFO", "VM shares storage with other VMs — correlated workload group detected"},
 	63: {"WARNING", "VM memory exceeds single NUMA node capacity — NUMA pinning not possible"},
 	64: {"INFO", "VM is idle on many observed days — consider scheduling power-off during inactive periods"},
+	65: {"INFO", "Network-bound VM with high throughput or packet drops — SR-IOV may improve performance"},
+	66: {"INFO", "Network-bound VM with high PPS and small packets — DPDK userspace networking may reduce latency"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

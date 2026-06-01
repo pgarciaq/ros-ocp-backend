@@ -605,6 +605,10 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Enable power-off scheduling <br><em>Detect periodically idle VMs (notification 64).</em> | true | `ROS_VM_ENABLE_POWER_SCHEDULE` | `PUT /settings/vm` | `power_schedule.enabled` | Yes |
 | Power-off min idle days <br><em>Minimum digest history for power-off candidate detection.</em> | 14 | `ROS_VM_POWER_OFF_MIN_IDLE_DAYS` | `PUT /settings/vm` | `power_schedule.min_idle_days` | Yes |
 | Power-off idle ratio threshold <br><em>Fraction of observed days that must be idle (requires some active days).</em> | 0.7 | `ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD` | `PUT /settings/vm` | `power_schedule.idle_ratio_threshold` | Yes |
+| Enable network QoS hints <br><em>SR-IOV/DPDK notifications (65–66) for network-bound VMs.</em> | true | `ROS_VM_NETWORK_QOS_ENABLED` | `PUT /settings/vm` | `network_qos.enabled` | Yes |
+| SR-IOV drop ratio threshold <br><em>Packet drop ratio (0–1) to suggest SR-IOV.</em> | 0.01 | `ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD` | `PUT /settings/vm` | `network_qos.sriov_drop_threshold` | Yes |
+| SR-IOV throughput threshold (bps) <br><em>Sustained throughput to suggest SR-IOV without drops.</em> | 5000000000 | `ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS` | `PUT /settings/vm` | `network_qos.sriov_throughput_bps` | Yes |
+| DPDK PPS threshold <br><em>Packets/sec for small-packet DPDK hint.</em> | 500000 | `ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD` | `PUT /settings/vm` | `network_qos.dpdk_pps_threshold` | Yes |
 
 **VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 

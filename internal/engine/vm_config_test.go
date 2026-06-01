@@ -44,6 +44,10 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 	assert.True(t, cfg.EnablePowerSchedule)
 	assert.Equal(t, int32(14), cfg.PowerOffMinIdleDays)
 	assert.InDelta(t, 0.7, cfg.PowerOffIdleRatioThreshold, 1e-9)
+	assert.True(t, cfg.NetworkQoSEnabled)
+	assert.InDelta(t, 0.01, cfg.NetworkQoSSRIOVDropThreshold, 1e-9)
+	assert.Equal(t, int64(5_000_000_000), cfg.NetworkQoSSRIOVThroughputBPS)
+	assert.Equal(t, int64(500_000), cfg.NetworkQoSDPDKPPSThreshold)
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {

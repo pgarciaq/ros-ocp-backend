@@ -575,13 +575,25 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity hints from network flow data |
-| **Network QoS (SR-IOV, DPDK)** | Dedicated network QoS sizing |
+| **Network QoS (simplified)** | Notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block |
 | **Storage tiering (hot/cold)** | Classify hot/warm/cold I/O over weeks; compare StorageClass vs recommended tier; migration + savings notification. **Effort:** medium (2–3 weeks). **Value:** medium (50+ VMs, mixed tiers). **Blockers:** no historical access frequency, no StorageClass on ROS VM CSV, no per-class cost or standard tier labels — [design doc](../../../docs/design/vm-recommendations.md#future-storage-tiering) |
 | **Power-off scheduling (simplified)** | Notification **64** for VMs idle on most days with occasional activity; Settings `power_schedule` block |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes to free hosts — see design doc |
 | **Full power-off scheduling** | Per-hour idle, cron stop/start, business hours — future |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes when node utilization is low — **effort:** high (3–4 weeks); **value:** high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku `node_cost_per_month`, live-migration feasibility, autoscaler awareness. See [design doc](../../../docs/design/vm-recommendations.md#node-consolidation-future) |
 | **Live migration recommendations** | Migration-in-progress awareness |
+| **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](../../../docs/design/vm-recommendations.md#full-network-qos-future) |
+
+### Network QoS hints (65–66)
+
+When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest metrics exceed thresholds, ROS may emit:
+
+| Code | When |
+|------|------|
+| **65** | High sustained throughput and/or packet drops — consider **SR-IOV** |
+| **66** | Very high PPS with small average packet size (&lt;256 B) — consider **DPDK** |
+
+Tune via `GET/PUT .../settings/vm` → `network_qos` or env vars `ROS_VM_NETWORK_QOS_*` (see [configuration](../configuration.md)).
 
 ## Related documentation
 

@@ -144,10 +144,12 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–64**. Full VM notification table also appears in
+Codes **18–19**, **37–66**. Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#placement-and-numa).
 Abandoned VMs use **43** only (not **18**). Power-off scheduling: **64** (`is_power_off_candidate`,
-`power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Placement flags:
+`power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Network QoS hints:
+**65** (SR-IOV), **66** (DPDK) when `is_network_bound` — see [Network QoS hints](../features/virtual-machines.md#network-qos-hints-6566).
+Placement flags:
 `is_redundant_placement` (**60**), `has_shared_storage` (**62**), `numa_oversized` (**63**).
 
 ### Quotas
