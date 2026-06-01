@@ -1,19 +1,84 @@
 # Validating the Native Engine
 
-This guide is for QE engineers validating the **ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. It covers end-to-end deployment, NISE test data, database and log verification, REST API checks, settings behavior, and VM-specific scenarios.
+This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **Kruize-compatible API shapes** (so **koku-ui** needs no changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
+
+**Document organization:** general platform and bread-and-butter features first (containers, API compat, cross-cutting), then specialized plugins (GPU, node, PVC, quota, snapshot), then VM scenarios and checklists at the end.
 
 ---
 
 ## Overview
 
-**What changed:** `ros-ocp-backend` now computes OpenShift resource optimization recommendations in **Go** (the “native engine”), using plugins for containers, namespaces, nodes, GPU, PVC, quota, cluster-quota, snapshots, and VMs. The legacy **Kruize** (Java / Autotune) path is optional and **mutually exclusive** with native plugins.
+**What changed:** `ros-ocp-backend` now computes OpenShift resource optimization recommendations in **Go** (the “native engine”), using plugins for containers, namespaces, nodes, GPU, PVC, quota, cluster-quota, snapshots, and VMs. The legacy **Kruize** path is optional and **mutually exclusive** with native plugins.
 
-**What you are validating:**
+See also: [Native migration guide](../../docs/architecture/native-migration.md), [Features index](../features/index.md).
+
+### Scope of validation (entire engine)
+
+| Category | What to validate | Primary evidence |
+|----------|------------------|------------------|
+| **Plugins (recommendation types)** | All nine native plugins produce correct rows and API responses | DB tables, list/detail APIs, processor logs |
+| **Cross-cutting** | Idle/zombie, business hours, fleet/savings summary, history/quality, terms, settings locks, dual engines | Filters, settings PUT, aggregate endpoints |
+| **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, box plots |
+| **Data pipeline** | Kafka → S3 CSV download → digest → recommend | Listener + processor logs, `meta.count` |
+| **Performance** | Latency, memory, DB query time under load | Prometheus, `hey`/`k6`, processor duration logs |
+| **Regression** | Native vs Kruize where both can run (legacy env only) | Side-by-side comparison, known diffs doc |
+
+#### Native plugins (all must be in scope)
+
+| Plugin | Feature | ROS CSV / input | List API (representative) |
+|--------|---------|-----------------|---------------------------|
+| **container** | CPU/memory right-sizing (core; was Kruize) | `ocp_ros_usage.csv` | `GET .../recommendations/openshift` |
+| **namespace** | Namespace quota targets | `ocp_ros_namespace_usage.csv` | `GET .../recommendations/openshift/namespace` |
+| **gpu** | MIG bin-packing + time-slicing + classification | Same as container (+ GPU metrics) | `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` |
+| **node** | Underutilized / overcommitted nodes | Piggybacks on container CSV | `GET .../nodes`, `/nodes/utilization` |
+| **pvc** | Oversized, near-full, growth projection | `ocp_storage_usage.csv` | `GET .../pvcs` |
+| **quota** | ResourceQuota tighten/raise/optimal | Namespace digests + `ocp_ros_cluster_quota.csv` context | `GET .../quota/` |
+| **cluster-quota** | ClusterResourceQuota vs namespace sums | `ocp_ros_cluster_quota.csv` | `GET .../cluster-quota/` |
+| **snapshot** | Stale / orphaned / never-restored VolumeSnapshots | `ocp_snapshot_inventory.csv` | `GET .../snapshots` |
+| **vm** | KubeVirt guest sizing (Preview/Beta) | `ocp_ros_vm_usage.csv` (+ optional GPU device CSV) | `GET .../vm`, `/vm/detail` |
+
+**Not separate plugins but required:** idle/zombie detection (inside container/GPU produce paths), business hours (dual metric streams), savings via `KOKU_MASU_URL`.
+
+#### Cross-cutting features
+
+| Feature | Validate via |
+|---------|----------------|
+| Idle / zombie detection | `filter[idle_state]`, `idle_state`, `estimated_monthly_waste`, notification codes **5–7** |
+| Business hours | `business_hours` block on detail engines; settings `.../settings/business-hours` |
+| Fleet summary | `GET .../fleet-summary` |
+| Savings summary | `GET .../savings-summary?engine=cost` |
+| History & quality | `GET .../history`, `GET .../quality` |
+| Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
+| Per-plugin thresholds | `GET/PUT/DELETE .../settings/thresholds?recommendation_type=...` |
+| Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
+| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers; `filter[engine]` on VM/node |
+
+### Validation priority (suggested order)
+
+Use this order for a new native-engine QE cycle. **Containers and Kruize-compatible detail responses are highest priority** because production **koku-ui** Optimizations pages depend on them today.
+
+| Priority | Area | Why first |
+|----------|------|-----------|
+| **P0** | Deployment + ingestion (Kafka, ROS CSVs, processor running) | Nothing else works without data |
+| **P0** | Container list + detail + **Kruize JSON shape** | Primary UI surface; regression vs Kruize |
+| **P0** | koku-ui-onprem smoke on `/optimizations` | End-user validation |
+| **P1** | Settings API (thresholds, terms, locks) + dual engine | Tenant tuning and cost vs performance |
+| **P1** | Idle/zombie + notifications + box plots | High-visibility UX |
+| **P1** | Namespace recommendations | Quota guidance in UI |
+| **P2** | GPU (MIG + time-slicing + summary) | Growing adoption |
+| **P2** | Node, PVC, quota, cluster-quota, snapshot | On-prem feature completeness |
+| **P2** | Fleet/savings summary, history, quality | FinOps dashboards |
+| **P3** | VM plugin (Preview/Beta) | Newest; UI may be partial |
+| **P3** | Performance / scalability / regression matrix | Release hardening |
+
+**What you are validating (summary):**
 
 - Data flows from operator-style payloads through Koku into ROS via **Kafka + S3/MinIO**
 - The **processor** ingests ROS CSVs and runs native recommendation logic **inline** (no Kruize wait loop for the default deployment)
 - The **API** exposes recommendations and settings under `/api/cost-management/v1/recommendations/openshift/...`
-- **VM recommendations** (Preview/Beta) behave per design: idle/abandoned detection, guest-agent confidence, dual engines, notifications, history, settings
+- **Every enabled plugin** returns sensible recommendations, notifications, and filters
+- **koku-ui** renders list and breakdown without console errors when pointed at native engine data
+- **VM recommendations** (when enabled) behave per design: idle/abandoned, guest-agent confidence, dual engines, history, settings
 
 **What you do not need for native-engine validation:**
 
@@ -687,6 +752,351 @@ Expect `meta.count` ≥ 1 when data and plugins match. Empty `data` with `count:
 
 ---
 
+## Kruize API compatibility validation
+
+**koku-ui** (and Bruno collections in `costmgmt-api-cheatsheet`) call the **same URL paths** Kruize used. The native engine must return **compatible JSON** so the UI does not require changes. Implementation reference: `internal/model/detail_response.go` (`BuildDetailResponse`, `BuildNamespaceDetailResponse`), handlers in `internal/api/handlers.go`.
+
+### Endpoints koku-ui uses (container-focused)
+
+| UI flow | Method | Path | Notes |
+|---------|--------|------|-------|
+| Optimizations list | GET | `/recommendations/openshift` | Paginated; `meta.count`, `data[]` |
+| Breakdown / detail | GET | `/recommendations/openshift/{recommendation-id}` | Kruize-nested detail shape |
+| Namespace list | GET | `/recommendations/openshift/namespace` or `/namespaces` | Same term/engine nesting |
+| Settings | GET/PUT | `/recommendations/openshift/settings/*` | Thresholds, terms, idle, business hours |
+| GPU / nodes / PVC / VM | GET | Domain-specific paths under `/recommendations/openshift/...` | See [Key recommendation endpoints](#key-recommendation-endpoints) |
+
+On **cost-onprem**, Koku nginx proxies `/api/cost-management/v1/recommendations/` to **ros-api**; local dev may hit ROS on port 8000 with the same path prefix.
+
+### Detail response shape (must match Kruize)
+
+The UI reads nested structures under `recommendations`, not flat millicore fields alone. Per term (`short_term`, `medium_term`, `long_term`):
+
+| Path | Required content |
+|------|------------------|
+| `recommendations.monitoring_end_time` | RFC3339 UTC string (from digest window) |
+| `recommendations.current` | `requests` / `limits` with `cpu` and `memory` objects |
+| `recommendations.recommendation_terms.<term>.duration_in_hours` | `24` / `168` / `360` for short/medium/long |
+| `recommendations.recommendation_terms.<term>.recommendation_engines.cost` | `config`, optional `variation`, `notifications`, optional `business_hours` |
+| `recommendations.recommendation_terms.<term>.recommendation_engines.performance` | Same structure as cost |
+| `recommendations.recommendation_terms.<term>.plots.plots_data` | Box plot quartiles for CPU and memory |
+| `recommendations.recommendation_terms.<term>.notifications` | Map keyed by code string |
+
+Each resource value in **config** / **current** / **business_hours** must use:
+
+| Field | CPU | Memory |
+|-------|-----|--------|
+| `amount` | float (cores, e.g. `0.5` = 500m) | float (MiB) |
+| `format` | **`"cores"`** | **`"MiB"`** |
+
+**Invalid for UI:** `"millicores"`, `"bytes"`, or missing `format`. Native code converts internally via `mcToCores` / `kibToMiB` in `detail_response.go`.
+
+Variation percentages use `format: "percent"` on `variation.requests.cpu` / `memory`.
+
+### Compatibility verification checklist
+
+| # | Check | Command / action |
+|---|--------|------------------|
+| 1 | Detail returns all three terms when data spans windows | `GET .../recommendations/openshift/{id}` → jq `.recommendations.recommendation_terms \| keys` |
+| 2 | Both engines present per term | jq `.recommendations.recommendation_terms.medium_term.recommendation_engines \| keys` → `["cost","performance"]` |
+| 3 | CPU format is `cores` | jq `...cost.config.requests.cpu.format` → `"cores"` |
+| 4 | Memory format is `MiB` | jq `...cost.config.requests.memory.format` → `"MiB"` |
+| 5 | Box plots non-empty for medium_term | jq `...medium_term.plots.plots_data` has CPU/memory series |
+| 6 | Notifications map shape | Keys are strings; values have `type`, `message`, `code` |
+| 7 | List view still works | `GET .../recommendations/openshift?limit=5` → `meta.count` > 0 |
+| 8 | UI renders breakdown | Deploy koku-ui-onprem (see [End-to-end with koku-ui](#end-to-end-with-koku-ui)); open workload breakdown without JS errors |
+
+```bash
+REC_ID=$(curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?limit=1' \
+  | jq -r '.data[0].id')
+
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "http://localhost:8000/api/cost-management/v1/recommendations/openshift/${REC_ID}" \
+  | jq '{
+    terms: (.recommendations.recommendation_terms | keys),
+    cpu_format: .recommendations.recommendation_terms.medium_term.recommendation_engines.cost.config.requests.cpu.format,
+    mem_format: .recommendations.recommendation_terms.medium_term.recommendation_engines.cost.config.requests.memory.format,
+    has_plots: (.recommendations.recommendation_terms.medium_term.plots.plots_data != null)
+  }'
+```
+
+Further UI field documentation: [UI Integration Guide](../ui-integration-guide.md).
+
+---
+
+## Container recommendations validation
+
+Container right-sizing is the **original core feature** (formerly 100% Kruize). Validate thoroughly before specialized plugins.
+
+### Prerequisites
+
+- `ocp_ros_usage.csv` in `resource_optimization_files`
+- `container` plugin enabled (default)
+- **≥ 1 day** of samples for `short_term`; **≥ 7 days** recommended for `medium_term` (match NISE date range)
+- `ROS_DISABLED_PLUGINS` must **not** include `kruize`
+
+### Checklist
+
+| # | Check | How to verify | Expected |
+|---|--------|---------------|----------|
+| 1 | Recommendations persisted | `SELECT count(*) FROM recommendation_sets WHERE org_id='1234567'` | > 0 after ingest |
+| 2 | All terms populated (when data allows) | Detail API `recommendation_terms` keys | `short_term`, `medium_term`, `long_term` |
+| 3 | Cost vs performance differ on spiky workloads | Compare `config.requests.cpu.amount` for same term | Performance ≥ cost on CPU for spike patterns |
+| 4 | Box plots populated | Detail `plots.plots_data` | Non-null CPU/memory quartiles |
+| 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
+| 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
+| 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
+| 8 | Tag filter | `filter[tag:app]=<value>` when tags enabled | Subset of workloads |
+| 9 | Savings (optional) | `estimated_monthly_savings` on list | Non-zero when `KOKU_MASU_URL` + cost model; else code **25** |
+| 10 | Processor log | Grep processor | `native engine: wrote N recommendations` |
+
+### Workload pattern matrix (NISE / manual)
+
+| Pattern | NISE / setup hint | What to assert |
+|---------|-------------------|----------------|
+| **Steady** | Default `ocp_static_data.yml` containers | Cost ≈ performance; small variation % |
+| **Spiky** | Increase max vs avg CPU in static YAML | Performance engine CPU > cost; possible notification **2** |
+| **Growing** | Ramp usage over date range | Medium/long term requests ≥ short_term |
+| **Idle** | Near-zero usage, requests still high | `idle_state=idle`, downsize or waste |
+| **Zombie** | Zero usage sustained | `idle_state=zombie`, waste estimate |
+
+```bash
+# List with idle filter
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[idle_state]=idle&limit=10' \
+  | jq '.meta.count, .data[0].idle_state'
+```
+
+---
+
+## Namespace recommendations validation
+
+| # | Check | API / DB |
+|---|--------|----------|
+| 1 | Namespace rows after ingest | `GET .../recommendations/openshift/namespace` → `meta.count` > 0 |
+| 2 | Detail Kruize shape | `GET .../namespace/{id}` → `recommendation_terms` + engines |
+| 3 | Aggregates container guidance | DB: namespace recommendations align with sum of container recs in namespace |
+| 4 | Memory trend notification | Code **3** when growth detected (see notification catalog) |
+
+Data file: `ocp_ros_namespace_usage.csv`. Logs: `native namespace engine: wrote`.
+
+---
+
+## Node recommendations validation
+
+Handlers: `internal/api/handlers_node_recs.go`. Feature doc: [Node recommendations](../features/node-recommendations.md).
+
+| # | Check | How to verify | Expected |
+|---|--------|---------------|----------|
+| 1 | Node recs exist | `GET .../recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0 |
+| 2 | Engine filter | `?engine=cost` vs `?engine=performance` | Different target utilization / headroom |
+| 3 | Underutilized flag | `filter[is_underutilized]=true` | Nodes below cost threshold (~80% util target) |
+| 4 | Overcommitted nodes | High pod density scenarios in NISE | Notifications per node feature doc |
+| 5 | Utilization endpoint | `GET .../nodes/utilization` | Per-node CPU/memory util for charts |
+| 6 | DB consistency | `node_recommendations` table | Rows per node × term × engine |
+| 7 | Term settings | `GET .../settings/thresholds?recommendation_type=node` | PUT changes reflected after recalc |
+
+Logs: `node recs:` (success or `persist failed`).
+
+---
+
+## PVC recommendations validation
+
+Data: `ocp_storage_usage.csv` in manifest `files` (cost pipeline) and storage metrics for PVC plugin.
+
+| # | Check | API / signal |
+|---|--------|--------------|
+| 1 | List returns PVCs | `GET .../pvcs?filter[cluster]=...` |
+| 2 | Oversized PVC | `recommendation_type` or classification = oversized; notification **11** region |
+| 3 | Near-full PVC | Growth projection; codes **12–13** |
+| 4 | Growth projection | `recommended_bytes` < current for oversized; growth rate fields populated |
+| 5 | Savings on tighten | `estimated_monthly_savings` when Masu rates available |
+| 6 | DB | `pvc_recommendation_sets` rows with `notification_codes` |
+
+Logs: `native storage engine: wrote`.
+
+---
+
+## Quota and ClusterResourceQuota validation
+
+| # | ResourceQuota (`quota` plugin) | ClusterResourceQuota (`cluster-quota`) |
+|---|-------------------------------|----------------------------------------|
+| 1 | `GET .../quota/?filter[namespace]=...` | `GET .../cluster-quota/` |
+| 2 | Recommendation types: **tighten**, **raise**, **optimal** | Same classification model |
+| 3 | `risk_level`: low / medium / high | Aligns with headroom % thresholds |
+| 4 | Settings | `GET/PUT .../settings/quota` | `GET/PUT .../settings/cluster-quota` |
+| 5 | DB tables | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` |
+| 6 | Notifications | Codes **14–17** (see [Notification codes](#notification-codes)) | CRQ-specific codes in catalog |
+
+Cluster quota CSV: `ocp_ros_cluster_quota.csv`. Quota plugin also reads namespace digests after container processing.
+
+---
+
+## Snapshot recommendations validation
+
+Data: `ocp_snapshot_inventory.csv`.
+
+| # | Check | Expected |
+|---|--------|----------|
+| 1 | `GET .../snapshots` | Lists stale/orphaned/redundant snapshots |
+| 2 | Classification | `stale`, `orphaned`, `never_restored`, etc. per feature doc |
+| 3 | Cost estimate | Monthly savings when snapshot storage cost attributable |
+| 4 | Settings | `GET/PUT .../settings/snapshot` |
+| 5 | DB + logs | Snapshot recommendation table; `native snapshot engine: wrote` |
+
+---
+
+## Cross-cutting platform validation
+
+| Feature | Validation steps |
+|---------|------------------|
+| **History** | After second ingest or threshold change: `GET .../history?limit=20` shows versioned entries |
+| **Quality** | `GET .../quality` returns stability/adoption metrics for containers |
+| **Fleet summary** | `GET .../fleet-summary` aggregates across clusters (multi-cluster NISE or multiple sources) |
+| **Savings summary** | `GET .../savings-summary?engine=cost`; compare with sum of row-level savings |
+| **Business hours** | Configure `PUT .../settings/business-hours`; verify `business_hours` on detail engines after reship |
+| **Capabilities** | `GET .../settings/capabilities` lists enabled plugins and `locked_fields` |
+| **CSV export** | List endpoints with `?format=csv` return headers including `currency` when savings enabled |
+
+---
+
+## Performance and scalability testing
+
+Native engine runs **inline in the processor** after each Kafka message (no 24h Kruize poll). Validate scale before large customer rollouts.
+
+### Scale targets (order-of-magnitude)
+
+| Dimension | Dev expectation | Stress goal (QE) |
+|-----------|-----------------|------------------|
+| Containers per cluster | 100–500 (NISE static YAML) | 5,000+ (scaled YAML or duplicated rows) |
+| VMs per cluster | 20–30 (`vm_static_data.yml`) | 500+ |
+| Nodes | 4–20 | 100+ |
+| Kafka messages / hour | 1–12 (hourly operator) | Parallel uploads |
+| API concurrent readers | 10 | 50+ |
+
+Exact SLOs are deployment-specific; record baseline on your hardware.
+
+### Generating large-scale data
+
+1. **NISE:** Copy `ocp_static_data.yml` and multiply namespaces, pods, or nodes; extend `start_date`/`end_date` for longer terms.
+2. **Multiple clusters:** Register several OCP sources; run NISE per `CLUSTER_UUID`; verify fleet endpoints aggregate.
+3. **Repeated ingest:** Re-upload monthly tarballs to measure incremental upsert time (should not full-table scan unbounded).
+
+### Measuring recommendation generation time
+
+```bash
+# Processor: time from Kafka consume to log line
+# Grep: "native engine: wrote" with timestamp delta from "processing message"
+
+# Optional: Prometheus histograms on processor (PROMETHEUS_PORT=5005)
+curl -s localhost:5005/metrics | grep -i ros
+```
+
+Record: CSV size (MB), wall-clock seconds, rows in `recommendation_sets`, RSS memory of processor process.
+
+### Database performance
+
+| Check | Action |
+|-------|--------|
+| List API latency | `GET .../recommendations/openshift?limit=100` with `time curl` |
+| Explain plan | `EXPLAIN ANALYZE` on list query patterns (org_id + cluster + updated_at) |
+| Indexes | Migrations should index `org_id`, `cluster_uuid`, `updated_at` on recommendation tables |
+| Connection pool | Under load, no `ROS_DB_ACQUIRE_TIMEOUT` errors in API logs |
+
+### API load testing
+
+Use **hey** or **k6** against list + detail (with valid `x-rh-identity`):
+
+```bash
+# Example: 50 concurrent list requests for 30s (install hey first)
+hey -n 500 -c 50 -H "x-rh-identity: $IDENTITY" \
+  "http://localhost:8000/api/cost-management/v1/recommendations/openshift?limit=20"
+```
+
+Watch API pod/container CPU, `ROS_DB_MAX_CONNS`, and p95 latency. Flush Valkey if testing through Koku proxy with caching enabled.
+
+### Memory under load
+
+- Run processor with large CSV; monitor RSS (should stabilize after message completes)
+- Go benchmarks in repo: `go test -bench=. -run='^$' ./internal/engine/`
+- CI uses goleak for goroutine leaks (`make test`)
+
+---
+
+## Regression testing (native vs Kruize)
+
+For environments still running Kruize, compare outputs before cutover. **Production validation should be native-only** (`ROS_DISABLED_PLUGINS=kruize`).
+
+| Aspect | Kruize (legacy) | Native | QE action |
+|--------|-----------------|--------|-----------|
+| Wait time | Up to `KRUIZE_WAIT_TIME` (hours) | Seconds–minutes inline | Native must not require poller |
+| Detail shape | Nested JSON in `recommendation_sets` | `DetailResponse` builder | Byte-compare key paths, not full blob |
+| Box plots | Pre-computed | On-the-fly from samples | Visual compare in UI |
+| GPU / node / PVC / quota / VM | Not available | Full plugins | New coverage only on native |
+| Notification codes | Smaller set | 54 codes | Expect new codes; UI must tolerate unknown codes |
+| Savings | Limited | Masu `effective_rates` | Enable `KOKU_MASU_URL` for parity tests |
+| `monitoring_start_time` | In Kruize JSON | Derived from digests | May differ by hours; document delta |
+
+### Side-by-side procedure (legacy lab only)
+
+1. Ingest same tarball with `ROS_ENABLED_PLUGINS=kruize` (poller + Kruize pod running).
+2. Record container detail JSON for sample workload ID.
+3. Re-ingest with `ROS_DISABLED_PLUGINS=kruize` and native plugins.
+4. Diff: `recommendation_terms.*.recommendation_engines.cost.config.requests` (allow ±10% sizing tolerance).
+5. File known deltas in test report (percentile changes, OOM bump, idle detection).
+
+### Migration path
+
+Follow [Native migration guide](../../docs/architecture/native-migration.md): enable native plugins → verify P0/P1 checklist → disable Kruize → optional cleanup of `workload_metrics` via retention.
+
+---
+
+## End-to-end with koku-ui
+
+Validate that the **Optimizations** experience works against native engine data, not only curl/Bruno.
+
+### Start koku-ui-onprem
+
+**Port note:** on-prem webpack dev server defaults to **9001** in `apps/koku-ui-onprem/webpack.config.ts` (MinIO uses 9000).
+
+```bash
+cd ~/dev/koku/koku-ui
+
+# Identity for test customer (bare org_id 1234567)
+export API_TOKEN=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","type":"User","user":{"username":"user_dev","email":"user_dev@foo.com","is_org_admin":true,"access":{}}},"entitlements":{"cost_management":{"is_entitled":true}}}' | base64 -w0)
+
+# Koku API (proxies /recommendations/ to ros-api on cost-onprem)
+export API_PROXY_URL=http://localhost:8000
+
+npm run start --workspace apps/koku-ui-onprem
+```
+
+Proxy rewrites `/api/cost-management/v1` → backend root; ROS routes must be reachable via Koku at `http://localhost:8000/api/cost-management/v1/recommendations/...`.
+
+If using **Keycloak** on chart deployments, set `KEYCLOAK_*` vars per `apps/koku-ui-onprem/README.md` instead of `API_TOKEN`.
+
+### UI validation checklist
+
+| # | Page / flow | Pass criteria |
+|---|-------------|---------------|
+| 1 | `/optimizations` (or ROS module route) | Table loads; `meta.count` reflected in UI |
+| 2 | Container breakdown | Term tabs: short / medium / long |
+| 3 | Cost vs performance toggle | Different request/limit values |
+| 4 | Box plot charts | CPU and memory charts render (not empty skeleton) |
+| 5 | Notifications | Warning/info badges match API codes |
+| 6 | Idle workloads | Filter or badge for idle/zombie if exposed |
+| 7 | GPU optimizations | GPU list/MIG pages if enabled in UI build |
+| 8 | Node optimizations | Node list loads |
+| 9 | VM optimizations | VM table/detail (Preview; feature-flagged in UI) |
+| 10 | Settings | Threshold changes persist (unless `ROS_SETTINGS_LOCKED`) |
+
+**Browser devtools:** Network tab → detail request → verify `format: "cores"` and `"MiB"`. Console must have no unhandled JSON shape errors.
+
+**Cache:** After backend changes, `docker exec koku_valkey redis-cli FLUSHALL` and hard-refresh (Ctrl+Shift+R).
+
+---
+
 ## API validation
 
 ### Cheat sheet and Bruno
@@ -764,26 +1174,31 @@ Bruno equivalents: `VM recommendations list.bru`, `VM recommendations detail.bru
 
 ### Response checks (containers)
 
-Abbreviated expected shape:
+List responses expose flat engine fields and/or nested terms depending on endpoint version; **detail** uses full Kruize nesting (see [Kruize API compatibility validation](#kruize-api-compatibility-validation)).
+
+Abbreviated list shape:
 
 ```json
 {
   "meta": { "count": 1, "limit": 5, "offset": 0 },
   "data": [{
-    "cluster": "<uuid>",
+    "id": "<uuid>",
+    "cluster_uuid": "<uuid>",
     "project": "my-namespace",
+    "container": "app",
+    "workload": "api-deployment",
+    "idle_state": "active",
     "recommendations": {
-      "recommendation_terms": {
-        "short_term": {
-          "recommendation_engines": {
-            "cost": { "requests": { "cpu": "...", "memory": "..." } }
-          }
-        }
-      }
+      "estimated_monthly_savings": { "value": "12.34", "units": "USD" },
+      "short_term": { "cost": { }, "performance": { } },
+      "medium_term": { "cost": { }, "performance": { } },
+      "long_term": { "cost": { }, "performance": { } }
     }
   }]
 }
 ```
+
+For breakdown UI, always validate **`GET /{recommendation-id}`** detail shape, not list-only fields.
 
 ---
 
@@ -1068,17 +1483,57 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 ## GPU recommendations testing
 
+GPU validation spans **container workloads** (MIG profiles, per-container classification) and **node-level time-slicing**, plus **VM guest GPU** (see [VM GPU](#vm-gpu-vm-usage--optional-gpu-device-csv) below). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
+
 ### Container GPU (ROS usage CSV + container plugin)
 
 | Step | Action |
 |------|--------|
 | Data | NISE `ocp_static_data.yml` with GPU nodes, or operator GPU metrics |
 | Files | `ocp_ros_usage.csv` in `resource_optimization_files` |
-| API | `GET .../recommendations/openshift?filter[has_gpu]=true` |
-| Filter | `gpu_classification=idle|underutilized|memory_bound|compute_bound|...` (see [GPU Classification](../architecture/gpu-classification.md)) |
+| API list | `GET .../recommendations/openshift?filter[has_gpu]=true` |
+| API MIG | `GET .../recommendations/openshift/gpu/mig` — per-workload MIG profile recommendations |
+| API summary | `GET .../recommendations/openshift/gpu` — fleet GPU summary |
+| Filter | `gpu_classification=idle\|underutilized\|memory_bound\|compute_bound\|...` (see [GPU Classification](../architecture/gpu-classification.md)) |
+| Detail | Container detail includes `gpu.<term>` with `recommended_gpu_profile`, savings |
 | DB | `gpu_classifications` table |
 | Notifications | **10**, **26**–**28**, **36** |
 | Logs | `native engine: storing GPU classifications`, `marking GPU containers` |
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/gpu/mig?filter[cluster]=${CLUSTER_UUID}&limit=10" \
+  | jq '.meta.count'
+
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift?filter[has_gpu]=true&filter[gpu_classification]=underutilized&limit=5" \
+  | jq '.data[0].gpu'
+```
+
+### Node-level GPU time-slicing
+
+| Step | Action |
+|------|--------|
+| Data | Underutilized GPU nodes in ROS usage CSV (no MIG, shared GPU) |
+| API | `GET .../recommendations/openshift/gpu/timeslicing` |
+| Validate | `time_slicing_node`, `time_slicing_replicas` on container `gpu` object when recommended |
+| Notifications | Time-slicing-specific codes in catalog |
+| Savings | `estimated_monthly_timeslicing_savings` on `gpu.<term>` when rates available |
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/gpu/timeslicing?filter[cluster]=${CLUSTER_UUID}" \
+  | jq '.meta.count, .data[0]'
+```
+
+### GPU idle detection
+
+| Check | Expected |
+|-------|----------|
+| Classification `idle` | Very low SM/DRAM active averages |
+| Notification **10** | GPU idle on container rec |
+| Filter | `filter[gpu_classification]=idle` returns only idle GPU workloads |
+| VM GPU idle | Separate codes **50**–**54** on VM plugin (not `gpu_classifications` table) |
 
 ### VM GPU (VM usage + optional GPU device CSV)
 
@@ -1188,6 +1643,13 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 |----------|------------|
 | **This guide (MkDocs)** | `ros-ocp-backend/docs-site/testing/validating-native-engine.md` |
 | **Repo copy** | `ros-ocp-backend/docs/testing/validating-native-engine.md` |
+| **Native migration** | [docs/architecture/native-migration.md](../../docs/architecture/native-migration.md) |
+| **Detail response (code)** | `internal/model/detail_response.go` |
+| **Handlers (containers)** | `internal/api/handlers.go` |
+| **Handlers (VM)** | `internal/api/handlers_vm_recs.go` |
+| **Handlers (nodes)** | `internal/api/handlers_node_recs.go` |
+| **Config (env vars)** | `internal/config/config.go` |
+| **UI integration** | [ui-integration-guide.md](../ui-integration-guide.md) |
 | **Notification codes (published)** | [architecture/notification-codes.md](../architecture/notification-codes.md) |
 | Quickstart | `ros-ocp-backend/docs-site/quickstart.md` |
 | Configuration | `ros-ocp-backend/docs-site/configuration.md` |
