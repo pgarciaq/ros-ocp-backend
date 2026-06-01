@@ -594,6 +594,9 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Network drop ratio (basis points) <br><em>Max daily drop ratio must exceed this (10 = 0.1%) with high PPS.</em> | 10 | `ROS_VM_NETWORK_DROP_RATIO_BP` | `PUT /settings/vm` | `network.drop_ratio_bp` | Yes |
 | Network sustained days <br><em>Days in term window meeting throughput or PPS+drop criteria.</em> | 7 | `ROS_VM_NETWORK_SUSTAINED_DAYS` | `PUT /settings/vm` | `network.sustained_days` | Yes |
 | Enable n1 network series matching <br><em>When false, n1 types are skipped; falls back to u1.</em> | true | `ROS_VM_ENABLE_NETWORK_SERIES` | `PUT /settings/vm` | `network.enable_network_series` | Yes |
+
+**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+
 See [VM recommendations design](../design/vm-recommendations.md).
 
 ---

@@ -1,6 +1,20 @@
-# NVIDIA vGPU (GRID) profile catalog for OpenShift Virtualization recommendations.
-# Profiles use time-sliced C-series (vCS / compute) per NVIDIA Virtual GPU Software User Guide
-# Appendix A.1 (https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html).
+# NVIDIA vGPU (GRID) profile catalog for OpenShift Virtualization VM recommendations ONLY.
+#
+# Scope:
+#   - Used by vm_gpu_timeslicing.go / vm_gpu.go when setting recommended_vgpu_profile (API + notification 56).
+#   - NOT loaded by the container gpu plugin. Container GPU uses gpu_catalog.yaml for MIG profiles and
+#     integer replica counts for node time-slicing (nvidia.com/gpu.replicas) via gpu_recommender.go +
+#     gpu_timeslicing.go.
+#   - OpenShift AI inference/training workloads on Pods/Jobs follow the container path (gpu_catalog.yaml only).
+#
+# Profile family:
+#   - C-series (vCS / compute) only — correct for CUDA/training/inference FinOps optimization.
+#   - Q-series (graphics / VDI) is intentionally omitted; adding it would require profile_family in YAML
+#     and workload-type detection (labels, existing Q profile on guest, or tenant settings). See
+#     docs/design/vm-recommendations.md#future-q-series-support.
+#
+# Reference: NVIDIA Virtual GPU Software User Guide Appendix A.1
+#   https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html
 #
 # Name convention: lowercase grid_<nvidia-type> for API hints; maps to NVIDIA types such as
 # A100D-10C, A30-24C, T4-8C and OpenShift nvidia.com/vgpu.config / GRID_* device names.

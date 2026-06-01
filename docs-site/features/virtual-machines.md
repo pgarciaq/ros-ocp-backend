@@ -216,6 +216,21 @@ Configure via `GET/PUT .../settings/vm` → `network` (`throughput_threshold_bps
 
 When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher pod), the operator adds GPU columns to `ros-openshift-vm-usage-*.csv`. ROS classifies utilization and may recommend:
 
+### How VM GPU sharing differs from containers
+
+ROS uses **different mechanisms** per workload type. VM recommendations are not interchangeable with container GPU APIs.
+
+| Workload | Sharing mechanism | Catalog | API hints |
+|----------|-------------------|---------|-----------|
+| Containers & OpenShift AI (Pods/Jobs) | MIG + node time-slicing (`nvidia.com/gpu.replicas`) | `gpu_catalog.yaml` only | Replica count; no vGPU profile name — see [GPU time-slicing](gpu-time-slicing.md) and [GPU MIG](gpu-mig.md) |
+| **This page (KubeVirt VMs)** | MIG + **vGPU C-series profiles** (`grid_*`) + guest time-slicing | `gpu_catalog.yaml` + `vgpu_profiles.yaml` | `recommended_time_slice_count` and optional **`recommended_vgpu_profile`** (VM-only field) |
+
+- **`recommended_vgpu_profile`** appears **only** on VM list/detail responses (notification **56**). Container GPU endpoints never return a vGPU profile name.
+- **`vgpu_profiles.yaml`** is **VM-only** (A100D, A30, T4 C-series). Containers use MIG profiles from `gpu_catalog.yaml` and integer replica counts for time-slicing.
+- **Q-series** (graphics / VDI) profiles are not recommended today; see the design doc for planned workload-type detection.
+
+Maintainers: [GPU sharing by workload type](../../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+
 | Classification | Action | Notification |
 |----------------|--------|--------------|
 | Idle | Remove GPU assignment | **50** |
@@ -227,7 +242,7 @@ When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher
 For **underutilized** GPUs:
 
 - **MIG-capable** (A100, A30, H100, …): `recommended_gpu_profile` from frame-buffer headroom (`OptimalMIGProfile()`); MIG is preferred over time-slicing when the GPU supports it.
-- **Non-MIG** (e.g. T4): production time-slicing via `RecommendVMTimeSlicing()` — same multi-signal model as container [GPU time-slicing](gpu-time-slicing.md): peak of SM, DRAM, and frame-buffer utilization sets `recommended_time_slice_count`, with FB safety (default 80%), DRAM bandwidth penalty, and confidence (`gpu_timeslice_confidence`, `gpu_timeslice_rationale`). Optional `recommended_vgpu_profile` (e.g. `grid_t4-4q`) from `vgpu_profiles.yaml`.
+- **Non-MIG** (e.g. T4): production time-slicing via `RecommendVMTimeSlicing()` — same multi-signal model as container [GPU time-slicing](gpu-time-slicing.md): peak of SM, DRAM, and frame-buffer utilization sets `recommended_time_slice_count`, with FB safety (default 80%), DRAM bandwidth penalty, and confidence (`gpu_timeslice_confidence`, `gpu_timeslice_rationale`). Optional **`recommended_vgpu_profile`** (e.g. `grid_t4-4c`) from VM-only `vgpu_profiles.yaml` (C-series compute profiles).
 
 List/detail API responses include a `gpu` object (`gpu_count`, `gpu_classification`, `recommended_gpu_action`, `recommended_gpu_profile`, `recommended_time_slice_count`, `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`, etc.). Filters: `filter[has_gpu]=true|false`, `filter[gpu_classification]=idle,underutilized,...`.
 

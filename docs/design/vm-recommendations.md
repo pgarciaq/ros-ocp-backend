@@ -120,6 +120,37 @@ Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance
 | **n1** | `network-optimized` | `n1.medium` … `n1.2xlarge` — active when `network.enable_network_series` is true (default) |
 | **gn1** | `gpu` | `gn1.xlarge` … `gn1.16xlarge` — GPU memory capacity per size |
 
+## GPU sharing mechanisms by workload type
+
+The GPU recommendation system uses **different sharing mechanisms and catalogs** depending on workload type. Do not assume container GPU behavior applies to VMs (or vice versa).
+
+| Workload | GPU sharing mechanism | Catalog(s) | Code path |
+|----------|----------------------|------------|-----------|
+| **Containers** (bare metal / virtualized pods) | MIG (`nvidia.com/mig-*`) + node time-slicing (`nvidia.com/gpu.replicas`) | [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) only | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
+| **OpenShift Virtualization VMs** | MIG + vGPU profiles (`grid_*` device names) + guest time-slicing | `gpu_catalog.yaml` + [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go), [`vm_mig_optimal.go`](../../internal/engine/vm_mig_optimal.go) |
+| **OpenShift AI** (inference / training Pods and Jobs) | Same as containers | `gpu_catalog.yaml` only | Same as containers (`gpu` plugin) |
+
+**Shared vs VM-only catalogs**
+
+- **`gpu_catalog.yaml`** — MIG profile definitions (A100, A30, H100, …). Used by **both** container MIG recommendations and VM `recommended_gpu_profile` / `OptimalMIGProfile()`.
+- **`vgpu_profiles.yaml`** — NVIDIA GRID **C-series** vGPU profiles (A100D, A30, T4). **VM-only**; container GPU recommendations never read this file.
+
+**Time-slicing outputs differ by workload**
+
+| Workload | Time-slice output | vGPU profile name |
+|----------|-------------------|-------------------|
+| Containers | Integer replica count on the **node** (`recommended_replicas` → device-plugin `nvidia.com/gpu.replicas`) | Not applicable |
+| VMs | Integer `recommended_time_slice_count` on the **guest** + optional `recommended_vgpu_profile` | Only on VM list/detail API; **never** on container GPU endpoints |
+
+Container time-slicing is documented in [GPU time-slicing (public)](../../docs-site/features/gpu-time-slicing.md). Container classification thresholds: [gpu-classification.md](../architecture/gpu-classification.md).
+
+**Profile families today**
+
+- **C-series** (compute / CUDA) — what `vgpu_profiles.yaml` implements. Appropriate for FinOps optimization of training, inference, and general GPU compute on guests.
+- **Q-series** (graphics / VDI) — **not** in the catalog. CAD, visualization, and remote-desktop workloads would need Q-series profiles and workload-type detection (see [Future: Q-series support](#future-q-series-support) below).
+
+**API field:** `recommended_vgpu_profile` appears only on **VM** recommendation responses (notification **56**). Container GPU APIs expose MIG profile names and node replica counts only.
+
 ### GPU analysis
 
 When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launcher pods), ROS aggregates daily GPU utilization and classifies workloads in [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go):
@@ -571,6 +602,21 @@ Adds `daily_digests[]` with per-day percentile fields for charts.
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 
 **GPU limitations (implemented with constraints):** VM time-slicing is guest-level guidance (`recommended_time_slice_count`, `recommended_vgpu_profile`, notifications **56**–**57**), not node-level `nvidia.com/gpu.replicas` orchestration like container [GPU time-slicing](../../docs-site/features/gpu-time-slicing.md). DCGM Exporter required on cluster for GPU metrics. Per-device utilization and notification **54** require `ros-openshift-vm-gpu-device` ingestion (or GPU columns on usage CSV with distinct `gpu_uuid` values).
+
+### Future: Q-series support
+
+Today VM vGPU recommendations use **C-series** profiles only (`vgpu_profiles.yaml`). **Q-series** profiles would be required for guests running graphics-heavy or VDI-style workloads (CAD, 3D visualization, remote desktop) where frame-buffer and display encoding matter more than CUDA throughput.
+
+Planned approach (not implemented):
+
+1. Add a `profile_family` field to `vgpu_profiles.yaml` (`compute` vs `graphics`).
+2. Extend catalog entries for Q-series NVIDIA types (e.g. `grid_*` Q variants per Virtual GPU Software User Guide).
+3. Select family using a **workload-type signal**, for example:
+   - Existing guest already assigned a Q-series profile
+   - VM or namespace labels indicating VDI / graphics
+   - Tenant preference via Settings API (`/settings/vm` → `gpu` block)
+
+Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, tensor, DRAM) — correct for most OpenShift AI and batch GPU VMs, not for pure graphics guests.
 
 ---
 
