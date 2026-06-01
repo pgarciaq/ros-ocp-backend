@@ -470,7 +470,11 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 | `filter[is_idle]` | `true` / `false` |
 | `filter[is_abandoned]` | `true` / `false` |
 | `filter[is_oversized]` | `true` / `false` |
+| `filter[is_network_bound]` | `true` / `false` |
 | `filter[guest_agent_detected]` | `true` / `false` |
+| `filter[has_gpu]` | `true` / `false` |
+| `filter[gpu_classification]` | Comma-separated GPU classes (`idle`, `underutilized`, `well_utilized`, `saturated`) |
+| `filter[guest_os]` | Guest OS substring match (case-insensitive; comma-separated OR) |
 
 **Example**
 

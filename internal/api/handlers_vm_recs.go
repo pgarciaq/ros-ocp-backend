@@ -212,6 +212,10 @@ func GetVMRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	isNetworkBound, err := parseVMRecBoolFilter(c, "is_network_bound")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
@@ -275,8 +279,10 @@ func GetVMRecommendations(c echo.Context) error {
 		IsIdle:             isIdle,
 		IsAbandoned:        isAbandoned,
 		IsOversized:        isOversized,
+		IsNetworkBound:     isNetworkBound,
 		HasGPU:             hasGPU,
 		GPUClassification:  queryparams.FirstFilter(c, "gpu_classification"),
+		GuestOS:            queryparams.FirstFilter(c, "guest_os"),
 		OrderBy:            orderByKey,
 		OrderDesc:          orderHow == listoptions.OrderDesc,
 		Limit:              limit,

@@ -26,8 +26,10 @@ type VMRecommendationFilters struct {
 	IsIdle             *bool
 	IsAbandoned        *bool
 	IsOversized        *bool
+	IsNetworkBound     *bool
 	HasGPU             *bool
 	GPUClassification  string // comma-separated list
+	GuestOS            string // comma-separated substrings (case-insensitive)
 	OrderBy            string
 	OrderDesc          bool
 	Limit              int
@@ -96,7 +98,7 @@ func ListVMRecommendations(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized,
+			is_idle, is_abandoned, is_oversized, is_network_bound,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications,
@@ -149,7 +151,7 @@ func GetVMRecommendationDetail(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized,
+			is_idle, is_abandoned, is_oversized, is_network_bound,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
 			notifications,
@@ -311,6 +313,11 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 		args = append(args, *filters.IsOversized)
 		argIdx++
 	}
+	if filters.IsNetworkBound != nil {
+		clauses = append(clauses, "AND is_network_bound = $"+strconv.Itoa(argIdx))
+		args = append(args, *filters.IsNetworkBound)
+		argIdx++
+	}
 	if filters.HasGPU != nil {
 		if *filters.HasGPU {
 			clauses = append(clauses, "AND gpu_count > 0")
@@ -333,6 +340,22 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 			argIdx++
 		}
 	}
+	if filters.GuestOS != "" {
+		parts := strings.Split(filters.GuestOS, ",")
+		var guestClauses []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			guestClauses = append(guestClauses, "guest_os ILIKE $"+strconv.Itoa(argIdx))
+			args = append(args, "%"+p+"%")
+			argIdx++
+		}
+		if len(guestClauses) > 0 {
+			clauses = append(clauses, "AND ("+strings.Join(guestClauses, " OR ")+")")
+		}
+	}
 	_ = argIdx
 	return " " + strings.Join(clauses, " "), args
 }
@@ -353,7 +376,7 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.RecommendedVCPU, &r.RecommendedMemoryGiB, &r.RecommendedDiskGiB,
 		&r.RecommendedInstanceType, &r.RecommendedSeries,
 		&r.GuestAgentDetected, &r.Confidence, &r.Term, &r.Engine,
-		&r.IsIdle, &r.IsAbandoned, &r.IsOversized,
+		&r.IsIdle, &r.IsAbandoned, &r.IsOversized, &r.IsNetworkBound,
 		&r.IOReadIOPSP95, &r.IOWriteIOPSP95, &r.IOReadBPS95, &r.IOWriteBPS95, &r.IOHint,
 		&r.DiskDaysUntilFull, &r.DiskGrowthGiBPerDay, &r.DiskRecommendedExpandGiB,
 		&r.Notifications,

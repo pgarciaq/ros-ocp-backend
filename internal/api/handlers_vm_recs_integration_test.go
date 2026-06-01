@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +114,139 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "abandoned-vm", resp.Data[0].VMName)
 	assert.True(t, resp.Data[0].Metadata.IsAbandoned)
+}
+
+func TestVMList_Filter_IsNetworkBound(t *testing.T) {
+	orgID := "org-vm-network-bound-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMRecCluster(t, orgID)
+
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	now := time.Now().UTC()
+	networkBound := model.VMRecommendation{
+		OrgID:                orgID,
+		ClusterUUID:          clusterID,
+		VMName:               "network-heavy-vm",
+		Namespace:            "edge",
+		GuestOS:              "linux",
+		CurrentVCPU:          4,
+		CurrentMemoryGiB:     8,
+		RecommendedVCPU:      4,
+		RecommendedMemoryGiB: 8,
+		Confidence:           "high",
+		Term:                 "medium_term",
+		Engine:               "cost",
+		IsNetworkBound:       true,
+		Notifications:        []byte(`[{"code":55,"type":"warning","message":"network"}]`),
+		LastRecommendedAt:    now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	computeBound := networkBound
+	computeBound.VMName = "compute-vm"
+	computeBound.IsNetworkBound = false
+	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{networkBound, computeBound}, nil))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter[is_network_bound]=true&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp struct {
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+		Data []struct {
+			VMName   string `json:"vm_name"`
+			Metadata struct {
+				IsNetworkBound bool `json:"is_network_bound"`
+			} `json:"metadata"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "network-heavy-vm", resp.Data[0].VMName)
+	assert.True(t, resp.Data[0].Metadata.IsNetworkBound)
+}
+
+func TestVMList_Filter_GuestOS(t *testing.T) {
+	orgID := "org-vm-guest-os-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMRecCluster(t, orgID)
+
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	now := time.Now().UTC()
+	windowsVM := model.VMRecommendation{
+		OrgID: orgID, ClusterUUID: clusterID,
+		VMName: "win-vm", Namespace: "apps",
+		GuestOS: "Microsoft Windows Server 2022",
+		CurrentVCPU: 2, CurrentMemoryGiB: 4,
+		RecommendedVCPU: 2, RecommendedMemoryGiB: 4,
+		Confidence: "moderate", Term: "medium_term", Engine: "cost",
+		Notifications: []byte(`[]`),
+		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	linuxVM := windowsVM
+	linuxVM.VMName = "linux-vm"
+	linuxVM.GuestOS = "linux"
+	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{windowsVM, linuxVM}, nil))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter[guest_os]=windows&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp struct {
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+		Data []struct {
+			VMName  string `json:"vm_name"`
+			GuestOS string `json:"guest_os"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "win-vm", resp.Data[0].VMName)
+	assert.Contains(t, strings.ToLower(resp.Data[0].GuestOS), "windows")
 }
 
 func seedVMGPUListFixtures(t *testing.T, orgID string) {
