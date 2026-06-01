@@ -244,6 +244,8 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.True(t, names["000066_create_business_hours_schedules.down.sql"])
 	assert.True(t, names["000067_add_schedule_type_to_digests.up.sql"])
 	assert.True(t, names["000067_add_schedule_type_to_digests.down.sql"])
+	assert.True(t, names["000110_namespace_recommendation_schedule_type.up.sql"])
+	assert.True(t, names["000110_namespace_recommendation_schedule_type.down.sql"])
 
 	sort.Ints(versions)
 	require.GreaterOrEqual(t, len(versions), 2)

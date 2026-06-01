@@ -102,7 +102,7 @@ func TestBHEnrichment_OnlyQueriesPageContainers(t *testing.T) {
 				ClusterUUID:    testutil.TestClusterUUID,
 				Namespace:      testutil.TestNamespace,
 				Workload:       spec.workload,
-				WorkloadType:     testutil.TestWorkloadType,
+				WorkloadType:   testutil.TestWorkloadType,
 				ContainerName:  spec.container,
 				CPUUsageP95MC:  spec.cpu,
 				MemUsageP95KiB: 524288,
@@ -662,17 +662,24 @@ func TestRecommendNamespace_DualStream(t *testing.T) {
 	for _, r := range nsRecs {
 		if r.Term == "medium" && r.Engine == "cost" {
 			allMediumCPU = r.RecCPURequestMC
+			assert.Equal(t, digestScheduleAllHours, r.ScheduleType)
 		}
 	}
 	require.True(t, allMediumCPU > 100)
 
-	bhGrouped, err := queryNamespaceDigestsByScheduleType(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end, digestScheduleBusinessHours)
+	bhRecs, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
-	terms := DefaultTerms()
-	bhByTerm := recommendNamespaceStream(bhGrouped[namespaceKey{Namespace: testutil.TestNamespace}], terms, defaultNamespaceSizingThresholds)
-	bhMedium := bhByTerm["medium_term"]["cost"].CPURequestMillicores
-	require.NotNil(t, bhMedium)
-	assert.NotEqual(t, allMediumCPU, *bhMedium)
+	require.NotEmpty(t, bhRecs)
+
+	var bhMediumCPU int64
+	for _, r := range bhRecs {
+		if r.Term == "medium" && r.Engine == "cost" {
+			bhMediumCPU = r.RecCPURequestMC
+			assert.Equal(t, digestScheduleBusinessHours, r.ScheduleType)
+		}
+	}
+	require.True(t, bhMediumCPU > 0)
+	assert.NotEqual(t, allMediumCPU, bhMediumCPU)
 
 	allMediumCPUCopy := allMediumCPU
 	native := []model.NativeNamespaceResult{{
@@ -689,7 +696,56 @@ func TestRecommendNamespace_DualStream(t *testing.T) {
 	term := native[0].Recommendations["medium_term"].(model.TermRecommendation)
 	require.NotNil(t, term.Cost.BusinessHours)
 	require.NotNil(t, term.Cost.BusinessHours.CPURequestMillicores)
-	assert.Equal(t, *bhMedium, *term.Cost.BusinessHours.CPURequestMillicores)
+	assert.Equal(t, bhMediumCPU, *term.Cost.BusinessHours.CPURequestMillicores)
+}
+
+func TestRecommendBusinessHoursNamespaces_NoSchedule(t *testing.T) {
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-ns-none-" + t.Name()
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 100, 5, 80000, 256, digestScheduleBusinessHours)
+
+	recs, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	assert.Empty(t, recs)
+}
+
+func TestRecommendBusinessHoursNamespaces_PersistedRows(t *testing.T) {
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-ns-persist-" + t.Name()
+	seedWeekdayBHSchedule(t, pool, orgID)
+
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 500, 20, 400000, 1024, digestScheduleAllHours)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 100, 5, 80000, 256, digestScheduleBusinessHours)
+
+	allRecs, err := RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NoError(t, WriteNamespaceRecommendations(ctx, pool, allRecs))
+
+	bhRecs, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, bhRecs)
+	require.NoError(t, WriteNamespaceRecommendations(ctx, pool, bhRecs))
+
+	var allCount, bhCount int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT count(*) FROM namespace_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3 AND term IS NOT NULL`,
+		orgID, testutil.TestClusterUUID, testutil.TestNamespace).Scan(&allCount))
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT count(*) FROM namespace_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3
+		  AND term IS NOT NULL AND schedule_type = 'business_hours'`,
+		orgID, testutil.TestClusterUUID, testutil.TestNamespace).Scan(&bhCount))
+	assert.Greater(t, allCount, 0)
+	assert.Greater(t, bhCount, 0)
+	assert.NotEqual(t, allCount, bhCount)
 }
 
 func seedNamespaceDigestSeriesForBH(

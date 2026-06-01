@@ -96,6 +96,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false")
 
 	query = applyNativeNamespaceRBAC(query, userPerms)
@@ -119,6 +120,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
+			Where("ns.schedule_type = 'all_hours'").
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
@@ -150,6 +152,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
+			Where("ns.schedule_type = 'all_hours'").
 			Where("ns.stale = false")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
@@ -228,6 +231,7 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 		Where("ra.org_id = ?", orgID).
 		Where("ns.namespace_id = ?", id).
 		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false")
 	query = applyNativeNamespaceRBAC(query, userPerms)
 
@@ -261,6 +265,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
 		Where("ra.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false").
 		Limit(500)
 	keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
@@ -289,6 +294,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		Where("ns.cluster_uuid = ?", matched.ClusterUUID).
 		Where("ns.namespace_name = ?", matched.NamespaceName).
 		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false").
 		Order("ns.term, ns.engine").
 		Find(&rows).Error

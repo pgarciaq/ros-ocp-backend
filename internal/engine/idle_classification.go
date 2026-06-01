@@ -290,7 +290,8 @@ func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID,
 			THEN 'idle'
 			ELSE 'active'
 		END
-		WHERE ns.org_id = $1 AND ns.cluster_uuid = $2::uuid`,
+		WHERE ns.org_id = $1 AND ns.cluster_uuid = $2::uuid
+		  AND ns.schedule_type = 'all_hours'`,
 		orgID, clusterUUID)
 	if err != nil {
 		return err
