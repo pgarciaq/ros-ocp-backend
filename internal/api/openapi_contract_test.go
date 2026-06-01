@@ -344,6 +344,23 @@ func TestOpenAPI_NodeRecommendations_ResponseFields(t *testing.T) {
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
+func TestOpenAPI_VMRecommendations_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-vm"
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/vm?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/vm", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
 func TestOpenAPI_AllSpecPathsHaveRoutes(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	enableAllPluginsForContractTest(t)
