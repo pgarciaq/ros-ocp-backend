@@ -153,7 +153,8 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 
 	// Fields documented in OpenAPI but omitted from JSON when empty.
 	optionalFields := map[string]struct{}{
-		"warnings": {},
+		"warnings":          {},
+		"settings_locked":   {}, // omitted when false (json omitempty) on settings GET responses
 	}
 
 	if required, ok := schema["required"].([]interface{}); ok && len(required) > 0 {
@@ -180,6 +181,7 @@ func enableAllPluginsForContractTest(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
+	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	config.ResetForTest()
 	_ = config.GetConfig()
 	engine.InitThresholdDefaults(config.GetConfig())
