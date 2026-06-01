@@ -34,6 +34,7 @@ func runServiceStartup(ctx context.Context) {
 	_ = db.GetPool()
 	tags.RunStartupHealthCheck(ctx)
 	logEnabledPlugins()
+	engine.LogSettingsLockedStartup(startCmdLog.Warnf)
 }
 
 // logEnabledPlugins emits the enabled-plugin allowlist after registry filtering.

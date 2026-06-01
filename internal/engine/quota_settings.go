@@ -33,6 +33,7 @@ type QuotaSettingsResponse struct {
 	HighRiskThresholdPercent   int      `json:"high_risk_threshold_percent"`
 	MediumRiskThresholdPercent int      `json:"medium_risk_threshold_percent"`
 	LockedFields               []string `json:"locked_fields"`
+	SettingsLocked             bool     `json:"settings_locked,omitempty"`
 }
 
 // quotaSettingsStored is the JSON document in recommendation_thresholds.
@@ -106,11 +107,13 @@ func ResolveQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string)
 
 func resolveQuotaSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (QuotaSettings, error) {
 	result := quotaSettingsFromConfig(config.GetConfig())
-	overlay, err := loadQuotaSettingsStored(ctx, pool, orgID)
-	if err != nil {
-		return result, err
+	if !IsSettingsLocked(quotaRecommendationType) {
+		overlay, err := loadQuotaSettingsStored(ctx, pool, orgID)
+		if err != nil {
+			return result, err
+		}
+		applyQuotaStoredOverlay(&result, overlay)
 	}
-	applyQuotaStoredOverlay(&result, overlay)
 	result = applyQuotaEnvLocks(result, config.GetConfig())
 	return result, nil
 }
@@ -156,7 +159,8 @@ func GetQuotaSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID strin
 		HeadroomPercent:            settings.HeadroomPercent,
 		HighRiskThresholdPercent:   settings.HighRiskThresholdPercent,
 		MediumRiskThresholdPercent: settings.MediumRiskThresholdPercent,
-		LockedFields:               lockedQuotaFieldsFromEnv(),
+		LockedFields:               LockedFieldsForAPI(quotaRecommendationType, lockedQuotaFieldsFromEnv()),
+		SettingsLocked:             IsSettingsLocked(quotaRecommendationType),
 	}, nil
 }
 

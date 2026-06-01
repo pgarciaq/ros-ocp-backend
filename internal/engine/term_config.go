@@ -95,10 +95,14 @@ func DefaultTermsForPlugin(recommendationType string) []TermConfig {
 func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationType string) ([]TermConfig, error) {
 	defaults := DefaultTermsForPlugin(recommendationType)
 
-	// Load tenant overrides from DB.
-	dbTerms, err := loadDBTerms(ctx, pool, orgID, recommendationType)
-	if err != nil {
-		return nil, err
+	// Load tenant overrides from DB (skipped when platform settings lock is active).
+	var dbTerms map[int]TermConfig
+	if !ShouldSkipTermTenantOverrides(recommendationType) {
+		var err error
+		dbTerms, err = loadDBTerms(ctx, pool, orgID, recommendationType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Build effective terms: for each position, apply precedence.

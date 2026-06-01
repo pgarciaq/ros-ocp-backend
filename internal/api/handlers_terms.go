@@ -114,6 +114,9 @@ func PutTermSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
+	if engine.IsSettingsLocked("terms") {
+		return respondSettingsLockedForbidden(c)
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -254,6 +257,9 @@ func PutTermSettings(c echo.Context) error {
 func DeleteTermSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked("terms") {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {

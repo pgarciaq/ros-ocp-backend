@@ -33,6 +33,7 @@ type ClusterQuotaSettingsResponse struct {
 	HighRiskThresholdPercent   int      `json:"high_risk_threshold_percent"`
 	MediumRiskThresholdPercent int      `json:"medium_risk_threshold_percent"`
 	LockedFields               []string `json:"locked_fields"`
+	SettingsLocked             bool     `json:"settings_locked,omitempty"`
 }
 
 type clusterQuotaSettingsStored struct {
@@ -105,11 +106,13 @@ func ResolveClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 
 func resolveClusterQuotaSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (ClusterQuotaSettings, error) {
 	result := clusterQuotaSettingsFromConfig(config.GetConfig())
-	overlay, err := loadClusterQuotaSettingsStored(ctx, pool, orgID)
-	if err != nil {
-		return result, err
+	if !IsSettingsLocked(clusterQuotaRecommendationType) {
+		overlay, err := loadClusterQuotaSettingsStored(ctx, pool, orgID)
+		if err != nil {
+			return result, err
+		}
+		applyClusterQuotaStoredOverlay(&result, overlay)
 	}
-	applyClusterQuotaStoredOverlay(&result, overlay)
 	result = applyClusterQuotaEnvLocks(result, config.GetConfig())
 	return result, nil
 }
@@ -155,7 +158,8 @@ func GetClusterQuotaSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgI
 		HeadroomPercent:            settings.HeadroomPercent,
 		HighRiskThresholdPercent:   settings.HighRiskThresholdPercent,
 		MediumRiskThresholdPercent: settings.MediumRiskThresholdPercent,
-		LockedFields:               lockedClusterQuotaFieldsFromEnv(),
+		LockedFields:               LockedFieldsForAPI(clusterQuotaRecommendationType, lockedClusterQuotaFieldsFromEnv()),
+		SettingsLocked:             IsSettingsLocked(clusterQuotaRecommendationType),
 	}, nil
 }
 

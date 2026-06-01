@@ -291,6 +291,22 @@ type Config struct {
 	IdleGPUSMActiveBP        int64  `mapstructure:"ROS_IDLE_GPU_SM_ACTIVE_BP"`
 	IdleGPUDRAMActiveBP      int64  `mapstructure:"ROS_IDLE_GPU_DRAM_ACTIVE_BP"`
 
+	// Global settings lock (ROS_SETTINGS_LOCKED): tenant Settings API writes disabled;
+	// per-feature ROS_SETTINGS_LOCKED_* vars opt out when the global lock is true.
+	SettingsLocked              bool `mapstructure:"ROS_SETTINGS_LOCKED"`
+	SettingsLockedContainer     bool `mapstructure:"ROS_SETTINGS_LOCKED_CONTAINER"`
+	SettingsLockedGPU           bool `mapstructure:"ROS_SETTINGS_LOCKED_GPU"`
+	SettingsLockedNode          bool `mapstructure:"ROS_SETTINGS_LOCKED_NODE"`
+	SettingsLockedNamespace     bool `mapstructure:"ROS_SETTINGS_LOCKED_NAMESPACE"`
+	SettingsLockedPVC           bool `mapstructure:"ROS_SETTINGS_LOCKED_PVC"`
+	SettingsLockedVM            bool `mapstructure:"ROS_SETTINGS_LOCKED_VM"`
+	SettingsLockedQuota         bool `mapstructure:"ROS_SETTINGS_LOCKED_QUOTA"`
+	SettingsLockedClusterQuota  bool `mapstructure:"ROS_SETTINGS_LOCKED_CLUSTER_QUOTA"`
+	SettingsLockedIdle          bool `mapstructure:"ROS_SETTINGS_LOCKED_IDLE"`
+	SettingsLockedSnapshot      bool `mapstructure:"ROS_SETTINGS_LOCKED_SNAPSHOT"`
+	SettingsLockedBusinessHours bool `mapstructure:"ROS_SETTINGS_LOCKED_BUSINESS_HOURS"`
+	SettingsLockedTerms         bool `mapstructure:"ROS_SETTINGS_LOCKED_TERMS"`
+
 	// Plugin configuration (see internal/plugin/registry.go).
 	EnabledPlugins  string `mapstructure:"ROS_ENABLED_PLUGINS"`
 	DisabledPlugins string `mapstructure:"ROS_DISABLED_PLUGINS"`
@@ -629,6 +645,19 @@ func initConfig() {
 	viper.SetDefault("ROS_CSV_MAX_BODY_BYTES", 524288000)
 	viper.SetDefault("ROS_CSV_DOWNLOAD_TIMEOUT_SECS", 120)
 	viper.SetDefault("ROS_CSV_ALLOWED_HOSTS", "")
+	viper.SetDefault("ROS_SETTINGS_LOCKED", false)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_CONTAINER", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_GPU", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_NODE", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_NAMESPACE", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_PVC", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_VM", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_QUOTA", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_CLUSTER_QUOTA", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_IDLE", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_SNAPSHOT", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_BUSINESS_HOURS", true)
+	viper.SetDefault("ROS_SETTINGS_LOCKED_TERMS", true)
 
 	// Unleash config
 	viper.SetDefault("UnleashClientAccessToken", "rosocp:dev.token")

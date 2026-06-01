@@ -27,7 +27,7 @@ You can view it interactively using:
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration |
 | Settings | `/recommendations/openshift/settings/capabilities` | GET | Plugin capabilities |
-| Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT | Snapshot staleness threshold |
+| Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT/DELETE | Snapshot staleness threshold |
 | Settings | `/recommendations/openshift/settings/idle-detection` | GET/PUT/DELETE | Idle/zombie classification thresholds |
 | Settings | `/recommendations/openshift/settings/quota` | GET/PUT/DELETE | ResourceQuota headroom and risk thresholds (`quota` plugin) |
 

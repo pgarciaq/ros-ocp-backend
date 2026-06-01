@@ -69,17 +69,19 @@ func PutThresholdSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
+	rt, err := validateThresholdRecommendationType(c)
+	if err != nil {
+		return err
+	}
+	if engine.IsSettingsLocked(rt) {
+		return respondSettingsLockedForbidden(c)
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
 	hlog := requestLogger(c, orgID)
-
-	rt, err := validateThresholdRecommendationType(c)
-	if err != nil {
-		return err
-	}
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -149,6 +151,9 @@ func DeleteThresholdSettings(c echo.Context) error {
 	rt, err := validateThresholdRecommendationType(c)
 	if err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked(rt) {
+		return respondSettingsLockedForbidden(c)
 	}
 
 	pool := db.GetPool()

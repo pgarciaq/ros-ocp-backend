@@ -51,6 +51,7 @@ type businessHoursSettingsResponse struct {
 	Enabled           bool                       `json:"enabled"`
 	ReshipStatus      string                     `json:"reship_status,omitempty"`
 	ReshipStatusSince *time.Time                 `json:"reship_status_since,omitempty"`
+	SettingsLocked    bool                       `json:"settings_locked,omitempty"`
 }
 
 type businessHoursPutResponse struct {
@@ -168,6 +169,11 @@ func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, 
 	}
 	orgID := xrhid.Identity.OrgID
 
+	if engine.IsSettingsLocked("business_hours") {
+		resp := businessHoursSettingsResponse{Enabled: false, SettingsLocked: true}
+		return c.JSON(http.StatusOK, resp)
+	}
+
 	pool := db.GetPool()
 	if pool == nil {
 		return serviceUnavailable(c, "database connection unavailable")
@@ -217,6 +223,9 @@ func (h *BusinessHoursSettingsHandler) getSettings(c echo.Context, clusterUUID, 
 func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, namespace string, orgLevel bool) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked("business_hours") {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -307,6 +316,9 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUID, namespace string, orgLevel bool) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked("business_hours") {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {

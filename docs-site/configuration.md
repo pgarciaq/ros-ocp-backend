@@ -11,6 +11,21 @@ variables below are the ones operators most often tune explicitly.
 
 ---
 
+## Global Settings Lock
+
+Set `ROS_SETTINGS_LOCKED=true` to freeze **all** tenant Settings API overrides at compiled
+defaults (same effect as clearing every org's settings rows). PUT and DELETE on settings routes
+return `403`; GET responses include `settings_locked: true` and `locked_fields: ["*"]`.
+
+Per-feature opt-outs (`ROS_SETTINGS_LOCKED_VM=false`, etc.) apply only when the global lock is on.
+Individual admin env vars (for example `ROS_CONTAINER_CPU_COST_PERCENTILE`) still override defaults
+on read even under the global lock.
+
+See [Configurability — Global Settings Lock](architecture/configurability.md#global-settings-lock)
+for the full variable list and business-hours behavior.
+
+---
+
 ## Performance Tuning
 
 Added during native-engine performance optimization (parallel ingestion,

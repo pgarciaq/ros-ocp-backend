@@ -45,6 +45,9 @@ func PutQuotaSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
 	}
+	if engine.IsSettingsLocked("quota") {
+		return respondSettingsLockedForbidden(c)
+	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -105,6 +108,9 @@ func PutQuotaSettings(c echo.Context) error {
 func DeleteQuotaSettings(c echo.Context) error {
 	if err := requireSettingsWrite(c); err != nil {
 		return err
+	}
+	if engine.IsSettingsLocked("quota") {
+		return respondSettingsLockedForbidden(c)
 	}
 	xrhid, err := requireXRHID(c)
 	if err != nil {

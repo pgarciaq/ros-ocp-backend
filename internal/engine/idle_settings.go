@@ -48,8 +48,9 @@ type IdleDetectionSettings struct {
 
 // IdleDetectionSettingsResponse wraps settings with locked_fields for GET.
 type IdleDetectionSettingsResponse struct {
-	IdleDetection IdleDetectionSettings `json:"idle_detection"`
-	LockedFields  []string              `json:"locked_fields"`
+	IdleDetection  IdleDetectionSettings `json:"idle_detection"`
+	LockedFields   []string              `json:"locked_fields"`
+	SettingsLocked bool                  `json:"settings_locked,omitempty"`
 }
 
 // idleDetectionStored is the JSON document in recommendation_thresholds.
@@ -172,8 +173,9 @@ func GetIdleDetectionSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, org
 		return IdleDetectionSettingsResponse{}, err
 	}
 	return IdleDetectionSettingsResponse{
-		IdleDetection: settings,
-		LockedFields:  lockedIdleFieldsFromEnv(),
+		IdleDetection:  settings,
+		LockedFields:   LockedFieldsForAPI(idleDetectionRecommendationType, lockedIdleFieldsFromEnv()),
+		SettingsLocked: IsSettingsLocked(idleDetectionRecommendationType),
 	}, nil
 }
 
@@ -183,11 +185,13 @@ func resolveIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 
 func resolveIdleDetectionSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (IdleDetectionSettings, error) {
 	result := defaultIdleDetectionSettings()
-	overlay, err := loadIdleDetectionStored(ctx, pool, orgID)
-	if err != nil {
-		return result, err
+	if !IsSettingsLocked(idleDetectionRecommendationType) {
+		overlay, err := loadIdleDetectionStored(ctx, pool, orgID)
+		if err != nil {
+			return result, err
+		}
+		applyIdleStoredOverlay(&result, overlay)
 	}
-	applyIdleStoredOverlay(&result, overlay)
 	result = applyIdleEnvLocks(result, config.GetConfig())
 	return result, nil
 }

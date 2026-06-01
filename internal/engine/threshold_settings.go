@@ -127,7 +127,8 @@ type SizingThresholdSettings struct {
 // SizingThresholdSettingsResponse is the API GET response for container/namespace.
 type SizingThresholdSettingsResponse struct {
 	SizingThresholdSettings
-	LockedFields []string `json:"locked_fields"`
+	LockedFields   []string `json:"locked_fields"`
+	SettingsLocked bool     `json:"settings_locked,omitempty"`
 }
 
 // SizingThresholdSettingsUpdate is the API PUT body for container/namespace.
@@ -162,7 +163,8 @@ type NodeThresholdSettings struct {
 // NodeThresholdSettingsResponse is the API GET response for node thresholds.
 type NodeThresholdSettingsResponse struct {
 	NodeThresholdSettings
-	LockedFields []string `json:"locked_fields"`
+	LockedFields   []string `json:"locked_fields"`
+	SettingsLocked bool     `json:"settings_locked,omitempty"`
 }
 
 // NodeThresholdSettingsUpdate is the API PUT body for node thresholds.
@@ -200,7 +202,8 @@ type GPUThresholdSettings struct {
 // GPUThresholdSettingsResponse is the API GET response for GPU thresholds.
 type GPUThresholdSettingsResponse struct {
 	GPUThresholdSettings
-	LockedFields []string `json:"locked_fields"`
+	LockedFields   []string `json:"locked_fields"`
+	SettingsLocked bool     `json:"settings_locked,omitempty"`
 }
 
 // GPUThresholdSettingsUpdate is the API PUT body for GPU thresholds.
@@ -240,7 +243,8 @@ type PVCThresholdSettings struct {
 // PVCThresholdSettingsResponse is the API GET response for PVC thresholds.
 type PVCThresholdSettingsResponse struct {
 	PVCThresholdSettings
-	LockedFields []string `json:"locked_fields"`
+	LockedFields   []string `json:"locked_fields"`
+	SettingsLocked bool     `json:"settings_locked,omitempty"`
 }
 
 // PVCThresholdSettingsUpdate is the API PUT body for PVC thresholds.
@@ -644,6 +648,9 @@ func resolveSizingThresholds(
 }
 
 func overlayThresholdJSON(ctx context.Context, pool *pgxpool.Pool, orgID, recType string, dest any) error {
+	if IsSettingsLocked(recType) {
+		return nil
+	}
 	var raw []byte
 	err := pool.QueryRow(ctx, `
 		SELECT thresholds FROM recommendation_thresholds
@@ -782,7 +789,8 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return SizingThresholdSettingsResponse{
 			SizingThresholdSettings: settings,
-			LockedFields:            lockedFieldsFromEnvMap(containerEnvLockMap()),
+			LockedFields:            LockedFieldsForAPI("container", lockedFieldsFromEnvMap(containerEnvLockMap())),
+			SettingsLocked:          IsSettingsLocked("container"),
 		}, nil
 	case "namespace":
 		settings, err := ResolveNamespaceSizingThresholds(ctx, pool, orgID)
@@ -791,7 +799,8 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return SizingThresholdSettingsResponse{
 			SizingThresholdSettings: settings,
-			LockedFields:            lockedFieldsFromEnvMap(namespaceEnvLockMap()),
+			LockedFields:            LockedFieldsForAPI("namespace", lockedFieldsFromEnvMap(namespaceEnvLockMap())),
+			SettingsLocked:          IsSettingsLocked("namespace"),
 		}, nil
 	case "node":
 		settings, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
@@ -800,7 +809,8 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return NodeThresholdSettingsResponse{
 			NodeThresholdSettings: settings,
-			LockedFields:          lockedFieldsFromEnvMap(nodeEnvLockMap()),
+			LockedFields:          LockedFieldsForAPI("node", lockedFieldsFromEnvMap(nodeEnvLockMap())),
+			SettingsLocked:        IsSettingsLocked("node"),
 		}, nil
 	case "gpu":
 		settings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
@@ -809,7 +819,8 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return GPUThresholdSettingsResponse{
 			GPUThresholdSettings: settings,
-			LockedFields:         lockedFieldsFromEnvMap(gpuEnvLockMap()),
+			LockedFields:         LockedFieldsForAPI("gpu", lockedFieldsFromEnvMap(gpuEnvLockMap())),
+			SettingsLocked:       IsSettingsLocked("gpu"),
 		}, nil
 	case "pvc":
 		settings, err := ResolvePVCThresholdSettings(ctx, pool, orgID)
@@ -818,7 +829,8 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return PVCThresholdSettingsResponse{
 			PVCThresholdSettings: settings,
-			LockedFields:         lockedFieldsFromEnvMap(pvcEnvLockMap()),
+			LockedFields:         LockedFieldsForAPI("pvc", lockedFieldsFromEnvMap(pvcEnvLockMap())),
+			SettingsLocked:       IsSettingsLocked("pvc"),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported recommendation_type %q", recType)

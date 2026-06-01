@@ -85,7 +85,9 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | Route | Methods | Status | Purpose |
 |-------|---------|--------|---------|
 | `/settings/terms?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant term windows (short / medium / long). Valid plugins: `container`, `namespace`, `node`, `gpu`, `pvc`. |
-| `/settings/snapshot` | GET, PUT | **Existing** | Snapshot staleness thresholds (orphan age, never-restored days, stale days, redundant count, cost per GiB/month). |
+| `/settings/snapshot` | GET, PUT, DELETE | **Existing** | Snapshot staleness thresholds (orphan age, never-restored days, stale days, redundant count, cost per GiB/month). |
+| `/settings/vm` | GET, PUT, DELETE | **Existing** | VM rightsizing thresholds, memory floors, disk, I/O, instance-type matching (`vm` plugin). |
+| `/settings/vm/terms` | GET, PUT, DELETE | **Existing** | VM recommendation term windows (`vm` plugin). |
 | `/settings/business-hours` | GET, PUT, DELETE | **Existing** | Org-default business-hours schedule. |
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
@@ -105,10 +107,56 @@ recommendations typically appear within seconds. Disable with
 
 Implementation references: [`handlers_terms.go`](../../internal/api/handlers_terms.go),
 [`handlers_snapshot_settings.go`](../../internal/api/handlers_snapshot_settings.go),
+[`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go),
 [`handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go),
 [`handlers_threshold_settings.go`](../../internal/api/handlers_threshold_settings.go),
 [`term_config.go`](../../internal/engine/term_config.go),
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go).
+
+---
+
+## Global Settings Lock
+
+When `ROS_SETTINGS_LOCKED=true`, ROS behaves as if **every** tenant Settings API override were cleared:
+compiled defaults are enforced on read and resolve paths, and PUT/DELETE on settings routes return
+`403 Forbidden` with `{"error":"settings are locked by platform administrator","locked":true}`.
+
+This reuses the existing `locked_fields` mechanism on GET responses (`locked_fields: ["*"]`) plus
+`settings_locked: true` on API envelopes. Individual admin env vars (`ROS_CONTAINER_*`, `ROS_VM_*`, etc.)
+still override compiled defaults on read/resolve even under the global lock.
+
+### Environment variables
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `ROS_SETTINGS_LOCKED` | `false` | Master switch: freeze all tenant settings overrides platform-wide. |
+| `ROS_SETTINGS_LOCKED_CONTAINER` | `true` | When global lock is on, lock container threshold settings (opt-out with `false`). |
+| `ROS_SETTINGS_LOCKED_GPU` | `true` | Lock GPU threshold settings. |
+| `ROS_SETTINGS_LOCKED_NODE` | `true` | Lock node threshold settings. |
+| `ROS_SETTINGS_LOCKED_NAMESPACE` | `true` | Lock namespace threshold settings. |
+| `ROS_SETTINGS_LOCKED_PVC` | `true` | Lock PVC threshold settings. |
+| `ROS_SETTINGS_LOCKED_VM` | `true` | Lock VM settings and VM terms. |
+| `ROS_SETTINGS_LOCKED_QUOTA` | `true` | Lock ResourceQuota settings. |
+| `ROS_SETTINGS_LOCKED_CLUSTER_QUOTA` | `true` | Lock ClusterResourceQuota settings. |
+| `ROS_SETTINGS_LOCKED_IDLE` | `true` | Lock idle-detection settings. |
+| `ROS_SETTINGS_LOCKED_SNAPSHOT` | `true` | Lock snapshot staleness settings. |
+| `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` | `true` | Lock business-hours schedules; GET returns `enabled: false`. |
+| `ROS_SETTINGS_LOCKED_TERMS` | `true` | Lock generic `/settings/terms` overrides (container, namespace, node, gpu, pvc). |
+
+Per-feature opt-outs apply **only** when `ROS_SETTINGS_LOCKED=true`. Example: with global lock on and
+`ROS_SETTINGS_LOCKED_VM=false`, tenants may PUT/DELETE VM settings while container thresholds remain frozen.
+
+### Startup logging
+
+On service start, when the global lock is enabled, ROS logs a warning listing any per-feature opt-outs.
+See [`settings_locked_startup.go`](../../internal/engine/settings_locked_startup.go) and
+[`IsSettingsLocked`](../../internal/engine/settings_locked.go).
+
+### Business hours under global lock
+
+When `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` is true (default under global lock), all business-hours
+PUT/DELETE routes return `403`, schedules are not applied during recommendation ingestion, and GET
+returns `{"enabled": false, "settings_locked": true}`.
 
 ---
 
