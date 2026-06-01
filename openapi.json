@@ -2413,6 +2413,34 @@
             }
           },
           {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sort field. Bracket form `order_by[field]` is also accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "usage_ratio",
+                "estimated_monthly_savings",
+                "pvc_name",
+                "capacity_bytes"
+              ],
+              "default": "usage_ratio"
+            }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Maximum number of results (1-100, default 20)",

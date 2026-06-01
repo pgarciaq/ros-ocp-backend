@@ -33,6 +33,20 @@ type PVCRecommendationResponse struct {
 	ResizeNote                 string                                     `json:"resize_note,omitempty"`
 }
 
+const (
+	pvcDefaultOrderBy  = "usage_ratio"
+	pvcDefaultOrderHow = "desc"
+)
+
+var pvcAllowedOrderBy = map[string]string{
+	"usage_ratio":                   "usage_ratio",
+	"estimated_monthly_savings":     "estimated_monthly_savings_usd",
+	"estimated_monthly_savings_usd": "estimated_monthly_savings_usd",
+	"pvc_name":                      "persistentvolumeclaim",
+	"persistentvolumeclaim":         "persistentvolumeclaim",
+	"capacity_bytes":                "capacity_bytes",
+}
+
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
 type PVCRecommendationListResponse struct {
 	Meta struct {
@@ -87,6 +101,11 @@ func GetPVCRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
 	}
 
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, pvcAllowedOrderBy, pvcDefaultOrderBy, pvcDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
 	countQuery := `SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -106,7 +125,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		FROM pvc_recommendation_sets
 		WHERE org_id = $1` + filterSQL
 
-	query += ` ORDER BY usage_ratio DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+	query += ` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
 	pageArgs := append(args, limit, offset)
 
 	rows, err := pool.Query(ctx, query, pageArgs...)

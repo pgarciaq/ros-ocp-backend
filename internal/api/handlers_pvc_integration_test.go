@@ -83,3 +83,47 @@ func TestGetPVCRecommendations_FilterStorageClass(t *testing.T) {
 	assert.Equal(t, "gp3-csi", resp.Data[0].StorageClass)
 	assert.Equal(t, "data-gp3", resp.Data[0].PersistentVolumeClaim)
 }
+
+func TestGetPVCRecommendations_OrderByEstimatedSavingsAsc(t *testing.T) {
+	orgID := "org-pvc-order-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			recommendation_type, usage_ratio, estimated_monthly_savings_usd, updated_at
+		) VALUES
+			($1, $2, 'ns', 'pvc-low', 'medium', 'oversized', 0.1, 100, NOW()),
+			($1, $2, 'ns', 'pvc-high', 'medium', 'oversized', 0.2, 50000, NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term) DO NOTHING`,
+		orgID, testutil.TestClusterUUID,
+	)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?order_by=estimated_monthly_savings&order_how=asc&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.GreaterOrEqual(t, resp.Meta.Count, 2)
+	require.GreaterOrEqual(t, len(resp.Data), 2)
+	assert.Equal(t, "pvc-low", resp.Data[0].PersistentVolumeClaim)
+	assert.Equal(t, "pvc-high", resp.Data[len(resp.Data)-1].PersistentVolumeClaim)
+}
