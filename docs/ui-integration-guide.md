@@ -609,6 +609,44 @@ current usage is below 85%.
 
 ---
 
+## 4b. ResourceQuota and ClusterResourceQuota Recommendations
+
+Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** recommendations are
+**API-ready**; there is **no dedicated koku-ui view yet** (deferred — see
+[Deferred: Quota UI](../docs-site/known-issues.md#deferred-quota-ui) and
+[quota feature roadmap](features/quota-recommendations.md#roadmap--future-work)).
+
+### Namespace ResourceQuota
+
+```http
+GET /recommendations/openshift/quota
+GET /recommendations/openshift/quota/detail?cluster_uuid=...&namespace=...
+```
+
+List rows include `recommendation_type` (`tighten`, `raise`, `optimal`), `risk_level`,
+`utilization`, `quota_hard` / `quota_used` / `quota_recommended`, `capacity_freed`, and
+`estimated_savings` on tighten. Use `order_by`, `order_how`, and `group_by[cluster]` /
+`group_by[project]` per OpenAPI.
+
+Detail adds notification codes **70–72** and `history[]` for trend charts when UI ships.
+
+### ClusterResourceQuota
+
+```http
+GET /recommendations/openshift/cluster-quota
+```
+
+Same classification pattern at CRQ scope; notification code **73** for cluster-quota rows.
+
+### Planned UI (future work)
+
+- Sortable quota list: utilization, risk, savings, recommendation type
+- Detail drawer/page with hard/used/recommended breakdown and history sparkline
+- CRQ aggregate table across clusters
+- Inline badges for notification codes **70–73**
+
+---
+
 ## 5. Snapshot Recommendations
 
 ```http

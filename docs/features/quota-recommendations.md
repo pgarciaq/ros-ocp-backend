@@ -156,7 +156,18 @@ Public reference: [docs-site feature page](../../docs-site/features/quota-recomm
 OpenShift team/tenant quotas are implemented separately via the **`cluster-quota`** plugin.
 See [cluster-resource-quota.md](cluster-resource-quota.md) for API, operator CSV, and configuration.
 
-## Future work (namespace quota)
+## Roadmap / Future Work
+
+### Quota UI (deferred)
+
+APIs are production-ready (`GET .../quota/`, `GET .../quota/detail`, `GET .../cluster-quota/`,
+settings, notification codes **70–73**, detail `history[]`). Dedicated **koku-ui** views are
+deferred (large effort; ResourceQuota status report item 9). Planned scope: quota list with
+utilization/risk/savings, detail breakdown, ClusterResourceQuota aggregate view, notification
+integration, and historical trend charts. See [docs-site UI guide](../../docs-site/ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
+and [known issues](../known-issues.md#deferred-quota-ui).
+
+### Operator / engine gaps (namespace quota)
 
 | Gap | Notes |
 |-----|-------|
@@ -164,7 +175,7 @@ See [cluster-resource-quota.md](cluster-resource-quota.md) for API, operator CSV
 | **Per-quota object identity** | Operator sums `kube_resourcequota` **by namespace** only (no `resourcequota` label in PromQL). Multiple `ResourceQuota` objects per namespace are merged — per-object `quota_name` needs operator CSV columns. |
 | **CRQ namespace selector** | Cluster quota CSV has hard/used per CRQ name only; no namespace selector labels. CRQ recommendations apply one cluster-wide namespace-quota aggregate to every CRQ row until the operator exports selector membership. |
 
-Implemented in this plugin: `order_by` / `order_how`, detail endpoints with `history[]`, notification codes **70–72**, and append-only `quota_recommendation_history` (90-day retention).
+Implemented in this plugin: `order_by` / `order_how`, detail endpoints with `history[]`, notification codes **70–73**, and append-only `quota_recommendation_history` (90-day retention).
 
 ---
 

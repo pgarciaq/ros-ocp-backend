@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-01 (GPU time-slicing future-work items)
+Last updated: 2026-06-02 (deferred Quota UI)
 
 ---
 
@@ -131,7 +131,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
 | Savings stale until re-ingestion | Container/node/PVC `estimated_monthly_savings_usd` reflects rates from the last successful Masu fetch during ingestion; Koku cost model changes do not update ROS rows until the next report cycle | Low — by design | REQ-7.5 |
-| No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
+| No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
 #### Unparsable Kafka message logging (sensitive payload fields)
@@ -494,6 +494,22 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 
 See `docs/archive/gpu-recommendations.md` for detailed design and
 `docs/archive/gpu-recommendations-test-plan.md` for E2E testing guide.
+
+### Deferred: Quota UI
+
+ResourceQuota and ClusterResourceQuota recommendation **APIs are production-ready**;
+dedicated **koku-ui views are deferred** (large effort; ResourceQuota status report item 9).
+
+| Planned UI | API today |
+|------------|-----------|
+| Quota list (utilization, risk level, savings) | `GET /recommendations/openshift/quota/` |
+| Quota detail / breakdown | `GET /recommendations/openshift/quota/detail` |
+| ClusterResourceQuota aggregate view | `GET /recommendations/openshift/cluster-quota/` |
+| Notification integration (codes **70–73**) | Emitted on quota / cluster-quota rows |
+| Historical trend visualization | `history[]` on detail endpoints |
+
+See [quota-recommendations.md](features/quota-recommendations.md#roadmap--future-work) and
+[ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
 
 ### GPU: Deferred / Future Work
 

@@ -200,3 +200,33 @@ Used values (optional, backward compatible): `cpu_request_namespace_used`,
 
 Older operators without `*_namespace_used` columns still work; utilization falls back to
 container recommendation sums where used metrics are absent.
+
+---
+
+## Roadmap / Future Work
+
+### Quota UI (deferred)
+
+The **`quota`** and **`cluster-quota`** plugins, settings APIs, detail endpoints, notification
+codes **70–73**, and `history[]` on detail responses are **API-ready**. Dedicated **koku-ui**
+views are planned as future work (large effort; deferred from the ResourceQuota status report).
+
+Planned UI scope:
+
+- **List view** — utilization, risk level, recommendation type, estimated savings
+- **Detail view** — hard / used / recommended breakdown, capacity freed, notifications
+- **ClusterResourceQuota view** — aggregate CRQ recommendations across namespace selectors
+- **Notifications** — surface codes 70–73 in the optimizations experience
+- **Trends** — historical recommendation snapshots from detail `history[]`
+
+Until UI ships, use the REST API or internal tooling. See
+[UI integration guide](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
+and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
+
+### Operator / engine gaps (namespace quota)
+
+| Gap | Notes |
+|-----|-------|
+| **Storage / object counts** | Operator `kube_resourcequota` queries only collect CPU/memory request/limit hard and used. No `requests.storage`, `pods`, or `count/*` in the namespace ROS CSV yet. |
+| **Per-quota object identity** | PromQL sums by namespace only; multiple `ResourceQuota` objects per namespace are merged until the operator exports `quota_name`. |
+| **CRQ namespace selector** | Cluster quota CSV has hard/used per CRQ name only; selector membership is not exported yet. |
