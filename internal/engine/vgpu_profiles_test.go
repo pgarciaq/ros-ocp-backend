@@ -14,5 +14,5 @@ func TestMatchVGPUModel_A100(t *testing.T) {
 }
 
 func TestVGPUProfileFBMiB(t *testing.T) {
-	assert.Equal(t, 10240, VGPUProfileFBMiB("NVIDIA A100-SXM4-80GB", "grid_a100-10q"))
+	assert.Equal(t, 10240, VGPUProfileFBMiB("NVIDIA A100-SXM4-80GB", "grid_a100d-10c"))
 }

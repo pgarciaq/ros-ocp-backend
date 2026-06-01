@@ -95,13 +95,13 @@ func TestRecommendVMTimeSlicing_LegacyNoDRAM(t *testing.T) {
 
 func TestRecommendVGPUProfile_A100(t *testing.T) {
 	profile := RecommendVGPUProfile("NVIDIA A100-SXM4-80GB", 8192)
-	assert.Equal(t, "grid_a100-10q", profile)
+	assert.Equal(t, "grid_a100d-10c", profile)
 }
 
 func TestRecommendVGPUProfile_T4Smallest(t *testing.T) {
 	profile := RecommendVGPUProfile("Tesla T4", 512)
 	require.NotEmpty(t, profile)
-	assert.Equal(t, "grid_t4-1q", profile)
+	assert.Equal(t, "grid_t4-4c", profile)
 }
 
 func TestVMGPU_T4_TimeSlicingIntegration(t *testing.T) {
