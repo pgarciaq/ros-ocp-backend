@@ -55,7 +55,11 @@ func truncatePublicTables(tb testing.TB, pool *pgxpool.Pool) {
 		SELECT 'TRUNCATE TABLE ' || string_agg(format('%I', tablename), ', ') || ' CASCADE'
 		FROM pg_tables
 		WHERE schemaname = 'public'
-		  AND tablename <> 'schema_migrations'
+		  AND tablename NOT IN (
+		    'schema_migrations',
+		    'notification_code_definitions',
+		    'ros_partitioned_parent_registry'
+		  )
 	`).Scan(&truncateSQL)
 	if err != nil {
 		tb.Fatalf("build truncate statement: %v", err)

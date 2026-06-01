@@ -2,12 +2,14 @@ package engine
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -82,6 +84,9 @@ func TestSnapshotRecommendations_HealthyNotFlagged(t *testing.T) {
 }
 
 func TestSnapshotRecommendations_CustomThresholds(t *testing.T) {
+	unsetSnapshotThresholdEnvForTest(t)
+	config.ResetForTest()
+
 	pool, names := setupSnapshotRecommendTest(t)
 	ctx := context.Background()
 
@@ -107,4 +112,23 @@ func TestSnapshotRecommendations_CustomThresholds(t *testing.T) {
 	assert.Equal(t, "never_restored", staleRec.RecommendationType,
 		"120-day snapshot should be never_restored when stale_days=180")
 	assert.NotEqual(t, "stale", staleRec.RecommendationType)
+}
+
+// unsetSnapshotThresholdEnvForTest removes locked snapshot threshold env vars so
+// ResolveSnapshotSettings reads per-org DB values in integration tests.
+func unsetSnapshotThresholdEnvForTest(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"ROS_SNAPSHOT_ORPHAN_AGE_DAYS",
+		"ROS_SNAPSHOT_NEVER_RESTORED_DAYS",
+		"ROS_SNAPSHOT_STALE_DAYS",
+		"ROS_SNAPSHOT_REDUNDANT_THRESHOLD",
+	} {
+		prev, ok := os.LookupEnv(key)
+		if !ok {
+			continue
+		}
+		require.NoError(t, os.Unsetenv(key))
+		t.Cleanup(func() { _ = os.Setenv(key, prev) })
+	}
 }

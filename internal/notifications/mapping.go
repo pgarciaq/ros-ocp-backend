@@ -61,6 +61,18 @@ var Definitions = map[int16]notifDef{
 	40: {"WARNING", "Filesystem usage growing toward capacity at current growth rate"},
 	41: {"INFO", "Recommended instance type available for virtual machine sizing"},
 	42: {"CRITICAL", "Filesystem critically full: immediate expansion recommended"},
+	43: {"CRITICAL", "VM has zero CPU and memory usage — likely abandoned"},
+	44: {"INFO", "Guest agent data interrupted — recommendations use hypervisor metrics"},
+	45: {"INFO", "Insufficient metrics — less than one full day of data available"},
+	46: {"INFO", "Guest OS not detected — using Linux defaults. Install qemu-guest-agent for OS-specific thresholds."},
+	47: {"INFO", "Periodic usage spikes detected (possibly OS updates); P95 sizing accounts for this"},
+	48: {"WARNING", "VM restarted multiple times in the observation window — possible instability or crash loop"},
+	49: {"INFO", "Downsize recommendation suppressed: usage not consistently below threshold"},
+	50: {"WARNING", "GPU is idle — consider removing GPU passthrough/vGPU assignment"},
+	51: {"WARNING", "GPU underutilized — see recommended_gpu_action and recommended_gpu_profile"},
+	52: {"WARNING", "GPU memory saturated — consider a larger GPU or additional GPU"},
+	53: {"WARNING", "GPU compute saturated — workload may benefit from a more powerful GPU"},
+	54: {"WARNING", "One or more GPUs are idle while others are active"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

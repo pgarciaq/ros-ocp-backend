@@ -87,9 +87,28 @@ func cpuUsageP60(row ContainerDigestRow) int64 {
 	return row.CPUUsageP95MC
 }
 
+// EnsureMonthlyPartition creates a RANGE partition for bucket_date/interval_start parents.
+func EnsureMonthlyPartition(t *testing.T, pool *pgxpool.Pool, parentTable string, bucketDate time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	monthStart := time.Date(bucketDate.Year(), bucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := parentTable + "_" + monthStart.Format("200601")
+	_, err := pool.Exec(ctx,
+		"CREATE TABLE IF NOT EXISTS "+partName+
+			" PARTITION OF "+parentTable+
+			" FOR VALUES FROM ('"+monthStart.Format("2006-01-02")+
+			"') TO ('"+monthEnd.Format("2006-01-02")+"')",
+	)
+	if err != nil {
+		t.Fatalf("ensureMonthlyPartition %s: %v", partName, err)
+	}
+}
+
 // SeedContainerDigest inserts a single row into daily_container_digests.
 func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRow) {
 	t.Helper()
+	EnsureMonthlyPartition(t, pool, "daily_container_digests", row.BucketDate)
 	scheduleType := row.ScheduleType
 	if scheduleType == "" {
 		scheduleType = "all_hours"
@@ -194,6 +213,8 @@ func SeedNamespaceDigestSeries(t *testing.T, pool *pgxpool.Pool, namespace strin
 	t.Helper()
 	ctx := context.Background()
 	for i := 0; i < days; i++ {
+		bucketDate := BaseDate.AddDate(0, 0, i)
+		EnsureMonthlyPartition(t, pool, "daily_namespace_digests", bucketDate)
 		cpuVal := baseCPU + int64(i)*cpuStep
 		memVal := baseMem + int64(i)*memStep
 		_, err := pool.Exec(ctx, `
@@ -212,7 +233,7 @@ func SeedNamespaceDigestSeries(t *testing.T, pool *pgxpool.Pool, namespace strin
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
-			BaseDate.AddDate(0, 0, i), TestOrgID, TestClusterUUID, namespace,
+			bucketDate, TestOrgID, TestClusterUUID, namespace,
 			cpuVal-20, cpuVal+10,
 			cpuVal-10, cpuVal, cpuVal+15,
 			memVal-1024, memVal+512,
@@ -232,6 +253,8 @@ func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace s
 	t.Helper()
 	ctx := context.Background()
 	for i := 0; i < days; i++ {
+		bucketDate := BaseDate.AddDate(0, 0, i)
+		EnsureMonthlyPartition(t, pool, "daily_namespace_digests", bucketDate)
 		cpuVal := baseCPU + int64(i)*cpuStep
 		memVal := baseMem + int64(i)*memStep
 		_, err := pool.Exec(ctx, `
@@ -252,7 +275,7 @@ func SeedNamespaceDigestSeriesFull(t *testing.T, pool *pgxpool.Pool, namespace s
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
-			BaseDate.AddDate(0, 0, i), TestOrgID, TestClusterUUID, namespace,
+			bucketDate, TestOrgID, TestClusterUUID, namespace,
 			cpuVal-20, cpuVal-10, cpuVal+10, cpuVal+20,
 			cpuVal-10, cpuVal, cpuVal+10, cpuVal+15, cpuVal+18, cpuVal+25,
 			memVal-1024, memVal-512, memVal+512,

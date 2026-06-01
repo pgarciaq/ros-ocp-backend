@@ -703,6 +703,8 @@ func seedNamespaceDigestSeriesForBH(
 	t.Helper()
 	ctx := context.Background()
 	for i := 0; i < days; i++ {
+		bucketDate := testutil.BaseDate.AddDate(0, 0, i)
+		testutil.EnsureMonthlyPartition(t, pool, "daily_namespace_digests", bucketDate)
 		cpuVal := baseCPU + int64(i)*cpuStep
 		memVal := baseMem + int64(i)*memStep
 		_, err := pool.Exec(ctx, `
@@ -723,7 +725,7 @@ func seedNamespaceDigestSeriesForBH(
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type)
 			DO UPDATE SET cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc`,
-			testutil.BaseDate.AddDate(0, 0, i), orgID, testutil.TestClusterUUID, namespace, scheduleType,
+			bucketDate, orgID, testutil.TestClusterUUID, namespace, scheduleType,
 			cpuVal-20, cpuVal-10, cpuVal+10, cpuVal+20,
 			cpuVal-10, cpuVal, cpuVal+10, cpuVal+15, cpuVal+18, cpuVal+25,
 			memVal-1024, memVal-512, memVal+512,
