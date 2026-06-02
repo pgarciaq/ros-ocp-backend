@@ -1189,8 +1189,6 @@ func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
 		name  string
 		query string
 	}{
-		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10"},
-		{"filter engine performance", "?filter%5Bengine%5D=performance&limit=10"},
 		{"filter namespace alias", "?filter%5Bnamespace%5D=payments&limit=10"},
 		{"filter container", "?filter%5Bcontainer%5D=web&limit=10"},
 		{"filter workload", "?filter%5Bworkload%5D=api-deploy&limit=10"},
@@ -1205,6 +1203,87 @@ func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
 			app.ServeHTTP(rec, req)
 			assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 		})
+	}
+
+	for _, tc := range []struct {
+		name       string
+		query      string
+		wantEngine string
+	}{
+		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10", "cost"},
+		{"filter engine performance", "?filter%5Bengine%5D=performance&limit=10", "performance"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, basePath+tc.query, nil)
+			req.Header.Set("X-Rh-Identity", identityHeader)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			assertContainerListEngineFilterResponse(t, rec.Body.Bytes(), tc.wantEngine)
+		})
+	}
+}
+
+func assertContainerListEngineFilterResponse(t *testing.T, body []byte, wantEngine string) {
+	t.Helper()
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	require.Contains(t, resp, "meta")
+	require.Contains(t, resp, "data")
+
+	data, ok := resp["data"].([]interface{})
+	require.True(t, ok, "data must be an array")
+	require.NotEmpty(t, data, "expected non-empty data")
+
+	otherEngine := "performance"
+	if wantEngine == "performance" {
+		otherEngine = "cost"
+	}
+
+	filterOmitsOtherEngine := true
+	for _, rawItem := range data {
+		item, ok := rawItem.(map[string]interface{})
+		require.True(t, ok)
+		recs, ok := item["recommendations"].(map[string]interface{})
+		require.True(t, ok, "list item missing recommendations")
+		terms, ok := recs["recommendation_terms"].(map[string]interface{})
+		require.True(t, ok, "recommendations missing recommendation_terms")
+
+		foundWant := false
+		for _, termRaw := range terms {
+			term, ok := termRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			engines, ok := term["recommendation_engines"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if _, ok := engines[wantEngine].(map[string]interface{}); ok {
+				foundWant = true
+			}
+			if _, ok := engines[otherEngine]; ok {
+				filterOmitsOtherEngine = false
+			}
+		}
+		assert.True(t, foundWant, "expected %q engine data under recommendation_engines", wantEngine)
+	}
+
+	if filterOmitsOtherEngine {
+		for _, rawItem := range data {
+			item := rawItem.(map[string]interface{})
+			terms := item["recommendations"].(map[string]interface{})["recommendation_terms"].(map[string]interface{})
+			for _, termRaw := range terms {
+				term := termRaw.(map[string]interface{})
+				engines, ok := term["recommendation_engines"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				assert.NotContains(t, engines, otherEngine,
+					"filter[engine]=%s should omit %q from recommendation_engines", wantEngine, otherEngine)
+			}
+		}
 	}
 }
 

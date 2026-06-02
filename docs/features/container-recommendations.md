@@ -269,6 +269,10 @@ rightsizing savings are omitted when not `active`.
 See [idle-detection.md](idle-detection.md) for classification rules and
 `filter[idle_state]` usage.
 
+> **UI terminology mapping:** The API value `zombie` corresponds to the UI label
+> "Abandoned". The API value `active` (or absence of idle classification)
+> corresponds to active/healthy containers in the UI.
+
 ---
 
 ## Related documentation
