@@ -1,126 +1,182 @@
 # ClusterResourceQuota Recommendations
 
-**Status:** **IMPLEMENTED** (Phase 10)  
-**Plugin:** `cluster-quota` (Phase 1, priority 36)  
-**Depends on:** Namespace [ResourceQuota recommendations](../plugin-reference/quota.md) (recommended for v1 recommended-hard sums)  
-**OpenShift:** Required — `ClusterResourceQuota` is an OpenShift API extension (`quota.openshift.io/v1`), not upstream Kubernetes.
+!!! info "Quick Facts"
+    **API:** `GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`  
+    **Plugin:** `cluster-quota` (priority 36, OpenShift only)  
+    **Configurable:** Per-org Settings API + admin env vars  
+    **Savings:** Yes on `tighten` rows when cost integration is enabled (CPU, memory, storage request)
+
+Right-size OpenShift **ClusterResourceQuota** hard limits by comparing CRQ hard/used metrics
+against aggregated namespace ResourceQuota recommendations for the namespaces selected by
+each CRQ's label or annotation selector.
+
+Each recommendation row is keyed by **`(cluster_uuid, cluster_quota_name)`**. The API also
+returns a **`namespaces[]`** array listing namespace membership for that CRQ (from operator
+CSV or engine fallback).
+
+**Related:** [ResourceQuota recommendations](quota-recommendations.md) tune per-namespace
+limits. The **`cluster-quota`** plugin provides a team-pool view across multiple namespaces.
+
+**OpenShift required:** `ClusterResourceQuota` is an OpenShift API extension
+(`quota.openshift.io/v1`), not upstream Kubernetes.
 
 ---
 
-## What is ClusterResourceQuota?
+## What it does
 
-`ClusterResourceQuota` enforces the same **hard / used** semantics as namespace `ResourceQuota`, but **aggregated across multiple namespaces** selected by a label or annotation selector on `Namespace` objects.
+| Problem | ROS guidance |
+|---------|--------------|
+| Over-provisioned CRQ hard limits | `tighten` — reduce hard limits toward summed namespace quota recommendations plus headroom |
+| CRQ near or at capacity | `raise` + elevated `risk_level` — admission pressure before deployments fail |
+| CRQ aligned with namespace quotas | `optimal` — no change recommended |
 
-| Concept | Namespace `ResourceQuota` | `ClusterResourceQuota` |
-|---------|---------------------------|-------------------------|
-| API group | `v1` / `ResourceQuota` | `quota.openshift.io/v1` / `ClusterResourceQuota` |
-| Scope | One namespace | Many namespaces (selector) |
-| Metric source | `kube_resourcequota` | `openshift_clusterresourcequota_usage` |
-| Operator CSV | `ros-openshift-namespace-*.csv` | `ros-openshift-cluster-quota-*.csv` |
-| ROS plugin | `quota` (priority 35) | `cluster-quota` (priority 36) |
+Resources covered in recommendations and risk:
 
-CRQ objects are **per cluster** — each recommendation row is `(org_id, cluster_uuid, cluster_quota_name)`.
+| Resource | Tighten / raise | Savings on tighten | Notes |
+|----------|-----------------|-------------------|-------|
+| CPU request / limit | Yes | Yes (hourly usage rates) | Utilization uses max of used vs namespace rec sums |
+| Memory request / limit | Yes | Yes (hourly usage rates) | Same signal as CPU |
+| Storage request | Yes | Yes when `storage_gb_request_per_month` exists | `capacity_freed.storage_request_bytes` |
+| Pods | Yes | Count only — no dollar estimate | `capacity_freed.pods_freed` |
+| Object counts (`count/*`) | Visibility only | No | Risk + blocking notifications only |
 
----
-
-## Implementation overview
-
-| Layer | Component | Behavior |
-|-------|-----------|----------|
-| **Operator** | koku-metrics-operator | PromQL on `openshift_clusterresourcequota_usage` (`type=hard` / `used`) for CPU/memory request and limit resources; emits `ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv` when series exist |
-| **Listener** | Koku masu | No changes — `ros-openshift` files route to `resource_optimization_files` via existing packaging |
-| **Ingest** | [`internal/ingestion/cluster_quota.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/ingestion/cluster_quota.go) | `PayloadTypeClusterQuota`; upserts `daily_cluster_quota_digests` |
-| **Engine** | [`internal/engine/recommend_cluster_quota.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/recommend_cluster_quota.go) | Classification reuse from namespace quota (`tighten` / `raise` / `optimal` / `none`) |
-| **Persistence** | [`migrations/000087_cluster_quota_recommendations.up.sql`](../../migrations/000087_cluster_quota_recommendations.up.sql) | `cluster_quota_recommendation_sets` |
-| **API** | [`internal/api/handlers_cluster_quota_recs.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/api/handlers_cluster_quota_recs.go) | `GET .../cluster-quota/` |
-| **Settings** | [`internal/engine/cluster_quota_settings.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/cluster_quota_settings.go) | `GET/PUT/DELETE .../settings/cluster-quota` |
-
-**Plugin registration:** [`internal/plugins/cluster-quota/plugin.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/plugins/cluster-quota/plugin.go) — CSV ingest via `SupportedCSVTypes`, priority 36, retention on recommendation and digest tables.
-
-**Enablement:** Include `cluster-quota` in `ROS_ENABLED_PLUGINS`. When disabled, list and settings routes return **404** (same as other plugins).
+**FinOps note:** Do not add namespace `quota` savings and CRQ `tighten` savings in one fleet
+total without deduplication — CRQ is a team-pool view; namespace quota is a project view.
 
 ---
 
-## Data flow
+## How it works
 
 ```mermaid
-sequenceDiagram
-    participant Op as koku-metrics-operator
-    participant Ing as Koku listener
-    participant ROS as ros-ocp-backend
-
-    Op->>Op: openshift_clusterresourcequota_usage
-    Op->>Op: ros-openshift-cluster-quota-*.csv
-    Op->>Ing: Tarball (resource_optimization_files)
-    Ing->>ROS: Kafka + S3 download
-    ROS->>ROS: ProcessClusterQuotaCSV → daily_cluster_quota_digests
-    ROS->>ROS: RunClusterQuotaRecommendations
-    ROS->>ROS: cluster_quota_recommendation_sets
+flowchart TD
+  Op[Metrics operator] --> CSV[ros-openshift-cluster-quota CSV]
+  NS[Namespace quota plugin] --> QRS[quota_recommendation_sets]
+  CSV --> Digests[daily_cluster_quota_digests]
+  QRS --> CRQ[RunClusterQuotaRecommendations]
+  Digests --> CRQ
+  CRQ --> API[GET .../cluster-quota/]
 ```
 
-**Filename routing:** [`DetermineCSVType`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/utils/utils.go) matches ordered prefixes, including `ros-openshift-cluster-quota-` and nise compat `ocp_ros_cluster_quota`.
+1. The operator reports CRQ **hard** and **used** values from `openshift_clusterresourcequota_usage`.
+2. ROS ingests cluster-quota CSV into `daily_cluster_quota_digests`.
+3. `RunClusterQuotaRecommendations` sums namespace `quota_recommendation_sets` for namespaces
+   in the operator `namespaces` column (cluster-wide when empty).
+4. Each CRQ gets a recommendation type, risk level, optional estimated savings on **tighten**,
+   and notification codes **70–73** when applicable.
 
-**Clusters without CRQs:** No metrics → no CSV → zero API rows (not an error). Plugin stays enabled.
+**Enablement:** Include `cluster-quota` in `ROS_ENABLED_PLUGINS`. When disabled, list and
+settings routes return **404**. Clusters without CRQ objects return an empty `data` array (not an error).
+
+Internal design: [`docs/features/cluster-resource-quota.md`](../../docs/features/cluster-resource-quota.md).
 
 ---
 
-## Recommendation algorithm (v1)
+## Namespace membership
 
-1. Load latest CRQ hard/used per `cluster_quota_name` from `daily_cluster_quota_digests`.
-2. Sum namespace quota recommendations from `quota_recommendation_sets` for namespaces in the
-   operator `namespaces` column (cluster-wide when empty).
-3. Apply headroom and utilization thresholds from [Configuration](#configuration) (same semantics as namespace `quota`).
-4. Classify `recommendation_type` and `risk_level`; on `tighten`, estimate monthly savings when
-   `ROS_SAVINGS_ESTIMATES_ENABLED=true` (CPU, memory, and storage when cost rates exist; pods
-   report `capacity_freed` only).
-
-**Namespace membership:** The operator exports a comma-separated `namespaces` column on
+The operator exports a comma-separated **`namespaces`** column on
 `ros-openshift-cluster-quota-*.csv`. The engine sums namespace `quota_recommendation_sets`
 only for namespaces in that list. When membership is empty (older operator builds), the
 engine falls back to a cluster-wide aggregate.
 
-**FinOps note:** Do not add namespace `quota` savings and CRQ `tighten` savings in one fleet total without deduplication — CRQ is a team-pool view; namespace quota is a project view.
+The list and detail API responses expose membership as **`namespaces[]`** — a JSON array of
+namespace names. Filter with `filter[namespace]` or the alias `filter[project]` to find CRQs
+whose membership includes a given namespace.
 
 ---
 
-## Timing and one-cycle lag
+## Object-count quotas (risk and notifications only)
 
-Same pattern as [namespace ResourceQuota](quota-recommendations.md#timing-and-one-cycle-lag):
+The operator ingests aggregated **`object_count_*`** metrics (sum of Kubernetes `count/*`
+ResourceQuota types). These appear on CRQ digests but follow a **visibility-only** policy:
 
-1. **After container CSV:** `RunClusterQuotaRecommendations` runs immediately after `RunQuotaRecommendations` at the end of `processContainerCSVNative`, using digests and namespace quota rows already in PostgreSQL.
-2. **After cluster-quota CSV:** Ingest updates `daily_cluster_quota_digests`, then `RunClusterQuotaRecommendations` runs in the same cycle.
-3. **Stale namespace quota sums:** If namespace `quota` has not run yet in the current cycle (for example, only CRQ CSV in the payload), recommended-hard aggregates reflect the **previous** namespace quota run until container + namespace/quota processing completes.
+| Use case | Included? | Notes |
+|----------|-----------|-------|
+| **API utilization fields** | No | `utilization` exposes CPU, memory, storage, and pods percents only |
+| **`order_by=utilization`** | No | Sort uses the same four percents; object-count is internal-only |
+| **Risk level** | Yes | High object-count utilization can surface `high` risk |
+| **Blocking notifications** | Yes | Code **72** when `used >= hard` on object counts |
+| **High-utilization notifications** | Yes | Codes **70** and **73** when `risk_level` is `high` |
+| **Tighten / raise** | No | No workload-derived target for object counts |
+| **Savings** | No | No cost-model rate for object counts |
 
-On first deployment, expect **one report cycle** before tighten/raise signals fully align with fresh container and namespace quota data.
+Treat object-count signals as admission-pressure indicators, not FinOps dollar impact.
+See also [ResourceQuota object-count policy](quota-recommendations.md#object-count-resources).
 
 ---
 
-## Database schema
+## Configuration
 
-**Recommendations:** `cluster_quota_recommendation_sets` — unique `(org_id, cluster_uuid, cluster_quota_name)`.
+Resolution order: **per-org Settings API** → **`ROS_CLUSTER_QUOTA_*` env vars** → **compiled defaults** (10 / 90 / 70).
 
-**Digests:** `daily_cluster_quota_digests` — unique `(org_id, cluster_uuid, cluster_quota_name, report_date)`; GREATEST upsert on hard/used columns.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `10` | Margin on recommended CRQ hard values |
+| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | Triggers `raise` and `high` risk |
+| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk band |
 
-Thresholds are **not** stored per row; they resolve at runtime from settings (see below).
+**Settings API:**
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
+PUT /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
+DELETE /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
+```
+
+GET returns current thresholds and `locked_fields` (env-locked fields). PUT requires all three
+percent fields; `high_risk_threshold_percent` must exceed `medium_risk_threshold_percent`.
+PUT on env-locked fields returns **403**. DELETE clears per-org overrides and restores
+deployment defaults.
+
+See [Configuration — ClusterResourceQuota](../configuration.md#clusterresourcequota-recommendations).
+
+---
+
+## Savings recalculation
+
+Cluster-quota `estimated_savings` values are computed at ingestion time from Koku cost rates
+when `ROS_SAVINGS_ESTIMATES_ENABLED=true` (tighten rows only). When cost model rates change,
+persisted savings can become stale until refreshed.
+
+**Automatic refresh:** After Koku applies updated cost model rates, masu calls:
+
+```http
+POST /api/cost-management/v1/internal/recalculate-savings
+```
+
+Include `"cluster-quota"` in `recommendation_types`. ROS recomputes `estimated_savings` on
+existing `tighten` rows without re-ingesting CSV. Requires `ROS_SAVINGS_RECALCULATION_ENABLED=true`
+(default) and Koku→ROS connectivity.
+
+**What changes:** Dollar savings only — `recommendation_type`, `risk_level`, hard/used values,
+and notification codes are unchanged by savings recalc.
+
+See [Cost Integration — Savings recalculation](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
 
 ---
 
 ## API
 
-```
+```http
 GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
+GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail
 ```
 
-| Query param | Maps to |
-|-------------|---------|
-| `filter[cluster]` | `cluster_uuid` |
-| `filter[cluster_quota_name]`, `filter[cluster_resource_quota]`, or `filter[crq]` | `cluster_quota_name` |
-| `filter[recommendation_type]` | `tighten` \| `raise` \| `optimal` \| `none` |
-| `filter[risk_level]` | `high` \| `medium` \| `low` \| `none` |
-| `filter[namespace]` or `filter[project]` | CRQs whose namespace membership includes the value |
-| `group_by[cluster]` | Aggregate per cluster (sum `capacity_freed` and `estimated_savings`; row includes `count`) |
-| `order_by`, `order_how` | Sort — see [order_by values](#order_by-values) |
-| `limit`, `offset` | Pagination (default limit 20, max 100) |
+### List filters, sorting, and grouping
+
+| Parameter | Example | Description |
+|-----------|---------|-------------|
+| `filter[cluster]` | UUID | Limit to one cluster |
+| `filter[cluster_quota_name]` | `team-payments-quota` | CRQ object name (exact match) |
+| `filter[cluster_resource_quota]` | `team-payments-quota` | Alias for `filter[cluster_quota_name]` |
+| `filter[crq]` | `team-payments-quota` | Alias for `filter[cluster_quota_name]` |
+| `filter[namespace]` | `team-a` | CRQs whose `namespaces[]` includes the value |
+| `filter[project]` | `team-a` | Alias for `filter[namespace]` |
+| `filter[recommendation_type]` | `tighten,raise` | `tighten`, `raise`, `optimal`, or `none` |
+| `filter[risk_level]` | `high,medium` | `high`, `medium`, `low`, or `none` |
+| `order_by` | `utilization` | Sort key — see [order_by values](#order_by-values) |
+| `order_how` | `desc` | `asc` or `desc` (default `desc` when `order_by` is set) |
+| `group_by[cluster]` | `*` | Aggregate rows per cluster (sums `capacity_freed`, `estimated_savings`; includes `count`) |
+| `limit` / `offset` | `20` / `0` | Pagination (default limit 20, max 100) |
 
 ### order_by values
 
@@ -133,172 +189,158 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 
 ### Notification codes
 
-CRQ rows may emit codes **70–73** (shared catalog with namespace ResourceQuota except code 73 is CRQ-specific). Derivation: [`ClusterQuotaNotificationCodes`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/quota_notifications.go).
+CRQ rows may emit codes **70–73**. Filter the catalog:
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/notification-codes/?filter[plugin]=cluster-quota
+```
 
 | Code | Name | When emitted (CRQ) |
 |------|------|-------------------|
 | **70** | `QUOTA_NEAR_CAPACITY` | `risk_level` is `high` — utilization at or above the high-risk threshold |
 | **71** | `QUOTA_OVERSIZED` | `recommendation_type` is `tighten` — hard limits exceed aggregated namespace quota recommendations |
-| **72** | `QUOTA_BLOCKING` | `used >= hard` on any tracked resource (CPU, memory, storage, pods, or object counts) — admission may block new workloads |
+| **72** | `QUOTA_BLOCKING` | `used >= hard` on any tracked resource (CPU, memory, storage, pods, or object counts) |
 | **73** | `CLUSTER_QUOTA_AT_CAPACITY` | `risk_level` is `high` — CRQ-specific high-utilization alert (often co-emitted with **70**) |
 
-Filter notification catalog by plugin: `GET .../notification-codes/?filter[plugin]=cluster-quota` returns all four codes.
+See [Notification codes](../architecture/notification-codes.md).
 
-**Detail:**
+### Detail endpoint
 
-```
-GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail?cluster_uuid=...&cluster_quota_name=...
-```
-
-Returns the same fields as a list row plus `history[]` (90-day append-only snapshots per resource).
-
-**Settings:**
-
-```
-GET /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
-PUT /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
-DELETE /api/cost-management/v1/recommendations/openshift/settings/cluster-quota
+```http
+GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail
+  ?cluster_uuid={uuid}&cluster_quota_name={name}
 ```
 
-OpenAPI: [`openapi.json`](../openapi.md). Public docs: [docs-site feature page](cluster-resource-quota.md).
+**Required query params:** `cluster_uuid`, `cluster_quota_name`.
+
+Returns the same fields as a list row plus **`history[]`** — 90-day append-only snapshots
+per resource (CPU request, memory request, storage request, pods, etc.).
+
+### Example list response
+
+```json
+{
+  "meta": {
+    "count": 1,
+    "limit": 20,
+    "offset": 0
+  },
+  "links": {
+    "first": "/api/cost-management/v1/recommendations/openshift/cluster-quota/?limit=20&offset=0",
+    "last": "...",
+    "next": null,
+    "previous": null
+  },
+  "data": [
+    {
+      "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+      "cluster_quota_name": "team-payments-quota",
+      "namespaces": ["namespace-a", "namespace-b"],
+      "recommendation_type": "tighten",
+      "risk_level": "low",
+      "quota_hard": {
+        "cpu_request_millicores": 500000,
+        "memory_request_bytes": 1099511627776,
+        "storage_request_bytes": 107374182400,
+        "pods": 500
+      },
+      "quota_used": {
+        "cpu_request_millicores": 175000,
+        "storage_request_bytes": 53687091200,
+        "pods": 120
+      },
+      "quota_recommended": {
+        "cpu_request_millicores": 396000,
+        "memory_request_bytes": 496125722624,
+        "storage_request_bytes": 85899345920,
+        "pods": 400
+      },
+      "utilization": {
+        "cpu_request_percent": 35,
+        "memory_request_percent": 12,
+        "storage_request_percent": 50,
+        "pods_percent": 24
+      },
+      "capacity_freed": {
+        "cpu_cores_freed": 104,
+        "memory_bytes": 603387187152,
+        "storage_request_bytes": 21474836480,
+        "pods_freed": 100
+      },
+      "estimated_savings": {
+        "value": 420,
+        "units": "USD"
+      },
+      "notifications": {
+        "71": {
+          "code": 71,
+          "severity": "info",
+          "description": "ClusterResourceQuota hard limits exceed aggregated namespace quota recommendations"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Example `group_by[cluster]` response
+
+```json
+{
+  "meta": { "count": 2, "limit": 20, "offset": 0 },
+  "data": [
+    {
+      "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+      "count": 3,
+      "capacity_freed": {
+        "cpu_cores_freed": 12,
+        "memory_bytes": 85899345920,
+        "storage_request_bytes": 10737418240,
+        "pods_freed": 5
+      },
+      "estimated_savings": { "value": 840, "units": "USD" }
+    }
+  ]
+}
+```
+
+### `capacity_freed` keys
+
+On **tighten** rows (and summed in `group_by[cluster]`), `capacity_freed` includes:
+
+| Key | Description |
+|-----|-------------|
+| `cpu_cores_freed` | CPU request cores that could be reclaimed |
+| `memory_bytes` | Memory request bytes that could be reclaimed |
+| `storage_request_bytes` | Storage request bytes that could be reclaimed |
+| `pods_freed` | Pod slots that could be reclaimed (count only — no dollar estimate) |
+
+Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../../openapi.json).
+
+Plugin reference: [cluster-quota](../plugin-reference/cluster-quota.md).
 
 ---
 
-## Savings recalculation
+## Timing and one-cycle lag
 
-Cluster-quota `estimated_savings` values are computed at ingestion time from Koku
-`configured_rates` when `ROS_SAVINGS_ESTIMATES_ENABLED=true` (tighten rows only).
-When cost model rates change, persisted savings can become stale until refreshed.
+Same pattern as [namespace ResourceQuota](quota-recommendations.md#timing-and-one-cycle-lag):
 
-**Automatic refresh:** After Koku applies updated cost model rates
-(`update_summary_cost_model_costs`), masu calls ROS:
+1. **After container CSV:** `RunClusterQuotaRecommendations` runs after `RunQuotaRecommendations`.
+2. **After cluster-quota CSV:** Ingest updates digests, then recommendations run in the same cycle.
+3. **Stale namespace quota sums:** If only CRQ CSV arrives in a cycle, recommended-hard aggregates
+   reflect the **previous** namespace quota run until container + namespace/quota processing completes.
 
-```
-POST /api/cost-management/v1/internal/recalculate-savings
-```
-
-Include `"cluster-quota"` in `recommendation_types` (along with `container`, `node`,
-`pvc`, and/or `quota` as needed). ROS recomputes `savings_dollars_monthly` on existing
-`tighten` rows without re-ingesting CSV data. Requires `ROS_SAVINGS_RECALCULATION_ENABLED=true`
-(default) and Koku→ROS connectivity (`KOKU_MASU_URL` / `ROS_API_HOST`).
-
-**What changes:** Dollar savings only — `recommendation_type`, `risk_level`, hard/used
-values, and notification codes are unchanged by savings recalc.
-
-Implementation: [`internal/engine/savings_recalculate.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/savings_recalculate.go)
-(`TestRecalculateClusterQuotaSavings_Unit`). See also
-[cost-integration.md](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
-
----
-
-## Configuration
-
-Resolution order: **per-org Settings API** → **`ROS_CLUSTER_QUOTA_*` env vars** → **compiled defaults** (10 / 90 / 70).
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | `10` | Margin on recommended CRQ hard values |
-| `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` + `high` risk when utilization ≥ threshold |
-| `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk band |
-
-Distinct prefix from namespace `ROS_QUOTA_*`. PUT on env-locked fields returns **403**.
-
----
-
-## Comparison with namespace quota
-
-| Aspect | Namespace Quota | ClusterResourceQuota |
-|--------|-----------------|----------------------|
-| Scope | Single namespace | Multiple namespaces (selector) |
-| Metric source | `kube_resourcequota` | `openshift_clusterresourcequota_usage` |
-| Operator CSV | `ros-openshift-namespace-*.csv` | `ros-openshift-cluster-quota-*.csv` |
-| DB table | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` |
-| Plugin | `quota` | `cluster-quota` |
-| API | `GET .../quota/` | `GET .../cluster-quota/` |
-| Settings | `.../settings/quota` | `.../settings/cluster-quota` |
-| Status | **Implemented** | **Implemented** |
-
----
-
-## Operator CSV columns
-
-Beyond CPU/memory request and limit hard/used, the operator also collects:
-
-| Column | PromQL resource |
-|--------|-----------------|
-| `storage_request_hard` / `storage_request_used` | `requests.storage` |
-| `pods_hard` / `pods_used` | `pods` |
-| `object_count_hard` / `object_count_used` | Sum of `count/*` resources |
-| `namespaces` | Distinct namespaces with `type=used` > 0 |
-
-### Object-count quotas (risk and notifications only)
-
-The operator ingests aggregated **`object_count_*`** metrics (sum of all Kubernetes
-`count/*` ResourceQuota resource types, such as `count/deployments.apps`,
-`count/services`, `count/secrets`, and `count/configmaps`). These appear on CRQ digests as
-`object_count_hard` / `object_count_used`. Namespace quota uses the same aggregation — see
-[Object-count resources](quota-recommendations.md#object-count-resources).
-
-| Use case | Included? | Notes |
-|----------|-----------|-------|
-| **API utilization fields** | No | `utilization` exposes CPU, memory, storage, and pods percents only — no `object_count_*` fields |
-| **`order_by=utilization`** | No | Sort uses the same four percents; object-count utilization is internal-only |
-| **Risk level** | Yes | `ObjectCountBP` participates in `maxUtilizationBP()` — a team at 95% of its object-count hard limit can surface `high` risk even when CPU/memory are low |
-| **Blocking notifications** | Yes | Code **72** fires when `used >= hard` on object counts, same as CPU/memory/storage/pods |
-| **High-utilization notifications** | Yes | Codes **70** and **73** fire when `risk_level` is `high` (object-count pressure can contribute to that classification) |
-| **Tighten / raise** | No | There is no workload-derived target comparable to summed namespace `quota_recommendation_sets` or container `rec_*` request columns |
-| **Savings** | No | Koku `effective_rates` has no object-count or per-object cost metric; freed object-count capacity is not monetized |
-
-**Rationale:** Object-count limits are **admission-control guardrails**, not FinOps cost levers.
-ROS does not recommend lowering object-count hard values because:
-
-- There is no rightsizing signal — container recommendations do not produce a target object total.
-- There is no cost-model rate for discrete object types in Koku.
-- Reducing object limits could cause production outages (deployments blocked at admission).
-
-**What users get:** elevated **risk badge** when object-count utilization is high,
-**notification code 72** when at hard capacity, and **codes 70/73** when overall CRQ risk
-is `high`. Treat these as operational admission-pressure indicators, not dollar savings
-opportunities.
-
-Implementation: [`quota_notifications.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/quota_notifications.go),
-[`recommend_cluster_quota.go`](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/engine/recommend_cluster_quota.go) (`ObjectCountBP`
-in risk classification only; no tighten/raise path for object counts).
-
-### Savings by resource
-
-| Resource | Monthly savings | Capacity freed |
-|----------|-----------------|----------------|
-| CPU / memory request | Yes (hourly rates × 730 h/month) | `cpu_cores_freed`, `memory_bytes` |
-| Storage request | Yes when `storage_gb_request_per_month` (or usage fallback) is in effective rates | `storage_request_bytes` |
-| Pods | No monetary estimate | `pods_freed` on tighten only |
+On first deployment, expect **one report cycle** before tighten/raise signals fully align.
 
 ---
 
 ## Extended resources (future work)
 
-Extended ResourceQuota and ClusterResourceQuota resource types — for example
-`requests.ephemeral-storage`, `limits.ephemeral-storage`, `nvidia.com/gpu`,
-`hugepages-2Mi`, `hugepages-1Gi`, and custom device-plugin resources — are **not**
-currently collected by the koku-metrics-operator or analyzed by the `quota` /
-`cluster-quota` plugins.
+Extended CRQ resource types — ephemeral storage, GPU quota, hugepages, custom device plugins —
+are **not** currently collected by the operator or analyzed by the `cluster-quota` plugin.
 
-**Data availability:** Prometheus already exposes these values on
-`kube_resourcequota` and `openshift_clusterresourcequota_usage` when clusters define
-them. The gap is **operator query scope** (which PromQL series the ROS CSV includes),
-not missing cluster telemetry.
-
-| Resource type | Priority | Notes |
-|---------------|----------|-------|
-| **Ephemeral storage** (`requests.ephemeral-storage`) | **High** | Common quota dimension; cadvisor usage metrics remain unreliable through OCP 4.21 — visibility on hard/used may precede usage-based tighten (see REQ-8.2) |
-| **GPU quota** (`nvidia.com/gpu`, vendor GPU resources) | **Medium** | GPU **workload** recommendations are handled by the separate `gpu` plugin; GPU **quota** hard/used would be visibility-only unless a quota-specific cost rate exists |
-| **Hugepages** (`hugepages-*`) | **Low** | Niche; demand-driven |
-| **Custom device-plugin resources** | **Low** | Demand-driven; pattern same as object counts unless a cost-model rate is added |
-
-**Planned pattern when added:** Same as [object-count quotas](#object-count-quotas-visibility-and-alerting-only) —
-**visibility + alerting only** (utilization %, risk level, blocking notifications) unless
-Koku exposes a matching cost-model rate. Do not emit tighten/raise or `estimated_savings`
-for extended resources without a workload-derived target and a FinOps metric.
+**Planned pattern when added:** Same as [object-count quotas](#object-count-quotas-risk-and-notifications-only) —
+visibility + alerting only unless Koku exposes a matching cost-model rate.
 
 Track alongside namespace quota extended-resource work in
 [quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap--future-work).
@@ -307,7 +349,8 @@ Track alongside namespace quota extended-resource work in
 
 ## Related documentation
 
-- [Namespace ResourceQuota recommendations](../plugin-reference/quota.md)
-- [REQ-8.4b](../architecture/requirements.md) — requirements traceability
-- [Plugin phases](../architecture/plugin-phases.md) — `cluster-quota` priority 36
-- [Known issues](../known-issues.md) — timing and remaining gaps
+- [ResourceQuota recommendations](quota-recommendations.md)
+- [Plugin reference — cluster-quota](../plugin-reference/cluster-quota.md)
+- [Configuration](../configuration.md#clusterresourcequota-recommendations)
+- [Known issues](../known-issues.md)
+- [UI integration guide](../ui-integration-guide.md)

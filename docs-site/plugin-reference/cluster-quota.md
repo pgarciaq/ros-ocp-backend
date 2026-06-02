@@ -55,7 +55,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail?clust
 ```
 
 Required params: `cluster_uuid`, `cluster_quota_name`. Returns one object with `history[]`
-per resource. See [feature documentation](../features/cluster-resource-quota.md#detail).
+per resource. See [feature documentation](../features/cluster-resource-quota.md#detail-endpoint).
 
 **Response fields (per list item):**
 
