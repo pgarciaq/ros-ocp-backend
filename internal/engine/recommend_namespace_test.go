@@ -102,6 +102,26 @@ func TestEvaluateNamespaceNotifications_BothNewAndLowConfidence(t *testing.T) {
 	}
 }
 
+func TestEvaluateNamespaceNotifications_StaleData(t *testing.T) {
+	rec := NamespaceRec{
+		DataDays:        10,
+		ConfidenceLevel: 0.8,
+		Stale:           true,
+	}
+	codes := EvaluateNamespaceNotifications(rec)
+	assert.Contains(t, codes, NotifStaleData)
+}
+
+func TestEvaluateNamespaceNotifications_NotStale_NoStaleDataCode(t *testing.T) {
+	rec := NamespaceRec{
+		DataDays:        10,
+		ConfidenceLevel: 0.8,
+		Stale:           false,
+	}
+	codes := EvaluateNamespaceNotifications(rec)
+	assert.NotContains(t, codes, NotifStaleData)
+}
+
 func TestEvaluateNamespaceNotifications_MemoryTrendingUp(t *testing.T) {
 	rec := NamespaceRec{
 		DataDays:        10,

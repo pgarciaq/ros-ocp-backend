@@ -721,7 +721,24 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 		return queryParams, errors.Join(errs...)
 	}
 
+	applyRecommendationStaleFilter(c, queryParams, "ns")
+
 	return queryParams, nil
+}
+
+// applyRecommendationStaleFilter adds a stale column predicate from filter[stale].
+// columnPrefix is the SQL table alias (rs or ns).
+func applyRecommendationStaleFilter(c echo.Context, queryParams map[string]interface{}, columnPrefix string) {
+	staleKey := columnPrefix + ".stale = ?"
+	switch queryparams.FirstFilter(c, "stale") {
+	case "true":
+		// No filter — return both stale and non-stale.
+	case "only":
+		queryParams[staleKey] = true
+	default:
+		// "false" or unset: exclude stale (backward compatible).
+		queryParams[staleKey] = false
+	}
 }
 
 func get_user_permissions(c echo.Context) map[string][]string {

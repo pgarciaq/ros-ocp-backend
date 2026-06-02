@@ -57,6 +57,7 @@ var nativeRecFilterAtoms = map[string]struct{}{
 var nativeNSFixedQueryKeys = map[string]struct{}{
 	"ns.monitoring_end_time >= ?": {},
 	"ns.monitoring_end_time < ?":  {},
+	"ns.stale = ?":                {},
 }
 
 var nativeNSFilterAtoms = map[string]struct{}{

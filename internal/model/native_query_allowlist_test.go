@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
@@ -87,6 +88,12 @@ func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 	params, err := api.MapNativeNamespaceQueryParameters(c)
 	require.NoError(t, err)
 	assertAllNativeNSKeysAllowed(t, params)
+
+	query.Set("filter[stale]", "only")
+	cStale := echoCtxGET(query)
+	paramsStale, err := api.MapNativeNamespaceQueryParameters(cStale)
+	require.NoError(t, err)
+	assert.Equal(t, true, paramsStale["ns.stale = ?"])
 
 	require.True(t, model.IsAllowedNativeNamespaceQueryKey(
 		"(ns.namespace_name ILIKE ? OR ns.namespace_name ILIKE ?)"))

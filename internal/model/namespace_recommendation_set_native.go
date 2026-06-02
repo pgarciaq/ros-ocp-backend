@@ -96,8 +96,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
-		Where("ns.stale = false")
+		Where("ns.schedule_type = 'all_hours'")
 
 	query = applyNativeNamespaceRBAC(query, userPerms)
 	query = applyNSQueryParams(query, queryParams)
@@ -120,8 +119,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
-			Where("ns.schedule_type = 'all_hours'").
-			Where("ns.stale = false")
+			Where("ns.schedule_type = 'all_hours'")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
 		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
@@ -152,8 +150,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 			Where("ns.org_id = ?", orgID).
 			Where("ns.term IS NOT NULL").
-			Where("ns.schedule_type = 'all_hours'").
-			Where("ns.stale = false")
+			Where("ns.schedule_type = 'all_hours'")
 		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 		distinctNS = applyNSQueryParams(distinctNS, queryParams)
 		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {

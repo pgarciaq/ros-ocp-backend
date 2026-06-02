@@ -360,6 +360,9 @@ func EvaluateNamespaceNotificationsWithThresholds(rec NamespaceRec, th Notificat
 	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)
 	}
+	if rec.Stale {
+		codes = append(codes, NotifStaleData)
+	}
 
 	return codes
 }
