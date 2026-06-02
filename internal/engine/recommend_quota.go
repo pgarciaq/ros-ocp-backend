@@ -435,6 +435,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				memory_request_utilization_bp, memory_limit_utilization_bp,
 				utilization_storage_request_bp, utilization_pods_bp,
 				cpu_freed_millicores, memory_freed_bytes,
+				storage_freed_bytes, pods_freed,
 				estimated_savings_cents, currency,
 				recommendation_type, risk_level, notification_codes,
 				last_observed_at, updated_at
@@ -448,10 +449,9 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				$23,
 				$24, $25, $26, $27,
 				$28, $29,
-				$30, $31,
-				$32, $33,
+				$30, $31, $32, $33,
 				$34, $35, $36,
-				$37, NOW()
+				$37, $38, $39, NOW()
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, quota_name)
 			DO UPDATE SET
@@ -482,6 +482,8 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				utilization_pods_bp = EXCLUDED.utilization_pods_bp,
 				cpu_freed_millicores = EXCLUDED.cpu_freed_millicores,
 				memory_freed_bytes = EXCLUDED.memory_freed_bytes,
+				storage_freed_bytes = EXCLUDED.storage_freed_bytes,
+				pods_freed = EXCLUDED.pods_freed,
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				currency = EXCLUDED.currency,
 				recommendation_type = EXCLUDED.recommendation_type,
@@ -505,6 +507,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 			utilizationBP(s.StorageRequestUsedBytes, s.StorageRequestHardBytes),
 			utilizationBP(s.PodsUsed, s.PodsHard),
 			nullableInt64(r.CapacityFreed.CPUMillicores), nullableInt64(r.CapacityFreed.MemoryBytes),
+			nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
 			nullableInt64(r.EstimatedSavingsCents), r.Currency,
 			r.RecommendationType, r.RiskLevel, r.NotificationCodes,
 			s.LastObservedAt,

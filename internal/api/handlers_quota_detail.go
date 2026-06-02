@@ -138,6 +138,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 			memory_request_utilization_bp, memory_limit_utilization_bp,
 			utilization_storage_request_bp, utilization_pods_bp,
 			cpu_freed_millicores, memory_freed_bytes,
+			storage_freed_bytes, pods_freed,
 			estimated_savings_cents, currency, notification_codes, last_observed_at
 		FROM quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`
@@ -306,7 +307,7 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	var cpuReqRec, cpuLimRec, memReqRec, memLimRec sql.NullInt64
 	var cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil sql.NullInt64
 	var storageUtil, podsUtil sql.NullInt64
-	var cpuFreed, memFreed sql.NullInt64
+	var cpuFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 	var currency string
 	var lastObserved sql.NullTime
@@ -320,7 +321,7 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
 		&cpuReqUtil, &cpuLimUtil, &memReqUtil, &memLimUtil,
 		&storageUtil, &podsUtil,
-		&cpuFreed, &memFreed,
+		&cpuFreed, &memFreed, &storageFreed, &podsFreed,
 		&savings, &currency, &codes, &lastObserved,
 	)
 	if err != nil {
@@ -331,10 +332,7 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	item.QuotaUsed = quotaValuesFromNullExtended(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = quotaValuesFromNullExtended(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
-	item.CapacityFreed = &QuotaCapacityFreedResponse{
-		CPUMillicores: nullInt64Val(cpuFreed),
-		MemoryBytes:   nullInt64Val(memFreed),
-	}
+	item.CapacityFreed = quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed)
 	if savings.Valid {
 		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
 	}

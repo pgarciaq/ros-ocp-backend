@@ -38,8 +38,10 @@ type QuotaUtilizationPercents struct {
 
 // QuotaCapacityFreedResponse is capacity that could be reclaimed by tightening quota.
 type QuotaCapacityFreedResponse struct {
-	CPUMillicores int64 `json:"cpu_millicores"`
-	MemoryBytes   int64 `json:"memory_bytes"`
+	CPUMillicores       int64 `json:"cpu_millicores"`
+	MemoryBytes         int64 `json:"memory_bytes"`
+	StorageRequestBytes int64 `json:"storage_request_bytes,omitempty"`
+	PodsFreed           int64 `json:"pods_freed,omitempty"`
 }
 
 // QuotaRecommendationListResponse wraps quota recommendation list output.
@@ -183,6 +185,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 			memory_request_utilization_bp, memory_limit_utilization_bp,
 			utilization_storage_request_bp, utilization_pods_bp,
 			cpu_freed_millicores, memory_freed_bytes,
+			storage_freed_bytes, pods_freed,
 			estimated_savings_cents, currency, notification_codes, last_observed_at
 		FROM quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL +
@@ -253,6 +256,8 @@ func getQuotaRecommendationsGrouped(
 			COUNT(*) AS row_count,
 			COALESCE(SUM(cpu_freed_millicores), 0),
 			COALESCE(SUM(memory_freed_bytes), 0),
+			COALESCE(SUM(storage_freed_bytes), 0),
+			COALESCE(SUM(pods_freed), 0),
 			COALESCE(SUM(estimated_savings_cents), 0),
 			MAX(currency),
 			MAX(last_observed_at)
@@ -274,18 +279,15 @@ func getQuotaRecommendationsGrouped(
 	for rows.Next() {
 		var groupKey string
 		var count int
-		var cpuFreed, memFreed, savingsCents int64
+		var cpuFreed, memFreed, storageFreed, podsFreed, savingsCents int64
 		var currency string
 		var lastObserved sql.NullTime
-		if err := rows.Scan(&groupKey, &count, &cpuFreed, &memFreed, &savingsCents, &currency, &lastObserved); err != nil {
+		if err := rows.Scan(&groupKey, &count, &cpuFreed, &memFreed, &storageFreed, &podsFreed, &savingsCents, &currency, &lastObserved); err != nil {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read quota recommendation groups"})
 		}
 		item := QuotaRecommendationListItem{
 			Count: count,
-			CapacityFreed: &QuotaCapacityFreedResponse{
-				CPUMillicores: cpuFreed,
-				MemoryBytes:   memFreed,
-			},
+			CapacityFreed: quotaCapacityFreedFromTotals(cpuFreed, memFreed, storageFreed, podsFreed),
 			LastObservedAt: lastObserved.Time.UTC().Format(time.RFC3339),
 		}
 		if groupByCluster {
@@ -325,7 +327,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	var cpuReqRec, cpuLimRec, memReqRec, memLimRec sql.NullInt64
 	var cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil sql.NullInt64
 	var storageUtil, podsUtil sql.NullInt64
-	var cpuFreed, memFreed sql.NullInt64
+	var cpuFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 	var currency string
 	var notifCodes []int16
@@ -340,7 +342,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
 		&cpuReqUtil, &cpuLimUtil, &memReqUtil, &memLimUtil,
 		&storageUtil, &podsUtil,
-		&cpuFreed, &memFreed,
+		&cpuFreed, &memFreed, &storageFreed, &podsFreed,
 		&savings, &currency, &notifCodes, &lastObserved,
 	)
 	if err != nil {
@@ -351,10 +353,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	item.QuotaUsed = quotaValuesFromNullExtended(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = quotaValuesFromNullExtended(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
-	item.CapacityFreed = &QuotaCapacityFreedResponse{
-		CPUMillicores: nullInt64Val(cpuFreed),
-		MemoryBytes:   nullInt64Val(memFreed),
-	}
+	item.CapacityFreed = quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed)
 	if savings.Valid {
 		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
 	}
@@ -381,6 +380,33 @@ func quotaValuesFromNullExtended(cpuReq, cpuLim, memReq, memLim, storage, pods s
 		StorageRequestBytes:  nullInt64Ptr(storage),
 		Pods:                 nullInt64Ptr(pods),
 	}
+}
+
+func quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed sql.NullInt64) *QuotaCapacityFreedResponse {
+	if !cpuFreed.Valid && !memFreed.Valid && !storageFreed.Valid && !podsFreed.Valid {
+		return nil
+	}
+	return quotaCapacityFreedFromTotals(
+		nullInt64Val(cpuFreed), nullInt64Val(memFreed),
+		nullInt64Val(storageFreed), nullInt64Val(podsFreed),
+	)
+}
+
+func quotaCapacityFreedFromTotals(cpuFreed, memFreed, storageFreed, podsFreed int64) *QuotaCapacityFreedResponse {
+	if cpuFreed == 0 && memFreed == 0 && storageFreed == 0 && podsFreed == 0 {
+		return nil
+	}
+	resp := &QuotaCapacityFreedResponse{
+		CPUMillicores: cpuFreed,
+		MemoryBytes:   memFreed,
+	}
+	if storageFreed > 0 {
+		resp.StorageRequestBytes = storageFreed
+	}
+	if podsFreed > 0 {
+		resp.PodsFreed = podsFreed
+	}
+	return resp
 }
 
 func quotaUtilFromNullBP(cpuReq, cpuLim, memReq, memLim, storage, pods sql.NullInt64) *QuotaUtilizationPercents {
