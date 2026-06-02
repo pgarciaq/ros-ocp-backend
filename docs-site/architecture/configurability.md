@@ -96,6 +96,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
 | `/settings/cluster-quota` | GET, PUT, DELETE | **Existing** | ClusterResourceQuota headroom and risk thresholds (`cluster-quota` plugin). |
 | `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
+| `/settings/capabilities` | GET | **Existing** | Read-only feature discovery: enabled plugins, term support, business-hours gate (see below). |
 
 ### Reference table columns
 
@@ -125,8 +126,56 @@ Implementation references: [`handlers_terms.go`](../../internal/api/handlers_ter
 [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go),
 [`handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go),
 [`handlers_threshold_settings.go`](../../internal/api/handlers_threshold_settings.go),
+[`handlers_capabilities.go`](../../internal/api/handlers_capabilities.go),
 [`term_config.go`](../../internal/engine/term_config.go),
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go).
+
+## Capabilities endpoint
+
+`GET /api/cost-management/v1/recommendations/openshift/settings/capabilities` is **read-only**
+(no PUT or DELETE). It answers which recommendation domains exist for the deployment and
+whether each is currently enabled, so clients do not hard-code plugin lists.
+
+### Response shape
+
+```json
+{
+  "recommendation_types": [
+    {
+      "name": "container",
+      "enabled": true,
+      "supports_terms": true
+    },
+    {
+      "name": "snapshot",
+      "enabled": true,
+      "supports_terms": false
+    }
+  ],
+  "business_hours": true
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `recommendation_types[]` | One entry per registered production plugin (except disabled legacy `kruize`). |
+| `recommendation_types[].name` | Plugin id used in URLs and `recommendation_type` query params (e.g. `container`, `quota`, `pvc`). |
+| `recommendation_types[].enabled` | Whether `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` currently expose routes for that plugin. |
+| `recommendation_types[].supports_terms` | Whether `GET/PUT/DELETE /settings/terms?recommendation_type=<name>` is valid for that plugin. |
+| `business_hours` | Whether business-hours settings routes and dual-stream digests are active (`ROS_BUSINESS_HOURS_ENABLED`). |
+
+### Client usage
+
+- **koku-ui / Optimizations:** Call once per session (or on app init) to build navigation and
+  settings tabs—hide GPU, snapshot, quota, or business-hours panels when `enabled` is `false`.
+- **Term settings UI:** Only show term editors when `supports_terms` is `true` for that plugin;
+  use the same `name` values as `recommendation_type` on `/settings/terms`.
+- **Business hours:** Gate schedule editors on `business_hours: true`; when `false`, BH routes
+  return `404` and the field is omitted or `false` in capabilities.
+
+Implementation: [`GetCapabilities`](../../internal/api/handlers_capabilities.go) iterates
+[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/traits.go)
+trait for `supports_terms`.
 
 ### Settings PUT side effects
 
