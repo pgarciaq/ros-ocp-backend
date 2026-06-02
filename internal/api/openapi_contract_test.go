@@ -157,10 +157,36 @@ func (spec openAPISpecDoc) componentSchema(name string) map[string]interface{} {
 	return spec.resolveSchema(raw)
 }
 
+func openAPIOptionalPropertyFields() map[string]struct{} {
+	return map[string]struct{}{
+		"warnings":                {},
+		"settings_locked":         {},
+		"locked_fields":           {},
+		"gpu":                     {},
+		"savings":                 {},
+		"daily_digests":           {},
+		"instance_type":           {},
+		"machineset_name":         {},
+		"suggested_instance_type": {},
+		"instance_type_reason":    {},
+		"pod_capacity":            {},
+		"pod_scheduling_headroom": {},
+		"notifications":           {},
+		"estimated_savings":       {},
+		"count":                   {},
+		"quota_name":              {},
+		"capacity_freed":          {},
+	}
+}
+
 func assertObjectHasSpecProperties(t *testing.T, obj map[string]interface{}, schema map[string]interface{}, label string) {
 	t.Helper()
 	require.NotNil(t, schema, "%s schema must be resolved from openapi.json", label)
+	optionalFields := openAPIOptionalPropertyFields()
 	for _, prop := range schemaPropertyNames(schema) {
+		if _, skip := optionalFields[prop]; skip {
+			continue
+		}
 		_, ok := obj[prop]
 		assert.True(t, ok, "%s missing spec-defined property %q", label, prop)
 	}
@@ -173,22 +199,7 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(body, &resp))
 
-	// Fields documented in OpenAPI but omitted from JSON when empty.
-	optionalFields := map[string]struct{}{
-		"warnings":                {},
-		"settings_locked":         {}, // omitted when false (json omitempty) on settings GET responses
-		"locked_fields":           {}, // omitted when no env-locked VM settings fields
-		"gpu":                     {}, // omitted when VM has no GPU recommendation block
-		"savings":                 {}, // null when savings estimates disabled or rates unavailable
-		"daily_digests":           {}, // omitted on list; detail should include when digest data exists
-		"instance_type":           {}, // omitted when operator does not report instance type
-		"machineset_name":         {},
-		"suggested_instance_type": {},
-		"instance_type_reason":    {},
-		"pod_capacity":            {},
-		"pod_scheduling_headroom": {},
-		"notifications":           {}, // omitted when no notification codes on primary engine
-	}
+	optionalFields := openAPIOptionalPropertyFields()
 
 	if required, ok := schema["required"].([]interface{}); ok && len(required) > 0 {
 		for _, r := range required {
@@ -836,6 +847,87 @@ func TestOpenAPI_PVCThresholdSettings_ResponseFields(t *testing.T) {
 	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
 		"oversized_threshold", "near_full_threshold", "locked_fields",
 	})
+}
+
+func seedOpenAPIQuotaRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (clusterUUID, namespace string) {
+	t.Helper()
+	ctx := context.Background()
+	clusterUUID = testutil.TestClusterUUID
+	namespace = "openapi-quota-ns"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace,
+			cpu_request_hard_millicores, cpu_request_used_millicores,
+			cpu_request_recommended_millicores,
+			cpu_request_utilization_bp, recommendation_type, risk_level,
+			last_observed_at
+		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, 2500, 'tighten', 'low', NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO UPDATE SET
+			recommendation_type = EXCLUDED.recommendation_type`,
+		orgID, clusterUUID, namespace,
+	)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_history (
+			org_id, cluster_uuid, namespace, quota_name,
+			resource, recommendation_type, risk_level,
+			recommended_hard, current_hard, current_used, utilization_percent,
+			recorded_at
+		) VALUES ($1, $2::uuid, $3, '', 'cpu_request', 'tighten', 'low', 36000, 100000, 50000, 50, NOW() - INTERVAL '2 days')`,
+		orgID, clusterUUID, namespace,
+	)
+	require.NoError(t, err)
+
+	return clusterUUID, namespace
+}
+
+func TestOpenAPI_QuotaList_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-quota-list"
+	_, _ = seedOpenAPIQuotaRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/quota?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/quota", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("QuotaRecommendation"))
+}
+
+func TestOpenAPI_QuotaDetail_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-quota-detail"
+	clusterUUID, namespace := seedOpenAPIQuotaRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/quota/detail?cluster_uuid=%s&namespace=%s",
+			apiV1Prefix, clusterUUID, namespace))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	detailSchema := getResponseSchema(spec, "/recommendations/openshift/quota/detail", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), detailSchema)
+
+	var detail map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	history, ok := detail["history"].([]interface{})
+	require.True(t, ok, "detail response must include history array")
+	require.NotEmpty(t, history, "seeded quota history must appear in detail response")
+	first, ok := history[0].(map[string]interface{})
+	require.True(t, ok)
+	assertObjectHasSpecProperties(t, first, spec.componentSchema("QuotaRecommendationHistoryEntry"), "history[0]")
 }
 
 func TestOpenAPI_QuotaSettings_ResponseFields(t *testing.T) {
