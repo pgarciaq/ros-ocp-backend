@@ -107,6 +107,7 @@ nav:
       - Native Migration: architecture/native-migration.md
   - Testing:
       - Validating the Native Engine: testing/validating-native-engine.md
+      - IQE Requirement Registration: testing/iqe-requirements-registration.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md

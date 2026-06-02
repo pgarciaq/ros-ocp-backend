@@ -742,7 +742,49 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenar
 
 **Rules:** Rebuild and push **new image tags** before E2E; never run raw `pytest` without `run-pytest.sh` (venv + env setup). See `cost-onprem-chart/.cursor/rules/testing.mdc`.
 
-### 4. Health checks
+### 4. IQE integration tests (iqe-cost-management-plugin)
+
+For **deeper API and data-accuracy validation** than chart pytest (~88 tests), use **IQE** (Insights QE) tests in `iqe-cost-management-plugin`. These exercise ROS recommendations end-to-end against on-prem clusters (via `cost_ocp_on_prem` marker) or SaaS stage/prod.
+
+Each ROS recommendation area has a **`requirements:` marker** in test docstrings, declared in `iqe_cost_management/conf/requirements.yaml`. Pass `--requirements=<id>` to run a **targeted subset** (for example quota-only) instead of a full `smoke` or `extended` profile.
+
+| Native plugin | IQE requirement ID | Example test module |
+|---------------|-------------------|---------------------|
+| Container, namespace, settings, cross-cutting | `cost_ros_ocp` | `test_ros.py`, `test_ros_namespace_recommendations.py` |
+| VM | `cost_ros_ocp_vm` | `test_ros_vm_recommendations.py` |
+| Node | `cost_ros_ocp_nodes` | `test_ros_node_recommendations.py` |
+| GPU | `cost_ros_ocp_gpu` | `test_ros_gpu_recommendations.py` |
+| PVC | `cost_ros_ocp_pvc` | `test_ros_pvc_recommendations.py` |
+| Snapshot | `cost_ros_ocp_snapshot` | `test_ros_snapshot_recommendations.py` |
+| ClusterResourceQuota | `cost_ros_ocp_cluster_quota` | `test_ros_cluster_quota_recommendations.py` |
+| Namespace ResourceQuota | `cost_ros_ocp_quota` | `test_ros_quota_recommendations.py` |
+
+**Full-profile on-prem runs** (all ROS tests matching `cost_ocp_on_prem`):
+
+```bash
+cd ~/dev/koku/cost-onprem-chart
+./scripts/deploy-test-cost-onprem.sh --iqe-only --listener-cpu max --iqe-profile smoke
+# or locally (requires iqe-core + iqe-cost-management-plugin clones):
+./scripts/run-iqe-tests-local.sh --profile smoke
+```
+
+**Requirement-filtered runs** (one recommendation type at a time):
+
+```bash
+iqe tests plugin cost_management \
+  --force-default-user cost_onprem_user \
+  -m "cost_ocp_on_prem" \
+  --requirements=cost_ros_ocp_quota \
+  --requirements-priority=high
+```
+
+Replace `cost_ros_ocp_quota` with any requirement ID from the table. IQE collects only tests whose `requirements:` markers intersect the requested set.
+
+**Registration:** All eight ROS requirement IDs are declared in the plugin's `requirements.yaml`. Automated requirement-scoped CI jobs also need matching IDs in **app-interface**. See **[IQE requirement registration](./iqe-requirements-registration.md)** for the full matrix, app-interface MR checklist, and which types share the broad `cost_ros_ocp` marker.
+
+Setup prerequisites: `cost-onprem-chart/docs/development/iqe-testing-setup.md`.
+
+### 5. Health checks
 
 | Service | Endpoint | Expected |
 |---------|----------|----------|
