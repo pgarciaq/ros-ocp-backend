@@ -294,6 +294,10 @@ providers with incremental snapshot behavior.
 
 Tracked in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
+**v1 placeholder:** Per-org `cost_per_gib_month_usd` is approximate FinOps signal,
+not billing truth. **COST-7523** adds Koku's **effective cost internal endpoint**
+so ROS can source rates from billing exports and/or cost model instead of flat defaults.
+
 The current dynamic default reuses `storage_gb_usage_per_month` from the OCP cost
 model — a PVC storage **usage** rate, not snapshot-specific pricing. A proper
 solution is a dedicated cost model metric:
@@ -786,3 +790,9 @@ classify → API) without waiting for the operator implementation.
    so they work anywhere. Operator E2E tests specifically need a cluster with
    CSI snapshot capability (e.g., AWS EBS CSI, ODF/Ceph CSI, or hostpath CSI
    provisioner for CI).
+
+11. **Restore and cleanup automation (out of v1 scope)**: Detection/classification
+    only — no restore-and-verify, safe-delete, or backup-operator orchestration.
+
+12. **Cost accuracy (COST-7523)**: Flat `cost_per_gib_month_usd` until effective
+    cost internal endpoint ships; see [COST-7523](https://redhat.atlassian.net/browse/COST-7523).

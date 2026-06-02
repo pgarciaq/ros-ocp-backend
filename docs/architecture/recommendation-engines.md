@@ -259,6 +259,11 @@ reclaimable holding cost and restore size; see
 
 Formula: `estimated_monthly_cost = restore_size_gib × cost_per_gib_month`.
 
+v1 rates are **placeholders** (Settings/env/default, optional PVC storage proxy).
+Provider-accurate costing is upstream **[COST-7523](https://redhat.atlassian.net/browse/COST-7523)**
+(effective cost internal endpoint). v1 is **detection-only** — no automated restore,
+safe-delete, or Velero/OADP workflows.
+
 See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates).
 
 ---

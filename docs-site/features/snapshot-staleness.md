@@ -5,9 +5,10 @@ VolumeSnapshots accumulate on OpenShift clusters and consume backing storage
 cost-management metrics operator and surfaces actionable recommendations through
 the REST API.
 
-There is **no koku-ui view yet**; integrate via API or automation. Dollar savings
-for snapshots are estimated from configurable cost-per-GiB rates (not full CUR
-integration in v1).
+There is **no koku-ui view yet**; integrate via API or automation. Recoverable
+holding cost in v1 is a **placeholder estimate** from a configurable $/GiB/month
+rate (`cost_per_gib_month_usd`); see [Future work](#future-work) for provider-accurate
+costing via [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
 ## What it does
 
@@ -148,5 +149,47 @@ recommendation staleness.
 ## Limitations (v1)
 
 - No UI in koku-ui
-- Cost estimates use a flat GiB/month rate, not provider-specific CUR lines
+- **Detection and classification only** — ROS does not restore volumes, delete
+  snapshots, run safe-delete workflows, or integrate with backup operators (Velero,
+  OADP, Kasten, etc.). Operators and admins act on API output manually or via their
+  own automation.
+- **Cost estimates are approximate** — `estimated_monthly_cost_usd` uses
+  `restore_size_bytes × cost_per_gib_month_usd`. The per-org Settings API field and
+  env default are **placeholders** for QE/Ops tuning, not provider billing truth.
+  When savings estimates are enabled, ROS may fall back to Koku
+  `effective_rates` `storage_gb_usage_per_month` (PVC usage proxy), which is still
+  not snapshot-specific CUR or block-storage snapshot line items.
 - Requires VolumeSnapshot CRDs on the cluster; operator skips collection if absent
+
+## Future work
+
+### Accurate snapshot cost (COST-7523)
+
+Production-quality recoverable cost should come from **actual storage economics**,
+not a flat GiB/month knob:
+
+| Source (target) | Role |
+|-----------------|------|
+| Koku cloud billing (AWS CUR, Azure exports, GCP BigQuery, etc.) | Provider-specific snapshot or volume backup charges where available |
+| Koku OCP cost model | User-defined storage rates (e.g. `storage_gb_usage_per_month`, future snapshot metric) |
+
+Upstream work is tracked in **[COST-7523](https://redhat.atlassian.net/browse/COST-7523)**.
+That epic adds a Koku **effective cost internal endpoint**; ROS will consume it (same
+pattern as today's Masu `effective_rates` fetch) to replace placeholder
+`cost_per_gib_month_usd` defaults with cluster- and class-aware rates when data exists.
+
+Until COST-7523 ships, keep using `/settings/snapshot` and `ROS_SNAPSHOT_COST_PER_GIB_MONTH_USD`
+for demos and on-prem pools without CUR. See
+[Cost integration — Snapshot cost](../../docs/architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates)
+and [features-f-snapshot-staleness.md](../../docs/features-f-snapshot-staleness.md).
+
+### Restore and cleanup automation (explicitly out of v1)
+
+Planned follow-ons, **not** in staleness v1 scope:
+
+- Automated restore-and-verify (prove a snapshot can rebuild a PVC before deletion)
+- Safe-delete workflows (pre-checks, dry-run, approval gates)
+- Backup operator integration (Velero/OADP retention alignment, coordinated prune)
+
+v1 **`managed`** classification only flags backup-tool-owned snapshots for human
+retention review; it does not trigger operator actions.

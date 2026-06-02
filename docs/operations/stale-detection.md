@@ -98,6 +98,30 @@ Fresh reporting clears `stale` and removes code 2 on the next recommendation run
   etc.) use `GET /recommendations/openshift/snapshots` and
   `ROS_SNAPSHOT_*` / `/settings/snapshot`, not this threshold.
 
+## VolumeSnapshot cost estimates (separate from reporting staleness)
+
+Snapshot **recoverable holding cost** is unrelated to `ROS_STALENESS_THRESHOLD_HOURS`
+above. It is computed at ingestion from `restore_size_bytes` and a resolved
+`cost_per_gib_month_usd` rate.
+
+| State (v1) | What Ops/QE should expect |
+|------------|---------------------------|
+| **Today** | Placeholder economics: per-org `cost_per_gib_month_usd` in `/settings/snapshot`, optional `ROS_SNAPSHOT_COST_PER_GIB_MONTH_USD`, else Masu `effective_rates` `storage_gb_usage_per_month` (PVC usage proxy), else **$0.05**/GiB/month default |
+| **Future** | Provider-accurate costs via Koku billing data and/or cost-model storage rates, delivered through the **effective cost internal endpoint** from **[COST-7523](https://redhat.atlassian.net/browse/COST-7523)** |
+
+Do not treat v1 dollar fields as CUR-backed invoice amounts. Tune the flat rate for
+demos and on-prem Ceph/ODF pools; wait for COST-7523 for SaaS CUR alignment.
+
+Details: [snapshot staleness feature](../features-f-snapshot-staleness.md),
+[cost-integration.md — Snapshot cost](../architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates),
+[docs-site snapshot staleness](../../docs-site/features/snapshot-staleness.md).
+
+## Snapshot restore automation (v1 = detection only)
+
+ROS v1 **classifies** VolumeSnapshots only. It does **not** run restore-and-verify,
+automated safe-delete, or Velero/OADP backup workflows. Cleanup remains manual or
+customer-owned automation against `GET .../snapshots` and namespace summary APIs.
+
 ## Koku-side stale source detection (SaaS)
 
 Koku (sibling repository) provides **SaaS operational tooling** that complements

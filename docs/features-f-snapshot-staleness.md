@@ -294,6 +294,19 @@ providers with incremental snapshot behavior.
 
 Tracked in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
+**v1 placeholder:** Per-org `cost_per_gib_month_usd` and the compiled **$0.05**/GiB/month
+default are **not** provider billing rates. They exist so QE/Ops can rank namespaces
+by approximate reclaimable cost until upstream integration lands.
+
+**Delivery mechanism (COST-7523):** Koku will expose an **effective cost internal
+endpoint** (building on / extending today's Masu `effective_rates` pattern). ROS
+will consume that endpoint to resolve snapshot holding cost from:
+
+- **Billing data** — AWS CUR / Azure / GCP exports where snapshot or backup storage
+  is attributable; and/or
+- **Cost model** — user-defined storage rates (PVC proxy today; dedicated snapshot
+  metric below when available).
+
 The current dynamic default reuses `storage_gb_usage_per_month` from the OCP cost
 model — a PVC storage **usage** rate, not snapshot-specific pricing. A proper
 solution is a dedicated cost model metric:
@@ -786,3 +799,15 @@ classify → API) without waiting for the operator implementation.
    so they work anywhere. Operator E2E tests specifically need a cluster with
    CSI snapshot capability (e.g., AWS EBS CSI, ODF/Ceph CSI, or hostpath CSI
    provisioner for CI).
+
+11. **Restore and cleanup automation (out of v1 scope)**: Staleness v1 is
+    **detection-only**. ROS does not restore PVCs from snapshots, verify restores,
+    delete snapshots, or orchestrate Velero/OADP/Kasten retention. The `managed`
+    class surfaces backup-tool ownership for human review only. Automated
+    restore-and-verify, safe-delete workflows, and backup-operator integration are
+    explicit future work.
+
+12. **Cost accuracy (COST-7523)**: Until [COST-7523](https://redhat.atlassian.net/browse/COST-7523)
+    delivers the effective cost internal endpoint and optional `snapshot_gb_per_month`
+    metric, treat `estimated_monthly_cost_usd` as a **ceiling estimate** from
+    configurable rates, not CUR-backed invoice data.

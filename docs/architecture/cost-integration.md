@@ -241,9 +241,26 @@ The Settings API GET/PUT path does **not** expose the dynamic effective-rates
 value — it returns the stored org setting, env-locked value, or compiled default.
 See [features-f-snapshot-staleness.md](../features-f-snapshot-staleness.md).
 
-**Future (v2):** A dedicated `snapshot_gb_per_month` metric in the OCP cost model
-would replace the PVC storage proxy. See that doc for the planned Koku/UI/operator
-work. Tracked in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
+**v1 placeholder:** `cost_per_gib_month_usd` (Settings API / env / compiled default)
+is an **approximate** holding-cost knob for FinOps prioritization, not billing truth.
+Even step 3 (`storage_gb_usage_per_month`) is a PVC usage proxy, not cloud snapshot
+line items.
+
+**Future ([COST-7523](https://redhat.atlassian.net/browse/COST-7523)):** Accurate
+recoverable cost should be derived from:
+
+- **Cloud provider billing** ingested by Koku (CUR and equivalent exports), where
+  snapshot or backup storage charges exist; and/or
+- **OCP cost model** user-defined storage rates (today's proxy; future dedicated
+  snapshot metric such as `snapshot_gb_per_month`).
+
+Koku work under COST-7523 introduces an **effective cost internal endpoint** (Masu
+or successor to today's `effective_rates` path). ROS will call that endpoint to
+resolve cluster- and StorageClass-aware snapshot rates instead of relying on the flat
+`cost_per_gib_month_usd` chain. See
+[features-f-snapshot-staleness.md](../features-f-snapshot-staleness.md) for component
+breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
+`/settings/snapshot` for on-prem and demo clusters.
 
 ## Plugin savings coverage
 
