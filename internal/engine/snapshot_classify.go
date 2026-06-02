@@ -12,11 +12,12 @@ import (
 
 // SnapshotSettings holds resolved snapshot classification thresholds.
 type SnapshotSettings struct {
-	OrphanAgeDays      int
-	NeverRestoredDays  int
-	StaleDays          int
-	RedundantThreshold int
-	CostPerGiBMonth    float64
+	OrphanAgeDays       int
+	NeverRestoredDays   int
+	StaleDays           int
+	RedundantThreshold  int
+	CostPerGiBMonth     float64
+	InventoryFreshHours int
 }
 
 // SnapshotRec is a classified snapshot recommendation.
@@ -79,7 +80,7 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		WHERE org_id = $1 AND cluster_uuid = $2
 			AND ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
 		ORDER BY namespace, snapshot_name, ingested_at DESC`,
-		orgID, clusterUUID, SnapshotInventoryFreshHours(),
+		orgID, clusterUUID, snapshotInventoryFreshHours(settings),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying snapshot inventory: %w", err)
@@ -283,23 +284,33 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 	return nil
 }
 
+func snapshotInventoryFreshHours(settings SnapshotSettings) int {
+	if settings.InventoryFreshHours > 0 {
+		return settings.InventoryFreshHours
+	}
+	return SnapshotSettingsDefaults.InventoryFreshHours
+}
+
 // ReconcileSnapshotRecommendations deletes rows from snapshot_recommendation_sets
 // (ROS resource optimization data only; unrelated to Koku tables) when a snapshot
 // no longer appears in snapshot_inventory within the fresh window.
 //
 // Inventory gating (staleGraceHours from ROS_SNAPSHOT_STALE_GRACE_HOURS, default 48):
 //
-//   - Normal path: rows exist in snapshot_inventory within the last 6 hours → run
+//   - Normal path: rows exist in snapshot_inventory within freshHours → run
 //     DELETE for recommendations whose snapshot is absent from that fresh inventory.
 //
-//   - Transient gap: rows exist within staleGraceHours but none within 6 hours → skip
+//   - Transient gap: rows exist within staleGraceHours but none within freshHours → skip
 //     reconcile. Ingest may have paused briefly; deleting would risk wiping valid rows
 //     because NOT EXISTS against an empty fresh inventory would match everything.
 //
 //   - Stale / abandoned cluster: no snapshot_inventory rows within staleGraceHours →
 //     run DELETE anyway. The cluster has stopped reporting; clearing orphaned ROS rows
 //     is preferable to leaving stale recommendations indefinitely.
-func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, staleGraceHours int) (int64, error) {
+func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, freshHours, staleGraceHours int) (int64, error) {
+	if freshHours <= 0 {
+		freshHours = SnapshotSettingsDefaults.InventoryFreshHours
+	}
 	if staleGraceHours <= 0 {
 		staleGraceHours = 48
 	}
@@ -313,7 +324,7 @@ func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, o
 			(SELECT COUNT(*) FROM snapshot_inventory
 			 WHERE org_id = $1 AND cluster_uuid = $2::uuid
 			   AND ingested_at >= NOW() - ($4 * INTERVAL '1 hour'))`,
-		orgID, clusterUUID, SnapshotInventoryFreshHours(), staleGraceHours,
+		orgID, clusterUUID, freshHours, staleGraceHours,
 	).Scan(&cntFresh, &cntGrace)
 	if err != nil {
 		return 0, fmt.Errorf("count snapshot inventory: %w", err)
@@ -332,7 +343,7 @@ func ReconcileSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, o
 			  AND si.namespace = srs.namespace
 			  AND si.snapshot_name = srs.snapshot_name
 			  AND si.ingested_at >= NOW() - ($3 * INTERVAL '1 hour')
-		)`, orgID, clusterUUID, SnapshotInventoryFreshHours())
+		)`, orgID, clusterUUID, freshHours)
 	if err != nil {
 		return 0, fmt.Errorf("reconciling snapshot recommendations: %w", err)
 	}

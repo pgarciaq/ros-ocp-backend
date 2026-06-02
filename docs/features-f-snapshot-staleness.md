@@ -157,6 +157,8 @@ tune them.
 | Never-restored age | `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` | 30 | `never_restored_days` | Min age for "never restored" |
 | Staleness threshold | `ROS_SNAPSHOT_STALE_DAYS` | 90 | `stale_days` | Age threshold for staleness and redundant filter |
 | Redundant threshold | `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | `redundant_threshold` | Max snapshots to keep per PVC before flagging |
+| Cost rate ($/GiB/month) | `ROS_SNAPSHOT_COST_PER_GIB_MONTH` | 0.05 | `cost_per_gib_month_usd` | Fallback monthly storage rate |
+| Inventory freshness | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | 6 | `inventory_fresh_hours` | Hours of recent inventory used for classify/reconcile |
 | Inventory retention | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | (not exposed) | Raw inventory row retention (operational) |
 
 ### Settings API
@@ -174,6 +176,7 @@ PUT  /api/cost-management/v1/recommendations/openshift/settings/snapshot
   "stale_days": 90,
   "redundant_threshold": 3,
   "cost_per_gib_month_usd": 0.05,
+  "inventory_fresh_hours": 6,
   "locked_fields": ["stale_days"]
 }
 ```

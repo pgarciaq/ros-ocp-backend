@@ -94,8 +94,8 @@ func TestSnapshotRecommendations_CustomThresholds(t *testing.T) {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO snapshot_settings (
 			org_id, orphan_age_days, never_restored_days, stale_days,
-			redundant_threshold, cost_per_gib_month_usd, updated_at
-		) VALUES ($1, 7, 30, 180, 3, 0.05, NOW())
+			redundant_threshold, cost_per_gib_month_usd, inventory_fresh_hours, updated_at
+		) VALUES ($1, 7, 30, 180, 3, 0.05, 6, NOW())
 		ON CONFLICT (org_id) DO UPDATE SET stale_days = EXCLUDED.stale_days`,
 		testutil.TestOrgID,
 	)
@@ -123,6 +123,7 @@ func unsetSnapshotThresholdEnvForTest(t *testing.T) {
 		"ROS_SNAPSHOT_NEVER_RESTORED_DAYS",
 		"ROS_SNAPSHOT_STALE_DAYS",
 		"ROS_SNAPSHOT_REDUNDANT_THRESHOLD",
+		"ROS_SNAPSHOT_INVENTORY_FRESH_HOURS",
 	} {
 		prev, ok := os.LookupEnv(key)
 		if !ok {

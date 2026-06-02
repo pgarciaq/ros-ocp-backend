@@ -1105,7 +1105,7 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		log.Infof("native snapshot engine: wrote %d snapshot recommendations", len(recs))
 	}
 
-	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, appCfg.SnapshotStaleGraceHours)
+	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, settings.InventoryFreshHours, appCfg.SnapshotStaleGraceHours)
 	if err != nil {
 		log.Errorf("native snapshot engine: reconciliation failed: %v", err)
 		return fmt.Errorf("reconcile snapshots: %w", err)

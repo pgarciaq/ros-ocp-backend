@@ -218,6 +218,8 @@ func defaultRecalculateCluster(ctx context.Context, pool *pgxpool.Pool, orgID, c
 		return RunQuotaRecommendations(ctx, pool, orgID, clusterUUID)
 	case "cluster-quota":
 		return RunClusterQuotaRecommendations(ctx, pool, orgID, clusterUUID)
+	case "snapshot":
+		return RunSnapshotRecommendationsForCluster(ctx, pool, orgID, clusterUUID)
 	default:
 		return fmt.Errorf("unsupported recommendation_type %q", recType)
 	}

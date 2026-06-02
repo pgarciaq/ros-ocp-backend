@@ -1135,7 +1135,8 @@ func NodeEnginesFromThresholds(th NodeThresholdSettings) []NodeEngineConfig {
 	}
 }
 
-// SnapshotInventoryFreshHours returns the admin-configured recent-ingest window for snapshot inventory.
+// SnapshotInventoryFreshHours returns the platform default recent-ingest window (hours).
+// Per-org values are resolved via ResolveSnapshotSettings.InventoryFreshHours.
 func SnapshotInventoryFreshHours() int {
 	h := config.GetConfig().SnapshotInventoryFreshHours
 	if h <= 0 {

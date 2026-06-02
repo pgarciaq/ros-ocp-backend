@@ -103,6 +103,14 @@ func PutSnapshotSettings(c echo.Context) error {
 	}
 
 	if err := engine.UpdateSnapshotSettings(c.Request().Context(), pool, orgID, update); err != nil {
+		var valErr *engine.ThresholdValidationError
+		if errors.As(err, &valErr) {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":            "error",
+				"message":           valErr.Error(),
+				"validation_errors": valErr.Errors,
+			})
+		}
 		if errors.Is(err, engine.ErrFieldsLocked) {
 			lockedFields := engine.LockedFieldsFromError(err)
 			return c.JSON(http.StatusForbidden, echo.Map{
@@ -118,7 +126,8 @@ func PutSnapshotSettings(c echo.Context) error {
 		})
 	}
 
-	// Return the updated settings
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "snapshot")
+
 	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

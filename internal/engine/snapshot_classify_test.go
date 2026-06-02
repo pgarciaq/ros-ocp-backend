@@ -8,13 +8,7 @@ import (
 )
 
 func defaultSnapshotSettings() SnapshotSettings {
-	return SnapshotSettings{
-		OrphanAgeDays:      7,
-		NeverRestoredDays:  30,
-		StaleDays:          90,
-		RedundantThreshold: 3,
-		CostPerGiBMonth:    0.05,
-	}
+	return SnapshotSettingsDefaults
 }
 
 func TestClassifySnapshot_Active(t *testing.T) {

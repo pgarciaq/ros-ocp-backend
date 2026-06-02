@@ -653,12 +653,12 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 | Age > N → stale. <br><em>Expanded: A snapshot is classified as "stale" when it is older than this many days, regardless of whether its source PVC still exists. Stale snapshots may contain outdated data that is no longer useful for recovery. 90 days (3 months) is the default threshold before recommending cleanup.</em> | 90 | `ROS_SNAPSHOT_STALE_DAYS` | `/settings/snapshot` | stale_days | Yes |
 | > N per PVC → redundant. <br><em>Expanded: Maximum number of snapshots per PVC before older ones are flagged as redundant. If a PVC has more than 3 snapshots, the excess are likely unnecessary—keeping the 2-3 most recent is usually sufficient for recovery. Redundant snapshots waste storage and increase backup costs.</em> | 3 | `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | `/settings/snapshot` | redundant_threshold | Yes |
 | Fallback $/GiB/month. <br><em>Expanded: Fallback storage cost rate (USD per GiB per month) used when no cost model rate is available from Koku. This is used to estimate the monthly cost of keeping a snapshot. The resolution chain is: Koku effective-rates `storage_gb_usage_per_month` (dynamic) → tenant DB override → this env var → $0.05 default. Set this to match your actual block storage provider's snapshot pricing.</em> | 0.05 | `ROS_SNAPSHOT_COST_PER_GIB_MONTH` | `/settings/snapshot` | cost_per_gib_month_usd | Yes |
+| Inventory freshness window (hours) <br><em>Classification and reconciliation only consider `snapshot_inventory` rows ingested within this many hours. Shorter windows react faster to operator gaps; longer windows tolerate delayed uploads.</em> | 6 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | `/settings/snapshot` | inventory_fresh_hours | Yes |
 
 ### Snapshot — admin-only (no Settings API field)
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Snapshot inventory freshness (hours) <br><em>Skip snapshot plugin if inventory ingest older than this (6h). Not tenant-configurable.</em> | 6 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | — | — | No |
 | Snapshot inventory retention (hours) <br><em>Retain raw inventory rows in DB (48h)—ops tuning, not classification thresholds.</em> | 48 | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | — | — | No |
 | Snapshot stale grace without fresh inventory (hours) <br><em>Defer stale classification this long when inventory ingest is down (48h).</em> | 48 | `ROS_SNAPSHOT_STALE_GRACE_HOURS` | — | — | No |
 

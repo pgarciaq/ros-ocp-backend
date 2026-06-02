@@ -126,8 +126,8 @@ func TestResolveSnapshotSettings_DBOverrideIntegration(t *testing.T) {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO snapshot_settings (
 			org_id, orphan_age_days, never_restored_days, stale_days,
-			redundant_threshold, cost_per_gib_month_usd, updated_at
-		) VALUES ($1, 7, 30, 90, 3, 0.15, NOW())`, orgID)
+			redundant_threshold, cost_per_gib_month_usd, inventory_fresh_hours, updated_at
+		) VALUES ($1, 7, 30, 90, 3, 0.15, 6, NOW())`, orgID)
 	require.NoError(t, err)
 
 	costData := &costdata.ClusterCostData{
@@ -139,6 +139,31 @@ func TestResolveSnapshotSettings_DBOverrideIntegration(t *testing.T) {
 	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, costData)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.15, settings.CostPerGiBMonth, 1e-6)
+}
+
+func TestResolveSnapshotSettings_InventoryFreshHours_DBAndEnv(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-snapshot-fresh-hours"
+
+	config.ResetForTest()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO snapshot_settings (
+			org_id, orphan_age_days, never_restored_days, stale_days,
+			redundant_threshold, cost_per_gib_month_usd, inventory_fresh_hours, updated_at
+		) VALUES ($1, 7, 30, 90, 3, 0.05, 12, NOW())`, orgID)
+	require.NoError(t, err)
+
+	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	require.NoError(t, err)
+	require.Equal(t, 12, settings.InventoryFreshHours)
+
+	t.Setenv("ROS_SNAPSHOT_INVENTORY_FRESH_HOURS", "24")
+	config.ResetForTest()
+	settings, err = ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	require.NoError(t, err)
+	require.Equal(t, 24, settings.InventoryFreshHours)
 }
 
 func TestResolveSnapshotSettings_NilCostDataSkipsEffectiveRates(t *testing.T) {

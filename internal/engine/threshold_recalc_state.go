@@ -35,6 +35,10 @@ func computeThresholdSettingsHash(ctx context.Context, pool *pgxpool.Pool, orgID
 		var s PVCThresholdSettings
 		s, err = ResolvePVCThresholdSettings(ctx, pool, orgID)
 		payload = s
+	case "snapshot":
+		var s SnapshotSettings
+		s, err = ResolveSnapshotSettings(ctx, pool, orgID, nil)
+		payload = s
 	default:
 		return "", fmt.Errorf("unsupported recommendation_type %q", recType)
 	}
