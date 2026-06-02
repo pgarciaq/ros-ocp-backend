@@ -512,6 +512,40 @@ GET /recommendations/openshift/gpu/timeslicing
 
 Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on container `gpu` objects.
 
+#### Which count to use (summary vs list)
+
+The GPU **summary** and **time-slicing list** both expose counts; they are **not
+equivalent**.
+
+```http
+GET /recommendations/openshift/gpu
+→ { "timeslicing": { "count": N, "link": "..." } }
+
+GET /recommendations/openshift/gpu/timeslicing
+→ { "meta": { "count": M }, "data": [ ... ] }
+```
+
+| Field | Typical relation | Semantics | UI usage |
+|-------|------------------|-----------|----------|
+| `timeslicing.count` (**N**) | N ≥ M | Monitored **node×GPU-model** groups with fresh `gpu_container_digests` telemetry (coverage / navigation) | Show the time-slicing **section** or link when N &gt; 0; do **not** use for recommendation badges |
+| `meta.count` (**M**) | M ≤ N | Groups that **passed** the time-slicing engine (underutilized majority, safe `recommended_replicas`, no MIG conflict, fresh node, etc.) | **Badges**, notification counts, “N recommendations available” |
+| `len(data)` on one page | ≤ M | Rows returned for the current `offset`/`limit` only | Table body; may be &lt; M when paginating |
+
+**Rules for koku-ui:**
+
+1. **Recommendation badge / Optimizations card count** → `meta.count` from
+   `GET .../gpu/timeslicing` (or count containers with notification **36**).
+2. **Section visibility** (“Time-slicing” tab or card) → `timeslicing.count`
+   from `GET .../gpu` (fleet has GPU ROS coverage).
+3. **Never** display copy like “`timeslicing.count` recommendations” — users
+   will see fewer rows than the badge implies.
+4. **Empty list, non-zero summary** → copy such as: “GPU usage is monitored on
+   this fleet, but no nodes currently qualify for time-slicing” (well-utilized,
+   MIG, or threshold gates).
+
+Operational prerequisites (DCGM, namespace labels, cost model rates, plugin
+enablement): [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#prerequisites).
+
 ### UI Integration Recommendations
 
 **Node CPU/memory utilization**
@@ -531,6 +565,9 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 **GPU time-slicing**
 
+- Use **`meta.count`** from the list endpoint for recommendation badges; use
+  **`timeslicing.count`** from the summary endpoint only to decide whether to
+  show the time-slicing navigation entry (see [Which count to use](#which-count-to-use-summary-vs-list)).
 - Show a node-level view with GPU utilization **ProgressBar** per GPU model.
 - Display `recommended_replicas` prominently as the primary action metric.
 - Compare current vs recommended time-slicing configuration in a side-by-side layout.
@@ -1210,15 +1247,25 @@ Lightweight entry point for GPU optimization views. Returns counts and links to 
 }
 ```
 
-Use this endpoint for dashboard cards that link to MIG and time-slicing drill-downs.
+Use this endpoint for dashboard cards that **link** to MIG and time-slicing
+drill-downs — not for recommendation badge totals.
 
-**`timeslicing.count` semantics:** Treat this number as “node×GPU-model groups
-with recent GPU activity” (telemetry in `gpu_container_digests`), not as a count
-of actionable time-slicing rows. It can exceed the length of
-`GET .../gpu/timeslicing` `data` because the list runs the full engine and drops
-groups that are well-utilized, memory-bound, or MIG-preferred. For badges or
-“N recommendations” copy, use the list endpoint’s `meta.count` or drill down
-into the list; do not equate summary `timeslicing.count` with actionable items.
+**`timeslicing.count` (N) vs list `meta.count` (M):**
+
+| | Summary `timeslicing.count` | List `meta.count` |
+|--|------------------------------|-------------------|
+| **Measures** | GPU telemetry coverage (distinct node×GPU-model in digests) | Actionable time-slicing rows after engine gates |
+| **Typical size** | Larger (N ≥ M) | Smaller — source of truth for “how many recs” |
+| **UI role** | Show/hide time-slicing section; “we have GPU ROS data” | Badges, “N recommendations”, notification rollups |
+
+The summary does **not** run `ComputeNodeTimeslicingRec` (performance trade-off).
+The list drops groups that are well-utilized, memory-bound, idle-only, MIG-first,
+below the majority threshold, or cannot reach `recommended_replicas` ≥ 2.
+
+**Do not** show `timeslicing.count` as “N time-slicing recommendations.” Use
+`GET .../gpu/timeslicing` → `meta.count`, notification **36**, or paginated
+`data` length. Full semantics:
+[GPU time-slicing — Summary vs list count](features/gpu-time-slicing.md#summary-vs-list-count-semantics).
 
 ### GPU MIG profile recommendations
 

@@ -1023,39 +1023,79 @@ Prioritize when:
 
 ---
 
+## GPU time-slicing operational prerequisites
+
+Time-slicing APIs can return **empty lists**, **`no_profiling`** classifications,
+or **$0.00** savings even when Koku cost reports show GPU spend. That is usually
+missing prerequisites, not a backend defect.
+
+| Prerequisite | Symptom when missing | Fix |
+|--------------|----------------------|-----|
+| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing — Prerequisites](../docs-site/features/gpu-time-slicing.md#prerequisites)) |
+| **Namespace label** `cost_management_optimizations: "true"` (or legacy `insights_cost_management_optimizations`) | Cost CSV has GPUs; ROS `gpu_container_digests` empty for namespace | Label GPU workload namespaces; wait for operator ROS upload + ingest |
+| **GPU cost model rate** `gpu_core_usage_per_hour` | Recommendations with utilization and replicas but no dollar savings fields | Assign cost model with GPU rates to the cluster |
+| **`gpu` plugin enabled** (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) | `404` on `/recommendations/openshift/gpu/*` | Include `gpu` in enabled plugins (default) |
+
+**E2E / IQE:** GPU suites skip on CPU-only clusters — see
+[GPU E2E and IQE test data prerequisite](#gpu-e2e-and-iqe-test-data-prerequisite).
+
+Authoritative detail: [docs-site/features/gpu-time-slicing.md](../docs-site/features/gpu-time-slicing.md).
+
+---
+
 ## GPU Summary `timeslicing.count` Divergence
 
 Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **8** — not a defect backlog item.
 
 **Severity:** Cosmetic / semantic gap (not a bug)
 
-The `/recommendations/openshift/gpu` summary endpoint returns
-`timeslicing.count` from `CountNodeGPUTriples`: distinct **node×GPU-model**
-groups with fresh rows in `gpu_container_digests` (areas with recent GPU
-telemetry — potential time-slicing candidates).
+### The discrepancy
 
-The `/recommendations/openshift/gpu/timeslicing` list runs
-`ComputeNodeTimeslicingRec` on each group and may return **no row** when
-utilization is too high for sharing (`recommended_replicas` &lt; 2), no
-containers classify as underutilized, workloads are memory-bound or idle, or
-MIG takes precedence.
+| Endpoint | Field | Meaning |
+|----------|-------|---------|
+| `GET /recommendations/openshift/gpu` | `timeslicing.count` (**N**) | **Data coverage** — distinct `(cluster, node, gpu_model)` triples in `gpu_container_digests` with fresh telemetry (`CountNodeGPUTriples`). Does not run the time-slicing engine. |
+| `GET /recommendations/openshift/gpu/timeslicing` | `meta.count` (**M**) | **Actionable recommendations** — groups where `ComputeNodeTimeslicingRec` returns a row (threshold, majority, replica, MIG, freshness, confidence gates). |
 
-So `timeslicing.count` can be **greater than** `meta.count` on the list (or
-non-zero while `data` is empty). The summary count is **not** a badge count of
-actionable recommendations.
+**N ≥ M** (often **N > M**). Summary may be non-zero while list `data` is empty.
+
+### Why they differ
+
+**Summary (N)** answers: “Where do we have GPU ROS telemetry?” Every fresh
+node×GPU-model group in digests increments N, including well-utilized, idle,
+memory-bound, and MIG-prioritized nodes that will never get a list row.
+
+**List (M)** answers: “How many sharing recommendations can we show?” A group
+is omitted when, among other checks:
+
+1. No `underutilized` / `compute_bound_underutil` candidates (idle / memory-bound excluded).
+2. Below `timeslicing_majority_threshold` (default 50%) when impacted containers exist.
+3. `recommended_replicas` &lt; `timeslicing_min_replicas` (default 2) from peak SM/DRAM/FB utilization.
+4. MIG recommendation takes precedence for the workload.
+5. Node telemetry older than freshness window (default 7 days).
+6. Classification thresholds (Settings API `recommendation_type=gpu`) not met.
 
 ### Why it is intentionally not aligned
 
 Running the full time-slicing engine for every triple on every summary request
 would add significant query and CPU cost (classification + replica math per
-group). The summary is designed as a cheap inventory of monitored GPU groups;
-the list endpoint is the source of truth for actionable node-level guidance.
+group). The summary is a cheap inventory; the list is the source of truth for
+actionable node-level guidance.
 
-### Impact
+### Impact (UI and automation)
 
-UI or automation that treats `timeslicing.count` as “N recommendations ready”
-will over-count. Use the list endpoint (or container notification code **36**)
-for actionable items.
+| Mistake | Result |
+|---------|--------|
+| Badge uses `timeslicing.count` | Over-counts vs actual recommendations |
+| Hide time-slicing UI when list empty but summary &gt; 0 | Hides valid “monitored but not qualified” state |
+
+**Correct usage:**
+
+- **Badges / “N recommendations”** → list `meta.count` or notification **36**
+- **Section visibility / navigation** → summary `timeslicing.count`
+- **Empty state** → explain telemetry exists but no group passed engine gates
+
+See docs-site [Summary vs list count semantics](../docs-site/features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
+[UI Integration Guide](../docs-site/ui-integration-guide.md#which-count-to-use-summary-vs-list).
 
 ### Resolution options (if product requires alignment later)
 
