@@ -223,6 +223,13 @@ GPU API enrichment does **not** append `NotifNoCostData`; savings fields are omi
 
 ### Snapshot cost (dynamic default from effective-rates)
 
+**Snapshot byte sizing (non-goal):** Holding-cost math uses `restore_size_bytes` from
+VolumeSnapshot `.status.restoreSize` (logical volume size). ROS and the operator do
+**not** scrape CSI- or cloud-provider metrics for actual snapshot bytes consumed on
+backend storage — no portable in-cluster signal, high per-driver maintenance, and
+[COST-7523](https://redhat.atlassian.net/browse/COST-7523) is the path to billing-accurate
+bytes. `restoreSize` may overstate incremental/COW snapshot cost until then (v1 acceptable).
+
 Snapshot recommendations estimate recoverable monthly cost as
 `restore_size_bytes × cost_per_gib_month_usd`. The rate is resolved at **ingestion**
 with this priority:

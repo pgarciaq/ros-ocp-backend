@@ -148,6 +148,13 @@ recommendation staleness.
 
 ## Limitations (v1)
 
+### Snapshot size estimation (design)
+
+- **Source:** `restore_size_bytes` from VolumeSnapshot `.status.restoreSize` (full logical volume size).
+- **Non-goal — CSI consumed bytes:** We do not collect provider-specific CSI metrics for actual snapshot consumption on backend storage. There is no standard Kubernetes metric for this; the CSI spec does not mandate it; in-cluster Prometheus rarely exposes provider metrics (Ceph RBD, CloudWatch, GCP, etc.); per-driver maintenance is high; and [COST-7523](https://redhat.atlassian.net/browse/COST-7523) will supply real consumed bytes from billing/CUR where available.
+- **Trade-off:** `restoreSize` overestimates holding cost for incremental/COW snapshots on most providers — acceptable for v1 prioritization.
+- **Resolution:** COST-7523 effective cost uses actual billing data; on-prem/ODF without CUR may warrant a separate Ceph-specific effort later.
+
 - No UI in koku-ui
 - **Detection and classification only** — ROS does not restore volumes, delete
   snapshots, run safe-delete workflows, or integrate with backup operators (Velero,

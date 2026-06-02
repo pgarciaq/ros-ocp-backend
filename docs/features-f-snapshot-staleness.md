@@ -745,6 +745,15 @@ classify → API) without waiting for the operator implementation.
 - Show snapshot name, age, classification, estimated cost, managed-by tool
 - Settings page for snapshot cost rate
 
+## Design decisions
+
+### Snapshot size: `restoreSize`, not CSI metrics
+
+- **What we use:** `restore_size_bytes` from VolumeSnapshot `.status.restoreSize` — the full logical volume size the operator converts to bytes for the inventory CSV.
+- **Why not CSI / provider metrics for consumed bytes:** No standard Kubernetes metric for “bytes this snapshot consumes on backend storage”; the CSI spec does not require drivers to expose it; provider-specific signals (Ceph RBD, AWS CloudWatch, GCP compute metrics) are unreliable, fragile, and usually unavailable in-cluster via Prometheus; maintenance differs per CSI driver and version; and this is redundant once [COST-7523](https://redhat.atlassian.net/browse/COST-7523) delivers billing/CUR data with real consumed bytes.
+- **Trade-off:** `restoreSize` overestimates monthly holding cost for incremental/COW snapshots on most cloud providers — acceptable for v1 FinOps ranking.
+- **Resolution path:** COST-7523 effective cost endpoint; for on-prem/ODF without CUR, a future Ceph-specific scope is possible but out of v1.
+
 ## Limitations and Considerations
 
 1. **No restore history**: Kubernetes does not track historical restores.
