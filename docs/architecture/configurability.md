@@ -128,6 +128,32 @@ Implementation references: [`handlers_terms.go`](../../internal/api/handlers_ter
 [`term_config.go`](../../internal/engine/term_config.go),
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go).
 
+### Settings PUT side effects
+
+What happens after a successful tenant **PUT** (and after **DELETE** where noted).
+The HTTP response returns immediately; long-running work runs in the background unless
+`ROS_THRESHOLD_RECALCULATION_ENABLED=false` (threshold recalc only).
+
+| Route | On successful PUT |
+|-------|-------------------|
+| `/settings/container` | Async recalc (container) |
+| `/settings/namespace` | Async recalc (namespace) |
+| `/settings/node` | Async recalc (node) |
+| `/settings/gpu` | Async recalc (gpu) |
+| `/settings/pvc` | Async recalc (pvc) |
+| `/settings/quota` | Async recalc (quota) |
+| `/settings/cluster-quota` | Async recalc (cluster-quota) |
+| `/settings/snapshot` | Async recalc (snapshot) |
+| `/settings/idle-detection` | Async recalc (container) |
+| `/settings/vm` | Cache invalidation; next ingest applies |
+| `/settings/vm/terms` | Cache invalidation; next ingest applies |
+| `/settings/terms` | Cache invalidation; next ingest applies |
+| `/settings/business-hours*` | Digest reship + schedule apply |
+
+**DELETE** on threshold-style routes also invalidates the in-process settings cache;
+idle-detection DELETE additionally triggers container async recalc. Snapshot DELETE
+returns `204` without recalc (effective values revert on the next classification run).
+
 ---
 
 ## Global Settings Lock
@@ -354,6 +380,8 @@ recommendations via **`GET/PUT/DELETE /settings/container`** (or the deprecated 
 
 \* Configurable via `PUT /settings/terms?recommendation_type=container`. Admin `ROS_TERMS_*` env vars lock individual term fields.
 
+See [Container recommendations](../features/container-recommendations.md).
+
 ---
 
 ## Namespace
@@ -386,6 +414,8 @@ container-level digests; thresholds apply to the aggregated series.
 | Long decay (15d). <br><em>Expanded: 360-hour (15-day) decay half-life for the long-term namespace window.</em> | 360 | `ROS_TERMS_NAMESPACE_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=namespace` | terms[].decay_halflife_hours | Yes |
 
 \* Configurable via `PUT /settings/terms?recommendation_type=namespace`.
+
+See [Namespace recommendations](../features/namespace-recommendations.md).
 
 ---
 
@@ -434,6 +464,8 @@ JSON fields: `underutil_threshold`, `overcommit_threshold`, `allocatable_factor`
 
 \* Threshold fields via `PUT /settings/node` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=node`.
 
+See [Node recommendations](../features/node-recommendations.md).
+
 ---
 
 ## GPU
@@ -479,7 +511,8 @@ Classification, MIG sizing, confidence scoring, and time-slicing parameters.
 
 \* Configurable via `PUT /settings/terms?recommendation_type=gpu`.
 
-See also [GPU Classification](gpu-classification.md) for the decision tree and
+See also [GPU Classification](gpu-classification.md) for the decision tree,
+[GPU MIG profiling](../features/gpu-mig.md), and
 [GPU Time-Slicing](../features/gpu-time-slicing.md) for replica selection logic.
 
 ---
@@ -508,6 +541,8 @@ because storage growth is slow.
 | Long decay (0=none). <br><em>Expanded: No decay for PVC long window. All days in the 90-day window contribute equally to storage trend analysis.</em> | 0 | `ROS_TERMS_PVC_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=pvc` | terms[].decay_halflife_hours | Yes |
 
 \* Configurable via `PUT /settings/terms?recommendation_type=pvc`.
+
+See [PVC right-sizing](../features/pvc-rightsizing.md).
 
 ---
 
@@ -663,6 +698,8 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 | Snapshot stale grace without fresh inventory (hours) <br><em>Defer stale classification this long when inventory ingest is down (48h).</em> | 48 | `ROS_SNAPSHOT_STALE_GRACE_HOURS` | — | — | No |
 
 \* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
+
+See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ---
 

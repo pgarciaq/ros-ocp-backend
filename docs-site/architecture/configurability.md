@@ -128,6 +128,32 @@ Implementation references: [`handlers_terms.go`](../../internal/api/handlers_ter
 [`term_config.go`](../../internal/engine/term_config.go),
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go).
 
+### Settings PUT side effects
+
+What happens after a successful tenant **PUT** (and after **DELETE** where noted).
+The HTTP response returns immediately; long-running work runs in the background unless
+`ROS_THRESHOLD_RECALCULATION_ENABLED=false` (threshold recalc only).
+
+| Route | On successful PUT |
+|-------|-------------------|
+| `/settings/container` | Async recalc (container) |
+| `/settings/namespace` | Async recalc (namespace) |
+| `/settings/node` | Async recalc (node) |
+| `/settings/gpu` | Async recalc (gpu) |
+| `/settings/pvc` | Async recalc (pvc) |
+| `/settings/quota` | Async recalc (quota) |
+| `/settings/cluster-quota` | Async recalc (cluster-quota) |
+| `/settings/snapshot` | Async recalc (snapshot) |
+| `/settings/idle-detection` | Async recalc (container) |
+| `/settings/vm` | Cache invalidation; next ingest applies |
+| `/settings/vm/terms` | Cache invalidation; next ingest applies |
+| `/settings/terms` | Cache invalidation; next ingest applies |
+| `/settings/business-hours*` | Digest reship + schedule apply |
+
+**DELETE** on threshold-style routes also invalidates the in-process settings cache;
+idle-detection DELETE additionally triggers container async recalc. Snapshot DELETE
+returns `204` without recalc (effective values revert on the next classification run).
+
 ---
 
 ## Global Settings Lock

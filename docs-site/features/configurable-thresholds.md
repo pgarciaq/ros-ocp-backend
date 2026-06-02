@@ -1,7 +1,7 @@
 # Configurable Thresholds
 
 !!! info "Quick Facts"
-    **API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=<type>`  
+    **API:** Per-plugin `GET/PUT/DELETE` under `/api/cost-management/v1/recommendations/openshift/settings/`  
     **Configurable:** Yes (meta-feature)  
     **Engines:** Applies to all engine types  
     **RBAC:** `cost-management:settings:write` required for PUT/DELETE
@@ -9,102 +9,85 @@
 ## Overview
 
 Configurable thresholds let each tenant tune recommendation behavior — percentiles,
-classification cutoffs, margins, and idle detection — without redeploying ROS.
-Administrators can lock parameters platform-wide via environment variables.
+classification cutoffs, margins, idle detection, and plugin-specific knobs — without
+redeploying ROS. Administrators can lock parameters platform-wide via environment
+variables or freeze all tenant overrides with `ROS_SETTINGS_LOCKED`.
+
+## Canonical settings routes
+
+Use these dedicated paths (not query parameters):
+
+| Route | Purpose |
+|-------|---------|
+| `/settings/container` | Container CPU/memory percentiles, margins, idle thresholds |
+| `/settings/namespace` | Namespace-aggregated sizing (same field set as container) |
+| `/settings/node` | Node utilization, consolidation, classification |
+| `/settings/gpu` | GPU classification, MIG, time-slicing parameters |
+| `/settings/pvc` | PVC oversized/near-full ratios, growth projection |
+| `/settings/quota` | ResourceQuota headroom and risk bands |
+| `/settings/cluster-quota` | ClusterResourceQuota headroom and risk bands |
+| `/settings/snapshot` | Snapshot staleness and cost thresholds |
+| `/settings/vm` | VM rightsizing thresholds, disk, I/O, instance-type matching |
+| `/settings/idle-detection` | Idle/zombie classification (`{"idle_detection":{...}}`) |
+
+**Deprecated alias:** `GET/PUT/DELETE /settings/thresholds?recommendation_type=<type>`
+still works for `container`, `namespace`, `node`, `gpu`, and `pvc`. Responses include
+`Deprecation: true` and a `Link` header pointing at the canonical `/settings/<type>` path.
+
+Term windows, VM terms, and business-hours schedules use separate routes — see
+[Configurability Reference](../architecture/configurability.md#settings-api-routes).
 
 ## Three-tier precedence
-
-```mermaid
-flowchart TD
-  Env[Admin ROS_* env vars] -->|locks field| Effective[Effective value]
-  DB[Tenant DB override] --> Effective
-  Default[Compiled default] --> Effective
-```
 
 | Tier | Source | Behavior |
 |------|--------|----------|
 | **1 — Admin env var** | `ROS_CONTAINER_*`, `ROS_NODE_*`, etc. | **Locks** the field; tenant PUT returns `403` with `locked_fields` |
-| **2 — Tenant Settings API** | `recommendation_thresholds` table | Applied when no env lock exists |
+| **2 — Tenant Settings API** | Per-org DB overrides | Applied when no env lock exists |
 | **3 — Compiled default** | Engine constants / `Default*()` functions | Fallback |
 
-Resolution order: Tier 1 → Tier 2 → Tier 3. See
-[Configurability Reference](../architecture/configurability.md#configuration-precedence).
+Resolution order: Tier 1 → Tier 2 → Tier 3. Env locks and `ROS_SETTINGS_LOCKED` are
+documented in [Configurability Reference](../architecture/configurability.md).
 
-## Settings API workflow
+## Typical workflow
 
-### GET — current effective values
+**GET** returns merged effective values plus `locked_fields` (and `settings_locked`
+when the platform lock is on).
 
-```http
-GET /api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container
-```
+**PUT** accepts partial JSON, validates ranges, saves tier-2 overrides, then applies
+side effects per route (see [async behavior](#async-behavior-after-put) below).
 
-Returns merged effective settings plus `locked_fields` (admin-locked parameter names).
-Compare returned values to [compiled defaults](../architecture/configurability.md) to
-see whether the tenant has overrides (DELETE resets tier-2 overrides).
+**DELETE** removes tier-2 overrides; effective values revert to compiled defaults unless
+env-locked. Returns `204` on some routes and `200` with the reset body on others — see
+the reference doc.
 
-### PUT — partial override
+When `ROS_SETTINGS_LOCKED=true` (or a per-plugin `ROS_SETTINGS_LOCKED_<TYPE>` opt-out
+is inverted), PUT/DELETE return `403` with `settings are locked by platform administrator`.
 
-```http
-PUT /api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container
-Content-Type: application/json
+## Async behavior after PUT
 
-{ "cpu_cost_percentile": 0.55, "min_margin": 1.20 }
-```
+| Category | Routes | After successful PUT |
+|----------|--------|----------------------|
+| **Async recalc** | `container`, `namespace`, `node`, `gpu`, `pvc`, `quota`, `cluster-quota`, `snapshot` | Background re-recommendation for all clusters in the org (existing digest data; typically seconds) |
+| **Idle detection** | `idle-detection` | Async recalc for **container** recommendations (idle runs inline on container/GPU ingest) |
+| **Cache only** | `vm`, `vm/terms`, `terms` | Settings cache invalidated; new values apply on **next ingest** |
+| **Reship** | `business-hours*` | Digest reship triggered; schedules applied on subsequent processing |
 
-- Accepts partial JSON; validates ranges before save.
-- Locked fields → `403 Forbidden` with `locked_fields` array.
-- Invalid values → `400` with `validation_errors`.
-- On success, triggers **async recalculation** (see below).
+Disable background threshold recalc with `ROS_THRESHOLD_RECALCULATION_ENABLED=false`
+(settings still save; recalc waits for the next operator upload).
 
-### DELETE — reset tenant overrides
-
-```http
-DELETE /api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=container
-```
-
-Returns `204 No Content`. Removes tier-2 overrides; effective values revert to
-compiled defaults (unless admin env vars are set).
-
-When `ROS_SETTINGS_LOCKED=true` (or the plugin type is locked via `ROS_SETTINGS_LOCKED_<TYPE>`),
-DELETE returns `403` with `settings are locked by platform administrator`. GET still returns
-`settings_locked: true`. See [Global Settings Lock](../configuration.md#global-settings-lock).
-
-## Async recalculation
-
-After a successful PUT, ROS re-runs recommendation engines for **all clusters
-in the org** using existing digest data — typically within seconds, without
-waiting for the next operator upload.
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Kill-switch — when `false`, PUT saves settings but skips background recalc |
-
-Recalculation uses the same pipelines as ingestion; only threshold inputs change.
-
-## Supported recommendation types
-
-| `recommendation_type` | Scope |
-|-----------------------|-------|
-| `container` | CPU/memory percentiles, margins, idle thresholds |
-| `namespace` | Same field set as container (higher default trend threshold) |
-| `node` | Utilization targets, consolidation, classification |
-| `gpu` | Classification, MIG sizing, time-slicing parameters |
-| `pvc` | Oversized/near-full ratios, growth projection |
-
-Snapshot thresholds use a dedicated route:
-`GET/PUT .../settings/snapshot` (not the thresholds endpoint).
+Full route-by-route table:
+[Settings PUT side effects](../architecture/configurability.md#settings-put-side-effects).
 
 ## RBAC
 
 When RBAC is enabled, PUT and DELETE require **`cost-management:settings:write`**
-(mapped to `settings.write` permission in the identity header). GET is available
-to all authenticated users with recommendation read access.
+(mapped to `settings.write` in the identity header). GET is available to authenticated
+users with recommendation read access.
 
-## Full parameter catalog
+## Full reference
 
-The thresholds API exposes plugin-specific fields. For the complete list of
-**49+ environment variables** (including term windows, global platform settings,
-and snapshot/business-hours knobs), see:
+Parameter catalogs, env-var matrices, global lock, term windows, snapshot knobs, and
+VM/business-hours settings:
 
 **[Configurability Reference](../architecture/configurability.md)**
 
@@ -115,4 +98,4 @@ For how thresholds affect engine output, see
 
 - [Dual Engine](dual-engine.md) — Percentile differences between cost and performance
 - [Container Right-Sizing](container-recommendations.md) — Primary consumer of container thresholds
-- [UI Integration Guide — Settings: Thresholds](../ui-integration-guide.md#8-settings-thresholds)
+- [UI Integration Guide — Settings](../ui-integration-guide.md)
