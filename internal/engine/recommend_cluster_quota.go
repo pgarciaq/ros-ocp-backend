@@ -157,10 +157,11 @@ func bpToPercentInt(bp *int) *int {
 }
 
 type clusterQuotaUtilization struct {
-	CPURequestBP    *int
-	MemoryRequestBP *int
+	CPURequestBP     *int
+	MemoryRequestBP  *int
 	StorageRequestBP *int
-	PodsBP          *int
+	PodsBP           *int
+	ObjectCountBP    *int
 }
 
 func clusterQuotaUtilizationBP(
@@ -174,12 +175,15 @@ func clusterQuotaUtilizationBP(
 			maxInt64(snap.MemoryRequestUsedBytes, base.MemoryRequestBytes), snap.MemoryRequestHardBytes),
 		StorageRequestBP: utilizationBP(maxInt64(snap.StorageRequestUsedBytes, storageRecommended), snap.StorageRequestHardBytes),
 		PodsBP:           utilizationBP(maxInt64(snap.PodsUsed, podsRecommended), snap.PodsHard),
+		ObjectCountBP:    utilizationBP(snap.ObjectCountUsed, snap.ObjectCountHard),
 	}
 }
 
 func maxClusterQuotaUtilizationBP(util clusterQuotaUtilization) int {
 	maxBP := 0
-	for _, bp := range []*int{util.CPURequestBP, util.MemoryRequestBP, util.StorageRequestBP, util.PodsBP} {
+	for _, bp := range []*int{
+		util.CPURequestBP, util.MemoryRequestBP, util.StorageRequestBP, util.PodsBP, util.ObjectCountBP,
+	} {
 		if bp != nil && *bp > maxBP {
 			maxBP = *bp
 		}

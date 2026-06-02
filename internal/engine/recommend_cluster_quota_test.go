@@ -144,6 +144,38 @@ func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
 	assert.Equal(t, int64(20), recs[0].CapacityFreed.PodsFreed)
 }
 
+func TestComputeClusterQuotaRecommendation_ObjectCountHighRisk(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   11000,
+		HighRiskThresholdBP:   9000,
+		MediumRiskThresholdBP: 7000,
+	}
+	snap := ClusterQuotaSnapshot{
+		ClusterQuotaName: "team-objects",
+		ObjectCountHard:  100,
+		ObjectCountUsed:  95,
+		CPURequestHardMC: 1000000,
+		CPURequestUsedMC: 1000,
+	}
+	rec := computeClusterQuotaRecommendation("org1", "cluster1", snap, NamespaceQuotaClusterAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRiskHigh, rec.RiskLevel)
+	assert.Equal(t, QuotaRecTypeRaise, rec.RecommendationType)
+}
+
+func TestClusterQuotaNotificationCodes_ObjectCountBlocking(t *testing.T) {
+	rec := ClusterQuotaRec{
+		Snapshot: ClusterQuotaSnapshot{
+			ObjectCountHard: 50,
+			ObjectCountUsed: 50,
+		},
+		RecommendationType: QuotaRecTypeOptimal,
+		RiskLevel:          QuotaRiskLow,
+	}
+	codes := ClusterQuotaNotificationCodes(rec)
+	assert.Contains(t, codes, NotifQuotaBlocking)
+}
+
 func TestRecommendClusterQuotas_SkipsZeroHardLimit(t *testing.T) {
 	cfg := QuotaRecConfig{HeadroomBasisPoints: 11000, HighRiskThresholdBP: 9000, MediumRiskThresholdBP: 7000}
 	snap := ClusterQuotaSnapshot{ClusterQuotaName: "no-hard"}

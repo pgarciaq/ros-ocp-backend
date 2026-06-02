@@ -44,7 +44,8 @@ func clusterQuotaResourceBlocking(snap ClusterQuotaSnapshot) bool {
 		quotaUsedAtHard(snap.MemoryRequestUsedBytes, snap.MemoryRequestHardBytes) ||
 		quotaUsedAtHard(snap.MemoryLimitUsedBytes, snap.MemoryLimitHardBytes) ||
 		quotaUsedAtHard(snap.StorageRequestUsedBytes, snap.StorageRequestHardBytes) ||
-		quotaUsedAtHard(snap.PodsUsed, snap.PodsHard)
+		quotaUsedAtHard(snap.PodsUsed, snap.PodsHard) ||
+		quotaUsedAtHard(snap.ObjectCountUsed, snap.ObjectCountHard)
 }
 
 func quotaResourceBlocking(snap NamespaceQuotaSnapshot) bool {
