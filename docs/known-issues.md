@@ -791,9 +791,10 @@ deployment for signals to fully align.
 
 **Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
 
-**Object-count quotas (Gap 9 — by design):** `count/*` resources are visibility + alerting only
-(utilization %, risk, notifications **72**/**73**). No tighten/raise or savings. See
-[cluster-resource-quota.md](features/cluster-resource-quota.md#object-count-quotas-visibility-and-alerting-only).
+**Object-count quotas (Gap 9 — by design):** `count/*` resources affect **risk_level** and
+notifications only — not API `utilization` fields or `order_by=utilization`. Code **72** when
+`used >= hard`; codes **70**/**73** when `risk_level` is `high`. No tighten/raise or savings.
+See [cluster-resource-quota.md](features/cluster-resource-quota.md#object-count-quotas-risk-and-notifications-only).
 
 **Extended resources (Gap 10 — future work):** `requests.ephemeral-storage`, GPU quota,
 hugepages, and custom device-plugin resources are not collected. Prometheus exposes them;

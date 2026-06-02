@@ -42,15 +42,27 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `filter[namespace]` / `filter[project]` | CRQs whose `namespaces` membership includes the value |
 | `filter[recommendation_type]` | `tighten`, `raise`, `optimal`, `none` |
 | `filter[risk_level]` | `high`, `medium`, `low`, `none` |
+| `group_by[cluster]` | Aggregate per cluster (`count`, summed savings and capacity_freed) |
+| `order_by` | `cluster_quota_name`, `utilization`, `risk_level`, `estimated_monthly_savings` |
+| `order_how` | `asc` or `desc` |
 | `limit` | Page size (1–100, default 20) |
 | `offset` | Pagination offset |
 
-**Response fields (per item):**
+### Detail
+
+```
+GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail?cluster_uuid=...&cluster_quota_name=...
+```
+
+Required params: `cluster_uuid`, `cluster_quota_name`. Returns one object with `history[]`
+per resource. See [feature documentation](../features/cluster-resource-quota.md#detail).
+
+**Response fields (per list item):**
 
 - `cluster_uuid`, `cluster_quota_name`
 - `recommendation_type`, `risk_level`
-- `quota_hard`, `quota_used`, `quota_recommended` — CPU/memory request and limit millicores/bytes
-- `utilization` — `cpu_request_percent`, `memory_request_percent`
+- `quota_hard`, `quota_used`, `quota_recommended` — CPU/memory request and limit, storage request, pods
+- `utilization` — `cpu_request_percent`, `memory_request_percent`, `storage_request_percent`, `pods_percent`
 - `capacity_freed` — `cpu_cores_freed`, `memory_bytes`, `storage_request_bytes`, `pods_freed` (on tighten)
 - `estimated_savings` — `value` (whole USD), `units` (CPU/memory/storage when cost data exists; pods not monetized)
 
@@ -140,4 +152,3 @@ Engine: [`ResolveClusterQuotaSettings`](../../internal/engine/cluster_quota_sett
 ## Feature documentation
 
 - [ClusterResourceQuota Recommendations](../features/cluster-resource-quota.md)
-- [OpenAPI specification](../openapi.md)

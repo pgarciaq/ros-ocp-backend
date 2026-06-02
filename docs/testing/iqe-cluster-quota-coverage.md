@@ -25,13 +25,15 @@ Requirement ID: `cost_ros_ocp_cluster_quota` (declared in both plugins' `require
 | `test_cluster_quota_filter_by_cluster` | `filter[cluster]` |
 | `test_cluster_quota_filter_by_cluster_quota_name` | `filter[cluster_quota_name]` |
 | `test_cluster_quota_filter_crq_alias_matches_cluster_quota_name` | `filter[crq]` alias |
+| `test_cluster_quota_filter_cluster_resource_quota_alias` | `filter[cluster_resource_quota]` alias |
 | `test_cluster_quota_filter_by_namespace` | `filter[namespace]` membership |
 | `test_cluster_quota_filter_project_alias_matches_namespace` | `filter[project]` alias |
 | `test_cluster_quota_filter_recommendation_type_and_risk_level` | Type and risk filters |
 | `test_cluster_quota_order_by_utilization_desc` | `order_by=utilization` |
+| `test_cluster_quota_order_by_risk_level_desc` | `order_by=risk_level` |
+| `test_cluster_quota_order_by_estimated_monthly_savings_desc` | `order_by=estimated_monthly_savings` |
 | `test_cluster_quota_pagination` | `limit` / `offset` |
-| `test_cluster_quota_detail_returns_history` | Detail + `history[]` |
-| `test_cluster_quota_detail_returns_history_and_notifications` | Notification codes (70–73) |
+| `test_cluster_quota_detail_returns_history` | Detail + `history[]`; validates notification codes 70–73 when present |
 | `test_cluster_quota_group_by_cluster` | `group_by[cluster]` aggregation |
 | `test_cluster_quota_settings_get_returns_200` | Settings GET |
 | `test_cluster_quota_settings_has_expected_fields` | Settings defaults + `locked_fields` |

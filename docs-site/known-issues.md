@@ -794,11 +794,14 @@ deployment for signals to fully align.
 **Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
 
 **Object-count quotas (Gap 9 — by design):** `count/*` resources (for example `count/deployments.apps`,
-`count/services`) are ingested for **visibility and alerting only** — utilization %, risk level, and
-blocking notifications (**72** namespace, **73** CRQ). They do **not** produce tighten/raise
-recommendations or `estimated_savings`. Rationale: admission-control guardrails without a
-workload-derived target or cost-model rate; lowering object limits risks production outages.
-See [ClusterResourceQuota — Object-count quotas](features/cluster-resource-quota.md#object-count-quotas-visibility-and-alerting-only)
+`count/services`) are ingested for **risk classification and alerting only** — they affect
+`risk_level` and notifications but are **not** exposed in API `utilization` fields or
+`order_by=utilization`. Code **72** fires when `used >= hard` (including object counts);
+codes **70** and **73** fire when `risk_level` is `high`. Object counts do **not** produce
+tighten/raise recommendations or `estimated_savings`. Rationale: admission-control guardrails
+without a workload-derived target or cost-model rate; lowering object limits risks production
+outages.
+See [ClusterResourceQuota — Object-count quotas](features/cluster-resource-quota.md#object-count-quotas-risk-and-notifications-only)
 and [ResourceQuota — Object-count resources](features/quota-recommendations.md#object-count-resources).
 
 ### Quota extended resources (future work)

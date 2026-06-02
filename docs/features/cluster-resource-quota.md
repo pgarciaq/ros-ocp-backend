@@ -119,8 +119,30 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `filter[risk_level]` | `high` \| `medium` \| `low` \| `none` |
 | `filter[namespace]` or `filter[project]` | CRQs whose namespace membership includes the value |
 | `group_by[cluster]` | Aggregate per cluster (sum `capacity_freed` and `estimated_savings`; row includes `count`) |
-| `order_by`, `order_how` | Sort (see namespace quota API) |
+| `order_by`, `order_how` | Sort — see [order_by values](#order_by-values) |
 | `limit`, `offset` | Pagination (default limit 20, max 100) |
+
+### order_by values
+
+| `order_by` | Sort key |
+|------------|----------|
+| `cluster_quota_name` | CRQ object name (default) |
+| `utilization` | Max of CPU/memory/storage/pods utilization percents (object-count excluded) |
+| `risk_level` | `high` → `medium` → `low` → `none` |
+| `estimated_monthly_savings` | `savings_dollars_monthly` (tighten rows only) |
+
+### Notification codes
+
+CRQ rows may emit codes **70–73** (shared catalog with namespace ResourceQuota except code 73 is CRQ-specific). Derivation: [`ClusterQuotaNotificationCodes`](../../internal/engine/quota_notifications.go).
+
+| Code | Name | When emitted (CRQ) |
+|------|------|-------------------|
+| **70** | `QUOTA_NEAR_CAPACITY` | `risk_level` is `high` — utilization at or above the high-risk threshold |
+| **71** | `QUOTA_OVERSIZED` | `recommendation_type` is `tighten` — hard limits exceed aggregated namespace quota recommendations |
+| **72** | `QUOTA_BLOCKING` | `used >= hard` on any tracked resource (CPU, memory, storage, pods, or object counts) — admission may block new workloads |
+| **73** | `CLUSTER_QUOTA_AT_CAPACITY` | `risk_level` is `high` — CRQ-specific high-utilization alert (often co-emitted with **70**) |
+
+Filter notification catalog by plugin: `GET .../notification-codes/?filter[plugin]=cluster-quota` returns all four codes.
 
 **Detail:**
 
@@ -182,7 +204,7 @@ Beyond CPU/memory request and limit hard/used, the operator also collects:
 | `object_count_hard` / `object_count_used` | Sum of `count/*` resources |
 | `namespaces` | Distinct namespaces with `type=used` > 0 |
 
-### Object-count quotas (visibility and alerting only)
+### Object-count quotas (risk and notifications only)
 
 The operator ingests aggregated **`object_count_*`** metrics (sum of all Kubernetes
 `count/*` ResourceQuota resource types, such as `count/deployments.apps`,
@@ -192,9 +214,11 @@ The operator ingests aggregated **`object_count_*`** metrics (sum of all Kuberne
 
 | Use case | Included? | Notes |
 |----------|-----------|-------|
-| **Utilization %** | Yes | `object_count_used / object_count_hard` contributes to per-resource utilization in API responses |
+| **API utilization fields** | No | `utilization` exposes CPU, memory, storage, and pods percents only — no `object_count_*` fields |
+| **`order_by=utilization`** | No | Sort uses the same four percents; object-count utilization is internal-only |
 | **Risk level** | Yes | `ObjectCountBP` participates in `maxUtilizationBP()` — a team at 95% of its object-count hard limit can surface `high` risk even when CPU/memory are low |
-| **Blocking notifications** | Yes | Code **72** (namespace ResourceQuota at capacity) and code **73** (ClusterResourceQuota at capacity) fire when `used >= hard` on object counts, same as CPU/memory/storage/pods |
+| **Blocking notifications** | Yes | Code **72** fires when `used >= hard` on object counts, same as CPU/memory/storage/pods |
+| **High-utilization notifications** | Yes | Codes **70** and **73** fire when `risk_level` is `high` (object-count pressure can contribute to that classification) |
 | **Tighten / raise** | No | There is no workload-derived target comparable to summed namespace `quota_recommendation_sets` or container `rec_*` request columns |
 | **Savings** | No | Koku `effective_rates` has no object-count or per-object cost metric; freed object-count capacity is not monetized |
 
@@ -205,14 +229,14 @@ ROS does not recommend lowering object-count hard values because:
 - There is no cost-model rate for discrete object types in Koku.
 - Reducing object limits could cause production outages (deployments blocked at admission).
 
-**What users get:** utilization percentage on object counts, elevated **risk badge** when
-approaching hard limits, and **notification code 73** when a CRQ object-count resource is at
-capacity. Treat these as operational admission-pressure indicators, not dollar savings
+**What users get:** elevated **risk badge** when object-count utilization is high,
+**notification code 72** when at hard capacity, and **codes 70/73** when overall CRQ risk
+is `high`. Treat these as operational admission-pressure indicators, not dollar savings
 opportunities.
 
 Implementation: [`quota_notifications.go`](../../internal/engine/quota_notifications.go),
 [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go) (`ObjectCountBP`
-only; no tighten/raise path for object counts).
+in risk classification only; no tighten/raise path for object counts).
 
 ### Savings by resource
 
