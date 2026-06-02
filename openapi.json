@@ -250,6 +250,75 @@
             }
           },
           {
+            "name": "after",
+            "in": "query",
+            "description": "Opaque base64url cursor from a previous response's `meta.next_cursor`. When set, the server uses keyset pagination and **ignores `offset`**. See [API pagination](docs-site/pagination.md).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[term]`. Limits nested `recommendation_terms` in each list item to the selected term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter nested recommendation terms in list responses. Accepts `short`, `medium`, `long` or `short_term`, `medium_term`, `long_term`. When omitted, all terms are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. Include only this engine in `recommendation_engines`. When omitted, both cost and performance are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Include only this engine in `recommendation_engines` under each term. When omitted, both cost and performance are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
             "name": "order_by",
             "in": "query",
             "description": "Field to order results by. Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
@@ -2796,6 +2865,15 @@
               "offset": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "has_next": {
+                "type": "boolean",
+                "description": "True when another page exists after this one (keyset pagination)."
+              },
+              "next_cursor": {
+                "type": "string",
+                "nullable": true,
+                "description": "Opaque cursor to pass as `after` on the next request when `has_next` is true."
               }
             }
           },
