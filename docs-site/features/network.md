@@ -318,7 +318,7 @@ List responses follow pagination and identity conventions in the [UI Integration
 | Tier B | SaaS egress $ attribution and top destinations |
 | v2 (Tier C) | Cross-zone co-location with strict classification QA |
 
-See internal design: [`docs/design/network-recommendations.md`](../../../docs/design/network-recommendations.md).
+See internal design: [`docs/design/network-recommendations.md`](../../docs/design/network-recommendations.md).
 
 ---
 
@@ -326,7 +326,7 @@ See internal design: [`docs/design/network-recommendations.md`](../../../docs/de
 
 | Document | Audience |
 |----------|----------|
-| [Internal design: network recommendations](../../../docs/design/network-recommendations.md) | Engineering — tiers, risks, phases |
+| [Internal design: network recommendations](../../docs/design/network-recommendations.md) | Engineering — tiers, risks, phases |
 | [Features overview](index.md) | All ROS capabilities |
 | [Configurable thresholds](configurable-thresholds.md) | Settings API |
 | OpenShift docs | [Network Observability Operator](https://docs.openshift.com/container-platform/latest/networking/network_observability/installing-operators.html) |

@@ -73,6 +73,8 @@ Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_
 
 Per-organization overrides for CRQ headroom and utilization risk bands. Resolution order:
 **Settings API** → **`ROS_CLUSTER_QUOTA_*` env vars** → compiled defaults (10 / 90 / 70).
+See [Configurability — ClusterResourceQuota](../architecture/configurability.md#clusterresourcequota)
+for env vars, precedence, and lock behavior.
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/settings/cluster-quota

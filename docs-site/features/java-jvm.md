@@ -440,4 +440,4 @@ See [Configurable thresholds](configurable-thresholds.md).
 | [Dual Engine (Cost vs Performance)](dual-engine.md) | Cost vs performance profiles |
 | [Configurable Thresholds](configurable-thresholds.md) | Settings API and precedence |
 | [Plugin Execution Phases](../architecture/plugin-phases.md) | Enrich-phase placement |
-| Internal design | [`docs/design/java-recommendations.md`](../../../docs/design/java-recommendations.md) |
+| Internal design | [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md) |

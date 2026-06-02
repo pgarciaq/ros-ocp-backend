@@ -69,7 +69,7 @@ recommendations exist, so the authoritative run is the explicit call at the end 
 `processContainerCSVNative` in the report processor.
 
 Internal design (timing, object-count policy, pod-savings analysis):
-[`docs/features/quota-recommendations.md`](../../../docs/features/quota-recommendations.md) in the repo `docs/` tree.
+[`docs/features/quota-recommendations.md`](../../docs/features/quota-recommendations.md) in the repo `docs/` tree.
 
 ---
 
@@ -351,5 +351,5 @@ and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 | **Per-quota identity (legacy operators)** | Without `quota_name` in namespace CSV, multiple ResourceQuota objects merge into one row |
 
 **Not planned:** Dollar savings for freed pod quota slots (see internal doc
-[Pod savings feasibility](../../../docs/features/quota-recommendations.md#pod-savings-feasibility-analysis)).
+[Pod savings feasibility](../../docs/features/quota-recommendations.md#pod-savings-feasibility-analysis)).
 Use **`pods_freed`** for capacity reporting and node consolidation savings for node-level FinOps impact.

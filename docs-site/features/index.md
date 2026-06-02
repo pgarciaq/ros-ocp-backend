@@ -113,26 +113,26 @@ no usage (zombie vs idle), estimate full monthly waste, and filter with
 recurring peaks in daily usage history, forecast upcoming demand with
 [Augurs](https://github.com/grafana/augurs), and warn operators days before
 predictable spikes (month-end batch, weekly surges, holiday traffic). See the
-internal design: [`docs/design/seasonality-plugin.md`](../../../docs/design/seasonality-plugin.md).
+internal design: [`docs/design/seasonality-plugin.md`](../../docs/design/seasonality-plugin.md).
 
 **[Virtual Machine Recommendations](virtual-machines.md)** — *Preview (Beta).* Right-size
 KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (u1, cx1,
 m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth projection,
 I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduated
 confidence with guest-agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
-Technical design: [`docs/design/vm-recommendations.md`](../../../docs/design/vm-recommendations.md).
+Technical design: [`docs/design/vm-recommendations.md`](../../docs/design/vm-recommendations.md).
 
 **[Java & JVM Optimization](java-jvm.md)** — *Planned.* JVM-specific tuning on top of container
 recommendations: MaxRAMPercentage, garbage collector selection, Quarkus/Spring thread pools,
 and container limits that account for non-heap memory (metaspace, thread stacks). Addresses
 OOMKills where the heap was not full. Gated behind `ROS_ENABLE_JVM_RECS`.
-Technical design: [`docs/design/java-recommendations.md`](../../../docs/design/java-recommendations.md).
+Technical design: [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md).
 
 **[Network Optimization](network.md)** — *Planned.* Analyze OpenShift Network Observability flows to
 recommend reductions in expensive internet egress, fix DNS latency outliers, and surface unhealthy
 packet-drop paths; SaaS deployments add egress cost attribution by namespace. Cross-zone co-location
 hints are planned for v2 after classification quality gates. Gated behind `ROS_ENABLE_NETWORK_RECS`.
-Technical design: [`docs/design/network-recommendations.md`](../../../docs/design/network-recommendations.md).
+Technical design: [`docs/design/network-recommendations.md`](../../docs/design/network-recommendations.md).
 
 ## Planned recommendation types
 

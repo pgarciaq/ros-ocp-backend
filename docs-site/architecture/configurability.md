@@ -91,7 +91,8 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/business-hours` | GET, PUT, DELETE | **Existing** | Org-default business-hours schedule. |
 | `/settings/business-hours/clusters/:cluster_id` | GET, PUT, DELETE | **Existing** | Cluster-level schedule override. |
 | `/settings/business-hours/clusters/:cluster_id/namespaces/:namespace` | GET, PUT, DELETE | **Existing** | Namespace-level schedule override. |
-| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds (percentiles, margins, idle limits, GPU SM thresholds, PVC oversized ratio, etc.). |
+| `/settings/container`, `/settings/namespace`, `/settings/node`, `/settings/gpu`, `/settings/pvc` | GET, PUT, DELETE | **Existing** | Per-tenant sizing and classification thresholds for each plugin (canonical paths). |
+| `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Deprecated** | Alias for the five paths above; responses include `Deprecation: true` and a `Link` successor header. |
 | `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
 | `/settings/cluster-quota` | GET, PUT, DELETE | **Existing** | ClusterResourceQuota headroom and risk thresholds (`cluster-quota` plugin). |
 | `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
@@ -185,7 +186,8 @@ admin env-var locks on read. The in-process settings cache is invalidated for th
 | `/settings/vm` | VM threshold / disk / I/O / instance-type overrides |
 | `/settings/vm/terms` | VM term-window overrides (separate from generic terms table) |
 | `/settings/terms?recommendation_type=<plugin>` | Generic term rows for that plugin |
-| `/settings/thresholds?recommendation_type=<plugin>` | Threshold JSON for that plugin |
+| `/settings/container`, `/settings/namespace`, `/settings/node`, `/settings/gpu`, `/settings/pvc` | Threshold JSON for that plugin |
+| `/settings/thresholds?recommendation_type=<plugin>` | Same as dedicated path (deprecated alias) |
 | `/settings/quota`, `/settings/cluster-quota`, `/settings/idle-detection` | Respective override rows |
 | Business-hours routes | Schedule override at that scope |
 
@@ -286,7 +288,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_ARCHIVE_DAYS` for deletion timing.</em> | 72 | `ROS_STALENESS_THRESHOLD_HOURS` | — | — | No |
+| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_ARCHIVE_DAYS` for deletion timing.</em> | 48 | `ROS_STALENESS_THRESHOLD_HOURS`, `ROS_STALE_DATA_THRESHOLD_HOURS` (alias) | — | — | No |
 | Max digest lookback (days) <br><em>Hard cap on digest history queries. Lower speeds DB work; raise for seasonal analysis if partitions retained. Must stay within `ROS_RETENTION_MONTHS` data still on disk.</em> | 90 | `ROS_MAX_LOOKBACK_DAYS` | — | — | No |
 | OOM memory bump base factor <br><em>Log-scaling constant after OOMKill events. Higher → larger memory bumps; pairs with `ROS_OOM_MAX_BUMP` cap.</em> | 0.15 | `ROS_OOM_BASE_BUMP` | — | — | No |
 | OOM memory bump max multiplier <br><em>Max memory recommendation multiplier after repeated OOMs (1.60 = +60% cap). Prevents runaway suggestions from crash loops.</em> | 1.60 | `ROS_OOM_MAX_BUMP` | — | — | No |
@@ -324,7 +326,7 @@ Per-term overrides: `PUT` body `{"terms":[{"name":"medium","window_days":10,"min
 ## Container
 
 Sizing, classification, and notification thresholds for per-container CPU/memory
-recommendations via **`GET/PUT/DELETE /settings/thresholds?recommendation_type=container`**. Cost and performance engines share these parameters with different percentile values.
+recommendations via **`GET/PUT/DELETE /settings/container`** (or the deprecated `/settings/thresholds?recommendation_type=container` alias). Cost and performance engines share these parameters with different percentile values.
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
@@ -351,6 +353,8 @@ recommendations via **`GET/PUT/DELETE /settings/thresholds?recommendation_type=c
 | Long decay (15d). <br><em>Expanded: Decay half-life for the long-term window. 360 hours = 15 days, matching the window length. Data from two weeks ago has half the influence of today's data, emphasizing recent trends while still considering the full window.</em> | 360 | `ROS_TERMS_CONTAINER_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=container` | terms[].decay_halflife_hours | Yes |
 
 \* Configurable via `PUT /settings/terms?recommendation_type=container`. Admin `ROS_TERMS_*` env vars lock individual term fields.
+
+See [Container recommendations](../features/container-recommendations.md).
 
 ---
 
@@ -385,6 +389,8 @@ container-level digests; thresholds apply to the aggregated series.
 
 \* Configurable via `PUT /settings/terms?recommendation_type=namespace`.
 
+See [Namespace recommendations](../features/namespace-recommendations.md).
+
 ---
 
 ## Node
@@ -394,15 +400,22 @@ Node-level CPU/memory utilization, classification, and dual-engine sizing
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| P95 util below → underutilized. <br><em>Expanded: Node underutilization threshold (fraction of allocatable capacity). A node is classified as 'underutilized' when BOTH its CPU P95 AND memory P95 usage are below this fraction of allocatable capacity. 0.30 means: if a node never uses more than 30% of its CPU and 30% of its memory, it's underutilized and a candidate for consolidation.</em> | 0.30 | `ROS_NODE_UNDERUTIL_THRESHOLD` | `/settings/terms?recommendation_type=node` | underutil_threshold | Yes |
-| Requests/allocatable above → overcommitted. <br><em>Expanded: Node overcommit threshold (ratio of total pod requests to allocatable). A node is 'overcommitted' when the sum of all pod CPU requests exceeds this multiple of the node's allocatable CPU. 1.50 means: if pods request 150% of what the node can actually provide, the node is dangerously overcommitted and likely to experience evictions.</em> | 1.50 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | `/settings/terms?recommendation_type=node` | overcommit_threshold | Yes |
-| Fallback when allocatable unknown. <br><em>Expanded: Fallback multiplier when node allocatable capacity is unknown. Some nodes don't report allocatable resources. In that case, allocatable is estimated as `max_observed_requests × this_factor`. 0.93 accounts for system-reserved resources (~7% for kubelet, OS, etc.).</em> | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` | `/settings/terms?recommendation_type=node` | allocatable_factor | Yes |
-| CPU/mem imbalance → stranded. <br><em>Expanded: CPU/memory imbalance ratio above which a node is classified as having 'stranded resources'. Stranded means one resource (e.g., CPU) is heavily used while the other (memory) has large amounts wasted. Calculated as ` | 0.60 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | `/settings/terms?recommendation_type=node` | stranded_imbalance_threshold | No |
-| EMA smoothing factor. <br><em>Expanded: Exponential Moving Average (EMA) smoothing factor for node trend and imbalance calculations. Higher values (closer to 1.0) react faster to recent changes but are noisier. Lower values (closer to 0.0) are smoother but lag behind. 0.30 gives moderate smoothing, weighting recent data ~30% vs ~70% history.</em> | 0.30 | `ROS_NODE_EMA_ALPHA` | `/settings/terms?recommendation_type=node` | ema_alpha | Yes |
-| Cost engine target (80%). <br><em>Expanded: The cost engine sizes node recommendations assuming nodes should run at this utilization level. 0.80 (80%) means the engine recommends enough nodes to keep average utilization around 80%—leaving 20% spare capacity for bursts. Lower values = more spare capacity and higher cost; higher values = tighter packing with less headroom.</em> | 0.80 | `ROS_NODE_COST_TARGET_UTILIZATION` | `/settings/terms?recommendation_type=node` | cost_target_utilization | Yes |
-| Performance engine target (55%). <br><em>Expanded: The performance engine uses a much more conservative target. 0.55 (55%) means nodes should run at most ~55% utilization, leaving 45% headroom for latency-sensitive workloads and failure recovery. This produces fewer consolidation recommendations and larger node counts than the cost engine.</em> | 0.55 | `ROS_NODE_PERF_TARGET_UTILIZATION` | `/settings/terms?recommendation_type=node` | perf_target_utilization | Yes |
-| Perf consolidates only when current ≥ N× recommended. <br><em>Expanded: Performance engine consolidation guard. The performance engine will only recommend consolidating nodes (reducing node count) when the current capacity is at least this multiple of the recommended capacity on BOTH CPU and memory. 2.0 means: the cluster must have at least twice the recommended resources before consolidation is suggested. This prevents the performance engine from being too aggressive with capacity reduction.</em> | 2.0 | `ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER` | `/settings/terms?recommendation_type=node` | perf_consolidation_headroom_multiplier | Yes |
-| Min days for CPU trend slope. <br><em>Expanded: Minimum days of node usage data required before computing a CPU trend (growth or decline). Trend detection uses linear regression and needs enough data points to be meaningful. 3 days prevents noisy trend alerts from a single day's spike or dip in node utilization.</em> | 3 | `ROS_NODE_TREND_MIN_DAYS` | `/settings/terms?recommendation_type=node` | trend_min_days | Yes |
+| P95 util below → underutilized. <br><em>Expanded: Node underutilization threshold (fraction of allocatable capacity). A node is classified as 'underutilized' when BOTH its CPU P95 AND memory P95 usage are below this fraction of allocatable capacity. 0.30 means: if a node never uses more than 30% of its CPU and 30% of its memory, it's underutilized and a candidate for consolidation.</em> | 0.30 | `ROS_NODE_UNDERUTIL_THRESHOLD` | `/settings/node` | underutil_threshold | Yes |
+| Requests/allocatable above → overcommitted. <br><em>Expanded: Node overcommit threshold (ratio of total pod requests to allocatable). A node is 'overcommitted' when the sum of all pod CPU requests exceeds this multiple of the node's allocatable CPU. 1.50 means: if pods request 150% of what the node can actually provide, the node is dangerously overcommitted and likely to experience evictions.</em> | 1.50 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | `/settings/node` | overcommit_threshold | Yes |
+| Fallback when allocatable unknown. <br><em>Expanded: Fallback multiplier when node allocatable capacity is unknown. Some nodes don't report allocatable resources. In that case, allocatable is estimated as `max_observed_requests × this_factor`. 0.93 accounts for system-reserved resources (~7% for kubelet, OS, etc.).</em> | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` | `/settings/node` | allocatable_factor | Yes |
+| CPU/mem imbalance → stranded. <br><em>Expanded: CPU/memory imbalance ratio above which a node is classified as having 'stranded resources'. Stranded means one resource (e.g., CPU) is heavily used while the other (memory) has large amounts wasted. Calculated as ` | 0.60 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | `/settings/node` | stranded_imbalance_threshold | No |
+| EMA smoothing factor. <br><em>Expanded: Exponential Moving Average (EMA) smoothing factor for node trend and imbalance calculations. Higher values (closer to 1.0) react faster to recent changes but are noisier. Lower values (closer to 0.0) are smoother but lag behind. 0.30 gives moderate smoothing, weighting recent data ~30% vs ~70% history.</em> | 0.30 | `ROS_NODE_EMA_ALPHA` | `/settings/node` | ema_alpha | Yes |
+| Cost engine target (80%). <br><em>Expanded: The cost engine sizes node recommendations assuming nodes should run at this utilization level. 0.80 (80%) means the engine recommends enough nodes to keep average utilization around 80%—leaving 20% spare capacity for bursts. Lower values = more spare capacity and higher cost; higher values = tighter packing with less headroom.</em> | 0.80 | `ROS_NODE_COST_TARGET_UTILIZATION` | `/settings/node` | cost_target_utilization | Yes |
+| Performance engine target (55%). <br><em>Expanded: The performance engine uses a much more conservative target. 0.55 (55%) means nodes should run at most ~55% utilization, leaving 45% headroom for latency-sensitive workloads and failure recovery. This produces fewer consolidation recommendations and larger node counts than the cost engine.</em> | 0.55 | `ROS_NODE_PERF_TARGET_UTILIZATION` | `/settings/node` | perf_target_utilization | Yes |
+| Perf consolidates only when current ≥ N× recommended. <br><em>Expanded: Performance engine consolidation guard. The performance engine will only recommend consolidating nodes (reducing node count) when the current capacity is at least this multiple of the recommended capacity on BOTH CPU and memory. 2.0 means: the cluster must have at least twice the recommended resources before consolidation is suggested. This prevents the performance engine from being too aggressive with capacity reduction.</em> | 2.0 | `ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER` | `/settings/node` | perf_consolidation_headroom_multiplier | Yes |
+| Min days for CPU trend slope. <br><em>Expanded: Minimum days of node usage data required before computing a CPU trend (growth or decline). Trend detection uses linear regression and needs enough data points to be meaningful. 3 days prevents noisy trend alerts from a single day's spike or dip in node utilization.</em> | 3 | `ROS_NODE_TREND_MIN_DAYS` | `/settings/node` | trend_min_days | Yes |
+| Pod scheduling consolidation gate. <br><em>Expanded: Minimum pod scheduling headroom (fraction 0.0–1.0) before the cost/performance engines suppress `node_count_reduction` consolidation on that node. Headroom is `(pod_capacity − max_pod_count) / pod_capacity` when capacity is known. Below this fraction (default **0.15**), consolidation is blocked even if the node is underutilized. Must be ≥ `pod_headroom_notification_threshold`.</em> | 0.15 | `ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE` | `/settings/node` | pod_headroom_consolidation_gate | Yes |
+| Pod scheduling notification threshold. <br><em>Expanded: Headroom below this fraction emits notification code **74** (`NotifNodePodSchedulingLimit`). Default **0.10** (10%).</em> | 0.10 | `ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD` | `/settings/node` | pod_headroom_notification_threshold | Yes |
+| Zombie CPU P95 (millicores). <br><em>Expanded: Node is classified `zombie` when CPU P95 is below this value and running pod count is at most `zombie_max_pods`. Stricter than idle (near-zero CPU with few pods).</em> | 200 | `ROS_NODE_ZOMBIE_CPU_MC` | `/settings/node` | zombie_cpu_p95_mc | Yes |
+| Zombie max pods. <br><em>Expanded: Maximum running pods for zombie classification.</em> | 5 | `ROS_NODE_ZOMBIE_MAX_PODS` | `/settings/node` | zombie_max_pods | Yes |
+| Idle CPU util % of allocatable. <br><em>Expanded: Idle candidate when CPU P95 utilization (fraction of allocatable) is below this percent (0–100).</em> | 10 | `ROS_NODE_IDLE_CPU_UTIL_PCT` | `/settings/node` | idle_cpu_util_pct | Yes |
+| Idle memory util % of allocatable. <br><em>Expanded: Idle candidate when memory P95 utilization is below this percent (0–100).</em> | 10 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | `/settings/node` | idle_mem_util_pct | Yes |
+| Idle max pods. <br><em>Expanded: Maximum running pods for idle classification (with low CPU and memory util).</em> | 10 | `ROS_NODE_IDLE_MAX_PODS` | `/settings/node` | idle_max_pods | Yes |
 | Short-term window. <br><em>Expanded: Days of node-level usage history for short-term node recommendations. 1 day captures immediate node utilization changes.</em> | 1 | `ROS_TERMS_NODE_SHORT_WINDOW_DAYS` | `/settings/terms?recommendation_type=node` | terms[].window_days | Yes |
 | Short min data days. <br><em>Expanded: Minimum days of node telemetry required for a short-term node recommendation. 1 day is sufficient.</em> | 1 | `ROS_TERMS_NODE_SHORT_MIN_DATA_DAYS` | `/settings/terms?recommendation_type=node` | terms[].min_data_days | Yes |
 | Short decay (0=none). <br><em>Expanded: Decay half-life for short-term node window. 0 = no decay, all hours weighted equally.</em> | 0 | `ROS_TERMS_NODE_SHORT_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=node` | terms[].decay_halflife_hours | Yes |
@@ -413,7 +426,19 @@ Node-level CPU/memory utilization, classification, and dual-engine sizing
 | Long min data. <br><em>Expanded: Minimum 7 days of node data required within the 15-day long window.</em> | 7 | `ROS_TERMS_NODE_LONG_MIN_DATA_DAYS` | `/settings/terms?recommendation_type=node` | terms[].min_data_days | Yes |
 | Long decay (15d). <br><em>Expanded: 360-hour decay half-life for long-term node window.</em> | 360 | `ROS_TERMS_NODE_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=node` | terms[].decay_halflife_hours | Yes |
 
-\* Configurable via `PUT /settings/terms?recommendation_type=node`.
+**Node threshold Settings API:** `GET` / `PUT` / `DELETE`
+`/settings/node` (canonical) or deprecated `/settings/thresholds?recommendation_type=node`.
+JSON fields: `underutil_threshold`, `overcommit_threshold`, `allocatable_factor`,
+`stranded_imbalance_threshold`, `ema_alpha`, `cost_target_utilization`,
+`perf_target_utilization`, `perf_consolidation_headroom_multiplier`, `trend_min_days`,
+`zombie_cpu_p95_mc`, `zombie_max_pods`, `idle_cpu_util_pct`, `idle_mem_util_pct`,
+`idle_max_pods`, `pod_headroom_consolidation_gate`, `pod_headroom_notification_threshold`
+(plus `locked_fields`). Term windows remain on
+`PUT /settings/terms?recommendation_type=node`.
+
+\* Threshold fields via `PUT /settings/node` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=node`.
+
+See [Node recommendations](../features/node-recommendations.md).
 
 ---
 
@@ -460,7 +485,8 @@ Classification, MIG sizing, confidence scoring, and time-slicing parameters.
 
 \* Configurable via `PUT /settings/terms?recommendation_type=gpu`.
 
-See also [GPU Classification](gpu-classification.md) for the decision tree and
+See also [GPU Classification](gpu-classification.md) for the decision tree,
+[GPU MIG profiling](../features/gpu-mig.md), and
 [GPU Time-Slicing](../features/gpu-time-slicing.md) for replica selection logic.
 
 ---
@@ -489,6 +515,8 @@ because storage growth is slow.
 | Long decay (0=none). <br><em>Expanded: No decay for PVC long window. All days in the 90-day window contribute equally to storage trend analysis.</em> | 0 | `ROS_TERMS_PVC_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=pvc` | terms[].decay_halflife_hours | Yes |
 
 \* Configurable via `PUT /settings/terms?recommendation_type=pvc`.
+
+See [PVC right-sizing](../features/pvc-rightsizing.md).
 
 ---
 
@@ -559,6 +587,9 @@ Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_c
 | Disk round step (GiB) <br><em>Round disk recommendations to 10 GiB steps.</em> | 10 | `ROS_VM_DISK_ROUND_STEP_GIB` | `/settings/vm` | `disk.round_step_gib` | Yes |
 | Disk min growth (MiB/day) <br><em>Minimum slope to treat disk as growing (100 MiB/day).</em> | 100 | `ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY` | `/settings/vm` | `disk.min_growth_mib_per_day` | Yes |
 | High IOPS threshold <br><em>Average IOPS above 3000 flags IO-sensitive VM.</em> | 3000 | `ROS_VM_HIGH_IOPS_THRESHOLD` | `/settings/vm` | `io.high_iops_threshold` | Yes |
+| Sequential I/O threshold (bytes) <br><em>Peak BPS/IOPS average at or above 64 KiB → sequential pattern.</em> | 65536 | `ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES` | `/settings/vm` | `io.sequential_threshold_bytes` | Yes |
+| Random I/O threshold (bytes) <br><em>Peak BPS/IOPS average below 16 KiB → random pattern.</em> | 16384 | `ROS_VM_IO_RANDOM_THRESHOLD_BYTES` | `/settings/vm` | `io.random_threshold_bytes` | Yes |
+| Min IOPS for I/O classification <br><em>Combined peak IOPS below 100 → low-io pattern.</em> | 100 | `ROS_VM_IO_MIN_IOPS_CLASSIFICATION` | `/settings/vm` | `io.min_iops_for_classification` | Yes |
 | Instance type matching <br><em>Map vCPU/RAM to nearest instance type when true.</em> | true | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `/settings/vm` | `instance_type_matching` | Yes |
 GET also returns top-level `enabled` (derived from `ROS_ENABLE_VM_RECS` + plugin registry; not stored per tenant). PUT accepts partial JSON objects for `thresholds`, `memory_floors`, `stability`, `disk`, `io`, and `instance_type_matching`.
 
@@ -578,11 +609,43 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
 | Enable VM recommendations <br><em>Master VM plugin gate; also requires `vm` not denied.</em> | true | `ROS_ENABLE_VM_RECS` | — | — | No |
-| CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | — | — | No |
-| VM recommendation history retention (days) <br><em>VM-specific history retention (90d).</em> | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | — | — | No |
-| VM GPU idle threshold <br><em>vGPU SM below 5% → idle.</em> | 0.05 | `ROS_VM_GPU_IDLE_THRESHOLD` | — | — | No |
-| VM GPU underutilized threshold <br><em>vGPU SM below 30% → underutilized.</em> | 0.30 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | — | — | No |
-| VM GPU compute saturation threshold <br><em>vGPU SM above 85% → saturated; avoid downsize.</em> | 0.85 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | — | — | No |
+| CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | `PUT /settings/vm` | `cpu_adaptive_margin_enabled` | Yes |
+| VM recommendation history retention (days) <br><em>VM-specific history retention (90d). Read-only in GET /settings/vm.</em> | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `GET /settings/vm` | `history_retention_days` | No |
+| VM GPU time-slice min replicas <br><em>Minimum `recommended_time_slice_count` when time-slicing is advised.</em> | 2 | `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_min_replicas` | Yes |
+| VM GPU time-slice max replicas <br><em>Upper cap on slice count; reduced when DRAM exceeds penalty threshold.</em> | 16 | `ROS_VM_GPU_TIMESLICE_MAX_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_max_replicas` | Yes |
+| VM GPU time-slice FB safety (basis points) <br><em>Do not recommend time-slicing when FB fraction ≥ this (8000 = 80%).</em> | 8000 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_fb_safety_threshold_bp` | Yes |
+| VM GPU time-slice DRAM penalty (basis points) <br><em>When DRAM ≥ this, max replicas is halved (5000 = 50%).</em> | 5000 | `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `PUT /settings/vm` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` | Yes |
+| VM GPU idle threshold (basis points) <br><em>vGPU SM below 5% → idle.</em> | 500 | `ROS_VM_GPU_IDLE_THRESHOLD` | `PUT /settings/vm` | `gpu.idle_threshold_bp` | Yes |
+| VM GPU underutilized threshold (basis points) <br><em>vGPU SM below 30% → underutilized.</em> | 3000 | `ROS_VM_GPU_UNDERUTIL_THRESHOLD` | `PUT /settings/vm` | `gpu.underutil_threshold_bp` | Yes |
+| VM GPU frame-buffer saturation (MiB) <br><em>FB usage above this → memory saturated; 0 auto-detects 90% of catalog GPU memory.</em> | 0 | `ROS_VM_GPU_FB_SATURATION_MIB` | `PUT /settings/vm` | `gpu.fb_saturation_mib` | Yes |
+| VM GPU compute saturation threshold (basis points) <br><em>vGPU SM at or above 85% → compute saturated.</em> | 8500 | `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` | `PUT /settings/vm` | `gpu.compute_saturation_threshold_bp` | Yes |
+| Network throughput P95 threshold (bytes/sec) <br><em>Sustained aggregate rx+tx above this → network-optimized series (62_500_000 ≈ 500 Mbps).</em> | 62500000 | `ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS` | `PUT /settings/vm` | `network.throughput_threshold_bps` | Yes |
+| Network PPS P95 threshold <br><em>Used with drop ratio for alternate network-bound path.</em> | 100000 | `ROS_VM_NETWORK_PPS_THRESHOLD` | `PUT /settings/vm` | `network.pps_threshold` | Yes |
+| Network drop ratio (basis points) <br><em>Max daily drop ratio must exceed this (10 = 0.1%) with high PPS.</em> | 10 | `ROS_VM_NETWORK_DROP_RATIO_BP` | `PUT /settings/vm` | `network.drop_ratio_bp` | Yes |
+| Network sustained days <br><em>Days in term window meeting throughput or PPS+drop criteria.</em> | 7 | `ROS_VM_NETWORK_SUSTAINED_DAYS` | `PUT /settings/vm` | `network.sustained_days` | Yes |
+| Enable n1 network series matching <br><em>When false, n1 types are skipped; falls back to u1.</em> | true | `ROS_VM_ENABLE_NETWORK_SERIES` | `PUT /settings/vm` | `network.enable_network_series` | Yes |
+| Enable placement checks <br><em>Same-node redundancy and node skew notifications (60–61).</em> | true | `ROS_VM_ENABLE_PLACEMENT_CHECKS` | `PUT /settings/vm` | `placement.enable_placement_checks` | Yes |
+| Placement skew ratio <br><em>Max:min VM count per node for profile group before skew notification (61).</em> | 3 | `ROS_VM_PLACEMENT_SKEW_RATIO` | `PUT /settings/vm` | `placement.placement_skew_ratio` | Yes |
+| Enable shared PVC correlation <br><em>Correlated profile peers in namespace (62) until per-VM PVC column exists.</em> | true | `ROS_VM_ENABLE_SHARED_PVC_CORRELATION` | `PUT /settings/vm` | `placement.enable_shared_pvc_correlation` | Yes |
+| NUMA node memory (GiB) <br><em>Fallback per-NUMA cap for notification **63** when `daily_node_digests` has no allocatable memory for the VM's node.</em> | 64 | `ROS_VM_NUMA_NODE_MEMORY_GIB` | `PUT /settings/vm` | `placement.numa_node_memory_gib` | Yes |
+| NUMA assumed sockets <br><em>Divides node allocatable memory from `daily_node_digests` for per-NUMA estimate (default 2).</em> | 2 | `ROS_VM_NUMA_ASSUMED_SOCKETS` | `PUT /settings/vm` | `placement.numa_assumed_sockets` | Yes |
+| Enable power-off scheduling <br><em>Detect periodically idle VMs (notification 64).</em> | true | `ROS_VM_ENABLE_POWER_SCHEDULE` | `PUT /settings/vm` | `power_schedule.enabled` | Yes |
+| Power-off min idle days <br><em>Minimum digest history for power-off candidate detection.</em> | 14 | `ROS_VM_POWER_OFF_MIN_IDLE_DAYS` | `PUT /settings/vm` | `power_schedule.min_idle_days` | Yes |
+| Power-off idle ratio threshold <br><em>Fraction of observed days that must be idle (requires some active days).</em> | 0.7 | `ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD` | `PUT /settings/vm` | `power_schedule.idle_ratio_threshold` | Yes |
+| Enable network QoS hints <br><em>SR-IOV/DPDK notifications (65–66) for network-bound VMs.</em> | true | `ROS_VM_NETWORK_QOS_ENABLED` | `PUT /settings/vm` | `network_qos.enabled` | Yes |
+| SR-IOV drop ratio threshold <br><em>Packet drop ratio (0–1) to suggest SR-IOV.</em> | 0.01 | `ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD` | `PUT /settings/vm` | `network_qos.sriov_drop_threshold` | Yes |
+| SR-IOV throughput threshold (bps) <br><em>Sustained throughput to suggest SR-IOV without drops.</em> | 5000000000 | `ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS` | `PUT /settings/vm` | `network_qos.sriov_throughput_bps` | Yes |
+| DPDK PPS threshold <br><em>Packets/sec for small-packet DPDK hint.</em> | 500000 | `ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD` | `PUT /settings/vm` | `network_qos.dpdk_pps_threshold` | Yes |
+| Enable storage tiering hints <br><em>Cold/IOPS/throughput notifications (67–69) from multi-day I/O patterns.</em> | true | `ROS_VM_STORAGE_TIERING_ENABLED` | `PUT /settings/vm` | `storage_tiering.enabled` | Yes |
+| Storage tiering min days <br><em>Minimum digest history before tier hints run.</em> | 7 | `ROS_VM_STORAGE_TIERING_MIN_DAYS` | `PUT /settings/vm` | `storage_tiering.min_days` | Yes |
+| Storage tiering cold min days <br><em>Low-io days to suggest lower-cost tier.</em> | 14 | `ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS` | `PUT /settings/vm` | `storage_tiering.cold_min_days` | Yes |
+| Storage tiering IOPS min days <br><em>Random high-IOPS days for IOPS-optimized hint.</em> | 7 | `ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS` | `PUT /settings/vm` | `storage_tiering.iops_min_days` | Yes |
+| Storage tiering throughput min days <br><em>Sequential high-throughput days for throughput hint.</em> | 7 | `ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS` | `PUT /settings/vm` | `storage_tiering.throughput_min_days` | Yes |
+| Storage tiering high IOPS threshold <br><em>Peak daily read+write IOPS for random high-IOPS day.</em> | 5000 | `ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD` | `PUT /settings/vm` | `storage_tiering.high_iops_threshold` | Yes |
+| Storage tiering high throughput (bps) <br><em>Peak daily read+write BPS for sequential high-throughput day.</em> | 104857600 | `ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS` | `PUT /settings/vm` | `storage_tiering.high_throughput_bps` | Yes |
+
+**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+
 See [VM recommendations design](../design/vm-recommendations.md).
 
 ---
@@ -599,16 +662,18 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 | Age > N → stale. <br><em>Expanded: A snapshot is classified as "stale" when it is older than this many days, regardless of whether its source PVC still exists. Stale snapshots may contain outdated data that is no longer useful for recovery. 90 days (3 months) is the default threshold before recommending cleanup.</em> | 90 | `ROS_SNAPSHOT_STALE_DAYS` | `/settings/snapshot` | stale_days | Yes |
 | > N per PVC → redundant. <br><em>Expanded: Maximum number of snapshots per PVC before older ones are flagged as redundant. If a PVC has more than 3 snapshots, the excess are likely unnecessary—keeping the 2-3 most recent is usually sufficient for recovery. Redundant snapshots waste storage and increase backup costs.</em> | 3 | `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | `/settings/snapshot` | redundant_threshold | Yes |
 | Fallback $/GiB/month. <br><em>Expanded: Fallback storage cost rate (USD per GiB per month) used when no cost model rate is available from Koku. This is used to estimate the monthly cost of keeping a snapshot. The resolution chain is: Koku effective-rates `storage_gb_usage_per_month` (dynamic) → tenant DB override → this env var → $0.05 default. Set this to match your actual block storage provider's snapshot pricing.</em> | 0.05 | `ROS_SNAPSHOT_COST_PER_GIB_MONTH` | `/settings/snapshot` | cost_per_gib_month_usd | Yes |
+| Inventory freshness window (hours) <br><em>Classification and reconciliation only consider `snapshot_inventory` rows ingested within this many hours. Shorter windows react faster to operator gaps; longer windows tolerate delayed uploads.</em> | 6 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | `/settings/snapshot` | inventory_fresh_hours | Yes |
 
 ### Snapshot — admin-only (no Settings API field)
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Snapshot inventory freshness (hours) <br><em>Skip snapshot plugin if inventory ingest older than this (6h). Not tenant-configurable.</em> | 6 | `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | — | — | No |
 | Snapshot inventory retention (hours) <br><em>Retain raw inventory rows in DB (48h)—ops tuning, not classification thresholds.</em> | 48 | `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | — | — | No |
 | Snapshot stale grace without fresh inventory (hours) <br><em>Defer stale classification this long when inventory ingest is down (48h).</em> | 48 | `ROS_SNAPSHOT_STALE_GRACE_HOURS` | — | — | No |
 
 \* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
+
+See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ---
 
@@ -691,8 +756,74 @@ Dollar estimate integration with Koku Masu `effective_rates`. See
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, each recommendation includes an estimated monthly savings (or cost) based on Koku cost model rates. When disabled, recommendations show resource changes (CPU, memory, storage) without dollar amounts. Useful when cost model rates aren't configured or savings calculations aren't needed.</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
-| Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, GPU pricing). Masu provides the `effective_rates` API that ROS uses to convert resource recommendations into dollar savings. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty disables dynamic rate lookup—fallback rates are used instead.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
+| Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, container, node, PVC, snapshot, and VM plugins persist monthly savings (or recoverable cost for snapshots) from Koku `effective_rates`. When disabled, resource recommendations still run but dollar fields are null/zero (containers/nodes/PVCs may include notification code **25**; VM list/detail `savings` is always `null`).</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
+| Savings recalculation after cost model change. <br><em>Expanded: When true (default), ROS accepts `POST /api/cost-management/v1/internal/recalculate-savings` (service-account auth, same as tag sync). Koku calls this after [`update_summary_cost_model_costs`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py) to refresh persisted `estimated_monthly_savings_usd` without re-ingestion. Requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`. When false, savings update only on the next ingestion cycle.</em> | true | `ROS_SAVINGS_RECALCULATION_ENABLED` | — | — | No |
+| Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, node, VM, GPU pricing). Masu provides the `effective_rates` API that ROS uses for `savings` on VM recommendations and fleet `by_plugin.vm`. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty skips dynamic rate lookup.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
+
+### Koku → ROS savings recalculation (not ROS env vars)
+
+Configure on the **Koku** worker / masu deployment so rate changes trigger ROS recalculation:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_API_HOST` | (unset) | ROS API hostname. No callback when unset unless `ROS_OCP_BACKEND_URL` is set. |
+| `ROS_API_PORT` | `8000` | ROS API port when using `ROS_API_HOST`. |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Fallback base URL (on-prem chart). |
+| `ROS_SERVICE_TOKEN` | (unset) | Optional bearer token for `POST /internal/recalculate-savings`; otherwise Koku uses the projected service account token. |
+
+See [Cost Integration — Savings recalculation](cost-integration.md#savings-recalculation-after-cost-model-changes).
+
+---
+
+## List API — Node recommendations
+
+`GET /api/cost-management/v1/recommendations/openshift/nodes`
+
+### Response fields (per node object)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pod_capacity` | int, `omitempty` | Maximum schedulable pods on the node (from operator CSV / `daily_node_digests`). Omitted when unknown. |
+| `pod_scheduling_headroom` | float, `omitempty` | Ratio of available pod slots: `(pod_capacity − pod_count) / pod_capacity` when capacity is known (0.0–1.0). Omitted when capacity unknown. |
+
+### Filters
+
+| Query param | Values | Description |
+|-------------|--------|-------------|
+| `filter[stranded_resource]` | `cpu`, `memory`, `none` | Filter by stranded resource classification (`none` = no stranded resource). |
+| `filter[instance_type]` | string | Filter by node instance type label (exact match). |
+| `filter[machineset_name]` | string | Filter by OpenShift MachineSet name (exact match). |
+
+Also supports standard list params (`limit`, `offset`, `after`, `filter[cluster]`, `filter[engine]`,
+`filter[idle_state]`, `format=csv`, etc.). Implementation:
+[`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go).
+
+### Node notification codes (reference)
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| 11 | `NotifNodeUnderutilized` | CPU and memory P95 below `underutil_threshold` |
+| 12 | `NotifNodeOvercommitted` | Pod CPU requests exceed `overcommit_threshold` × allocatable |
+| 13 | `NotifStrandedResources` | CPU/memory imbalance above `stranded_imbalance_threshold` |
+| 15 | `NotifNodeIdle` | Node idle or zombie (`idle_state`); DB name `NODE_IDLE` (migration 000121) |
+| 25 | `NotifNoCostData` | Savings could not be computed (Masu rates missing) |
+| 74 | `NotifNodePodSchedulingLimit` | Pod scheduling headroom below `pod_headroom_notification_threshold` (default 10%) |
+| 75 | — | Reserved for Tier 3 MachineAutoscaler `minReplicas` recommendations |
+
+Full catalog: [Notification codes](notification-codes.md).
+
+---
+
+## List API — Fleet savings summary
+
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+
+| Query param | Values | Default | Description |
+|-------------|--------|---------|-------------|
+| `term` | `short`, `medium`, `long` | `medium` | Which recommendation term window to aggregate for fleet savings. |
+
+Also supports `engine` (`cost` / `performance`), `group_by[tag:key]`, `group_by[idle_state]`, and
+cluster filters. Implementation: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
 
 ---
 
@@ -847,7 +978,8 @@ and mirror the env re-apply step used in
 | [Recommendation Math](recommendation-math.md) | Adaptive margin, decay weighting, trend detection |
 | [Plugin Architecture](plugin-architecture.md) | Term resolution, plugin traits, enable/disable |
 | [GPU Classification](gpu-classification.md) | GPU decision tree and MIG profile selection |
-| [Cost Integration](cost-integration.md) | Savings formulas and fleet summary |
+| [Cost Integration](cost-integration.md) | Savings formulas, fleet summary, savings recalculation |
+| [Notification codes](notification-codes.md) | Full notification code catalog |
 | [Upgrade Runbook](../operations/upgrade-runbook.md) | Migration procedures and deploy notes |
 
 ## Source File Index

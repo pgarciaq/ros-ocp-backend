@@ -117,11 +117,12 @@ Example response (one namespace group):
 **Settings:** `GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot`
 
 Tenant overrides for orphan age, never-restored days, stale days, redundant
-threshold, and cost per GiB/month. Fields locked by deployment env vars appear
-in `locked_fields`. **DELETE** removes tenant overrides and resets to deployment
-defaults.
+threshold, inventory freshness window, and cost per GiB/month. Fields locked by
+deployment env vars appear in `locked_fields`. **DELETE** removes tenant overrides
+and resets to deployment defaults.
 
-OpenAPI: [openapi.md](../openapi.md).
+See [Configurability — Snapshot](../architecture/configurability.md#snapshot) for field
+reference, env vars, and precedence. OpenAPI: [openapi.md](../openapi.md).
 
 ## Configuration (environment)
 
@@ -133,6 +134,7 @@ OpenAPI: [openapi.md](../openapi.md).
 | `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | Max snapshots per PVC before redundant |
 | `ROS_SNAPSHOT_STALE_GRACE_HOURS` | 48 | Skip classification until inventory seen long enough |
 | `ROS_SNAPSHOT_COST_PER_GIB_MONTH_USD` | 0.05 | Monthly cost estimate per GiB |
+| `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | 6 | Inventory freshness window for classification (API: `inventory_fresh_hours`) |
 
 Snapshot settings can be locked with `ROS_SETTINGS_LOCKED_SNAPSHOT=true`.
 

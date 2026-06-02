@@ -51,6 +51,8 @@ Handler: [`GetQuotaRecommendations`](../../internal/api/handlers_quota_recs.go).
 
 Per-organization overrides for ResourceQuota headroom and utilization risk bands. Resolution
 order: **Settings API** → **`ROS_QUOTA_*` env vars** → compiled defaults (10 / 90 / 70).
+See [Configurability — ResourceQuota](../architecture/configurability.md#resourcequota) for
+env vars, precedence, and lock behavior.
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/settings/quota

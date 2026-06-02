@@ -15,7 +15,7 @@ sizing engine used for containers (with namespace-specific defaults).
 `ResourceQuota` **hard** limits against container sums. Namespace recommendations
 propose ideal namespace totals from observed usage — a different feature.
 
-Internal design: [`docs/features/namespace-recommendations.md`](../../../docs/features/namespace-recommendations.md) (repo `docs/` tree).
+Internal design: [`docs/features/namespace-recommendations.md`](../../docs/features/namespace-recommendations.md) (repo `docs/` tree).
 
 ---
 
