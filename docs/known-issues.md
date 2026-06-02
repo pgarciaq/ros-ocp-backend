@@ -84,7 +84,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | On-demand real-time recs | REQ-3.4 | API-time recommendation for custom timeframe requests | Low | Low |
 | Poison message DLQ | REQ-0.7 | Dead-letter topic for Kafka messages that fail after max retries | Low | Low |
 | Shadow mode | REQ-1.12 | Production dual-engine comparison (offline CLI tool exists) | Low | Low |
-| Keyset pagination | — | Cursor-based pagination for large orgs (see below) | Low | Low |
+| ~~Keyset pagination (container/namespace lists)~~ | — | **DONE** — `after` cursor on container and namespace list APIs; `offset`/`limit` remain as fallback. Other list endpoints still use offset (see §Keyset Pagination). | — | — |
 | ~~Replica count from operator~~ | ~~REQ-7.1~~ | **DONE** — Operator now emits `desired_replicas` and `available_replicas`; backend stores and exposes via API. | — | — |
 
 ### Planned Future Work (Node Tier 2 & Tier 3)
@@ -923,103 +923,74 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 
 ---
 
-## Future Improvement: Keyset Pagination
+## Keyset Pagination
 
-### Current State
+### Delivered (ros-ocp-backend)
 
-**Interim note:** Hot-path fixes for heavy list handlers (for example node utilization / GPU aggregation,
-issues **#40** / **#41** in `docs/audits/490-issues.md`) use SQL-level `LIMIT`/`OFFSET` or smaller bounded scans rather
-than loading entire result sets in Go. That remains **offset-based pagination** at the database layer.
-**Keyset (cursor) pagination** described below is still the long-term approach for very large tenants and deep
-pages; see also §Implementation Path.
+Container and namespace recommendation **list** endpoints support **keyset (cursor)
+pagination** via the `after` query parameter. When `after` is present, `offset` is
+ignored and the response includes `meta.next_cursor` when another page exists.
 
-Both **Koku** (Django REST Framework) and **ros-ocp-backend** (Go/Echo) use
-offset/limit pagination across all list endpoints:
+| Endpoint | Pagination |
+|----------|------------|
+| `GET /recommendations/openshift` | Keyset (`after`) + offset fallback |
+| `GET /recommendations/openshift/namespaces` (and legacy namespace list aliases) | Keyset (`after`) + offset fallback |
 
-```
-GET /recommendations/openshift?offset=200&limit=50
-→ DB: SELECT ... ORDER BY x LIMIT 50 OFFSET 200
-```
+Implementation: opaque base64url cursors in [`internal/api/cursor.go`](../internal/api/cursor.go),
+handlers in [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go),
+SQL keyset filters in [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go)
+and [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go).
+Indexes: migration `000078_keyset_pagination_indexes`; large-org path uses `org_container_keys`
+(migration `000081`). See [operations/query-performance.md](operations/query-performance.md).
 
-This works by scanning and discarding `offset` rows before returning `limit`
-rows. Performance degrades linearly with page depth — page 100 at 50
-items/page requires the DB to scan 5,000 rows to return 50.
-
-### What Keyset Pagination Does
-
-Instead of a numeric offset, the client passes an opaque cursor encoding the
-last row's sort key:
+Example:
 
 ```
-GET /recommendations/openshift?after=eyJ1cGRhdGVkX2F0Ij...&limit=50
-→ DB: SELECT ... WHERE (namespace, workload) > ('proj-x', 'deploy-y')
-      ORDER BY namespace, workload LIMIT 50
+GET /recommendations/openshift?limit=50
+GET /recommendations/openshift?limit=50&after=<meta.next_cursor>
 ```
 
-The DB seeks directly to the cursor position using the index — O(1) per page
-regardless of depth. No rows are scanned and discarded.
+Deep pages use `WHERE (namespace, workload, container_name) > (...)` (or namespace
+equivalent) instead of `OFFSET`, so latency stays flat at high page depth.
 
-### Performance Comparison
+### Still offset-based
 
-| Page depth | Offset/limit | Keyset |
-|------------|--------------|--------|
-| Page 1 | ~1ms | ~1ms |
-| Page 10 | ~2ms | ~1ms |
-| Page 100 | ~15ms | ~1ms |
-| Page 1000 | ~150ms | ~1ms |
+Other ros-ocp-backend list handlers remain **`limit` / `offset`** only, including
+plugin routes (nodes, GPU, VM, PVC, quota), `GET .../history`, and quality/snapshot
+lists. Hot-path bounded scans for node/GPU aggregation (issues **#40** / **#41** in
+`docs/audits/490-issues.md`) are separate from container-list keyset work.
 
-(Approximate PostgreSQL timings for a 50k-row table with appropriate indexes.)
+**Koku** (Django REST Framework) still uses offset/limit on report and tag APIs;
+cursor pagination there is not part of this service.
 
-### Where It Would Help
+### Why keyset matters (offset cost)
 
-| Service | Endpoint | Why |
-|---------|----------|-----|
-| ros-ocp-backend | `/recommendations/openshift` | Large orgs with 10k+ containers across clusters |
-| ros-ocp-backend | `/recommendations/openshift/history` | History grows at ~1 row/container/term/engine/day |
-| ros-ocp-backend | `/recommendations/openshift/pvcs` | Clusters with thousands of PVCs |
-| Koku | `/reports/openshift/costs/?group_by[project]=*` | Orgs with hundreds of projects |
-| Koku | `/tags/openshift/` | Tags with many distinct values |
+Offset pagination scans and discards `offset` rows before returning `limit` rows,
+so cost grows with page depth. Keyset seeks from an indexed sort key — flat cost per
+page when `ORDER BY` matches the index.
 
-### Implementation Path
+| Page depth (approx.) | Offset/limit | Keyset |
+|----------------------|--------------|--------|
+| Page 1 | ~1 ms | ~1 ms |
+| Page 100 | ~15 ms | ~1 ms |
+| Page 1000 | ~150 ms | ~1 ms |
 
-**ros-ocp-backend (Go):**
+### Future work (optional)
 
-- Add `after` query parameter to `ListAPIOptions`
-- Decode cursor → `WHERE (sort_col) > (cursor_value)` SQL clause
-- Encode last row's sort key into `next` cursor in response `links`
-- Keep `offset`/`limit` as fallback (backward compatible)
-
-**Koku (Django):**
-
-- Django REST Framework ships `CursorPagination` built-in:
-  ```python
-  from rest_framework.pagination import CursorPagination
-  class RecommendationCursorPagination(CursorPagination):
-      page_size = 50
-      ordering = '-updated_at'
-  ```
-- Requires a unique or near-unique indexed ordering column (timestamps +
-  tiebreaker on `id` or composite key)
+| Service | Endpoint | Notes |
+|---------|----------|-------|
+| ros-ocp-backend | `/recommendations/openshift/history` | Grows ~1 row/container/term/day |
+| ros-ocp-backend | `/recommendations/openshift/pvcs` | Large PVC counts per cluster |
+| ros-ocp-backend | Node/GPU/VM plugin lists | Offset today |
+| Koku | `/reports/openshift/costs/`, `/tags/openshift/` | DRF `CursorPagination` candidate |
 
 ### Trade-offs
 
 | Pro | Con |
 |-----|-----|
-| O(1) per page at any depth | No random access ("jump to page N") |
-| Consistent results under concurrent writes | Requires stable sort order |
-| Index-only scan (no seq scan for offset) | Client must store opaque cursor |
-| Works with infinite scroll / streaming UIs | Breaking API change (new param format) |
-
-### When to Implement
-
-This is a **medium-priority improvement**. Large customers have 200,000+
-containers per org, making deep-page offset/limit queries expensive
-(offset=5000 with 50 items/page forces the DB to skip 5000 rows).
-Prioritize when:
-
-- Deep-page API latency exceeds SLA thresholds
-- The history table grows significantly (1 row/container/term/day)
-- The UI moves to infinite-scroll (no page numbers)
+| Flat latency at deep pages | No random access ("jump to page N") |
+| Stable sort + index seek | Client must follow `next_cursor` |
+| Good for infinite scroll | Offset kept for backward compatibility on delivered lists |
 
 ---
 
