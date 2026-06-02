@@ -79,6 +79,7 @@ func (p *NodePlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/nodes", rosapi.GetNodeUtilizationRecs)
 	g.GET("/recommendations/openshift/nodes/utilization", rosapi.GetNodeUtilizationRecsLegacyPath)
 	g.GET("/recommendations/openshift/nodes/:node", rosapi.GetNodeUtilizationDetail)
+	g.GET("/recommendations/openshift/machinesets", rosapi.GetMachineSetRecommendations)
 }
 
 func (p *NodePlugin) RetentionTables() []string {

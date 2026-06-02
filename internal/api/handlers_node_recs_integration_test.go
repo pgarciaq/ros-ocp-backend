@@ -846,6 +846,7 @@ func setupNativeRecommendationRoutesEcho() *echo.Echo {
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
 	v1.GET("/recommendations/openshift/nodes/utilization", api.GetNodeUtilizationRecsLegacyPath)
 	v1.GET("/recommendations/openshift/nodes/:node", api.GetNodeUtilizationDetail)
+	v1.GET("/recommendations/openshift/machinesets", api.GetMachineSetRecommendations)
 	return app
 }
 
@@ -856,6 +857,7 @@ func TestRecommendationRoutes_Unauthorized(t *testing.T) {
 		"/api/cost-management/v1/recommendations/openshift/nodes",
 		"/api/cost-management/v1/recommendations/openshift/nodes/utilization",
 		"/api/cost-management/v1/recommendations/openshift/nodes/worker-1",
+		"/api/cost-management/v1/recommendations/openshift/machinesets",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {
@@ -1039,6 +1041,50 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 	require.True(t, ok, "idle/zombie nodes should emit notification code 15")
 	assert.Contains(t, notif.Message, "idle")
 	assert.NotContains(t, notif.Message, "MachineAutoscaler")
+}
+
+func TestGetNodeUtilization_PaginationAndSort(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'pagination-cluster', 'src-pag', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+			estimated_monthly_savings_usd
+		) VALUES
+			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
+			($1, $2::uuid, 'zulu-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?limit=1&offset=0&order_by=node&order_how=asc", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "alpha-node", resp.Data[0].Node)
+	require.NotNil(t, resp.Meta)
+	assert.Equal(t, 2, resp.Meta.Count)
+	assert.NotEmpty(t, resp.Links.Next)
 }
 
 func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
