@@ -737,6 +737,22 @@ func assertThresholdPluginFields(t *testing.T, body []byte, fields []string) {
 	}
 }
 
+func seedContractTestBHCluster(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+	t.Helper()
+	ctx := context.Background()
+	var tenantID int64
+	err := pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`, orgID).Scan(&tenantID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'openapi-bh-cluster', 'src-bh-contract', now()) ON CONFLICT DO NOTHING`,
+		tenantID, clusterUUID)
+	require.NoError(t, err)
+}
+
 func assertBusinessHoursSettingsResponse(t *testing.T, body []byte, schema map[string]interface{}) {
 	t.Helper()
 	require.NotNil(t, schema, "business hours schema must be resolved from openapi.json")
@@ -972,6 +988,54 @@ func TestOpenAPI_BusinessHoursSettings_ResponseFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	schema := getResponseSchema(spec, "/recommendations/openshift/settings/business-hours", http.MethodGet, "200")
+	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_BusinessHoursClusterSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-bh-cluster"
+	clusterUUID := testutil.TestClusterUUID
+	seedContractTestBHCluster(t, pool, orgID, clusterUUID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(
+		spec,
+		"/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}",
+		http.MethodGet,
+		"200",
+	)
+	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_BusinessHoursNamespaceSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-bh-namespace"
+	clusterUUID := testutil.TestClusterUUID
+	seedContractTestBHCluster(t, pool, orgID, clusterUUID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID+"/namespaces/openshift-console")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(
+		spec,
+		"/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}",
+		http.MethodGet,
+		"200",
+	)
 	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
 }
 
