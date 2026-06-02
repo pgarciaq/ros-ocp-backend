@@ -15,6 +15,11 @@ func RegisterTestInternalRoutes(e *echo.Echo) {
 	internal.POST("/recalculate-savings", PostRecalculateSavings)
 }
 
+// RegisterTestReferenceRoutes mounts reference endpoints that do not require identity middleware.
+func RegisterTestReferenceRoutes(e *echo.Echo) {
+	e.GET("/api/cost-management/v1/recommendations/openshift/notification-codes", GetNotificationCodes)
+}
+
 // RegisterV1RoutesForTest mounts the same v1 recommendation routes as StartAPIServer.
 // Used by OpenAPI contract tests; bhTrigger may be nil (defaults to NoopTriggerer).
 func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {

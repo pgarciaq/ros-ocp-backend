@@ -178,6 +178,9 @@ func StartAPIServer(ctx context.Context) {
 	app.GET("/readyz", GetReadyz)
 	app.GET("/api/cost-management/v1/recommendations/openshift/openapi.json", ServeFilteredOpenAPI)
 
+	// Reference data — registered before v1 identity middleware (no org context required).
+	app.GET("/api/cost-management/v1/recommendations/openshift/notification-codes", GetNotificationCodes)
+
 	// Internal routes (no identity/RBAC middleware). Tag sync is gated by ROS_TAGS_ENABLED in handler.
 	internal := app.Group("/api/cost-management/v1/internal")
 	internal.Use(middleware.BodyLimit(cfg.TagsSyncBodyLimit()))
