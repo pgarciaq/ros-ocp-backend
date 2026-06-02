@@ -17,7 +17,7 @@ teams to reclaim storage costs without manual auditing.
 
 The koku-metrics-operator **ships** a collector that queries the Kubernetes API for `VolumeSnapshot` objects and cross-references `PersistentVolumeClaim.spec.dataSource` to determine restore activity (when the VolumeSnapshot CRDs are installed).
 
-**Optional future enhancements** documented below (for example per-StorageClass cost in settings v2) are not required for the initial shipped implementation.
+**Optional future enhancements** documented below (for example per-StorageClass cost in settings v2, [COST-7563](https://redhat.atlassian.net/browse/COST-7563)) are not required for the initial shipped implementation.
 
 ---
 
@@ -237,6 +237,8 @@ snapshot economics still vary by provider and storage tier:
   should set based on their actual pool economics
 
 ### Per-StorageClass Cost Rates (v2 — Not in Initial Implementation)
+
+Tracked in [COST-7563](https://redhat.atlassian.net/browse/COST-7563).
 
 Different StorageClasses have different snapshot costs (e.g., gp3 vs io2 on
 AWS, SSD vs HDD). The initial implementation uses a single org-wide rate.
@@ -753,6 +755,8 @@ classify → API) without waiting for the operator implementation.
 2. **Incremental snapshots**: On AWS EBS, only the first snapshot is full;
    subsequent snapshots are incremental. The cost estimate based on
    `restoreSize` is a ceiling, not exact. The API response should note this.
+   [COST-7523](https://redhat.atlassian.net/browse/COST-7523)'s effective cost endpoint
+   will also address this: it uses actual billing data rather than logical volume size.
 
 3. **Ceph/ODF COW semantics**: Ceph RBD snapshots are Copy-on-Write and may
    consume near-zero additional space if the source volume hasn't been
@@ -775,12 +779,12 @@ classify → API) without waiting for the operator implementation.
    emerge. The managed-detection logic should be configurable or at least
    easy to extend (a simple list of label prefixes).
 
-8. **Per-StorageClass cost granularity**: v1 uses a single org-wide cost rate.
+8. **Per-StorageClass cost granularity** ([COST-7563](https://redhat.atlassian.net/browse/COST-7563)): v1 uses a single org-wide cost rate.
    Clusters with mixed storage tiers (e.g., gp3 + io2) will get approximate
    cost estimates. The `volume_snapshot_class` field is already collected and
    can be used for per-class rates in v2 without additional operator changes.
 
-9. **Koku cost model gap — per-StorageClass rates**: The OpenShift cost model
+9. **Koku cost model gap — per-StorageClass rates** ([COST-7563](https://redhat.atlassian.net/browse/COST-7563)): The OpenShift cost model
    in Koku only supports a single `storage_gb_usage_per_month` /
    `storage_gb_request_per_month` rate across all StorageClasses. The only way
    to differentiate is via tag-based rates (user labels PVCs with a tag key

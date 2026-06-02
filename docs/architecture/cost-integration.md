@@ -257,7 +257,8 @@ recoverable cost should be derived from:
 Koku work under COST-7523 introduces an **effective cost internal endpoint** (Masu
 or successor to today's `effective_rates` path). ROS will call that endpoint to
 resolve cluster- and StorageClass-aware snapshot rates instead of relying on the flat
-`cost_per_gib_month_usd` chain. See
+`cost_per_gib_month_usd` chain. Per-StorageClass cost overrides in snapshot settings v2
+are tracked in [COST-7563](https://redhat.atlassian.net/browse/COST-7563). See
 [features-f-snapshot-staleness.md](../features-f-snapshot-staleness.md) for component
 breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 `/settings/snapshot` for on-prem and demo clusters.

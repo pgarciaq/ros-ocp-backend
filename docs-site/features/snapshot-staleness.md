@@ -159,6 +159,10 @@ recommendation staleness.
   When savings estimates are enabled, ROS may fall back to Koku
   `effective_rates` `storage_gb_usage_per_month` (PVC usage proxy), which is still
   not snapshot-specific CUR or block-storage snapshot line items.
+- **Incremental snapshots** — on providers such as AWS EBS, `restore_size_bytes`
+  is a ceiling estimate, not billed incremental snapshot size.
+  [COST-7523](https://redhat.atlassian.net/browse/COST-7523)'s effective cost endpoint
+  will use actual billing data rather than logical volume size.
 - Requires VolumeSnapshot CRDs on the cluster; operator skips collection if absent
 
 ## Future work
@@ -182,6 +186,13 @@ Until COST-7523 ships, keep using `/settings/snapshot` and `ROS_SNAPSHOT_COST_PE
 for demos and on-prem pools without CUR. See
 [Cost integration — Snapshot cost](../../docs/architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates)
 and [features-f-snapshot-staleness.md](../../docs/features-f-snapshot-staleness.md).
+
+### Per-StorageClass cost overrides (v2)
+
+v1 uses a single org-wide `cost_per_gib_month_usd`. Per-`volume_snapshot_class` (or
+StorageClass) rate overrides in snapshot settings v2 are tracked in
+**[COST-7563](https://redhat.atlassian.net/browse/COST-7563)**. See
+[features-f-snapshot-staleness.md](../../docs/features-f-snapshot-staleness.md#per-storageclass-cost-rates-v2--not-in-initial-implementation).
 
 ### Restore and cleanup automation (explicitly out of v1)
 
