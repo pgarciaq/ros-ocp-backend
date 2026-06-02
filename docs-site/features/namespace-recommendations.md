@@ -75,6 +75,7 @@ Legacy aliases (deprecated): `GET .../openshift/namespace/recommendations`,
 |-----------|-------------|
 | `filter[cluster]` / `cluster` | Cluster UUID |
 | `filter[project]` / `project` / `namespace` | Namespace name (exact; comma-separated OR) |
+| `filter[stale]` / `stale` | Staleness filter: `false` (default, exclude stale), `true` (include stale and fresh), `only` (stale rows only). Recommendations older than 48h without fresh cluster data. |
 | `filter[tag:<key>]` | OpenShift label filter (`ROS_TAGS_ENABLED=true`) |
 | `order_by` / `order_how` | Sort (e.g. `namespace`, variation fields) |
 | `limit` / `offset` | Pagination (default limit 100, max 1000) |

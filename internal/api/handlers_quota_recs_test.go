@@ -266,6 +266,66 @@ func TestGetQuotaRecommendations_OrderByUtilizationDesc(t *testing.T) {
 	assert.Equal(t, "high-util", resp.Data[0].Namespace)
 }
 
+func TestGetQuotaRecommendations_GroupByCluster(t *testing.T) {
+	orgID := "org-quota-group-cluster-" + uuid.New().String()[:8]
+	clusterA := "550e8400-e29b-41d4-a716-446655440060"
+	clusterB := "550e8400-e29b-41d4-a716-446655440061"
+	e := setupQuotaRecommendationsHandler(t, orgID)
+	insertQuotaRecommendation(t, orgID, clusterA, "ns-a1")
+	insertQuotaRecommendation(t, orgID, clusterA, "ns-a2")
+	insertQuotaRecommendation(t, orgID, clusterB, "ns-b1")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?group_by[cluster]=*", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp QuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byCluster := map[string]QuotaRecommendationListItem{}
+	for _, item := range resp.Data {
+		byCluster[item.ClusterUUID] = item
+	}
+	require.Contains(t, byCluster, clusterA)
+	assert.Equal(t, 2, byCluster[clusterA].Count)
+	require.Contains(t, byCluster, clusterB)
+	assert.Equal(t, 1, byCluster[clusterB].Count)
+}
+
+func TestGetQuotaRecommendations_GroupByProject(t *testing.T) {
+	orgID := "org-quota-group-project-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440070"
+	e := setupQuotaRecommendationsHandler(t, orgID)
+	insertQuotaRecommendation(t, orgID, clusterUUID, "project-a")
+	insertQuotaRecommendation(t, orgID, clusterUUID, "project-b")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?group_by[project]=*", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp QuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byNamespace := map[string]QuotaRecommendationListItem{}
+	for _, item := range resp.Data {
+		byNamespace[item.Namespace] = item
+	}
+	require.Contains(t, byNamespace, "project-a")
+	assert.Equal(t, 1, byNamespace["project-a"].Count)
+	require.Contains(t, byNamespace, "project-b")
+	assert.Equal(t, 1, byNamespace["project-b"].Count)
+}
+
 func TestGetQuotaRecommendations_InvalidOrderBy(t *testing.T) {
 	orgID := "org-quota-bad-order-" + uuid.New().String()[:8]
 	e := setupQuotaRecommendationsHandler(t, orgID)
