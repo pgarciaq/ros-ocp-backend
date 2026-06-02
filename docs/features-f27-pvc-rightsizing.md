@@ -12,7 +12,8 @@ usage and classifies PVCs to help reduce storage costs and prevent outages.
 ## Data Source
 
 The koku-metrics-operator already collects PVC metrics and writes them as
-`cm-openshift-storage-usage-YYYYMM.csv` files in the upload tarball. No operator
+`cm-openshift-storage-usage-YYYYMM.csv` files in the upload tarball (includes optional
+`vm_name` when the mounting pod is a virt-launcher). No operator
 changes are required for data collection.
 
 > **File routing (implemented):** The storage CSV is in the manifest `files`

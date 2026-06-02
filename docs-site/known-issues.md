@@ -832,15 +832,15 @@ days-to-full for capacity planning.
 List and detail responses include `mounted_by` (last observed mounting pod from storage CSV).
 Responses include `estimated_monthly_savings` when Masu storage rates are available.
 
-**VM–PVC correlation (known limitation):** The koku-metrics-operator **cost** VM CSV
-(`cm-openshift-vm-usage`) includes `vm_persistentvolumeclaim_name`, and the **storage**
-CSV includes a `pod` column (often a `virt-launcher-*` name). ROS does not ingest either
-field today: `ParseVMCSVRows` ignores PVC/pod columns on VM usage, and PVC ingestion
-did not persist `pod` until migration **000114**. VM shared-storage notifications
-([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) therefore use a
-namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
-requires ROS to ingest `pod` on storage digests and either `vm_persistentvolumeclaim_name`
-or `exported_pod` on VM digests (operator ROS VM CSV would need the latter column added).
+**VM–PVC correlation:** The operator **storage** CSV (`cm-openshift-storage-usage`) includes
+`vm_name` when the mounting `pod` is a virt-launcher (KubeVirt VM name from
+`kube_pod_labels` or pod-name parsing). ROS ingests that column into `daily_pvc_digests`
+and exposes it on PVC list/detail responses as `vm_name` (migration **000124**), alongside
+`mounted_by` (last observed pod from migration **000114**). VM shared-storage notifications
+([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) still use a namespace +
+resource-profile peer heuristic until VM-side PVC names are correlated via digest lookups.
+The cost VM CSV (`cm-openshift-vm-usage`) still exposes `vm_persistentvolumeclaim_name` for
+Koku cost paths; ROS VM usage CSV does not yet ingest per-PVC names from that column.
 
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).

@@ -25,6 +25,7 @@ type PVCRecommendationDetailResponse struct {
 	Namespace             string                              `json:"namespace"`
 	PersistentVolumeClaim string                              `json:"persistentvolumeclaim"`
 	MountedBy             string                              `json:"mounted_by,omitempty"`
+	VMName                string                              `json:"vm_name,omitempty"`
 	PersistentVolume      string                              `json:"persistentvolume,omitempty"`
 	StorageClass          string                              `json:"storageclass,omitempty"`
 	CapacityBytes         int64                               `json:"capacity_bytes"`
@@ -118,6 +119,9 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 			summary.CapacityBytes = rec.CapacityBytes
 			if rec.MountedBy != "" {
 				summary.MountedBy = rec.MountedBy
+			}
+			if rec.VMName != "" {
+				summary.VMName = rec.VMName
 			}
 		}
 	}

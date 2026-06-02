@@ -618,6 +618,7 @@ for charts. Use for row drill-down from the list table.
       "namespace": "team-a",
       "persistentvolumeclaim": "data-pvc",
       "mounted_by": "virt-launcher-data-pvc-abc12",
+      "vm_name": "data-pvc",
       "persistentvolume": "pv-abc",
       "storageclass": "gp3",
       "capacity_bytes": 107374182400,
@@ -665,6 +666,7 @@ current usage is below 85%.
 
 - Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings. Wire column sort to `order_by` + `order_how` (server-side).
 - Show `mounted_by` as workload context (e.g. "Mounted by: virt-launcher-…") when non-empty; omit when empty.
+- Show `vm_name` when present (authoritative KubeVirt VM from operator storage CSV); link to VM recommendation detail when integrating VM views.
 - Add a **Storage class** filter dropdown bound to `filter[storageclass]` for tier-specific views.
 - Open detail on row click via `GET .../pvcs/detail` — render `terms` side-by-side and `historical_usage` as a usage-over-time chart.
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").

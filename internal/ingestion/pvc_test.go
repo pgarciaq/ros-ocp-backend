@@ -58,6 +58,34 @@ val1,val2
 	assert.Contains(t, err.Error(), "missing required columns")
 }
 
+func TestParsePVCRows_VMNameColumn(t *testing.T) {
+	csv := `interval_start,interval_end,namespace,pod,vm_name,persistentvolumeclaim
+2026-05-01 00:00:00+00:00,2026-05-01 01:00:00+00:00,kubevirt,virt-launcher-fedora-vm-x9y8z,fedora-vm,vm-disk
+`
+	rows, err := ParsePVCRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "fedora-vm", rows[0].VMName)
+}
+
+func TestComputePVCDigests_VMNamePropagation(t *testing.T) {
+	rows := []PVCRow{
+		{
+			IntervalStart:         mustParseTime("2026-05-01 00:00:00+00:00"),
+			IntervalEnd:           mustParseTime("2026-05-01 01:00:00+00:00"),
+			Namespace:             "kubevirt",
+			Pod:                   "virt-launcher-fedora-vm-x9y8z",
+			VMName:                "fedora-vm",
+			PersistentVolumeClaim: "vm-disk",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 5e9,
+		},
+	}
+	digests := ComputePVCDigests(rows)
+	require.Len(t, digests, 1)
+	assert.Equal(t, "fedora-vm", digests[0].VMName)
+}
+
 func TestComputePVCDigests_BasicAggregation(t *testing.T) {
 	rows := []PVCRow{
 		{

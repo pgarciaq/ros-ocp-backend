@@ -462,6 +462,12 @@ short/medium/long term rows to coexist after phase 12 multi-term PVC output.
 
 ---
 
+## PVC `vm_name` / VM correlation (migration 000124)
+
+The operator storage CSV may include `vm_name` for PVCs mounted by virt-launcher pods.
+ROS persists it on `daily_pvc_digests` and `pvc_recommendation_sets` and returns it on
+PVC recommendation list/detail responses when present.
+
 ## PVC last-seen pod / `mounted_by` (migration 000114)
 
 ### What it adds
@@ -475,5 +481,5 @@ Migration **000114** adds `last_seen_pod TEXT NOT NULL DEFAULT ''` to
 - Additive — no worker stop required.
 - Values populate on the **next ingestion cycle** after deploy (no historical backfill).
 - Empty string when the operator did not report a pod name for that PVC/day.
-- `mounted_by` is display context only; VM–PVC correlation still uses namespace heuristics
+- `mounted_by` is display context only; authoritative VM link is `vm_name` (migration **000124**)
   until VM CSV PVC columns are ingested (see [known-issues.md](known-issues.md)).

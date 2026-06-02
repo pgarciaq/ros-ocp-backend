@@ -560,6 +560,8 @@ GET /recommendations/openshift/pvcs
       "cluster_uuid": "...",
       "namespace": "team-a",
       "persistentvolumeclaim": "data-pvc",
+      "mounted_by": "virt-launcher-data-pvc-abc12",
+      "vm_name": "data-pvc",
       "persistentvolume": "pv-abc",
       "storageclass": "gp3",
       "capacity_bytes": 107374182400,

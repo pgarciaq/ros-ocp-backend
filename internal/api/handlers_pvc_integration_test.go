@@ -34,22 +34,23 @@ func seedPVCRecCluster(t *testing.T, orgID string) {
 	require.NoError(t, err)
 }
 
-func insertPVCRecommendation(t *testing.T, orgID, namespace, pvcName, storageClass, recType, lastSeenPod string, usageRatio float64) {
+func insertPVCRecommendation(t *testing.T, orgID, namespace, pvcName, storageClass, recType, lastSeenPod, vmName string, usageRatio float64) {
 	t.Helper()
 	ctx := context.Background()
 	pool := database.GetPool()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (
 			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
-			storageclass, last_seen_pod, recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+			storageclass, last_seen_pod, vm_name, recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
 			notification_codes, data_days, updated_at
-		) VALUES ($1, $2, $3, $4, 'medium', $5, $6, $7, $8, 10737418240, 1073741824, '{}', 14, NOW())
+		) VALUES ($1, $2, $3, $4, 'medium', $5, $6, $7, $8, $9, 10737418240, 1073741824, '{}', 14, NOW())
 		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 		DO UPDATE SET storageclass = EXCLUDED.storageclass,
 			last_seen_pod = EXCLUDED.last_seen_pod,
+			vm_name = EXCLUDED.vm_name,
 			recommendation_type = EXCLUDED.recommendation_type,
 			usage_ratio = EXCLUDED.usage_ratio`,
-		orgID, testutil.TestClusterUUID, namespace, pvcName, storageClass, lastSeenPod, recType, usageRatio,
+		orgID, testutil.TestClusterUUID, namespace, pvcName, storageClass, lastSeenPod, vmName, recType, usageRatio,
 	)
 	require.NoError(t, err)
 }
@@ -61,8 +62,8 @@ func TestGetPVCRecommendations_FilterStorageClass(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	seedPVCRecCluster(t, orgID)
-	insertPVCRecommendation(t, orgID, "apps", "data-gp3", "gp3-csi", "", "oversized", 0.05)
-	insertPVCRecommendation(t, orgID, "apps", "data-odf", "ocs-storagecluster-ceph-rbd", "", "near_full", 0.92)
+	insertPVCRecommendation(t, orgID, "apps", "data-gp3", "gp3-csi", "", "", "oversized", 0.05)
+	insertPVCRecommendation(t, orgID, "apps", "data-odf", "ocs-storagecluster-ceph-rbd", "", "", "near_full", 0.92)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -139,7 +140,7 @@ func TestGetPVCRecommendations_MountedByInResponse(t *testing.T) {
 
 	seedPVCRecCluster(t, orgID)
 	insertPVCRecommendation(t, orgID, "kubevirt", "vm-disk", "ocs-storagecluster-ceph-rbd",
-		"healthy", "virt-launcher-fedora-vm-x9y8z", 0.5)
+		"healthy", "virt-launcher-fedora-vm-x9y8z", "fedora-vm", 0.5)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -156,6 +157,34 @@ func TestGetPVCRecommendations_MountedByInResponse(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "virt-launcher-fedora-vm-x9y8z", resp.Data[0].MountedBy)
+	assert.Equal(t, "fedora-vm", resp.Data[0].VMName)
+}
+
+func TestGetPVCRecommendations_VMNameInResponse(t *testing.T) {
+	orgID := "org-pvc-vmname-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	insertPVCRecommendation(t, orgID, "kubevirt", "datavol-fedora", "ocs-storagecluster-ceph-rbd",
+		"healthy", "virt-launcher-fedora-vm-x9y8z", "fedora-vm", 0.4)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/pvcs?limit=20", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "fedora-vm", resp.Data[0].VMName)
 }
 
 func TestGetPVCRecommendationDetail_AllTermsAndHistory(t *testing.T) {

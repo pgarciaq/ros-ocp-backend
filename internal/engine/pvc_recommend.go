@@ -25,6 +25,7 @@ type PVCDigestRow struct {
 	Namespace     string
 	PVC           string
 	LastSeenPod   string
+	VMName        string
 	PV            string
 	StorageClass  string
 	CapacityBytes int64
@@ -42,6 +43,7 @@ type PVCRec struct {
 	Namespace                    string
 	PVC                          string
 	LastSeenPod                  string
+	VMName                       string
 	PV                           string
 	StorageClass                 string
 	CapacityBytes                int64
@@ -116,7 +118,7 @@ func windowDigests(digests []PVCDigestRow, windowDays int) []PVCDigestRow {
 func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCDigestRow, error) {
 	lookbackDays := MaxWindowDays(terms, 90)
 	query := fmt.Sprintf(`
-		SELECT bucket_date, namespace, persistentvolumeclaim, last_seen_pod, persistentvolume,
+		SELECT bucket_date, namespace, persistentvolumeclaim, last_seen_pod, vm_name, persistentvolume,
 			storageclass, capacity_bytes, request_bytes,
 			usage_bytes_min, usage_bytes_max, usage_bytes_avg, sample_count
 		FROM daily_pvc_digests
@@ -134,7 +136,7 @@ func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 	for pgRows.Next() {
 		var r PVCDigestRow
 		if err := pgRows.Scan(
-			&r.BucketDate, &r.Namespace, &r.PVC, &r.LastSeenPod, &r.PV,
+			&r.BucketDate, &r.Namespace, &r.PVC, &r.LastSeenPod, &r.VMName, &r.PV,
 			&r.StorageClass, &r.CapacityBytes, &r.RequestBytes,
 			&r.UsageBytesMin, &r.UsageBytesMax, &r.UsageBytesAvg, &r.SampleCount,
 		); err != nil {
@@ -157,6 +159,7 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		Namespace:     latest.Namespace,
 		PVC:           latest.PVC,
 		LastSeenPod:   latest.LastSeenPod,
+		VMName:        latest.VMName,
 		PV:            latest.PV,
 		StorageClass:  latest.StorageClass,
 		CapacityBytes: latest.CapacityBytes,
@@ -306,18 +309,22 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 		_, err := pool.Exec(ctx, `
 			INSERT INTO pvc_recommendation_sets (
 				org_id, cluster_uuid, namespace, persistentvolumeclaim,
-				last_seen_pod, persistentvolume, storageclass, capacity_bytes,
+				last_seen_pod, vm_name, persistentvolume, storageclass, capacity_bytes,
 				usage_bytes_max, usage_ratio, recommendation_type,
 				recommended_bytes, days_to_full, growth_bytes_per_day,
 				notification_codes, data_days, term,
 				estimated_monthly_savings_usd,
 				updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
 			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 			DO UPDATE SET
 				last_seen_pod = CASE
 					WHEN EXCLUDED.last_seen_pod != '' THEN EXCLUDED.last_seen_pod
 					ELSE pvc_recommendation_sets.last_seen_pod
+				END,
+				vm_name = CASE
+					WHEN EXCLUDED.vm_name != '' THEN EXCLUDED.vm_name
+					ELSE pvc_recommendation_sets.vm_name
 				END,
 				persistentvolume = EXCLUDED.persistentvolume,
 				storageclass = EXCLUDED.storageclass,
@@ -333,7 +340,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
 				updated_at = NOW()`,
 			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.PVC,
-			rec.LastSeenPod, rec.PV, rec.StorageClass, rec.CapacityBytes,
+			rec.LastSeenPod, rec.VMName, rec.PV, rec.StorageClass, rec.CapacityBytes,
 			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
 			rec.NotificationCodes, rec.DataDays, rec.Term,
