@@ -90,29 +90,72 @@ container recommendations exist; the authoritative run is the explicit call in
    - `medium` — utilization ≥ `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` (default 70)
    - `low` — utilization &gt; 0 but below medium threshold
    - `none` — no utilization signal
-6. **Savings** — `tighten` rows estimate monthly savings from freed CPU/memory via Koku
-   effective rates when `ROS_SAVINGS_ESTIMATES_ENABLED=true` (`estimated_savings` in API).
+6. **Savings** — `tighten` rows estimate monthly savings from freed CPU/memory/storage
+   request capacity via Koku `configured_rates` when `ROS_SAVINGS_ESTIMATES_ENABLED=true`
+   (`estimated_savings` in API). Freed **pods** are reported in `capacity_freed.pods_freed`
+   only — there is no cost-model metric for pod slots (see [Pod capacity freed](#pod-capacity-freed)).
 
 Implementation: [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
 [`internal/engine/quota_run.go`](../../internal/engine/quota_run.go),
 [`internal/api/handlers_quota_recs.go`](../../internal/api/handlers_quota_recs.go).
 
+### Object-count resources
+
+The operator ingests aggregated **`object_count_*`** metrics (sum of all Kubernetes
+`count/*` ResourceQuota resource types, such as `count/configmaps` and `count/secrets`).
+These appear on namespace and ClusterResourceQuota digests as `object_count_hard` /
+`object_count_used`.
+
+| Use case | Included? | Notes |
+|----------|-----------|-------|
+| **Risk level** | Yes | `ObjectCountBP` participates in `maxUtilizationBP()` — a namespace at 95% of its object-count hard limit can surface `high` risk even when CPU/memory are low. |
+| **Blocking notifications** | Yes | Code **72** (namespace ResourceQuota at capacity) and code **73** (ClusterResourceQuota at capacity) fire when `used >= hard` on object counts, same as CPU/memory/storage/pods. |
+| **Tighten / raise** | No | There is no workload-derived target comparable to summed container `rec_*` request columns. Recommended object-count hard values are not computed from rightsizing output. |
+| **Savings** | No | Koku `effective_rates` has no object-count or per-object cost metric; freed object-count capacity is not monetized. |
+
+Object-count quotas are **visibility and alerting only** in ROS: they help operators see
+admission pressure on object totals, not FinOps dollar impact from quota tightening.
+
+Implementation: [`quota_notifications.go`](../../internal/engine/quota_notifications.go),
+[`recommend_quota.go`](../../internal/engine/recommend_quota.go) (`ObjectCountBP` only).
+
+### Pod capacity freed
+
+Pod quota uses **`pods_used`** from `kube_resourcequota` (with headroom) as the
+recommended hard target — not a sum of container recommendations. Tighten can set
+`capacity_freed.pods_freed`, but [`ApplyQuotaSavings()`](../../internal/engine/recommend_quota.go)
+monetizes only CPU, memory, and storage (same as ClusterResourceQuota). See
+[Pod savings feasibility](#pod-savings-feasibility) below.
+
 ### Timing and one-cycle lag
 
 Container sums are read from PostgreSQL (`recommendation_sets`), not passed in memory
-from the container plugin. In a typical payload (container CSV then namespace CSV):
+from the container plugin. Namespace quota **hard/used** and container **recommendation
+sums** can therefore be up to **one operator upload cycle** out of phase.
+
+**Typical payload (container CSV, then namespace CSV in the same or later upload):**
 
 1. Container digest ingest runs.
 2. `RecommendWorkloadsStreaming` writes fresh `term=medium` / `engine=cost` rows.
-3. Quota runs **once** at the end of `processContainerCSVNative` with those new rows.
-4. Namespace digest ingest updates hard/used snapshots for the **next** quota run.
+3. `RunQuotaRecommendations` at the end of `processContainerCSVNative` uses those new sums;
+   namespace hard/used in `daily_namespace_quota_digests` may still reflect the **previous**
+   cycle until step 4 completes.
+4. Namespace CSV ingest updates hard/used snapshots; `RunQuotaRecommendations` at the end of
+   `processNamespaceCSVNative` refreshes risk and tighten/raise using the latest quota metrics
+   (container sums unchanged in that sub-step).
 
-If only namespace CSV is ingested in a cycle, quota hard/used and risk from quota
-metrics update immediately (namespace-path `RunQuotaRecommendations`), but container
-recommendation sums still come from the **previous** cycle until container CSV arrives.
-On first deployment, expect one report cycle before tighten/raise signals fully reflect
-container-based sums. There is no way to derive container sums from namespace CSV alone;
-running quota twice in one cycle would not help.
+**Mitigations (implemented):**
+
+- Quota always runs **after** container recommendation persistence when container CSV is present.
+- Quota also runs **after** namespace CSV ingest so hard/used and blocking signals are not stuck
+  one cycle behind when only namespace data arrives.
+
+**Accepted limitation:** This is inherent to the split-CSV architecture (separate container and
+namespace ROS files). ROS cannot derive container recommendation sums from namespace CSV alone;
+running quota twice in one processor pass does not remove cross-file lag. For **steady-state**
+operation (regular uploads of both file types), at most one cycle of skew is expected and is
+acceptable. On **first deployment**, allow one full report cycle before tighten/raise fully
+reflect both fresh container sums and fresh quota hard/used.
 
 ---
 
@@ -181,10 +224,50 @@ and [known issues](../known-issues.md#deferred-quota-ui).
 
 | Gap | Notes |
 |-----|-------|
-| **Object-count tighten/raise** | Operator ingests aggregated `object_count_*` (sum of all `count/*` types). The engine includes object counts in **risk** and **blocking** notifications (code 72) but not in tighten/raise or savings: there is no workload-derived target comparable to container CPU/memory sums, and freed object-count capacity is not monetized. |
-| **CRQ namespace selector** | Implemented: operator exports comma-separated `namespaces` on cluster-quota CSV; engine sums namespace quota recommendations for member namespaces only. |
+| **Per-quota object identity** | When multiple `ResourceQuota` objects exist per namespace, rows are keyed by `quota_name` from the operator; older builds without `quota_name` merge by namespace. |
 
-Implemented in this plugin: storage and pods in tighten/raise/risk/savings (storage monetized via cost model; pods reported in `capacity_freed` only), per-resource `history[]` aligned with cluster-quota (`cpu_request`, `memory_request`, `storage_request`, `pods`), `order_by` / `order_how`, detail endpoints, notification codes **70–72** (73 is CRQ-only), and append-only `quota_recommendation_history` (90-day retention).
+Implemented in this plugin: CPU/memory/storage/pods in tighten/raise/risk; storage monetized via cost model; pods and object counts in `capacity_freed` / risk / notifications only (see [Object-count resources](#object-count-resources), [Pod capacity freed](#pod-capacity-freed)); per-resource `history[]`; notification codes **70–72** (73 is CRQ-only).
+
+### Pod savings feasibility (analysis)
+
+**Question:** Can ROS estimate dollar savings for freed **pod quota** slots by dividing node
+cost by `node_allocatable_pods` (or kubelet max pods)?
+
+**How quota savings work today:** [`ApplyQuotaSavings()`](../../internal/engine/recommend_quota.go)
+uses the same Koku `configured_rates` helpers as PVC savings:
+
+- `cpu_core_usage_per_hour` × freed CPU cores × 730
+- `memory_gb_usage_per_hour` × freed GiB × 730
+- `storage_gb_request_per_month` (or usage fallback) × freed storage GiB
+
+Container rightsizing savings ([`savings.go`](../../internal/engine/savings.go)) are richer:
+per-namespace **`namespace_aggregates`** (cost-model CPU/memory costs plus
+`infrastructure_cost` + `distributed_cost` from OCP-on-cloud correlation). Node consolidation
+savings ([`node_savings.go`](../../internal/engine/node_savings.go)) use the same hourly CPU/memory
+rates plus **`node_cost_per_month` × `node_count_reduction`**.
+
+There is **no** `pod_cost_per_month` (or similar) in `effective_rates`. Koku distributes
+`cluster_cost_per_month` and `node_cost_per_month` to line items by CPU/memory (or storage/GPU),
+not by pod count.
+
+**Proposed “cost per pod slot” approach:**
+
+```
+node_monthly_cost = f(node_cost, cluster_share, cpu/mem rates, cloud infra)
+cost_per_pod_slot = node_monthly_cost / pod_capacity
+pod_quota_savings = pods_freed × cost_per_pod_slot
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Feasibility** | **Medium–hard** in ros-ocp-backend; **hard** to make accurate cluster-wide. |
+| **Data available** | `pod_capacity` / `node_capacity_pods` on node digests (operator); `pods_freed` on quota recs; node rates in `configured_rates`. Missing: which node(s) “own” a namespace’s pod quota, per-pod CPU/memory footprint, and whether freed slots enable node removal. |
+| **Accuracy** | **Low to misleading** for FinOps. Pod slots are not fungible like GiB: a freed quota of 10 pod slots does not save money unless workloads shrink **and** the cluster can remove a node or shed cloud instance cost. A sidecar (10m CPU) and a batch job (32 cores) both consume one slot. Dividing **total node cost** by max pods assumes uniform cost per slot — dominated by large workloads, not slot count. |
+| **Double-count risk** | Container and node plugins already monetize CPU/memory (and node removal). Adding pod-slot dollars on quota tighten would **overlap** unless carefully scoped to “quota-only” capacity with no CPU/memory freed — a narrow edge case. |
+| **Where to implement** | **Neither Koku nor ROS should add this as default quota savings.** Koku could theoretically expose a derived metric (e.g. amortized node cost per allocatable pod for reporting), but the **business meaning** belongs in ROS/docs as operational capacity, not dollars. If ever built, a **ros-ocp-backend** optional estimate (behind a flag, with heavy disclaimers) is closer to recommendation context; **Koku** would only be the rate source, not the allocator of pod-slot economics. |
+| **Recommendation** | Keep **`pods_freed` as a count** in `capacity_freed` and API; do **not** add `estimated_savings` for pods without node consolidation proof. Prioritize node plugin savings (`node_count_reduction` × `node_cost_per_month`) when pod headroom blocks consolidation (notification **74**). |
+
+---
 
 ---
 

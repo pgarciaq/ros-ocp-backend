@@ -37,13 +37,38 @@ flowchart TD
 3. After container `recommendation_sets` are written, `RunQuotaRecommendations` compares
    hard/used limits to aggregated container `term=medium` / `engine=cost` sums.
 4. Each namespace with hard limits gets a recommendation type, risk level, and optional
-   estimated savings on **tighten**.
+   estimated savings on **tighten** (CPU, memory, and storage request capacity only).
 
 Quota does **not** use an ingest hook: namespace CSV hooks run before container
 recommendations exist, so the authoritative run is the explicit call at the end of
 `processContainerCSVNative` in the report processor.
 
-Internal design: [`docs/features/quota-recommendations.md`](../../../docs/features/quota-recommendations.md) (repo `docs/` tree).
+Internal design (timing, object-count policy, pod-savings analysis):
+[`docs/features/quota-recommendations.md`](../../../docs/features/quota-recommendations.md) in the repo `docs/` tree.
+
+---
+
+## Object-count resources
+
+The operator reports aggregated **`object_count_*`** hard/used values (sum of Kubernetes
+`count/*` quota types). ROS uses them for **visibility and alerting only**:
+
+| Use case | Included? |
+|----------|-----------|
+| Risk level (`high` / `medium` / …) | Yes — counts toward max utilization across resources |
+| Blocking notifications | Yes — code **72** (namespace), **73** (ClusterResourceQuota) when at hard limit |
+| Tighten / raise recommendations | No — no workload-derived target from container rightsizing |
+| Estimated savings | No — no cost-model rate for object counts in Koku `effective_rates` |
+
+Operators should treat object-count signals as admission-risk indicators, not FinOps dollar impact.
+
+---
+
+## Pod capacity freed
+
+When pod quota can be tightened, the API reports **`capacity_freed.pods_freed`** (count only).
+Monthly **`estimated_savings`** on tighten rows includes CPU, memory, and storage request
+capacity — not pod slots. There is no `pod_cost_per_month` metric in the cost model.
 
 ---
 
@@ -112,11 +137,25 @@ See [Configuration](../configuration.md#resourcequota-recommendations) for deplo
 
 ---
 
-## Timing
+## Timing and one-cycle lag
 
-When a report bundle includes container CSV, quota runs **once** after container
-recommendations are persisted. If only namespace CSV arrives in a cycle, quota uses
-container sums from the **previous** cycle until container metrics are processed again.
+Namespace quota **hard/used** metrics and container **recommendation sums** come from
+different ROS CSV files. They can be up to **one operator upload cycle** out of phase.
+
+**Mitigations (implemented):**
+
+- After **container** CSV: quota runs when `recommendation_sets` are written (fresh sums).
+- After **namespace** CSV: quota runs again so hard/used and blocking signals use the latest
+  `kube_resourcequota` snapshots.
+
+**Accepted behavior:** Split-CSV ingestion cannot merge both signals in a single pass when
+only one file type arrives. For steady-state clusters that upload container and namespace
+data regularly, one cycle of skew is expected and acceptable. On first deployment, allow one
+full report cycle before tighten/raise fully align.
+
+When a bundle includes container CSV, quota runs after container recommendations are
+persisted. If only namespace CSV arrives in a cycle, quota refreshes hard/used immediately
+but container sums remain from the **previous** cycle until container CSV is processed again.
 
 ---
 
@@ -192,11 +231,14 @@ Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../../o
 
 ## Operator data
 
-Hard limits (required): `cpu_request_namespace_sum`, `cpu_limit_namespace_sum`,
+**Compute (required):** `cpu_request_namespace_sum`, `cpu_limit_namespace_sum`,
 `memory_request_namespace_sum`, `memory_limit_namespace_sum`.
 
-Used values (optional, backward compatible): `cpu_request_namespace_used`,
-`cpu_limit_namespace_used`, `memory_request_namespace_used`, `memory_limit_namespace_used`.
+**Compute used (optional):** `cpu_request_namespace_used`, `cpu_limit_namespace_used`,
+`memory_request_namespace_used`, `memory_limit_namespace_used`.
+
+**Extended resources (optional, current operator builds):** storage request hard/used,
+`pods_*`, `object_count_*`, and per-quota `quota_name`.
 
 Older operators without `*_namespace_used` columns still work; utilization falls back to
 container recommendation sums where used metrics are absent.
@@ -227,6 +269,8 @@ and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 
 | Gap | Notes |
 |-----|-------|
-| **Storage / object counts** | Operator `kube_resourcequota` queries only collect CPU/memory request/limit hard and used. No `requests.storage`, `pods`, or `count/*` in the namespace ROS CSV yet. |
-| **Per-quota object identity** | PromQL sums by namespace only; multiple `ResourceQuota` objects per namespace are merged until the operator exports `quota_name`. |
-| **CRQ namespace selector** | Cluster quota CSV has hard/used per CRQ name only; selector membership is not exported yet. |
+| **Per-quota object identity** | Rows are keyed by `quota_name` when the operator exports it; older builds without `quota_name` merge multiple ResourceQuota objects per namespace. |
+
+**Not planned:** Dollar savings for freed pod quota slots (see internal doc
+[Pod savings feasibility](../../../docs/features/quota-recommendations.md#pod-savings-feasibility-analysis)).
+Use **`pods_freed`** for capacity reporting and node consolidation savings for node-level FinOps impact.
