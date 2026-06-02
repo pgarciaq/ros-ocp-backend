@@ -67,8 +67,8 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Exact match | — | `filter[exact:<field>]` | Exact match instead of partial |
 | Exclude | — | `exclude[<field>]` | Exclude matching values |
 | Sort | `order_by` + `order_how` | `order_by[<field>]` | Sort field; value is `asc` or `desc` |
-| Pagination | `limit` / `offset` | `limit` / `offset` | Offset pagination |
-| Keyset cursor | `after` | `after` | Keyset pagination (container/namespace lists) |
+| Pagination | `limit` / `offset` | `limit` / `offset` | Offset pagination (most list endpoints) |
+| Keyset cursor | `after` | `after` | Keyset pagination — **only** `GET /recommendations/openshift` and namespace list routes; see [API Pagination](../pagination.md) |
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
@@ -82,15 +82,23 @@ These boolean filters apply to **`GET /api/cost-management/v1/recommendations/op
 |-----------|------|---------|-------------|
 | Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node is classified underutilized: CPU P95 **and** memory P95 are below the underutil threshold (default 30% of allocatable). |
 | Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node is classified overcommitted: sum of pod CPU requests divided by allocatable CPU exceeds the overcommit threshold (default **1.5** via `ROS_NODE_OVERCOMMIT_THRESHOLD`). |
+| Idle state | `idle_state` | `filter[idle_state]` | `active`, `idle`, or `zombie` (comma-separated OR). |
+| Stranded resource | `stranded_resource` | `filter[stranded_resource]` | `cpu`, `memory`, or `none` (EMA imbalance classification). |
+| Instance type | `instance_type` | `filter[instance_type]` | Exact match on operator-reported instance type. |
+| MachineSet | `machineset_name` | `filter[machineset_name]` | Exact match on MachineSet name when present in ROS CSV. |
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=true
 GET /api/cost-management/v1/recommendations/openshift/nodes?filter[is_overcommitted]=true
 GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=false&is_overcommitted=false
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[idle_state]=zombie,idle
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[stranded_resource]=cpu
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[instance_type]=m5.xlarge
 ```
 
-Response objects include `is_underutilized` and `is_overcommitted` booleans (and `cpu_overcommit_ratio`)
-matching the stored classification. See [UI integration — node recommendations](../ui-integration-guide.md#3-node-recommendations).
+Response objects include `classification` (`is_underutilized`, `is_overcommitted`, `idle_state`,
+`stranded_resource`), `pod_capacity`, `pod_scheduling_headroom`, and nested `recommendation_terms`.
+See [node plugin reference](node.md) and [UI integration — node recommendations](../ui-integration-guide.md#3-node-recommendations).
 
 ## Tag filtering
 

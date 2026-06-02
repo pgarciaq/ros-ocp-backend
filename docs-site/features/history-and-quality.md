@@ -43,7 +43,7 @@ GET /api/cost-management/v1/recommendations/openshift/history?format=csv
 | Date range | `start_date`, `end_date` (YYYY-MM-DD; default: current month) |
 
 Sort by `recorded_at`, `cluster`, `project`, `container`, `term`, or `engine`.
-Pagination via `offset` and `limit`.
+Pagination via `offset` and `limit` (offset-only by design — see [API Pagination](../pagination.md)).
 
 ### Example (abbreviated)
 

@@ -47,6 +47,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 
 ## Quick links
 
+- [API Pagination](pagination.md) — Keyset vs offset strategy across all list endpoints
 - [UI Integration Guide](ui-integration-guide.md) — REST API reference for koku-ui frontend developers
 - [Features overview](features/index.md) — Feature matrix and deep-dive pages per domain
 - [What's new](whats-new.md) — Native engine release highlights

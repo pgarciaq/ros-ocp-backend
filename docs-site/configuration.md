@@ -137,14 +137,14 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 
 ### List pagination (`after` cursor)
 
-Container and namespace recommendation list endpoints support **keyset pagination**
-via the `after` query parameter. When `after` is present, the API uses an opaque
-base64-encoded cursor and ignores `offset`. Each JSON response includes
-`meta.has_next` and, when more pages exist, `meta.next_cursor` for the next
-request. Existing clients can continue using `offset` and `limit`; `meta.count`
-is served from pre-computed org stats when available.
+Container and namespace list endpoints support **keyset pagination** via `?after=<opaque base64url cursor>`.
+When `after` is set, `offset` is ignored. Responses include `meta.has_next` and `meta.next_cursor`
+for the next page. Other list endpoints remain offset-only by design.
 
-Example:
+**Authoritative reference:** [API Pagination](pagination.md) — endpoint matrix, client patterns,
+and when offset-only routes would need keyset.
+
+Quick example:
 
 ```
 GET /recommendations/openshift?limit=100

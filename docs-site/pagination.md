@@ -1,0 +1,254 @@
+# API Pagination Strategy
+
+This page is the **authoritative public reference** for how ROS-OCP Backend paginates
+list endpoints. It covers the keyset (cursor) API contract, which routes use it, which
+routes stay on offset pagination and why, and when offset-only endpoints might need keyset
+in the future.
+
+**Base path:** `/api/cost-management/v1`
+
+---
+
+## Summary
+
+| Strategy | When to use | Endpoints |
+|----------|-------------|-----------|
+| **Keyset (`after`)** | Large, unbounded org-wide lists (thousands+ rows) | Container list, namespace list |
+| **Offset (`offset` / `limit`)** | Small or bounded result sets | History, PVC, GPU, nodes, quota, VM, quality, snapshots, fleet summaries |
+
+Only **container** and **namespace** recommendation lists routinely reach thousands of
+distinct rows per organization in large enterprises. Those two endpoints support **keyset
+pagination** so latency stays flat at any page depth. Everything else uses offset
+pagination today because cardinality or retention bounds make `OFFSET` cost negligible.
+
+---
+
+## Keyset pagination (container and namespace lists)
+
+### Endpoints
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/recommendations/openshift` | Container recommendations (distinct containers per page) |
+| `GET` | `/recommendations/openshift/namespaces` | Namespace recommendations (canonical path) |
+| `GET` | `/recommendations/openshift/namespace` | Legacy alias — same handler as `namespaces` |
+| `GET` | `/openshift/namespace/recommendations` | Legacy alias — same handler |
+
+List responses paginate by **distinct container or namespace**, not by raw database rows.
+Each list item can still expose multiple **term × engine** nested objects.
+
+### API contract
+
+#### Request
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `after` | No | Opaque **base64url** cursor from the previous response’s `meta.next_cursor`. When set, the server uses keyset seek and **ignores `offset`**. |
+| `limit` | No | Page size (default **100**, max **1000**). |
+| `offset` | No | Legacy offset pagination. **Ignored when `after` is present.** Still supported for existing clients that do not send `after`. |
+
+Example — first page:
+
+```http
+GET /api/cost-management/v1/recommendations/openshift?limit=100
+```
+
+Example — next page (copy `meta.next_cursor` verbatim):
+
+```http
+GET /api/cost-management/v1/recommendations/openshift?limit=100&after=<meta.next_cursor>
+```
+
+Invalid or tampered cursors return **400** with a message such as `invalid after parameter`.
+
+#### Response (`meta`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `meta.count` | integer | Total distinct containers/namespaces for the org (from pre-computed org stats when available). |
+| `meta.limit` | integer | Page size for this request. |
+| `meta.offset` | integer | **0** when keyset mode (`after` was used); otherwise the request offset. |
+| `meta.has_next` | boolean | `true` if another page exists after this one. |
+| `meta.next_cursor` | string | Present when `has_next` is `true`. Pass as `after` on the next request. Opaque to clients — do not parse or construct manually. |
+
+`links.first`, `links.previous`, `links.next`, and `links.last` are still populated for
+offset mode. In keyset mode, prefer following `meta.next_cursor` rather than synthesizing
+offsets from link URLs.
+
+#### Sort keys (implementation detail)
+
+Cursors encode the last row’s sort position so the database can seek with
+`WHERE (sort columns) > (cursor)` instead of `OFFSET n`:
+
+| List | Default sort | Cursor fields (decoded internally) |
+|------|--------------|-----------------------------------|
+| Containers | `last_reported` DESC (configurable via `order_by` / `order_how`) | `namespace`, `workload`, `container_name` |
+| Namespaces | Cluster + namespace order | `namespace`, `cluster_uuid` |
+
+The `ORDER BY` used for a request must stay **stable** across pages (same filters and
+sort). Changing filters or sort between pages can skip or duplicate rows.
+
+#### Why keyset (not offset at depth)
+
+Offset pagination must scan and discard `offset` rows before returning `limit` rows, so
+cost grows with page number. Keyset pagination seeks from an indexed sort key — **stable
+latency at any depth** when `ORDER BY` matches the index (see
+[Query Performance — `org_container_keys`](query-performance.md#pagination-architecture-org_container_keys)).
+
+| Approx. page depth | Offset / `limit` | Keyset / `after` |
+|--------------------|-------------------|------------------|
+| Page 1 | ~1 ms | ~1 ms |
+| Page 100 | ~15 ms | ~1 ms |
+| Page 1000 | ~150 ms | ~1 ms |
+
+At ~200k containers, the container list uses the `org_container_keys` key table plus
+keyset seek — typically **under 5 ms per page** at any depth (migration `000081`).
+
+#### Client integration patterns
+
+**Infinite scroll / “load more”** — Recommended:
+
+1. `GET ...?limit=50` (no `after`).
+2. If `meta.has_next`, `GET ...?limit=50&after=<meta.next_cursor>`.
+3. Repeat until `has_next` is `false`.
+
+**Classic paged UI with page numbers** — Continue using `offset` and `limit` until the
+UI migrates to cursor mode. Deep offset pages on very large orgs will be slower than keyset.
+
+**Do not:**
+
+- Decode or edit `next_cursor` (base64url JSON internally; format may change).
+- Mix `after` with a non-zero `offset` expecting both to apply (`offset` is ignored).
+- Change `order_by`, filters, or `filter[tag:…]` between cursor pages without restarting from page 1.
+
+### Implementation references
+
+| Component | Location |
+|-----------|----------|
+| Cursor encode/decode | [`internal/api/cursor.go`](../internal/api/cursor.go) |
+| Handler wiring | [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go) |
+| SQL keyset filters | [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go), [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go) |
+| Indexes | Migration `000078_keyset_pagination_indexes` |
+| Large-org key table | `org_container_keys` — migration `000081`; see [query-performance.md](query-performance.md) |
+
+---
+
+## Offset-only endpoints (by design)
+
+These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
+**result-set cardinality**, not missing implementation.
+
+### Endpoint matrix
+
+| Endpoint | Pagination | Typical scale | Rationale |
+|----------|------------|---------------|-----------|
+| `GET /recommendations/openshift` | **Keyset + offset** | 1k–200k+ containers/org | Primary fleet list; OFFSET at depth is expensive |
+| `GET /recommendations/openshift/namespaces` (+ legacy aliases) | **Keyset + offset** | Hundreds–low thousands/org | Same pattern as containers |
+| `GET /recommendations/openshift/history` | Offset only | Default **current month**; retention ~90 days | Bounded time window; filtered history is tens–low hundreds of rows per query |
+| `GET /recommendations/openshift/namespaces/{id}/history` | Offset only | ~14–90 days × terms × engines per namespace | Per-entity history; max ~30–60 rows typical |
+| `GET /recommendations/openshift/vms/{vm_name}/history` | Offset only | Same as namespace history | Per-VM bounded snapshots |
+| `GET /recommendations/openshift/pvcs` | Offset only | Tens–low hundreds per cluster | PVC count per cluster is small; keyset complexity not justified |
+| `GET /recommendations/openshift/gpu/mig` | Offset only | Tens–low hundreds org-wide | In-memory filter/sort/paginate over digest-derived list; GPU hardware is sparse |
+| `GET /recommendations/openshift/gpu/timeslicing` (and related GPU list routes) | Offset only | Same as MIG | Full list built per request then sliced in memory |
+| `GET /recommendations/openshift/nodes` | Offset only | Nodes per cluster (tens–low hundreds) | Recommendations computed at read time; cardinality ≈ node count |
+| `GET /recommendations/openshift/quota` | Offset only | ResourceQuotas per namespace | Small cardinality |
+| `GET /recommendations/openshift/cluster-quota` | Offset only | ClusterResourceQuotas per cluster | Small cardinality |
+| `GET /recommendations/openshift/vm` | Offset only | Moderate (VMs per org) | Not yet at scale requiring keyset |
+| `GET /recommendations/openshift/snapshots` | Offset only | Bounded by retention/settings | Staleness lists are cluster-scoped and limited |
+| `GET /recommendations/openshift/quality` | Offset only | One row per active container cycle | Similar bounds to history/quality pipelines |
+| `GET /recommendations/openshift/savings-summary` | N/A (aggregate) | Single rollup | Not a row list |
+| `GET /recommendations/openshift/fleet-summary` | N/A (aggregate) | Single rollup | Not a row list |
+
+### Why each category stays offset-only
+
+#### History endpoints
+
+- **Paths:** `GET /recommendations/openshift/history` (fleet-wide, filterable);
+  `GET /recommendations/openshift/namespaces/{recommendation-id}/history`;
+  `GET /recommendations/openshift/vms/{vm_name}/history`.
+- **Why:** History is a **bounded** time series — default window is the **current calendar
+  month**, with configurable retention (`ROS_HISTORY_RETENTION_DAYS`, default 90). Even
+  with daily snapshots per container × term × engine, filtered result sets are usually
+  **tens to low hundreds of rows**, not thousands. `OFFSET` overhead is negligible.
+- **Detail:** [History & Quality](features/history-and-quality.md).
+
+#### PVC recommendations
+
+- **Path:** `GET /recommendations/openshift/pvcs`
+- **Why:** PVC count per cluster is typically **tens to low hundreds**. Operators rarely
+  have thousands of PVC recommendation rows in a single filtered view.
+
+#### GPU plugin lists (MIG, time-slicing)
+
+- **Paths:** e.g. `GET /recommendations/openshift/gpu/mig`, time-slicing list routes under `/gpu/`
+- **Why:** The handler **loads, classifies, filters, and sorts in memory**, then applies
+  `offset`/`limit`. GPU deployments are **expensive and sparse** — org-wide MIG-capable
+  rows are usually tens to low hundreds, not tens of thousands. Adding keyset would require
+  **materializing recommendations to SQL** (or a dedicated page-key table) first; that cost
+  is not justified at current scale. See [known-issues.md — MIG in-memory pagination](known-issues.md#mig-list-in-memory-pagination).
+
+#### Node recommendations
+
+- **Path:** `GET /recommendations/openshift/nodes` (and node utilization variants)
+- **Why:** Cardinality is bounded by **nodes per cluster** (often tens on SNO, low hundreds
+  on large clusters). Node sizing rows are computed at read time from digests.
+
+#### ResourceQuota and ClusterResourceQuota
+
+- **Paths:** `GET /recommendations/openshift/quota`, `GET /recommendations/openshift/cluster-quota`
+- **Why:** One (or few) quota objects per namespace or tenant pool — inherently small lists.
+
+#### VM recommendations
+
+- **Path:** `GET /recommendations/openshift/vm`
+- **Why:** Moderate cardinality today (VM count per org). Keyset can be added if VM fleets
+  routinely exceed **thousands** of guests per org without heavy filtering.
+
+---
+
+## When offset-only endpoints would need keyset
+
+Consider keyset (or SQL-backed pagination with page keys) when **any** of the following
+become true in production for a **single org** (with typical filters):
+
+| Signal | Threshold (rule of thumb) | Likely endpoint |
+|--------|---------------------------|-----------------|
+| Deep offset pages exceed **~500 ms** p95 | `offset` > 5,000 on unfiltered list | That list endpoint |
+| Unfiltered org row count | **> 5,000** distinct list keys | Container/namespace (already keyset); or PVC/GPU/VM if product grows |
+| GPU MIG/time-slicing list | **> 1,000** rows after filters | `/gpu/mig`, time-slicing — materialize to DB first |
+| Per-cluster PVC list | **> 2,000** PVCs with recommendations | `/pvcs` |
+| VM list | **> 2,000** guests per org | `/vm` |
+
+**Today:** Only **container** and **namespace** lists routinely hit **thousands+** rows in
+large enterprises. Those are the endpoints that **must** use keyset for acceptable UX.
+
+History, quota, node, and GPU lists are unlikely to reach that scale without a fundamental
+change in product scope (e.g. retaining years of per-snapshot history in one query).
+
+---
+
+## Related documentation
+
+| Topic | Page |
+|-------|------|
+| Environment / quick `after` example | [Configuration — List pagination](configuration.md#list-pagination-after-cursor) |
+| `org_container_keys` and latency | [Query Performance](query-performance.md) |
+| Query parameter cheat sheet | [Plugin Reference — Query parameters](plugin-reference/query-parameters.md) |
+| UI integration (infinite scroll) | [UI Integration Guide — Pagination](ui-integration-guide.md#pagination) |
+| GPU MIG pagination limitations | [Known Issues](known-issues.md) |
+| Koku report APIs (separate service) | DRF offset/cursor — not ROS-OCP |
+
+---
+
+## Keyset vs offset trade-offs
+
+| Keyset (`after`) | Offset (`offset` / `limit`) |
+|------------------|-----------------------------|
+| Flat latency at deep pages | Simple “page N” UX |
+| Stable with matching index + sort | Random access to page N |
+| No row skips when sort is stable | Scan cost grows with `offset` |
+| Client must follow `next_cursor` | `links.*` URLs work out of the box |
+| Cannot jump to arbitrary page number | Fine for small or bounded sets |
+
+Both modes coexist on container and namespace lists: new clients should prefer **`after`**;
+legacy clients can keep **`offset`** until migrated.

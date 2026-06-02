@@ -82,6 +82,9 @@ Run `EXPLAIN ANALYZE` and look for:
 
 ## Pagination Architecture — `org_container_keys`
 
+For the full API pagination contract (keyset `after` vs offset, endpoint matrix, client
+guidance), see **[API Pagination](pagination.md)**.
+
 The container list API uses a **2-step query** instead of `SELECT DISTINCT` over
 `recommendation_sets`:
 

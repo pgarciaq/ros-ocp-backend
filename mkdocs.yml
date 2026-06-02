@@ -126,6 +126,7 @@ nav:
   - Operations:
       - Monitoring: monitoring.md
       - Configuration: configuration.md
+      - API Pagination: pagination.md
       - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Issues: known-issues.md

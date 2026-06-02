@@ -925,72 +925,15 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 
 ## Keyset Pagination
 
-### Delivered (ros-ocp-backend)
+**Delivered:** Container and namespace list endpoints support keyset pagination via `after`
+(opaque base64url cursor), with `meta.has_next` and `meta.next_cursor`. Offset/limit remains
+as a backward-compatible fallback on those two routes only.
 
-Container and namespace recommendation **list** endpoints support **keyset (cursor)
-pagination** via the `after` query parameter. When `after` is present, `offset` is
-ignored and the response includes `meta.next_cursor` when another page exists.
+**Authoritative public reference:** [API Pagination](../docs-site/pagination.md) — full endpoint matrix,
+API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
+thresholds for future keyset work. See also [operations/query-performance.md](operations/query-performance.md).
 
-| Endpoint | Pagination |
-|----------|------------|
-| `GET /recommendations/openshift` | Keyset (`after`) + offset fallback |
-| `GET /recommendations/openshift/namespaces` (and legacy namespace list aliases) | Keyset (`after`) + offset fallback |
-
-Implementation: opaque base64url cursors in [`internal/api/cursor.go`](../internal/api/cursor.go),
-handlers in [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go),
-SQL keyset filters in [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go)
-and [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go).
-Indexes: migration `000078_keyset_pagination_indexes`; large-org path uses `org_container_keys`
-(migration `000081`). See [operations/query-performance.md](operations/query-performance.md).
-
-Example:
-
-```
-GET /recommendations/openshift?limit=50
-GET /recommendations/openshift?limit=50&after=<meta.next_cursor>
-```
-
-Deep pages use `WHERE (namespace, workload, container_name) > (...)` (or namespace
-equivalent) instead of `OFFSET`, so latency stays flat at high page depth.
-
-### Still offset-based
-
-Other ros-ocp-backend list handlers remain **`limit` / `offset`** only, including
-plugin routes (nodes, GPU, VM, PVC, quota), `GET .../history`, and quality/snapshot
-lists. Hot-path bounded scans for node/GPU aggregation (issues **#40** / **#41** in
-`docs/audits/490-issues.md`) are separate from container-list keyset work.
-
-**Koku** (Django REST Framework) still uses offset/limit on report and tag APIs;
-cursor pagination there is not part of this service.
-
-### Why keyset matters (offset cost)
-
-Offset pagination scans and discards `offset` rows before returning `limit` rows,
-so cost grows with page depth. Keyset seeks from an indexed sort key — flat cost per
-page when `ORDER BY` matches the index.
-
-| Page depth (approx.) | Offset/limit | Keyset |
-|----------------------|--------------|--------|
-| Page 1 | ~1 ms | ~1 ms |
-| Page 100 | ~15 ms | ~1 ms |
-| Page 1000 | ~150 ms | ~1 ms |
-
-### Future work (optional)
-
-| Service | Endpoint | Notes |
-|---------|----------|-------|
-| ros-ocp-backend | `/recommendations/openshift/history` | Grows ~1 row/container/term/day |
-| ros-ocp-backend | `/recommendations/openshift/pvcs` | Large PVC counts per cluster |
-| ros-ocp-backend | Node/GPU/VM plugin lists | Offset today |
-| Koku | `/reports/openshift/costs/`, `/tags/openshift/` | DRF `CursorPagination` candidate |
-
-### Trade-offs
-
-| Pro | Con |
-|-----|-----|
-| Flat latency at deep pages | No random access ("jump to page N") |
-| Stable sort + index seek | Client must follow `next_cursor` |
-| Good for infinite scroll | Offset kept for backward compatibility on delivered lists |
+**Koku** report/tag APIs use Django REST Framework pagination in a separate service.
 
 ---
 

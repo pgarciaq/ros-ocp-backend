@@ -1451,10 +1451,25 @@ Complements `GET /recommendations/openshift/savings-summary` (Section 6) with wo
 
 ### Pagination
 
-Standard `offset` + `limit` with `meta.count` and `links.first|previous|next|last`.
+**Authoritative reference:** [API Pagination](pagination.md).
+
+| List type | Parameters | Response hints |
+|-----------|------------|------------------|
+| Container / namespace lists | Prefer `after` + `limit`; `offset` + `limit` still supported | `meta.has_next`, `meta.next_cursor` when using keyset |
+| All other lists (PVC, GPU, nodes, history, VM, quota, …) | `offset` + `limit` | `meta.count`, `links.first\|previous\|next\|last` |
 
 Container/namespace lists paginate by **distinct containers/namespaces**, not by raw DB rows
 (each container row includes all term × engine combinations).
+
+**Keyset flow (recommended for large orgs):**
+
+```http
+GET /api/cost-management/v1/recommendations/openshift?limit=50
+GET /api/cost-management/v1/recommendations/openshift?limit=50&after=<meta.next_cursor>
+```
+
+Repeat while `meta.has_next` is `true`. Do not parse `next_cursor`. When `after` is sent,
+`offset` is ignored (`meta.offset` is `0`).
 
 ### Sorting
 
