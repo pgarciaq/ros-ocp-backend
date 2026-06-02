@@ -185,7 +185,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | F44 | **MachineSet right-sizing (Tier 2)** | Aggregate utilization across MachineSet nodes. Replica count recommendation (`rec = ceil(current × util / target)`). Instance type recommendation from cloud catalog (smallest-fit). Stranded resource → family switch. PDB notification. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (3-5 queries) | Active | **NO** | **Net-new** | Go heuristic (not PL/pgSQL). 20% minimum savings hysteresis. 2-replica HA floor. |
 | F45 | **MachineAutoscaler optimization (Tier 3)** | Saturated/idle/flapping/missing autoscaler detection. Suggested min/max adjustments. | 8c | REQ-8c.7 | Yes (2 queries, optional) | Active | **NO** | **Net-new** | Cloud-only (bare metal N/A). |
 | F46 | **Cloud instance type catalog** | Live catalog from AWS Bulk Pricing JSON, Azure Retail Prices API, GCP machineTypes API. Daily refresh. In-memory cache. | 8c | REQ-8c.6 | No | Active | **NO** | **Net-new** | AWS Tier 1: public JSON (no auth). Tier 2: optional `ec2:DescribeInstanceTypes` if customer adds IAM perm. |
-| F47 | **Node/MachineSet API endpoints** | `/nodes`, `/nodes/:node`, `/machinesets`, `/machinesets/:name`. Filter by utilization, instance type, stranded resource. | 8c | REQ-8c.10 | No | Active | **PARTIAL** | **Net-new** — Node utilization exists (**`GET /recommendations/openshift/nodes`**; deprecated alias **`GET /recommendations/openshift/nodes/utilization`**). GPU time-slicing moved to **`GET /recommendations/openshift/gpu/timeslicing`**. MachineSet endpoints not implemented. |
+| F47 | **Node/MachineSet API endpoints** | `/nodes`, `/nodes/:node`, `/machinesets`, `/machinesets/:name`. Filter by utilization, instance type, stranded resource. | 8c | REQ-8c.10 | No | Active | **PARTIAL** | **Net-new** — Node utilization exists (**`GET /recommendations/openshift/nodes`**; deprecated alias **`GET /recommendations/openshift/nodes/utilization`**). GPU time-slicing moved to **`GET /recommendations/openshift/gpu/timeslicing`**. MachineSet list endpoint (**`GET /machinesets`**) shipped as Tier 1 aggregation. Detail endpoint (**`GET /machinesets/{name}`**) and catalog-driven engine are Tier 2. |
 
 ### JVM/Quarkus Runtime Recommendations
 
@@ -1871,7 +1871,7 @@ Customers may be running on instance types that are no longer listed in cloud pr
 
 2. **Idle autoscaler:**
    - If `current_replicas == min_replicas` sustained >95% of window: recommend decreasing `minReplicas`.
-   - Emit `AUTOSCALER_IDLE` (code 15) — autoscaler never scales up, `minReplicas` may be set too high.
+   - Emit autoscaler idle signal (code **75** reserved for future `minReplicas` tuning). Code **15** is **`NODE_IDLE`** (node idle/zombie detection, migration **000121**). Autoscaler codes **14**, **16**, **17** remain Tier 3.
 
 3. **Missing autoscaler:**
    - If a MachineSet has no MachineAutoscaler AND utilization varies >50% between daily peak and trough: recommend enabling autoscaling.

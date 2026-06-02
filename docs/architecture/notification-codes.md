@@ -28,7 +28,7 @@ For operator-facing explanations and remediation steps, see
 | VM | `vm_recommendations.notifications` | JSONB array of `{code,type,message}` |
 | Quota / ClusterResourceQuota | 70–73 | Near capacity, oversized/tighten, blocking, CRQ at capacity |
 
-**Planned API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` is described in requirements; catalog is seeded in DB migrations today.
+**Reference API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` returns the full catalog from [`internal/notifications/Definitions`](../../internal/notifications/mapping.go) (sorted by code). Optional `filter[plugin]` (`container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `vm`, `quota`, `cluster-quota`) limits results. No identity header required. DB table `notification_code_definitions` remains the migration source of truth; Go maps must stay in sync (`TestDefinitionsMatchDB`).
 
 ### Maintaining codes
 
@@ -50,7 +50,7 @@ VM JSONB uses lowercase equivalents.
 | Code | DB name | Severity | Plugin | Emitted? | Primary emitter |
 |------|---------|----------|--------|----------|-----------------|
 | 1 | `LOW_CONFIDENCE` | WARNING | Container, Namespace | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/recommend_namespace.go) |
-| 2 | `STALE_DATA` | WARNING | Container | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go) when `rec.Stale` |
+| 2 | `STALE_DATA` | WARNING | Container, Namespace | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/recommend_namespace.go) when `rec.Stale` |
 | 3 | `OOM_DETECTED` | CRITICAL | Container | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go) when `OOMCountSum > 0` |
 | 4 | `PDB_CAVEAT` | WARNING | Node (MachineSet) | **No** | Reserved — not set by native engine |
 | 5 | `IDLE_WORKLOAD` | INFO | Container | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go) — idle/zombie/abandoned path |
@@ -63,7 +63,7 @@ VM JSONB uses lowercase equivalents.
 | 12 | `NODE_OVERCOMMITTED` | WARNING | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) request/allocatable ratio |
 | 13 | `STRANDED_RESOURCES` | INFO | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) CPU/mem imbalance EMA |
 | 14 | `AUTOSCALER_SATURATED` | WARNING | Node | **No** | Reserved — MachineAutoscaler Tier 3 |
-| 15 | `AUTOSCALER_IDLE` | INFO | Node | Yes | [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) when `idle_state` is `idle` or `zombie` |
+| 15 | `NODE_IDLE` | INFO | Node | Yes | [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) when `idle_state` is `idle` or `zombie` |
 | 16 | `AUTOSCALER_FLAPPING` | WARNING | Node | **No** | Reserved |
 | 17 | `AUTOSCALER_RECOMMENDED` | INFO | Node | **No** | Reserved |
 | 18 | `VM_IDLE` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) |
@@ -114,6 +114,8 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 61 | `VM_UNEVEN_NODE_DISTRIBUTION` | INFO | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — skew ratio across nodes for profile group |
 | 62 | `VM_SHARED_STORAGE` | INFO | VM | Yes | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated profile peers in namespace |
 | 63 | `VM_NUMA_OVERSIZED` | WARNING | VM | Yes | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory exceeds `numa_node_memory_gib` |
+| 74 | `NODE_POD_SCHEDULING_LIMIT` | WARNING | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) — low pod scheduling headroom on node |
+| 76 | `NODE_FLEET_CONSOLIDATION` | INFO | Node | Yes | [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) — fleet consolidation opportunity (MachineSet/instance-type group has excess nodes) |
 
 ---
 
@@ -124,7 +126,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | Code | Constant | Trigger conditions | Message (DB / mapping) |
 |------|----------|-------------------|------------------------|
 | 1 | `NotifLowConfidence` | `confidence_level < low_confidence_threshold` (default 0.5) and `data_days > 0` | Less than 4 days of data available for this workload |
-| 2 | `NotifStaleData` | `stale == true` — no digest within `ROS_STALENESS_THRESHOLD_HOURS` (default 72h). See [`docs/operations/stale-detection.md`](../operations/stale-detection.md) | No new metrics data received for more than 48 hours |
+| 2 | `NotifStaleData` | `stale == true` — cluster not reported within `ROS_STALENESS_THRESHOLD_HOURS` (default 48h). See [`docs/operations/stale-detection.md`](../operations/stale-detection.md) | No new metrics data received for more than 48 hours |
 | 3 | `NotifOOMDetected` | `oom_count_sum > 0` in term window | OOM kill events detected within the analysis window |
 | 5 | `NotifIdleWorkload` | `IsIdle` or `idle_state` idle/zombie, or legacy abandoned path (see `recommend_all.go`) | Workload uses less than 1% of requested resources |
 | 6 | `NotifRecApplied` | Current requests within 5% of prior recommendation ([`FindAdoptedContainers`](../../internal/engine/adoption.go) / [`MarkAdopted`](../../internal/engine/adoption.go)) | Resource change detected matching a previous recommendation |
@@ -142,6 +144,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | Code | Constant | Trigger |
 |------|----------|---------|
 | 1 | `NotifLowConfidence` | Same as container, namespace aggregates |
+| 2 | `NotifStaleData` | `stale == true` — same cluster staleness as containers ([`docs/operations/stale-detection.md`](../operations/stale-detection.md)) |
 | 7 | `NotifNewWorkload` | `data_days < 1` |
 | 9 | `NotifMemoryTrendingUp` | Namespace slope threshold **500 KiB/day** ([`namespaceMemTrendSlopeThreshold`](../../internal/engine/recommend_namespace.go)) |
 
@@ -155,8 +158,10 @@ Emitter: [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/
 | 12 | `NotifNodeOvercommitted` | `max(requests) / allocatable CPU > OvercommitThreshold` |
 | 13 | `NotifStrandedResources` | EMA of CPU vs mem imbalance &gt; `StrandedImbalanceThreshold` (default 0.6) for ≥2 days |
 | 25 | `NotifNoCostData` | [`applyNodeSavings`](../../internal/engine/node_savings.go) |
-| 15 | `NotifAIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go)) |
-| 4, 14–17, 23–24 | — | Reserved (14–17 still MachineAutoscaler; code 15 DB name is legacy) |
+| 15 | `NotifNodeIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go)) |
+| 74 | `NotifNodePodSchedulingLimit` | `pod_scheduling_headroom` below `pod_headroom_notification_threshold` (default 10%) |
+| 76 | `NotifNodeFleetConsolidation` | Fleet consolidation assigned `node_count_reduction` for this node |
+| 4, 14–17, 23–24 | — | Reserved (14–17 MachineAutoscaler Tier 3; **75** reserved for future minReplicas) |
 
 Emitter: [`classifyNode`](../../internal/engine/recommend_nodes.go) and [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) → persisted in [`WriteNodeRecommendations`](../../internal/engine/recommend_nodes.go).
 

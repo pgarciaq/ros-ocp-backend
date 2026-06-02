@@ -288,7 +288,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_ARCHIVE_DAYS` for deletion timing.</em> | 72 | `ROS_STALENESS_THRESHOLD_HOURS` | — | — | No |
+| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_ARCHIVE_DAYS` for deletion timing.</em> | 48 | `ROS_STALENESS_THRESHOLD_HOURS`, `ROS_STALE_DATA_THRESHOLD_HOURS` (alias) | — | — | No |
 | Max digest lookback (days) <br><em>Hard cap on digest history queries. Lower speeds DB work; raise for seasonal analysis if partitions retained. Must stay within `ROS_RETENTION_MONTHS` data still on disk.</em> | 90 | `ROS_MAX_LOOKBACK_DAYS` | — | — | No |
 | OOM memory bump base factor <br><em>Log-scaling constant after OOMKill events. Higher → larger memory bumps; pairs with `ROS_OOM_MAX_BUMP` cap.</em> | 0.15 | `ROS_OOM_BASE_BUMP` | — | — | No |
 | OOM memory bump max multiplier <br><em>Max memory recommendation multiplier after repeated OOMs (1.60 = +60% cap). Prevents runaway suggestions from crash loops.</em> | 1.60 | `ROS_OOM_MAX_BUMP` | — | — | No |
@@ -794,7 +794,7 @@ Also supports standard list params (`limit`, `offset`, `after`, `filter[cluster]
 | 11 | `NotifNodeUnderutilized` | CPU and memory P95 below `underutil_threshold` |
 | 12 | `NotifNodeOvercommitted` | Pod CPU requests exceed `overcommit_threshold` × allocatable |
 | 13 | `NotifStrandedResources` | CPU/memory imbalance above `stranded_imbalance_threshold` |
-| 15 | `NotifAIdle` | Node idle or zombie (`idle_state`); **not** MachineAutoscaler minReplicas (DB legacy name corrected in migration 000121) |
+| 15 | `NotifNodeIdle` | Node idle or zombie (`idle_state`); DB name `NODE_IDLE` (migration 000121) |
 | 25 | `NotifNoCostData` | Savings could not be computed (Masu rates missing) |
 | 74 | `NotifNodePodSchedulingLimit` | Pod scheduling headroom below `pod_headroom_notification_threshold` (default 10%) |
 | 75 | — | Reserved for Tier 3 MachineAutoscaler `minReplicas` recommendations |

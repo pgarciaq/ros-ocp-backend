@@ -37,7 +37,7 @@
 |----------|-------|
 | [Runbooks](operations/runbooks.md) | Alert response procedures, failure mode diagnosis |
 | [Retention Policy](operations/retention.md) | Data lifecycle, partition sweeps, configuration |
-| [Stale Detection](operations/stale-detection.md) | How stale recommendations are identified and cleaned |
+| [Stale Detection](operations/stale-detection.md) | ROS staleness (code 2) and Koku SaaS stale-source checks |
 | [RBAC Model](operations/rbac.md) | Permission types, filtering logic, endpoint coverage |
 | [GPU Catalog](operations/gpu-catalog.md) | How to add new GPU models, specs, monitoring for gaps |
 | [Upgrade Runbook](upgrade-runbook.md) | Database migration procedures and advisory lock patterns |

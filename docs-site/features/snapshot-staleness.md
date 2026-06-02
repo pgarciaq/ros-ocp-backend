@@ -1,186 +1,152 @@
-# Snapshot Staleness Detection
+# Snapshot staleness detection
 
-!!! info "Quick Facts"
-    **API:** `GET /api/cost-management/v1/recommendations/openshift/snapshots`  
-    **Scope:** Per VolumeSnapshot  
-    **Engines:** single (no cost/performance split; no term windows)  
-    **Savings:** Yes — recoverable **monthly cost** (`estimated_monthly_cost_usd`)  
-    **Configurable:** Yes (dedicated Settings API)
+VolumeSnapshots accumulate on OpenShift clusters and consume backing storage
+(EBS, Azure Disk, Ceph/ODF, etc.). ROS classifies each snapshot reported by the
+cost-management metrics operator and surfaces actionable recommendations through
+the REST API.
 
-## Overview
+There is **no koku-ui view yet**; integrate via API or automation. Dollar savings
+for snapshots are estimated from configurable cost-per-GiB rates (not full CUR
+integration in v1).
 
-Snapshot staleness detection identifies Kubernetes `VolumeSnapshot` objects that
-accumulate storage cost without providing ongoing value. ROS classifies each
-snapshot as orphaned, stale, redundant, never-restored, managed by a backup tool,
-or active — and estimates the monthly cost of retaining it.
+## What it does
 
-This complements [PVC Right-Sizing](pvc-rightsizing.md), which optimizes live
-PersistentVolumeClaim capacity. Snapshots address the often-forgotten storage
-layer that persists after backups, migrations, or PVC deletion.
+On each ingestion cycle, ROS ingests `ocp_snapshot_inventory.csv` from the
+operator tarball, classifies snapshots, upserts `snapshot_recommendation_sets`,
+and removes rows for snapshots no longer present in the latest inventory.
 
-## When it applies
+Classifications:
 
-- **Clusters with CSI snapshot support** — The `snapshot.storage.k8s.io` CRDs and
-  a VolumeSnapshotClass must be installed. The koku-metrics-operator skips
-  collection gracefully when the CRD is absent.
-- **Any namespace** — Inventory covers all VolumeSnapshots the operator can list.
-- **All snapshots are classified** — Including backup-managed snapshots (shown as
-  `managed`, not hidden) and active snapshots with no notification.
+| Type | Meaning |
+|------|---------|
+| `orphaned` | Source PVC deleted and age exceeds orphan threshold |
+| `never_restored` | Never used to restore a volume; age exceeds threshold |
+| `redundant` | More than N snapshots per PVC; this one is outside the N newest |
+| `stale` | Old, never restored, not managed by a backup tool |
+| `managed` | Labels indicate Velero/OADP or similar backup tooling |
+| `active` | Recent or restored — informational only |
 
-Snapshots with an empty `source_pvc_name` (e.g., created from pre-provisioned
-VolumeSnapshotContent) skip orphaned and redundant checks but can still be
-classified as stale, never-restored, managed, or active.
+Notification codes **31–35** map to these classes (see
+[notification codes](../../docs/architecture/notification-codes.md)).
 
-## How it works
+## Data flow
 
-```mermaid
-flowchart TD
-  Op[Operator: VolumeSnapshot inventory CSV] --> Ingest[Parse & upsert snapshot_inventory]
-  Ingest --> Classify[ClassifySnapshots]
-  Classify --> Cost[Apply cost rate]
-  Cost --> Persist[Upsert snapshot_recommendation_sets]
-  Persist --> Reconcile[Reconcile deleted snapshots]
-  Reconcile --> API[GET /snapshots]
+```text
+OpenShift API (VolumeSnapshot + PVC dataSource)
+        ↓
+koku-metrics-operator → ocp_snapshot_inventory.csv
+        ↓
+Koku listener → ROS processor → classify → snapshot_recommendation_sets
+        ↓
+GET /recommendations/openshift/snapshots
 ```
 
-1. **Collection** — The koku-metrics-operator lists `VolumeSnapshot` objects and
-   cross-references PVC `dataSource` fields to count restores and detect whether
-   the source PVC still exists. Output is a snapshot-inventory CSV (filename must
-   contain the substring `"snapshot"`).
-2. **Ingestion** — ROS parses the CSV into `snapshot_inventory` (raw staging,
-   retained ~48 hours).
-3. **Classification** — The latest inventory per cluster (within a 6-hour fresh
-   window) is evaluated against tenant thresholds.
-4. **Cost estimate** — `estimated_monthly_cost_usd = (restore_size_bytes / GiB) × cost_per_gib_month_usd`.
-   This is a ceiling estimate for providers with incremental snapshot behavior.
-5. **Persistence** — One row per snapshot in `snapshot_recommendation_sets`, updated
-   on each ingestion. Snapshots deleted from the cluster are removed on the next
-   reconcile cycle.
-
-## Classification
-
-Evaluated in priority order (first match wins):
-
-| Type | Condition | Code | Severity |
-|------|-----------|------|----------|
-| **orphaned** | Source PVC deleted and age > `orphan_age_days` | 31 | WARNING |
-| **managed** | Backup-tool label detected (Velero, Kasten K10, OADP, Trilio, Stash) | 35 | INFO |
-| **redundant** | More than `redundant_threshold` snapshots for same source PVC; this one is outside the N most recent and age > `stale_days` | 33 | INFO |
-| **stale** | Age > `stale_days` and `restored_pvc_count == 0` | 34 | INFO |
-| **never_restored** | Age > `never_restored_days` and never restored | 32 | INFO |
-| **active** | Recent snapshot or has active restores | — | — |
-
-Orphaned takes precedence even for managed snapshots. Managed supersedes
-stale/redundant/never-restored so backup retention policies are not flagged as waste.
-
-Redundant detection avoids noise on intentional retention windows: a team keeping
-seven recent daily snapshots gets no redundancy alerts until older snapshots exceed
-the keep count **and** the staleness threshold.
+Operator collection is documented in the design doc:
+[`docs/features-f-snapshot-staleness.md`](../../docs/features-f-snapshot-staleness.md).
 
 ## API
 
-```http
-GET /api/cost-management/v1/recommendations/openshift/snapshots
-```
+**List:** `GET /api/cost-management/v1/recommendations/openshift/snapshots`
 
-Filters: `cluster_uuid`, `namespace`, `recommendation_type` (`orphaned`,
-`never_restored`, `redundant`, `stale`, `managed`, `active`), pagination
-(`limit`, `offset`; default limit 20, max 100). Results sort by `age_days`
-descending.
+Query parameters:
 
-Settings (separate from the unified thresholds API):
+| Parameter | Description |
+|-----------|-------------|
+| `limit`, `offset` | Pagination (default limit 20, max 100) |
+| `filter[cluster]` | Cluster UUID |
+| `filter[project]` | Namespace |
+| `filter[recommendation_type]` | One of the classifications above |
 
-```http
-GET /api/cost-management/v1/recommendations/openshift/settings/snapshot
-PUT /api/cost-management/v1/recommendations/openshift/settings/snapshot
-DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot
-```
+### Namespace summary
 
-DELETE returns `204` and clears per-org snapshot threshold overrides. Blocked when
-`ROS_SETTINGS_LOCKED_SNAPSHOT` is true under global lock (GET includes `settings_locked: true`).
+**Summary:** `GET /api/cost-management/v1/recommendations/openshift/snapshots/summary`
 
-### Example (abbreviated)
+Aggregates `snapshot_recommendation_sets` by namespace and cluster (default) or by
+cluster only (`group_by=cluster`). Use this endpoint to **prioritize cleanup work**
+— sort by `reclaimable_monthly_holding_cost_usd` (default, descending) or
+`reclaimable_restore_size_gib` to find namespaces with the highest recoverable
+holding cost or storage.
+
+Reclaimable totals include only `orphaned`, `stale`, `never_restored`, and
+`redundant` snapshots. `active` and `managed` snapshots are counted in
+`snapshot_count` and `counts_by_type` but excluded from reclaimable byte and cost
+sums (managed snapshots are backup-tool-owned and should not be auto-deleted).
+
+| Parameter | Description |
+|-----------|-------------|
+| `group_by` | `project` (namespace + cluster, default) or `cluster` |
+| `filter[cluster]` | Cluster UUID |
+| `filter[project]` | Namespace (exact or wildcard `*` → ILIKE) |
+| `order_by` | `reclaimable_monthly_holding_cost_usd` (default), `reclaimable_restore_size_gib`, `actionable_snapshot_count`, `snapshot_count` |
+| `order_how` | `desc` (default) or `asc` |
+| `limit`, `offset` | Pagination (default limit 10, max 100) |
+
+Example response (one namespace group):
 
 ```json
 {
-  "meta": { "count": 1, "limit": 20, "offset": 0, "currency": "USD" },
-  "data": [{
-    "cluster_uuid": "...",
-    "namespace": "production",
-    "snapshot_name": "db-backup-2025-12-01",
-    "source_pvc_name": "postgres-data",
-    "volume_snapshot_class": "csi-aws-vsc",
-    "storageclass": "gp3",
-    "creation_timestamp": "2025-12-01T03:00:00Z",
-    "restore_size_bytes": 53687091200,
-    "age_days": 158,
-    "source_pvc_exists": true,
-    "restored_pvc_count": 0,
-    "managed_by": "",
-    "recommendation_type": "stale",
-    "estimated_monthly_cost_usd": 2.50,
-    "notifications": {
-      "34": {
-        "type": "INFO",
-        "message": "Snapshot older than retention threshold with no known usage",
-        "code": 34
-      }
+  "meta": { "count": 3, "limit": 10, "offset": 0, "currency": "USD" },
+  "data": [
+    {
+      "namespace": "payments",
+      "cluster_uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "snapshot_count": 12,
+      "actionable_snapshot_count": 8,
+      "counts_by_type": {
+        "orphaned": 2,
+        "stale": 4,
+        "never_restored": 1,
+        "redundant": 1,
+        "managed": 2,
+        "active": 2
+      },
+      "total_restore_size_bytes": 128849018880,
+      "total_restore_size_gib": 120.0,
+      "reclaimable_restore_size_bytes": 96636764160,
+      "reclaimable_restore_size_gib": 90.0,
+      "total_monthly_holding_cost_usd": 6.0,
+      "reclaimable_monthly_holding_cost_usd": 4.5,
+      "age_days": { "min": 14, "max": 180 }
     }
-  }]
+  ],
+  "links": { "first": "...", "next": null, "previous": null, "last": "..." }
 }
 ```
 
-Fleet cost rollup: `GET .../recommendations/openshift/savings-summary` includes
-snapshot totals in `by_plugin.snapshot` as **recoverable cost**, not savings.
+**Settings:** `GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot`
 
-## Configurable thresholds
+Tenant overrides for orphan age, never-restored days, stale days, redundant
+threshold, and cost per GiB/month. Fields locked by deployment env vars appear
+in `locked_fields`. **DELETE** removes tenant overrides and resets to deployment
+defaults.
 
-`GET/PUT/DELETE .../settings/snapshot`
+OpenAPI: [openapi.md](../openapi.md).
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `orphan_age_days` | 7 | Min age before orphaned; also the "active" ceiling |
-| `never_restored_days` | 30 | Min age for never-restored classification |
-| `stale_days` | 90 | Age threshold for stale and redundant filter |
-| `redundant_threshold` | 3 | Max snapshots to keep per source PVC before flagging older ones |
-| `cost_per_gib_month_usd` | 0.05 | Monthly rate for cost estimation |
+## Configuration (environment)
 
-Precedence for threshold fields: env var (locks field) → tenant DB row → compiled
-default. Env locks appear in `locked_fields`; PUT on a locked field returns `403`.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_SNAPSHOT_ORPHAN_AGE_DAYS` | 7 | Orphan classification |
+| `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` | 30 | Never-restored classification |
+| `ROS_SNAPSHOT_STALE_DAYS` | 90 | Stale / redundant age gate |
+| `ROS_SNAPSHOT_REDUNDANT_THRESHOLD` | 3 | Max snapshots per PVC before redundant |
+| `ROS_SNAPSHOT_STALE_GRACE_HOURS` | 48 | Skip classification until inventory seen long enough |
+| `ROS_SNAPSHOT_COST_PER_GIB_MONTH_USD` | 0.05 | Monthly cost estimate per GiB |
 
-Cost rate resolution at ingestion (when no org DB override exists):
+Snapshot settings can be locked with `ROS_SETTINGS_LOCKED_SNAPSHOT=true`.
 
-1. Per-org Settings API value
-2. `ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var
-3. `storage_gb_usage_per_month` from Koku `effective_rates` (when savings estimates enabled)
-4. Compiled default ($0.05/GiB/month)
+## Distinction from container/namespace staleness
 
-Admin-only operational settings (not exposed via Settings API):
+Container and namespace recommendations use **cluster reporting freshness**
+(`ROS_STALENESS_THRESHOLD_HOURS`, default **48** hours) and `filter[stale]` on
+container and namespace list APIs. That is unrelated to VolumeSnapshot age
+classification.
 
-| Env variable | Default | Purpose |
-|--------------|---------|---------|
-| `ROS_SNAPSHOT_INVENTORY_FRESH_HOURS` | 6 | Recent-ingest window for classification and reconcile |
-| `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | Raw inventory row retention |
-| `ROS_SNAPSHOT_STALE_GRACE_HOURS` | 48 | Skip reconcile during transient ingest gaps |
+See [stale detection](../../docs/operations/stale-detection.md) for
+recommendation staleness.
 
-See [Cost Integration](../architecture/cost-integration.md) for the savings
-formula and [Savings Estimations](savings-estimations.md) for fleet-summary
-behavior.
+## Limitations (v1)
 
-## Limitations
-
-- **No historical restore tracking** — `restored_pvc_count` reflects only PVCs
-  that currently exist with `dataSource` pointing to the snapshot. Restores that
-  were later deleted are invisible.
-- **Same-namespace restores only** — Cross-namespace restores via
-  VolumeSnapshotContent are not counted.
-- **Incremental snapshot pricing** — Cost based on `restoreSize` is a ceiling for
-  providers like AWS EBS where subsequent snapshots are incremental.
-- **Single org-wide cost rate** — Per-VolumeSnapshotClass rates are not yet supported;
-  `volume_snapshot_class` is collected for future use.
-
-## Related
-
-- [PVC Right-Sizing](pvc-rightsizing.md) — Live PVC capacity optimization
-- [Savings Estimations](savings-estimations.md) — Fleet cost rollup (`by_plugin.snapshot`)
-- [Cost Integration](../architecture/cost-integration.md) — Rate resolution and formulas
+- No UI in koku-ui
+- Cost estimates use a flat GiB/month rate, not provider-specific CUR lines
+- Requires VolumeSnapshot CRDs on the cluster; operator skips collection if absent

@@ -287,7 +287,7 @@ go run rosocp.go start api
 | `ROS_RETENTION_MONTHS` | `6` | Data retention period |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Max lookback for recommendations |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | History data retention |
-| `ROS_STALENESS_THRESHOLD_HOURS` | `72` | Hours before marking stale |
+| `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours before marking stale |
 | `ROS_STALE_ARCHIVE_DAYS` | `30` | Days before deleting stale recs |
 | `ROS_OOM_BASE_BUMP` | `0.15` | OOM memory bump factor (15%) |
 | `ROS_OOM_MAX_BUMP` | `1.60` | Max OOM bump cap (160%) |
@@ -948,7 +948,7 @@ and returns UTC. Never use local time in queries or comparisons.
 
 ### Stale Recommendations
 
-Recommendations with no new data for `ROS_STALENESS_THRESHOLD_HOURS` (default 72h)
+Recommendations with no new data for `ROS_STALENESS_THRESHOLD_HOURS` (default 48h)
 are marked stale. After `ROS_STALE_ARCHIVE_DAYS` (default 30), they're deleted.
 Don't be surprised when test data "disappears" — check the retention sweep.
 

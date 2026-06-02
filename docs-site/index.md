@@ -55,6 +55,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 - [Recommendation Engines](architecture/recommendation-engines.md) — Thresholds, percentiles, and term reference for all plugins
 - [Configurability Reference](architecture/configurability.md) — Environment variables, Settings API, and tuning guidance
 - [Notification codes](architecture/notification-codes.md) — All API notification codes in one place
+- [Notification codes API](api-reference/notification-codes.md) — `GET .../notification-codes` reference catalog
 - [Contributing Guide](contributing.md) — Setup, testing, PR process
 - [Plugin Architecture](architecture/plugin-architecture.md) — How plugins work
 - [Plugin Execution Phases](architecture/plugin-phases.md) — Phase and priority ordering

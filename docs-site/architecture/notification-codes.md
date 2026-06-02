@@ -43,7 +43,7 @@ having no actionable savings.
 | Code | Severity | Area | Summary | What to do |
 |------|----------|------|---------|------------|
 | 1 | WARNING | Container, Namespace | Short history / low confidence | Wait for more data or treat recommendation as tentative |
-| 2 | WARNING | Container | Stale metrics (cluster stopped reporting) | Fix operator upload; verify cluster connectivity |
+| 2 | WARNING | Container, Namespace | Stale metrics (cluster stopped reporting) | Fix operator upload; verify cluster connectivity |
 | 3 | CRITICAL | Container | OOM kills in window | Increase memory request/limit or fix app memory leak |
 | 4 | WARNING | Node (reserved) | PDB caveat for MachineSet | *Not emitted today* |
 | 5 | INFO | Container | Idle workload (low % of requests) | Right-size down, scale to zero, or decommission |

@@ -32,7 +32,7 @@ same cost/performance percentiles as container. See [Business Hours](../features
 
 | Parameter | Default | Env variable | Source |
 |-----------|---------|--------------|--------|
-| Staleness threshold | 72 hours | `ROS_STALENESS_THRESHOLD_HOURS` | [`recommend_all.go`](../../internal/engine/recommend_all.go) |
+| Staleness threshold | 48 hours | `ROS_STALENESS_THRESHOLD_HOURS` | [`recommend_all.go`](../../internal/engine/recommend_all.go) |
 | Max lookback (container, namespace, node, GPU) | 90 days | `ROS_MAX_LOOKBACK_DAYS` | [`config.go`](../../internal/config/config.go), plugin `MaxWindowDays()` |
 | Max lookback (PVC) | 365 days | (plugin cap via term `WINDOW_DAYS`) | [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.go) |
 | OOM base bump factor | 0.15 | `ROS_OOM_BASE_BUMP` | [`types.go`](../../internal/engine/types.go) |
@@ -88,7 +88,7 @@ Plugin defaults: [`internal/plugins/container/plugin.go`](../../internal/plugins
 |--------|-----------|--------------|
 | **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB across all digest rows in the term window | Constants in [`detect_idle.go`](../../internal/engine/detect_idle.go) |
 | **Abandoned** | All digest rows have CPU max = 0 **and** memory max = 0 | [`DetectAbandoned()`](../../internal/engine/detect_idle.go) |
-| **Stale** | No cluster report within staleness threshold (default 72 h) | `ROS_STALENESS_THRESHOLD_HOURS` |
+| **Stale** | No cluster report within staleness threshold (default 48 h) | `ROS_STALENESS_THRESHOLD_HOURS` |
 
 Idle containers receive 100% savings estimation (deallocation). Abandoned
 supersedes idle in notification codes.
@@ -242,6 +242,11 @@ Source: [`classifySnapshot()`](../../internal/engine/snapshot_classify.go),
 
 Settings precedence: env (locked) → per-org DB (`snapshot_settings`) → compiled default.
 Settings API: `GET/PUT /recommendations/openshift/settings/snapshot`.
+
+List API: `GET /recommendations/openshift/snapshots`. Namespace/cluster rollup for
+prioritization: `GET /recommendations/openshift/snapshots/summary` (aggregates
+reclaimable holding cost and restore size; see
+[`handlers_snapshot_summary.go`](../../internal/api/handlers_snapshot_summary.go)).
 
 ### Cost rate
 

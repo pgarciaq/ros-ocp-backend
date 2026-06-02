@@ -297,7 +297,7 @@ The table below is a summary; VM codes 37–54 and reserved codes are documented
 ### Stale flag
 
 A recommendation is **stale** when the cluster stopped sending metrics beyond
-`ROS_STALENESS_THRESHOLD_HOURS` (default 72h). Stale rows get notification code **2**.
+`ROS_STALENESS_THRESHOLD_HOURS` (default 48h). Stale rows get notification code **2**.
 
 | `?stale=` | Behavior |
 |-----------|----------|
@@ -452,7 +452,7 @@ One object per node with nested terms and engines:
 
 Notification codes **11** (underutilized), **12** (overcommitted), **13** (stranded), and **15**
 (node `idle` or `zombie`) align with these flags. Code **15** reuses the legacy DB name
-`AUTOSCALER_IDLE`; the message in API responses describes node idle/zombie state.
+`NODE_IDLE` (code **15**, constant `NotifNodeIdle`); the message describes node idle/zombie state — not MachineAutoscaler minReplicas.
 
 #### Savings fields
 
@@ -1541,7 +1541,7 @@ When `currency` is absent, fall back to `USD` (server default).
 | 35 | INFO | Backup-tool managed snapshot | Caution — review retention policy |
 | 36 | INFO | GPU time-slicing candidate | Link to time-slicing view |
 
-Reference endpoint (if enabled): `GET /recommendations/openshift/notification-codes`.  
+Reference endpoint: `GET /recommendations/openshift/notification-codes` (no identity header required).  
 Full catalog: [Notification codes](architecture/notification-codes.md).
 
 Severity mapping for badges: `CRITICAL` → error, `WARNING` → warning, `INFO` → info.

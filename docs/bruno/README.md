@@ -9,6 +9,7 @@ Node-related requests (2026):
 | Request | Path |
 |---------|------|
 | Node utilization | `GET .../recommendations/openshift/nodes` |
+| MachineSet recommendations | `GET .../recommendations/openshift/machinesets` |
 | Node utilization - filters | List with `filter[stranded_resource]`, `filter[machineset_name]`, etc. |
 | Node utilization detail | `filter[node]` + `filter[cluster]` + `limit=1` |
 | Node utilization CSV export | `?format=csv` |

@@ -59,7 +59,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | GPU presence | `has_gpu` | `filter[has_gpu]` | GPU presence (`true` / `false`) |
 | GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match |
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
-| Staleness | `stale` | `filter[stale]` | Staleness filter (`true`, `false`, `only`) |
+| Staleness | `stale` | `filter[stale]` | Container and namespace lists: exclude/include/only stale rows (default `false`; threshold 48h via `ROS_STALENESS_THRESHOLD_HOURS`) |
 | Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node underutilization filter ([details](#node-utilization-filters)) |
 | Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node CPU overcommit filter ([details](#node-utilization-filters)) |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |

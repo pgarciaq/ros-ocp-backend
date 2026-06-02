@@ -13,10 +13,11 @@ These features were implemented as "low-hanging fruit" from the
 ### Definition
 
 A recommendation is **stale** when the engine has not received new usage data
-for a container within the **staleness threshold** (default: 72 hours /
-`ROS_STALENESS_THRESHOLD_HOURS`). Staleness is evaluated during each
-recommendation run by comparing `time.Now()` to the most recent
-`bucket_date` in `daily_container_digests` for that container.
+for a container or namespace when the cluster has not reported within the
+**staleness threshold** (default: 48 hours / `ROS_STALENESS_THRESHOLD_HOURS`).
+Staleness is evaluated during each recommendation run via
+`isStaleRecommendation` (cluster `last_reported_at` takes precedence over
+digest `bucket_date`).
 
 ### Behavior
 
@@ -46,7 +47,7 @@ recommendation run by comparing `time.Now()` to the most recent
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `ROS_STALENESS_THRESHOLD_HOURS` | 72 | Hours without data before marking stale |
+| `ROS_STALENESS_THRESHOLD_HOURS` | 48 | Hours without data before marking stale |
 | `ROS_STALE_ARCHIVE_DAYS` | 30 | Days after which stale recs are deleted |
 
 ### Key Files

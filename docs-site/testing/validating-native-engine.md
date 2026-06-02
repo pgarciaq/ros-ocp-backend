@@ -176,22 +176,47 @@ Native recommendations run in the **processor** after CSV ingestion (`process*CS
 
 ### Repositories and branches
 
+Clone all sibling repos under one parent directory (for example `~/dev/koku/`). Native-engine integration work typically tracks the same feature branch across **koku** and **ros-ocp-backend**; confirm with your team before cutting a release.
+
 | Repository | Path | Branch / tag | Purpose |
 |------------|------|--------------|---------|
-| **ros-ocp-backend** | `~/dev/koku/ros-ocp-backend` | **`pgarciaq-rosocp-superpowers-phase11`** (native engine + VM work; may be named `phase11` on your fork) | Service under test |
-| **koku** | `~/dev/koku/koku` | **`main`** unless your team pins an integration branch | Listener, ROS shipper, cost pipeline |
-| **nise** | `~/dev/koku/nise` | **`main`** — VM generator and `examples/ocp_vm/vm_static_data.yml` are on main | Synthetic metrics CSVs |
-| **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno requests for ROS endpoints |
-| **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm-based full stack on OpenShift (no docker-compose in chart) |
-| **koku-metrics-operator** | `~/dev/koku/koku-metrics-operator` | Only for **real cluster** testing | Not required when using NISE |
+| **ros-ocp-backend** | `~/dev/koku/ros-ocp-backend` | Feature branch with native engine (e.g. **`pgarciaq-rosocp-superpowers-phase12`**) or team integration branch | Go API + processor (native engine) |
+| **koku-metrics-operator** | `~/dev/koku/koku-metrics-operator` | **`main`** (upstream) or downstream stable channel on cluster | Collects Prometheus metrics → tarball upload (real OpenShift only) |
+| **koku** | `~/dev/koku/koku` | Same integration branch as ROS when testing end-to-end; otherwise **`main`** | Listener, ROS shipper, cost pipeline, nginx proxy to ROS |
+| **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
+| **nise** | `~/dev/koku/nise` | **`main`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
+| **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
+| **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
+
+**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on the active ROS feature branch (check `git log` / release notes). **Koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
 
 ```bash
-# Example clone and checkout (adjust remotes to your forks)
+# Example clone and checkout (adjust remotes and branch names to your forks)
 cd ~/dev/koku
-git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase11
-git -C koku checkout main
+git clone <remote>/ros-ocp-backend.git ros-ocp-backend
+git clone <remote>/koku.git koku
+git clone <remote>/nise.git nise
+git clone <remote>/cost-onprem-chart.git cost-onprem-chart
+git clone <remote>/koku-ui.git koku-ui          # optional
+git clone <remote>/koku-metrics-operator.git koku-metrics-operator  # cluster only
+
+git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase12
+git -C koku checkout pgarciaq-rosocp-superpowers-phase12   # or main if integrated
 git -C nise checkout main
 ```
+
+### Build order
+
+Build images or binaries in dependency order so downstream services pick up compatible artifacts:
+
+| Step | Component | Commands (x86-64) | Notes |
+|------|-----------|-------------------|--------|
+| 1 | **koku-metrics-operator** | `make build` / `make docker-build` | Only when testing against a real cluster (not NISE-only) |
+| 2 | **ros-ocp-backend** | `go build ./...` or `podman build -t ros-ocp-backend:tag -f Dockerfile .` | Run `go run rosocp.go db migrate up` before API/processor |
+| 3 | **koku** | `docker compose build koku-server masu-server koku-worker koku-beat koku-listener` | Uses Pipfile; set `USER_ID` / `GROUP_ID` in `.env` |
+| 4 | **koku-ui** (optional) | `npm ci && npm run build --workspace apps/koku-ui-onprem` | Dev iteration: `npm run start --workspace apps/koku-ui-onprem` |
+
+On **OpenShift / cost-onprem**, push **new image tags** for koku and ros-ocp-backend before E2E (`imagePullPolicy: IfNotPresent` caches old layers). See `cost-onprem-chart/CLAUDE.md`.
 
 ### Test identity (Koku dev customer)
 
@@ -229,7 +254,23 @@ Tenant schema: `org1234567` (Koku prepends `org` to bare `org_id` **1234567**).
 
 ## Deployment order
 
-Two supported layouts:
+### Full-stack deployment order (OpenShift / cost-onprem or integrated local)
+
+Use this sequence when standing up a complete environment (Ops or QE on a cluster). Local docker-compose follows the same logical order within Path A below.
+
+| Order | Component | Purpose |
+|-------|-----------|---------|
+| 1 | **PostgreSQL** | Koku tenant data + ROS recommendation tables (often shared DB, separate ROS user) |
+| 2 | **Valkey/Redis** | Koku cache, Celery broker, RBAC cache |
+| 3 | **Kafka / AMQ Streams** | `hccm.ros.events` (ROS ingest), platform sources, listener |
+| 4 | **Keycloak / RHBK** | JWT auth for UI and API (`org_id` must be bare numeric — see Prerequisites) |
+| 5 | **MinIO / S3** | `ocp-ingress`, `koku-bucket`, `ros-data`, `insights-upload-perma` |
+| 6 | **Koku** | `koku-server`, `masu-server`, `koku-worker`, `koku-beat`, **`koku-listener`** |
+| 7 | **ros-ocp-backend** | **`ros-api`** + **`ros-processor`** (native: no Kruize, no recommendation-poller) |
+| 8 | **koku-metrics-operator** | On the **OpenShift** cluster under test (skipped when using NISE-only) |
+| 9 | **koku-ui** (optional) | Static/nginx or webpack dev proxy to Koku `:8000` |
+
+Two supported **local** layouts:
 
 - **Path A — Integrated local stack:** Koku on-prem + MinIO + Kafka + listener + ROS (closest to cost-onprem)
 - **Path B — ROS-focused quickstart:** ROS compose + optional ingress (fastest API/plugin iteration)
@@ -380,6 +421,52 @@ docker exec koku-kafka kafka-topics --bootstrap-server localhost:9092 --list | g
 ```
 
 When using **Koku nginx proxy** (cost-onprem / clowder), the same recommendation URLs are served on **Koku port 8000**; nginx forwards `/api/cost-management/v1/recommendations/` to `ros-api:8000`.
+
+### Component configuration (Ops / QE)
+
+Set these on **both** `ros-api` and `ros-processor` unless noted. Helm: `cost-onprem/templates/ros/_feature-env.yaml` and `values.yaml` → `ros.env`.
+
+#### ros-ocp-backend (native engine)
+
+| Variable | Typical on-prem / native value | Purpose |
+|----------|----------------------------------|---------|
+| `ROS_ENABLED_PLUGINS` | *(empty = all native)* or explicit allowlist | `container,gpu,node,pvc,quota,cluster-quota,snapshot,vm,namespace` |
+| `ROS_DISABLED_PLUGINS` | `kruize` | Disables legacy Java path; native runs in processor |
+| `ROS_USE_NATIVE_ENGINE` | `true` (default) | Deprecated flag; native is default when Kruize is disabled |
+| `ROS_ENABLE_VM_RECS` | `true` | Registers VM routes and plugin |
+| `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetches rates from Masu for dollar savings |
+| `ROS_SAVINGS_RECALCULATION_ENABLED` | `true` | Allows `POST .../internal/recalculate-savings` after cost model updates |
+| `KOKU_MASU_URL` | `http://<masu-host>:5042` | Masu base URL for savings (optional for correctness of recs, required for non-zero savings) |
+| `KAFKA_BOOTSTRAP_SERVERS` | broker address | Processor consumer |
+| `UPLOAD_TOPIC` | `hccm.ros.events` | ROS ingest topic |
+| `RBAC_ENABLE` | `true` (chart); `false` (local curl) | OpenShift RBAC on list/detail |
+| `DB_*` | PostgreSQL service | Same DB as Koku in integrated deployments |
+
+There is **no** `ROS_RECOMMENDATION_ENGINE` variable — native mode is **`ROS_DISABLED_PLUGINS=kruize`** (and not setting `ROS_ENABLED_PLUGINS=kruize`).
+
+#### Koku (pipeline + proxy)
+
+| Variable | Typical value | Purpose |
+|----------|---------------|---------|
+| `ONPREM` | `True` | PostgreSQL-only path (no Trino) |
+| `DISABLE_ROS_MSG` | `False` | Enables ROS Kafka messages from listener |
+| `S3_ROS_*` | MinIO credentials + `ros-data` bucket | ROS CSV staging for presigned URLs |
+| `ROS_API_HOST` | `cost-onprem-ros-api...` or empty | Koku → ROS for savings recalc (see `ros_savings_recalc.py`) |
+| `ROS_API_PORT` | `8000` | ROS API port when using host/port pair |
+
+#### koku-metrics-operator (cluster)
+
+Configure via **`CostManagementMetricsConfig`** CR (`costmanagement-metrics-cfg.openshift.io/v1beta1`):
+
+| Spec field | Purpose |
+|------------|---------|
+| `spec.api_url` | Ingress base URL (e.g. `https://<host>/api/ingress/v1`) |
+| `spec.authentication` | `token`, `service-account`, or deprecated `basic` |
+| `spec.upload.cycle` | Hours between uploads (default 6) |
+| `spec.prometheus_config` | Query source (Thanos/Prometheus URL, token) |
+| `spec.source` | Sources API integration for cluster registration |
+
+Upload content-type: `application/vnd.redhat.hccm.tar+tgz`. Manifest must list typed files and `resource_optimization_files` for ROS CSVs.
 
 ---
 
@@ -584,6 +671,85 @@ docker compose logs --since=5m koku-listener 2>&1 | grep -iE "ROS reports|hccm.r
 #   "native VM engine"
 #   "recommendation" / "no recommendations"
 ```
+
+---
+
+## QE testing workflow
+
+End-to-end validation: generate data → upload → confirm processor logs → smoke each plugin API → optional UI and automated tests.
+
+### 1. Generate and upload test data
+
+See [Generating test data](#generating-test-data). Minimum for all native plugins:
+
+```bash
+nise report ocp \
+  --static-report-file examples/ocp_on_aws/ocp_static_data.yml \
+  --ocp-cluster-id "$CLUSTER_UUID" \
+  --ros-ocp-info \
+  --write-monthly \
+  -w /tmp/nise-ros-output
+```
+
+Add `examples/ocp_vm/vm_static_data.yml` for VM scenarios. Package with `manifest.json` (`start`/`end` required) and upload via **Masu** `ingest_ocp_payload` or **ingress** `POST /api/ingress/v1/upload`.
+
+### 2. Verify each plugin (API smoke)
+
+Base URL: `http://localhost:8000/api/cost-management/v1` (Koku proxy) or direct ROS API. Header: **`x-rh-identity: $IDENTITY`** (except notification catalog).
+
+| Plugin | Method | Path | Pass signal |
+|--------|--------|------|-------------|
+| **Container** | GET | `/recommendations/openshift` | `meta.count` > 0 (list); detail via `/{recommendation-id}` |
+| **Namespace** | GET | `/recommendations/openshift/namespaces` or `/namespace` | `meta.count` > 0 |
+| **Node** | GET | `/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0; nested `recommendation_terms` |
+| **Snapshot** | GET | `/recommendations/openshift/snapshots` | Rows when `ocp_snapshot_inventory.csv` ingested |
+| **PVC** | GET | `/recommendations/openshift/pvcs` | Rows when storage usage ingested |
+| **VM** | GET | `/recommendations/openshift/vm` | `meta.count` > 0 when VM CSV present |
+| **GPU (workloads)** | GET | `/recommendations/openshift/gpu/mig` | MIG recommendations |
+| **GPU (time-slicing)** | GET | `/recommendations/openshift/gpu/timeslicing` | Node-level time-slicing recs |
+| **Quota** | GET | `/recommendations/openshift/quota/` | Namespace ResourceQuota recs |
+| **Cluster quota** | GET | `/recommendations/openshift/cluster-quota/` | CRQ recs |
+| **Notification catalog** | GET | `/recommendations/openshift/notification-codes` | **No** identity header; `meta.count` > 0 |
+| **Savings** | GET | `/recommendations/openshift/savings-summary?engine=cost&term=medium` | `total` / `by_plugin` populated when Masu + cost model configured |
+
+Example smoke script:
+
+```bash
+BASE='http://localhost:8000/api/cost-management/v1'
+H=(-H "x-rh-identity: $IDENTITY")
+
+curl -s "${H[@]}" "${BASE}/recommendations/openshift?limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/namespaces?limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/snapshots?limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/pvcs?limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/vm?filter[cluster]=${CLUSTER_UUID}&limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/gpu/timeslicing?limit=1" | jq '.meta.count'
+curl -s "${BASE}/recommendations/openshift/notification-codes" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/savings-summary?engine=cost&term=medium" | jq '.total'
+```
+
+### 3. Automated tests (cost-onprem-chart)
+
+On an OpenShift cluster with the chart deployed:
+
+```bash
+cd ~/dev/koku/cost-onprem-chart
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh          # CI mode (~88 tests)
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros    # ROS-focused suite
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenarios
+```
+
+**Rules:** Rebuild and push **new image tags** before E2E; never run raw `pytest` without `run-pytest.sh` (venv + env setup). See `cost-onprem-chart/.cursor/rules/testing.mdc`.
+
+### 4. Health checks
+
+| Service | Endpoint | Expected |
+|---------|----------|----------|
+| Koku API | `GET /api/cost-management/v1/status/` | 200 JSON |
+| Masu | `GET /api/cost-management/v1/status/` on `:5042` | 200 JSON |
+| ROS API | `GET /status` or `GET /readyz` on ROS port | 200; `/readyz` checks DB pool |
+| ROS metrics | `GET /metrics` on `PROMETHEUS_PORT` (API **5007**, processor **5005**) | Prometheus text |
 
 ---
 
@@ -928,7 +1094,7 @@ Design reference: [Known issues — Node recommendations](../known-issues.md) (e
 | 8 | Stranded filter | `filter[stranded_resource]=cpu` / `memory` / `none` | Matches `classification.stranded_resource`; `none` = not stranded |
 | 9 | Instance type / MachineSet | `filter[instance_type]=...`, `filter[machineset_name]=...` | Subset matches digest labels when present |
 | 9b | Instance type suggestion | Stranded node with multiple instance types in cluster | `suggested_instance_type`, `instance_type_reason` on JSON when applicable |
-| 9c | Single-node detail | `filter[node]=...&filter[cluster]=...&limit=1` | `meta.count` ≤ 1; full `recommendation_terms` on `data[0]` |
+| 9c | Single-node detail | `GET .../nodes/{node}?filter[cluster]=...` (or list-filter `filter[node]` + `limit=1`) | Full `recommendation_terms` on detail response |
 | 10 | Pod capacity fields | Node with `pod_capacity` in CSV | `pod_count`, `pod_capacity`, `pod_scheduling_headroom` (0.0–1.0) on JSON; **omitted** when capacity unknown |
 | 11 | Deprecated alias | `GET .../nodes/utilization` | Same payload + `Deprecation: true` header; prefer `/nodes` |
 | 12 | RBAC | `RBAC_ENABLE=true`; user with subset of `openshift.cluster` and `openshift.node` | Only allowed clusters/nodes; empty list if no intersection |
@@ -1766,9 +1932,28 @@ Use `examples/ocp_vm/vm_static_data.yml` scenarios. Map VM names to expected beh
 
 ## Troubleshooting
 
+### Log locations
+
+| Component | Where to look |
+|-----------|----------------|
+| **ROS processor** | Terminal running `make run-processor`; K8s: `kubectl logs -l app.kubernetes.io/component=ros-processor -n cost-onprem --tail=200` |
+| **ROS API** | `kubectl logs -l app.kubernetes.io/component=ros-api -n cost-onprem --tail=100` |
+| **Koku listener** | `docker compose logs koku-listener` — ROS shipper, Kafka publish |
+| **Koku worker** | `docker compose logs koku-worker` — cost summarization, cost model |
+| **Masu** | `docker compose logs masu-server` — ingest, `ingest_ocp_payload` |
+| **Operator** | `oc logs -l control-plane=controller-manager -n <operator-ns>` — upload failures, Prometheus errors |
+
+Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, `No ROS reports`.
+
+### Common symptoms
+
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | No recommendations in API | ROS Kafka disabled, processor not running, or empty `resource_optimization_files` | `DISABLE_ROS_MSG=False`; run processor; fix manifest |
+| Plugin returns **404** | Plugin disabled or Kruize mode | Check `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`; ensure not `kruize`-only |
+| Stale recommendations | Old digests, no re-ingest | Re-upload tarball; check `updated_at` in DB; settings cache up to **60s** |
+| **Savings = 0** | No cost model, `KOKU_MASU_URL` unset, or estimates disabled | Apply Koku cost model; set `ROS_SAVINGS_ESTIMATES_ENABLED=true`; trigger recalc |
+| Notification catalog empty | Wrong path or old binary | `GET .../notification-codes` without auth; rebuild ros-api |
 | Listener: `No ROS reports to handle` | ROS CSVs only under `files`, not `resource_optimization_files` | Move `ocp_ros_*.csv` to `resource_optimization_files` in manifest |
 | Processor: `unable to fetch CSV` | Presigned URL expired or wrong bucket | Re-upload; check `S3_ROS_*` and clock skew |
 | `meta.count: 0` for VMs only | `ROS_ENABLE_VM_RECS=false`, `vm` disabled, or no `ocp_ros_vm_usage.csv` | Enable VM plugin; include VM file in tarball |
@@ -1839,8 +2024,8 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 export IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","type":"User","user":{"username":"user_dev","email":"user_dev@foo.com","is_org_admin":true,"access":{}}},"entitlements":{"cost_management":{"is_entitled":true}}}' | base64 -w0)
 export CLUSTER_UUID="<replace-with-ocp-provider-uuid>"
 
-# ROS branch
-cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase11
+# ROS branch (use your team's native-engine branch)
+cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase12
 
 # Native ROS processes
 go run rosocp.go db migrate up

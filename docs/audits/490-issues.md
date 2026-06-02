@@ -1002,7 +1002,7 @@ Additional fixes from the P0/P1 pass:
 - **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
-- **Fix:** Added `viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 72)` and validation in `validateLoadedConfig`.
+- **Fix:** Added `viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 48)` and validation in `validateLoadedConfig`.
 
 **#189 — Producer config sets `enable.auto.commit` (consumer-specific property)**
 - **Status: ✅ FIXED** (P2 batch 7)

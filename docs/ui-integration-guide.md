@@ -296,7 +296,7 @@ The table below is a summary; VM codes 37–54 and reserved codes are in the ful
 ### Stale flag
 
 A recommendation is **stale** when the cluster stopped sending metrics beyond
-`ROS_STALENESS_THRESHOLD_HOURS` (default 72h). Stale rows get notification code **2**.
+`ROS_STALENESS_THRESHOLD_HOURS` (default 48h). Stale rows get notification code **2**.
 
 | `?stale=` | Behavior |
 |-----------|----------|
@@ -443,7 +443,7 @@ One object per node with nested terms and engines:
 
 Notification codes **11** (underutilized), **12** (overcommitted), **13** (stranded), and **15**
 (node `idle` or `zombie`) align with these flags. Code **15** reuses the legacy DB name
-`AUTOSCALER_IDLE`; the message in API responses describes node idle/zombie state.
+`NODE_IDLE` (code **15**, constant `NotifNodeIdle`); the message describes node idle/zombie state — not MachineAutoscaler minReplicas.
 
 #### Savings fields
 
