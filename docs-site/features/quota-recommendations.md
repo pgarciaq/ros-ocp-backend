@@ -339,10 +339,23 @@ Until UI ships, use the REST API or internal tooling. See
 [UI integration guide](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
 and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 
+### Savings and fleet rollup
+
+Each quota list or detail row may include **`estimated_savings`** on `tighten` recommendations
+(CPU, memory, and storage request capacity). Those values are persisted per row and refresh on
+ingestion and when Koku calls `POST /api/cost-management/v1/internal/recalculate-savings` with
+`recommendation_types` including `quota`.
+
+**`GET /api/cost-management/v1/recommendations/openshift/savings-summary` does not include
+quota or cluster-quota savings** in its fleet `total` or `by_plugin` rollup. Use per-row
+`estimated_savings` on `GET .../quota/` and `GET .../cluster-quota/` (or the detail endpoints)
+for ResourceQuota FinOps totals. ClusterResourceQuota follows the same pattern.
+
 ### Limitations
 
 | Limitation | Impact |
 |------------|--------|
+| **Fleet savings-summary exclusion** | Quota and CRQ `estimated_savings` are per-row only; not summed in `GET .../savings-summary` |
 | **Object-count quotas** | Included in risk and blocking (code **72**), but not in tighten/raise or savings |
 | **Extended resources** | `requests.ephemeral-storage`, GPU quota, hugepages, custom device plugins — not collected (future work; see [CRQ doc](cluster-resource-quota.md#extended-resources-future-work)) |
 | **Pod quota savings** | `pods_freed` is count-only; no `estimated_savings` for pod slots |

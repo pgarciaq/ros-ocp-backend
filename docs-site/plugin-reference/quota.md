@@ -13,7 +13,7 @@ from namespace ROS CSVs against aggregated container recommendation totals.
 | Phase | 1 (Produce) |
 | Priority | 35 |
 | CSV types | (none — runs after container ingest in `report_processor`) |
-| Retention tables | `quota_recommendation_sets` |
+| Retention tables | `quota_recommendation_sets`, `quota_recommendation_history` |
 
 ## Traits
 
@@ -38,14 +38,44 @@ GET /api/cost-management/v1/recommendations/openshift/quota/
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID |
 | `filter[project]` | Namespace |
+| `filter[quota_name]` | ResourceQuota object name (exact match). Alias: `filter[resource_quota_name]` |
 | `filter[recommendation_type]` | `tighten`, `raise`, `optimal`, `none` |
 | `filter[risk_level]` | `high`, `medium`, `low`, `none` |
-| `group_by[cluster]` | Aggregate per cluster |
-| `group_by[project]` | Aggregate per namespace |
+| `group_by[cluster]` | Aggregate per cluster (`*`) |
+| `group_by[project]` | Aggregate per namespace (`*`) |
+| `order_by` | `namespace`, `quota_name`, `utilization`, `estimated_monthly_savings`, `risk_level` |
+| `order_how` | `asc` or `desc` (default `desc` when `order_by` is set) |
 | `limit` | Page size (1–100, default 20) |
 | `offset` | Pagination offset |
 
 Handler: [`GetQuotaRecommendations`](../../internal/api/handlers_quota_recs.go).
+
+### Detail
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quota/detail
+  ?cluster_uuid={uuid}&namespace={ns}&quota_name={name}
+```
+
+Returns one recommendation object (not wrapped in `data`) with `headroom_basis_points`,
+`notifications` (codes **70–72**), and `history[]` per-resource snapshots (`recorded_at`,
+`resource`, `recommendation_type`, `risk_level`, and optional hard/used/utilization fields).
+`quota_name` is optional when only one ResourceQuota exists for the namespace.
+
+Handler: [`GetQuotaRecommendationDetail`](../../internal/api/handlers_quota_detail.go).
+
+### Notification codes
+
+Namespace ResourceQuota rows may emit codes **70–72**:
+
+| Code | Name | When |
+|------|------|------|
+| **70** | `NotifQuotaNearCapacity` | `risk_level` is `high` |
+| **71** | `NotifQuotaOversized` | `recommendation_type` is `tighten` |
+| **72** | `NotifQuotaBlocking` | Any resource at or above hard limit |
+
+Filter the catalog: `GET /recommendations/openshift/notification-codes?filter[plugin]=quota`.
+Code **73** applies to the `cluster-quota` plugin only.
 
 ### Settings
 
