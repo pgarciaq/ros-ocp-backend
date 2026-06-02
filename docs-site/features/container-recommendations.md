@@ -53,10 +53,12 @@ Algorithm details: [Recommendation Math](../architecture/recommendation-math.md)
 |------|-----------|----------------|
 | **Active** | Normal usage above idle thresholds | Apply right-sizing |
 | **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB | Consider scale-down or removal |
-| **Abandoned** | All digest rows show zero CPU **and** zero memory | Decommission candidate |
+| **Zombie** (`idle_state: "zombie"`) | All digest rows show zero CPU **and** zero memory | Decommission candidate; UI may label this **Abandoned** |
 
-Idle and abandoned containers still receive recommendations; savings estimates
-treat them as **100% recoverable** when cost data is available.
+Idle and zombie containers still receive recommendations; savings estimates
+treat them as **100% recoverable** when cost data is available. Filter with
+`filter[idle_state]=zombie` (API value); the UI displays zombie workloads as
+"Abandoned".
 
 ## OOM detection and bump
 
@@ -85,8 +87,8 @@ When `data_days / window_days` falls below `low_confidence_threshold` (default
 
 ## Dual engine
 
-Each term returns **both** engines nested under `recommendations.{term}.cost`
-and `recommendations.{term}.performance`:
+Each term returns **both** engines nested under
+`recommendations.recommendation_terms.{term}.recommendation_engines.{cost,performance}`:
 
 | Engine | CPU percentile | Memory percentile |
 |--------|----------------|-------------------|
@@ -110,22 +112,36 @@ endpoints use a Kruize-compatible shape with `recommendation_terms` and
 
 ```json
 {
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "container": "app",
   "project": "team-a",
   "workload": "api",
-  "estimated_monthly_savings_usd": 12.50,
+  "idle_state": "active",
   "currency": "USD",
   "recommendations": {
-    "medium_term": {
-      "cost": {
-        "config": {
-          "requests": { "cpu": { "amount": 0.25, "format": "cores" }, "memory": { "amount": 384, "format": "MiB" } }
-        },
-        "notifications": { "1": { "type": "INFO", "code": 1, "message": "..." } }
-      },
-      "performance": {
-        "config": {
-          "requests": { "cpu": { "amount": 0.5, "format": "cores" }, "memory": { "amount": 512, "format": "MiB" } }
+    "monitoring_end_time": "2026-05-31T23:00:00.000Z",
+    "estimated_monthly_savings": { "value": "12.500000", "units": "USD" },
+    "recommendation_terms": {
+      "medium_term": {
+        "duration_in_hours": 168,
+        "recommendation_engines": {
+          "cost": {
+            "config": {
+              "requests": {
+                "cpu": { "amount": 0.25, "format": "cores" },
+                "memory": { "amount": 384, "format": "MiB" }
+              }
+            },
+            "notifications": { "1": { "type": "INFO", "code": 1, "message": "..." } }
+          },
+          "performance": {
+            "config": {
+              "requests": {
+                "cpu": { "amount": 0.5, "format": "cores" },
+                "memory": { "amount": 512, "format": "MiB" }
+              }
+            }
+          }
         }
       }
     }

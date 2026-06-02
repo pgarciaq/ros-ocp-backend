@@ -201,6 +201,57 @@
             }
           },
           {
+            "name": "filter[project]",
+            "in": "query",
+            "description": "Partial match on project (namespace) name. Alias: `project`, `namespace`, or `filter[namespace]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[namespace]",
+            "in": "query",
+            "description": "Partial match on namespace (project) name. Alias for `filter[project]`. Also accepts flat `project` or `namespace`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "description": "Partial match on cluster alias; exact match on cluster UUID. Alias: `cluster`, `cluster_uuid`, or `filter[exact:cluster]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[container]",
+            "in": "query",
+            "description": "Partial match on container name. Alias: `container` or `filter[exact:container]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[has_gpu]",
+            "in": "query",
+            "description": "Filter by GPU presence. 'true' or '1' returns only containers with GPU data; 'false' or '0' returns only containers without GPU data. Alias: `has_gpu`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            }
+          },
+          {
             "name": "true-units",
             "in": "query",
             "required": false,
