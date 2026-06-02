@@ -158,7 +158,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
-| Savings stale until re-ingestion | Container/node/PVC `estimated_monthly_savings_usd` reflects rates from the last successful Masu fetch during ingestion; Koku cost model changes do not update ROS rows until the next report cycle | Low — by design | REQ-7.5 |
+| Savings stale until re-ingestion | **Mitigated** when `ROS_SAVINGS_RECALCULATION_ENABLED=true` (default) and Koku calls `POST /internal/recalculate-savings` after cost model updates ([`ros_savings_recalc.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) must be deployed in koku). Without that integration, container/node/PVC `estimated_monthly_savings_usd` still reflects rates from the last ingestion only | Low — mitigated with recalc; legacy path by design | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
@@ -843,6 +843,12 @@ or `exported_pod` on VM digests (operator ROS VM CSV would need the latter colum
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
 Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
+
+**In-place shrink:** Kubernetes and most CSI drivers **cannot shrink PVCs in place**.
+Oversized recommendations include `resize_note` on list and detail responses (for example:
+"Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
+provisioning a smaller PVC, migrating data, and deleting the original. See
+[features-f27-pvc-rightsizing.md](./features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
 
 **Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 

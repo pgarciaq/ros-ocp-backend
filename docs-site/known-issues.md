@@ -846,6 +846,12 @@ or `exported_pod` on VM digests (operator ROS VM CSV would need the latter colum
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
 Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
+**In-place shrink:** Kubernetes and most CSI drivers **cannot shrink PVCs in place**.
+Oversized recommendations include `resize_note` on list and detail responses (for example:
+"Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
+provisioning a smaller PVC, migrating data, and deleting the original. See
+[features-f27-pvc-rightsizing.md](../docs/features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
+
 **Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 
 **UI status:** Not implemented.
