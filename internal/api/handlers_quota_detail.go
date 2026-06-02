@@ -2,10 +2,12 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -152,7 +154,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 
 	row := pool.QueryRow(ctx, query, args...)
 	item, codes, headroomBP, err := scanQuotaDetailRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
 			"message": "quota recommendation not found",
@@ -248,7 +250,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 
 	row := pool.QueryRow(ctx, query, orgID, id.clusterUUID, id.clusterQuotaName)
 	item, codes, err := scanClusterQuotaDetailRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
 			"message": "cluster-quota recommendation not found",

@@ -104,3 +104,60 @@ func TestRegisterDisabledPluginRouteGuards_ClusterQuotaDisabled_Returns404(t *te
 	require.True(t, ok)
 	require.Contains(t, msg, "plugin 'cluster-quota' is not enabled")
 }
+
+func TestPutClusterQuotaSettings_UpdatesAndReturns(t *testing.T) {
+	orgID := "org-cluster-quota-settings-api-put"
+	e := setupClusterQuotaSettingsTestEcho(t, orgID)
+
+	body := bytes.NewReader([]byte(`{
+		"headroom_percent": 15,
+		"high_risk_threshold_percent": 85,
+		"medium_risk_threshold_percent": 65
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/cluster-quota", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, float64(15), resp["headroom_percent"])
+	assert.Equal(t, float64(85), resp["high_risk_threshold_percent"])
+	assert.Equal(t, float64(65), resp["medium_risk_threshold_percent"])
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/cluster-quota", nil)
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req2)
+	require.Equal(t, http.StatusOK, rec2.Code)
+	var resp2 map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec2.Body.Bytes(), &resp2))
+	assert.Equal(t, float64(15), resp2["headroom_percent"])
+}
+
+func TestDeleteClusterQuotaSettings_RestoresDefaults(t *testing.T) {
+	orgID := "org-cluster-quota-settings-api-delete"
+	e := setupClusterQuotaSettingsTestEcho(t, orgID)
+
+	putBody := bytes.NewReader([]byte(`{
+		"headroom_percent": 20,
+		"high_risk_threshold_percent": 80,
+		"medium_risk_threshold_percent": 55
+	}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/cluster-quota", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/cluster-quota", nil)
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusOK, delRec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(delRec.Body.Bytes(), &resp))
+	assert.Equal(t, float64(10), resp["headroom_percent"])
+	assert.Equal(t, float64(90), resp["high_risk_threshold_percent"])
+	assert.Equal(t, float64(70), resp["medium_risk_threshold_percent"])
+}

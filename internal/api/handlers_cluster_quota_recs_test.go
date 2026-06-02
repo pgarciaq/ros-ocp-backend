@@ -41,7 +41,72 @@ func setupClusterQuotaRecommendationsHandler(t *testing.T, orgID string) *echo.E
 	})
 	v1 := e.Group("/api/cost-management/v1")
 	v1.GET("/recommendations/openshift/cluster-quota", GetClusterQuotaRecommendations)
+	v1.GET("/recommendations/openshift/cluster-quota/detail", GetClusterQuotaRecommendationDetail)
 	return e
+}
+
+type clusterQuotaRecOpts struct {
+	recommendationType string
+	riskLevel          string
+	namespaces         string
+	cpuUtilPercent     int
+	savingsDollars     int64
+	notificationCodes  []int16
+}
+
+func insertClusterQuotaRecommendationWithOpts(
+	t *testing.T,
+	orgID, clusterUUID, crqName string,
+	opts clusterQuotaRecOpts,
+) {
+	t.Helper()
+	if opts.recommendationType == "" {
+		opts.recommendationType = "tighten"
+	}
+	if opts.riskLevel == "" {
+		opts.riskLevel = "low"
+	}
+	if opts.notificationCodes == nil {
+		opts.notificationCodes = []int16{}
+	}
+	ctx := context.Background()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO cluster_quota_recommendation_sets (
+			org_id, cluster_uuid, cluster_quota_name,
+			cpu_request_hard, cpu_request_used, cpu_request_recommended,
+			recommendation_type, risk_level, namespaces,
+			utilization_cpu_request_percent,
+			savings_cpu_cores_freed, savings_memory_bytes_freed,
+			savings_storage_bytes_freed, savings_pods_freed,
+			savings_dollars_monthly, notification_codes
+		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, $4, $5, $6, $7,
+			2, 1073741824, 5368709120, 5, $8, $9)
+		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name) DO UPDATE SET
+			recommendation_type = EXCLUDED.recommendation_type,
+			risk_level = EXCLUDED.risk_level,
+			namespaces = EXCLUDED.namespaces,
+			utilization_cpu_request_percent = EXCLUDED.utilization_cpu_request_percent,
+			savings_dollars_monthly = EXCLUDED.savings_dollars_monthly,
+			notification_codes = EXCLUDED.notification_codes`,
+		orgID, clusterUUID, crqName,
+		opts.recommendationType, opts.riskLevel, opts.namespaces, opts.cpuUtilPercent,
+		opts.savingsDollars, opts.notificationCodes,
+	)
+	require.NoError(t, err)
+}
+
+func insertClusterQuotaHistory(t *testing.T, orgID, clusterUUID, crqName, resource string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO cluster_quota_recommendation_history (
+			org_id, cluster_uuid, cluster_quota_name,
+			resource, recommendation_type, risk_level,
+			recommended_hard, current_hard, current_used, utilization_percent
+		) VALUES ($1, $2::uuid, $3, $4, 'tighten', 'low', 36000, 100000, 25000, 25)`,
+		orgID, clusterUUID, crqName, resource,
+	)
+	require.NoError(t, err)
 }
 
 func insertClusterQuotaRecommendation(t *testing.T, orgID, clusterUUID, crqName string, savingsDollars int64) {
@@ -142,4 +207,188 @@ func TestGetClusterQuotaRecommendations_GroupByCluster(t *testing.T) {
 	assert.Equal(t, 1, byCluster[clusterB].Count)
 	require.NotNil(t, byCluster[clusterB].EstimatedSavings)
 	assert.Equal(t, 5, byCluster[clusterB].EstimatedSavings.Value)
+}
+
+func TestGetClusterQuotaRecommendations_FilterByClusterQuotaName(t *testing.T) {
+	orgID := "org-crq-filter-name-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440020"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "target-crq", 10)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "other-crq", 20)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[cluster_quota_name]=target-crq", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "target-crq", resp.Data[0].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_FilterClusterResourceQuotaAlias(t *testing.T) {
+	orgID := "org-crq-filter-alias-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440021"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "alias-crq", 10)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[cluster_resource_quota]=alias-crq", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "alias-crq", resp.Data[0].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_FilterByCluster(t *testing.T) {
+	orgID := "org-crq-filter-cluster-" + uuid.New().String()[:8]
+	clusterA := "550e8400-e29b-41d4-a716-446655440030"
+	clusterB := "550e8400-e29b-41d4-a716-446655440031"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterA, "crq-a", 10)
+	insertClusterQuotaRecommendation(t, orgID, clusterB, "crq-b", 20)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[cluster]="+clusterA, nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, clusterA, resp.Data[0].ClusterUUID)
+}
+
+func TestGetClusterQuotaRecommendations_FilterByNamespace(t *testing.T) {
+	orgID := "org-crq-filter-ns-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440040"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "ns-crq", clusterQuotaRecOpts{
+		namespaces: "team-a, team-b",
+	})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "other-crq", clusterQuotaRecOpts{
+		namespaces: "team-c",
+	})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[namespace]=team-a", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "ns-crq", resp.Data[0].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_FilterRecommendationTypeAndRiskLevel(t *testing.T) {
+	orgID := "org-crq-filter-type-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440050"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "high-raise", clusterQuotaRecOpts{
+		recommendationType: "raise",
+		riskLevel:          "high",
+	})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "low-tighten", clusterQuotaRecOpts{
+		recommendationType: "tighten",
+		riskLevel:          "low",
+	})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[recommendation_type]=raise&filter[risk_level]=high", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "high-raise", resp.Data[0].ClusterQuotaName)
+	assert.Equal(t, "raise", resp.Data[0].RecommendationType)
+	assert.Equal(t, "high", resp.Data[0].RiskLevel)
+}
+
+func TestGetClusterQuotaRecommendations_OrderByRiskLevelDesc(t *testing.T) {
+	orgID := "org-crq-order-risk-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440060"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "low-crq", clusterQuotaRecOpts{riskLevel: "low"})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "high-crq", clusterQuotaRecOpts{riskLevel: "high"})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "medium-crq", clusterQuotaRecOpts{riskLevel: "medium"})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?order_by=risk_level&order_how=desc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 3)
+	assert.Equal(t, "high", resp.Data[0].RiskLevel)
+	assert.Equal(t, "medium", resp.Data[1].RiskLevel)
+	assert.Equal(t, "low", resp.Data[2].RiskLevel)
+}
+
+func TestGetClusterQuotaRecommendations_OrderByEstimatedMonthlySavingsDesc(t *testing.T) {
+	orgID := "org-crq-order-savings-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440070"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "small-savings", 10)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "large-savings", 100)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?order_by=estimated_monthly_savings&order_how=desc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 2)
+	assert.Equal(t, "large-savings", resp.Data[0].ClusterQuotaName)
+	assert.Equal(t, 100, resp.Data[0].EstimatedSavings.Value)
+}
+
+func TestGetClusterQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
+	orgID := "org-crq-detail-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440080"
+	crqName := "detail-crq"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, crqName, 55)
+	insertClusterQuotaHistory(t, orgID, clusterUUID, crqName, "cpu_request")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota/detail?cluster_uuid="+clusterUUID+"&cluster_quota_name="+crqName, nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var detail ClusterQuotaRecommendationDetailResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, clusterUUID, detail.ClusterUUID)
+	assert.Equal(t, crqName, detail.ClusterQuotaName)
+	require.NotEmpty(t, detail.History)
+	assert.Equal(t, "cpu_request", detail.History[0].Resource)
+}
+
+func TestGetClusterQuotaRecommendationDetail_NotFound(t *testing.T) {
+	orgID := "org-crq-detail-miss-" + uuid.New().String()[:8]
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota/detail?cluster_uuid=550e8400-e29b-41d4-a716-446655440099&cluster_quota_name=missing", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
