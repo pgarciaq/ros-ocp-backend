@@ -39,6 +39,8 @@ docs-site/features/
 !docs-site/features/network.md
 !docs-site/features/node-recommendations.md
 !docs-site/features/pvc-rightsizing.md
+!docs-site/features/quota-recommendations.md
+!docs-site/features/cluster-resource-quota.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output

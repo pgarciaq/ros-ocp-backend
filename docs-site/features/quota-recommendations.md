@@ -9,6 +9,11 @@
 Right-size Kubernetes **ResourceQuota** hard limits per namespace by comparing
 configured limits and observed usage against aggregated container recommendation totals.
 
+Each recommendation row is keyed by **`(cluster_uuid, namespace, quota_name)`** when the
+metrics operator exports the Prometheus `resourcequota` label. Namespaces with multiple
+ResourceQuota objects therefore get one row per quota. Older operator builds without
+`quota_name` merge all quotas in a namespace into a single row (empty `quota_name`).
+
 **Related:** [Namespace recommendations](namespace-recommendations.md) recommend ideal
 namespace CPU/memory totals from usage digests. The `quota` plugin tunes **existing**
 ResourceQuota objects against container rightsizing output and optional `kube_resourcequota`
@@ -16,6 +21,26 @@ used metrics.
 
 **ClusterResourceQuota** (OpenShift multi-namespace quotas) is implemented by the
 **`cluster-quota`** plugin — see [ClusterResourceQuota Recommendations](cluster-resource-quota.md).
+
+---
+
+## What it does
+
+| Problem | ROS guidance |
+|---------|--------------|
+| Over-provisioned quota hard limits | `tighten` — reduce hard limits toward rightsized container sums plus headroom |
+| Quota near or at capacity | `raise` + elevated `risk_level` — admission pressure before deployments fail |
+| Quota aligned with workloads | `optimal` — no change recommended |
+
+Resources covered in recommendations and risk:
+
+| Resource | Tighten / raise | Savings on tighten | Notes |
+|----------|-----------------|-------------------|-------|
+| CPU request / limit | Yes | Yes (hourly usage rates) | Utilization uses max of used vs container rec sums |
+| Memory request / limit | Yes | Yes (hourly usage rates) | Same signal as CPU |
+| Storage request | Yes | Yes when `storage_gb_request_per_month` exists | `capacity_freed.storage_request_bytes` |
+| Pods | Yes | Count only — no dollar estimate | `capacity_freed.pods_freed` |
+| Object counts (`count/*`) | Visibility only | No | Risk + blocking notifications only |
 
 ---
 
@@ -91,6 +116,17 @@ capacity — not pod slots. There is no `pod_cost_per_month` metric in the cost 
 Utilization uses the **greater** of quota **used** metrics and container recommendation sums
 vs hard limits.
 
+### Notification codes
+
+| Code | Name | When emitted |
+|------|------|--------------|
+| **70** | `NotifQuotaNearCapacity` | `risk_level` is `high` (utilization near hard limit) |
+| **71** | `NotifQuotaOversized` | `recommendation_type` is `tighten` (quota hard exceeds rightsized need) |
+| **72** | `NotifQuotaBlocking` | Any resource at or above hard limit (`used >= hard`) |
+
+Code **73** (`NotifClusterQuotaAtCapacity`) applies to **ClusterResourceQuota** rows only.
+See [Notification codes](../architecture/notification-codes.md).
+
 ---
 
 ## Configuration
@@ -163,16 +199,36 @@ but container sums remain from the **previous** cycle until container CSV is pro
 
 ```http
 GET /api/cost-management/v1/recommendations/openshift/quota/
+GET /api/cost-management/v1/recommendations/openshift/quota/detail
 ```
+
+### List filters, sorting, and grouping
 
 | Parameter | Example | Description |
 |-----------|---------|-------------|
 | `filter[cluster]` | UUID | Limit to one cluster |
 | `filter[project]` | `production` | Limit to one namespace |
+| `filter[quota_name]` | `team-alpha-budget` | ResourceQuota object name (exact match) |
+| `filter[resource_quota_name]` | `team-alpha-budget` | Alias for `filter[quota_name]` |
 | `filter[recommendation_type]` | `tighten,raise` | Filter by type |
 | `filter[risk_level]` | `high,medium` | Filter by risk |
-| `group_by[cluster]` | — | Aggregate rows per cluster |
+| `order_by` | `utilization` | Sort key: `namespace`, `quota_name`, `utilization`, `estimated_monthly_savings`, `risk_level` |
+| `order_how` | `desc` | `asc` (default) or `desc` |
+| `group_by[cluster]` | — | Aggregate rows per cluster (sums capacity freed and savings) |
 | `group_by[project]` | — | Aggregate rows per namespace |
+| `limit` / `offset` | `20` / `0` | Pagination (default limit 20, max 100) |
+
+Do not combine `group_by[cluster]` and `group_by[project]` in one request.
+
+### Detail endpoint
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/quota/detail
+  ?cluster_uuid={uuid}&namespace={ns}&quota_name={name}
+```
+
+Returns the same fields as a list row plus **`history[]`** (90-day append-only snapshots
+per resource). `quota_name` is optional when only one quota exists for the namespace.
 
 ### Example response
 
@@ -194,30 +250,48 @@ GET /api/cost-management/v1/recommendations/openshift/quota/
     {
       "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
       "namespace": "production",
+      "quota_name": "team-alpha-budget",
       "recommendation_type": "tighten",
       "risk_level": "low",
       "quota_hard": {
         "cpu_request_millicores": 100000,
-        "memory_request_bytes": 107374182400
+        "memory_request_bytes": 107374182400,
+        "storage_request_bytes": 536870912000,
+        "pods": 500
       },
       "quota_used": {
-        "cpu_request_millicores": 25000
+        "cpu_request_millicores": 25000,
+        "storage_request_bytes": 107374182400,
+        "pods": 42
       },
       "quota_recommended": {
         "cpu_request_millicores": 36000,
-        "memory_request_bytes": 45097156608
+        "memory_request_bytes": 45097156608,
+        "storage_request_bytes": 118111600640,
+        "pods": 55
       },
       "utilization": {
-        "cpu_request_percent": 25.0
+        "cpu_request_percent": 25.0,
+        "storage_request_percent": 20.0,
+        "pods_percent": 8.4
       },
       "capacity_freed": {
         "cpu_millicores": 64000,
-        "memory_bytes": 62277025792
+        "memory_bytes": 62277025792,
+        "storage_request_bytes": 418759311360,
+        "pods_freed": 445
       },
       "estimated_savings": {
         "value": 142.50,
         "units": "USD",
         "currency": "USD"
+      },
+      "notifications": {
+        "71": {
+          "code": 71,
+          "severity": "info",
+          "description": "ResourceQuota hard limits exceed rightsized workload needs"
+        }
       },
       "last_observed_at": "2026-05-28T12:00:00Z"
     }
@@ -265,11 +339,15 @@ Until UI ships, use the REST API or internal tooling. See
 [UI integration guide](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
 and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 
-### Operator / engine gaps (namespace quota)
+### Limitations
 
-| Gap | Notes |
-|-----|-------|
-| **Per-quota object identity** | Rows are keyed by `quota_name` when the operator exports it; older builds without `quota_name` merge multiple ResourceQuota objects per namespace. |
+| Limitation | Impact |
+|------------|--------|
+| **Object-count quotas** | Included in risk and blocking (code **72**), but not in tighten/raise or savings |
+| **Pod quota savings** | `pods_freed` is count-only; no `estimated_savings` for pod slots |
+| **One-cycle lag** | Container rec sums and namespace quota hard/used can be one operator upload out of phase (see [Timing](#timing-and-one-cycle-lag)) |
+| **Savings after cost model change** | Quota `estimated_savings` refresh on ingestion only today — not included in Koku→ROS savings recalculation (container/node/PVC are). See [Cost Integration — Savings recalculation](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes) |
+| **Per-quota identity (legacy operators)** | Without `quota_name` in namespace CSV, multiple ResourceQuota objects merge into one row |
 
 **Not planned:** Dollar savings for freed pod quota slots (see internal doc
 [Pod savings feasibility](../../../docs/features/quota-recommendations.md#pod-savings-feasibility-analysis)).
