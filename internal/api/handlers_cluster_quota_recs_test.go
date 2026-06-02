@@ -228,6 +228,89 @@ func TestGetClusterQuotaRecommendations_FilterByClusterQuotaName(t *testing.T) {
 	assert.Equal(t, "target-crq", resp.Data[0].ClusterQuotaName)
 }
 
+func TestGetClusterQuotaRecommendations_FilterCrqAlias(t *testing.T) {
+	orgID := "org-crq-filter-crq-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440021"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "crq-alias", 10)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[crq]=crq-alias", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "crq-alias", resp.Data[0].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_FilterProjectAlias(t *testing.T) {
+	orgID := "org-crq-filter-project-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440041"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "project-crq", clusterQuotaRecOpts{
+		namespaces: "team-a, team-b",
+	})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "other-crq", clusterQuotaRecOpts{
+		namespaces: "team-c",
+	})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[project]=team-a", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "project-crq", resp.Data[0].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_CapacityFreedAllKeys(t *testing.T) {
+	orgID := "org-crq-capacity-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440071"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "capacity-crq", 42)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	require.NotNil(t, resp.Data[0].CapacityFreed)
+	assert.Equal(t, int64(2), resp.Data[0].CapacityFreed.CPUCoresFreed)
+	assert.Equal(t, int64(1073741824), resp.Data[0].CapacityFreed.MemoryBytes)
+	assert.Equal(t, int64(5368709120), resp.Data[0].CapacityFreed.StorageRequestBytes)
+	assert.Equal(t, int64(5), resp.Data[0].CapacityFreed.PodsFreed)
+}
+
+func TestGetClusterQuotaRecommendations_NamespacesArray(t *testing.T) {
+	orgID := "org-crq-namespaces-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440072"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "ns-crq", clusterQuotaRecOpts{
+		namespaces: "alpha-ns, beta-ns",
+	})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, []string{"alpha-ns", "beta-ns"}, resp.Data[0].Namespaces)
+}
+
 func TestGetClusterQuotaRecommendations_FilterClusterResourceQuotaAlias(t *testing.T) {
 	orgID := "org-crq-filter-alias-" + uuid.New().String()[:8]
 	clusterUUID := "550e8400-e29b-41d4-a716-446655440021"

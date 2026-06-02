@@ -81,6 +81,32 @@ func TestGetNotificationCodes_PluginFilterNamespace(t *testing.T) {
 	assert.ElementsMatch(t, []int16{1, 2, 7, 9, 70, 71, 72}, codes)
 }
 
+func TestGetNotificationCodes_PluginFilterClusterQuota(t *testing.T) {
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	v1.GET("/recommendations/openshift/notification-codes", GetNotificationCodes)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/notification-codes?filter[plugin]=cluster-quota",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp notifications.CatalogResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 4, resp.Meta.Count)
+
+	codes := make([]int16, len(resp.Data))
+	for i, entry := range resp.Data {
+		codes[i] = entry.Code
+	}
+	assert.ElementsMatch(t, []int16{70, 71, 72, 73}, codes)
+}
+
 func TestGetNotificationCodes_PluginFilterUnknown_ReturnsEmpty(t *testing.T) {
 	e := echo.New()
 	v1 := e.Group("/api/cost-management/v1")
