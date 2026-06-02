@@ -46,17 +46,23 @@ oversized quota represents **double waste** (unused workloads plus stranded quot
 
 ## Ingestion path
 
-1. **Operator** — koku-metrics-operator emits namespace ROS CSV with aggregated
-   `kube_resourcequota` hard limits (`*_namespace_sum`) and optional used values
-   (`*_namespace_used`). See [data sources](#what-data-we-already-have).
-2. **Namespace digest** — `internal/ingestion/namespace.go` maps CSV columns into
-   `daily_namespace_digests` (max per namespace per day). Missing `*_namespace_used`
-   columns are ignored (**backward compatible** with older operator builds).
+1. **Operator** — koku-metrics-operator emits namespace ROS CSV with per-ResourceQuota
+   rows (`quota_name` from the Prometheus `resourcequota` label), hard limits
+   (`*_namespace_sum`), optional used values (`*_namespace_used`), and extended
+   resources (storage, pods, object counts). See [data sources](#what-data-we-already-have).
+2. **Namespace digests** — `internal/ingestion/namespace.go` maps usage columns into
+   `daily_namespace_digests` (max per namespace per day). Per-quota hard/used snapshots
+   land in `daily_namespace_quota_digests` via [`namespace_quota.go`](../../internal/ingestion/namespace_quota.go).
+   Missing optional columns are ignored (**backward compatible** with older operator builds).
 3. **Container recommendations** — `processContainerCSVNative` runs container sizing,
    writes `recommendation_sets`, then calls `engine.RunQuotaRecommendations` so quota
    sees fresh container aggregates in the same cycle when container CSV is present.
-4. **Persistence** — Results upsert into `quota_recommendation_sets` (one row per
-   org / cluster / namespace).
+4. **Namespace CSV follow-up** — `processNamespaceCSVNative` also calls
+   `RunQuotaRecommendations` after namespace ingest so quota hard/used snapshots refresh
+   even when a payload has no container CSV in that cycle (mitigates one-cycle lag for
+   quota *usage* signals; container sums may still be one cycle behind — see below).
+5. **Persistence** — Results upsert into `quota_recommendation_sets` (one row per
+   org / cluster / namespace / **quota_name**).
 
 Plugin registration: [`internal/plugins/quota/plugin.go`](../../internal/plugins/quota/plugin.go).
 The `quota` plugin does **not** register an `IngestHook` — namespace CSV hooks run before
@@ -101,9 +107,12 @@ from the container plugin. In a typical payload (container CSV then namespace CS
 3. Quota runs **once** at the end of `processContainerCSVNative` with those new rows.
 4. Namespace digest ingest updates hard/used snapshots for the **next** quota run.
 
-If only namespace CSV is ingested in a cycle, quota uses container recommendations
-from the **previous** cycle until container metrics arrive. On first deployment,
-expect one report cycle before tighten/raise signals fully reflect container-based sums.
+If only namespace CSV is ingested in a cycle, quota hard/used and risk from quota
+metrics update immediately (namespace-path `RunQuotaRecommendations`), but container
+recommendation sums still come from the **previous** cycle until container CSV arrives.
+On first deployment, expect one report cycle before tighten/raise signals fully reflect
+container-based sums. There is no way to derive container sums from namespace CSV alone;
+running quota twice in one cycle would not help.
 
 ---
 

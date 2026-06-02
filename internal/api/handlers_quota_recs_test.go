@@ -97,7 +97,7 @@ func insertQuotaRecommendation(t *testing.T, orgID, clusterUUID, namespace strin
 			cpu_request_utilization_bp, recommendation_type, risk_level,
 			last_observed_at
 		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, 2500, 'tighten', 'low', NOW())
-		ON CONFLICT (org_id, cluster_uuid, namespace) DO UPDATE SET
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO UPDATE SET
 			recommendation_type = EXCLUDED.recommendation_type`,
 		orgID, clusterUUID, namespace,
 	)
@@ -287,8 +287,8 @@ func TestGetQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
 	ctx := context.Background()
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO quota_recommendation_history (
-			org_id, cluster_uuid, namespace, recommendation_type, risk_level, recorded_at
-		) VALUES ($1, $2::uuid, 'detail-ns', 'tighten', 'low', NOW() - INTERVAL '2 days')`,
+			org_id, cluster_uuid, namespace, quota_name, recommendation_type, risk_level, recorded_at
+		) VALUES ($1, $2::uuid, 'detail-ns', '', 'tighten', 'low', NOW() - INTERVAL '2 days')`,
 		orgID, clusterUUID,
 	)
 	require.NoError(t, err)
@@ -311,10 +311,11 @@ func TestGetQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
 }
 
 func TestQuotaUtilFromNullBP(t *testing.T) {
-	assert.Nil(t, quotaUtilFromNullBP(sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}))
+	empty := sql.NullInt64{}
+	assert.Nil(t, quotaUtilFromNullBP(empty, empty, empty, empty, empty, empty))
 	util := quotaUtilFromNullBP(
 		sql.NullInt64{Int64: 5000, Valid: true},
-		sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{},
+		empty, empty, empty, empty, empty,
 	)
 	require.NotNil(t, util)
 	require.NotNil(t, util.CPURequestPercent)

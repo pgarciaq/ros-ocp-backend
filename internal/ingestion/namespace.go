@@ -21,6 +21,7 @@ type NamespaceMetricRow struct {
 	IntervalStart time.Time
 	IntervalEnd   time.Time
 	Namespace     string
+	QuotaName     string
 
 	CPURequestSumMC  int64
 	CPULimitSumMC    int64
@@ -47,6 +48,12 @@ type NamespaceMetricRow struct {
 	CPULimitUsedMC         int64
 	MemoryRequestUsedBytes int64
 	MemoryLimitUsedBytes   int64
+	StorageRequestHardBytes int64
+	StorageRequestUsedBytes int64
+	PodsHard                int64
+	PodsUsed                int64
+	ObjectCountHard         int64
+	ObjectCountUsed         int64
 }
 
 // NamespaceDigestKey uniquely identifies a namespace-day and schedule stream.
@@ -120,6 +127,13 @@ type nsColumnIndex struct {
 	cpuLimitUsed   int
 	memRequestUsed int
 	memLimitUsed   int
+	quotaName      int
+	storageHard    int
+	storageUsed    int
+	podsHard       int
+	podsUsed       int
+	objectCountHard int
+	objectCountUsed int
 }
 
 // buildNSColumnIndex maps CSV headers to column indices. Parsing is header-based, not
@@ -136,6 +150,8 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 		memRSSUsageAvg: -1, memRSSUsageMax: -1,
 		cpuRequestUsed: -1, cpuLimitUsed: -1,
 		memRequestUsed: -1, memLimitUsed: -1,
+		quotaName: -1, storageHard: -1, storageUsed: -1,
+		podsHard: -1, podsUsed: -1, objectCountHard: -1, objectCountUsed: -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -145,6 +161,20 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 			idx.intervalEnd = i
 		case "namespace":
 			idx.namespace = i
+		case "quota_name", "resource_quota_name":
+			idx.quotaName = i
+		case "storage_request_namespace_hard":
+			idx.storageHard = i
+		case "storage_request_namespace_used":
+			idx.storageUsed = i
+		case "pods_namespace_hard":
+			idx.podsHard = i
+		case "pods_namespace_used":
+			idx.podsUsed = i
+		case "object_count_namespace_hard":
+			idx.objectCountHard = i
+		case "object_count_namespace_used":
+			idx.objectCountUsed = i
 		case "cpu_request_namespace_sum":
 			idx.cpuRequestSum = i
 		case "cpu_limit_namespace_sum":
@@ -260,6 +290,9 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 	}
 
 	row.Namespace = record[idx.namespace]
+	if idx.quotaName >= 0 && idx.quotaName < len(record) {
+		row.QuotaName = strings.TrimSpace(record[idx.quotaName])
+	}
 
 	row.CPURequestSumMC, err = CoreToMillicores(record[idx.cpuRequestSum])
 	if err != nil {
@@ -344,6 +377,42 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, erro
 		}
 		row.MemoryLimitUsedBytes = usedKiB * 1024
 	}
+	if idx.storageHard >= 0 && idx.storageHard < len(record) && record[idx.storageHard] != "" {
+		row.StorageRequestHardBytes, err = parseInt64Field(record[idx.storageHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.storageUsed >= 0 && idx.storageUsed < len(record) && record[idx.storageUsed] != "" {
+		row.StorageRequestUsedBytes, err = parseInt64Field(record[idx.storageUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.podsHard >= 0 && idx.podsHard < len(record) && record[idx.podsHard] != "" {
+		row.PodsHard, err = parseInt64Field(record[idx.podsHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.podsUsed >= 0 && idx.podsUsed < len(record) && record[idx.podsUsed] != "" {
+		row.PodsUsed, err = parseInt64Field(record[idx.podsUsed])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.objectCountHard >= 0 && idx.objectCountHard < len(record) && record[idx.objectCountHard] != "" {
+		row.ObjectCountHard, err = parseInt64Field(record[idx.objectCountHard])
+		if err != nil {
+			return row, err
+		}
+	}
+	if idx.objectCountUsed >= 0 && idx.objectCountUsed < len(record) && record[idx.objectCountUsed] != "" {
+		row.ObjectCountUsed, err = parseInt64Field(record[idx.objectCountUsed])
+		if err != nil {
+			return row, err
+		}
+	}
 	if idx.memUsageMax >= 0 && idx.memUsageMax < len(record) && record[idx.memUsageMax] != "" {
 		row.MemUsageMaxKiB, err = BytesToKiB(record[idx.memUsageMax])
 		if err != nil {
@@ -402,6 +471,22 @@ func GroupNamespaceCSVRows(rows []NamespaceMetricRow, orgID, clusterUUID string)
 
 // NamespaceRowWeightFunc returns schedule weight for a namespace CSV row.
 type NamespaceRowWeightFunc func(NamespaceMetricRow) float64
+
+// dedupeNamespaceRowsForUsageDigest keeps one row per namespace+interval when the operator
+// emits multiple CSV lines per namespace (one per ResourceQuota object).
+func dedupeNamespaceRowsForUsageDigest(rows []NamespaceMetricRow) []NamespaceMetricRow {
+	seen := make(map[string]struct{})
+	out := make([]NamespaceMetricRow, 0, len(rows))
+	for _, row := range rows {
+		key := row.Namespace + "|" + row.IntervalStart.UTC().Format(time.RFC3339Nano)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, row)
+	}
+	return out
+}
 
 // GroupNamespaceCSVRowsForStream groups rows by namespace-day and schedule_type.
 func GroupNamespaceCSVRowsForStream(
@@ -817,7 +902,8 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 		return fmt.Errorf("upsert namespace usage samples: %w", err)
 	}
 
-	groupedAll := GroupNamespaceCSVRows(rows, orgID, clusterUUID)
+	usageRows := dedupeNamespaceRowsForUsageDigest(rows)
+	groupedAll := GroupNamespaceCSVRows(usageRows, orgID, clusterUUID)
 
 	var scheduleCache *bhschedule.Cache
 	if BusinessHoursAggregationEnabled() {
@@ -832,7 +918,7 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 			}
 		}
 	}
-	groupedBH := buildNamespaceBusinessHoursGroups(rows, orgID, clusterUUID, scheduleCache)
+	groupedBH := buildNamespaceBusinessHoursGroups(usageRows, orgID, clusterUUID, scheduleCache)
 	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: %d rows -> %d all_hours groups, %d business_hours groups",
 		len(rows), len(groupedAll), len(groupedBH))
@@ -845,6 +931,10 @@ func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.
 
 	if err := upsertNamespaceDigests(ctx, pool, grouped, scheduleCache); err != nil {
 		return err
+	}
+
+	if err := UpsertNamespaceQuotaDigestsFromRows(ctx, pool, rows, orgID, clusterUUID); err != nil {
+		return fmt.Errorf("upsert namespace quota digests: %w", err)
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: upserted %d digests",

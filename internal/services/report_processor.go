@@ -812,6 +812,13 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 			return fmt.Errorf("write namespace history: %w", err)
 		}
 	}
+
+	if plugin.EnabledFor("quota") {
+		if quotaErr := engine.RunQuotaRecommendations(ctx, pool, orgID, clusterUUID); quotaErr != nil {
+			log.Warnf("native namespace engine: quota recommendations failed: %v", quotaErr)
+			PluginHookErrors.WithLabelValues("quota", "after_namespace_ingest").Inc()
+		}
+	}
 	return nil
 }
 

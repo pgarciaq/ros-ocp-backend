@@ -18,6 +18,7 @@ import (
 type QuotaRecommendationDetailResponse struct {
 	ClusterUUID        string                                      `json:"cluster_uuid"`
 	Namespace          string                                      `json:"namespace"`
+	QuotaName          string                                      `json:"quota_name,omitempty"`
 	RecommendationType string                                      `json:"recommendation_type"`
 	RiskLevel          string                                      `json:"risk_level"`
 	HeadroomBasisPoints int                                        `json:"headroom_basis_points"`
@@ -52,6 +53,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 type quotaDetailIdentity struct {
 	clusterUUID string
 	namespace   string
+	quotaName   string
 }
 
 type clusterQuotaDetailIdentity struct {
@@ -68,7 +70,14 @@ func parseQuotaDetailIdentity(c echo.Context) quotaDetailIdentity {
 	if namespace == "" {
 		namespace = queryparams.FirstFilter(c, "project")
 	}
-	return quotaDetailIdentity{clusterUUID: cluster, namespace: namespace}
+	quotaName := strings.TrimSpace(c.QueryParam("quota_name"))
+	if quotaName == "" {
+		quotaName = queryparams.FirstFilter(c, "quota_name")
+	}
+	if quotaName == "" {
+		quotaName = queryparams.FirstFilter(c, "resource_quota_name")
+	}
+	return quotaDetailIdentity{clusterUUID: cluster, namespace: namespace, quotaName: quotaName}
 }
 
 func parseClusterQuotaDetailIdentity(c echo.Context) clusterQuotaDetailIdentity {
@@ -116,21 +125,31 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	query := `
-		SELECT cluster_uuid, namespace, recommendation_type, risk_level, headroom_basis_points,
+		SELECT cluster_uuid, namespace, quota_name, recommendation_type, risk_level, headroom_basis_points,
 			cpu_request_hard_millicores, cpu_limit_hard_millicores,
 			memory_request_hard_bytes, memory_limit_hard_bytes,
 			cpu_request_used_millicores, cpu_limit_used_millicores,
 			memory_request_used_bytes, memory_limit_used_bytes,
+			storage_request_hard_bytes, storage_request_used_bytes, storage_request_recommended_bytes,
+			pods_hard, pods_used, pods_recommended,
 			cpu_request_recommended_millicores, cpu_limit_recommended_millicores,
 			memory_request_recommended_bytes, memory_limit_recommended_bytes,
 			cpu_request_utilization_bp, cpu_limit_utilization_bp,
 			memory_request_utilization_bp, memory_limit_utilization_bp,
+			utilization_storage_request_bp, utilization_pods_bp,
 			cpu_freed_millicores, memory_freed_bytes,
 			estimated_savings_cents, currency, notification_codes, last_observed_at
 		FROM quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`
+	args := []any{orgID, id.clusterUUID, id.namespace}
+	if id.quotaName != "" {
+		query += ` AND quota_name = $4`
+		args = append(args, id.quotaName)
+	} else {
+		query += ` ORDER BY quota_name LIMIT 1`
+	}
 
-	row := pool.QueryRow(ctx, query, orgID, id.clusterUUID, id.namespace)
+	row := pool.QueryRow(ctx, query, args...)
 	item, codes, headroomBP, err := scanQuotaDetailRow(row)
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, echo.Map{
@@ -146,7 +165,11 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
-	history, histErr := engine.ListQuotaRecommendationHistory(ctx, pool, orgID, id.clusterUUID, id.namespace, 30)
+	quotaName := item.QuotaName
+	if id.quotaName != "" {
+		quotaName = id.quotaName
+	}
+	history, histErr := engine.ListQuotaRecommendationHistory(ctx, pool, orgID, id.clusterUUID, id.namespace, quotaName, 30)
 	if histErr != nil {
 		hlog.Errorf("quota detail history failed: %v", histErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -158,6 +181,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 	detail := QuotaRecommendationDetailResponse{
 		ClusterUUID:         item.ClusterUUID,
 		Namespace:           item.Namespace,
+		QuotaName:           item.QuotaName,
 		RecommendationType:  item.RecommendationType,
 		RiskLevel:           item.RiskLevel,
 		HeadroomBasisPoints: headroomBP,
@@ -277,19 +301,25 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	var codes []int16
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
 	var cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed sql.NullInt64
+	var storageHard, storageUsed, storageRec sql.NullInt64
+	var podsHard, podsUsed, podsRec sql.NullInt64
 	var cpuReqRec, cpuLimRec, memReqRec, memLimRec sql.NullInt64
 	var cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil sql.NullInt64
+	var storageUtil, podsUtil sql.NullInt64
 	var cpuFreed, memFreed sql.NullInt64
 	var savings sql.NullInt64
 	var currency string
 	var lastObserved sql.NullTime
 
 	err := rows.Scan(
-		&item.ClusterUUID, &item.Namespace, &item.RecommendationType, &item.RiskLevel, &headroomBP,
+		&item.ClusterUUID, &item.Namespace, &item.QuotaName, &item.RecommendationType, &item.RiskLevel, &headroomBP,
 		&cpuReqHard, &cpuLimHard, &memReqHard, &memLimHard,
 		&cpuReqUsed, &cpuLimUsed, &memReqUsed, &memLimUsed,
+		&storageHard, &storageUsed, &storageRec,
+		&podsHard, &podsUsed, &podsRec,
 		&cpuReqRec, &cpuLimRec, &memReqRec, &memLimRec,
 		&cpuReqUtil, &cpuLimUtil, &memReqUtil, &memLimUtil,
+		&storageUtil, &podsUtil,
 		&cpuFreed, &memFreed,
 		&savings, &currency, &codes, &lastObserved,
 	)
@@ -297,10 +327,10 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 		return item, nil, 0, err
 	}
 
-	item.QuotaHard = quotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard)
-	item.QuotaUsed = quotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed)
-	item.QuotaRecommended = quotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec)
-	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil)
+	item.QuotaHard = quotaValuesFromNullExtended(cpuReqHard, cpuLimHard, memReqHard, memLimHard, storageHard, podsHard)
+	item.QuotaUsed = quotaValuesFromNullExtended(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
+	item.QuotaRecommended = quotaValuesFromNullExtended(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
+	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
 	item.CapacityFreed = &QuotaCapacityFreedResponse{
 		CPUMillicores: nullInt64Val(cpuFreed),
 		MemoryBytes:   nullInt64Val(memFreed),
