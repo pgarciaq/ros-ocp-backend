@@ -227,6 +227,7 @@ and [known issues](../known-issues.md#deferred-quota-ui).
 | Gap | Notes |
 |-----|-------|
 | **Per-quota object identity** | When multiple `ResourceQuota` objects exist per namespace, rows are keyed by `quota_name` from the operator; older builds without `quota_name` merge by namespace. |
+| **Extended resources** | `requests.ephemeral-storage`, GPU quota, hugepages, custom device plugins — not collected. See [CRQ extended resources](cluster-resource-quota.md#extended-resources-future-work). |
 
 Implemented in this plugin: CPU/memory/storage/pods in tighten/raise/risk; storage monetized via cost model; pods and object counts in `capacity_freed` / risk / notifications only (see [Object-count resources](#object-count-resources), [Pod capacity freed](#pod-capacity-freed)); per-resource `history[]`; notification codes **70–72** (73 is CRQ-only).
 

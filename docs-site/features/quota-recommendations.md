@@ -344,6 +344,7 @@ and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 | Limitation | Impact |
 |------------|--------|
 | **Object-count quotas** | Included in risk and blocking (code **72**), but not in tighten/raise or savings |
+| **Extended resources** | `requests.ephemeral-storage`, GPU quota, hugepages, custom device plugins — not collected (future work; see [CRQ doc](cluster-resource-quota.md#extended-resources-future-work)) |
 | **Pod quota savings** | `pods_freed` is count-only; no `estimated_savings` for pod slots |
 | **One-cycle lag** | Container rec sums and namespace quota hard/used can be one operator upload out of phase (see [Timing](#timing-and-one-cycle-lag)) |
 | **Savings after cost model change** | Quota and cluster-quota `estimated_savings` refresh on ingestion and via Koku→ROS savings recalculation (same as container/node/PVC). See [Cost Integration — Savings recalculation](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes) |

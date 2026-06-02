@@ -82,15 +82,55 @@ digests for observability but **do not** produce right-sizing recommendations (s
 
 ---
 
-## Object-count quotas (ingest only)
+## Object-count quotas (visibility and alerting only)
 
-Object-count hard/used columns are stored in `daily_cluster_quota_digests` for capacity
-visibility. ROS does **not** emit tighten/raise recommendations for them because:
+The operator reports aggregated **`object_count_*`** hard/used values (sum of Kubernetes
+`count/*` quota types such as `count/deployments.apps`, `count/services`, `count/secrets`).
+These are stored in `daily_cluster_quota_digests`. Namespace quota uses the same policy —
+see [Object-count resources](quota-recommendations.md#object-count-resources).
 
-- Counts are discrete integers with no meaningful utilization curve for right-sizing.
-- There is no associated cost in the Koku cost model.
-- The useful operational signal is **at limit** (blocking), which is already surfaced via
-  notification code **72** on namespace quota rows and CRQ-at-capacity code **73**.
+| Use case | Included? |
+|----------|-----------|
+| Utilization % on object counts | Yes |
+| Risk level (`high` / `medium` / …) | Yes — counts toward max utilization across CRQ resources |
+| Blocking notifications | Yes — code **73** (CRQ at capacity); code **72** on namespace quota rows |
+| Tighten / raise recommendations | **No** |
+| Estimated savings | **No** |
+
+**Why no right-sizing:** Object limits are **admission-control guardrails**, not cost levers.
+ROS has no workload-derived target (container rightsizing does not produce object totals) and
+no cost-model rate in Koku. Recommending lower object-count hard values could block production
+deployments.
+
+**What you get:** utilization percentage, risk badge when approaching limits, and notification
+**73** when a CRQ object-count resource is at capacity. Use these signals for operational
+admission pressure — not FinOps dollar impact.
+
+---
+
+## Extended resources (future work)
+
+Extended quota resource types are **not** collected or analyzed today, including:
+
+- `requests.ephemeral-storage` / `limits.ephemeral-storage`
+- `nvidia.com/gpu` and other GPU device resources
+- `hugepages-2Mi`, `hugepages-1Gi`
+- Custom device-plugin resources
+
+Prometheus already exposes hard/used values on `kube_resourcequota` and
+`openshift_clusterresourcequota_usage` when clusters define these limits. The limitation is
+**operator query scope** (which series the ROS CSV includes), not missing cluster metrics.
+
+| Resource | Priority | Notes |
+|----------|----------|-------|
+| Ephemeral storage | **High** | Common quota dimension; usage-based tighten may wait on cadvisor reliability (REQ-8.2) |
+| GPU quota | **Medium** | GPU **workload** recs use the `gpu` plugin separately; GPU **quota** would likely be visibility-only |
+| Hugepages | **Low** | Niche; demand-driven |
+| Custom device-plugin resources | **Low** | Demand-driven |
+
+When extended resources are added, expect the same pattern as object counts:
+**visibility + alerting only** (utilization, risk, blocking notifications) unless a Koku
+cost-model rate exists. See [Known issues — Quota extended resources](../known-issues.md#quota-extended-resources-future-work).
 
 ---
 

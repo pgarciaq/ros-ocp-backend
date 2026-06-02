@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (GPU MIG Gap 5 — UI and test-data gaps)
+Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work)
 
 ---
 
@@ -792,6 +792,47 @@ until container and namespace/quota processing complete. Expect one report cycle
 deployment for signals to fully align.
 
 **Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
+
+**Object-count quotas (Gap 9 — by design):** `count/*` resources (for example `count/deployments.apps`,
+`count/services`) are ingested for **visibility and alerting only** — utilization %, risk level, and
+blocking notifications (**72** namespace, **73** CRQ). They do **not** produce tighten/raise
+recommendations or `estimated_savings`. Rationale: admission-control guardrails without a
+workload-derived target or cost-model rate; lowering object limits risks production outages.
+See [ClusterResourceQuota — Object-count quotas](features/cluster-resource-quota.md#object-count-quotas-visibility-and-alerting-only)
+and [ResourceQuota — Object-count resources](features/quota-recommendations.md#object-count-resources).
+
+### Quota extended resources (future work)
+
+**Status:** Planned / Future Work — **not implemented** in the `quota` or `cluster-quota` plugins.
+
+Extended ResourceQuota and ClusterResourceQuota resource types are **not** collected or analyzed
+for recommendations today. Examples:
+
+| Resource | Example quota key | Collected? |
+|----------|-------------------|------------|
+| Ephemeral storage | `requests.ephemeral-storage` | No |
+| GPU devices | `nvidia.com/gpu`, vendor GPU resources | No |
+| Hugepages | `hugepages-2Mi`, `hugepages-1Gi` | No |
+| Custom device plugins | Cluster-specific extended resources | No |
+
+**Prometheus already exposes** hard/used values on `kube_resourcequota` and
+`openshift_clusterresourcequota_usage` when clusters define these limits. The gap is
+**koku-metrics-operator query scope** (which series are written to ROS CSVs), not missing
+cluster telemetry.
+
+**Priority when implemented:**
+
+| Priority | Resource | Rationale |
+|----------|----------|-----------|
+| **High** | Ephemeral storage | Common quota dimension; hard/used visibility valuable even before usage-based tighten (cadvisor usage unreliable through OCP 4.21 — REQ-8.2) |
+| **Medium** | GPU quota | GPU **workload** recommendations ship via the `gpu` plugin; GPU **quota** hard/used would follow visibility-only pattern unless a quota-specific cost rate exists |
+| **Low** | Hugepages, custom device-plugin resources | Niche; demand-driven |
+
+**Planned behavior:** Same pattern as [object-count quotas](#clusterresourcequota-recommendations-req-84b--implemented) —
+visibility + alerting (utilization %, risk, blocking notifications) unless Koku exposes a
+matching cost-model rate. No tighten/raise or savings without a workload-derived target.
+
+Design detail: [ClusterResourceQuota — Extended resources](features/cluster-resource-quota.md#extended-resources-future-work).
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 

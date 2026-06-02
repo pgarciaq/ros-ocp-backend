@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (GPU MIG Gap 5 — UI and test-data gaps)
+Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work)
 
 ---
 
@@ -790,6 +790,15 @@ until container and namespace/quota processing complete. Expect one report cycle
 deployment for signals to fully align.
 
 **Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
+
+**Object-count quotas (Gap 9 — by design):** `count/*` resources are visibility + alerting only
+(utilization %, risk, notifications **72**/**73**). No tighten/raise or savings. See
+[cluster-resource-quota.md](features/cluster-resource-quota.md#object-count-quotas-visibility-and-alerting-only).
+
+**Extended resources (Gap 10 — future work):** `requests.ephemeral-storage`, GPU quota,
+hugepages, and custom device-plugin resources are not collected. Prometheus exposes them;
+operator query scope is the gap. See
+[cluster-resource-quota.md — Extended resources](features/cluster-resource-quota.md#extended-resources-future-work).
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
