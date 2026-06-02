@@ -99,14 +99,50 @@ See [Dual Engine](dual-engine.md) for when to display each perspective.
 
 ## API
 
+### List endpoint
+
 ```http
 GET /api/cost-management/v1/recommendations/openshift
+```
+
+Returns one row per container with nested `recommendations.recommendation_terms` for
+short/medium/long windows and cost/performance engines.
+
+**Offset pagination** (default for legacy clients):
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `limit` | 100 | 1–1000 |
+| `offset` | 0 | Page start index |
+
+```http
+GET .../recommendations/openshift?limit=20&offset=0
+GET .../recommendations/openshift?limit=20&offset=20
+```
+
+Response envelope:
+
+```json
+{
+  "meta": { "count": 42, "limit": 20, "offset": 0, "has_next": true, "next_cursor": "..." },
+  "data": [ { "id": "...", "container": "...", "recommendations": { ... } } ],
+  "links": { "first": "...", "next": "...", "last": "..." }
+}
+```
+
+### Detail endpoint
+
+```http
 GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
 ```
 
-List returns one row per container with all terms and engines nested. Detail
-endpoints use a Kruize-compatible shape with `recommendation_terms` and
-`recommendation_engines`.
+Lookup by deterministic UUID v5 from `(cluster_uuid, namespace, workload, workload_type, container_name)`.
+Same schema as list items, with usage box plots, `recommendations.current`, optional `gpu` block,
+and idle/zombie fields when classified.
+
+```http
+GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
+```
 
 ### Example (abbreviated list item)
 
@@ -153,22 +189,25 @@ Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-re
 
 ### Filters
 
-| Parameter | Purpose |
-|-----------|---------|
-| `filter[project]` | Namespace (partial match) |
-| `filter[namespace]` | Alias for `filter[project]` |
-| `filter[cluster]` | Cluster UUID (exact) or alias (partial) |
-| `filter[container]` | Container name (partial) |
-| `filter[workload]` | Workload name (partial) |
-| `filter[workload_type]` | Kubernetes kind (`deployment`, `statefulset`, …) |
-| `filter[has_gpu]` | `true` / `false` / `1` / `0` |
-| `filter[gpu_model]` | GPU model substring (repeatable, OR) |
-| `filter[idle_state]` | `active`, `idle`, and/or `zombie` (comma-separated) |
-| `filter[tag:<key>]` | Tag key/value (requires `ROS_TAGS_ENABLED=true`) |
-| `filter[engine]` | `cost` or `performance` — limits nested engines per term |
+Bracket syntax (`filter[field]`) and legacy flat params are both accepted.
 
-Exact/exclude variants: `filter[exact:<field>]`, `exclude[<field>]`. Date window:
-`start_date`, `end_date` (`YYYY-MM-DD`) on `updated_at`.
+| Filter | Bracket form | Description |
+|--------|--------------|-------------|
+| Cluster | `filter[cluster]` | Cluster UUID (exact) or alias (partial match) |
+| Project / namespace | `filter[project]` or `filter[namespace]` | Namespace (partial); `filter[namespace]` is an alias for `filter[project]` |
+| Workload | `filter[workload]` | Workload name (partial match) |
+| Workload type | `filter[workload_type]` | `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset` |
+| Container | `filter[container]` | Container name (partial match) |
+| Engine | `filter[engine]` | `cost` or `performance` — limits nested engines per term |
+| Term | `filter[term]` | `short`/`medium`/`long` or `short_term`/`medium_term`/`long_term` |
+| Idle state | `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` |
+| GPU presence | `filter[has_gpu]` | `true` / `false` / `1` / `0` |
+| GPU model | `filter[gpu_model]` | Case-insensitive substring (repeatable, OR) |
+| GPU classification | `filter[gpu_classification]` | `idle`, `underutilized`, `compute_bound_underutil`, `memory_bound`, `well_utilized`, `no_profiling` |
+
+Exact and exclude variants: `filter[exact:<field>]`, `exclude[<field>]`.
+Date window on `updated_at`: `start_date`, `end_date` (`YYYY-MM-DD`).
+Tag filters: `filter[tag:<key>]` (requires `ROS_TAGS_ENABLED=true`). See [Tag Filtering](tag-filtering.md).
 
 ### Sorting (`order_by`)
 
@@ -214,20 +253,35 @@ Details: [API Pagination](../pagination.md).
 
 ### History, quality, business hours, notifications
 
-- **History & quality** — `GET .../history` and `GET .../quality` track recommendation
-  changes and stability/adoption over time. See
-  [History & Quality](history-and-quality.md).
+- **History** — `GET .../recommendations/openshift/history` — fleet-wide recommendation
+  snapshots. Filters: `cluster`, `project`, `workload`, `container`, `term`, `engine`,
+  `start_date`, `end_date`, `limit`, `offset`, `format=csv`.
+- **Quality** — `GET .../recommendations/openshift/quality` — stability, adoption, and
+  OOM-after-recommendation metrics. Filters: `cluster`, `project`, `workload`, `container`,
+  date range, `order_by`, `format=csv`.
 - **Business hours** — Schedule-aware percentiles add a `business_hours` block on detail
-  engines when enabled. Configure via `.../settings/business-hours`. See
-  [Business Hours](business-hours.md).
+  engines when enabled. Configure via `GET/PUT/DELETE .../settings/business-hours/clusters/{uuid}`.
+  See [Business Hours](business-hours.md).
 - **Notification codes** — Lookup catalog for container plugin notifications:
 
   ```http
   GET /api/cost-management/v1/recommendations/openshift/notification-codes?filter[plugin]=container
   ```
 
-  See [Notification codes API](../api-reference/notification-codes.md) and the
+  Container codes: **1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25**. See
+  [Notification codes API](../api-reference/notification-codes.md) and the
   [human-readable catalog](../architecture/notification-codes.md).
+
+### Savings shape
+
+When Masu cost model rates are available (`ROS_SAVINGS_ESTIMATES_ENABLED`):
+
+| Field | When present |
+|-------|----------------|
+| `recommendations.estimated_monthly_savings` | `idle_state` is `active` — `{ "value": "12.340000", "units": "USD" }` |
+| `estimated_monthly_waste` | `idle_state` is `idle` or `zombie` |
+
+Replica counts multiply total impact on detail responses. See [Savings Estimations](savings-estimations.md).
 
 ### CSV export
 
@@ -238,9 +292,21 @@ keys apply as the JSON list. Details: [UI Integration Guide — CSV export](../u
 
 ## Configurable thresholds
 
-Tenant overrides via
-`GET/PUT/DELETE .../settings/container` (canonical path; the legacy
-`/settings/thresholds?recommendation_type=container` alias is deprecated).
+Per-organization sizing thresholds:
+
+```http
+GET    /api/cost-management/v1/recommendations/openshift/settings/container
+PUT    /api/cost-management/v1/recommendations/openshift/settings/container
+DELETE /api/cost-management/v1/recommendations/openshift/settings/container
+```
+
+Term windows (shared across container/namespace/node/gpu where applicable):
+
+```http
+GET/PUT/DELETE .../settings/terms?recommendation_type=container
+```
+
+Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|

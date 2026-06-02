@@ -189,9 +189,42 @@ or use `ROS_DISABLED_PLUGINS=quota` to disable — API returns 404).
 
 `GET /api/cost-management/v1/recommendations/openshift/quota/`
 
-- Filters: `filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[risk_level]`
-- Group by: `group_by[cluster]` or `group_by[project]` (aggregated counts and savings)
+- **Filters:** `filter[cluster]`, `filter[project]`, `filter[quota_name]` (alias
+  `filter[resource_quota_name]`), `filter[recommendation_type]`, `filter[risk_level]`
+  - `filter[recommendation_type]` — `tighten`, `raise`, `optimal`, or `none` (no hard
+    limits on the namespace snapshot)
+  - `filter[risk_level]` — `high`, `medium`, `low`, or `none` (no utilization signal)
+- **Group by:** `group_by[cluster]` or `group_by[project]` (mutually exclusive;
+  aggregated counts and summed savings)
+- **Sort:** `order_by` with `order_how` (`asc` / `desc`; default `desc` when
+  `order_by` is set). Allowed `order_by` values: `namespace`, `quota_name`,
+  `utilization`, `estimated_monthly_savings`, `risk_level`. Default list order without
+  `order_by` is namespace ascending.
+- **Pagination:** `limit` (1–100, default 20), `offset` (default 0)
 - Requires `quota` in `ROS_ENABLED_PLUGINS`
+
+**Detail:** `GET /api/cost-management/v1/recommendations/openshift/quota/detail`
+
+Query parameters: `cluster_uuid`, `namespace` (alias `filter[project]`). Optional:
+`quota_name` (alias `filter[resource_quota_name]`) when multiple ResourceQuota objects
+exist in the namespace. Returns one recommendation object (not wrapped in `data`) with
+`headroom_basis_points`, `notifications` (codes **70–72**), and `history[]` per-resource
+snapshots.
+
+| Code | Name | When |
+|------|------|------|
+| **70** | `NotifQuotaNearCapacity` | `risk_level` is `high` |
+| **71** | `NotifQuotaOversized` | `recommendation_type` is `tighten` |
+| **72** | `NotifQuotaBlocking` | Any resource at or above hard limit |
+
+Filter the catalog:
+`GET /api/cost-management/v1/recommendations/openshift/notification-codes?filter[plugin]=quota`.
+Code **73** applies to the `cluster-quota` plugin only.
+
+**Fleet savings:** Quota savings are excluded from the fleet-level
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary` endpoint to avoid
+double-counting with container-level savings that already account for quota-bound
+workloads. Per-quota `estimated_savings` on list and detail responses is unchanged.
 
 **Settings** (`GET` / `PUT` / `DELETE` `/api/cost-management/v1/recommendations/openshift/settings/quota`):
 

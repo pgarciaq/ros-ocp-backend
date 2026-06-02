@@ -159,6 +159,12 @@ Engine: [`ResolveQuotaSettings`](../../internal/engine/quota_settings.go).
   [`RecommendQuotas`](../../internal/engine/recommend_quota.go)
 - Settings: [`ResolveQuotaSettings`](../../internal/engine/quota_settings.go)
 
+## Notes
+
+Quota savings are excluded from the fleet-level
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary` endpoint to avoid
+double-counting with container-level savings that already account for quota-bound workloads.
+
 ## Feature documentation
 
 - [ResourceQuota Recommendations](../features/quota-recommendations.md)

@@ -42,6 +42,7 @@ docs-site/features/
 !docs-site/features/quota-recommendations.md
 !docs-site/features/cluster-resource-quota.md
 !docs-site/features/snapshot-staleness.md
+!docs-site/features/container-recommendations.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output

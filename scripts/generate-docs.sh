@@ -54,8 +54,9 @@ done
 mkdir -p "$DOCS_DIR/operations"
 [ -f "$ROOT_DIR/docs/upgrade-runbook.md" ] && cp "$ROOT_DIR/docs/upgrade-runbook.md" "$DOCS_DIR/operations/upgrade-runbook.md"
 
-# Feature docs — pvc-rightsizing, business-hours, gpu-time-slicing, snapshot-staleness,
-# and cluster-resource-quota are maintained in docs-site/features/ (not copied from docs/)
+# Feature docs — container-recommendations, pvc-rightsizing, business-hours, gpu-time-slicing,
+# snapshot-staleness, and cluster-resource-quota are maintained in docs-site/features/
+# (not copied from docs/)
 mkdir -p "$DOCS_DIR/features"
 
 # Top-level docs
