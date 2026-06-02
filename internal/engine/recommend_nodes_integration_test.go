@@ -288,9 +288,9 @@ func TestNodeIdleState_PipelineIntegration(t *testing.T) {
 	}
 
 	require.Equal(t, engine.IdleStateZombie, recByNode["zombie-node"].IdleState)
-	assert.Contains(t, recByNode["zombie-node"].NotificationCodes, engine.NotifAIdle)
+	assert.Contains(t, recByNode["zombie-node"].NotificationCodes, engine.NotifNodeIdle)
 	require.Equal(t, engine.IdleStateIdle, recByNode["idle-node"].IdleState)
-	assert.Contains(t, recByNode["idle-node"].NotificationCodes, engine.NotifAIdle)
+	assert.Contains(t, recByNode["idle-node"].NotificationCodes, engine.NotifNodeIdle)
 	require.Equal(t, engine.IdleStateActive, recByNode["active-node"].IdleState)
 	assert.True(t, recByNode["active-node"].IsUnderutilized)
 

@@ -1,4 +1,4 @@
--- Code 15 is NotifAIdle (node idle/zombie), not MachineAutoscaler minReplicas.
+-- Code 15 is NotifNodeIdle (node idle/zombie), not MachineAutoscaler minReplicas.
 UPDATE notification_code_definitions SET
     name = 'NODE_IDLE',
     severity = 'INFO',

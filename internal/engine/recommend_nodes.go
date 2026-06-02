@@ -401,7 +401,7 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 func applyNodeIdleClassification(class *nodeClassification, nodeSettings NodeThresholdSettings) {
 	class.IdleState = ClassifyNodeIdleState(*class, nodeSettings)
 	if class.IdleState == IdleStateIdle || class.IdleState == IdleStateZombie {
-		class.NotificationCodes = append(class.NotificationCodes, NotifAIdle)
+		class.NotificationCodes = append(class.NotificationCodes, NotifNodeIdle)
 	}
 }
 

@@ -99,7 +99,7 @@ func TestNotificationDefinitionsComplete(t *testing.T) {
 	require.True(t, ok, "notification code 76 (node fleet consolidation) should be defined")
 }
 
-func TestMapToKruizeFormat_NotifAIdle_Code15(t *testing.T) {
+func TestMapToKruizeFormat_NotifNodeIdle_Code15(t *testing.T) {
 	result := MapToKruizeFormat([]int16{15})
 	require.Len(t, result, 1)
 	entry := result["15"]
@@ -153,16 +153,18 @@ func TestDefinitionsMatchDB(t *testing.T) {
 	ctx := context.Background()
 
 	rows, err := pool.Query(ctx,
-		`SELECT code, severity, description FROM notification_code_definitions ORDER BY code`)
+		`SELECT code, name, severity, description FROM notification_code_definitions ORDER BY code`)
 	require.NoError(t, err)
 	defer rows.Close()
 
 	dbCodes := make(map[int16]notifDef)
+	dbNames := make(map[int16]string)
 	for rows.Next() {
 		var code int16
-		var severity, description string
-		require.NoError(t, rows.Scan(&code, &severity, &description))
+		var name, severity, description string
+		require.NoError(t, rows.Scan(&code, &name, &severity, &description))
 		dbCodes[code] = notifDef{Severity: severity, Message: description}
+		dbNames[code] = name
 	}
 	require.NoError(t, rows.Err())
 	require.NotEmpty(t, dbCodes, "notification_code_definitions table should have seed data")
@@ -176,13 +178,21 @@ func TestDefinitionsMatchDB(t *testing.T) {
 			assert.Equal(t, dbDef.Message, goDef.Message,
 				"message mismatch for code %d", code)
 		}
+		assert.Equal(t, dbNames[code], CodeNames[code],
+			"name mismatch for code %d", code)
 	}
 
 	for code := range Definitions {
 		_, ok := dbCodes[code]
 		assert.True(t, ok, "Go code %d missing from DB notification_code_definitions", code)
 	}
+	for code := range CodeNames {
+		_, ok := dbCodes[code]
+		assert.True(t, ok, "Go CodeNames %d missing from DB notification_code_definitions", code)
+	}
 
 	assert.Equal(t, len(dbCodes), len(Definitions),
 		"Go Definitions and DB notification_code_definitions should have same number of entries")
+	assert.Equal(t, len(Definitions), len(CodeNames),
+		"CodeNames and Definitions should have the same number of entries")
 }

@@ -16,7 +16,7 @@ const (
 	NotifNodeOvercommitted  int16 = 12
 	NotifStrandedResources  int16 = 13
 	NotifASaturated         int16 = 14
-	NotifAIdle              int16 = 15
+	NotifNodeIdle           int16 = 15
 	NotifAFlapping          int16 = 16
 	NotifARecommended       int16 = 17
 	NotifVMIdle             int16 = 18
