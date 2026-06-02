@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (deferred Quota UI)
+Last updated: 2026-06-02 (GPU MIG Gap 5 limitations)
 
 ---
 
@@ -540,16 +540,57 @@ dedicated **koku-ui views are deferred** (large effort; ResourceQuota status rep
 See [quota-recommendations.md](features/quota-recommendations.md#roadmap--future-work) and
 [ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
 
+### GPU MIG — Known limitations (Gap 5)
+
+Phase 12 documents two **intentional** limits on MIG recommendations. They are acceptable
+for current fleet sizes and are tracked as future work (deferred table items **2** and **3**
+below), not as defects.
+
+#### MIG list in-memory pagination
+
+`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../../internal/api/handlers_gpu_mig.go))
+loads MIG recommendations for every cluster in the org by calling
+`QueryGPURecommendations` per cluster, builds the full result set in memory, then applies
+RBAC, tag filters, sort, and `offset`/`limit` pagination in Go. Filter and sort keys are
+not pushed to SQL (see [`GpuMigAllowedOrderBy`](../../internal/api/listoptions/list_options.go)).
+
+**Why this is acceptable now:** Typical fleets have tens to low hundreds of MIG-enabled
+containers. The in-memory path adds well under ~50 ms of API latency at that scale.
+
+**What would be needed at scale (thousands of MIG workloads):** Refactor to SQL-level
+pagination — for example a materialized `gpu_mig_recommendations` table populated during
+the recommendation pipeline, or indexed page keys on `gpu_container_digests` with
+post-filter for MIG-only rows — mirroring patterns used for other heavy list endpoints.
+
+#### Multi-GPU container consolidation (per-container only)
+
+The MIG engine recommends a profile **per container independently** based on that
+container's utilization and frame-buffer usage. It does **not** analyze whether several
+containers on a node each use a fraction of a **different** GPU and could be consolidated
+onto fewer physical GPUs to free one for other work.
+
+**Why this is acceptable now:** That scenario is a cluster-wide **scheduling / bin-packing**
+optimization. It requires correlating per-GPU placement, MIG instance occupancy, and
+workload affinity across the node — substantially more complex than per-container profile
+sizing. Inference and single-GPU workloads (>95% of current GPU containers) are fully
+covered; multi-GPU training pods are rare outside dedicated ML clusters (see REQ-5.5).
+
+**What would be needed:** Per-device telemetry (DCGM by GPU UUID or `gpu_request_count` from
+the operator), a node-level consolidation model, and API/notification surfaces for
+"request fewer GPUs" or "co-locate these workloads." VMs already expose multi-GPU guidance
+via notification **54**; container path would follow deferred item **2** prerequisites.
+
 ### GPU: Deferred / Future Work
 
 The following items are **not** shipping defects. They are tracked enhancements
-deferred until prerequisites or customer scale justify the investment.
+deferred until prerequisites or customer scale justify the investment. Gap 5 detail:
+[GPU MIG — Known limitations (Gap 5)](#gpu-mig--known-limitations-gap-5).
 
 | # | Item | Consumer | Why deferred | Prerequisites |
 |---|------|----------|--------------|---------------|
 | **1** | **GPUs per node** — add `node_gpu_count` to ROS data from `kube_node_status_allocatable{resource='nvidia.com/gpu'}` | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only. | Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin |
-| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation for containers requesting multiple GPUs ("request fewer GPUs") | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3 | Rare outside dedicated ML clusters (<5% of GPU workloads). Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; engine + notification changes |
-| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` with SQL page keys (as time-slicing uses) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have dozens to low-hundreds of GPU containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
+| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation; no cluster-wide "free a GPU by co-locating workloads" (see [Gap 5](#gpu-mig--known-limitations-gap-5)) | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3; nodes where many containers each hold a slice on a different GPU | Rare outside dedicated ML clusters (<5% of GPU workloads). Per-container MIG sizing does not perform bin-packing across GPUs on a node. Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; node-level consolidation engine + notification changes |
+| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` (see [Gap 5](#gpu-mig--known-limitations-gap-5)) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
 | **4** | **MIG + time-slicing combined strategy** — time-slicing within MIG partitions instead of mutually exclusive strategies in `partitionContainers` (MIG recs currently exclude time-slicing candidates) | Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node | Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand. | MIG instance scheduling model; operator partition telemetry |
 | **5** | **UI for GPU time-slicing recommendations** — frontend views for `GET /recommendations/openshift/gpu/timeslicing` and `GET /recommendations/openshift/gpu/mig` | Cluster admins who want visual guidance on GPU sharing without using the API directly | All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in [ui-integration-guide.md](ui-integration-guide.md). | koku-ui GPU optimizations pages |
 | **6** | **Materialized time-slicing results (performance)** — persist time-slicing recommendations during the recommendation pipeline instead of computing at read-time | Large GPU fleets (1000+ node×model triples) where read-time computation adds latency | Current scale is well within acceptable latency (<50 ms). Materialization adds write-path complexity and staleness concerns. Revisit when GPU fleet sizes grow ~10×. | Pipeline write path; recompute on term or threshold changes |

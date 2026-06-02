@@ -92,14 +92,17 @@ The confidence score (0.0–1.0) is based on:
 
 ## Deferred Items
 
-Enhancements documented but not implemented. Full rationale and prerequisites:
+Enhancements documented but not implemented. **Gap 5** (MIG list in-memory pagination and
+lack of multi-GPU bin-packing) is expanded in
+[known-issues.md § GPU MIG — Known limitations (Gap 5)](../known-issues.md#gpu-mig--known-limitations-gap-5).
+Full tracking table:
 [known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred--future-work).
 
 | # | Item | Consumer | Why deferred |
 |---|------|----------|--------------|
 | 1 | Node `node_gpu_count` (allocatable GPUs per node) | Tier 2 MachineSet GPU-aware consolidation; node GPU savings | No consumer until Tier 2 + GPU-aware node engine |
-| 2 | Multi-GPU container consolidation (per-device DCGM) | ML pods requesting 4–8 GPUs with low utilization | <5% of workloads; 1-GPU assumption covers inference; VMs have notification **54** |
-| 3 | MIG list API SQL-backed pagination | Fleets with 10k+ MIG-capable containers | In-memory path is <50ms at current scale |
+| 2 | Multi-GPU / cross-GPU consolidation (per-device DCGM; no node bin-packing) | ML pods requesting 4–8 GPUs; containers each using a slice on a different GPU | <5% of workloads; engine sizes MIG per container only; VMs have notification **54** |
+| 3 | MIG list API SQL-backed pagination (`GET .../gpu/mig` loads all rows then paginates in Go) | Fleets with 10k+ MIG-capable containers | Tens–low hundreds of MIG containers today; in-memory path is <50ms |
 
 ## Source Files
 

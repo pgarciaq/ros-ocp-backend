@@ -1219,6 +1219,16 @@ GET /recommendations/openshift/gpu/mig
 
 Lists containers with MIG profile recommendations (`recommended_gpu_profile` set and not `full_gpu`).
 
+**Limitations (Gap 5 — acceptable at current scale):**
+
+- **In-memory pagination:** The handler builds the full MIG list per org (all clusters),
+  then applies `offset`/`limit`, sort, and filters in application memory — not in SQL.
+  Fine for tens to low hundreds of MIG workloads; large fleets (thousands) will need
+  SQL-backed pagination (see [known-issues.md § GPU MIG — Known limitations](known-issues.md#gpu-mig--known-limitations-gap-5)).
+- **Per-container recommendations only:** Each row is an independent MIG profile suggestion.
+  The API does not propose consolidating multiple containers onto fewer GPUs to free a
+  physical GPU (cluster-wide bin-packing is future work).
+
 | Parameter | Description |
 |-----------|-------------|
 | `cluster` | Filter by cluster alias |
