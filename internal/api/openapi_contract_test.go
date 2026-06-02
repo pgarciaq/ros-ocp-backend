@@ -727,6 +727,254 @@ func TestOpenAPI_NamespaceSettings_ResponseFields(t *testing.T) {
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
+func assertThresholdPluginFields(t *testing.T, body []byte, fields []string) {
+	t.Helper()
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	for _, field := range fields {
+		_, ok := resp[field]
+		assert.True(t, ok, "threshold settings missing field %q", field)
+	}
+}
+
+func assertBusinessHoursSettingsResponse(t *testing.T, body []byte, schema map[string]interface{}) {
+	t.Helper()
+	require.NotNil(t, schema, "business hours schema must be resolved from openapi.json")
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+
+	_, ok := resp["enabled"].(bool)
+	assert.True(t, ok, "business hours response must include enabled boolean")
+
+	bhOptional := map[string]struct{}{
+		"timezone":            {},
+		"schedule":            {},
+		"off_hours_weight":    {},
+		"reship_status":       {},
+		"reship_status_since": {},
+		"settings_locked":     {},
+		"locked_fields":       {},
+	}
+	for _, prop := range schemaPropertyNames(schema) {
+		if _, skip := bhOptional[prop]; skip {
+			continue
+		}
+		_, exists := resp[prop]
+		assert.True(t, exists, "business hours response missing property %q", prop)
+	}
+}
+
+func TestOpenAPI_NodeThresholdSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-node-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/node")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/node", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
+		"cost_target_utilization", "underutil_threshold", "locked_fields",
+	})
+}
+
+func TestOpenAPI_GPUThresholdSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-gpu-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/gpu")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/gpu", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
+		"idle_threshold", "underutilized_sm_threshold", "locked_fields",
+	})
+}
+
+func TestOpenAPI_PVCThresholdSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-pvc-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/pvc")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/pvc", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
+		"oversized_threshold", "near_full_threshold", "locked_fields",
+	})
+}
+
+func TestOpenAPI_QuotaSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-quota-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/quota")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/quota", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_ClusterQuotaSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-cluster-quota-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/cluster-quota")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/cluster-quota", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_SnapshotSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-snapshot-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/snapshot")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/snapshot", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
+		"orphan_age_days",
+		"never_restored_days",
+		"stale_days",
+		"redundant_threshold",
+		"cost_per_gib_month_usd",
+		"inventory_fresh_hours",
+		"locked_fields",
+	})
+}
+
+func TestOpenAPI_IdleDetectionSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-idle-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/idle-detection")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/idle-detection", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	idleDetection, ok := resp["idle_detection"].(map[string]interface{})
+	require.True(t, ok, "idle_detection object must be present")
+	_, ok = idleDetection["enabled"].(bool)
+	assert.True(t, ok, "idle_detection.enabled must be a boolean")
+	assertObjectHasSpecProperties(t, idleDetection, spec.componentSchema("IdleDetectionSettings"), "idle_detection")
+}
+
+func TestOpenAPI_TermSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-term-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/terms?recommendation_type=container")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/terms", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "container", resp["recommendation_type"])
+	terms, ok := resp["terms"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, terms)
+	first, ok := terms[0].(map[string]interface{})
+	require.True(t, ok)
+	for _, prop := range []string{"name", "window_days", "min_data_days", "decay_halflife_hours", "locked", "is_default"} {
+		_, exists := first[prop]
+		assert.True(t, exists, "terms[0] missing property %q", prop)
+	}
+}
+
+func TestOpenAPI_Capabilities_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-capabilities")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/capabilities")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/capabilities", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	types, ok := resp["recommendation_types"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, types)
+	first, ok := types[0].(map[string]interface{})
+	require.True(t, ok)
+	assertObjectHasSpecProperties(t, first, spec.componentSchema("CapabilityItem"), "recommendation_types[0]")
+	_, ok = resp["business_hours"].(bool)
+	assert.True(t, ok, "business_hours must be a boolean")
+}
+
+func TestOpenAPI_BusinessHoursSettings_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	e := setupContractTestEcho(t, pool, "org-openapi-bh-settings")
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/settings/business-hours")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/business-hours", http.MethodGet, "200")
+	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
+}
+
 func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	enableAllPluginsForContractTest(t)
