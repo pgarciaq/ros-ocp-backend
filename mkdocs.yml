@@ -112,6 +112,7 @@ nav:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md
       - container: plugin-reference/container.md
+      - idle-detection: plugin-reference/idle-detection.md
       - gpu: plugin-reference/gpu.md
       - node: plugin-reference/node.md
       - pvc: plugin-reference/pvc.md

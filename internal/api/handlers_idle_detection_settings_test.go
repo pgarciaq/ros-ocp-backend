@@ -93,11 +93,12 @@ func TestPutIdleDetectionSettings_TriggersAsyncRecalculation(t *testing.T) {
 	e := setupIdleDetectionSettingsTestEcho(t, orgID)
 
 	var mu sync.Mutex
-	var triggeredOrg, triggeredType string
+	var triggeredOrg string
+	var triggeredTypes []string
 	engine.SetThresholdRecalcHookForTest(func(oid, rt string) {
 		mu.Lock()
 		triggeredOrg = oid
-		triggeredType = rt
+		triggeredTypes = append(triggeredTypes, rt)
 		mu.Unlock()
 	})
 	defer engine.ClearThresholdRecalcHookForTest()
@@ -112,7 +113,7 @@ func TestPutIdleDetectionSettings_TriggersAsyncRecalculation(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, orgID, triggeredOrg)
-	assert.Equal(t, "container", triggeredType)
+	assert.ElementsMatch(t, []string{"container", "gpu", "namespace", "node"}, triggeredTypes)
 }
 
 func TestPutIdleDetectionSettings_ForbiddenWhenEnvLocksField(t *testing.T) {

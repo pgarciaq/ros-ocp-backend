@@ -44,6 +44,37 @@ func setupThresholdTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *ech
 	return e
 }
 
+func TestGetDedicatedContainerSettings_AllEnginePercentileKeys(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	e := setupThresholdTestEcho(t, pool, "org-threshold-percentile-keys")
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/container",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+	for _, key := range []string{
+		"cpu_cost_percentile",
+		"cpu_perf_percentile",
+		"mem_cost_percentile",
+		"mem_perf_percentile",
+	} {
+		val, ok := resp[key]
+		require.True(t, ok, "settings/container missing %s", key)
+		pct, ok := val.(float64)
+		require.True(t, ok, "%s should be a number", key)
+		assert.Greater(t, pct, 0.0)
+		assert.LessOrEqual(t, pct, 1.0)
+	}
+}
+
 func TestGetThresholdSettings_ReturnsDefaults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-get"

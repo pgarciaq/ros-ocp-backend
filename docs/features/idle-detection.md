@@ -758,6 +758,16 @@ until Phase 2 validation completes.
 | **Cost attribution** | Idle waste by tag/team via [tag filtering](tag-filtering.md) |
 | **VM idle** | Extend `NotifVMIdle` pattern to OpenShift Virtualization guests |
 
+## Deferred / future work
+
+- **Pod annotation opt-out (item 13):** Allow workload owners to annotate Pods with `ros.openshift.io/idle-detection-exclude: true` to skip classification. Requires operator CSV export of annotations and ingestion pipeline changes. Namespace/workload-type exclusions via Settings API cover most cases today.
+
+- **Sidecar / workload grouping (item 14):** Post-pass downgrade: after classifying all containers in a workload, if any non-sidecar container is active, downgrade sidecars to active/supporting. Requires workload grouping key (namespace, workload_name, workload_type) and known-sidecar heuristic.
+
+- **Org-level idle notification (item 15):** Fire org-level notification when idle container count exceeds configurable threshold. Deferred — requires notification delivery infrastructure (email/webhook) not yet built.
+
+- **Operator network I/O for zombie refinement (item 16):** Adding container network RX/TX as a zombie guard signal (workload with CPU idle but receiving traffic should not be zombie). Operator already collects VM network metrics; extending to containers would improve zombie accuracy.
+
 ---
 
 ## Test and deployment coverage

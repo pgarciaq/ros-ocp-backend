@@ -20,6 +20,18 @@ func TestValidateIdleDetectionUpdate_RejectsUnknownField(t *testing.T) {
 	assert.Contains(t, valErr.Error(), "unknown field")
 }
 
+func TestValidateIdleDetectionUpdate_AcceptsZombieThresholds(t *testing.T) {
+	body := `{"idle_detection":{"thresholds":{"zombie_cpu_millicores":5,"zombie_peak_millicores":50}}}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	assert.NoError(t, err)
+}
+
+func TestValidateIdleDetectionUpdate_RejectsZombieOutOfRange(t *testing.T) {
+	body := `{"idle_detection":{"thresholds":{"zombie_cpu_millicores":200}}}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	assert.Error(t, err)
+}
+
 func TestValidateIdleDetectionUpdate_AcceptsThresholds(t *testing.T) {
 	body := `{
 		"idle_detection": {

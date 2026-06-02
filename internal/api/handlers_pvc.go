@@ -31,6 +31,8 @@ type PVCRecommendationResponse struct {
 	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	DataDays                   int                                        `json:"data_days"`
 	Term                       string                                     `json:"term"`
+	IdleSince                  *string                                    `json:"idle_since,omitempty"`
+	IdleDurationDays           *int                                       `json:"idle_duration_days,omitempty"`
 	ResizeNote                 string                                     `json:"resize_note,omitempty"`
 }
 

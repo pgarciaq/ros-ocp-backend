@@ -16,7 +16,17 @@ Public feature page: [docs-site/features/namespace-recommendations.md](../../doc
 ## Filters
 
 List supports `filter[cluster]`, `filter[project]` (namespace), tag filters,
-pagination, sorting, and **`filter[stale]`**:
+pagination, sorting, **`filter[engine]`** (`cost` or `performance`; legacy flat
+`?engine=` also accepted), and **`filter[stale]`**:
+
+| Engine filter | Behavior |
+|---------------|----------|
+| omitted | Both `cost` and `performance` under each `recommendation_terms.<term>.recommendation_engines` |
+| `filter[engine]=cost` | Only the cost engine block is returned |
+| `filter[engine]=performance` | Only the performance engine block is returned |
+
+Cost uses lower usage percentiles for rightsizing; performance uses higher
+percentiles for headroom (same model as container recommendations).
 
 | Value | Behavior |
 |-------|----------|

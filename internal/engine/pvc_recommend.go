@@ -58,6 +58,8 @@ type PVCRec struct {
 	NotificationCodes            []int16
 	DataDays                     int
 	Term                         string
+	IdleSince                    *time.Time
+	IdleDurationDays             int
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
@@ -207,6 +209,8 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	case allZero && len(digests) >= tc.MinDataDays:
 		rec.RecommendationType = PVCRecTypeOrphaned
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
+		rec.IdleSince = findPVCOrphanedSince(digests)
+		rec.IdleDurationDays = computeIdleDuration(rec.IdleSince)
 
 	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= tc.MinDataDays:
 		rec.RecommendationType = PVCRecTypeOversized
@@ -235,6 +239,30 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	}
 
 	return rec
+}
+
+func pvcIdleDurationArg(days int) any {
+	if days <= 0 {
+		return nil
+	}
+	return days
+}
+
+// findPVCOrphanedSince returns the first digest date with zero usage in the window.
+func findPVCOrphanedSince(digests []PVCDigestRow) *time.Time {
+	if len(digests) == 0 {
+		return nil
+	}
+	start := len(digests) - 1
+	for start >= 0 && digests[start].UsageBytesMax == 0 && digests[start].UsageBytesAvg == 0 {
+		start--
+	}
+	firstZero := start + 1
+	if firstZero >= len(digests) {
+		return nil
+	}
+	t := digests[firstZero].BucketDate
+	return &t
 }
 
 // computePVCGrowthSlope computes the regression slope of daily average usage
@@ -314,8 +342,9 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				recommended_bytes, days_to_full, growth_bytes_per_day,
 				notification_codes, data_days, term,
 				estimated_monthly_savings_usd,
+				idle_since, idle_duration_days,
 				updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
 			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 			DO UPDATE SET
 				last_seen_pod = CASE
@@ -338,6 +367,8 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				notification_codes = EXCLUDED.notification_codes,
 				data_days = EXCLUDED.data_days,
 				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
+				idle_since = EXCLUDED.idle_since,
+				idle_duration_days = EXCLUDED.idle_duration_days,
 				updated_at = NOW()`,
 			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.PVC,
 			rec.LastSeenPod, rec.VMName, rec.PV, rec.StorageClass, rec.CapacityBytes,
@@ -345,6 +376,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
 			rec.NotificationCodes, rec.DataDays, rec.Term,
 			rec.EstimatedMonthlySavingsCents,
+			rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
 		)
 		if err != nil {
 			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s [%s]: %v", rec.Namespace, rec.PVC, rec.Term, err)

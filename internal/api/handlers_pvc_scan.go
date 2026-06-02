@@ -13,12 +13,14 @@ func scanPVCRecommendationRow(row pgx.Row) (PVCRecommendationResponse, error) {
 	var codes []int16
 	var growth sql.NullInt64
 	var savings sql.NullInt64
+	var idleSince sql.NullTime
+	var idleDays sql.NullInt32
 	if err := row.Scan(
 		&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.MountedBy, &r.VMName, &r.PersistentVolume,
 		&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
 		&r.RecommendationType, &r.RecommendedBytes, &r.DaysToFull,
 		&growth, &codes, &r.DataDays, &r.Term,
-		&savings,
+		&savings, &idleSince, &idleDays,
 	); err != nil {
 		return r, err
 	}
@@ -28,6 +30,14 @@ func scanPVCRecommendationRow(row pgx.Row) (PVCRecommendationResponse, error) {
 	}
 	if savings.Valid {
 		r.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&savings.Int64, money.DefaultCurrency)
+	}
+	if idleSince.Valid {
+		s := idleSince.Time.UTC().Format("2006-01-02")
+		r.IdleSince = &s
+	}
+	if idleDays.Valid && idleDays.Int32 > 0 {
+		d := int(idleDays.Int32)
+		r.IdleDurationDays = &d
 	}
 	r.Notifications = notifications.MapToKruizeFormat(codes)
 	switch r.RecommendationType {
@@ -44,4 +54,4 @@ const pvcRecommendationSelectSQL = `
 		storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
 		recommendation_type, recommended_bytes, days_to_full,
 		growth_bytes_per_day, notification_codes, data_days, term,
-		estimated_monthly_savings_usd`
+		estimated_monthly_savings_usd, idle_since, idle_duration_days`

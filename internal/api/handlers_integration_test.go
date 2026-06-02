@@ -287,6 +287,85 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	})
 }
 
+func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?limit=1", nil)
+	listReq.Header.Set("X-Rh-Identity", identityHeader)
+	listRec := httptest.NewRecorder()
+	app.ServeHTTP(listRec, listReq)
+	require.Equal(t, http.StatusOK, listRec.Code)
+
+	var listResp struct {
+		Data []model.DetailResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &listResp))
+	require.NotEmpty(t, listResp.Data)
+
+	containerID := listResp.Data[0].ID
+	detailReq := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+	detailReq.Header.Set("X-Rh-Identity", identityHeader)
+	detailRec := httptest.NewRecorder()
+	app.ServeHTTP(detailRec, detailReq)
+	require.Equal(t, http.StatusOK, detailRec.Code)
+
+	var detail map[string]interface{}
+	require.NoError(t, json.Unmarshal(detailRec.Body.Bytes(), &detail))
+	terms := detail["recommendations"].(map[string]interface{})["recommendation_terms"].(map[string]interface{})
+
+	foundCost := false
+	foundPerf := false
+	for _, termRaw := range terms {
+		term, ok := termRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		engines, ok := term["recommendation_engines"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, ok := engines["cost"].(map[string]interface{}); ok {
+			foundCost = true
+		}
+		if _, ok := engines["performance"].(map[string]interface{}); ok {
+			foundPerf = true
+		}
+	}
+	assert.True(t, foundCost, "detail should include recommendation_engines.cost")
+	assert.True(t, foundPerf, "detail should include recommendation_engines.performance")
+}
+
 func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	// T-2.2: Org A must not see org B's recommendations.
 	pool := testutil.SetupTestDB(t)

@@ -372,6 +372,15 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		}
 	}
 
+	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
+		states, err := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
+		if err != nil {
+			filterErrs = append(filterErrs, err)
+		} else if len(states) > 0 {
+			queryParams["rs.gpu_idle_state IN ?"] = states
+		}
+	}
+
 	if err := applyNativeEngineQueryFilter(c, queryParams, "rs.engine"); err != nil {
 		filterErrs = append(filterErrs, err)
 	}

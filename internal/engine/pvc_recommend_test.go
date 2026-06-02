@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var defaultMediumTerm = TermConfig{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}
@@ -30,6 +31,9 @@ func TestComputePVCRecommendation_Orphaned(t *testing.T) {
 
 	assert.Equal(t, PVCRecTypeOrphaned, rec.RecommendationType)
 	assert.Contains(t, rec.NotificationCodes, NotifPVCOrphaned)
+	require.NotNil(t, rec.IdleSince)
+	assert.Equal(t, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), rec.IdleSince.UTC())
+	assert.Greater(t, rec.IdleDurationDays, 0)
 	assert.Equal(t, int64(0), rec.UsageBytesMax)
 	assert.Equal(t, float64(0), rec.UsageRatio)
 	assert.Equal(t, 5, rec.DataDays)

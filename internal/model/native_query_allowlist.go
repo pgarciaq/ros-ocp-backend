@@ -11,6 +11,7 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.has_gpu = ?":             {},
 	"rs.gpu_classification IN ?": {},
 	"rs.idle_state IN ?":         {},
+	"rs.gpu_idle_state IN ?":   {},
 	"rs.engine IN ?":             {},
 
 	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
@@ -61,6 +62,7 @@ var nativeNSFixedQueryKeys = map[string]struct{}{
 	"ns.monitoring_end_time < ?":  {},
 	"ns.stale = ?":                {},
 	"ns.engine IN ?":              {},
+	"ns.idle_state IN ?":        {},
 }
 
 var nativeNSFilterAtoms = map[string]struct{}{

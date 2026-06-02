@@ -80,6 +80,9 @@ var ContainerAllowedOrderBy = OrderByMap{
 	"memory_variation_medium_performance": "recommendation_sets.memory_variation_medium_performance_pct",
 	"memory_variation_long_cost":          "recommendation_sets.memory_variation_long_cost_pct",
 	"memory_variation_long_performance":   "recommendation_sets.memory_variation_long_performance_pct",
+	"idle_state":                        "recommendation_sets.idle_state",
+	"idle_duration_days":                "recommendation_sets.idle_duration_days",
+	"estimated_monthly_waste":           "recommendation_sets.estimated_waste_cents",
 }
 
 var NodeRecsAllowedOrderBy = OrderByMap{

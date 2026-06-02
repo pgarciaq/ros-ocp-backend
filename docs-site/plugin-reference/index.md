@@ -63,6 +63,7 @@ Hand-maintained API reference pages (settings, filters, notification codes):
 | Plugin | Page |
 |--------|------|
 | container | [container](container.md) |
+| idle-detection | [idle-detection](idle-detection.md) |
 | cluster-quota | [cluster-quota](cluster-quota.md) |
 | node | [node](node.md) |
 | quota | [quota](quota.md) |

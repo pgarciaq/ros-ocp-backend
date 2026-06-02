@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
@@ -90,6 +91,10 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 				if rec == nil || !rec.HasMIGRecommendation() {
 					continue
 				}
+				gpuIdle := string(rec.GPUIdleState)
+				if gpuIdle == "" {
+					gpuIdle = "active"
+				}
 				entries = append(entries, model.GPUMIGRecommendationEntry{
 					ClusterUUID:           clusterUUID,
 					Namespace:             ns,
@@ -102,6 +107,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 					CurrentGPUProfile:     rec.CurrentGPUProfile,
 					Classification:        string(rec.Classification),
 					Confidence:            rec.Confidence,
+					GPUIdleState:          gpuIdle,
 				})
 			}
 		}
@@ -118,6 +124,30 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	entries = filterGPUMIGEntriesByRBAC(entries, userPerms)
+
+	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
+		states, idleErr := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
+		if idleErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": idleErr.Error()})
+		}
+		if len(states) > 0 {
+			allowed := make(map[string]struct{}, len(states))
+			for _, s := range states {
+				allowed[s] = struct{}{}
+			}
+			filtered := entries[:0]
+			for _, e := range entries {
+				state := e.GPUIdleState
+				if state == "" {
+					state = "active"
+				}
+				if _, ok := allowed[state]; ok {
+					filtered = append(filtered, e)
+				}
+			}
+			entries = filtered
+		}
+	}
 
 	tagFilters, tagErr := parseTagFiltersFromRequest(c)
 	if tagErr != nil {

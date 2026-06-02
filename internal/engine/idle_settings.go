@@ -31,6 +31,8 @@ type IdleDetectionThresholds struct {
 	MinimumObservationDays   int   `json:"minimum_observation_days"`
 	GPUSMActiveBasisPoints   int64 `json:"gpu_sm_active_basis_points"`
 	GPUDRAMActiveBasisPoints int64 `json:"gpu_dram_active_basis_points"`
+	ZombieCPUMillicores      int64 `json:"zombie_cpu_millicores"`
+	ZombiePeakMillicores     int64 `json:"zombie_peak_millicores"`
 }
 
 // IdleDetectionExclusions lists namespaces and workload types never flagged idle.
@@ -62,6 +64,8 @@ type idleDetectionStored struct {
 	MinimumObservationDays   *int     `json:"minimum_observation_days,omitempty"`
 	GPUSMActiveBasisPoints   *int64   `json:"gpu_sm_active_basis_points,omitempty"`
 	GPUDRAMActiveBasisPoints *int64   `json:"gpu_dram_active_basis_points,omitempty"`
+	ZombieCPUMillicores      *int64   `json:"zombie_cpu_millicores,omitempty"`
+	ZombiePeakMillicores     *int64   `json:"zombie_peak_millicores,omitempty"`
 	ExcludeNamespaces        []string `json:"exclude_namespaces,omitempty"`
 	ExcludeWorkloadTypes     []string `json:"exclude_workload_types,omitempty"`
 }
@@ -112,6 +116,8 @@ func defaultIdleDetectionSettings() IdleDetectionSettings {
 			MinimumObservationDays:   cfg.MinObservationDays,
 			GPUSMActiveBasisPoints:   gpuDef.IdleSMActiveBP,
 			GPUDRAMActiveBasisPoints: gpuDef.IdleDRAMActiveBP,
+			ZombieCPUMillicores:      cfg.ZombieCPUP95MC,
+			ZombiePeakMillicores:     cfg.ZombieCPUPeakMC,
 		},
 		Exclusions: IdleDetectionExclusions{
 			Namespaces:    append([]string(nil), cfg.ExcludeNamespaces...),
@@ -123,7 +129,7 @@ func defaultIdleDetectionSettings() IdleDetectionSettings {
 func idleConfigFromSettings(s IdleDetectionSettings) IdleConfig {
 	def := DefaultIdleConfig()
 	out := IdleConfig{
-		Enabled:              s.Enabled,
+		Enabled: s.Enabled,
 		ZombieCPUP95MC:       def.ZombieCPUP95MC,
 		ZombieCPUPeakMC:      def.ZombieCPUPeakMC,
 		IdleCPUUtilPct:       s.Thresholds.CPUUtilizationPercent,
@@ -133,12 +139,18 @@ func idleConfigFromSettings(s IdleDetectionSettings) IdleConfig {
 		ExcludeNamespaces:    append([]string(nil), s.Exclusions.Namespaces...),
 		ExcludeWorkloadTypes: append([]string(nil), s.Exclusions.WorkloadTypes...),
 	}
+	if s.Thresholds.ZombieCPUMillicores > 0 {
+		out.ZombieCPUP95MC = s.Thresholds.ZombieCPUMillicores
+	}
+	if s.Thresholds.ZombiePeakMillicores > 0 {
+		out.ZombieCPUPeakMC = s.Thresholds.ZombiePeakMillicores
+	}
 	cfg := config.GetConfig()
 	if cfg != nil {
-		if cfg.IdleZombieCPUMillicores > 0 {
+		if _, ok := os.LookupEnv("ROS_IDLE_ZOMBIE_CPU_MILLICORES"); ok && cfg.IdleZombieCPUMillicores > 0 {
 			out.ZombieCPUP95MC = cfg.IdleZombieCPUMillicores
 		}
-		if cfg.IdleZombiePeakMillicores > 0 {
+		if _, ok := os.LookupEnv("ROS_IDLE_ZOMBIE_PEAK_MILLICORES"); ok && cfg.IdleZombiePeakMillicores > 0 {
 			out.ZombieCPUPeakMC = cfg.IdleZombiePeakMillicores
 		}
 	}
@@ -292,6 +304,12 @@ func applyIdleStoredOverlay(dest *IdleDetectionSettings, stored *idleDetectionSt
 	if stored.GPUDRAMActiveBasisPoints != nil {
 		dest.Thresholds.GPUDRAMActiveBasisPoints = *stored.GPUDRAMActiveBasisPoints
 	}
+	if stored.ZombieCPUMillicores != nil {
+		dest.Thresholds.ZombieCPUMillicores = *stored.ZombieCPUMillicores
+	}
+	if stored.ZombiePeakMillicores != nil {
+		dest.Thresholds.ZombiePeakMillicores = *stored.ZombiePeakMillicores
+	}
 	if len(stored.ExcludeNamespaces) > 0 {
 		dest.Exclusions.Namespaces = append(dest.Exclusions.Namespaces, stored.ExcludeNamespaces...)
 	}
@@ -373,9 +391,11 @@ var idleUpdateKeyToEnv = map[string]string{
 	"memory_utilization_percent":   "ROS_IDLE_MEMORY_UTILIZATION_PCT",
 	"burst_ratio":                  "ROS_IDLE_BURST_RATIO",
 	"minimum_observation_days":     "ROS_IDLE_MIN_OBSERVATION_DAYS",
-	"gpu_sm_active_basis_points":   "ROS_IDLE_GPU_SM_ACTIVE_BP",
-	"gpu_dram_active_basis_points": "ROS_IDLE_GPU_DRAM_ACTIVE_BP",
-	"exclude_namespaces":           "ROS_IDLE_EXCLUDE_NAMESPACES",
+		"gpu_sm_active_basis_points":   "ROS_IDLE_GPU_SM_ACTIVE_BP",
+		"gpu_dram_active_basis_points": "ROS_IDLE_GPU_DRAM_ACTIVE_BP",
+		"zombie_cpu_millicores":        "ROS_IDLE_ZOMBIE_CPU_MILLICORES",
+		"zombie_peak_millicores":       "ROS_IDLE_ZOMBIE_PEAK_MILLICORES",
+		"exclude_namespaces":           "ROS_IDLE_EXCLUDE_NAMESPACES",
 	"exclude_workload_types":       "ROS_IDLE_EXCLUDE_WORKLOAD_TYPES",
 }
 
@@ -426,9 +446,11 @@ func validateIdleDetectionUpdate(rawUpdate json.RawMessage) error {
 		"memory_utilization_percent": {},
 		"burst_ratio":                {},
 		"minimum_observation_days":   {},
-		"gpu_sm_active_basis_points": {},
+		"gpu_sm_active_basis_points":   {},
 		"gpu_dram_active_basis_points": {},
-		"exclude_namespaces":         {},
+		"zombie_cpu_millicores":        {},
+		"zombie_peak_millicores":       {},
+		"exclude_namespaces":           {},
 		"exclude_workload_types":     {},
 	}
 	for key, val := range idle {
@@ -516,6 +538,20 @@ func validateIdleThresholdKey(v *fieldValidator, path, key string, val json.RawM
 			return
 		}
 		v.addRangeInt64(path, n, 100, 5000)
+	case "zombie_cpu_millicores":
+		var n int64
+		if json.Unmarshal(val, &n) != nil {
+			v.addConstraint(path, "must be an integer")
+			return
+		}
+		v.addRangeInt64(path, n, 0, 100)
+	case "zombie_peak_millicores":
+		var n int64
+		if json.Unmarshal(val, &n) != nil {
+			v.addConstraint(path, "must be an integer")
+			return
+		}
+		v.addRangeInt64(path, n, 0, 1000)
 	}
 }
 

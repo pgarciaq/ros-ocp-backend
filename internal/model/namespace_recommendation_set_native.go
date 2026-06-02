@@ -48,6 +48,7 @@ type NativeNamespaceRow struct {
 	ConfidenceLevel        *float32      `gorm:"column:confidence_level"`
 	NotificationCodes      SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
 	Stale                  bool          `gorm:"column:stale"`
+	IdleState              string        `gorm:"column:idle_state"`
 
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
 	UpdatedAt         time.Time  `gorm:"column:updated_at"`
@@ -72,6 +73,7 @@ type NativeNamespaceResult struct {
 	Project         string         `json:"project"`
 	SourceID        string         `json:"source_id"`
 	LastReported    string         `json:"last_reported"`
+	IdleState       string         `json:"idle_state"`
 	Recommendations map[string]any `json:"recommendations"`
 }
 
@@ -82,7 +84,7 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.current_memory_request_kib, ns.current_memory_limit_kib,
 	ns.variation_cpu_request_pct, ns.variation_cpu_limit_pct,
 	ns.variation_memory_request_pct, ns.variation_memory_limit_pct,
-	ns.notification_codes, ns.confidence_level, ns.stale,
+	ns.notification_codes, ns.confidence_level, ns.stale, ns.idle_state,
 	ns.monitoring_end_time, ns.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
@@ -332,6 +334,10 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespace
 		rowGroup := grouped[key]
 		first := rowGroup[0]
 
+		idleState := first.IdleState
+		if idleState == "" {
+			idleState = "active"
+		}
 		result := NativeNamespaceResult{
 			ID:              NativeNamespaceID(first.ClusterUUID, first.NamespaceName),
 			ClusterAlias:    first.ClusterAlias,
@@ -339,6 +345,7 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespace
 			Project:         first.NamespaceName,
 			SourceID:        first.SourceID,
 			LastReported:    first.LastReported.Format(time.RFC3339),
+			IdleState:       idleState,
 			Recommendations: make(map[string]any),
 		}
 

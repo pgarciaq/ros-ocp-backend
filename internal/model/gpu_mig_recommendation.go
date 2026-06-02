@@ -13,6 +13,7 @@ type GPUMIGRecommendationEntry struct {
 	CurrentGPUProfile     string  `json:"current_gpu_profile,omitempty"`
 	Classification        string  `json:"gpu_classification"`
 	Confidence            float32 `json:"confidence"`
+	GPUIdleState          string  `json:"gpu_idle_state,omitempty"`
 }
 
 // GPUMIGListMeta paginates the MIG-focused GPU list.

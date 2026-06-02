@@ -51,7 +51,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
-| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers; `filter[engine]` on VM/node. VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. |
+| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, quality, and history list endpoints. VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
 
 ### Validation priority (suggested order)
 
@@ -1818,13 +1818,13 @@ See [Configuration](../configuration.md) and [Configurability](../architecture/c
 
 ## Dual engine testing (cost vs performance)
 
-Both engines are computed on every ingest and stored separately. See [Dual Engine (Cost vs Performance)](../features/dual-engine.md).
+Both engines are computed on every ingest and stored separately. See [Container recommendations](../features/container-recommendations.md) (dual-engine section) and the NISE fixture [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md).
 
 | Resource | API filter | What to compare |
 |----------|------------|-----------------|
-| **VM** | `filter[engine]=cost` or `filter[engine]=performance` | Cost uses CPU **P95**; performance **P99**. Performance may hold downsizes (**49**). |
+| **VM** | `filter[engine]=cost` or `filter[engine]=performance` | Cost uses CPU **P95**; performance **P99**. Performance may hold downsizes (**49**). List rows expose `metadata.engine`. |
 | **Node** | `filter[engine]=cost` or `performance` on `/nodes` | Cost targets **80%** util; performance **55%** with stricter consolidation. Pod headroom **< 15%** blocks `node_count_reduction`. |
-| **Container / namespace** | No list filter — both nested under `recommendation_terms.*.recommendation_engines` | Pick `cost` vs `performance` in JSON for same workload. |
+| **Container / namespace** | `filter[engine]=cost` or `performance` on list/detail | Omitted engine is not returned under `recommendation_terms.*.recommendation_engines`. Without filter, both `cost` and `performance` are nested. |
 | **Fleet savings** | `GET .../savings-summary?engine=cost&term=medium` | `term` query param (`short` \| `medium` \| `long`); defaults to **medium**. Node totals align with `node_recommendations` for that term. |
 
 ```bash
@@ -2052,6 +2052,8 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 | NISE VM YAML | `~/dev/koku/nise/examples/ocp_vm/vm_static_data.yml` |
 | Koku dev environment | `koku/AGENTS.md` (Full Development Environment) |
 | cost-onprem chart | `cost-onprem-chart/CLAUDE.md` |
+| **IQE requirement registration** | [iqe-requirements-registration.md](./iqe-requirements-registration.md) |
+| IQE on-prem setup | `cost-onprem-chart/docs/development/iqe-testing-setup.md` |
 | ROS compose | `ros-ocp-backend/scripts/docker-compose.yml` |
 | Koku compose | `koku/docker-compose.yml` |
 | Makefile targets | `ros-ocp-backend/Makefile` (`run-api-server`, `run-processor`, `db-migrate`, `test`) |

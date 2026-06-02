@@ -102,6 +102,11 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			}
 			gpuMap := make(map[string]*model.GPURecommendation, len(recs))
 			for _, rec := range recs {
+				if rec.GPUIdleState != engine.IdleStateActive && costData != nil {
+					if rate := engine.GPUMonthlyRate(costData); rate > 0 {
+						rec.GPUEstimatedWasteCents = money.USDToCents(rate)
+					}
+				}
 				gpuRec := toGPURecommendation(rec)
 				gpuRec.Currency = blockCurrency
 				gpuMap[rec.Term] = gpuRec
@@ -180,6 +185,23 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 	if rec.TimeSlicingReplicas > 0 {
 		r := rec.TimeSlicingReplicas
 		result.TimeSlicingReplicas = &r
+	}
+	if rec.GPUIdleState != "" {
+		result.GPUIdleState = string(rec.GPUIdleState)
+	} else {
+		result.GPUIdleState = "active"
+	}
+	if rec.GPUIdleSince != nil {
+		s := rec.GPUIdleSince.UTC().Format("2006-01-02")
+		result.GPUIdleSince = &s
+	}
+	if rec.GPUIdleDurationDays > 0 {
+		d := rec.GPUIdleDurationDays
+		result.GPUIdleDurationDays = &d
+	}
+	if rec.GPUEstimatedWasteCents > 0 {
+		cents := rec.GPUEstimatedWasteCents
+		result.GPUEstimatedWasteCents = &cents
 	}
 	return result
 }

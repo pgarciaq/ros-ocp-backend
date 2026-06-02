@@ -103,6 +103,9 @@ func PutIdleDetectionSettings(c echo.Context) error {
 	}
 
 	engine.TriggerThresholdRecalculationAsync(pool, orgID, "container")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "gpu")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "namespace")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "node")
 
 	return c.JSON(http.StatusOK, resp)
 }
@@ -146,5 +149,8 @@ func DeleteIdleDetectionSettings(c echo.Context) error {
 		})
 	}
 	engine.TriggerThresholdRecalculationAsync(pool, orgID, "container")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "gpu")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "namespace")
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "node")
 	return c.JSON(http.StatusOK, resp)
 }

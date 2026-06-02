@@ -21,6 +21,10 @@ type GPURecommendation struct {
 	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
 	EstimatedMonthlyGPUSavings         *money.SavingsObject `json:"estimated_monthly_gpu_savings,omitempty"`
 	EstimatedMonthlyTimeslicingSavings *money.SavingsObject `json:"estimated_monthly_timeslicing_savings,omitempty"`
+	GPUIdleState                          string   `json:"gpu_idle_state,omitempty"`
+	GPUIdleSince                          *string  `json:"gpu_idle_since,omitempty"`
+	GPUIdleDurationDays                   *int     `json:"gpu_idle_duration_days,omitempty"`
+	GPUEstimatedWasteCents                *int64   `json:"gpu_estimated_waste_cents,omitempty"`
 	Currency                              string   `json:"currency,omitempty"`
 	Notifications                         []int16  `json:"notifications,omitempty"`
 	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`

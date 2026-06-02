@@ -723,6 +723,15 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 
 	applyRecommendationStaleFilter(c, queryParams, "ns")
 
+	if idleVals := queryparams.IncludeValues(c, "idle_state"); len(idleVals) > 0 {
+		states, err := model.IdleStateFilterValues(strings.Join(idleVals, ","))
+		if err != nil {
+			errs = append(errs, err)
+		} else if len(states) > 0 {
+			queryParams["ns.idle_state IN ?"] = states
+		}
+	}
+
 	if err := applyNativeEngineQueryFilter(c, queryParams, "ns.engine"); err != nil {
 		errs = append(errs, err)
 	}

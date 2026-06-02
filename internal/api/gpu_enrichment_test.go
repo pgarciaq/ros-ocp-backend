@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -106,6 +107,28 @@ func TestToGPURecommendation_WithNotifications(t *testing.T) {
 	got := toGPURecommendation(rec)
 	assert.NotNil(t, got)
 	assert.Equal(t, []int16{301, 302, 303}, got.Notifications)
+}
+
+func TestToGPURecommendation_IdleFields(t *testing.T) {
+	since := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	rec := &engine.GPURec{
+		GPUModelName:           "H100",
+		Classification:         engine.GPUClassIdle,
+		GPUIdleState:           engine.IdleStateZombie,
+		GPUIdleSince:           &since,
+		GPUIdleDurationDays:    12,
+		GPUEstimatedWasteCents: 50000,
+	}
+
+	got := toGPURecommendation(rec)
+	require.NotNil(t, got)
+	assert.Equal(t, "zombie", got.GPUIdleState)
+	require.NotNil(t, got.GPUIdleSince)
+	assert.Equal(t, "2026-04-01", *got.GPUIdleSince)
+	require.NotNil(t, got.GPUIdleDurationDays)
+	assert.Equal(t, 12, *got.GPUIdleDurationDays)
+	require.NotNil(t, got.GPUEstimatedWasteCents)
+	assert.Equal(t, int64(50000), *got.GPUEstimatedWasteCents)
 }
 
 // --- E-T17: Container cross-reference in toGPURecommendation ---
