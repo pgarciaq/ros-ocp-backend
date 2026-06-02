@@ -127,8 +127,8 @@ the next predictable peak.
 
 **Design references (planned only):**
 
-- [Seasonality plugin design](../docs/design/seasonality-plugin.md)
-- [Product overview](features/seasonality.md)
+- [Seasonality plugin design](design/seasonality-plugin.md)
+- [Product overview (docs-site)](../docs-site/features/seasonality.md)
 
 ### Not Planned for Current MVP
 
@@ -158,7 +158,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
-| Savings stale after cost model change (degraded) | On-prem with Koku→ROS notification configured, cost model updates trigger `POST /internal/recalculate-savings` for **container, node, PVC, quota, and cluster-quota**. If notification fails or ROS recalc is disabled, persisted savings reflect rates from the last ingestion only | Low | REQ-7.5 |
+| Savings stale until re-ingestion | **Mitigated** when `ROS_SAVINGS_RECALCULATION_ENABLED=true` (default) and Koku calls `POST /internal/recalculate-savings` after cost model updates ([`ros_savings_recalc.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) must be deployed in koku). Without that integration, container/node/PVC/quota/cluster-quota savings still reflect rates from the last ingestion only | Low — mitigated with recalc; legacy path by design | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
@@ -594,7 +594,7 @@ UI, docs, and API clients must keep them distinct.
 - Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
 - VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.
 
-See [ui-integration-guide.md](ui-integration-guide.md#gpu-time-slicing-separate-endpoint) and [configurability.md](architecture/configurability.md).
+See [ui-integration-guide.md](ui-integration-guide.md#gpu-time-slicing-separate-endpoint) and [configurability.md](architecture/configurability.md) (container `ROS_GPU_TIMESLICING_*` vs VM `ROS_VM_GPU_TIMESLICE_*`).
 
 #### ROS MIG recommendations UI (not shipped)
 
@@ -616,7 +616,7 @@ Optimizations UX until backend contracts were settled; cost accounting shipped f
 **What would be needed:** New koku-ui Optimizations views (summary cards, MIG table, time-slicing
 table) wired to the ROS endpoints above. Intended patterns are in
 [ui-integration-guide.md](ui-integration-guide.md#12-gpu-recommendations). Tracked as deferred
-items **5** and **9** below.
+item **5** and **9** below.
 
 #### GPU E2E and IQE test data prerequisite
 
@@ -773,9 +773,7 @@ The **`quota`** plugin (Phase 1, priority 35) compares ResourceQuota **hard** an
 API: `GET /api/cost-management/v1/recommendations/openshift/quota/`. See
 [quota-recommendations.md](features/quota-recommendations.md).
 
-**Implemented (namespace quota):** Storage and pod quota resources, per-ResourceQuota `quota_name`
-identity, `capacity_freed.storage_request_bytes` / `pods_freed`, and `filter[quota_name]`.
-Object-count quotas remain visibility-only (risk + notifications, no tighten/savings).
+**Operator dependency (namespace quota):** Non-compute quota resources (`requests.storage`, `pods`, `count/*`) and per-`ResourceQuota` object name are **not** in the operator CSV today — PromQL sums by namespace only. See [quota-recommendations.md](features/quota-recommendations.md#future-work-namespace-quota).
 
 ### ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
 
@@ -793,49 +791,15 @@ deployment for signals to fully align.
 
 **Operator dependency (CRQ):** Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without `namespaces` still use a cluster-wide namespace-quota aggregate.
 
-**Object-count quotas (Gap 9 — by design):** `count/*` resources (for example `count/deployments.apps`,
-`count/services`) are ingested for **risk classification and alerting only** — they affect
-`risk_level` and notifications but are **not** exposed in API `utilization` fields or
-`order_by=utilization`. Code **72** fires when `used >= hard` (including object counts);
-codes **70** and **73** fire when `risk_level` is `high`. Object counts do **not** produce
-tighten/raise recommendations or `estimated_savings`. Rationale: admission-control guardrails
-without a workload-derived target or cost-model rate; lowering object limits risks production
-outages.
-See [ClusterResourceQuota — Object-count quotas](features/cluster-resource-quota.md#object-count-quotas-risk-and-notifications-only)
-and [ResourceQuota — Object-count resources](features/quota-recommendations.md#object-count-resources).
+**Object-count quotas (Gap 9 — by design):** `count/*` resources affect **risk_level** and
+notifications only — not API `utilization` fields or `order_by=utilization`. Code **72** when
+`used >= hard`; codes **70**/**73** when `risk_level` is `high`. No tighten/raise or savings.
+See [cluster-resource-quota.md](features/cluster-resource-quota.md#object-count-quotas-risk-and-notifications-only).
 
-### Quota extended resources (future work)
-
-**Status:** Planned / Future Work — **not implemented** in the `quota` or `cluster-quota` plugins.
-
-Extended ResourceQuota and ClusterResourceQuota resource types are **not** collected or analyzed
-for recommendations today. Examples:
-
-| Resource | Example quota key | Collected? |
-|----------|-------------------|------------|
-| Ephemeral storage | `requests.ephemeral-storage` | No |
-| GPU devices | `nvidia.com/gpu`, vendor GPU resources | No |
-| Hugepages | `hugepages-2Mi`, `hugepages-1Gi` | No |
-| Custom device plugins | Cluster-specific extended resources | No |
-
-**Prometheus already exposes** hard/used values on `kube_resourcequota` and
-`openshift_clusterresourcequota_usage` when clusters define these limits. The gap is
-**koku-metrics-operator query scope** (which series are written to ROS CSVs), not missing
-cluster telemetry.
-
-**Priority when implemented:**
-
-| Priority | Resource | Rationale |
-|----------|----------|-----------|
-| **High** | Ephemeral storage | Common quota dimension; hard/used visibility valuable even before usage-based tighten (cadvisor usage unreliable through OCP 4.21 — REQ-8.2) |
-| **Medium** | GPU quota | GPU **workload** recommendations ship via the `gpu` plugin; GPU **quota** hard/used would follow visibility-only pattern unless a quota-specific cost rate exists |
-| **Low** | Hugepages, custom device-plugin resources | Niche; demand-driven |
-
-**Planned behavior:** Same pattern as [object-count quotas](#clusterresourcequota-recommendations-req-84b--implemented) —
-visibility + alerting (utilization %, risk, blocking notifications) unless Koku exposes a
-matching cost-model rate. No tighten/raise or savings without a workload-derived target.
-
-Design detail: [ClusterResourceQuota — Extended resources](features/cluster-resource-quota.md#extended-resources-future-work).
+**Extended resources (Gap 10 — future work):** `requests.ephemeral-storage`, GPU quota,
+hugepages, and custom device-plugin resources are not collected. Prometheus exposes them;
+operator query scope is the gap. See
+[cluster-resource-quota.md — Extended resources](features/cluster-resource-quota.md#extended-resources-future-work).
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
@@ -874,18 +838,17 @@ days-to-full for capacity planning.
 `filter[cluster]`, `filter[project]`, `filter[recommendation_type]`, `filter[term]`,
 `filter[storageclass]`, `order_by`/`order_how`, and pagination.
 `GET /recommendations/openshift/pvcs/detail` returns all terms plus daily usage history.
-List and detail responses include `mounted_by` (last observed mounting pod from storage CSV).
 Responses include `estimated_monthly_savings` when Masu storage rates are available.
 
-**VM–PVC correlation:** The operator **storage** CSV (`cm-openshift-storage-usage`) includes
-`vm_name` when the mounting `pod` is a virt-launcher (KubeVirt VM name from
-`kube_pod_labels` or pod-name parsing). ROS ingests that column into `daily_pvc_digests`
-and exposes it on PVC list/detail responses as `vm_name` (migration **000124**), alongside
-`mounted_by` (last observed pod from migration **000114**). VM shared-storage notifications
-([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) still use a namespace +
-resource-profile peer heuristic until VM-side PVC names are correlated via digest lookups.
-The cost VM CSV (`cm-openshift-vm-usage`) still exposes `vm_persistentvolumeclaim_name` for
-Koku cost paths; ROS VM usage CSV does not yet ingest per-PVC names from that column.
+**VM–PVC correlation (known limitation):** The koku-metrics-operator **cost** VM CSV
+(`cm-openshift-vm-usage`) includes `vm_persistentvolumeclaim_name`, and the **storage**
+CSV includes a `pod` column (often a `virt-launcher-*` name). ROS does not ingest either
+field today: `ParseVMCSVRows` ignores PVC/pod columns on VM usage, and PVC ingestion
+did not persist `pod` until migration **000114**. VM shared-storage notifications
+([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) therefore use a
+namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
+requires ROS to ingest `pod` on storage digests and either `vm_persistentvolumeclaim_name`
+or `exported_pod` on VM digests (operator ROS VM CSV would need the latter column added).
 
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
@@ -895,7 +858,7 @@ Requires migration **000070**. See [architecture/cost-integration.md](./architec
 Oversized recommendations include `resize_note` on list and detail responses (for example:
 "Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
 provisioning a smaller PVC, migrating data, and deleting the original. See
-[features-f27-pvc-rightsizing.md](../docs/features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
+[features-f27-pvc-rightsizing.md](./features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
 
 **Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 
@@ -928,7 +891,7 @@ manages per-org thresholds and cost rate with env-var locking.
 **UI status:** Not implemented. No snapshot recommendations view or settings
 page in koku-ui.
 
-See [snapshot staleness](features/snapshot-staleness.md)
+See [features-f-snapshot-staleness.md](./features-f-snapshot-staleness.md)
 for full design details.
 
 ---
@@ -982,12 +945,11 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 (opaque base64url cursor), with `meta.has_next` and `meta.next_cursor`. Offset/limit remains
 as a backward-compatible fallback on those two routes only.
 
-**Authoritative public reference:** [API Pagination](pagination.md) — full endpoint matrix,
+**Authoritative public reference:** [API Pagination](../docs-site/pagination.md) — full endpoint matrix,
 API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
-thresholds for future keyset work.
+thresholds for future keyset work. See also [operations/query-performance.md](operations/query-performance.md).
 
-**Koku** report/tag APIs use Django REST Framework pagination in a separate service; not
-documented on that page.
+**Koku** report/tag APIs use Django REST Framework pagination in a separate service.
 
 ---
 
@@ -999,16 +961,15 @@ missing prerequisites, not a backend defect.
 
 | Prerequisite | Symptom when missing | Fix |
 |--------------|----------------------|-----|
-| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#prerequisites)) |
+| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing — Prerequisites](../docs-site/features/gpu-time-slicing.md#prerequisites)) |
 | **Namespace label** `cost_management_optimizations: "true"` (or legacy `insights_cost_management_optimizations`) | Cost CSV has GPUs; ROS `gpu_container_digests` empty for namespace | Label GPU workload namespaces; wait for operator ROS upload + ingest |
-| **GPU cost model rate** `gpu_core_usage_per_hour` | Recommendations with utilization and replicas but no `total_node_savings_usd` / `estimated_monthly_timeslicing_savings` | Assign cost model with GPU rates to the cluster |
+| **GPU cost model rate** `gpu_core_usage_per_hour` | Recommendations with utilization and replicas but no dollar savings fields | Assign cost model with GPU rates to the cluster |
 | **`gpu` plugin enabled** (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) | `404` on `/recommendations/openshift/gpu/*` | Include `gpu` in enabled plugins (default) |
 
 **E2E / IQE:** GPU suites skip on CPU-only clusters — see
 [GPU E2E and IQE test data prerequisite](#gpu-e2e-and-iqe-test-data-prerequisite).
 
-Authoritative operator and threshold detail:
-[features/gpu-time-slicing.md](features/gpu-time-slicing.md).
+Authoritative detail: [docs-site/features/gpu-time-slicing.md](../docs-site/features/gpu-time-slicing.md).
 
 ---
 
@@ -1022,8 +983,8 @@ Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work
 
 | Endpoint | Field | Meaning |
 |----------|-------|---------|
-| `GET /recommendations/openshift/gpu` | `timeslicing.count` (**N**) | **Data coverage** — distinct `(cluster, node, gpu_model)` triples in `gpu_container_digests` with fresh telemetry ([`CountNodeGPUTriples`](../../internal/engine/node_gpu_triples.go)). Does not run the time-slicing engine. |
-| `GET /recommendations/openshift/gpu/timeslicing` | `meta.count` (**M**) | **Actionable recommendations** — groups where [`ComputeNodeTimeslicingRec`](../../internal/engine/gpu_timeslicing.go) returns a row (threshold, majority, replica, MIG, freshness, confidence gates). |
+| `GET /recommendations/openshift/gpu` | `timeslicing.count` (**N**) | **Data coverage** — distinct `(cluster, node, gpu_model)` triples in `gpu_container_digests` with fresh telemetry (`CountNodeGPUTriples`). Does not run the time-slicing engine. |
+| `GET /recommendations/openshift/gpu/timeslicing` | `meta.count` (**M**) | **Actionable recommendations** — groups where `ComputeNodeTimeslicingRec` returns a row (threshold, majority, replica, MIG, freshness, confidence gates). |
 
 **N ≥ M** (often **N > M**). Summary may be non-zero while list `data` is empty.
 
@@ -1063,8 +1024,8 @@ actionable node-level guidance.
 - **Section visibility / navigation** → summary `timeslicing.count`
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
-See [GPU time-slicing — Summary vs list count semantics](features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](ui-integration-guide.md#which-count-to-use-summary-vs-list).
+See docs-site [Summary vs list count semantics](../docs-site/features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
+[UI Integration Guide](../docs-site/ui-integration-guide.md#which-count-to-use-summary-vs-list).
 
 ### Resolution options (if product requires alignment later)
 
