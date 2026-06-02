@@ -135,6 +135,20 @@ endpoints use a Kruize-compatible shape with `recommendation_terms` and
 
 Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container--namespace).
 
+### Pagination
+
+Container lists support **keyset pagination** via `?after=<meta.next_cursor>` for stable
+iteration over large fleets. Offset pagination (`limit` / `offset`) remains available
+for legacy clients. See [API Pagination](../pagination.md) for the full contract,
+client patterns, and when to prefer cursor mode over offset.
+
+### CSV export
+
+Bulk export uses `?format=csv` or `Accept: text/csv` on the list endpoint. The response
+is `text/csv` with one row per container × term × engine (cluster, project, workload,
+container, savings, idle state, and recommendation values). The same filters and sort
+keys apply as the JSON list. Details: [UI Integration Guide — CSV export](../ui-integration-guide.md).
+
 ## Configurable thresholds
 
 Tenant overrides via
@@ -158,6 +172,7 @@ Full env var catalog: [Configurability Reference](../architecture/configurabilit
 
 ## Related
 
+- [API Pagination](../pagination.md) — Keyset (`after`) vs offset pagination
 - [Savings Estimations](savings-estimations.md) — Dollar impact per container
 - [Business Hours](business-hours.md) — Schedule-aware percentiles
 - [History & Quality](history-and-quality.md) — Track recommendation changes over time
