@@ -328,6 +328,51 @@ func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
 	assert.InDelta(t, 0.75, resp["cost_target_utilization"].(float64), 1e-9)
 }
 
+func TestPutThresholdSettings_Node_TriggersAsyncRecalculation(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-recalc-node"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	var mu sync.Mutex
+	var triggeredOrg, triggeredType string
+	engine.SetThresholdRecalcHookForTest(func(oid, rt string) {
+		mu.Lock()
+		triggeredOrg = oid
+		triggeredType = rt
+		mu.Unlock()
+	})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"underutil_threshold": 0.28}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, orgID, triggeredOrg)
+	assert.Equal(t, "node", triggeredType)
+}
+
+func TestPutThresholdSettings_Node_ForbiddenWhenEnvLocksField(t *testing.T) {
+	t.Setenv("ROS_NODE_UNDERUTIL_THRESHOLD", "0.30")
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-forbidden-node"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	body := bytes.NewReader([]byte(`{"underutil_threshold": 0.25}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
 func TestPutThresholdSettings_Node_IdleZombie_PersistsAndReturns(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-put-node-idle-zombie"
