@@ -1228,6 +1228,10 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
 - **Per-container recommendations only:** Each row is an independent MIG profile suggestion.
   The API does not propose consolidating multiple containers onto fewer GPUs to free a
   physical GPU (cluster-wide bin-packing is future work).
+- **ROS Optimizations UI not shipped:** No koku-ui pages call `GET .../gpu`, `/gpu/mig`, or
+  `/gpu/timeslicing` yet. Koku cost UI may expose `reports/openshift/gpu/mig_profiles/` (spend
+  drill-down) — that is not a substitute for ROS recommendation fields on this section’s
+  endpoints. See [known-issues.md § ROS MIG recommendations UI](known-issues.md#ros-mig-recommendations-ui-not-shipped).
 
 | Parameter | Description |
 |-----------|-------------|
@@ -1263,6 +1267,10 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
 Container list rows also embed GPU data under `gpu.{term}` when the GPU plugin is enabled.
 
 ### UI Integration Recommendations
+
+> **Status:** The patterns below are the intended koku-ui design. **No Optimizations pages
+> consume these ROS GPU endpoints today** — implement when product prioritizes ROS GPU UX.
+> Backend APIs are ready; see [known-issues.md](known-issues.md#ros-mig-recommendations-ui-not-shipped).
 
 - Use the GPU summary endpoint for dashboard **Card** widgets showing MIG vs time-slicing counts with links to detailed views.
 - Show MIG recommendations in a **Table**: container, namespace, cluster, GPU model, current allocation, recommended MIG profile, savings.

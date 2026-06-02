@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (GPU MIG Gap 5 limitations)
+Last updated: 2026-06-02 (GPU MIG Gap 5 — UI and test-data gaps)
 
 ---
 
@@ -542,9 +542,10 @@ See [quota-recommendations.md](features/quota-recommendations.md#roadmap--future
 
 ### GPU MIG — Known limitations (Gap 5)
 
-Phase 12 documents two **intentional** limits on MIG recommendations. They are acceptable
-for current fleet sizes and are tracked as future work (deferred table items **2** and **3**
-below), not as defects.
+Phase 12 documents **intentional** limits on MIG recommendations — backend scale trade-offs,
+missing product UI, and test-data prerequisites. Backend/API gaps **2** and **3** (pagination,
+multi-GPU consolidation) are acceptable at current fleet sizes and tracked in the deferred table
+below, not as defects.
 
 #### MIG list in-memory pagination
 
@@ -580,6 +581,52 @@ the operator), a node-level consolidation model, and API/notification surfaces f
 "request fewer GPUs" or "co-locate these workloads." VMs already expose multi-GPU guidance
 via notification **54**; container path would follow deferred item **2** prerequisites.
 
+#### ROS MIG recommendations UI (not shipped)
+
+**koku-ui** has no Optimizations pages that consume the ROS GPU recommendation APIs:
+
+- `GET /recommendations/openshift/gpu` — strategy summary (MIG vs time-slicing counts and links)
+- `GET /recommendations/openshift/gpu/mig` — per-container MIG profile, classification, confidence
+- `GET /recommendations/openshift/gpu/timeslicing` — node-level sharing guidance
+
+The **cost-side** MIG drill-down (`GET /reports/openshift/gpu/mig_profiles/` in Koku, often
+behind an Unleash flag) covers slice-level **spend** attribution. It does **not** surface ROS
+recommendation fields (`recommended_gpu_profile`, `gpu_classification`, `gpu_confidence`,
+`estimated_monthly_gpu_savings`, notification codes **10** / **26**–**28** / **36**).
+
+**Why this is acceptable now:** ROS GPU list/detail APIs are stable, OpenAPI-documented, and
+validated via API clients, Bruno, and IQE where GPU data exists. Product deferred the
+Optimizations UX until backend contracts were settled; cost accounting shipped first.
+
+**What would be needed:** New koku-ui Optimizations views (summary cards, MIG table, time-slicing
+table) wired to the ROS endpoints above. Intended patterns are in
+[ui-integration-guide.md](ui-integration-guide.md#12-gpu-recommendations). Tracked as deferred
+items **5** and **9** below.
+
+#### GPU E2E and IQE test data prerequisite
+
+GPU-focused **E2E** (`cost-onprem-chart` `test_gpu_mig_recommendations_flow`, etc.) and **IQE**
+(`iqe-ros-ocp-plugin` / `iqe-cost-management-plugin` GPU/MIG tests) **skip or assert empty**
+when the cluster has no GPU ROS payloads ingested or when `GET .../gpu` reports `mig.count == 0`.
+That is expected — not a backend bug.
+
+**Why this is acceptable now:** Tests gate on real telemetry rather than fabricating API
+responses. Most CI/staging clusters are CPU-only; skipping avoids false failures.
+
+**What is needed for green GPU test runs (operational, not code):**
+
+1. Generate data with **nise** using `--ros-ocp-info` and GPU/MIG workloads (e.g.
+   `examples/ros_ocp/ocp_static_data.yml` with `mig.count` > 0 profiles).
+2. Package typed ROS CSVs (not combined `openshift_report.*.csv` only) and ingest through the
+   normal operator → listener → ros-processor path.
+3. Ensure the operator collects DCGM profiling metrics on GPU-capable nodes.
+4. Wait for recommendation pipeline completion, then verify `mig.count > 0` before E2E/IQE GPU
+   suites.
+
+See `docs/archive/gpu-recommendations-test-plan.md` and
+`cost-onprem-chart/docs/development/skipped-iqe-tests.md` (GPU skip groups). Tracked as deferred
+item **10** below.
+
 ### GPU: Deferred / Future Work
 
 The following items are **not** shipping defects. They are tracked enhancements
@@ -593,6 +640,8 @@ deferred until prerequisites or customer scale justify the investment. Gap 5 det
 | **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` (see [Gap 5](#gpu-mig--known-limitations-gap-5)) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
 | **4** | **MIG + time-slicing combined strategy** — time-slicing within MIG partitions instead of mutually exclusive strategies in `partitionContainers` (MIG recs currently exclude time-slicing candidates) | Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node | Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand. | MIG instance scheduling model; operator partition telemetry |
 | **5** | **UI for GPU time-slicing recommendations** — frontend views for `GET /recommendations/openshift/gpu/timeslicing` and `GET /recommendations/openshift/gpu/mig` | Cluster admins who want visual guidance on GPU sharing without using the API directly | All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in [ui-integration-guide.md](ui-integration-guide.md). | koku-ui GPU optimizations pages |
+| **9** | **ROS MIG recommendations Optimizations UI** — no koku-ui pages for `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` (see [Gap 5 § ROS MIG recommendations UI](#ros-mig-recommendations-ui-not-shipped)) | FinOps users who need recommended MIG profiles, classification, and confidence in the console | Cost-side MIG **spend** UI exists (`reports/openshift/gpu/mig_profiles/`); ROS **recommendation** UX is a separate product surface. Backend APIs are ready; UI is deferred. | koku-ui Optimizations GPU section per [ui-integration-guide.md](ui-integration-guide.md#12-gpu-recommendations) |
+| **10** | **GPU E2E/IQE data prerequisite** — tests skip without GPU ROS ingest and `mig.count > 0` (see [Gap 5 § GPU E2E and IQE](#gpu-e2e-and-iqe-test-data-prerequisite)) | CI pipelines expecting GPU tests to pass on CPU-only clusters | Not a code gap — operational fixture requirement. Documented so QE knows why GPU suites are skipped. | nise `--ros-ocp-info` + GPU workloads; operator DCGM; full ingest cycle |
 | **6** | **Materialized time-slicing results (performance)** — persist time-slicing recommendations during the recommendation pipeline instead of computing at read-time | Large GPU fleets (1000+ node×model triples) where read-time computation adds latency | Current scale is well within acceptable latency (<50 ms). Materialization adds write-path complexity and staleness concerns. Revisit when GPU fleet sizes grow ~10×. | Pipeline write path; recompute on term or threshold changes |
 | **7** | **Multi-GPU container awareness for time-slicing** — per-device analysis instead of assuming one GPU per container (e.g., 4-GPU ML training pods) | Dedicated ML training clusters with multi-GPU pods | Same prerequisites as deferred item **2** (per-device operator data). Rare workload pattern. Inference workloads remain covered by the 1-GPU assumption. | See deferred item **2**; operator per-device DCGM or `gpu_request_count` |
 | **8** | **GPU summary `timeslicing.count` accuracy** — summary count reflects telemetry triples, not actionable list rows | Dashboards or automation that badge summary counts as “N recommendations ready” | **Intentional trade-off**, not a bug to fix: full engine on every summary request would add significant cost. See [GPU Summary `timeslicing.count` Divergence](#gpu-summary-timeslicingcount-divergence). Use list `meta.count` or notification **36** for actionable items. | Product/UI requirement to align counts (rename, engine-on-summary, or copy-only) |
