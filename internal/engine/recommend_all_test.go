@@ -334,7 +334,7 @@ func TestRecommendAllWorkloads_StaleDetection(t *testing.T) {
 }
 
 func TestIsStaleRecommendation_ClusterLastReportedTakesPrecedence(t *testing.T) {
-	threshold := 72 * time.Hour
+	threshold := 48 * time.Hour
 	now := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
 	oldDigest := time.Date(2026, 5, 19, 0, 0, 0, 0, time.UTC)
 	recentReport := time.Date(2026, 5, 23, 2, 0, 0, 0, time.UTC)
@@ -357,7 +357,7 @@ func TestRecommendAllWorkloads_StaleDetection_RecentClusterReport(t *testing.T) 
 		VALUES (1, $1, 'reship-cluster', 'src-reship', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	// Historical digests ending 5 days ago (older than default 72h threshold).
+	// Historical digests ending 5 days ago (older than default 48h threshold).
 	testutil.SeedDigestSeries(t, pool, 3, 200, 10, 524288, 1024)
 	end := testutil.BaseDate.AddDate(0, 0, 2)
 	results, err := RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, OOMConfig{})

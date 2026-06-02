@@ -111,7 +111,7 @@ type Config struct {
 	HistoryRetentionDays int `mapstructure:"ROS_HISTORY_RETENTION_DAYS"`
 
 	// Staleness threshold in hours. Recommendations with no new data beyond
-	// this threshold are marked stale. Defaults to 72 (3 days).
+	// this threshold are marked stale. Defaults to 48 (2 days).
 	StalenessThresholdHours int `mapstructure:"ROS_STALENESS_THRESHOLD_HOURS"`
 
 	// Stale archive days. Stale recommendations older than this are deleted
@@ -542,7 +542,7 @@ func initConfig() {
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("ROS_RETENTION_MONTHS", 6)
 	viper.SetDefault("ROS_HISTORY_RETENTION_DAYS", 90)
-	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 72)
+	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 48)
 	viper.SetDefault("ROS_STALE_ARCHIVE_DAYS", 30)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
@@ -772,6 +772,8 @@ func initConfig() {
 	// Legacy env names kept for backward compatibility.
 	_ = viper.BindEnv("KubernetesSATokenPath", "KUBERNETES_SA_TOKEN_PATH", "KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH")
 	_ = viper.BindEnv("CSVDownloadTimeoutSecs", "ROS_CSV_DOWNLOAD_TIMEOUT_SECS", "ROS_CSV_DOWNLOAD_TIMEOUT_SECONDS")
+	// Requirements spec name; ROS_STALENESS_THRESHOLD_HOURS remains the primary env var.
+	_ = viper.BindEnv("ROS_STALENESS_THRESHOLD_HOURS", "ROS_STALENESS_THRESHOLD_HOURS", "ROS_STALE_DATA_THRESHOLD_HOURS")
 
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf("config: cannot unmarshal configuration: %v", err)
@@ -792,8 +794,8 @@ func validateLoadedConfig(c *Config) {
 		c.MaxLookbackDays = 14
 	}
 	if c.StalenessThresholdHours <= 0 {
-		log.Printf("config: ROS_STALENESS_THRESHOLD_HOURS (%d) is invalid; using 72", c.StalenessThresholdHours)
-		c.StalenessThresholdHours = 72
+		log.Printf("config: ROS_STALENESS_THRESHOLD_HOURS (%d) is invalid; using 48", c.StalenessThresholdHours)
+		c.StalenessThresholdHours = 48
 	}
 	if c.StaleArchiveDays <= 0 {
 		log.Printf("config: ROS_STALE_ARCHIVE_DAYS (%d) is invalid; using 30", c.StaleArchiveDays)

@@ -545,7 +545,7 @@ func sumOOMCounts(rows []DigestRow) int64 {
 }
 
 // DefaultStalenessThreshold is used when ROS_STALENESS_THRESHOLD_HOURS is not set.
-const DefaultStalenessThreshold = 3 * 24 * time.Hour // 72 hours
+const DefaultStalenessThreshold = 48 * time.Hour
 
 // loadClusterLastReportedAt returns clusters.last_reported_at for org+cluster, or zero time if unknown.
 func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) time.Time {
