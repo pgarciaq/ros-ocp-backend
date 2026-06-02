@@ -46,3 +46,72 @@ func TestNodeUtilizationDetailFromRec_FlattensPrimaryFields(t *testing.T) {
 	require.NotNil(t, detail.Notifications)
 	assert.Contains(t, detail.Notifications, "stranded_resources")
 }
+
+func TestNodeUtilizationDetailFromRec_AggregatesAllTermsAndEngines(t *testing.T) {
+	rec := model.NodeUtilizationRec{
+		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
+			"medium_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{
+						Notifications: map[string]notifications.NotificationEntry{
+							"stranded_resources": {Code: 12},
+						},
+					},
+				},
+			},
+			"short_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Performance: &model.NodeUtilizationEngineRec{
+						Notifications: map[string]notifications.NotificationEntry{
+							"node_underutilized": {Code: 11},
+						},
+					},
+				},
+			},
+			"long_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{
+						Notifications: map[string]notifications.NotificationEntry{
+							"no_cost_data": {Code: 25},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	detail := nodeUtilizationDetailFromRec(rec)
+	require.NotNil(t, detail.Notifications)
+	assert.Contains(t, detail.Notifications, "stranded_resources")
+	assert.Contains(t, detail.Notifications, "node_underutilized")
+	assert.Contains(t, detail.Notifications, "no_cost_data")
+}
+
+func TestNodeUtilizationDetailFromRec_DeduplicatesBySeverity(t *testing.T) {
+	rec := model.NodeUtilizationRec{
+		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
+			"long_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{
+						Notifications: map[string]notifications.NotificationEntry{
+							"overcommit": {Code: 12, Type: "WARNING"},
+						},
+					},
+				},
+			},
+			"short_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{
+						Notifications: map[string]notifications.NotificationEntry{
+							"overcommit": {Code: 3, Type: "CRITICAL"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	detail := nodeUtilizationDetailFromRec(rec)
+	require.NotNil(t, detail.Notifications)
+	assert.Equal(t, int16(3), detail.Notifications["overcommit"].Code)
+}

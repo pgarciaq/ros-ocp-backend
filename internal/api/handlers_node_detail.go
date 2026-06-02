@@ -8,6 +8,7 @@ import (
 
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // GetNodeUtilizationDetail handles GET /recommendations/openshift/nodes/{node}.
@@ -179,12 +180,62 @@ func nodeUtilizationDetailFromRec(rec model.NodeUtilizationRec) model.NodeUtiliz
 		TrendSlope:            rec.TrendSlope,
 		RecommendationTerms: rec.RecommendationTerms,
 	}
-	if termRec, ok := rec.RecommendationTerms["medium_term"]; ok && termRec.RecommendationEngines != nil {
-		if eng := termRec.RecommendationEngines.Cost; eng != nil && len(eng.Notifications) > 0 {
-			detail.Notifications = eng.Notifications
-		} else if eng := termRec.RecommendationEngines.Performance; eng != nil && len(eng.Notifications) > 0 {
-			detail.Notifications = eng.Notifications
+	detail.Notifications = aggregateNodeUtilizationNotifications(rec)
+	return detail
+}
+
+// nodeUtilDetailTermOrder processes longer windows first so shorter (more recent) terms win on duplicate codes.
+var nodeUtilDetailTermOrder = []string{"long_term", "medium_term", "short_term"}
+
+func aggregateNodeUtilizationNotifications(rec model.NodeUtilizationRec) map[string]notifications.NotificationEntry {
+	all := map[string]notifications.NotificationEntry{}
+	for _, termKey := range nodeUtilDetailTermOrder {
+		termRec, ok := rec.RecommendationTerms[termKey]
+		if !ok || termRec.RecommendationEngines == nil {
+			continue
+		}
+		eng := termRec.RecommendationEngines
+		if eng.Cost != nil {
+			mergeNodeUtilNotificationMaps(all, eng.Cost.Notifications)
+		}
+		if eng.Performance != nil {
+			mergeNodeUtilNotificationMaps(all, eng.Performance.Notifications)
 		}
 	}
-	return detail
+	if len(all) == 0 {
+		return nil
+	}
+	return all
+}
+
+func mergeNodeUtilNotificationMaps(dst, src map[string]notifications.NotificationEntry) {
+	if len(src) == 0 {
+		return
+	}
+	for k, v := range src {
+		if existing, ok := dst[k]; !ok || nodeUtilNotificationHigherPriority(v, existing) {
+			dst[k] = v
+		}
+	}
+}
+
+func nodeUtilNotificationHigherPriority(a, b notifications.NotificationEntry) bool {
+	return nodeUtilNotificationSeverityRank(a) > nodeUtilNotificationSeverityRank(b)
+}
+
+func nodeUtilNotificationSeverityRank(e notifications.NotificationEntry) int {
+	def, ok := notifications.Definitions[e.Code]
+	if !ok {
+		return 0
+	}
+	switch def.Severity {
+	case "CRITICAL":
+		return 3
+	case "WARNING":
+		return 2
+	case "INFO":
+		return 1
+	default:
+		return 0
+	}
 }
