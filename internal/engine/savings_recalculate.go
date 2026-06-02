@@ -19,9 +19,11 @@ import (
 )
 
 const (
-	savingsRecTypeContainer = "container"
-	savingsRecTypeNode      = "node"
-	savingsRecTypePVC       = "pvc"
+	savingsRecTypeContainer     = "container"
+	savingsRecTypeNode          = "node"
+	savingsRecTypePVC           = "pvc"
+	savingsRecTypeQuota         = "quota"
+	savingsRecTypeClusterQuota  = "cluster-quota"
 )
 
 var (
@@ -195,6 +197,16 @@ func defaultRecalculateClusterSavings(ctx context.Context, pool *pgxpool.Pool, o
 			errs = append(errs, err)
 		}
 	}
+	if containsSavingsRecType(recTypes, savingsRecTypeQuota) {
+		if err := recalculateQuotaSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if containsSavingsRecType(recTypes, savingsRecTypeClusterQuota) {
+		if err := recalculateClusterQuotaSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return errorsJoin(errs)
 }
 
@@ -239,6 +251,30 @@ func recalculatePVCSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 	ApplyPVCSavings(recs, costData)
 	return updatePVCSavings(ctx, pool, recs)
+}
+
+func recalculateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	recs, err := loadQuotaRecsForSavingsRecalc(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("load quota recommendations: %w", err)
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	ApplyQuotaSavings(recs, costData)
+	return updateQuotaSavings(ctx, pool, recs)
+}
+
+func recalculateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	recs, err := loadClusterQuotaRecsForSavingsRecalc(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("load cluster-quota recommendations: %w", err)
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	ApplyClusterQuotaSavings(recs, costData)
+	return updateClusterQuotaSavings(ctx, pool, recs)
 }
 
 func loadContainerRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]ContainerRec, error) {
@@ -352,6 +388,68 @@ func loadPVCRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID,
 	return recs, rows.Err()
 }
 
+func loadQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]QuotaRec, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT org_id, cluster_uuid::text, namespace, COALESCE(quota_name, ''),
+			recommendation_type,
+			COALESCE(cpu_freed_millicores, 0), COALESCE(memory_freed_bytes, 0),
+			COALESCE(storage_freed_bytes, 0), COALESCE(pods_freed, 0)
+		FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND recommendation_type = $3`,
+		orgID, clusterUUID, QuotaRecTypeTighten)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []QuotaRec
+	for rows.Next() {
+		var r QuotaRec
+		if err := rows.Scan(
+			&r.OrgID, &r.ClusterUUID, &r.Namespace, &r.QuotaName,
+			&r.RecommendationType,
+			&r.CapacityFreed.CPUMillicores, &r.CapacityFreed.MemoryBytes,
+			&r.CapacityFreed.StorageBytes, &r.CapacityFreed.PodsFreed,
+		); err != nil {
+			return nil, err
+		}
+		recs = append(recs, r)
+	}
+	return recs, rows.Err()
+}
+
+func loadClusterQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]ClusterQuotaRec, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT org_id, cluster_uuid::text, cluster_quota_name,
+			recommendation_type,
+			COALESCE(savings_cpu_cores_freed, 0), COALESCE(savings_memory_bytes_freed, 0),
+			COALESCE(savings_storage_bytes_freed, 0), COALESCE(savings_pods_freed, 0)
+		FROM cluster_quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND recommendation_type = $3`,
+		orgID, clusterUUID, QuotaRecTypeTighten)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []ClusterQuotaRec
+	for rows.Next() {
+		var r ClusterQuotaRec
+		var cpuCoresFreed int64
+		if err := rows.Scan(
+			&r.OrgID, &r.ClusterUUID, &r.ClusterQuotaName,
+			&r.RecommendationType,
+			&cpuCoresFreed, &r.CapacityFreed.MemoryBytes,
+			&r.CapacityFreed.StorageBytes, &r.CapacityFreed.PodsFreed,
+		); err != nil {
+			return nil, err
+		}
+		r.CapacityFreed.CPUMillicores = cpuCoresFreed * 1000
+		recs = append(recs, r)
+	}
+	return recs, rows.Err()
+}
+
 func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -431,6 +529,42 @@ func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) er
 	return nil
 }
 
+func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec) error {
+	for _, r := range recs {
+		_, err := pool.Exec(ctx, `
+			UPDATE quota_recommendation_sets
+			SET estimated_savings_cents = $1,
+			    updated_at = now()
+			WHERE org_id = $2 AND cluster_uuid = $3::uuid
+			  AND namespace = $4 AND quota_name = $5`,
+			r.EstimatedSavingsCents,
+			r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
+		)
+		if err != nil {
+			return fmt.Errorf("update quota savings %s/%s: %w", r.Namespace, r.QuotaName, err)
+		}
+	}
+	return nil
+}
+
+func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []ClusterQuotaRec) error {
+	for _, r := range recs {
+		_, err := pool.Exec(ctx, `
+			UPDATE cluster_quota_recommendation_sets
+			SET savings_dollars_monthly = $1,
+			    updated_at = now()
+			WHERE org_id = $2 AND cluster_uuid = $3::uuid
+			  AND cluster_quota_name = $4`,
+			r.SavingsDollarsMonthly,
+			r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
+		)
+		if err != nil {
+			return fmt.Errorf("update cluster-quota savings %s: %w", r.ClusterQuotaName, err)
+		}
+	}
+	return nil
+}
+
 // NormalizeSavingsRecTypesForAPI validates recommendation type names for the internal API.
 func NormalizeSavingsRecTypesForAPI(recTypes []string) []string {
 	return normalizeSavingsRecTypes(recTypes)
@@ -438,14 +572,21 @@ func NormalizeSavingsRecTypesForAPI(recTypes []string) []string {
 
 func normalizeSavingsRecTypes(recTypes []string) []string {
 	if len(recTypes) == 0 {
-		return []string{savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC}
+		return []string{
+			savingsRecTypeContainer,
+			savingsRecTypeNode,
+			savingsRecTypePVC,
+			savingsRecTypeQuota,
+			savingsRecTypeClusterQuota,
+		}
 	}
 	seen := make(map[string]struct{}, len(recTypes))
 	var out []string
 	for _, rt := range recTypes {
 		rt = strings.TrimSpace(strings.ToLower(rt))
 		switch rt {
-		case savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC:
+		case savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC,
+			savingsRecTypeQuota, savingsRecTypeClusterQuota:
 			if _, ok := seen[rt]; ok {
 				continue
 			}

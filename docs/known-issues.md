@@ -96,7 +96,7 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 | **2** | MachineSet right-sizing (replica count + instance family via cloud catalog) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | ~2–3 weeks | Planned |
 | **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
 
-**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` → `machineset` engine plugin → `GET .../machinesets` API → `machineset_recommendations` table + instance catalog.
+**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` → `machineset` engine plugin (catalog-driven recs) → optional `machineset_recommendations` table + cloud instance catalog. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations; does not require the catalog engine).
 
 **Tier 3 prerequisites:** Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.
 
@@ -158,7 +158,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
-| Savings stale until re-ingestion | **Mitigated** when `ROS_SAVINGS_RECALCULATION_ENABLED=true` (default) and Koku calls `POST /internal/recalculate-savings` after cost model updates ([`ros_savings_recalc.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) must be deployed in koku). Without that integration, container/node/PVC `estimated_monthly_savings_usd` still reflects rates from the last ingestion only | Low — mitigated with recalc; legacy path by design | REQ-7.5 |
+| Savings stale until re-ingestion | **Mitigated** when `ROS_SAVINGS_RECALCULATION_ENABLED=true` (default) and Koku calls `POST /internal/recalculate-savings` after cost model updates ([`ros_savings_recalc.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) must be deployed in koku). Without that integration, container/node/PVC/quota/cluster-quota savings still reflect rates from the last ingestion only | Low — mitigated with recalc; legacy path by design | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
@@ -460,7 +460,7 @@ time-of-day dependent.
 
 | Tier | Scope | Status |
 |------|--------|--------|
-| Tier 2 — MachineSet | Replica count + instance family at MachineSet level; `.../machinesets` API; `machineset_recommendations` table; cloud catalog | **Planned** (not a defect) |
+| Tier 2 — MachineSet | Replica count + instance family at MachineSet level; `machineset_recommendations` table; cloud catalog (`.../machinesets` aggregation API **shipped**) | **Planned** (not a defect) |
 | Tier 3 — MachineAutoscaler | Historical scaling analysis; min/max bounds; saturated/idle/flapping | **Planned**; depends on Tier 2 |
 
 ### GPU Recommendations
@@ -764,7 +764,7 @@ matching), and dedicated API endpoints. Gated by `ROS_ENABLE_VM_RECS` (default
 
 ### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
 
-Node Tier 1 is implemented. Tier 2 (MachineSet) and Tier 3 (MachineAutoscaler) are **planned future work** — see [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md). Not tracked as product defects.
+Node Tier 1 is implemented. **`GET .../machinesets` fleet aggregation is shipped.** Remaining Tier 2 work: catalog-driven replica count and instance-family recommendations (`machineset` engine plugin, `machineset_recommendations` table, cloud pricing catalog). Tier 3 (MachineAutoscaler) is **planned future work** — see [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md). Not tracked as product defects.
 
 ### Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED
 

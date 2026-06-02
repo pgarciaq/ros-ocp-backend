@@ -70,7 +70,7 @@ func PostRecalculateSavings(c echo.Context) error {
 	if len(recTypes) == 0 {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "bad_request",
-			"message": "recommendation_types must include container, node, and/or pvc",
+			"message": "recommendation_types must include container, node, pvc, quota, and/or cluster-quota",
 		})
 	}
 

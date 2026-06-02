@@ -109,6 +109,16 @@ data.
 
 Koku implementation: `koku/masu/api/effective_rates.py` (sibling repository).
 
+### Stale OCP sources (SaaS operations)
+
+Separate from cost/savings, Koku can detect OCP sources with no manifest
+upload for **3+ days** and emit a `cm-operator-stale` platform notification
+(Celery task `check_for_stale_ocp_source`). That path is **SaaS-only** (Kafka
+to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
+(notification code **2**). Manual run: Masu
+`GET /api/cost-management/v1/notifications/?stale_ocp_check`. Details:
+[Stale detection — Koku-side](../operations/stale-detection.md#koku-side-stale-source-detection-saas).
+
 ### Container Savings
 
 1. Fetch effective rates once per ingestion cycle per cluster ([`report_processor.go`](../../internal/services/report_processor.go))
@@ -333,12 +343,13 @@ The `effective_rates` endpoint is an **internal masu API** endpoint — it does 
 | Container (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | Node CPU/memory (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | PVC (`estimated_monthly_savings_usd`) | Storage ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| Quota / cluster-quota (`estimated_savings` / `savings_dollars_monthly`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled (tighten rows only) |
 | GPU / node time-slicing | On each API request that enriches GPU data |
 | Snapshot recoverable cost | On each snapshot ingestion cycle (resolved rate from settings / env / effective-rates / default) |
 
 The `effective_rates` date range covers the most recent 30 days (configurable via
 lookback). Koku cost model updates trigger a savings-only recalculation for
-container, node, and PVC when configured (see [Savings recalculation after cost model changes](#savings-recalculation-after-cost-model-changes)); GPU still refreshes on the next API call.
+container, node, PVC, quota, and cluster-quota when configured (see [Savings recalculation after cost model changes](#savings-recalculation-after-cost-model-changes)); GPU still refreshes on the next API call.
 
 ## Negative savings
 
@@ -401,7 +412,7 @@ Implementation: [`internal/api/handlers_savings_recalculate.go`](../../internal/
 |-------|----------|-------------|
 | `org_id` | Yes | Organization ID **without** the `org` schema prefix (e.g. `1234567`) |
 | `cluster_uuid` | No | Scope recalculation to one cluster (Koku provider UUID) |
-| `recommendation_types` | No | Subset of `container`, `node`, `pvc` (default: all three) |
+| `recommendation_types` | No | Subset of `container`, `node`, `pvc`, `quota`, `cluster-quota` (default: all five) |
 
 Example:
 
@@ -409,7 +420,7 @@ Example:
 {
   "org_id": "1234567",
   "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
-  "recommendation_types": ["container", "node", "pvc"]
+  "recommendation_types": ["container", "node", "pvc", "quota", "cluster-quota"]
 }
 ```
 
@@ -421,7 +432,7 @@ goroutine ([`TriggerSavingsRecalculationAsync()`](../../internal/engine/savings_
 ### What recalculation does
 
 1. Re-fetches Masu `effective_rates` for each affected cluster (same provider as ingestion).
-2. Recomputes `estimated_monthly_savings_usd` on existing recommendation rows for the requested types.
+2. Recomputes savings on existing recommendation rows for the requested types (container/node/PVC `estimated_monthly_savings_usd`; quota `estimated_savings_cents`; cluster-quota `savings_dollars_monthly`).
 3. Does **not** re-run classification, percentile sizing, or CSV ingestion.
 
 GPU and snapshot dollar fields are out of scope for this path (GPU remains API read-time;
@@ -435,6 +446,13 @@ Koku invokes [`notify_ros_savings_recalculation()`](https://github.com/project-k
 inline (10s HTTP timeout). The call is **non-blocking for the cost model task** in the
 sense that failures are logged as warnings and do not fail the updater; the HTTP call
 itself is synchronous with a short timeout.
+
+**Cross-repo dependency:** The Koku-side trigger lives at
+`koku/masu/processor/ros_savings_recalc.py` (wired from
+[`ocp_cost_model_cost_updater.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py)).
+That module may exist only in a local koku working tree until it is committed and merged
+in the **koku** repository separately from ros-ocp-backend releases. On-prem/SaaS
+deployments need both repos aligned for savings to refresh after cost model edits.
 
 ### Configuration
 
@@ -452,9 +470,59 @@ itself is synchronous with a short timeout.
 
 Same service-account bearer validation as internal tag sync
 ([`tags.ValidateBearerToken`](../../internal/tags/auth.go) — see `internal/tags/`).
-Koku sends
-`Authorization: Bearer <token>` when `ROS_SERVICE_TOKEN` or the Kubernetes
-service-account token file is available.
+User JWTs from the console are **not** accepted on this route.
+
+Koku sends `Authorization: Bearer <token>` when:
+
+1. `ROS_SERVICE_TOKEN` is set (static token for dev or explicit Helm override), or
+2. The Celery worker reads the projected Kubernetes service account token at
+   `ROS_TAGS_SA_TOKEN_PATH` (default `/var/run/secrets/kubernetes.io/serviceaccount/token`),
+   same path used by [`ros_tag_sync._read_bearer_token()`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_tag_sync.py).
+
+On ROS, `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` (comma-separated) restricts which SA
+usernames pass TokenReview when not using `ROS_TAGS_DEV_TOKEN`. The Koku worker
+ServiceAccount name must appear in that list when tag-sync-style auth is enforced.
+
+### On-prem Helm chart (`cost-onprem-chart`)
+
+The chart wires Koku workers and API pods with `ROS_OCP_BACKEND_URL` pointing at
+`http://<release>-ros-api:<port>` via `costManagement.rosIntegration` in
+[`cost-onprem/values.yaml`](https://github.com/project-koku/cost-onprem-chart/blob/main/cost-onprem/values.yaml)
+and [`templates/_helpers-koku.tpl`](https://github.com/project-koku/cost-onprem-chart/blob/main/cost-onprem/templates/_helpers-koku.tpl).
+
+**Example overrides** (`openshift-values.yaml` or `-f` values file):
+
+```yaml
+costManagement:
+  rosIntegration:
+    # Optional: full URL instead of chart default
+    # ocpBackendUrl: "http://cost-onprem-ros-api.cost-onprem.svc:8000"
+    # Optional: host/port form (takes precedence over ocpBackendUrl in Koku)
+    # apiHost: "cost-onprem-ros-api.cost-onprem.svc.cluster.local"
+    # apiPort: "8000"
+
+ros:
+  api:
+    savingsEstimatesEnabled: true
+    savingsRecalculationEnabled: true
+    # When using SA token auth from Koku worker, allow its SA username:
+    # tagsAllowedServiceAccounts: "system:serviceaccount:cost-onprem:cost-onprem-koku"
+```
+
+**Koku Celery:** Savings notification runs from the **cost-model** queue worker
+after `update_summary_cost_model_costs`. All workers inherit `ROS_OCP_BACKEND_URL`
+from `cost-onprem.koku.commonEnv`; no separate worker-only env block is required.
+
+**Verify end-to-end:**
+
+```bash
+# After a cost model PUT, cost-model worker logs should show:
+# "ROS savings recalculation triggered"
+kubectl logs -n cost-onprem -l cost-onprem.io/celery-type=worker,cost-onprem.io/worker-queue=cost-model --tail=50 | grep -i savings
+
+# ROS API should accept the callback (202):
+kubectl logs -n cost-onprem -l app.kubernetes.io/component=ros-api --tail=50 | grep -i recalc
+```
 
 ### Failure mode
 

@@ -346,7 +346,7 @@ and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
 | **Object-count quotas** | Included in risk and blocking (code **72**), but not in tighten/raise or savings |
 | **Pod quota savings** | `pods_freed` is count-only; no `estimated_savings` for pod slots |
 | **One-cycle lag** | Container rec sums and namespace quota hard/used can be one operator upload out of phase (see [Timing](#timing-and-one-cycle-lag)) |
-| **Savings after cost model change** | Quota `estimated_savings` refresh on ingestion only today — not included in Koku→ROS savings recalculation (container/node/PVC are). See [Cost Integration — Savings recalculation](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes) |
+| **Savings after cost model change** | Quota and cluster-quota `estimated_savings` refresh on ingestion and via Koku→ROS savings recalculation (same as container/node/PVC). See [Cost Integration — Savings recalculation](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes) |
 | **Per-quota identity (legacy operators)** | Without `quota_name` in namespace CSV, multiple ResourceQuota objects merge into one row |
 
 **Not planned:** Dollar savings for freed pod quota slots (see internal doc

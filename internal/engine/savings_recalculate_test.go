@@ -19,10 +19,13 @@ import (
 )
 
 func TestNormalizeSavingsRecTypesForAPI(t *testing.T) {
-	assert.Equal(t, []string{savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC},
-		NormalizeSavingsRecTypesForAPI(nil))
+	assert.Equal(t, []string{
+		savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC,
+		savingsRecTypeQuota, savingsRecTypeClusterQuota,
+	}, NormalizeSavingsRecTypesForAPI(nil))
 	assert.Equal(t, []string{savingsRecTypeNode}, NormalizeSavingsRecTypesForAPI([]string{"node", "NODE"}))
-	assert.Empty(t, NormalizeSavingsRecTypesForAPI([]string{"quota"}))
+	assert.Equal(t, []string{savingsRecTypeQuota, savingsRecTypeClusterQuota},
+		NormalizeSavingsRecTypesForAPI([]string{"quota", "cluster-quota"}))
 }
 
 func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing.T) {
@@ -223,4 +226,122 @@ func TestApplyNodeSavings_RateChangeRecomputesValue(t *testing.T) {
 	ApplyNodeSavings(recs, highRates)
 	highCents := recs[0].EstimatedMonthlySavingsCents
 	require.Greater(t, highCents, lowCents)
+}
+
+func TestRecalculateSavingsForOrg_QuotaUpdatesSavingsNotClassification(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
+	t.Setenv("ROS_SAVINGS_RECALCULATION_ENABLED", "true")
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-savings-recalc-quota"
+	clusterUUID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	namespace := "quota-recalc-ns"
+	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
+
+	const highCPURate = 1.0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{
+			"cluster_id": %q,
+			"currency": "USD",
+			"configured_rates": {
+				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": %g},
+				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 0.02},
+				"storage_gb_usage_per_month": {"infrastructure": 0, "supplementary": 0.01}
+			},
+			"namespace_aggregates": {}
+		}`, clusterUUID, highCPURate)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("KOKU_MASU_URL", srv.URL)
+	config.ResetForTest()
+	costdata.ClearCostDataCacheForTest()
+	t.Cleanup(costdata.ClearCostDataCacheForTest)
+
+	const cpuFreedMC int64 = 64000
+	_, err := pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace, quota_name,
+			cpu_request_hard_millicores, cpu_request_used_millicores,
+			cpu_request_recommended_millicores,
+			cpu_freed_millicores, recommendation_type, risk_level,
+			estimated_savings_cents, last_observed_at
+		) VALUES ($1, $2::uuid, $3, 'team-budget', 100000, 25000, 36000,
+			$4, 'tighten', 'low', 0, NOW())`,
+		orgID, clusterUUID, namespace, cpuFreedMC)
+	require.NoError(t, err)
+
+	var savingsBefore int64
+	err = pool.QueryRow(ctx, `
+		SELECT estimated_savings_cents FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`,
+		orgID, clusterUUID, namespace).Scan(&savingsBefore)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), savingsBefore)
+
+	var recType string
+	err = pool.QueryRow(ctx, `
+		SELECT recommendation_type FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`,
+		orgID, clusterUUID, namespace).Scan(&recType)
+	require.NoError(t, err)
+	require.Equal(t, QuotaRecTypeTighten, recType)
+
+	RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, []string{savingsRecTypeQuota})
+
+	var savingsAfter int64
+	err = pool.QueryRow(ctx, `
+		SELECT estimated_savings_cents FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`,
+		orgID, clusterUUID, namespace).Scan(&savingsAfter)
+	require.NoError(t, err)
+	require.Greater(t, savingsAfter, int64(0))
+	require.Greater(t, money.CentsToUSD(savingsAfter), 400.0,
+		"savings should be recomputed from effective rates (was 0 before recalc)")
+
+	err = pool.QueryRow(ctx, `
+		SELECT recommendation_type FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`,
+		orgID, clusterUUID, namespace).Scan(&recType)
+	require.NoError(t, err)
+	require.Equal(t, QuotaRecTypeTighten, recType, "classification fields must be unchanged")
+}
+
+func TestRecalculateQuotaSavings_Unit(t *testing.T) {
+	recs := []QuotaRec{{
+		OrgID:                "org1",
+		ClusterUUID:          "cluster1",
+		Namespace:            "ns1",
+		QuotaName:            "q1",
+		RecommendationType:   QuotaRecTypeTighten,
+		CapacityFreed:        QuotaCapacityFreed{CPUMillicores: 10000},
+		EstimatedSavingsCents: 100,
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 0.5},
+		},
+	}
+	ApplyQuotaSavings(recs, cd)
+	require.Greater(t, recs[0].EstimatedSavingsCents, int64(100))
+}
+
+func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
+	recs := []ClusterQuotaRec{{
+		OrgID:              "org1",
+		ClusterUUID:        "cluster1",
+		ClusterQuotaName:   "crq1",
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 2000},
+		SavingsDollarsMonthly: 1,
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 1.0},
+		},
+	}
+	ApplyClusterQuotaSavings(recs, cd)
+	require.Greater(t, recs[0].SavingsDollarsMonthly, 1)
 }

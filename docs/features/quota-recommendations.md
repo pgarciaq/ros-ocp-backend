@@ -92,7 +92,9 @@ container recommendations exist; the authoritative run is the explicit call in
    - `none` — no utilization signal
 6. **Savings** — `tighten` rows estimate monthly savings from freed CPU/memory/storage
    request capacity via Koku `configured_rates` when `ROS_SAVINGS_ESTIMATES_ENABLED=true`
-   (`estimated_savings` in API). Freed **pods** are reported in `capacity_freed.pods_freed`
+   (`estimated_savings` in API). Savings refresh on ingestion and when Koku triggers
+   `POST /internal/recalculate-savings` after cost model updates (same path as
+   container/node/PVC). Freed **pods** are reported in `capacity_freed.pods_freed`
    only — there is no cost-model metric for pod slots (see [Pod capacity freed](#pod-capacity-freed)).
 
 Implementation: [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
