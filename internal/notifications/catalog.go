@@ -35,7 +35,7 @@ var pluginCatalogCodes = map[string][]int16{
 		50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
 	},
 	"quota":         {70, 71, 72},
-	"cluster-quota": {73},
+	"cluster-quota": {70, 71, 72, 73},
 }
 
 // BuildCatalog returns notification catalog entries sorted by code ascending.
