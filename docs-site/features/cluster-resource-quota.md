@@ -13,7 +13,7 @@ metrics to aggregated namespace **ResourceQuota** recommendation totals.
 limits. Enable both the `quota` and `cluster-quota` plugins so CRQ recommended values
 incorporate fresh namespace quota sums.
 
-Internal design: [`docs/features/cluster-resource-quota.md`](../../../docs/features/cluster-resource-quota.md) (repo `docs/` tree).
+Internal design: [`docs/features/cluster-resource-quota.md`](../../docs/features/cluster-resource-quota.md) (repo `docs/` tree).
 
 ---
 
