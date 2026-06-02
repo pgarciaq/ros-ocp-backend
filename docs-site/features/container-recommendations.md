@@ -152,7 +152,8 @@ keys apply as the JSON list. Details: [UI Integration Guide — CSV export](../u
 ## Configurable thresholds
 
 Tenant overrides via
-`GET/PUT/DELETE .../settings/thresholds?recommendation_type=container`.
+`GET/PUT/DELETE .../settings/container` (canonical path; the legacy
+`/settings/thresholds?recommendation_type=container` alias is deprecated).
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|

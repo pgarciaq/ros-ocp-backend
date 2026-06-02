@@ -24,6 +24,21 @@ This document lists ROS-related requirements, what is registered in the plugin, 
 - **Containers and generic namespace recommendations** use the broad `cost_ros_ocp` requirement (shared with many ROS API tests).
 - **Specialized recommendation plugins** (nodes, PVCs, GPUs, VMs, snapshots, cluster-quota, namespace quota) each have a **dedicated** requirement ID so CI can run targeted subsets once app-interface enables them.
 
+### Container recommendations — IQE ownership split
+
+Container list/detail coverage is intentionally split across two IQE plugins to avoid
+duplicate maintenance and matrix drift:
+
+| Plugin | Owns |
+|--------|------|
+| **iqe-cost-management-plugin** | Detail contract, dual-engine (cost + performance), tag filtering, history, quality, idle detection, business hours |
+| **iqe-ros-ocp-plugin** | List filters (cluster, project, workload, container, workload_type), sorting, keyset pagination, settings (thresholds, business hours), CSV export, notification codes catalog |
+
+When adding a new container API behavior, place the IQE test in the owning plugin above
+(and tag with `cost_ros_ocp` in IQE-CM where applicable). Do not mirror the same
+assertion in both plugins unless the behavior spans both surfaces (e.g. a list field
+that must also appear on detail).
+
 ## Plugin-side registration (done in this repo)
 
 Add or update entries in:
