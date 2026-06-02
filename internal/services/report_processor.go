@@ -558,7 +558,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		}
 	}
 
-	oldRecs, err := engine.ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID)
+	oldRecs, err := engine.ReadClusterOldRecommendationsByEngine(ctx, pool, orgID, clusterUUID)
 	if err != nil {
 		log.Errorf("native engine: reading old recommendations failed: %v", err)
 		oldRecs = nil
@@ -574,7 +574,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		engine.ApplySavingsEstimates(batch, costData)
 
 		if oldRecs != nil {
-			adoptedKeys := engine.FindAdoptedContainers(batch, oldRecs)
+			adoptedKeys := engine.FindAdoptedContainers(batch, oldRecs["cost"])
 			if markErr := engine.MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
 				log.Warnf("native engine: adoption marking incomplete: %v", markErr)
 			}

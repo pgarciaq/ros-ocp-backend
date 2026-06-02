@@ -330,3 +330,8 @@ Full env var catalog: [Configurability Reference](../architecture/configurabilit
 - [Savings Estimations](savings-estimations.md) — Dollar impact per container
 - [Business Hours](business-hours.md) — Schedule-aware percentiles
 - [History & Quality](history-and-quality.md) — Track recommendation changes over time
+
+## Future work
+
+- **UI settings:** Expose cost vs performance percentile configuration in the UI (backend supports via `GET/PUT .../settings/container`).
+- **UI history/quality:** Wire an engine selector in the frontend to history and quality endpoints (`filter[engine]`).

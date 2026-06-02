@@ -166,6 +166,16 @@ engine block per term. Omit the filter to receive both.
 
 Percentile thresholds are configurable via settings (below).
 
+Quality metrics (`GET .../quality`) also support `filter[engine]=cost|performance` and default to
+**cost** when the filter is omitted (see [history-and-quality.md](history-and-quality.md)).
+
+---
+
+## Future work
+
+- **UI settings:** Expose cost vs performance percentile configuration in the UI (backend supports via `/settings/container`).
+- **UI history/quality:** Wire an engine selector in the frontend to history and quality endpoints.
+
 ---
 
 ## Settings

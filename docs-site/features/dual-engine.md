@@ -48,10 +48,12 @@ Best for: production, latency-sensitive services, SLA-critical workloads.
 
 | Plugin | API behavior |
 |--------|--------------|
-| **Container** | Both engines nested under every term; **no** server-side engine filter on list |
-| **Namespace** | Same as container |
-| **Node** | Both engines nested; optional `?engine=` filter on list |
+| **Container** | Both engines nested under every term; `filter[engine]=cost\|performance` on list (omits the other engine from `recommendation_engines`) |
+| **Namespace** | Same as container — `filter[engine]` on namespace list |
+| **Node** | Both engines nested; `filter[engine]=cost\|performance` on `/nodes` list |
 | **VM** | Both engines stored per VM × term; `filter[engine]=cost\|performance` on list/detail — **native only** (Kruize does not support VMs) |
+| **History** | `filter[engine]=cost\|performance` on `/history` and namespace history |
+| **Quality** | `filter[engine]=cost\|performance` on `/quality` (defaults to `cost` when omitted) |
 | **GPU, PVC, Snapshot** | Single engine only (no cost/performance split) |
 
 Business hours adds a second **schedule** dimension (all_hours vs business_hours)
@@ -61,8 +63,10 @@ on top of engines for container and namespace. See [Business Hours](business-hou
 
 | Context | Selection |
 |---------|-----------|
-| Container/namespace UI | Display one engine tab; both are always in the JSON |
-| Node list | `?engine=cost` or `?engine=performance` |
+| Container/namespace list API | `filter[engine]=cost` or `filter[engine]=performance` (legacy flat `?engine=` also accepted) |
+| Container/namespace UI | Display one engine tab; use `filter[engine]` when loading a single perspective |
+| Node list | `filter[engine]=cost` or `filter[engine]=performance` |
+| History / quality | `filter[engine]=cost` or `filter[engine]=performance` (quality defaults to cost) |
 | Fleet savings | `GET .../savings-summary?engine=cost` (default) |
 | CSV export | One row per term × engine |
 
@@ -89,6 +93,11 @@ Engine behavior is controlled by percentile and target parameters:
 | Node | `cost_target_utilization` | `perf_target_utilization`, `perf_consolidation_headroom_multiplier` |
 
 Tune via [Configurable Thresholds](configurable-thresholds.md) or admin env vars.
+
+## Future work
+
+- **UI settings:** Expose cost vs performance percentile tuning in the UI (backend already supports this via `GET/PUT .../settings/container`).
+- **UI history/quality:** Wire the engine selector in the frontend to history and quality endpoints (`filter[engine]`).
 
 ## Related
 

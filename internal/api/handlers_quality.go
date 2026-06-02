@@ -95,6 +95,12 @@ func GetRecommendationQuality(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
+	engineFilter, err := resolveQualityEngineFilter(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+	queryParams["q.engine = ?"] = engineFilter
+
 	rows, count, queryErr := model.GetRecommendationQuality(orgID, opts, queryParams, userPerms)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch recommendation quality: %v", queryErr)
@@ -140,7 +146,7 @@ func GetRecommendationQuality(c echo.Context) error {
 
 var qualityCSVHeader = []string{
 	"measured_at", "cluster_uuid", "cluster_alias",
-	"namespace", "workload", "container_name",
+	"namespace", "workload", "container_name", "engine",
 	"stability_pct", "adoption_detected",
 	"oom_events_after_rec", "recommendation_age_hours",
 }
@@ -158,6 +164,7 @@ func generateQualityCSV(ctx context.Context, w io.Writer, rows []model.QualityRo
 			r.Namespace,
 			r.Workload,
 			r.ContainerName,
+			r.Engine,
 			optFloat32Str(r.StabilityPct),
 			strconv.FormatBool(r.AdoptionDetected),
 			optInt64Str(r.OOMEventsAfterRec),

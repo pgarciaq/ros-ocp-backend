@@ -32,19 +32,22 @@ type OldRecommendation struct {
 // given containers (term='short', engine='cost' only), returning a map keyed
 // by container. This must be called BEFORE WriteRecommendations to capture
 // values for stability_pct and adoption_detected.
-// ReadClusterOldRecommendations loads all existing short-term/cost recommendations
-// for a cluster in a single query. Used by the streaming pipeline to avoid
+// ReadClusterOldRecommendations loads existing short-term recommendations for one
+// engine on a cluster in a single query. Used by the streaming pipeline to avoid
 // building O(containers) tuple lists.
 func ReadClusterOldRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
-	orgID, clusterUUID string,
+	orgID, clusterUUID, engine string,
 ) (map[containerKey]OldRecommendation, error) {
+	if engine != "cost" && engine != "performance" {
+		return nil, fmt.Errorf("ReadClusterOldRecommendations: invalid engine %q", engine)
+	}
 	rows, err := pool.Query(ctx, `
 		SELECT namespace, workload, COALESCE(workload_type, ''), container_name,
 			COALESCE(rec_cpu_request_millicores, 0), COALESCE(rec_memory_request_kib, 0), updated_at
 		FROM recommendation_sets
-		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'`,
-		orgID, clusterUUID)
+		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = $3`,
+		orgID, clusterUUID, engine)
 	if err != nil {
 		return nil, fmt.Errorf("ReadClusterOldRecommendations: %w", err)
 	}
@@ -66,7 +69,7 @@ func ReadClusterOldRecommendations(
 // Retained for backward compatibility with tests.
 func ReadOldRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
-	orgID, clusterUUID string,
+	orgID, clusterUUID, engine string,
 	keys []containerKey,
 ) (map[containerKey]OldRecommendation, error) {
 	result := make(map[containerKey]OldRecommendation, len(keys))
@@ -75,12 +78,15 @@ func ReadOldRecommendations(
 	}
 
 	var sb strings.Builder
-	args := []any{orgID, clusterUUID}
+	if engine != "cost" && engine != "performance" {
+		return nil, fmt.Errorf("ReadOldRecommendations: invalid engine %q", engine)
+	}
+	args := []any{orgID, clusterUUID, engine}
 	sb.WriteString(`
 		SELECT namespace, workload, COALESCE(workload_type, ''), container_name,
 			COALESCE(rec_cpu_request_millicores, 0), COALESCE(rec_memory_request_kib, 0), updated_at
 		FROM recommendation_sets
-		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = 'cost'
+		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'short' AND engine = $3
 			AND (namespace, workload, container_name) IN (`)
 	for i, k := range keys {
 		if i > 0 {
@@ -107,6 +113,25 @@ func ReadOldRecommendations(
 		result[containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}] = old
 	}
 	return result, rows.Err()
+}
+
+// ReadClusterOldRecommendationsByEngine loads short-term old recommendations for both engines.
+func ReadClusterOldRecommendationsByEngine(
+	ctx context.Context, pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+) (map[string]map[containerKey]OldRecommendation, error) {
+	cost, err := ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID, "cost")
+	if err != nil {
+		return nil, err
+	}
+	performance, err := ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID, "performance")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]map[containerKey]OldRecommendation{
+		"cost":        cost,
+		"performance": performance,
+	}, nil
 }
 
 // ComputeStabilityPct calculates recommendation stability as:
@@ -150,12 +175,12 @@ func ComputeRecommendationAgeHours(updatedAt time.Time, now time.Time) int64 {
 	return hours
 }
 
-// WriteRecommendationQuality batch-inserts quality metrics into recommendation_quality.
-// It deduplicates recs by container (uses the first cost-engine entry as representative).
+// WriteRecommendationQuality batch-inserts quality metrics into recommendation_quality
+// for each container × engine (cost and performance).
 func WriteRecommendationQuality(
 	ctx context.Context, pool *pgxpool.Pool,
 	newRecs []ContainerRec,
-	oldRecs map[containerKey]OldRecommendation,
+	oldRecsByEngine map[string]map[containerKey]OldRecommendation,
 	oomCountsByContainer map[containerKey]int64,
 ) error {
 	if len(newRecs) == 0 {
@@ -164,28 +189,37 @@ func WriteRecommendationQuality(
 
 	nowClock := time.Now().UTC()
 	measuredAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
-	seen := map[containerKey]bool{}
+	type qualityKey struct {
+		key    containerKey
+		engine string
+	}
+	seen := map[qualityKey]bool{}
 	batch := &pgx.Batch{}
 
 	for _, r := range newRecs {
+		if r.Engine != "cost" && r.Engine != "performance" {
+			continue
+		}
 		key := containerKey{
 			Namespace:     r.Namespace,
 			Workload:      r.Workload,
 			WorkloadType:  r.WorkloadType,
 			ContainerName: r.ContainerName,
 		}
-		if seen[key] {
+		qk := qualityKey{key: key, engine: r.Engine}
+		if seen[qk] {
 			continue
 		}
-		if r.Engine != "cost" {
-			continue
-		}
-		seen[key] = true
+		seen[qk] = true
 
 		var stabilityPct float32
 		var adopted bool
 		var ageHours int64
 
+		oldRecs := oldRecsByEngine[r.Engine]
+		if oldRecs == nil {
+			oldRecs = map[containerKey]OldRecommendation{}
+		}
 		if old, ok := oldRecs[key]; ok {
 			cpuVar := computeVariation(old.RecCPURequestMC, r.RecCPURequestMC)
 			memVar := computeVariation(old.RecMemRequestKiB, r.RecMemRequestKiB)
@@ -200,16 +234,16 @@ func WriteRecommendationQuality(
 
 		batch.Queue(`
 			INSERT INTO recommendation_quality (
-				measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+				measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, engine,
 				oom_events_after_rec, stability_pct, adoption_detected, recommendation_age_hours
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, measured_at)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, engine, measured_at)
 			DO UPDATE SET
 				oom_events_after_rec = EXCLUDED.oom_events_after_rec,
 				stability_pct = EXCLUDED.stability_pct,
 				adoption_detected = EXCLUDED.adoption_detected,
 				recommendation_age_hours = EXCLUDED.recommendation_age_hours`,
-			measuredAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+			measuredAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Engine,
 			oomEventsAfter, stabilityPct, adopted, ageHours,
 		)
 	}

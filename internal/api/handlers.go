@@ -372,6 +372,13 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		}
 	}
 
+	if err := applyNativeEngineQueryFilter(c, queryParams, "rs.engine"); err != nil {
+		filterErrs = append(filterErrs, err)
+	}
+	if len(filterErrs) > 0 {
+		return queryParams, errors.Join(filterErrs...)
+	}
+
 	return queryParams, nil
 }
 

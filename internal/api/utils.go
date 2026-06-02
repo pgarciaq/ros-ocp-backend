@@ -723,6 +723,13 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 
 	applyRecommendationStaleFilter(c, queryParams, "ns")
 
+	if err := applyNativeEngineQueryFilter(c, queryParams, "ns.engine"); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return queryParams, errors.Join(errs...)
+	}
+
 	return queryParams, nil
 }
 

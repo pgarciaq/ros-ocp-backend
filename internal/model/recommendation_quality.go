@@ -15,6 +15,7 @@ type QualityRow struct {
 	Namespace            string    `gorm:"column:namespace" json:"namespace"`
 	Workload             string    `gorm:"column:workload" json:"workload"`
 	ContainerName        string    `gorm:"column:container_name" json:"container_name"`
+	Engine               string    `gorm:"column:engine" json:"engine"`
 	StabilityPct         *float32  `gorm:"column:stability_pct" json:"stability_pct"`
 	AdoptionDetected     bool      `gorm:"column:adoption_detected" json:"adoption_detected"`
 	OOMEventsAfterRec    *int64    `gorm:"column:oom_events_after_rec" json:"oom_events_after_rec"`
@@ -33,7 +34,7 @@ func GetRecommendationQuality(
 
 	baseQuery := db.Table("recommendation_quality q").
 		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
-			q.namespace, q.workload, q.container_name,
+			q.namespace, q.workload, q.container_name, q.engine,
 			q.stability_pct, q.adoption_detected,
 			q.oom_events_after_rec, q.recommendation_age_hours`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).

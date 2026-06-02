@@ -2087,6 +2087,32 @@
             "schema": { "type": "string" }
           },
           {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. Quality metrics engine perspective. Defaults to `cost` when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Recommendation engine for quality metrics (`cost` or `performance`). Defaults to `cost` when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Pagination limit",

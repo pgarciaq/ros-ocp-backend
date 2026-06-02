@@ -121,10 +121,10 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 | `memory-unit` | `bytes` (default on list), `MiB`, or `GiB`. |
 | `true-units` | When `false` (default), memory/CPU use k8s-style formats in legacy JSON paths. |
 
-> **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
-> list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
-> which engine to display. CSV export expands to one row per term × engine and includes
-> `estimated_monthly_savings` (string `value`) and `currency` columns (from the list row's cost model).
+> **Note:** Container and namespace list endpoints support `filter[engine]=cost|performance` (and legacy
+> flat `?engine=`). When omitted, both **cost** and **performance** engines are returned nested under
+> each `recommendation_terms.<term>.recommendation_engines`. CSV export expands to one row per term × engine
+> and includes `estimated_monthly_savings` (string `value`) and `currency` columns (from the list row's cost model).
 
 Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `order_how`,
 `offset`, `limit`, and `format=csv`.

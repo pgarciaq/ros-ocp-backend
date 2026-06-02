@@ -100,8 +100,9 @@ func TestWriteRecommendationQuality_FullPipeline(t *testing.T) {
 	}
 
 	keys := ContainerKeys(results)
-	oldRecs, err := ReadOldRecommendations(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, keys)
+	oldCost, err := ReadOldRecommendations(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, "cost", keys)
 	require.NoError(t, err)
+	oldRecs := map[string]map[containerKey]OldRecommendation{"cost": oldCost, "performance": {}}
 
 	EnsureQualityPartitions(ctx, pool)
 
@@ -117,7 +118,7 @@ func TestWriteRecommendationQuality_FullPipeline(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT measured_at, oom_events_after_rec, stability_pct, adoption_detected, recommendation_age_hours
 		FROM recommendation_quality
-		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5 AND engine = 'cost'
 		ORDER BY measured_at DESC LIMIT 1`,
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestContainer,
 	).Scan(&measuredAt, &oomEventsAfter, &stabilityPct, &adopted, &ageHours)
@@ -166,9 +167,10 @@ func TestWriteRecommendationQuality_StabilityAcrossCycles(t *testing.T) {
 	require.NoError(t, err)
 
 	keys := ContainerKeys(results2)
-	oldRecs, err := ReadOldRecommendations(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, keys)
+	oldCost, err := ReadOldRecommendations(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, "cost", keys)
 	require.NoError(t, err)
-	require.NotEmpty(t, oldRecs)
+	require.NotEmpty(t, oldCost)
+	oldRecs := map[string]map[containerKey]OldRecommendation{"cost": oldCost, "performance": {}}
 
 	require.NoError(t, WriteRecommendations(ctx, pool, results2))
 
@@ -180,7 +182,7 @@ func TestWriteRecommendationQuality_StabilityAcrossCycles(t *testing.T) {
 	var stabilityPct float32
 	err = pool.QueryRow(ctx, `
 		SELECT stability_pct FROM recommendation_quality
-		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5 AND engine = 'cost'
 		ORDER BY measured_at DESC LIMIT 1`,
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestContainer,
 	).Scan(&stabilityPct)
@@ -230,7 +232,7 @@ func TestWriteRecommendationQuality_MissingPartition(t *testing.T) {
 			RecCPURequestMC: 100, RecMemRequestKiB: 1024,
 		},
 	}
-	oldRecs := map[containerKey]OldRecommendation{}
+	oldRecs := map[string]map[containerKey]OldRecommendation{"cost": {}, "performance": {}}
 	oomCounts := map[containerKey]int64{}
 
 	err := WriteRecommendationQuality(ctx, pool, recs, oldRecs, oomCounts)

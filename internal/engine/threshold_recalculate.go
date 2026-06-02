@@ -265,7 +265,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 
-	oldRecs, err := ReadClusterOldRecommendations(ctx, pool, orgID, clusterUUID)
+	oldRecs, err := ReadClusterOldRecommendationsByEngine(ctx, pool, orgID, clusterUUID)
 	if err != nil {
 		log.Warnf("threshold recalc: reading old recommendations failed: %v", err)
 		oldRecs = nil
@@ -276,7 +276,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	err = RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []ContainerRec) error {
 		ApplySavingsEstimates(batch, costData)
 		if oldRecs != nil {
-			adoptedKeys := FindAdoptedContainers(batch, oldRecs)
+			adoptedKeys := FindAdoptedContainers(batch, oldRecs["cost"])
 			if markErr := MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
 				log.Warnf("threshold recalc: adoption marking incomplete: %v", markErr)
 			}

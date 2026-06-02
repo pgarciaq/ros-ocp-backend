@@ -131,6 +131,7 @@ GET /api/cost-management/v1/recommendations/openshift/quality?format=csv
 | Project | `project` |
 | Workload | `workload` |
 | Container | `container` |
+| Engine | `filter[engine]` or `engine` (`cost`, `performance`; defaults to `cost`) |
 | Date range | `start_date`, `end_date` |
 
 Sort by `measured_at`, `stability`, `adoption`, `oom_events`, or
@@ -144,6 +145,7 @@ Sort by `measured_at`, `stability`, `adoption`, `oom_events`, or
     "measured_at": "2026-05-20T08:00:00Z",
     "container": "api",
     "project": "payments",
+    "engine": "cost",
     "stability_pct": 0.95,
     "adoption_detected": true,
     "oom_events_after_rec": 0,

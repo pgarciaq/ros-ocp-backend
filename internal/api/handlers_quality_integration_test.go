@@ -50,8 +50,7 @@ func setupQualityTest(t *testing.T) (*echo.Echo, string) {
 	require.NotEmpty(t, recs)
 
 	// Read old recs (empty on first run), write recs, then write quality
-	keys := engine.ContainerKeys(recs)
-	oldRecs, err := engine.ReadOldRecommendations(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, keys)
+	oldRecs, err := engine.ReadClusterOldRecommendationsByEngine(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	err = engine.WriteRecommendations(ctx, pool, recs)
@@ -180,6 +179,40 @@ func TestGetRecommendationQuality_Integration(t *testing.T) {
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("filter engine performance", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/quality?filter%5Bengine%5D=performance&limit=100", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response struct {
+			Data []model.QualityRow `json:"data"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		for _, row := range response.Data {
+			assert.Equal(t, "performance", row.Engine)
+		}
+	})
+
+	t.Run("filter engine cost default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/quality", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response struct {
+			Data []model.QualityRow `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		for _, row := range response.Data {
+			assert.Equal(t, "cost", row.Engine)
+		}
 	})
 
 	t.Run("wrong org returns empty", func(t *testing.T) {
