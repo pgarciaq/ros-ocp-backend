@@ -70,6 +70,7 @@ func (p *SnapshotPlugin) RegisterRoutes(g *echo.Group) {
 	if plugin.EnabledFor(plugin.KruizePluginName) {
 		return
 	}
+	g.GET("/recommendations/openshift/snapshots/summary", rosapi.GetSnapshotSummary)
 	g.GET("/recommendations/openshift/snapshots", rosapi.GetSnapshotRecommendations)
 	g.GET("/recommendations/openshift/settings/snapshot", rosapi.GetSnapshotSettings)
 	g.PUT("/recommendations/openshift/settings/snapshot", rosapi.PutSnapshotSettings)

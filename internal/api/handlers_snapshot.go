@@ -3,12 +3,15 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
 // SnapshotRecommendationResponse is a single snapshot recommendation in the API response.
@@ -77,12 +80,27 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	namespaceFilter := queryparams.FirstFilter(c, "project")
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
+	userPerms := get_user_permissions(c)
 
 	ctx := c.Request().Context()
 
 	filterSQL := ""
 	args := []interface{}{orgID}
 	argIdx := 2
+
+	rbacSQL, rbacArgs, rbacIdx, rbacDeny := snapshotRBACClusterFilter(userPerms, argIdx)
+	if rbacDeny {
+		resp := SnapshotRecommendationListResponse{}
+		resp.Meta.Limit = limit
+		resp.Meta.Offset = offset
+		resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+		resp.Links = buildLinks(c.Request(), 0, limit, offset)
+		resp.Data = []SnapshotRecommendationResponse{}
+		return c.JSON(http.StatusOK, resp)
+	}
+	filterSQL += rbacSQL
+	args = append(args, rbacArgs...)
+	argIdx = rbacIdx
 
 	if clusterFilter != "" {
 		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
@@ -176,4 +194,36 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+// snapshotRBACClusterFilter returns SQL AND args restricting snapshot rows to clusters
+// the user may read when RBAC is enabled. rbacDeny is true when the user has cluster
+// scope but no permitted clusters.
+func snapshotRBACClusterFilter(userPerms map[string][]string, argIdx int) (sql string, args []interface{}, nextIdx int, deny bool) {
+	nextIdx = argIdx
+	if !config.GetConfig().RBACEnabled {
+		return "", nil, nextIdx, false
+	}
+	if _, ok := userPerms["*"]; ok {
+		return "", nil, nextIdx, false
+	}
+	clusterPerms, hasCluster := userPerms["openshift.cluster"]
+	if !hasCluster {
+		return "", nil, nextIdx, false
+	}
+	if utils.StringInSlice("*", clusterPerms) {
+		return "", nil, nextIdx, false
+	}
+	if len(clusterPerms) == 0 {
+		return "", nil, nextIdx, true
+	}
+	placeholders := make([]string, len(clusterPerms))
+	args = make([]interface{}, len(clusterPerms))
+	for i, cu := range clusterPerms {
+		placeholders[i] = "$" + strconv.Itoa(argIdx+i)
+		args[i] = cu
+	}
+	nextIdx = argIdx + len(clusterPerms)
+	sql = " AND cluster_uuid IN (" + strings.Join(placeholders, ",") + ")"
+	return sql, args, nextIdx, false
 }
