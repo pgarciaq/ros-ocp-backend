@@ -287,8 +287,11 @@ func TestGetQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
 	ctx := context.Background()
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO quota_recommendation_history (
-			org_id, cluster_uuid, namespace, quota_name, recommendation_type, risk_level, recorded_at
-		) VALUES ($1, $2::uuid, 'detail-ns', '', 'tighten', 'low', NOW() - INTERVAL '2 days')`,
+			org_id, cluster_uuid, namespace, quota_name,
+			resource, recommendation_type, risk_level,
+			recommended_hard, current_hard, current_used, utilization_percent,
+			recorded_at
+		) VALUES ($1, $2::uuid, 'detail-ns', '', 'cpu_request', 'tighten', 'low', 36000, 100000, 50000, 50, NOW() - INTERVAL '2 days')`,
 		orgID, clusterUUID,
 	)
 	require.NoError(t, err)
@@ -308,6 +311,7 @@ func TestGetQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {
 	assert.Equal(t, "detail-ns", detail.Namespace)
 	assert.Equal(t, "tighten", detail.RecommendationType)
 	require.Len(t, detail.History, 1)
+	assert.Equal(t, "cpu_request", detail.History[0].Resource)
 }
 
 func TestQuotaUtilFromNullBP(t *testing.T) {

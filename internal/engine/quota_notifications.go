@@ -51,7 +51,10 @@ func quotaResourceBlocking(snap NamespaceQuotaSnapshot) bool {
 	return quotaUsedAtHard(snap.CPURequestUsedMC, snap.CPURequestHardMC) ||
 		quotaUsedAtHard(snap.CPULimitUsedMC, snap.CPULimitHardMC) ||
 		quotaUsedAtHard(snap.MemoryRequestUsedBytes, snap.MemoryRequestHardBytes) ||
-		quotaUsedAtHard(snap.MemoryLimitUsedBytes, snap.MemoryLimitHardBytes)
+		quotaUsedAtHard(snap.MemoryLimitUsedBytes, snap.MemoryLimitHardBytes) ||
+		quotaUsedAtHard(snap.StorageRequestUsedBytes, snap.StorageRequestHardBytes) ||
+		quotaUsedAtHard(snap.PodsUsed, snap.PodsHard) ||
+		quotaUsedAtHard(snap.ObjectCountUsed, snap.ObjectCountHard)
 }
 
 func quotaUsedAtHard(used, hard int64) bool {

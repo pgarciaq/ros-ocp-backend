@@ -10,47 +10,39 @@ import (
 
 const quotaRecHistoryRetentionDays = 90
 
-// QuotaRecommendationHistoryRow is one historical namespace quota recommendation snapshot.
+// QuotaRecommendationHistoryRow is one historical namespace quota resource snapshot.
 type QuotaRecommendationHistoryRow struct {
-	RecordedAt           time.Time `json:"recorded_at"`
-	RecommendationType   string    `json:"recommendation_type"`
-	RiskLevel            string    `json:"risk_level"`
-	CPURequestHardMC     *int64    `json:"cpu_request_hard_millicores,omitempty"`
-	CPURequestUsedMC     *int64    `json:"cpu_request_used_millicores,omitempty"`
-	CPURequestRecommendedMC *int64 `json:"cpu_request_recommended_millicores,omitempty"`
-	MemoryRequestHardBytes *int64  `json:"memory_request_hard_bytes,omitempty"`
-	MemoryRequestUsedBytes *int64  `json:"memory_request_used_bytes,omitempty"`
-	MemoryRequestRecommendedBytes *int64 `json:"memory_request_recommended_bytes,omitempty"`
-	MaxUtilizationPercent *float64 `json:"max_utilization_percent,omitempty"`
+	RecordedAt         time.Time `json:"recorded_at"`
+	Resource           string    `json:"resource"`
+	RecommendationType string    `json:"recommendation_type"`
+	RiskLevel          string    `json:"risk_level"`
+	RecommendedHard    *int64    `json:"recommended_hard,omitempty"`
+	CurrentHard        *int64    `json:"current_hard,omitempty"`
+	CurrentUsed        *int64    `json:"current_used,omitempty"`
+	UtilizationPercent *int      `json:"utilization_percent,omitempty"`
 }
 
-// AppendQuotaRecommendationHistory inserts a snapshot after each quota upsert.
+// AppendQuotaRecommendationHistory inserts per-resource snapshots after each quota upsert.
 func AppendQuotaRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec) error {
 	if len(recs) == 0 {
 		return nil
 	}
 	for _, r := range recs {
-		maxUtil := maxUtilizationPercent(r.Utilization)
-		_, err := pool.Exec(ctx, `
-			INSERT INTO quota_recommendation_history (
-				org_id, cluster_uuid, namespace, quota_name,
-				recommendation_type, risk_level,
-				cpu_request_hard_millicores, cpu_request_used_millicores,
-				cpu_request_recommended_millicores,
-				memory_request_hard_bytes, memory_request_used_bytes,
-				memory_request_recommended_bytes,
-				max_utilization_percent
-			) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
-			r.RecommendationType, r.RiskLevel,
-			nullableInt64(r.Snapshot.CPURequestHardMC), nullableInt64(r.Snapshot.CPURequestUsedMC),
-			nullableInt64(r.Recommended.CPURequestMillicores),
-			nullableInt64(r.Snapshot.MemoryRequestHardBytes), nullableInt64(r.Snapshot.MemoryRequestUsedBytes),
-			nullableInt64(r.Recommended.MemoryRequestBytes),
-			maxUtil,
-		)
-		if err != nil {
-			return fmt.Errorf("insert quota rec history %s: %w", r.Namespace, err)
+		for _, entry := range quotaHistoryEntries(r) {
+			_, err := pool.Exec(ctx, `
+				INSERT INTO quota_recommendation_history (
+					org_id, cluster_uuid, namespace, quota_name,
+					resource, recommendation_type, risk_level,
+					recommended_hard, current_hard, current_used, utilization_percent
+				) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+				r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
+				entry.resource, r.RecommendationType, r.RiskLevel,
+				nullableInt64(entry.recommendedHard), nullableInt64(entry.currentHard),
+				nullableInt64(entry.currentUsed), entry.utilizationPercent,
+			)
+			if err != nil {
+				return fmt.Errorf("insert quota rec history %s/%s: %w", r.Namespace, entry.resource, err)
+			}
 		}
 	}
 	return nil
@@ -80,15 +72,12 @@ func ListQuotaRecommendationHistory(
 		limit = 90
 	}
 	rows, err := pool.Query(ctx, `
-		SELECT recorded_at, recommendation_type, risk_level,
-			cpu_request_hard_millicores, cpu_request_used_millicores,
-			cpu_request_recommended_millicores,
-			memory_request_hard_bytes, memory_request_used_bytes,
-			memory_request_recommended_bytes,
-			max_utilization_percent
+		SELECT recorded_at, resource, recommendation_type, risk_level,
+			recommended_hard, current_hard, current_used, utilization_percent
 		FROM quota_recommendation_history
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3 AND quota_name = $4
-		ORDER BY recorded_at DESC
+			AND resource IS NOT NULL AND resource <> ''
+		ORDER BY recorded_at DESC, resource
 		LIMIT $5`,
 		orgID, clusterUUID, namespace, quotaName, limit,
 	)
@@ -100,33 +89,49 @@ func ListQuotaRecommendationHistory(
 	var out []QuotaRecommendationHistoryRow
 	for rows.Next() {
 		var row QuotaRecommendationHistoryRow
-		var cpuHard, cpuUsed, cpuRec, memHard, memUsed, memRec *int64
-		var maxUtil *float64
+		var recHard, curHard, curUsed *int64
+		var util *int
 		if err := rows.Scan(
-			&row.RecordedAt, &row.RecommendationType, &row.RiskLevel,
-			&cpuHard, &cpuUsed, &cpuRec,
-			&memHard, &memUsed, &memRec,
-			&maxUtil,
+			&row.RecordedAt, &row.Resource, &row.RecommendationType, &row.RiskLevel,
+			&recHard, &curHard, &curUsed, &util,
 		); err != nil {
 			return nil, fmt.Errorf("scan quota rec history: %w", err)
 		}
-		row.CPURequestHardMC = cpuHard
-		row.CPURequestUsedMC = cpuUsed
-		row.CPURequestRecommendedMC = cpuRec
-		row.MemoryRequestHardBytes = memHard
-		row.MemoryRequestUsedBytes = memUsed
-		row.MemoryRequestRecommendedBytes = memRec
-		row.MaxUtilizationPercent = maxUtil
+		row.RecommendedHard = recHard
+		row.CurrentHard = curHard
+		row.CurrentUsed = curUsed
+		row.UtilizationPercent = util
 		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
-func maxUtilizationPercent(util QuotaUtilizationBP) *float64 {
-	maxBP := maxUtilizationBP(util)
-	if maxBP <= 0 {
-		return nil
+type quotaHistoryEntry struct {
+	resource           string
+	recommendedHard    int64
+	currentHard        int64
+	currentUsed        int64
+	utilizationPercent *int
+}
+
+func quotaHistoryEntries(r QuotaRec) []quotaHistoryEntry {
+	s := r.Snapshot
+	var entries []quotaHistoryEntry
+	add := func(resource string, hard, used, recommended int64, util *int) {
+		if hard <= 0 {
+			return
+		}
+		entries = append(entries, quotaHistoryEntry{
+			resource:           resource,
+			recommendedHard:    recommended,
+			currentHard:        hard,
+			currentUsed:        used,
+			utilizationPercent: bpToPercentInt(util),
+		})
 	}
-	pct := float64(maxBP) / 100.0
-	return &pct
+	add("cpu_request", s.CPURequestHardMC, s.CPURequestUsedMC, r.Recommended.CPURequestMillicores, r.Utilization.CPURequestBP)
+	add("memory_request", s.MemoryRequestHardBytes, s.MemoryRequestUsedBytes, r.Recommended.MemoryRequestBytes, r.Utilization.MemoryRequestBP)
+	add("storage_request", s.StorageRequestHardBytes, s.StorageRequestUsedBytes, r.Recommended.StorageRequestBytes, r.Utilization.StorageRequestBP)
+	add("pods", s.PodsHard, s.PodsUsed, r.Recommended.Pods, r.Utilization.PodsBP)
+	return entries
 }

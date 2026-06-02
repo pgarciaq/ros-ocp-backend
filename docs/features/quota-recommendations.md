@@ -181,11 +181,10 @@ and [known issues](../known-issues.md#deferred-quota-ui).
 
 | Gap | Notes |
 |-----|-------|
-| **Storage / object counts** | Operator `kube_resourcequota` queries only collect CPU/memory request/limit hard and used. No `requests.storage`, `pods`, or `count/*` in the namespace ROS CSV — requires [koku-metrics-operator](https://github.com/project-koku/koku-metrics-operator) query/CSV changes before ros-ocp-backend can ingest them. |
-| **Per-quota object identity** | Operator sums `kube_resourcequota` **by namespace** only (no `resourcequota` label in PromQL). Multiple `ResourceQuota` objects per namespace are merged — per-object `quota_name` needs operator CSV columns. |
+| **Object-count tighten/raise** | Operator ingests aggregated `object_count_*` (sum of all `count/*` types). The engine includes object counts in **risk** and **blocking** notifications (code 72) but not in tighten/raise or savings: there is no workload-derived target comparable to container CPU/memory sums, and freed object-count capacity is not monetized. |
 | **CRQ namespace selector** | Implemented: operator exports comma-separated `namespaces` on cluster-quota CSV; engine sums namespace quota recommendations for member namespaces only. |
 
-Implemented in this plugin: `order_by` / `order_how`, detail endpoints with `history[]`, notification codes **70–73**, and append-only `quota_recommendation_history` (90-day retention).
+Implemented in this plugin: storage and pods in tighten/raise/risk/savings (storage monetized via cost model; pods reported in `capacity_freed` only), per-resource `history[]` aligned with cluster-quota (`cpu_request`, `memory_request`, `storage_request`, `pods`), `order_by` / `order_how`, detail endpoints, notification codes **70–72** (73 is CRQ-only), and append-only `quota_recommendation_history` (90-day retention).
 
 ---
 

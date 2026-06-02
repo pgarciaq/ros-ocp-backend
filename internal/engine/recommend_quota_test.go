@@ -235,6 +235,59 @@ func TestApplyQuotaSavings_TightenOnly(t *testing.T) {
 	assert.Zero(t, recs[1].EstimatedSavingsCents)
 }
 
+func TestComputeQuotaRecommendation_StorageTighten(t *testing.T) {
+	const gib = 1024 * 1024 * 1024
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   12000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:               "app",
+		StorageRequestHardBytes: 10 * gib,
+		StorageRequestUsedBytes: 2 * gib,
+	}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, ContainerQuotaAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRecTypeTighten, rec.RecommendationType)
+	assert.Equal(t, int64(2576980377), rec.Recommended.StorageRequestBytes)
+	assert.Equal(t, int64(8160437863), rec.CapacityFreed.StorageBytes)
+}
+
+func TestComputeQuotaRecommendation_PodsRaise(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   10000,
+		HighRiskThresholdBP:   8000,
+		MediumRiskThresholdBP: 6000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace: "app",
+		PodsHard:  50,
+		PodsUsed:  45,
+	}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, ContainerQuotaAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRecTypeRaise, rec.RecommendationType)
+	assert.Equal(t, QuotaRiskHigh, rec.RiskLevel)
+	require.NotNil(t, rec.Utilization.PodsBP)
+	assert.Equal(t, 9000, *rec.Utilization.PodsBP)
+}
+
+func TestApplyQuotaSavings_StorageFreed(t *testing.T) {
+	const gib = 1024 * 1024 * 1024
+	recs := []QuotaRec{{
+		RecommendationType: QuotaRecTypeTighten,
+		CapacityFreed:      QuotaCapacityFreed{StorageBytes: gib},
+	}}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"storage_gb_request_per_month": {Supplementary: 0.10},
+		},
+	}
+	ApplyQuotaSavings(recs, cd)
+	assert.Equal(t, int64(10), recs[0].EstimatedSavingsCents)
+}
+
 func TestApplyQuotaSavings_MemoryFreed(t *testing.T) {
 	const gib = 1024 * 1024 * 1024
 	recs := []QuotaRec{{

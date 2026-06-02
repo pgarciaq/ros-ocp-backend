@@ -42,6 +42,16 @@ func TestClusterQuotaNotificationCodes_AtCapacity(t *testing.T) {
 	assert.Contains(t, codes, NotifClusterQuotaAtCapacity)
 }
 
+func TestQuotaNotificationCodes_StorageBlocking(t *testing.T) {
+	snap := NamespaceQuotaSnapshot{
+		StorageRequestHardBytes: 1000,
+		StorageRequestUsedBytes: 1000,
+	}
+	rec := QuotaRec{RiskLevel: QuotaRiskLow, RecommendationType: QuotaRecTypeOptimal}
+	codes := QuotaNotificationCodes(snap, rec)
+	assert.Contains(t, codes, NotifQuotaBlocking)
+}
+
 func TestClusterQuotaNotificationCodes_BlockingAndOversized(t *testing.T) {
 	rec := ClusterQuotaRec{
 		Snapshot: ClusterQuotaSnapshot{

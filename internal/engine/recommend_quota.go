@@ -104,14 +104,16 @@ type QuotaResourceBundle struct {
 
 // QuotaUtilizationBP holds utilization ratios in basis points (used or recommended vs hard).
 type QuotaUtilizationBP struct {
-	CPURequestBP   *int
-	CPULimitBP     *int
+	CPURequestBP    *int
+	CPULimitBP      *int
 	MemoryRequestBP *int
 	MemoryLimitBP   *int
+	StorageRequestBP *int
+	PodsBP          *int
+	ObjectCountBP   *int
 }
 
 // QuotaCapacityFreed holds capacity that could be reclaimed by tightening quota.
-// StorageBytes and PodsFreed are populated for cluster-quota recommendations only.
 type QuotaCapacityFreed struct {
 	CPUMillicores int64
 	MemoryBytes   int64
@@ -163,11 +165,16 @@ func computeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSn
 		Currency:    money.DefaultCurrency,
 	}
 
+	storageRecommended := applyHeadroom(snap.StorageRequestUsedBytes, cfg.HeadroomBasisPoints)
+	podsRecommended := applyHeadroom(snap.PodsUsed, cfg.HeadroomBasisPoints)
+
 	rec.Recommended = QuotaResourceBundle{
 		CPURequestMillicores: applyHeadroom(agg.CPURequestSumMC, cfg.HeadroomBasisPoints),
 		CPULimitMillicores:   applyHeadroom(agg.CPULimitSumMC, cfg.HeadroomBasisPoints),
 		MemoryRequestBytes:   applyHeadroom(agg.MemoryRequestSumBytes, cfg.HeadroomBasisPoints),
 		MemoryLimitBytes:     applyHeadroom(agg.MemoryLimitSumBytes, cfg.HeadroomBasisPoints),
+		StorageRequestBytes:  storageRecommended,
+		Pods:                 podsRecommended,
 	}
 
 	// Signal C: utilization vs hard uses the greater of quota "used" and container rec sums.
@@ -178,6 +185,9 @@ func computeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSn
 			maxInt64(snap.MemoryRequestUsedBytes, agg.MemoryRequestSumBytes), snap.MemoryRequestHardBytes),
 		MemoryLimitBP: utilizationBP(
 			maxInt64(snap.MemoryLimitUsedBytes, agg.MemoryLimitSumBytes), snap.MemoryLimitHardBytes),
+		StorageRequestBP: utilizationBP(maxInt64(snap.StorageRequestUsedBytes, storageRecommended), snap.StorageRequestHardBytes),
+		PodsBP:           utilizationBP(maxInt64(snap.PodsUsed, podsRecommended), snap.PodsHard),
+		ObjectCountBP:    utilizationBP(snap.ObjectCountUsed, snap.ObjectCountHard),
 	}
 
 	rec.RiskLevel = classifyQuotaRisk(rec.Utilization, cfg)
@@ -204,7 +214,10 @@ func utilizationBP(used, hard int64) *int {
 
 func maxUtilizationBP(util QuotaUtilizationBP) int {
 	max := 0
-	for _, v := range []*int{util.CPURequestBP, util.CPULimitBP, util.MemoryRequestBP, util.MemoryLimitBP} {
+	for _, v := range []*int{
+		util.CPURequestBP, util.CPULimitBP, util.MemoryRequestBP, util.MemoryLimitBP,
+		util.StorageRequestBP, util.PodsBP, util.ObjectCountBP,
+	} {
 		if v != nil && *v > max {
 			max = *v
 		}
@@ -232,6 +245,9 @@ func classifyQuotaRecommendation(snap NamespaceQuotaSnapshot, recommended QuotaR
 
 	cpuTighten := snap.CPURequestHardMC > 0 && recommended.CPURequestMillicores > 0 && recommended.CPURequestMillicores < snap.CPURequestHardMC
 	memTighten := snap.MemoryRequestHardBytes > 0 && recommended.MemoryRequestBytes > 0 && recommended.MemoryRequestBytes < snap.MemoryRequestHardBytes
+	storageTighten := snap.StorageRequestHardBytes > 0 && recommended.StorageRequestBytes > 0 &&
+		recommended.StorageRequestBytes < snap.StorageRequestHardBytes
+	podsTighten := snap.PodsHard > 0 && recommended.Pods > 0 && recommended.Pods < snap.PodsHard
 
 	if cpuTighten {
 		freed.CPUMillicores = snap.CPURequestHardMC - recommended.CPURequestMillicores
@@ -239,11 +255,17 @@ func classifyQuotaRecommendation(snap NamespaceQuotaSnapshot, recommended QuotaR
 	if memTighten {
 		freed.MemoryBytes = snap.MemoryRequestHardBytes - recommended.MemoryRequestBytes
 	}
+	if storageTighten {
+		freed.StorageBytes = snap.StorageRequestHardBytes - recommended.StorageRequestBytes
+	}
+	if podsTighten {
+		freed.PodsFreed = snap.PodsHard - recommended.Pods
+	}
 
 	if needsRaise {
 		return QuotaRecTypeRaise, freed
 	}
-	if cpuTighten || memTighten {
+	if cpuTighten || memTighten || storageTighten || podsTighten {
 		return QuotaRecTypeTighten, freed
 	}
 	if snap.hasHardLimits() {
@@ -260,13 +282,16 @@ func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData) {
 	cpuRate := CPUCoreHourlyRate(costData)
 	memRate := MemoryGBHourlyRate(costData)
 
+	storageRate := StorageRequestPerMonth(costData)
+
 	for i := range recs {
 		if recs[i].RecommendationType != QuotaRecTypeTighten {
 			continue
 		}
 		cpuDelta := float64(recs[i].CapacityFreed.CPUMillicores) / 1000.0
 		memDelta := float64(recs[i].CapacityFreed.MemoryBytes) / (1024.0 * 1024.0 * 1024.0)
-		savings := cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth
+		storageGiB := float64(recs[i].CapacityFreed.StorageBytes) / (1024.0 * 1024.0 * 1024.0)
+		savings := cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth + storageGiB*storageRate
 		if savings < 0 {
 			savings = 0
 		}
