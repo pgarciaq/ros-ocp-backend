@@ -38,6 +38,25 @@ func TestAggregateNodeDigests_GroupsByNodeAndDay(t *testing.T) {
 	require.Len(t, result, 3)
 }
 
+func TestAggregateNodeDigests_DistinctPodsPerHour(t *testing.T) {
+	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+
+	// Two containers in the same pod at the same interval count as one pod.
+	rows := []MetricRow{
+		{IntervalStart: interval, Node: "node-a", Pod: "app-1", CPUUsageMC: 100, MemUsageKiB: 500},
+		{IntervalStart: interval, Node: "node-a", Pod: "app-1", CPUUsageMC: 50, MemUsageKiB: 200},
+		{IntervalStart: interval, Node: "node-a", Pod: "app-2", CPUUsageMC: 80, MemUsageKiB: 400},
+	}
+
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 1)
+
+	for _, acc := range result {
+		_, _, _, _, _, _, maxPods, _ := acc.Finalize()
+		assert.Equal(t, int64(2), maxPods, "max_pod_count should count distinct pods, not containers")
+	}
+}
+
 func TestAggregateNodeDigests_AccumulatesPerInterval(t *testing.T) {
 	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
 
@@ -60,7 +79,7 @@ func TestAggregateNodeDigests_AccumulatesPerInterval(t *testing.T) {
 		assert.Equal(t, int64(1100), memP95)
 		assert.Equal(t, int64(500), maxCPUReq) // 200 + 300
 		assert.Equal(t, int64(3000), maxMemReq)
-		assert.Equal(t, int64(2), maxPods)
+		assert.Equal(t, int64(1), maxPods, "single pod with two containers")
 		assert.Equal(t, int64(1), sampleCount) // 1 unique interval
 	}
 }
@@ -165,6 +184,26 @@ func TestAggregateNodeDigests_AllocatableTracked(t *testing.T) {
 	for _, acc := range result {
 		assert.Equal(t, int64(3500), acc.MaxCPUAllocatableMC)
 		assert.Equal(t, int64(15000000), acc.MaxMemAllocatableKiB)
+	}
+}
+
+func TestAggregateNodeDigests_PodCapacityAndMachineSet(t *testing.T) {
+	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	rows := []MetricRow{
+		{
+			IntervalStart:   interval,
+			Node:            "node-ms",
+			NodePodCapacity: 250,
+			MachineSetName:  "worker-us-east-1",
+			CPUUsageMC:      100,
+			MemUsageKiB:     500,
+		},
+	}
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 1)
+	for _, acc := range result {
+		assert.Equal(t, int64(250), acc.MaxPodCapacity)
+		assert.Equal(t, "worker-us-east-1", acc.MachineSetName)
 	}
 }
 

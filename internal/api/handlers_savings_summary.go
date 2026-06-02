@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -87,6 +88,14 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
 	}
 
+	termProfile := strings.TrimSpace(c.QueryParam("term"))
+	if termProfile == "" {
+		termProfile = "medium"
+	}
+	if termProfile != "short" && termProfile != "medium" && termProfile != "long" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid term"})
+	}
+
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -140,7 +149,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 			}
 			clusterUUIDs = []string{clusterQueryFilter}
 		}
-		byIdle, qerr := queryFleetSavingsByIdleState(ctx, pool, orgID, clusterUUIDs, engineProfile)
+		byIdle, qerr := queryFleetSavingsByIdleState(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile)
 		if qerr != nil {
 			hlog.Errorf("fleet savings by idle_state query failed: %v", qerr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -180,6 +189,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 			ClusterUUIDs:    clusterUUIDs,
 			NamespaceFilter: namespaceFilter,
 			EngineProfile:   engineProfile,
+			TermProfile:     termProfile,
 			TagKey:          groupByTagKey,
 		})
 		if qerr != nil {
@@ -194,7 +204,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 
 	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
-	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile, currency)
+	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if qerr != nil {
 		hlog.Errorf("fleet savings summary query failed: %v", qerr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -208,7 +218,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	return c.JSON(http.StatusOK, summary)
 }
 
-func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string, currency string) (FleetSavingsSummaryResponse, error) {
+func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsSummaryResponse, error) {
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
@@ -217,7 +227,7 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 		ByCluster: []FleetClusterSavings{},
 	}
 
-	byPlugin, err := queryFleetSavingsByPlugin(ctx, pool, orgID, clusterUUIDs, engineProfile)
+	byPlugin, err := queryFleetSavingsByPlugin(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile)
 	if err != nil {
 		return resp, err
 	}
@@ -227,7 +237,7 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	)
 	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, currency)
 
-	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, currency)
+	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
 		return resp, err
 	}
@@ -235,27 +245,29 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	return resp, nil
 }
 
-func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string) (FleetSavingsByPlugin, error) {
+func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByPlugin, error) {
 	var out FleetSavingsByPlugin
-	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
+	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
+	termRef := fmt.Sprintf("$%d", termParam)
+	vmTerm := savingsSummaryVMTerm(termProfile)
 
 	err := pool.QueryRow(ctx, `
 		SELECT
 			COALESCE((
 				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM recommendation_sets
-				WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
+				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			), 0),
 			COALESCE((
 				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM node_recommendations
-				WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
+				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			), 0),
 			COALESCE((
 				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
 				FROM pvc_recommendation_sets
-				WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
+				WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			), 0),
 			COALESCE((
 				SELECT SUM(estimated_monthly_cost_usd)
@@ -265,7 +277,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 			COALESCE((
 				SELECT SUM(savings_amount)
 				FROM vm_recommendations
-				WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
+				WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 			), 0)`,
 		args...,
 	).Scan(&out.Container, &out.Node, &out.PVC, &out.Snapshot, &out.VM)
@@ -281,27 +293,29 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	return out, nil
 }
 
-func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string, currency string) ([]FleetClusterSavings, error) {
+func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) ([]FleetClusterSavings, error) {
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
-	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
+	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
+	termRef := fmt.Sprintf("$%d", termParam)
+	vmTerm := savingsSummaryVMTerm(termProfile)
 	noCostCode := fmt.Sprintf("%d", engine.NotifNoCostData)
 
 	rows, err := pool.Query(ctx, `
 		WITH rec_clusters AS (
 			SELECT DISTINCT cluster_uuid::text AS cluster_uuid
 			FROM recommendation_sets
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			UNION
 			SELECT DISTINCT cluster_uuid::text
 			FROM node_recommendations
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			UNION
 			SELECT DISTINCT cluster_uuid::text
 			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			UNION
 			SELECT DISTINCT cluster_uuid::text
 			FROM snapshot_recommendation_sets
@@ -309,27 +323,27 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 			UNION
 			SELECT DISTINCT cluster_uuid::text
 			FROM vm_recommendations
-			WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 		),
 		container_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
 			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM recommendation_sets
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		node_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
 			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM node_recommendations
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		pvc_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
 			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
 			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		snapshot_savings AS (
@@ -343,21 +357,21 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 			SELECT cluster_uuid::text AS cluster_uuid,
 			       COALESCE(SUM(savings_amount), 0) AS savings
 			FROM vm_recommendations
-			WHERE org_id = $1 AND term = 'medium_term' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		cost_recs AS (
 			SELECT cluster_uuid::text AS cluster_uuid, notification_codes
 			FROM recommendation_sets
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			UNION ALL
 			SELECT cluster_uuid::text, notification_codes
 			FROM node_recommendations
-			WHERE org_id = $1 AND term = 'medium' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			UNION ALL
 			SELECT cluster_uuid::text, notification_codes
 			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = 'medium'`+clusterFilter+`
+			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 		),
 		cost_data AS (
 			SELECT cluster_uuid,
@@ -428,24 +442,39 @@ func savingsSummaryClusterArgsForColumn(orgID string, clusterUUIDs []string, col
 	return ` AND ` + column + `::text = ANY($2::text[])`, args
 }
 
-func savingsSummaryQueryArgs(orgID string, clusterUUIDs []string, engineProfile string) (filterSQL string, args []interface{}, engineParam int) {
-	return savingsSummaryQueryArgsForColumn(orgID, clusterUUIDs, engineProfile, "cluster_uuid")
+func savingsSummaryQueryArgs(orgID string, clusterUUIDs []string, engineProfile, termProfile string) (filterSQL string, args []interface{}, engineParam, termParam int) {
+	return savingsSummaryQueryArgsForColumn(orgID, clusterUUIDs, engineProfile, termProfile, "cluster_uuid")
 }
 
-func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engineProfile string, clusterColumn string) (filterSQL string, args []interface{}, engineParam int) {
+func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engineProfile, termProfile, clusterColumn string) (filterSQL string, args []interface{}, engineParam, termParam int) {
 	filterSQL, args = savingsSummaryClusterArgsForColumn(orgID, clusterUUIDs, clusterColumn)
 	engineParam = len(args) + 1
 	args = append(args, engineProfile)
-	return filterSQL, args, engineParam
+	termParam = len(args) + 1
+	args = append(args, termProfile)
+	return filterSQL, args, engineParam, termParam
 }
 
-func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile string) (FleetSavingsByIdleStateResponse, error) {
+// savingsSummaryVMTerm maps container/node term names to vm_recommendations term values.
+func savingsSummaryVMTerm(term string) string {
+	switch term {
+	case "short":
+		return "short_term"
+	case "long":
+		return "long_term"
+	default:
+		return "medium_term"
+	}
+}
+
+func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByIdleStateResponse, error) {
 	resp := FleetSavingsByIdleStateResponse{
 		Data: []FleetIdleStateSavingsRow{},
 		Meta: FleetSavingsByIdleMeta{Count: 0},
 	}
-	clusterFilter, args, engineParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile)
+	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
+	termRef := fmt.Sprintf("$%d", termParam)
 
 	rows, err := pool.Query(ctx, `
 		SELECT idle_state,
@@ -453,7 +482,7 @@ func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID
 		       COALESCE(SUM(estimated_waste_cents), 0)::float / 100.0 AS waste_usd
 		FROM recommendation_sets
 		WHERE org_id = $1
-		  AND term = 'medium'
+		  AND term = `+termRef+`
 		  AND engine = `+engineRef+`
 		  AND stale = false
 		  AND idle_state IN ('idle', 'zombie')`+clusterFilter+`

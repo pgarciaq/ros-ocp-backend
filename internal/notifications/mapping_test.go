@@ -70,26 +70,78 @@ func TestMapToKruizeFormat_VMPlacementCodes60to63(t *testing.T) {
 	assert.Equal(t, int16(63), result["63"].Code)
 }
 
+func TestFleetConsolidationRecommendation(t *testing.T) {
+	msg := FleetConsolidationRecommendation("worker-us-east-1a", 2)
+	assert.Equal(t, "reduce MachineSet 'worker-us-east-1a' by 2 nodes", msg)
+	assert.Empty(t, FleetConsolidationRecommendation("", 2))
+	assert.Empty(t, FleetConsolidationRecommendation("worker-a", 0))
+}
+
+func TestMapToKruizeFormatForNode_FleetConsolidation(t *testing.T) {
+	result := MapToKruizeFormatForNode([]int16{76}, nil, "worker-a", 2)
+	require.NotNil(t, result)
+	entry, ok := result["76"]
+	require.True(t, ok)
+	assert.Equal(t, "reduce MachineSet 'worker-a' by 2 nodes", entry.Message)
+}
+
 func TestNotificationDefinitionsComplete(t *testing.T) {
-	for code := int16(1); code <= 69; code++ {
-		_, ok := Definitions[code]
-		assert.True(t, ok, "notification code %d should be defined", code)
+	require.NotEmpty(t, Definitions)
+	for code, def := range Definitions {
+		assert.Greater(t, code, int16(0), "notification code must be positive")
+		assert.NotEmpty(t, def.Severity, "code %d severity", code)
+		assert.NotEmpty(t, def.Message, "code %d message", code)
 	}
+	_, ok := Definitions[74]
+	require.True(t, ok, "notification code 74 (node pod scheduling limit) should be defined")
+	assert.Contains(t, Definitions[74].Message, "pod scheduling")
+	_, ok = Definitions[76]
+	require.True(t, ok, "notification code 76 (node fleet consolidation) should be defined")
+}
+
+func TestMapToKruizeFormat_NotifAIdle_Code15(t *testing.T) {
+	result := MapToKruizeFormat([]int16{15})
+	require.Len(t, result, 1)
+	entry := result["15"]
+	assert.Equal(t, "INFO", entry.Type)
+	assert.Equal(t, int16(15), entry.Code)
+	assert.Contains(t, entry.Message, "idle")
+	assert.NotContains(t, entry.Message, "MachineAutoscaler")
+	assert.NotContains(t, entry.Message, "minReplicas")
+}
+
+func TestMapToKruizeFormatForNode_StrandedCPU(t *testing.T) {
+	cpu := "cpu"
+	result := MapToKruizeFormatForNode([]int16{13}, &cpu, "", 0)
+	require.NotNil(t, result)
+	entry := result["13"]
+	assert.Equal(t, "memory-optimized", entry.SuggestedDirection)
+	assert.Contains(t, entry.Message, "memory-optimized")
+}
+
+func TestMapToKruizeFormatForNode_StrandedMemory(t *testing.T) {
+	mem := "memory"
+	result := MapToKruizeFormatForNode([]int16{13}, &mem, "", 0)
+	require.NotNil(t, result)
+	entry := result["13"]
+	assert.Equal(t, "compute-optimized", entry.SuggestedDirection)
+	assert.Contains(t, entry.Message, "compute-optimized")
 }
 
 func TestMapToKruizeFormat_AllDefinedCodes(t *testing.T) {
 	var allCodes []int16
-	for code := int16(1); code <= 69; code++ {
+	for code := range Definitions {
 		allCodes = append(allCodes, code)
 	}
 
 	result := MapToKruizeFormat(allCodes)
-	require.Len(t, result, 69)
+	require.Len(t, result, len(Definitions))
 
 	for _, entry := range result {
 		assert.NotEmpty(t, entry.Type)
 		assert.NotEmpty(t, entry.Message)
-		assert.True(t, entry.Code >= 1 && entry.Code <= 73)
+		_, ok := Definitions[entry.Code]
+		assert.True(t, ok, "mapped entry code %d should exist in Definitions", entry.Code)
 	}
 }
 

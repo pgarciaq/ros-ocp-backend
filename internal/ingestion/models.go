@@ -44,6 +44,12 @@ type MetricRow struct {
 	// Empty when the column is absent from the CSV or the node is bare-metal.
 	InstanceType string
 
+	// NodePodCapacity is max schedulable pods on the node (optional; from node_capacity_pods or pod_capacity CSV columns).
+	NodePodCapacity int64
+
+	// MachineSetName is the OpenShift MachineSet for the node (optional).
+	MachineSetName string
+
 	AcceleratorModelName   string
 	AcceleratorProfileName string
 	AcceleratorFBUsageMin  float64

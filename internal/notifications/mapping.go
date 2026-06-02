@@ -5,9 +5,10 @@ import "fmt"
 // NotificationEntry is the Kruize-compatible notification object shape
 // expected by koku-ui. Keys are string representations of the code.
 type NotificationEntry struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
-	Code    int16  `json:"code"`
+	Type               string `json:"type"`
+	Message            string `json:"message"`
+	Code               int16  `json:"code"`
+	SuggestedDirection string `json:"suggested_direction,omitempty"`
 }
 
 type notifDef struct {
@@ -33,7 +34,7 @@ var Definitions = map[int16]notifDef{
 	12: {"WARNING", "Node request overcommit ratio exceeds threshold"},
 	13: {"INFO", "Imbalanced CPU/memory utilization — consider different instance family"},
 	14: {"WARNING", "MachineAutoscaler at maxReplicas sustained — consider increasing"},
-	15: {"INFO", "MachineAutoscaler at minReplicas sustained — consider decreasing"},
+	15: {"INFO", "Node has been idle with minimal utilization over the analysis period"},
 	16: {"WARNING", "Frequent scale events — widen stabilization window"},
 	17: {"INFO", "MachineSet has variable load but no autoscaler configured"},
 	18: {"WARNING", "VM is idle: CPU and memory usage are consistently below thresholds"},
@@ -92,6 +93,9 @@ var Definitions = map[int16]notifDef{
 	71: {"INFO", "Namespace ResourceQuota hard limits exceed recommended values — capacity can be reclaimed by tightening"},
 	72: {"CRITICAL", "Namespace ResourceQuota used equals hard limit on one or more resources — new workloads may fail admission"},
 	73: {"WARNING", "ClusterResourceQuota utilization is at or above the high-risk threshold"},
+	74: {"WARNING", "Node is near pod scheduling limit — limited headroom for additional pods"},
+	75: {"INFO", "MachineAutoscaler at minReplicas sustained — consider decreasing"},
+	76: {"INFO", "Fleet consolidation recommended for this MachineSet"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible
@@ -115,4 +119,59 @@ func MapToKruizeFormat(codes []int16) map[string]NotificationEntry {
 		}
 	}
 	return result
+}
+
+const notifStrandedResourcesCode int16 = 13
+const notifNodeFleetConsolidationCode int16 = 76
+
+// FleetConsolidationRecommendation formats fleet-level node reduction guidance for a MachineSet.
+func FleetConsolidationRecommendation(machineSetName string, nodesToRemove int) string {
+	if machineSetName == "" || nodesToRemove <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("reduce MachineSet '%s' by %d nodes", machineSetName, nodesToRemove)
+}
+
+// MapToKruizeFormatForNode converts node recommendation notification codes and
+// enriches stranded-resource notifications with an instance-family direction hint.
+// When fleetMachineSetName and fleetNodesToRemove are set, fleet consolidation (code 76) is enriched.
+func MapToKruizeFormatForNode(codes []int16, strandedResource *string, fleetMachineSetName string, fleetNodesToRemove int) map[string]NotificationEntry {
+	result := MapToKruizeFormat(codes)
+	if result == nil {
+		return result
+	}
+	if fleetMachineSetName != "" && fleetNodesToRemove > 0 {
+		key := fmt.Sprintf("%d", notifNodeFleetConsolidationCode)
+		if entry, ok := result[key]; ok {
+			entry.Message = FleetConsolidationRecommendation(fleetMachineSetName, fleetNodesToRemove)
+			result[key] = entry
+		}
+	}
+	if strandedResource == nil {
+		return result
+	}
+	direction := strandedSuggestedDirection(*strandedResource)
+	if direction == "" {
+		return result
+	}
+	key := fmt.Sprintf("%d", notifStrandedResourcesCode)
+	entry, ok := result[key]
+	if !ok {
+		return result
+	}
+	entry.SuggestedDirection = direction
+	entry.Message = entry.Message + " — consider " + direction + " instances"
+	result[key] = entry
+	return result
+}
+
+func strandedSuggestedDirection(stranded string) string {
+	switch stranded {
+	case "cpu":
+		return "memory-optimized"
+	case "memory":
+		return "compute-optimized"
+	default:
+		return ""
+	}
 }

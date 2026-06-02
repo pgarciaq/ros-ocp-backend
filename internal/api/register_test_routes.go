@@ -12,6 +12,7 @@ func RegisterTestInternalRoutes(e *echo.Echo) {
 	internal := e.Group("/api/cost-management/v1/internal")
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
+	internal.POST("/recalculate-savings", PostRecalculateSavings)
 }
 
 // RegisterV1RoutesForTest mounts the same v1 recommendation routes as StartAPIServer.

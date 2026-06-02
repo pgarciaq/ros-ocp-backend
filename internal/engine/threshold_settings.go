@@ -163,6 +163,10 @@ type NodeThresholdSettings struct {
 	IdleCPUUtilPct                      int64   `json:"idle_cpu_util_pct"`
 	IdleMemUtilPct                      int64   `json:"idle_mem_util_pct"`
 	IdleMaxPods                         int64   `json:"idle_max_pods"`
+	// PodHeadroomConsolidationGate is the minimum pod scheduling headroom (0.0–1.0) before consolidation is suppressed.
+	PodHeadroomConsolidationGate float64 `json:"pod_headroom_consolidation_gate"`
+	// PodHeadroomNotificationThreshold is the headroom (0.0–1.0) below which notification code 74 is emitted.
+	PodHeadroomNotificationThreshold float64 `json:"pod_headroom_notification_threshold"`
 }
 
 // NodeThresholdSettingsResponse is the API GET response for node thresholds.
@@ -183,6 +187,13 @@ type NodeThresholdSettingsUpdate struct {
 	PerfTargetUtilization               *float64 `json:"perf_target_utilization,omitempty"`
 	PerfConsolidationHeadroomMultiplier *float64 `json:"perf_consolidation_headroom_multiplier,omitempty"`
 	TrendMinDays                        *int     `json:"trend_min_days,omitempty"`
+	ZombieCPUP95MC                      *int64   `json:"zombie_cpu_p95_mc,omitempty"`
+	ZombieMaxPods                       *int64   `json:"zombie_max_pods,omitempty"`
+	IdleCPUUtilPct                      *int64   `json:"idle_cpu_util_pct,omitempty"`
+	IdleMemUtilPct                      *int64   `json:"idle_mem_util_pct,omitempty"`
+	IdleMaxPods                         *int64   `json:"idle_max_pods,omitempty"`
+	PodHeadroomConsolidationGate        *float64 `json:"pod_headroom_consolidation_gate,omitempty"`
+	PodHeadroomNotificationThreshold    *float64 `json:"pod_headroom_notification_threshold,omitempty"`
 }
 
 // GPUThresholdSettings holds GPU classification, confidence, and time-slicing parameters.
@@ -305,6 +316,8 @@ func DefaultNodeThresholdSettings() NodeThresholdSettings {
 		IdleCPUUtilPct:                      10,
 		IdleMemUtilPct:                      10,
 		IdleMaxPods:                         10,
+		PodHeadroomConsolidationGate:        0.15,
+		PodHeadroomNotificationThreshold:    0.10,
 	}
 }
 
@@ -498,6 +511,12 @@ func applyNodeEnvLocks(base NodeThresholdSettings, cfg *config.Config) NodeThres
 	}
 	if _, ok := os.LookupEnv("ROS_NODE_IDLE_MAX_PODS"); ok {
 		base.IdleMaxPods = cfg.NodeIdleMaxPods
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE"); ok {
+		base.PodHeadroomConsolidationGate = cfg.NodePodHeadroomConsolidationGate
+	}
+	if _, ok := os.LookupEnv("ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD"); ok {
+		base.PodHeadroomNotificationThreshold = cfg.NodePodHeadroomNotificationThreshold
 	}
 	return base
 }
@@ -741,6 +760,13 @@ func nodeEnvLockMap() map[string]string {
 		"ROS_NODE_PERF_TARGET_UTILIZATION":                "perf_target_utilization",
 		"ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER": "perf_consolidation_headroom_multiplier",
 		"ROS_NODE_TREND_MIN_DAYS":                         "trend_min_days",
+		"ROS_NODE_ZOMBIE_CPU_MC":                          "zombie_cpu_p95_mc",
+		"ROS_NODE_ZOMBIE_MAX_PODS":                        "zombie_max_pods",
+		"ROS_NODE_IDLE_CPU_UTIL_PCT":                      "idle_cpu_util_pct",
+		"ROS_NODE_IDLE_MEM_UTIL_PCT":                      "idle_mem_util_pct",
+		"ROS_NODE_IDLE_MAX_PODS":                          "idle_max_pods",
+		"ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE":        "pod_headroom_consolidation_gate",
+		"ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD":    "pod_headroom_notification_threshold",
 	}
 }
 
@@ -1032,6 +1058,13 @@ func lockedNodeFieldsInUpdate(update NodeThresholdSettingsUpdate) []string {
 	check("perf_target_utilization", update.PerfTargetUtilization != nil)
 	check("perf_consolidation_headroom_multiplier", update.PerfConsolidationHeadroomMultiplier != nil)
 	check("trend_min_days", update.TrendMinDays != nil)
+	check("zombie_cpu_p95_mc", update.ZombieCPUP95MC != nil)
+	check("zombie_max_pods", update.ZombieMaxPods != nil)
+	check("idle_cpu_util_pct", update.IdleCPUUtilPct != nil)
+	check("idle_mem_util_pct", update.IdleMemUtilPct != nil)
+	check("idle_max_pods", update.IdleMaxPods != nil)
+	check("pod_headroom_consolidation_gate", update.PodHeadroomConsolidationGate != nil)
+	check("pod_headroom_notification_threshold", update.PodHeadroomNotificationThreshold != nil)
 	return locked
 }
 

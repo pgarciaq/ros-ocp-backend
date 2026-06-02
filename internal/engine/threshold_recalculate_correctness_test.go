@@ -245,8 +245,8 @@ func TestRecalculation_NodeTargetUtilization_AffectsConsolidation(t *testing.T) 
 	InvalidateThresholdCache(orgID, "node")
 
 	recsHighTarget := nodeCostRecs(t, pool, orgID, nodeNames...)
-	assert.Equal(t, 4, fleetNodeCountReduction(recsHighTarget),
-		"each underutilized node should recommend consolidation at target 0.80")
+	assert.Equal(t, 2, fleetNodeCountReduction(recsHighTarget),
+		"four underutilized nodes at target 0.80 should fleet-consolidate by two nodes")
 	assert.LessOrEqual(t, fleetNodesNeeded(recsHighTarget), 2,
 		"40%% utilization on 4 nodes at target 0.80 should fit on ~2 right-sized nodes")
 

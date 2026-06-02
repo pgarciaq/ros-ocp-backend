@@ -200,6 +200,11 @@ func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy Order
 	}, nil
 }
 
+// ResolveResponseFormat selects JSON or CSV from the Accept header and format query parameter.
+func ResolveResponseFormat(acceptHeaderVal string, formatQueryParamVal string) (string, error) {
+	return resolveResponseFormat(acceptHeaderVal, strings.ToLower(strings.TrimSpace(formatQueryParamVal)))
+}
+
 func resolveResponseFormat(acceptHeaderVal string, formatQueryParamVal string) (string, error) {
 	if acceptHeaderVal == "" && formatQueryParamVal == "" {
 		return ResponseFormatJSON, nil // default format

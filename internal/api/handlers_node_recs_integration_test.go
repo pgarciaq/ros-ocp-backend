@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -844,6 +845,7 @@ func setupNativeRecommendationRoutesEcho() *echo.Echo {
 	v1.GET("/recommendations/openshift/gpu/mig", api.GetGPUMIGRecommendations)
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
 	v1.GET("/recommendations/openshift/nodes/utilization", api.GetNodeUtilizationRecsLegacyPath)
+	v1.GET("/recommendations/openshift/nodes/:node", api.GetNodeUtilizationDetail)
 	return app
 }
 
@@ -853,6 +855,7 @@ func TestRecommendationRoutes_Unauthorized(t *testing.T) {
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig",
 		"/api/cost-management/v1/recommendations/openshift/nodes",
 		"/api/cost-management/v1/recommendations/openshift/nodes/utilization",
+		"/api/cost-management/v1/recommendations/openshift/nodes/worker-1",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {
@@ -1028,6 +1031,14 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "zombie-worker", resp.Data[0].Node)
 	assert.Equal(t, "zombie", resp.Data[0].Classification.IdleState)
+
+	medium := resp.Data[0].RecommendationTerms["medium_term"]
+	require.NotNil(t, medium.RecommendationEngines)
+	require.NotNil(t, medium.RecommendationEngines.Cost)
+	notif, ok := medium.RecommendationEngines.Cost.Notifications["15"]
+	require.True(t, ok, "idle/zombie nodes should emit notification code 15")
+	assert.Contains(t, notif.Message, "idle")
+	assert.NotContains(t, notif.Message, "MachineAutoscaler")
 }
 
 func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
@@ -1066,4 +1077,334 @@ func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data)
 	assert.Equal(t, "m5.xlarge", resp.Data[0].InstanceType)
+}
+
+func setupNodeUtilizationEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[string][]string) *echo.Echo {
+	t.Helper()
+	cfg := config.GetConfig()
+	orig := cfg.RBACEnabled
+	cfg.RBACEnabled = true
+	t.Cleanup(func() { cfg.RBACEnabled = orig })
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("user.permissions", perms)
+			return next(c)
+		}
+	})
+	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
+	v1.GET("/recommendations/openshift/nodes/:node", api.GetNodeUtilizationDetail)
+	return app
+}
+
+func TestGetNodeUtilization_RBAC_FiltersByNode(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'rbac-node-util-cluster', 'src-rnu', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'allowed-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			($1, $2::uuid, 'denied-node', 'medium', 'cost',
+			 0.2, 0.3, 0.25, 0.35, 1.0, true, false, 'active', NULL, 8, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNodeUtilizationEchoWithRBAC(t, pool, map[string][]string{
+		"openshift.cluster": {"*"},
+		"openshift.node":    {"allowed-node"},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "allowed-node", resp.Data[0].Node)
+}
+
+func TestGetNodeUtilization_CSVExport(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'csv-cluster', 'src-csv', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			recommended_cpu_cores, recommended_memory_gib, estimated_monthly_savings_usd,
+			instance_type, machineset_name
+		) VALUES
+			($1, $2::uuid, 'csv-worker', 'medium', 'cost',
+			 0.1, 0.42, 0.15, 0.51, 1.1, true, false, 'active', 'cpu', 5, 0, '{}', 4, 16, 12500, 'm5.large', 'worker-ms'),
+			($1, $2::uuid, 'other-worker', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 8, 32, 50000, 'm5.2xlarge', 'other-ms')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?format=csv&filter[stranded_resource]=cpu", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), ".csv")
+
+	body := rec.Body.String()
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	require.GreaterOrEqual(t, len(lines), 2, "expected header and at least one data row")
+	assert.Contains(t, lines[0], "node")
+	assert.Contains(t, lines[0], "estimated_monthly_savings")
+	assert.Contains(t, body, "csv-worker")
+	assert.NotContains(t, body, "other-worker")
+}
+
+func TestGetNodeUtilization_FilterStrandedResource(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'stranded-filter-cluster', 'src-sf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'stranded-cpu', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', 'cpu', 5, 0, '{}'),
+			($1, $2::uuid, 'no-stranded', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[stranded_resource]=none", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "no-stranded", resp.Data[0].Node)
+}
+
+func TestGetNodeUtilization_FilterInstanceType(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'instance-filter-cluster', 'src-if', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes, instance_type
+		) VALUES
+			($1, $2::uuid, 'm5-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 'm5.xlarge'),
+			($1, $2::uuid, 'r5-node', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 'r5.xlarge')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[instance_type]=m5.xlarge", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "m5-node", resp.Data[0].Node)
+	assert.Equal(t, "m5.xlarge", resp.Data[0].InstanceType)
+}
+
+func TestGetNodeUtilization_FilterMachinesetName(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'ms-filter-cluster', 'src-msf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes, machineset_name
+		) VALUES
+			($1, $2::uuid, 'ms-a-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 'worker-a'),
+			($1, $2::uuid, 'ms-b-node', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 'worker-b')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[machineset_name]=worker-a", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "ms-a-node", resp.Data[0].Node)
+}
+
+func TestGetNodeUtilizationDetail_Returns200WithNestedTerms(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'detail-cluster', 'src-nd', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, pod_capacity, trend_slope, notification_codes,
+			instance_type, machineset_name, suggested_instance_type, instance_type_reason
+		) VALUES
+			($1, $2::uuid, 'worker-detail', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', 'cpu', 85, 110, 0, '{12}',
+			 'm5.xlarge', 'worker-us-east-1a', 'c5.xlarge', 'CPU-stranded node; c5.xlarge in same cluster'),
+			($1, $2::uuid, 'worker-detail', 'short', 'cost',
+			 0.2, 0.3, 0.2, 0.3, 1.0, false, false, 'active', NULL, 85, 110, 0, '{}',
+			 'm5.xlarge', 'worker-us-east-1a', NULL, NULL)`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes/worker-detail", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var detail model.NodeUtilizationDetailRec
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, "worker-detail", detail.Node)
+	assert.Equal(t, "m5.xlarge", detail.InstanceType)
+	assert.Equal(t, "worker-us-east-1a", detail.MachineSetName)
+	assert.Equal(t, "c5.xlarge", detail.SuggestedInstanceType)
+	require.NotNil(t, detail.PodCapacity)
+	assert.EqualValues(t, 110, *detail.PodCapacity)
+	require.NotNil(t, detail.RecommendationTerms["medium_term"].RecommendationEngines)
+	require.NotNil(t, detail.RecommendationTerms["short_term"].RecommendationEngines)
+}
+
+func TestGetNodeUtilizationDetail_UnknownNode404(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'detail-miss', 'src-ndm', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes/no-such-node", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGetNodeUtilizationDetail_RBAC_DeniedNode404(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'detail-rbac', 'src-ndr', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'secret-node', 'medium', 'cost',
+			0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNodeUtilizationEchoWithRBAC(t, pool, map[string][]string{
+		"openshift.cluster": {"*"},
+		"openshift.node":    {"allowed-node"},
+	})
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes/secret-node", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

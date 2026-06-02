@@ -147,6 +147,24 @@ func TestSnapshotInventoryFreshHours_FromConfig(t *testing.T) {
 	assert.Equal(t, 12, SnapshotInventoryFreshHours())
 }
 
+func TestResolveNodeThresholds_PodHeadroomEnvOverridesDefault(t *testing.T) {
+	t.Setenv("ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE", "0.18")
+	t.Setenv("ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD", "0.07")
+	config.ResetForTest()
+	InitThresholdDefaults(config.GetConfig())
+	ClearThresholdSettingsCacheForTest()
+	t.Cleanup(ClearThresholdSettingsCacheForTest)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-threshold-node-pod-headroom-env"
+
+	got, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.18, got.PodHeadroomConsolidationGate, 1e-9)
+	assert.InDelta(t, 0.07, got.PodHeadroomNotificationThreshold, 1e-9)
+}
+
 func TestResolveNodeThresholds_EnvOverridesDefault(t *testing.T) {
 	t.Setenv("ROS_NODE_COST_TARGET_UTILIZATION", "0.72")
 	config.ResetForTest()

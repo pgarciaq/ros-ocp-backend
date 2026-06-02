@@ -25,8 +25,8 @@ func replicaCountForSavings(rec *ContainerRec) float64 {
 // configured), all savings remain 0 and NotifNoCostData is appended.
 //
 // Stored USD values reflect rates from the last successful cost fetch during
-// report processing; upstream Koku cost-model changes do not refresh ROS rows
-// until new metrics are processed and GetEffectiveRates runs again (#63).
+// report processing. When Koku cost models change, POST /internal/recalculate-savings
+// (or TriggerSavingsRecalculationAsync) refreshes savings without re-ingestion.
 func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostData) {
 	if costData == nil {
 		for i := range recs {

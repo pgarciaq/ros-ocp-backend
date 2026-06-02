@@ -37,6 +37,10 @@ const (
 	NotifSnapshotRedundant  int16 = 33
 	NotifSnapshotStale      int16 = 34
 	NotifSnapshotManaged    int16 = 35
+	// NotifNodePodSchedulingLimit indicates the node is near its max pod scheduling capacity.
+	NotifNodePodSchedulingLimit int16 = 74
+	// NotifNodeFleetConsolidation indicates fleet-level node removal within a MachineSet.
+	NotifNodeFleetConsolidation int16 = 76
 )
 
 const (

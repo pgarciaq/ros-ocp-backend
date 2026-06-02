@@ -44,6 +44,13 @@ func makeDigestRow(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs
 
 func ptr64(v int64) *int64 { return &v }
 
+func makeDigestRowWithPods(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, maxPods, podCapacity int64, allocCPU, allocMem *int64) NodeDigestRow {
+	r := makeDigestRow(node, day, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, allocCPU, allocMem)
+	r.MaxPodCount = maxPods
+	r.PodCapacity = podCapacity
+	return r
+}
+
 func recsByNodeEngine(recs []NodeRec) map[string]NodeRec {
 	m := make(map[string]NodeRec, len(recs))
 	for _, r := range recs {
@@ -145,6 +152,27 @@ func TestRecommendNodes_StrandedCPU(t *testing.T) {
 	require.NotNil(t, rec.StrandedResource)
 	assert.Equal(t, "cpu", *rec.StrandedResource)
 	assert.Contains(t, rec.NotificationCodes, NotifStrandedResources)
+}
+
+func TestClassifyNode_DecayWeightsRecentSpikeHigher(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+	endDate := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+
+	// Old low-util days and one recent high-util day; decay should pull average toward the spike.
+	days := []NodeDigestRow{
+		makeDigestRow("node-decay", 1, 500, 1000, 2000, 4000, 4000, 16000, allocCPU, allocMem),
+		makeDigestRow("node-decay", 2, 500, 1000, 2000, 4000, 4000, 16000, allocCPU, allocMem),
+		makeDigestRow("node-decay", 3, 500, 1000, 2000, 4000, 4000, 16000, allocCPU, allocMem),
+		makeDigestRow("node-decay", 10, 12000, 14000, 50000, 55000, 14000, 60000, allocCPU, allocMem),
+	}
+
+	withDecay := classifyNode("node-decay", days, cfg, defaultNodeThresholdSettings, 168, endDate)
+	equalWeight := classifyNode("node-decay", days, cfg, defaultNodeThresholdSettings, 0, endDate)
+
+	assert.Greater(t, withDecay.CPUUtilP95, equalWeight.CPUUtilP95,
+		"medium-term decay should weight the recent CPU spike more than equal daily averages")
 }
 
 func TestRecommendNodes_StrandedMemory(t *testing.T) {
@@ -440,6 +468,73 @@ func TestRecommendNodes_CostEngineSmallerCapacityThanPerformance(t *testing.T) {
 	assert.LessOrEqual(t, costRec.RecommendedMemKiB, perfRec.RecommendedMemKiB)
 }
 
+func TestClassifyNode_PodSchedulingHeadroom(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(8000)
+	allocMem := ptr64(32768)
+	days := []NodeDigestRow{
+		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, 100, allocCPU, allocMem),
+	}
+	endDate := days[len(days)-1].BucketDate
+
+	class := classifyNode("node-pods", days, cfg, defaultNodeThresholdSettings, 0, endDate)
+	assert.InDelta(t, 0.05, float64(class.PodSchedulingHeadroom), 0.001)
+	assert.Contains(t, class.NotificationCodes, NotifNodePodSchedulingLimit)
+
+	unknown := classifyNode("node-unknown", []NodeDigestRow{
+		makeDigestRow("node-unknown", 1, 1500, 2000, 4000, 6000, 4000, 24000, allocCPU, allocMem),
+	}, cfg, defaultNodeThresholdSettings, 0, endDate)
+	assert.Equal(t, float32(-1), unknown.PodSchedulingHeadroom)
+}
+
+func TestRecommendNodes_PodHeadroomUsesCustomSettings(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(8000)
+	allocMem := ptr64(32768)
+	days := []NodeDigestRow{
+		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, 100, allocCPU, allocMem),
+	}
+	endDate := days[len(days)-1].BucketDate
+
+	strictNotify := defaultNodeThresholdSettings
+	strictNotify.PodHeadroomNotificationThreshold = 0.03
+	classStrict := classifyNode("node-pods", days, cfg, strictNotify, 0, endDate)
+	assert.NotContains(t, classStrict.NotificationCodes, NotifNodePodSchedulingLimit)
+
+	looseGate := defaultNodeThresholdSettings
+	looseGate.PodHeadroomConsolidationGate = 0.10
+	digests := []NodeDigestRow{
+		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, 100, allocCPU, allocMem),
+	}
+	results := RecommendNodes(digests, cfg, looseGate, singleMediumTerm())
+	costRec := recsByNodeEngine(results)["node-saturated/cost"]
+	require.True(t, costRec.IsUnderutilized)
+	assert.Equal(t, 1, costRec.NodeCountReduction, "looser consolidation gate should allow consolidation at 12% headroom")
+}
+
+func TestRecommendNodes_SuppressesConsolidationWhenPodSaturated(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(8000)
+	allocMem := ptr64(32768)
+
+	digests := []NodeDigestRow{
+		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, 100, allocCPU, allocMem),
+	}
+
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	costRec := recsByNodeEngine(results)["node-saturated/cost"]
+	require.True(t, costRec.IsUnderutilized)
+	assert.Equal(t, 0, costRec.NodeCountReduction, "pod-saturated node should not consolidate")
+}
+
 func TestRecommendNodes_CostEngineMoreAggressiveConsolidation(t *testing.T) {
 	cfg := defaultNodeRecConfig()
 	allocCPU := ptr64(8000)
@@ -502,4 +597,97 @@ func TestResolveAllocatable_FallsBackToRequests(t *testing.T) {
 	factor := 0.93
 	assert.Equal(t, int64(8602), resolveAllocatable(nil, 8000, factor))
 	assert.Equal(t, int64(34408), resolveAllocatableMem(nil, 32000, factor))
+}
+
+func TestNodeCapacityFleetKey_SimilarCapacitySameKey(t *testing.T) {
+	// Within one decimal core/GiB bucket (8.0 cores, 32.0 GiB).
+	classA := nodeClassification{CurrentCPUMC: 8000, CurrentMemKiB: 32 * 1024 * 1024}
+	classB := nodeClassification{CurrentCPUMC: 8040, CurrentMemKiB: 32*1024*1024 + 50*1024}
+	assert.Equal(t, nodeCapacityFleetKey(classA), nodeCapacityFleetKey(classB))
+}
+
+func TestNodeCapacityFleetKey_DifferentCapacityDifferentKey(t *testing.T) {
+	classSmall := nodeClassification{CurrentCPUMC: 4000, CurrentMemKiB: 16 * 1024 * 1024}
+	classLarge := nodeClassification{CurrentCPUMC: 16000, CurrentMemKiB: 64 * 1024 * 1024}
+	assert.NotEqual(t, nodeCapacityFleetKey(classSmall), nodeCapacityFleetKey(classLarge))
+}
+
+func TestNodeCapacityFleetKey_EmptyWhenCapacityUnknown(t *testing.T) {
+	assert.Empty(t, nodeCapacityFleetKey(nodeClassification{}))
+	assert.Empty(t, nodeCapacityFleetKey(nodeClassification{CurrentCPUMC: 8000}))
+}
+
+func TestSuggestFleetInstanceType_CPUStrandedPicksLowerRatio(t *testing.T) {
+	// m5.xlarge ~ 4:16 GiB = 0.25 mc/kib; c5.xlarge ~ 4:8 GiB = 0.5 — wait, c5 has less memory per CPU
+	// Use explicit ratios: node is memory-heavy shape (low CPU:mem ratio target)
+	fleet := map[string]float64{
+		"m5.xlarge": 0.40,
+		"c5.xlarge": 0.20,
+	}
+	suggested, reason := suggestFleetInstanceType("cpu", "m5.xlarge", 16000, 65536, fleet)
+	assert.Equal(t, "c5.xlarge", suggested)
+	assert.Contains(t, reason, "CPU-stranded")
+}
+
+func TestSuggestFleetInstanceType_MemoryStrandedPicksHigherRatio(t *testing.T) {
+	fleet := map[string]float64{
+		"r5.xlarge": 0.25,
+		"c5.xlarge": 0.50,
+	}
+	suggested, reason := suggestFleetInstanceType("memory", "r5.xlarge", 16000, 65536, fleet)
+	assert.Equal(t, "c5.xlarge", suggested)
+	assert.Contains(t, reason, "Memory-stranded")
+}
+
+func TestSuggestFleetInstanceType_CPUStrandedSkipsHigherRatio(t *testing.T) {
+	fleet := map[string]float64{
+		"m5.xlarge": 0.24,
+		"c5.xlarge": 0.48,
+	}
+	suggested, _ := suggestFleetInstanceType("cpu", "m5.xlarge", 16000, 65536, fleet)
+	assert.Empty(t, suggested, "c5 has higher CPU:memory ratio, not a fit for CPU-stranded")
+}
+
+func TestSuggestFleetInstanceType_NoAlternativeEmpty(t *testing.T) {
+	fleet := map[string]float64{
+		"m5.xlarge": 0.40,
+	}
+	suggested, reason := suggestFleetInstanceType("cpu", "m5.xlarge", 16000, 65536, fleet)
+	assert.Empty(t, suggested)
+	assert.Empty(t, reason)
+}
+
+func TestRecommendNodes_StrandedCPU_SuggestsFleetInstanceType(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	// m5: 16 CPU / 64 GiB; r5: 16 CPU / 128 GiB → lower CPU:memory ratio (more memory per CPU)
+	allocM5CPU := ptr64(16000)
+	allocM5Mem := ptr64(65536)
+	allocR5CPU := ptr64(16000)
+	allocR5Mem := ptr64(131072)
+
+	digests := []NodeDigestRow{
+		makeDigestRowWithInstance("node-mem", 1, 1000, 2000, 50000, 55000, 8000, 60000, allocM5CPU, allocM5Mem, "m5.xlarge"),
+		makeDigestRowWithInstance("node-mem", 2, 1200, 2200, 51000, 56000, 8000, 60000, allocM5CPU, allocM5Mem, "m5.xlarge"),
+		makeDigestRowWithInstance("node-mem", 3, 1100, 2100, 50500, 55500, 8000, 60000, allocM5CPU, allocM5Mem, "m5.xlarge"),
+		makeDigestRowWithInstance("node-r5", 1, 500, 800, 2000, 3000, 4000, 8000, allocR5CPU, allocR5Mem, "r5.xlarge"),
+		makeDigestRowWithInstance("node-r5", 2, 520, 820, 2100, 3100, 4000, 8000, allocR5CPU, allocR5Mem, "r5.xlarge"),
+		makeDigestRowWithInstance("node-r5", 3, 510, 810, 2050, 3050, 4000, 8000, allocR5CPU, allocR5Mem, "r5.xlarge"),
+	}
+
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	rec := recsByNodeEngine(results)["node-mem/cost"]
+	require.NotNil(t, rec.StrandedResource)
+	assert.Equal(t, "cpu", *rec.StrandedResource)
+	assert.Equal(t, "r5.xlarge", rec.SuggestedInstanceType)
+	assert.NotEmpty(t, rec.InstanceTypeReason)
+}
+
+func makeDigestRowWithInstance(
+	node string, day int,
+	cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs int64,
+	allocCPU, allocMem *int64, instanceType string,
+) NodeDigestRow {
+	r := makeDigestRow(node, day, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, allocCPU, allocMem)
+	r.InstanceType = instanceType
+	return r
 }

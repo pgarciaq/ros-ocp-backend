@@ -396,15 +396,22 @@ Node-level CPU/memory utilization, classification, and dual-engine sizing
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| P95 util below → underutilized. <br><em>Expanded: Node underutilization threshold (fraction of allocatable capacity). A node is classified as 'underutilized' when BOTH its CPU P95 AND memory P95 usage are below this fraction of allocatable capacity. 0.30 means: if a node never uses more than 30% of its CPU and 30% of its memory, it's underutilized and a candidate for consolidation.</em> | 0.30 | `ROS_NODE_UNDERUTIL_THRESHOLD` | `/settings/terms?recommendation_type=node` | underutil_threshold | Yes |
-| Requests/allocatable above → overcommitted. <br><em>Expanded: Node overcommit threshold (ratio of total pod requests to allocatable). A node is 'overcommitted' when the sum of all pod CPU requests exceeds this multiple of the node's allocatable CPU. 1.50 means: if pods request 150% of what the node can actually provide, the node is dangerously overcommitted and likely to experience evictions.</em> | 1.50 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | `/settings/terms?recommendation_type=node` | overcommit_threshold | Yes |
-| Fallback when allocatable unknown. <br><em>Expanded: Fallback multiplier when node allocatable capacity is unknown. Some nodes don't report allocatable resources. In that case, allocatable is estimated as `max_observed_requests × this_factor`. 0.93 accounts for system-reserved resources (~7% for kubelet, OS, etc.).</em> | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` | `/settings/terms?recommendation_type=node` | allocatable_factor | Yes |
-| CPU/mem imbalance → stranded. <br><em>Expanded: CPU/memory imbalance ratio above which a node is classified as having 'stranded resources'. Stranded means one resource (e.g., CPU) is heavily used while the other (memory) has large amounts wasted. Calculated as ` | 0.60 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | `/settings/terms?recommendation_type=node` | stranded_imbalance_threshold | No |
-| EMA smoothing factor. <br><em>Expanded: Exponential Moving Average (EMA) smoothing factor for node trend and imbalance calculations. Higher values (closer to 1.0) react faster to recent changes but are noisier. Lower values (closer to 0.0) are smoother but lag behind. 0.30 gives moderate smoothing, weighting recent data ~30% vs ~70% history.</em> | 0.30 | `ROS_NODE_EMA_ALPHA` | `/settings/terms?recommendation_type=node` | ema_alpha | Yes |
-| Cost engine target (80%). <br><em>Expanded: The cost engine sizes node recommendations assuming nodes should run at this utilization level. 0.80 (80%) means the engine recommends enough nodes to keep average utilization around 80%—leaving 20% spare capacity for bursts. Lower values = more spare capacity and higher cost; higher values = tighter packing with less headroom.</em> | 0.80 | `ROS_NODE_COST_TARGET_UTILIZATION` | `/settings/terms?recommendation_type=node` | cost_target_utilization | Yes |
-| Performance engine target (55%). <br><em>Expanded: The performance engine uses a much more conservative target. 0.55 (55%) means nodes should run at most ~55% utilization, leaving 45% headroom for latency-sensitive workloads and failure recovery. This produces fewer consolidation recommendations and larger node counts than the cost engine.</em> | 0.55 | `ROS_NODE_PERF_TARGET_UTILIZATION` | `/settings/terms?recommendation_type=node` | perf_target_utilization | Yes |
-| Perf consolidates only when current ≥ N× recommended. <br><em>Expanded: Performance engine consolidation guard. The performance engine will only recommend consolidating nodes (reducing node count) when the current capacity is at least this multiple of the recommended capacity on BOTH CPU and memory. 2.0 means: the cluster must have at least twice the recommended resources before consolidation is suggested. This prevents the performance engine from being too aggressive with capacity reduction.</em> | 2.0 | `ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER` | `/settings/terms?recommendation_type=node` | perf_consolidation_headroom_multiplier | Yes |
-| Min days for CPU trend slope. <br><em>Expanded: Minimum days of node usage data required before computing a CPU trend (growth or decline). Trend detection uses linear regression and needs enough data points to be meaningful. 3 days prevents noisy trend alerts from a single day's spike or dip in node utilization.</em> | 3 | `ROS_NODE_TREND_MIN_DAYS` | `/settings/terms?recommendation_type=node` | trend_min_days | Yes |
+| P95 util below → underutilized. <br><em>Expanded: Node underutilization threshold (fraction of allocatable capacity). A node is classified as 'underutilized' when BOTH its CPU P95 AND memory P95 usage are below this fraction of allocatable capacity. 0.30 means: if a node never uses more than 30% of its CPU and 30% of its memory, it's underutilized and a candidate for consolidation.</em> | 0.30 | `ROS_NODE_UNDERUTIL_THRESHOLD` | `/settings/node` | underutil_threshold | Yes |
+| Requests/allocatable above → overcommitted. <br><em>Expanded: Node overcommit threshold (ratio of total pod requests to allocatable). A node is 'overcommitted' when the sum of all pod CPU requests exceeds this multiple of the node's allocatable CPU. 1.50 means: if pods request 150% of what the node can actually provide, the node is dangerously overcommitted and likely to experience evictions.</em> | 1.50 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | `/settings/node` | overcommit_threshold | Yes |
+| Fallback when allocatable unknown. <br><em>Expanded: Fallback multiplier when node allocatable capacity is unknown. Some nodes don't report allocatable resources. In that case, allocatable is estimated as `max_observed_requests × this_factor`. 0.93 accounts for system-reserved resources (~7% for kubelet, OS, etc.).</em> | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` | `/settings/node` | allocatable_factor | Yes |
+| CPU/mem imbalance → stranded. <br><em>Expanded: CPU/memory imbalance ratio above which a node is classified as having 'stranded resources'. Stranded means one resource (e.g., CPU) is heavily used while the other (memory) has large amounts wasted. Calculated as ` | 0.60 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | `/settings/node` | stranded_imbalance_threshold | No |
+| EMA smoothing factor. <br><em>Expanded: Exponential Moving Average (EMA) smoothing factor for node trend and imbalance calculations. Higher values (closer to 1.0) react faster to recent changes but are noisier. Lower values (closer to 0.0) are smoother but lag behind. 0.30 gives moderate smoothing, weighting recent data ~30% vs ~70% history.</em> | 0.30 | `ROS_NODE_EMA_ALPHA` | `/settings/node` | ema_alpha | Yes |
+| Cost engine target (80%). <br><em>Expanded: The cost engine sizes node recommendations assuming nodes should run at this utilization level. 0.80 (80%) means the engine recommends enough nodes to keep average utilization around 80%—leaving 20% spare capacity for bursts. Lower values = more spare capacity and higher cost; higher values = tighter packing with less headroom.</em> | 0.80 | `ROS_NODE_COST_TARGET_UTILIZATION` | `/settings/node` | cost_target_utilization | Yes |
+| Performance engine target (55%). <br><em>Expanded: The performance engine uses a much more conservative target. 0.55 (55%) means nodes should run at most ~55% utilization, leaving 45% headroom for latency-sensitive workloads and failure recovery. This produces fewer consolidation recommendations and larger node counts than the cost engine.</em> | 0.55 | `ROS_NODE_PERF_TARGET_UTILIZATION` | `/settings/node` | perf_target_utilization | Yes |
+| Perf consolidates only when current ≥ N× recommended. <br><em>Expanded: Performance engine consolidation guard. The performance engine will only recommend consolidating nodes (reducing node count) when the current capacity is at least this multiple of the recommended capacity on BOTH CPU and memory. 2.0 means: the cluster must have at least twice the recommended resources before consolidation is suggested. This prevents the performance engine from being too aggressive with capacity reduction.</em> | 2.0 | `ROS_NODE_PERF_CONSOLIDATION_HEADROOM_MULTIPLIER` | `/settings/node` | perf_consolidation_headroom_multiplier | Yes |
+| Min days for CPU trend slope. <br><em>Expanded: Minimum days of node usage data required before computing a CPU trend (growth or decline). Trend detection uses linear regression and needs enough data points to be meaningful. 3 days prevents noisy trend alerts from a single day's spike or dip in node utilization.</em> | 3 | `ROS_NODE_TREND_MIN_DAYS` | `/settings/node` | trend_min_days | Yes |
+| Pod scheduling consolidation gate. <br><em>Expanded: Minimum pod scheduling headroom (fraction 0.0–1.0) before the cost/performance engines suppress `node_count_reduction` consolidation on that node. Headroom is `(pod_capacity − max_pod_count) / pod_capacity` when capacity is known. Below this fraction (default **0.15**), consolidation is blocked even if the node is underutilized. Must be ≥ `pod_headroom_notification_threshold`.</em> | 0.15 | `ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE` | `/settings/node` | pod_headroom_consolidation_gate | Yes |
+| Pod scheduling notification threshold. <br><em>Expanded: Headroom below this fraction emits notification code **74** (`NotifNodePodSchedulingLimit`). Default **0.10** (10%).</em> | 0.10 | `ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD` | `/settings/node` | pod_headroom_notification_threshold | Yes |
+| Zombie CPU P95 (millicores). <br><em>Expanded: Node is classified `zombie` when CPU P95 is below this value and running pod count is at most `zombie_max_pods`. Stricter than idle (near-zero CPU with few pods).</em> | 200 | `ROS_NODE_ZOMBIE_CPU_MC` | `/settings/node` | zombie_cpu_p95_mc | Yes |
+| Zombie max pods. <br><em>Expanded: Maximum running pods for zombie classification.</em> | 5 | `ROS_NODE_ZOMBIE_MAX_PODS` | `/settings/node` | zombie_max_pods | Yes |
+| Idle CPU util % of allocatable. <br><em>Expanded: Idle candidate when CPU P95 utilization (fraction of allocatable) is below this percent (0–100).</em> | 10 | `ROS_NODE_IDLE_CPU_UTIL_PCT` | `/settings/node` | idle_cpu_util_pct | Yes |
+| Idle memory util % of allocatable. <br><em>Expanded: Idle candidate when memory P95 utilization is below this percent (0–100).</em> | 10 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | `/settings/node` | idle_mem_util_pct | Yes |
+| Idle max pods. <br><em>Expanded: Maximum running pods for idle classification (with low CPU and memory util).</em> | 10 | `ROS_NODE_IDLE_MAX_PODS` | `/settings/node` | idle_max_pods | Yes |
 | Short-term window. <br><em>Expanded: Days of node-level usage history for short-term node recommendations. 1 day captures immediate node utilization changes.</em> | 1 | `ROS_TERMS_NODE_SHORT_WINDOW_DAYS` | `/settings/terms?recommendation_type=node` | terms[].window_days | Yes |
 | Short min data days. <br><em>Expanded: Minimum days of node telemetry required for a short-term node recommendation. 1 day is sufficient.</em> | 1 | `ROS_TERMS_NODE_SHORT_MIN_DATA_DAYS` | `/settings/terms?recommendation_type=node` | terms[].min_data_days | Yes |
 | Short decay (0=none). <br><em>Expanded: Decay half-life for short-term node window. 0 = no decay, all hours weighted equally.</em> | 0 | `ROS_TERMS_NODE_SHORT_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=node` | terms[].decay_halflife_hours | Yes |
@@ -415,7 +422,17 @@ Node-level CPU/memory utilization, classification, and dual-engine sizing
 | Long min data. <br><em>Expanded: Minimum 7 days of node data required within the 15-day long window.</em> | 7 | `ROS_TERMS_NODE_LONG_MIN_DATA_DAYS` | `/settings/terms?recommendation_type=node` | terms[].min_data_days | Yes |
 | Long decay (15d). <br><em>Expanded: 360-hour decay half-life for long-term node window.</em> | 360 | `ROS_TERMS_NODE_LONG_DECAY_HALFLIFE_HOURS` | `/settings/terms?recommendation_type=node` | terms[].decay_halflife_hours | Yes |
 
-\* Configurable via `PUT /settings/terms?recommendation_type=node`.
+**Node threshold Settings API:** `GET` / `PUT` / `DELETE`
+`/settings/node` (canonical) or deprecated `/settings/thresholds?recommendation_type=node`.
+JSON fields: `underutil_threshold`, `overcommit_threshold`, `allocatable_factor`,
+`stranded_imbalance_threshold`, `ema_alpha`, `cost_target_utilization`,
+`perf_target_utilization`, `perf_consolidation_headroom_multiplier`, `trend_min_days`,
+`zombie_cpu_p95_mc`, `zombie_max_pods`, `idle_cpu_util_pct`, `idle_mem_util_pct`,
+`idle_max_pods`, `pod_headroom_consolidation_gate`, `pod_headroom_notification_threshold`
+(plus `locked_fields`). Term windows remain on
+`PUT /settings/terms?recommendation_type=node`.
+
+\* Threshold fields via `PUT /settings/node` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=node`.
 
 ---
 
@@ -729,7 +746,73 @@ Dollar estimate integration with Koku Masu `effective_rates`. See
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
 | Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, container, node, PVC, snapshot, and VM plugins persist monthly savings (or recoverable cost for snapshots) from Koku `effective_rates`. When disabled, resource recommendations still run but dollar fields are null/zero (containers/nodes/PVCs may include notification code **25**; VM list/detail `savings` is always `null`).</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
+| Savings recalculation after cost model change. <br><em>Expanded: When true (default), ROS accepts `POST /api/cost-management/v1/internal/recalculate-savings` (service-account auth, same as tag sync). Koku calls this after [`update_summary_cost_model_costs`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py) to refresh persisted `estimated_monthly_savings_usd` without re-ingestion. Requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`. When false, savings update only on the next ingestion cycle.</em> | true | `ROS_SAVINGS_RECALCULATION_ENABLED` | — | — | No |
 | Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, node, VM, GPU pricing). Masu provides the `effective_rates` API that ROS uses for `savings` on VM recommendations and fleet `by_plugin.vm`. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty skips dynamic rate lookup.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
+
+### Koku → ROS savings recalculation (not ROS env vars)
+
+Configure on the **Koku** worker / masu deployment so rate changes trigger ROS recalculation:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_API_HOST` | (unset) | ROS API hostname. No callback when unset unless `ROS_OCP_BACKEND_URL` is set. |
+| `ROS_API_PORT` | `8000` | ROS API port when using `ROS_API_HOST`. |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Fallback base URL (on-prem chart). |
+| `ROS_SERVICE_TOKEN` | (unset) | Optional bearer token for `POST /internal/recalculate-savings`; otherwise Koku uses the projected service account token. |
+
+See [Cost Integration — Savings recalculation](cost-integration.md#savings-recalculation-after-cost-model-changes).
+
+---
+
+## List API — Node recommendations
+
+`GET /api/cost-management/v1/recommendations/openshift/nodes`
+
+### Response fields (per node object)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pod_capacity` | int, `omitempty` | Maximum schedulable pods on the node (from operator CSV / `daily_node_digests`). Omitted when unknown. |
+| `pod_scheduling_headroom` | float, `omitempty` | Ratio of available pod slots: `(pod_capacity − pod_count) / pod_capacity` when capacity is known (0.0–1.0). Omitted when capacity unknown. |
+
+### Filters
+
+| Query param | Values | Description |
+|-------------|--------|-------------|
+| `filter[stranded_resource]` | `cpu`, `memory`, `none` | Filter by stranded resource classification (`none` = no stranded resource). |
+| `filter[instance_type]` | string | Filter by node instance type label (exact match). |
+| `filter[machineset_name]` | string | Filter by OpenShift MachineSet name (exact match). |
+
+Also supports standard list params (`limit`, `offset`, `after`, `filter[cluster]`, `filter[engine]`,
+`filter[idle_state]`, `format=csv`, etc.). Implementation:
+[`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go).
+
+### Node notification codes (reference)
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| 11 | `NotifNodeUnderutilized` | CPU and memory P95 below `underutil_threshold` |
+| 12 | `NotifNodeOvercommitted` | Pod CPU requests exceed `overcommit_threshold` × allocatable |
+| 13 | `NotifStrandedResources` | CPU/memory imbalance above `stranded_imbalance_threshold` |
+| 15 | `NotifAIdle` | Node idle or zombie (`idle_state`); **not** MachineAutoscaler minReplicas (DB legacy name corrected in migration 000121) |
+| 25 | `NotifNoCostData` | Savings could not be computed (Masu rates missing) |
+| 74 | `NotifNodePodSchedulingLimit` | Pod scheduling headroom below `pod_headroom_notification_threshold` (default 10%) |
+| 75 | — | Reserved for Tier 3 MachineAutoscaler `minReplicas` recommendations |
+
+Full catalog: [Notification codes](notification-codes.md).
+
+---
+
+## List API — Fleet savings summary
+
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+
+| Query param | Values | Default | Description |
+|-------------|--------|---------|-------------|
+| `term` | `short`, `medium`, `long` | `medium` | Which recommendation term window to aggregate for fleet savings. |
+
+Also supports `engine` (`cost` / `performance`), `group_by[tag:key]`, `group_by[idle_state]`, and
+cluster filters. Implementation: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
 
 ---
 
@@ -884,7 +967,8 @@ and mirror the env re-apply step used in
 | [Recommendation Math](recommendation-math.md) | Adaptive margin, decay weighting, trend detection |
 | [Plugin Architecture](plugin-architecture.md) | Term resolution, plugin traits, enable/disable |
 | [GPU Classification](gpu-classification.md) | GPU decision tree and MIG profile selection |
-| [Cost Integration](cost-integration.md) | Savings formulas and fleet summary |
+| [Cost Integration](cost-integration.md) | Savings formulas, fleet summary, savings recalculation |
+| [Notification codes](notification-codes.md) | Full notification code catalog |
 | [Upgrade Runbook](../operations/upgrade-runbook.md) | Migration procedures and deploy notes |
 
 ## Source File Index

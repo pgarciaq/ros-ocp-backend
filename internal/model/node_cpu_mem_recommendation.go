@@ -1,6 +1,9 @@
 package model
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -45,14 +48,19 @@ type NodeUtilizationTermRec struct {
 // NodeUtilizationRec is the API response DTO for a node CPU/memory utilization recommendation.
 // Each node appears once with nested recommendation_terms and recommendation_engines.
 type NodeUtilizationRec struct {
-	Node                string                            `json:"node"`
-	ClusterUUID         string                            `json:"cluster_uuid"`
-	InstanceType        string                            `json:"instance_type,omitempty"`
-	RecommendationType  string                            `json:"recommendation_type"`
+	Node                  string                            `json:"node"`
+	ClusterUUID           string                            `json:"cluster_uuid"`
+	InstanceType          string                            `json:"instance_type,omitempty"`
+	MachineSetName        string                            `json:"machineset_name,omitempty"`
+	SuggestedInstanceType string                            `json:"suggested_instance_type,omitempty"`
+	InstanceTypeReason    string                            `json:"instance_type_reason,omitempty"`
+	RecommendationType    string                            `json:"recommendation_type"`
 	Classification      NodeUtilizationClassification     `json:"classification"`
 	Metrics             NodeUtilizationMetrics            `json:"metrics"`
-	PodCount            int64                             `json:"pod_count"`
-	CPUOvercommitRatio  float32                           `json:"cpu_overcommit_ratio"`
+	PodCount              int64    `json:"pod_count"`
+	PodCapacity           *int64   `json:"pod_capacity,omitempty"`
+	PodSchedulingHeadroom *float32 `json:"pod_scheduling_headroom,omitempty"`
+	CPUOvercommitRatio    float32  `json:"cpu_overcommit_ratio"`
 	TrendSlope          float32                           `json:"trend_slope"`
 	RecommendationTerms map[string]NodeUtilizationTermRec `json:"recommendation_terms"`
 }
@@ -73,6 +81,25 @@ type NodeUtilizationListResponse struct {
 	Warnings []string             `json:"warnings,omitempty"`
 }
 
+// NodeUtilizationDetailRec is the non-paginated response for a single node detail request.
+type NodeUtilizationDetailRec struct {
+	Node                  string                                     `json:"node"`
+	ClusterUUID           string                                     `json:"cluster_uuid"`
+	InstanceType          string                                     `json:"instance_type,omitempty"`
+	MachineSetName        string                                     `json:"machineset_name,omitempty"`
+	PodCount              int64                                      `json:"pod_count"`
+	PodCapacity           *int64                                     `json:"pod_capacity,omitempty"`
+	PodSchedulingHeadroom *float32                                   `json:"pod_scheduling_headroom,omitempty"`
+	IdleState             string                                     `json:"idle_state"`
+	SuggestedInstanceType string                                     `json:"suggested_instance_type,omitempty"`
+	InstanceTypeReason      string                                     `json:"instance_type_reason,omitempty"`
+	Metrics               NodeUtilizationMetrics                     `json:"metrics"`
+	CPUOvercommitRatio    float32                                    `json:"cpu_overcommit_ratio"`
+	TrendSlope            float32                                    `json:"trend_slope"`
+	RecommendationTerms   map[string]NodeUtilizationTermRec          `json:"recommendation_terms"`
+	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+}
+
 // NodeUtilizationMeta holds pagination metadata for node utilization responses.
 type NodeUtilizationMeta struct {
 	Count    int      `json:"count"`
@@ -85,4 +112,21 @@ type NodeUtilizationMeta struct {
 // NodeUtilTermAPIKey returns the API term key (e.g. "medium_term") for a DB term name.
 func NodeUtilTermAPIKey(dbTerm string) string {
 	return dbTerm + "_term"
+}
+
+// StrandedResourceFilterValue parses filter[stranded_resource] for the nodes list API.
+// Returns matchNone=true when the client requests stranded_resource=none (SQL IS NULL).
+func StrandedResourceFilterValue(raw string) (value string, matchNone bool, err error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return "", false, nil
+	}
+	switch raw {
+	case "cpu", "memory":
+		return raw, false, nil
+	case "none":
+		return "", true, nil
+	default:
+		return "", false, fmt.Errorf("invalid stranded_resource value %q", raw)
+	}
 }

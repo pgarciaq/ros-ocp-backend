@@ -885,17 +885,17 @@ Data file: `ocp_ros_namespace_usage.csv`. Logs: `native namespace engine: wrote`
 
 ## Node recommendations validation
 
-Handlers: `internal/api/handlers_node_recs.go`. Feature doc: [Node recommendations](../features/node-recommendations.md).
+See the canonical MkDocs guide: [Validating the Native Engine — Node recommendations](../../docs-site/testing/validating-native-engine.md#node-recommendations-validation) for the full checklist (term decay, dual engines, fleet consolidation, pod headroom, RBAC, CSV export, filters, savings `term` parameter, and example responses).
 
-| # | Check | How to verify | Expected |
-|---|--------|---------------|----------|
-| 1 | Node recs exist | `GET .../recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0 |
-| 2 | Engine filter | `?engine=cost` vs `?engine=performance` | Different target utilization / headroom |
-| 3 | Underutilized flag | `filter[is_underutilized]=true` | Nodes below cost threshold (~80% util target) |
-| 4 | Overcommitted nodes | High pod density scenarios in NISE | Notifications per node feature doc |
-| 5 | Utilization endpoint | `GET .../nodes/utilization` | Per-node CPU/memory util for charts |
-| 6 | DB consistency | `node_recommendations` table | Rows per node × term × engine |
-| 7 | Node thresholds | `GET .../settings/node` | PUT changes reflected after recalc |
+Handlers: `internal/api/handlers_node_utilization.go` (CPU/memory nodes). GPU time-slicing uses `internal/api/handlers_node_recs.go` at `GET .../gpu/timeslicing`.
+
+Quick smoke:
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}" \
+  | jq '.meta.count, .data[0].pod_scheduling_headroom, .data[0].recommendation_terms.medium_term.recommendation_engines'
+```
 
 Logs: `node recs:` (success or `persist failed`).
 

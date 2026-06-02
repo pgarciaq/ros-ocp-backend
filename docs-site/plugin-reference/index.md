@@ -58,6 +58,14 @@ Use the sidebar to navigate to individual plugin documentation. Each page includ
 - Default term configuration and rationale
 - Trait interface implementations
 
+Hand-maintained API reference pages (settings, filters, notification codes):
+
+| Plugin | Page |
+|--------|------|
+| cluster-quota | [cluster-quota](cluster-quota.md) |
+| node | [node](node.md) |
+| quota | [quota](quota.md) |
+
 ## Query parameters
 
 List endpoints use Koku-aligned bracket notation (`filter[project]`, `order_by[field]`).

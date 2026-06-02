@@ -188,3 +188,71 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	assert.InDelta(t, 200.00, summary.ByPlugin.Node, 0.01)
 	assert.Equal(t, "200.000000", summary.EstimatedMonthlySavings.Value)
 }
+
+func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'term-diff-cluster', 'src-td', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		VALUES
+			($1, $2, 'node-short', 'short', 'cost', '{}', 10000, now()),
+			($1, $2, 'node-medium', 'medium', 'cost', '{}', 50000, now()),
+			($1, $2, 'node-long', 'long', 'cost', '{}', 90000, now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+
+	callSummary := func(term string) api.FleetSavingsSummaryResponse {
+		url := "/api/cost-management/v1/recommendations/openshift/savings-summary"
+		if term != "" {
+			url += "?term=" + term
+		}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "term=%q body: %s", term, rec.Body.String())
+		var summary api.FleetSavingsSummaryResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &summary))
+		return summary
+	}
+
+	shortSummary := callSummary("short")
+	assert.Equal(t, "100.000000", shortSummary.EstimatedMonthlySavings.Value)
+	assert.InDelta(t, 100.00, shortSummary.ByPlugin.Node, 0.01)
+
+	mediumSummary := callSummary("medium")
+	assert.Equal(t, "500.000000", mediumSummary.EstimatedMonthlySavings.Value)
+	assert.InDelta(t, 500.00, mediumSummary.ByPlugin.Node, 0.01)
+
+	defaultSummary := callSummary("")
+	assert.Equal(t, mediumSummary.EstimatedMonthlySavings.Value, defaultSummary.EstimatedMonthlySavings.Value)
+	assert.InDelta(t, mediumSummary.ByPlugin.Node, defaultSummary.ByPlugin.Node, 0.01)
+
+	longSummary := callSummary("long")
+	assert.Equal(t, "900.000000", longSummary.EstimatedMonthlySavings.Value)
+	assert.NotEqual(t, shortSummary.EstimatedMonthlySavings.Value, longSummary.EstimatedMonthlySavings.Value)
+}

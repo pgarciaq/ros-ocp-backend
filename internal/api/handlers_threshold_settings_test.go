@@ -196,6 +196,8 @@ func TestGetThresholdSettings_Node_ReturnsDefaults(t *testing.T) {
 	assert.InDelta(t, 0.80, resp["cost_target_utilization"].(float64), 1e-9)
 	assert.InDelta(t, 0.30, resp["underutil_threshold"].(float64), 1e-9)
 	assert.InDelta(t, 1.50, resp["overcommit_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.15, resp["pod_headroom_consolidation_gate"].(float64), 1e-9)
+	assert.InDelta(t, 0.10, resp["pod_headroom_notification_threshold"].(float64), 1e-9)
 	locked, ok := resp["locked_fields"].([]interface{})
 	require.True(t, ok)
 	assert.Empty(t, locked)
@@ -264,6 +266,48 @@ func TestGetThresholdSettings_Namespace_ReturnsDefaults(t *testing.T) {
 	assert.Empty(t, locked)
 }
 
+func TestPutThresholdSettings_Node_PodHeadroomRejectsInvalid(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-node-pod-headroom-bad"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	body := bytes.NewReader([]byte(`{"pod_headroom_consolidation_gate": 0.05, "pod_headroom_notification_threshold": 0.10}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "pod_headroom_consolidation_gate")
+
+	body = bytes.NewReader([]byte(`{"pod_headroom_consolidation_gate": 1.5}`))
+	req = httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPutThresholdSettings_Node_PodHeadroomPersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-node-pod-headroom-put"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"pod_headroom_consolidation_gate": 0.20, "pod_headroom_notification_threshold": 0.08}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.20, resp["pod_headroom_consolidation_gate"].(float64), 1e-9)
+	assert.InDelta(t, 0.08, resp["pod_headroom_notification_threshold"].(float64), 1e-9)
+}
+
 func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-put-node"
@@ -282,6 +326,36 @@ func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.InDelta(t, 0.75, resp["cost_target_utilization"].(float64), 1e-9)
+}
+
+func TestPutThresholdSettings_Node_IdleZombie_PersistsAndReturns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-api-put-node-idle-zombie"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{
+		"zombie_cpu_p95_mc": 180,
+		"zombie_max_pods": 4,
+		"idle_cpu_util_pct": 8,
+		"idle_mem_util_pct": 9,
+		"idle_max_pods": 12
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/thresholds?recommendation_type=node", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.Bytes())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, float64(180), resp["zombie_cpu_p95_mc"])
+	assert.Equal(t, float64(4), resp["zombie_max_pods"])
+	assert.Equal(t, float64(8), resp["idle_cpu_util_pct"])
+	assert.Equal(t, float64(9), resp["idle_mem_util_pct"])
+	assert.Equal(t, float64(12), resp["idle_max_pods"])
 }
 
 func TestPutThresholdSettings_GPU_PersistsAndReturns(t *testing.T) {

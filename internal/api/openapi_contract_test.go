@@ -181,6 +181,13 @@ func assertResponseHasSpecProperties(t *testing.T, body []byte, schema map[strin
 		"gpu":                     {}, // omitted when VM has no GPU recommendation block
 		"savings":                 {}, // null when savings estimates disabled or rates unavailable
 		"daily_digests":           {}, // omitted on list; detail should include when digest data exists
+		"instance_type":           {}, // omitted when operator does not report instance type
+		"machineset_name":         {},
+		"suggested_instance_type": {},
+		"instance_type_reason":    {},
+		"pod_capacity":            {},
+		"pod_scheduling_headroom": {},
+		"notifications":           {}, // omitted when no notification codes on primary engine
 	}
 
 	if required, ok := schema["required"].([]interface{}); ok && len(required) > 0 {
@@ -430,6 +437,42 @@ func TestOpenAPI_SavingsSummary_ResponseFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	schema := getResponseSchema(spec, "/recommendations/openshift/savings-summary", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
+func TestOpenAPI_NodeUtilizationDetail_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-node-detail"
+	e := setupContractTestEcho(t, pool, orgID)
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-detail', 'src-od', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'openapi-worker', 'medium', 'cost',
+			0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/nodes/openapi-worker")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/nodes/{node}", http.MethodGet, "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 

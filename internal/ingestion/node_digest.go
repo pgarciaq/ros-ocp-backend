@@ -26,15 +26,17 @@ const nodeDayHours = 24
 type NodeDayAccumulator struct {
 	intervalCPUReqs      [nodeDayHours]int64
 	intervalMemReqs      [nodeDayHours]int64
-	intervalCPUUse       [nodeDayHours]int64
-	intervalMemUse       [nodeDayHours]int64
-	intervalPods         [nodeDayHours]int64
-	intervalSeen         [nodeDayHours]bool
+	intervalCPUUse           [nodeDayHours]int64
+	intervalMemUse           [nodeDayHours]int64
+	intervalPodsDistinct     [nodeDayHours]map[string]struct{}
+	intervalSeen             [nodeDayHours]bool
 	MaxCPUCapacityMC     int64
 	MaxMemCapacityKiB    int64
 	MaxCPUAllocatableMC  int64
 	MaxMemAllocatableKiB int64
+	MaxPodCapacity       int64
 	InstanceType         string
+	MachineSetName       string
 }
 
 func newNodeDayAccumulator() *NodeDayAccumulator {
@@ -55,7 +57,12 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	a.intervalMemReqs[h] += r.MemRequestKiB
 	a.intervalCPUUse[h] += r.CPUUsageMC
 	a.intervalMemUse[h] += r.MemUsageKiB
-	a.intervalPods[h]++
+	if r.Pod != "" {
+		if a.intervalPodsDistinct[h] == nil {
+			a.intervalPodsDistinct[h] = make(map[string]struct{})
+		}
+		a.intervalPodsDistinct[h][r.Pod] = struct{}{}
+	}
 	if r.NodeCapacityCPUMC > 0 && r.NodeCapacityCPUMC > a.MaxCPUCapacityMC {
 		a.MaxCPUCapacityMC = r.NodeCapacityCPUMC
 	}
@@ -70,6 +77,12 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	}
 	if a.InstanceType == "" && r.InstanceType != "" {
 		a.InstanceType = r.InstanceType
+	}
+	if r.NodePodCapacity > 0 && r.NodePodCapacity > a.MaxPodCapacity {
+		a.MaxPodCapacity = r.NodePodCapacity
+	}
+	if a.MachineSetName == "" && r.MachineSetName != "" {
+		a.MachineSetName = r.MachineSetName
 	}
 }
 
@@ -89,8 +102,8 @@ func (a *NodeDayAccumulator) Finalize() (cpuP50, cpuP95, memP50, memP95, maxCPUR
 		if a.intervalMemReqs[h] > maxMemReq {
 			maxMemReq = a.intervalMemReqs[h]
 		}
-		if a.intervalPods[h] > maxPods {
-			maxPods = a.intervalPods[h]
+		if n := int64(len(a.intervalPodsDistinct[h])); n > maxPods {
+			maxPods = n
 		}
 	}
 
@@ -227,6 +240,14 @@ func flushNodeDigestsOnSender(
 			if acc.InstanceType != "" {
 				instanceType = &acc.InstanceType
 			}
+			var machinesetName *string
+			if acc.MachineSetName != "" {
+				machinesetName = &acc.MachineSetName
+			}
+			var podCapacityVal *int64
+			if acc.MaxPodCapacity > 0 {
+				podCapacityVal = &acc.MaxPodCapacity
+			}
 
 			batch.Queue(`
 			INSERT INTO daily_node_digests (
@@ -235,8 +256,8 @@ func flushNodeDigestsOnSender(
 				mem_usage_p50_kib, mem_usage_p95_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
-				max_pod_count, instance_type, sample_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
@@ -248,12 +269,14 @@ func flushNodeDigestsOnSender(
 				max_cpu_requests_mc = EXCLUDED.max_cpu_requests_mc,
 				max_mem_requests_kib = EXCLUDED.max_mem_requests_kib,
 				max_pod_count = EXCLUDED.max_pod_count,
+				pod_capacity = EXCLUDED.pod_capacity,
 				instance_type = EXCLUDED.instance_type,
+				machineset_name = EXCLUDED.machineset_name,
 				sample_count = EXCLUDED.sample_count`,
 				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
 				cpuP50, cpuP95, memP50, memP95,
 				allocCPU, allocMem,
-				maxCPUReq, maxMemReq, maxPods, instanceType, sampleCount,
+				maxCPUReq, maxMemReq, maxPods, podCapacityVal, instanceType, machinesetName, sampleCount,
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {

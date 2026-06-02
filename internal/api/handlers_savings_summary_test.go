@@ -89,6 +89,31 @@ func TestGetSavingsSummary_EngineFilterPerformance_Accepted(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 }
 
+func TestGetSavingsSummary_TermFilterShort_Accepted(t *testing.T) {
+	orgID := "org-savings-summary-short-term"
+	e := setupSavingsSummaryHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary?term=short", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+}
+
+func TestGetSavingsSummary_InvalidTerm_Returns400(t *testing.T) {
+	orgID := "org-savings-summary-bad-term"
+	e := setupSavingsSummaryHandler(t, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary?term=invalid", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Contains(t, body["message"], "invalid term")
+}
+
 func TestGetSavingsSummary_InvalidEngine_Returns400(t *testing.T) {
 	orgID := "org-savings-summary-bad-engine"
 	e := setupSavingsSummaryHandler(t, orgID)

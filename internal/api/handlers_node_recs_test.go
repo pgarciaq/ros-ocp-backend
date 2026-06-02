@@ -392,6 +392,26 @@ func TestFilterNodeRecsByRBAC_NoNodePerms(t *testing.T) {
 	})
 }
 
+func TestOpenshiftNodeRBACScope(t *testing.T) {
+	withRBACEnabled(t, func() {
+		restrict, allowed := openshiftNodeRBACScope(map[string][]string{"openshift.node": {"node-a", "node-b"}})
+		assert.True(t, restrict)
+		assert.ElementsMatch(t, []string{"node-a", "node-b"}, allowed)
+	})
+
+	withRBACEnabled(t, func() {
+		restrict, _ := openshiftNodeRBACScope(map[string][]string{"openshift.node": {"*"}})
+		assert.False(t, restrict)
+	})
+
+	cfg := config.GetConfig()
+	orig := cfg.RBACEnabled
+	cfg.RBACEnabled = false
+	defer func() { cfg.RBACEnabled = orig }()
+	restrict, _ := openshiftNodeRBACScope(map[string][]string{"openshift.node": {"node-a"}})
+	assert.False(t, restrict)
+}
+
 func TestFilterNodeRecsByRBAC_EmptyPerms(t *testing.T) {
 	withRBACEnabled(t, func() {
 		recs := []model.NodeGPURecommendation{

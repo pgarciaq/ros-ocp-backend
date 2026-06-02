@@ -35,11 +35,23 @@ flowchart TD
    `max(usage_p95, requests) / target_utilization`.
 4. **Consolidation (Level 3)** — When underutilized, engines compute a per-node
    consolidation flag, then [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
-   groups nodes by `instance_type` (from operator ROS CSV) and distributes
-   `node_count_reduction` across the fleet. Nodes without `instance_type` keep
-   legacy per-node binary reduction (0 or 1).
-5. **Savings** — Dollar estimates compare current vs recommended node CPU, memory,
+   groups nodes by `instance_type` (from operator ROS CSV) when present, or by
+   **capacity-based fleet keys** when it is absent: allocatable CPU and memory rounded
+   to one decimal core/GiB (~10% tolerance) so similarly sized nodes consolidate
+   together. Fleet math distributes `node_count_reduction` across the group (not
+   only legacy per-node 0/1 binary reduction). When `machineset_name` is present on
+   digests, list responses include it for UI grouping; Tier 2 MachineSet APIs remain
+   planned (see roadmap).
+5. **Instance type hints** — For stranded CPU/memory nodes, the engine may set
+   `suggested_instance_type` and `instance_type_reason` by comparing capacity ratios
+   across instance types already observed in the cluster (simplified catalog-free
+   suggestion). Notification **13** also exposes `suggested_direction`
+   (`memory-optimized` / `compute-optimized`).
+6. **Savings** — Dollar estimates compare current vs recommended node CPU, memory,
    and monthly node cost. See [Cost Integration — Node Savings](../architecture/cost-integration.md#node-savings-cpumemory-utilization).
+   When a Koku OCP cost model is updated, Koku notifies ROS to
+   [recalculate persisted savings](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes)
+   without waiting for the next operator upload.
 
 ## Classification types
 
@@ -73,6 +85,11 @@ Filter list results: `?engine=cost` (default for sorting) or `?engine=performanc
 | `node_count_reduction` | Suggested nodes to remove in this engine/term (0 or 1 per row; fleet sum may exceed 1) |
 | `classification.idle_state` | `active`, `idle`, or `zombie` (node idle detection; migration **000111**) |
 | `instance_type` | Cloud or cluster instance type from ROS metrics (e.g. `m5.xlarge`); omitted when unknown |
+| `machineset_name` | MachineSet label when reported by the operator |
+| `suggested_instance_type` | In-cluster alternative instance type for stranded nodes (see above) |
+| `instance_type_reason` | Explanation when `suggested_instance_type` is set |
+| `pod_capacity` | Max schedulable pods (from ROS CSV); omitted when unknown |
+| `pod_scheduling_headroom` | `(pod_capacity − pod_count) / pod_capacity` when capacity is known |
 | `estimated_monthly_savings` | Dollar delta vs current allocation (`value` + `units`) |
 
 ## Term support
@@ -81,16 +98,98 @@ Short, medium, and long terms use the same defaults as container (1d / 7d / 15d)
 List API defaults to **medium** term for classification display; all terms are
 nested under `recommendation_terms`.
 
+## Cold start behavior
+
+Node recommendations require **`min_data_days`** of collected data per term before
+the engine emits results for that term. This is intentional — not a bug.
+
+| Term | Default `min_data_days` |
+|------|-------------------------|
+| short | 1 |
+| medium | 3 |
+| long | 7 |
+
+The multi-term design handles cold start gracefully:
+
+- **Short-term** recommendations can appear after **1 day** of node digests.
+- **Medium-term** recommendations appear after **3 days**.
+- **Long-term** recommendations appear after **7 days**.
+
+Users see progressively more confident recommendations as data accumulates. Until
+a term’s threshold is met, that term is omitted or empty in API responses
+(`recommendation_terms`); other terms may still return data.
+
+Override defaults per org:
+
+```http
+PUT /api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=node
+```
+
+Body includes `terms[].min_data_days` (must be ≤ `window_days` for each term).
+See [Configurability — Node terms](../architecture/configurability.md#node).
+
+## Consolidation model — current scope and limitations
+
+Tier 1 consolidation is an **advisory fleet signal**, not a scheduling guarantee.
+
+**Current scope (Tier 1):**
+
+- Signals such as “you likely have N excess nodes in this fleet”
+- Based on aggregate P95 utilization across nodes in a homogeneous group
+- Groups nodes by MachineSet when known, else `instance_type`, else allocatable capacity bucket (~10% tolerance)
+- Does **not** account for PodDisruptionBudgets, taints/tolerations/affinity, DaemonSet overhead, or whether pods can actually be placed on remaining nodes
+- Matches industry practice for FinOps advisory tools (AWS Compute Optimizer, Kubecost, CAST AI, and similar products)
+
+**PDB/scheduling-aware consolidation (Tier 2 estimate):** Would require PDB snapshots, pod tolerations/affinity, and a placement simulation (~O(pods × nodes) per candidate). Feasible as a follow-on with operator enhancements; not required for Tier 1 advisory mode. See [Node recommendations roadmap — consolidation limitations](../architecture/node-recommendations-roadmap.md#consolidation-model--current-scope-and-limitations).
+
+## Fleet instance type suggestions (Tier 1)
+
+When a node is **CPU-stranded** or **memory-stranded**, the engine can suggest a different **instance type that already exists in the same cluster** (no external catalog):
+
+| Stranded | Suggestion logic |
+|----------|------------------|
+| CPU (memory-heavy workload) | Instance type in cluster with **lower** allocatable CPU:memory ratio |
+| Memory (CPU-heavy workload) | Instance type in cluster with **higher** allocatable CPU:memory ratio |
+
+Response fields: `suggested_instance_type`, `instance_type_reason`. Empty when no better in-cluster type exists (directional stranded notifications still apply).
+
+A **full cloud catalog** (types not yet in the cluster, pricing-aware recommendations) is planned future work — see [roadmap](../architecture/node-recommendations-roadmap.md#fleet-instance-type-suggestions-tier-1-vs-cloud-catalog).
+
 ## API
+
+### List and filters
 
 ```http
 GET /api/cost-management/v1/recommendations/openshift/nodes
+GET /api/cost-management/v1/recommendations/openshift/nodes?format=csv
 ```
 
-Query parameters include `cluster_uuid`, `node`, `engine`, `term`,
-`filter[idle_state]` (`active`, `idle`, `zombie`; comma-separated),
-`is_underutilized`, `is_overcommitted`, `order_by` (default
-`estimated_monthly_savings`; alias `estimated_monthly_savings_usd`), and pagination.
+| Parameter | Description |
+|-----------|-------------|
+| `filter[cluster]` | Cluster UUID |
+| `filter[node]` | Node name (exact) |
+| `filter[term]` | `short`, `medium`, `long` |
+| `filter[engine]` | `cost`, `performance` |
+| `filter[is_underutilized]` | `true` / `false` |
+| `filter[is_overcommitted]` | `true` / `false` |
+| `filter[idle_state]` | `active`, `idle`, `zombie` (comma-separated) |
+| `filter[stranded_resource]` | `cpu`, `memory`, `none` |
+| `filter[instance_type]` | Exact instance type |
+| `filter[machineset_name]` | Exact MachineSet name |
+| `order_by` | `estimated_monthly_savings` (default) or `node` |
+| `limit` / `offset` | Pagination |
+
+Legacy flat params (`?cluster_uuid=`, `?node=`, `?term=`, `?engine=`) still work.
+
+### Single-node detail
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[cluster]=UUID&filter[node]=worker-0&limit=1
+```
+
+Same nested `recommendation_terms` payload as list. A path-style `GET .../nodes/{node}` is planned but not registered yet.
+
+Deprecated list alias: `GET .../nodes/utilization`.
 
 ### Example (abbreviated)
 
@@ -100,7 +199,14 @@ Query parameters include `cluster_uuid`, `node`, `engine`, `term`,
   "data": [{
     "node": "worker-3.example.com",
     "cluster_uuid": "...",
-    "recommendation_type": "underutilized",
+    "instance_type": "m5.2xlarge",
+    "machineset_name": "worker",
+    "pod_count": 42,
+    "pod_capacity": 110,
+    "pod_scheduling_headroom": 0.618,
+    "suggested_instance_type": "m5.large",
+    "instance_type_reason": "Memory-heavy workload; lower CPU:memory ratio than m5.2xlarge",
+    "recommendation_type": "cpu_memory_utilization",
     "recommendation_terms": {
       "medium_term": {
         "recommendation_engines": {
@@ -144,7 +250,15 @@ Query parameters include `cluster_uuid`, `node`, `engine`, `term`,
 | `perf_target_utilization` | 0.55 | Performance engine sizing target |
 | `perf_consolidation_headroom_multiplier` | 2.0 | Performance consolidation guard |
 | `trend_min_days` | 3 | Min days for CPU trend slope |
+| `zombie_cpu_p95_mc` | 200 | Zombie: CPU P95 below this (millicores) with few pods |
+| `zombie_max_pods` | 5 | Zombie: max running pods |
+| `idle_cpu_util_pct` | 10 | Idle: CPU util % of allocatable (0–100) |
+| `idle_mem_util_pct` | 10 | Idle: memory util % of allocatable (0–100) |
+| `idle_max_pods` | 10 | Idle: max running pods |
+| `pod_headroom_consolidation_gate` | 0.15 | Min headroom before consolidation is suppressed |
+| `pod_headroom_notification_threshold` | 0.10 | Headroom below this emits notification **74** |
 
+Idle and zombie thresholds are tenant-configurable via the Settings API (not env-only).
 Env vars: `ROS_NODE_*` — see [Configurability](../architecture/configurability.md#node).
 
 ## Roadmap / deferred

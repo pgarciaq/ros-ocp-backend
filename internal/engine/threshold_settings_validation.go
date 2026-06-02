@@ -97,6 +97,13 @@ func nodeThresholdAllowedFields() map[string]struct{} {
 		"perf_target_utilization":                {},
 		"perf_consolidation_headroom_multiplier": {},
 		"trend_min_days":                         {},
+		"zombie_cpu_p95_mc":                      {},
+		"zombie_max_pods":                        {},
+		"idle_cpu_util_pct":                      {},
+		"idle_mem_util_pct":                      {},
+		"idle_max_pods":                          {},
+		"pod_headroom_consolidation_gate":        {},
+		"pod_headroom_notification_threshold":    {},
 	}
 }
 
@@ -181,7 +188,11 @@ func ValidateThresholdSettingsUpdate(
 		if err := json.Unmarshal(rawUpdate, &update); err != nil {
 			return fmt.Errorf("invalid request body: %w", err)
 		}
-		return validateNodeThresholdUpdate(update)
+		current, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+		if err != nil {
+			return err
+		}
+		return validateNodeThresholdUpdate(update, current)
 	case "gpu":
 		var update GPUThresholdSettingsUpdate
 		if err := json.Unmarshal(rawUpdate, &update); err != nil {
@@ -273,7 +284,7 @@ func validateSizingThresholdUpdate(update SizingThresholdSettingsUpdate, current
 	return v.result()
 }
 
-func validateNodeThresholdUpdate(update NodeThresholdSettingsUpdate) error {
+func validateNodeThresholdUpdate(update NodeThresholdSettingsUpdate, current NodeThresholdSettings) error {
 	v := fieldValidator{}
 
 	if update.UnderutilThreshold != nil {
@@ -302,6 +313,42 @@ func validateNodeThresholdUpdate(update NodeThresholdSettingsUpdate) error {
 	}
 	if update.TrendMinDays != nil {
 		v.addRangeInt("trend_min_days", *update.TrendMinDays, 1, 30)
+	}
+	if update.ZombieCPUP95MC != nil {
+		v.addRangeInt64("zombie_cpu_p95_mc", *update.ZombieCPUP95MC, 1, 100000)
+	}
+	if update.ZombieMaxPods != nil {
+		v.addRangeInt64("zombie_max_pods", *update.ZombieMaxPods, 1, 10000)
+	}
+	if update.IdleCPUUtilPct != nil {
+		v.addRangeInt64("idle_cpu_util_pct", *update.IdleCPUUtilPct, 0, 100)
+	}
+	if update.IdleMemUtilPct != nil {
+		v.addRangeInt64("idle_mem_util_pct", *update.IdleMemUtilPct, 0, 100)
+	}
+	if update.IdleMaxPods != nil {
+		v.addRangeInt64("idle_max_pods", *update.IdleMaxPods, 1, 10000)
+	}
+	if update.PodHeadroomConsolidationGate != nil {
+		v.addRangeFloat("pod_headroom_consolidation_gate", *update.PodHeadroomConsolidationGate, 0.0, 1.0)
+	}
+	if update.PodHeadroomNotificationThreshold != nil {
+		v.addRangeFloat("pod_headroom_notification_threshold", *update.PodHeadroomNotificationThreshold, 0.0, 1.0)
+	}
+
+	consolidationGate := current.PodHeadroomConsolidationGate
+	if update.PodHeadroomConsolidationGate != nil {
+		consolidationGate = *update.PodHeadroomConsolidationGate
+	}
+	notificationThreshold := current.PodHeadroomNotificationThreshold
+	if update.PodHeadroomNotificationThreshold != nil {
+		notificationThreshold = *update.PodHeadroomNotificationThreshold
+	}
+	if consolidationGate < notificationThreshold {
+		v.addConstraint(
+			"pod_headroom_consolidation_gate",
+			"must be greater than or equal to pod_headroom_notification_threshold",
+		)
 	}
 
 	return v.result()

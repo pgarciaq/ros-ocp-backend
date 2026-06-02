@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,7 +136,28 @@ func TestRecommendNodes_UnknownInstanceType_FallsBackToBinary(t *testing.T) {
 	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
 	rec := recsByNode(results, "medium", "cost")["bare-metal-1"]
 	require.NotEmpty(t, rec.Node)
-	assert.Equal(t, 1, rec.NodeCountReduction, "unknown instance type uses per-node binary consolidation")
+	assert.Equal(t, 1, rec.NodeCountReduction, "single unknown-capacity node uses binary consolidation")
+}
+
+func TestRecommendNodes_SimilarCapacityWithoutInstanceType_Consolidates(t *testing.T) {
+	cfg := relaxedUnderutilConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	var digests []NodeDigestRow
+	for i := 1; i <= 4; i++ {
+		node := "bm-" + string(rune('0'+i))
+		nodeDays := underutilizedNodeDigests(node, "", 3, 6000, 12000)
+		for j := range nodeDays {
+			nodeDays[j].MaxCPUAllocMC = allocCPU
+			nodeDays[j].MaxMemAllocKiB = allocMem
+		}
+		digests = append(digests, nodeDays...)
+	}
+
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	assert.Equal(t, 2, totalReduction(results, "medium", "cost"),
+		"four similar-capacity nodes without instance_type should fleet-consolidate")
 }
 
 func TestRecommendNodes_AllNodesWellUtilized_NoReduction(t *testing.T) {
@@ -174,6 +196,103 @@ func TestMinimumNodesForWorkload(t *testing.T) {
 	// 5 × 6000 mc = 30000 total → ceil(30000/12800)=3
 	min = minimumNodesForWorkload(30000, 0, 16000, 65536, 0.8)
 	assert.Equal(t, int64(3), min)
+}
+
+func TestFleetGroupKey_PrefersMachineSetOverInstanceType(t *testing.T) {
+	class := nodeClassification{MachineSetName: "worker-us-east-1a"}
+	key := fleetGroupKey("node-1", class, map[string]string{"node-1": "m5.xlarge"})
+	assert.Equal(t, "ms:worker-us-east-1a", key)
+}
+
+func TestFleetGroupKey_FallsBackToInstanceType(t *testing.T) {
+	class := nodeClassification{}
+	key := fleetGroupKey("node-1", class, map[string]string{"node-1": "m5.xlarge"})
+	assert.Equal(t, "it:m5.xlarge", key)
+}
+
+func TestRecommendNodes_MachineSetFleetGrouping(t *testing.T) {
+	cfg := relaxedUnderutilConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	var digests []NodeDigestRow
+	for i := 1; i <= 3; i++ {
+		node := fmt.Sprintf("ms-node-%d", i)
+		for day := 1; day <= 3; day++ {
+			row := makeDigestRowWithType(node, "m5.xlarge", day, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem)
+			row.MachineSetName = "worker-a"
+			digests = append(digests, row)
+		}
+	}
+	// Same instance type but different MachineSet — should not fleet-consolidate together.
+	for i := 1; i <= 2; i++ {
+		node := fmt.Sprintf("other-ms-%d", i)
+		for day := 1; day <= 3; day++ {
+			row := makeDigestRowWithType(node, "m5.xlarge", day, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem)
+			row.MachineSetName = "worker-b"
+			digests = append(digests, row)
+		}
+	}
+
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	msAReduction := 0
+	msBReduction := 0
+	for _, r := range results {
+		if r.Engine != "cost" || r.Term != "medium" || r.NodeCountReduction <= 0 {
+			continue
+		}
+		if r.MachineSetName == "worker-a" {
+			msAReduction += r.NodeCountReduction
+		}
+		if r.MachineSetName == "worker-b" {
+			msBReduction += r.NodeCountReduction
+		}
+	}
+	assert.Equal(t, 1, msAReduction, "three underutilized nodes in one MachineSet should remove one node")
+	assert.LessOrEqual(t, msBReduction, 1, "two nodes in another MachineSet consolidate independently, not with worker-a")
+
+	// Without MachineSet labels, all five nodes fleet-consolidate as one instance_type group.
+	var combined []NodeDigestRow
+	for i := 1; i <= 5; i++ {
+		node := fmt.Sprintf("flat-%d", i)
+		for day := 1; day <= 3; day++ {
+			combined = append(combined, makeDigestRowWithType(node, "m5.xlarge", day, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem))
+		}
+	}
+	combinedResults := RecommendNodes(combined, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	assert.Equal(t, 2, totalReduction(combinedResults, "medium", "cost"),
+		"five homogeneous nodes without MachineSet should fleet-consolidate more aggressively than a three-node MachineSet pool")
+}
+
+func TestRecommendNodes_FleetConsolidationNotificationIncludesMachineSet(t *testing.T) {
+	cfg := relaxedUnderutilConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	var digests []NodeDigestRow
+	for i := 1; i <= 4; i++ {
+		node := "fleet-" + string(rune('0'+i))
+		for day := 1; day <= 3; day++ {
+			row := makeDigestRowWithType(node, "m5.xlarge", day, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem)
+			row.MachineSetName = "worker-fleet"
+			digests = append(digests, row)
+		}
+	}
+
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())
+	var withFleetNotif int
+	for _, r := range results {
+		if r.Engine != "cost" || r.Term != "medium" || r.MachineSetName != "worker-fleet" {
+			continue
+		}
+		for _, c := range r.NotificationCodes {
+			if c == NotifNodeFleetConsolidation {
+				withFleetNotif++
+				break
+			}
+		}
+	}
+	assert.Greater(t, withFleetNotif, 0, "fleet consolidation should emit MachineSet notification on reduced nodes")
 }
 
 func TestComputeGroupNodeCountReduction(t *testing.T) {

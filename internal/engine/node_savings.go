@@ -9,7 +9,8 @@ import (
 
 // ApplyNodeSavings computes EstimatedMonthlySavingsCents for each node recommendation
 // using configured rates from Koku. If costData is nil, savings remain 0 and
-// NotifNoCostData is appended.
+// NotifNoCostData is appended. Use savings recalculation (POST /internal/recalculate-savings)
+// to refresh persisted rows after upstream cost model changes without re-ingestion.
 func ApplyNodeSavings(recs []NodeRec, costData *costdata.ClusterCostData) {
 	if costData == nil {
 		for i := range recs {

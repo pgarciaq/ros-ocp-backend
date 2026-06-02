@@ -1,9 +1,25 @@
 # Node Recommendations Roadmap — Tier 2 & Tier 3
 
-**Status:** Planned future work (not implemented)  
+**Status:** Tier 1 complete; Tier 2/3 planned  
 **Related:** [Node consolidation (Tier 1)](../../docs-site/features/node-recommendations.md), [REQ-8c in requirements.md](requirements.md), [notification codes](notification-codes.md) (codes 14, 16–17 reserved for Tier 3)
 
-Tier 1 (per-node utilization visibility, dual cost/performance engines, fleet consolidation by `instance_type`) is **shipping**. This document describes the next two tiers: actionable recommendations at the **MachineSet** level (Tier 2) and **MachineAutoscaler** tuning (Tier 3).
+Tier 1 is **shipped**, including:
+
+| Capability | Status |
+|------------|--------|
+| `GET .../recommendations/openshift/nodes` (list, filters, CSV) | Done |
+| Dual engines, term windows, fleet consolidation | Done |
+| Idle / zombie detection + settings | Done |
+| `pod_capacity`, `pod_scheduling_headroom`, notification **74** | Done |
+| `filter[stranded_resource]`, `filter[instance_type]`, `filter[machineset_name]` | Done |
+| `suggested_instance_type` / `instance_type_reason` (in-cluster ratio hints) | Done |
+| `POST .../internal/recalculate-savings` after cost model changes | Done |
+| Savings summary `?term=` alignment | Done |
+| Dedicated `GET .../nodes/{node}` path | **Future** — use `filter[node]` today |
+| Node recommendation history time series | **Future** |
+| Cloud instance catalog (AWS/Azure/GCP specs + pricing) | **Future** (Tier 2) |
+
+This document describes Tier 2 (MachineSet) and Tier 3 (MachineAutoscaler).
 
 ---
 
@@ -23,6 +39,70 @@ flowchart LR
   Op --> T2
   Op --> T3
 ```
+
+---
+
+## Consolidation model — current scope and limitations
+
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](../../internal/engine/recommend_nodes.go)) is **advisory only**.
+
+### Current scope (Tier 1)
+
+- Advisory signal: “you likely have N excess nodes in this fleet”
+- Based on aggregate P95 utilization across the fleet group
+- Groups nodes by MachineSet (when labeled) → `instance_type` → capacity bucket
+- Does **not** account for: PodDisruptionBudgets, scheduling constraints (taints/tolerations/affinity), DaemonSet overhead, or actual pod placement feasibility
+- Aligns with FinOps advisory tools (AWS Compute Optimizer, Kubecost, CAST AI recommendations)
+
+### PDB/scheduling-aware consolidation (Tier 2 estimate)
+
+Additional data required:
+
+| Data | Source | Storage estimate |
+|------|--------|------------------|
+| PodDisruptionBudgets | `policy/v1` PDB resources | ~1 KB per PDB × namespaces |
+| Node taints | `node.spec.taints` | Already in node labels CSV |
+| Pod tolerations | `pod.spec.tolerations` | ~100 B per pod × pods |
+| Node/pod affinity rules | `pod.spec.affinity` | ~200 B per pod with affinity |
+| DaemonSet pod list | `apps/v1` DaemonSet resources | ~50 B per DS × nodes |
+
+Processing estimate:
+
+- For each candidate node removal, simulate whether non-DaemonSet pods can reschedule to remaining nodes while respecting PDBs, taints, and affinity
+- Essentially a **scheduling simulation** (mini kube-scheduler) — ~O(pods × nodes) per candidate
+- Example: 100-node cluster, 5000 pods → ~500K placement checks per consolidation evaluation
+- Latency: seconds per evaluation (acceptable at recommendation time, not real-time)
+
+**Storage:** ~50 MB additional per large cluster (PDB/affinity/toleration snapshots)  
+**Processing:** ~5–10 s additional per cluster recommendation cycle
+
+**Verdict:** Feasible for Tier 2 but requires operator enhancements (collect PDB + affinity data) and significant engine work. Not needed for advisory-only Tier 1.
+
+---
+
+## Fleet instance type suggestions (Tier 1 vs cloud catalog)
+
+### Implemented (Tier 1 — in-cluster fleet)
+
+When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](../../internal/engine/recommend_nodes.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
+
+- **CPU-stranded:** suggest a type with a **lower** CPU:memory allocatable ratio (compute-leaning shape already in the fleet)
+- **Memory-stranded:** suggest a type with a **higher** CPU:memory ratio
+- Persisted on `node_recommendations.suggested_instance_type` / `instance_type_reason` (migration **000123**)
+- Exposed on list and `GET .../nodes/{node}` detail APIs
+
+If no strictly better in-cluster type exists, fields remain empty; stranded directional notifications still apply.
+
+### Future work — full cloud catalog (Tier 2+)
+
+Not implemented in Tier 1. A full catalog path would:
+
+- Query an external instance catalog (AWS/Azure/GCP pricing APIs or a bundled catalog table — see REQ-8c.6 in [requirements.md](requirements.md))
+- Recommend instance types **not yet present** in the cluster
+- Factor in **pricing** for cost-optimized family/size changes
+- Require **provider-specific** catalog loaders and refresh jobs
+
+Tier 2 MachineSet recommendations will reuse catalog data for replica and instance family changes; Tier 1 fleet-only suggestions avoid catalog dependency and stay accurate for homogeneous on-prem / single-family clusters.
 
 ---
 
@@ -48,12 +128,12 @@ Individual node recommendations (Tier 1) remain informational; MachineSet recomm
 
 1. **Operator (koku-metrics-operator)**  
    - Collect `machine.openshift.io/machine-set` (or equivalent) from node labels via Prometheus.  
-   - Emit `machineset_name` on the ROS node usage CSV (column already defined in requirements; not yet populated in production paths).  
+   - Emit `machineset_name` on ROS container CSV (production path). **Nise** also generates `machineset_name` and `node_capacity_pods` for test data.  
    - Optional for Tier 2 core: MachineSet replica counts (`machineset_replicas`, `desired`/`available`) — required before Tier 3.
 
-2. **Ingestion (ros-ocp-backend)**  
-   - Parse `machineset_name` from ROS CSV into `daily_node_digests` (column exists since migration **000052**; today often `NULL`).  
-   - Ensure digest aggregation retains `machineset_name` and `instance_type` for grouping.
+2. **Ingestion (ros-ocp-backend)** — **done for Tier 1**  
+   - Parse `machineset_name` / `node_capacity_pods` from ROS CSV into `daily_node_digests`.  
+   - Digest aggregation retains `machineset_name`, `instance_type`, and `pod_capacity`.
 
 3. **Engine**  
    - New **`machineset` plugin** (or extension of node plugin phase):  

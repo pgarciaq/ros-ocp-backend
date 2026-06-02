@@ -1,0 +1,489 @@
+package engine
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+)
+
+const (
+	savingsRecTypeContainer = "container"
+	savingsRecTypeNode      = "node"
+	savingsRecTypePVC       = "pvc"
+)
+
+var (
+	savingsRecalculationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ros_savings_recalculation_total",
+			Help: "Cost-model-triggered savings-only recalculations per org, type, and outcome",
+		},
+		[]string{"org_id", "recommendation_type", "status"},
+	)
+
+	// clusterSavingsRecalcFunc runs savings-only recalculation for one cluster (tests may replace).
+	clusterSavingsRecalcFunc = defaultRecalculateClusterSavings
+
+	// savingsRecalcHook runs at the start of TriggerSavingsRecalculationAsync (tests only).
+	savingsRecalcHook func(orgID string, recTypes []string)
+)
+
+// SetClusterSavingsRecalcFuncForTest replaces the per-cluster savings recalculation function.
+func SetClusterSavingsRecalcFuncForTest(fn func(context.Context, *pgxpool.Pool, string, string, []string) error) func() {
+	prev := clusterSavingsRecalcFunc
+	clusterSavingsRecalcFunc = fn
+	return func() { clusterSavingsRecalcFunc = prev }
+}
+
+// SetSavingsRecalcHookForTest registers a hook invoked when async savings recalculation is triggered.
+func SetSavingsRecalcHookForTest(hook func(orgID string, recTypes []string)) {
+	savingsRecalcHook = hook
+}
+
+// ClearSavingsRecalcHookForTest removes the test hook.
+func ClearSavingsRecalcHookForTest() {
+	savingsRecalcHook = nil
+}
+
+// TriggerSavingsRecalculationAsync starts background savings-only recalculation after Koku cost model
+// rate changes. The caller returns immediately; work runs in a detached goroutine.
+func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
+	if pool == nil || orgID == "" {
+		return
+	}
+	if !config.GetConfig().SavingsEstimatesEnabled || !config.GetConfig().SavingsRecalculationEnabled {
+		return
+	}
+	types := normalizeSavingsRecTypes(recTypes)
+	if len(types) == 0 {
+		return
+	}
+	if savingsRecalcHook != nil {
+		savingsRecalcHook(orgID, types)
+	}
+	go func() {
+		ctx := context.Background()
+		RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, types)
+	}()
+}
+
+// RecalculateSavingsForOrg recomputes estimated_monthly_savings_usd for persisted recommendations
+// using current Koku effective rates. Classification and sizing are not re-run.
+func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
+	log := logging.ForOrgOnly(orgID)
+	started := time.Now()
+	types := normalizeSavingsRecTypes(recTypes)
+
+	costdata.InvalidateCostDataCache(orgID, clusterUUID)
+
+	clusters, err := listClustersForSavingsRecalc(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		log.WithFields(map[string]interface{}{
+			"msg":   "savings recalculation failed",
+			"error": err.Error(),
+		}).Error("unable to list clusters")
+		for _, rt := range types {
+			savingsRecalculationTotal.WithLabelValues(orgID, rt, "error").Inc()
+		}
+		return
+	}
+
+	log.WithFields(map[string]interface{}{
+		"msg":                  "savings recalculation started",
+		"recommendation_types": types,
+		"clusters":             len(clusters),
+		"cluster_filter":       clusterUUID != "",
+	}).Info("savings recalculation started")
+
+	if len(clusters) == 0 {
+		log.WithFields(map[string]interface{}{
+			"msg":         "savings recalculation completed",
+			"duration_ms": time.Since(started).Milliseconds(),
+		}).Info("savings recalculation completed")
+		for _, rt := range types {
+			savingsRecalculationTotal.WithLabelValues(orgID, rt, "success").Inc()
+		}
+		return
+	}
+
+	sem := make(chan struct{}, thresholdRecalcConcurrency())
+	var wg sync.WaitGroup
+	var processed int
+	var mu sync.Mutex
+
+	for _, cu := range clusters {
+		wg.Add(1)
+		go func(clusterID string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if err := clusterSavingsRecalcFunc(ctx, pool, orgID, clusterID, types); err != nil {
+				logging.ForOrg(orgID, clusterID).WithFields(map[string]interface{}{
+					"msg":   "savings recalculation cluster failed",
+					"error": err.Error(),
+				}).Warn("savings recalculation cluster failed")
+				for _, rt := range types {
+					savingsRecalculationTotal.WithLabelValues(orgID, rt, "error").Inc()
+				}
+				return
+			}
+			mu.Lock()
+			processed++
+			mu.Unlock()
+			for _, rt := range types {
+				savingsRecalculationTotal.WithLabelValues(orgID, rt, "success").Inc()
+			}
+		}(cu)
+	}
+	wg.Wait()
+
+	if containsSavingsRecType(types, savingsRecTypeContainer) {
+		if err := model.RefreshOrgRecommendationStats(ctx, pool, orgID); err != nil {
+			log.Warnf("savings recalc: refresh org recommendation stats failed: %v", err)
+		}
+	}
+
+	log.WithFields(map[string]interface{}{
+		"msg":                 "savings recalculation completed",
+		"clusters_processed":  processed,
+		"recommendation_types": types,
+		"duration_ms":         time.Since(started).Milliseconds(),
+	}).Info("savings recalculation completed")
+}
+
+func listClustersForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]string, error) {
+	clusterUUID = strings.TrimSpace(clusterUUID)
+	if clusterUUID != "" {
+		return []string{clusterUUID}, nil
+	}
+	return ListClustersForOrg(ctx, pool, orgID)
+}
+
+func defaultRecalculateClusterSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) error {
+	start, end := recalcDateRange()
+	var costData *costdata.ClusterCostData
+	if config.GetConfig().SavingsEstimatesEnabled {
+		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, end)
+	}
+
+	var errs []error
+	if containsSavingsRecType(recTypes, savingsRecTypeContainer) {
+		if err := recalculateContainerSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if containsSavingsRecType(recTypes, savingsRecTypeNode) {
+		if err := recalculateNodeSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if containsSavingsRecType(recTypes, savingsRecTypePVC) {
+		if err := recalculatePVCSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errorsJoin(errs)
+}
+
+func recalculateContainerSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	recs, err := loadContainerRecsForSavingsRecalc(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("load container recommendations: %w", err)
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	ApplySavingsEstimates(recs, costData)
+	return updateContainerSavings(ctx, pool, recs)
+}
+
+func recalculateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	nodeSettings, err := ResolveNodeThresholdSettings(ctx, pool, orgID)
+	if err != nil {
+		logging.ForOrg(orgID, clusterUUID).Warnf("savings recalc: load node thresholds failed, using defaults: %v", err)
+		nodeSettings = DefaultNodeThresholdSettings()
+	}
+	cfg := NodeRecConfigFromThresholds(nodeSettings)
+
+	recs, err := loadNodeRecsForSavingsRecalc(ctx, pool, orgID, clusterUUID, cfg.AllocatableFactor)
+	if err != nil {
+		return fmt.Errorf("load node recommendations: %w", err)
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	ApplyNodeSavings(recs, costData)
+	return updateNodeSavings(ctx, pool, orgID, clusterUUID, recs)
+}
+
+func recalculatePVCSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	recs, err := loadPVCRecsForSavingsRecalc(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return fmt.Errorf("load PVC recommendations: %w", err)
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	ApplyPVCSavings(recs, costData)
+	return updatePVCSavings(ctx, pool, recs)
+}
+
+func loadContainerRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]ContainerRec, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT org_id, cluster_uuid::text, namespace, workload, COALESCE(workload_type, ''), container_name,
+			term, engine,
+			COALESCE(rec_cpu_request_millicores, 0), COALESCE(rec_memory_request_kib, 0),
+			COALESCE(current_cpu_request_millicores, 0), COALESCE(current_memory_request_kib, 0),
+			COALESCE(pod_count_avg, 0), COALESCE(desired_replicas, 0),
+			COALESCE(idle_state, 'active'), notification_codes
+		FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND stale = false`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []ContainerRec
+	for rows.Next() {
+		var r ContainerRec
+		var idleState string
+		if err := rows.Scan(
+			&r.OrgID, &r.ClusterUUID, &r.Namespace, &r.Workload, &r.WorkloadType, &r.ContainerName,
+			&r.Term, &r.Engine,
+			&r.RecCPURequestMC, &r.RecMemRequestKiB,
+			&r.CurrentCPURequestMC, &r.CurrentMemRequestKiB,
+			&r.PodCountAvg, &r.DesiredReplicas,
+			&idleState, &r.NotificationCodes,
+		); err != nil {
+			return nil, err
+		}
+		r.IdleState = IdleState(idleState)
+		r.IsIdle = r.IdleState == IdleStateIdle || r.IdleState == IdleStateZombie
+		r.IsAbandoned = containsNotificationCode(r.NotificationCodes, NotifAbandonedWorkload)
+		recs = append(recs, r)
+	}
+	return recs, rows.Err()
+}
+
+func loadNodeRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, allocatableFactor float64) ([]NodeRec, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT nr.node, nr.term, nr.engine,
+			COALESCE(nr.recommended_cpu_cores, 0), COALESCE(nr.recommended_memory_gib, 0),
+			COALESCE(nr.node_count_reduction, 0), nr.notification_codes,
+			d.max_cpu_allocatable_mc, d.max_mem_allocatable_kib,
+			d.max_cpu_requests_mc, d.max_mem_requests_kib
+		FROM node_recommendations nr
+		LEFT JOIN LATERAL (
+			SELECT max_cpu_allocatable_mc, max_mem_allocatable_kib,
+				max_cpu_requests_mc, max_mem_requests_kib
+			FROM daily_node_digests
+			WHERE org_id = nr.org_id AND cluster_uuid = nr.cluster_uuid AND node = nr.node
+			ORDER BY bucket_date DESC
+			LIMIT 1
+		) d ON true
+		WHERE nr.org_id = $1 AND nr.cluster_uuid = $2::uuid`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	const kibPerGiB = 1024 * 1024
+	var recs []NodeRec
+	for rows.Next() {
+		var r NodeRec
+		var recCPUCores, recMemGiB float64
+		var maxCPUAlloc, maxMemAlloc *int64
+		var maxCPUReq, maxMemReq int64
+		if err := rows.Scan(
+			&r.Node, &r.Term, &r.Engine,
+			&recCPUCores, &recMemGiB, &r.NodeCountReduction, &r.NotificationCodes,
+			&maxCPUAlloc, &maxMemAlloc, &maxCPUReq, &maxMemReq,
+		); err != nil {
+			return nil, err
+		}
+		r.RecommendedCPUMC = int64(recCPUCores * 1000)
+		r.RecommendedMemKiB = int64(recMemGiB * float64(kibPerGiB))
+		r.CurrentCPUMC = resolveAllocatable(maxCPUAlloc, maxCPUReq, allocatableFactor)
+		r.CurrentMemKiB = resolveAllocatableMem(maxMemAlloc, maxMemReq, allocatableFactor)
+		recs = append(recs, r)
+	}
+	return recs, rows.Err()
+}
+
+func loadPVCRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]PVCRec, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT org_id, cluster_uuid::text, namespace, persistentvolumeclaim,
+			COALESCE(capacity_bytes, 0),
+			recommended_bytes, notification_codes, term
+		FROM pvc_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []PVCRec
+	for rows.Next() {
+		var r PVCRec
+		if err := rows.Scan(
+			&r.OrgID, &r.ClusterUUID, &r.Namespace, &r.PVC,
+			&r.CapacityBytes, &r.RecommendedBytes, &r.NotificationCodes, &r.Term,
+		); err != nil {
+			return nil, err
+		}
+		recs = append(recs, r)
+	}
+	return recs, rows.Err()
+}
+
+func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	batch := &pgx.Batch{}
+	for _, r := range recs {
+		batch.Queue(`
+			UPDATE recommendation_sets
+			SET estimated_monthly_savings_usd = $1,
+			    notification_codes = $2,
+			    updated_at = now()
+			WHERE org_id = $3 AND cluster_uuid = $4::uuid
+			  AND namespace = $5 AND workload = $6 AND workload_type = $7
+			  AND container_name = $8 AND term = $9 AND engine = $10`,
+			r.EstimatedSavingsCents, r.NotificationCodes,
+			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
+		)
+	}
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
+	for range recs {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("update container savings: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recs []NodeRec) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", nodeRecsAdvisoryLock)); err != nil {
+		return fmt.Errorf("advisory lock: %w", err)
+	}
+
+	for _, r := range recs {
+		_, err := tx.Exec(ctx, `
+			UPDATE node_recommendations
+			SET estimated_monthly_savings_usd = $1,
+			    notification_codes = $2,
+			    updated_at = now()
+			WHERE org_id = $3 AND cluster_uuid = $4::uuid
+			  AND node = $5 AND term = $6 AND engine = $7`,
+			r.EstimatedMonthlySavingsCents, r.NotificationCodes,
+			orgID, clusterUUID, r.Node, r.Term, r.Engine,
+		)
+		if err != nil {
+			return fmt.Errorf("update node savings %s: %w", r.Node, err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) error {
+	for _, r := range recs {
+		_, err := pool.Exec(ctx, `
+			UPDATE pvc_recommendation_sets
+			SET estimated_monthly_savings_usd = $1,
+			    notification_codes = $2,
+			    updated_at = now()
+			WHERE org_id = $3 AND cluster_uuid = $4::uuid
+			  AND namespace = $5 AND persistentvolumeclaim = $6 AND term = $7`,
+			r.EstimatedMonthlySavingsCents, r.NotificationCodes,
+			r.OrgID, r.ClusterUUID, r.Namespace, r.PVC, r.Term,
+		)
+		if err != nil {
+			return fmt.Errorf("update pvc savings %s/%s: %w", r.Namespace, r.PVC, err)
+		}
+	}
+	return nil
+}
+
+// NormalizeSavingsRecTypesForAPI validates recommendation type names for the internal API.
+func NormalizeSavingsRecTypesForAPI(recTypes []string) []string {
+	return normalizeSavingsRecTypes(recTypes)
+}
+
+func normalizeSavingsRecTypes(recTypes []string) []string {
+	if len(recTypes) == 0 {
+		return []string{savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC}
+	}
+	seen := make(map[string]struct{}, len(recTypes))
+	var out []string
+	for _, rt := range recTypes {
+		rt = strings.TrimSpace(strings.ToLower(rt))
+		switch rt {
+		case savingsRecTypeContainer, savingsRecTypeNode, savingsRecTypePVC:
+			if _, ok := seen[rt]; ok {
+				continue
+			}
+			seen[rt] = struct{}{}
+			out = append(out, rt)
+		}
+	}
+	return out
+}
+
+func containsSavingsRecType(types []string, want string) bool {
+	for _, t := range types {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsNotificationCode(codes []int16, code int16) bool {
+	for _, c := range codes {
+		if c == code {
+			return true
+		}
+	}
+	return false
+}
+
+func errorsJoin(errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	msgs := make([]string, len(errs))
+	for i, e := range errs {
+		msgs[i] = e.Error()
+	}
+	return fmt.Errorf("%s", strings.Join(msgs, "; "))
+}

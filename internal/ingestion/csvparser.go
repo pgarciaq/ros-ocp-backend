@@ -110,6 +110,10 @@ type csvColumnIndex struct {
 	nodeAllocatableMemBytes int
 	// Instance type column (optional; from ROS container CSV).
 	instanceType int
+	// Node pod capacity columns (optional).
+	nodePodCapacity int
+	// MachineSet name column (optional).
+	machinesetName int
 	// GPU columns (optional; -1 when header absent).
 	acceleratorModelName           int
 	acceleratorProfileName         int
@@ -134,7 +138,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
 		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
 		nodeAllocatableCPUCores: -1, nodeAllocatableMemBytes: -1,
-		instanceType: -1,
+		instanceType: -1, nodePodCapacity: -1, machinesetName: -1,
 		memUsage:     -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName:           -1,
@@ -180,6 +184,10 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.nodeAllocatableMemBytes = i
 		case "instance_type":
 			idx.instanceType = i
+		case "node_capacity_pods", "pod_capacity", "node_pod_capacity":
+			idx.nodePodCapacity = i
+		case "machineset_name", "machine_set", "machine_set_name":
+			idx.machinesetName = i
 		case "cpu_request_container_avg":
 			idx.cpuRequest = i
 		case "cpu_limit_container_avg":
@@ -499,6 +507,14 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 	}
 
 	row.InstanceType = optionalStringField(record, idx.instanceType)
+	if idx.nodePodCapacity >= 0 && idx.nodePodCapacity < len(record) && record[idx.nodePodCapacity] != "" {
+		v, err := strconv.ParseFloat(record[idx.nodePodCapacity], 64)
+		if err != nil {
+			return row, err
+		}
+		row.NodePodCapacity = int64(math.Round(v))
+	}
+	row.MachineSetName = optionalStringField(record, idx.machinesetName)
 
 	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
 	row.AcceleratorProfileName = optionalStringField(record, idx.acceleratorProfileName)

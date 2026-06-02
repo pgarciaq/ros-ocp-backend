@@ -133,6 +133,10 @@ type Config struct {
 	// threshold settings change via the Settings API PUT. Default true.
 	ThresholdRecalculationEnabled bool `mapstructure:"ROS_THRESHOLD_RECALCULATION_ENABLED"`
 
+	// SavingsRecalculationEnabled allows POST /internal/recalculate-savings after Koku cost model
+	// rate changes. Default true; requires SavingsEstimatesEnabled and KOKU_MASU_URL.
+	SavingsRecalculationEnabled bool `mapstructure:"ROS_SAVINGS_RECALCULATION_ENABLED"`
+
 	// ReshipPollerIntervalSecs is the background retry interval for pending masu reshships (default 60).
 	ReshipPollerIntervalSecs int `mapstructure:"ROS_RESHIP_POLLER_INTERVAL_SECS"`
 
@@ -189,6 +193,10 @@ type Config struct {
 	NodeIdleCPUUtilPct                      int64   `mapstructure:"ROS_NODE_IDLE_CPU_UTIL_PCT"`
 	NodeIdleMemUtilPct                      int64   `mapstructure:"ROS_NODE_IDLE_MEM_UTIL_PCT"`
 	NodeIdleMaxPods                         int64   `mapstructure:"ROS_NODE_IDLE_MAX_PODS"`
+	// PodHeadroomConsolidationGate is the minimum pod scheduling headroom (0.0–1.0) before consolidation is suppressed.
+	NodePodHeadroomConsolidationGate float64 `mapstructure:"ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE"`
+	// PodHeadroomNotificationThreshold is the headroom (0.0–1.0) below which notification code 74 is emitted.
+	NodePodHeadroomNotificationThreshold float64 `mapstructure:"ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`
@@ -550,6 +558,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
 	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)
+	viper.SetDefault("ROS_SAVINGS_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)
 	viper.SetDefault("ROS_KAFKA_WORKERS", 3)
 	viper.SetDefault("ROS_KAFKA_PARALLEL", true)
@@ -607,6 +616,8 @@ func initConfig() {
 	viper.SetDefault("ROS_NODE_IDLE_CPU_UTIL_PCT", 10)
 	viper.SetDefault("ROS_NODE_IDLE_MEM_UTIL_PCT", 10)
 	viper.SetDefault("ROS_NODE_IDLE_MAX_PODS", 10)
+	viper.SetDefault("ROS_NODE_POD_HEADROOM_CONSOLIDATION_GATE", 0.15)
+	viper.SetDefault("ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD", 0.10)
 	viper.SetDefault("ROS_GPU_IDLE_THRESHOLD", 0.02)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_SM_THRESHOLD", 0.25)
 	viper.SetDefault("ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD", 0.15)

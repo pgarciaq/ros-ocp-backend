@@ -153,8 +153,9 @@ Shared classification (underutilized, overcommitted, stranded) uses the same thr
 2. [`RecommendNodes()`](../../internal/engine/recommend_nodes.go) classifies once per (node, term), then sizes per engine via [`sizeNodeForEngine()`](../../internal/engine/recommend_nodes.go)
 3. [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) compares current vs recommended node CPU cores and memory GiB per engine row
 4. Rates from `configured_rates`: `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, `node_cost_per_month`
-5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty.
-6. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_monthly_savings_usd`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
+5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty. **`machineset_name`** on digests is surfaced in list JSON for fleet/UI grouping; consolidation math still keys off `instance_type` or capacity keys until Tier 2 MachineSet plugins ship.
+6. **Instance type suggestions** (migration **000122**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../internal/engine/recommend_nodes.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
+7. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_monthly_savings_usd`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
 
 **Node allocatable capacity:** Ingestion prefers **`node_allocatable_cpu_cores`** and
 **`node_allocatable_memory_bytes`** from koku-metrics-operator ROS container CSV rows
@@ -165,7 +166,7 @@ backward compatibility with older operator builds.
 
 **List API:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Shared classification and metrics come from the medium-term cost row when present. Pagination and default sort (`order_by=estimated_monthly_savings_usd`) operate on distinct nodes.
 
-Fleet savings summary aggregates container and node savings for the selected **`engine`** query parameter on `GET /recommendations/openshift/savings-summary` (default **`cost`**), consistent with container list behavior. PVC and snapshot totals are engine-agnostic.
+Fleet savings summary aggregates container and node savings for the selected **`engine`** and **`term`** query parameters on `GET /recommendations/openshift/savings-summary` (defaults: **`cost`**, **`medium`**), consistent with container list behavior. PVC and snapshot totals are engine-agnostic.
 
 **Formula** (rates = infrastructure + supplementary from `configured_rates`):
 
@@ -329,15 +330,15 @@ The `effective_rates` endpoint is an **internal masu API** endpoint — it does 
 
 | Savings type | Refresh cadence |
 |--------------|-----------------|
-| Container (`estimated_monthly_savings_usd`) | Once per ingestion cycle per cluster; stored in DB |
-| Node CPU/memory (`estimated_monthly_savings_usd`) | Once per ingestion cycle per cluster; stored in DB |
-| PVC (`estimated_monthly_savings_usd`) | Once per storage ingestion cycle per cluster; stored in DB |
+| Container (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| Node CPU/memory (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| PVC (`estimated_monthly_savings_usd`) | Storage ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | GPU / node time-slicing | On each API request that enriches GPU data |
 | Snapshot recoverable cost | On each snapshot ingestion cycle (resolved rate from settings / env / effective-rates / default) |
 
 The `effective_rates` date range covers the most recent 30 days (configurable via
-lookback). Koku cost model updates are reflected on the next fetch (ingestion for
-containers; next API call for GPU).
+lookback). Koku cost model updates trigger a savings-only recalculation for
+container, node, and PVC when configured (see [Savings recalculation after cost model changes](#savings-recalculation-after-cost-model-changes)); GPU still refreshes on the next API call.
 
 ## Negative savings
 
@@ -379,22 +380,93 @@ Implementation: [`internal/api/handlers_savings_summary.go`](../../internal/api/
 The response includes `gpu_savings_note` explaining that GPU dollar estimates
 are excluded because they are computed at API read time (see below).
 
-## Future: Real-time savings recalculation (v2)
+## Savings recalculation after cost model changes
 
-Today, container, node, and PVC `estimated_monthly_savings_usd` values are
-computed **once per ingestion cycle** using Masu `effective_rates` fetched at
-that time. If a customer updates their Koku cost model between ingestion
-cycles, persisted ROS savings remain stale until the next successful report
-processing run.
+When Koku finishes applying cost model rates to `OCPUsageLineItemDailySummary`,
+the masu cost model updater notifies ROS to refresh **persisted dollar savings
+only** — recommendation sizing and classification are unchanged.
 
-This staleness is documented in [known-issues.md](../known-issues.md) and affects
-fleet summary totals because they sum persisted columns.
+### Endpoint
 
-**Planned v2 enhancement:** Subscribe to a Koku event (Kafka message or webhook)
-when a cost model is created or updated, then trigger a background recalculation
-of savings for all affected clusters/orgs. This would keep fleet summary and
-per-recommendation dollar fields aligned with current rates without waiting for
-the next operator upload.
+```
+POST {ROS_API}/api/cost-management/v1/internal/recalculate-savings
+```
+
+Implementation: [`internal/api/handlers_savings_recalculate.go`](../../internal/api/handlers_savings_recalculate.go),
+[`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go).
+
+### Request body
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `org_id` | Yes | Organization ID **without** the `org` schema prefix (e.g. `1234567`) |
+| `cluster_uuid` | No | Scope recalculation to one cluster (Koku provider UUID) |
+| `recommendation_types` | No | Subset of `container`, `node`, `pvc` (default: all three) |
+
+Example:
+
+```json
+{
+  "org_id": "1234567",
+  "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
+  "recommendation_types": ["container", "node", "pvc"]
+}
+```
+
+### Response
+
+`202 Accepted` with `status: "accepted"`. Work runs asynchronously in a background
+goroutine ([`TriggerSavingsRecalculationAsync()`](../../internal/engine/savings_recalculate.go)).
+
+### What recalculation does
+
+1. Re-fetches Masu `effective_rates` for each affected cluster (same provider as ingestion).
+2. Recomputes `estimated_monthly_savings_usd` on existing recommendation rows for the requested types.
+3. Does **not** re-run classification, percentile sizing, or CSV ingestion.
+
+GPU and snapshot dollar fields are out of scope for this path (GPU remains API read-time;
+snapshot uses its own cost chain).
+
+### When Koku calls it
+
+After [`OCPCostModelCostUpdater.update_summary_cost_model_costs()`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py)
+completes (usage costs, markup, monthly costs, distribution, and UI summary refresh),
+Koku invokes [`notify_ros_savings_recalculation()`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py)
+inline (10s HTTP timeout). The call is **non-blocking for the cost model task** in the
+sense that failures are logged as warnings and do not fail the updater; the HTTP call
+itself is synchronous with a short timeout.
+
+### Configuration
+
+| Side | Variable | Default | Description |
+|------|----------|---------|-------------|
+| **Koku** | `ROS_API_HOST` | (unset) | ROS API hostname (e.g. `cost-onprem-ros-api.cost-onprem.svc.cluster.local`). No notification when unset unless `ROS_OCP_BACKEND_URL` is set |
+| **Koku** | `ROS_API_PORT` | `8000` | ROS API port when using `ROS_API_HOST` |
+| **Koku** | `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Fallback base URL when `ROS_API_HOST` is unset (on-prem chart) |
+| **Koku** | `ROS_SERVICE_TOKEN` | (unset) | Optional bearer token; otherwise Koku uses the same service-account token path as ROS tag sync |
+| **ROS** | `ROS_SAVINGS_RECALCULATION_ENABLED` | `true` | Gate for this endpoint (requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`) |
+| **ROS** | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Must be enabled for recalculation to run |
+| **ROS** | `KOKU_MASU_URL` | (empty) | Masu base URL for fresh `effective_rates` during recalculation |
+
+### Authentication
+
+Same service-account bearer validation as internal tag sync
+([`tags.ValidateBearerToken`](../../internal/tags/auth.go) — see `internal/tags/`).
+Koku sends
+`Authorization: Bearer <token>` when `ROS_SERVICE_TOKEN` or the Kubernetes
+service-account token file is available.
+
+### Failure mode
+
+| Scenario | Koku behavior | ROS / savings behavior |
+|----------|---------------|------------------------|
+| ROS not configured | Debug log, skip POST | N/A |
+| HTTP error / timeout | Warning log | Savings unchanged until next ingestion or retry |
+| ROS returns 404 (recalc disabled) | Warning log | Savings unchanged |
+| ROS accepts 202 | Info log | Background recalc updates persisted columns |
+
+Savings will still refresh on the next successful operator upload and ingestion cycle
+even when notification fails.
 
 ## Future: GPU savings persistence (v2)
 

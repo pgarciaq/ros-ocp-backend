@@ -46,6 +46,8 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.InDelta(t, 0.55, cfg.NodePerfTargetUtilization, 1e-9)
 	assert.InDelta(t, 2.0, cfg.NodePerfConsolidationHeadroomMultiplier, 1e-9)
 	assert.Equal(t, 3, cfg.NodeTrendMinDays)
+	assert.InDelta(t, 0.15, cfg.NodePodHeadroomConsolidationGate, 1e-9)
+	assert.InDelta(t, 0.10, cfg.NodePodHeadroomNotificationThreshold, 1e-9)
 
 	assert.InDelta(t, 0.02, cfg.GPUIdleThreshold, 1e-9)
 	assert.InDelta(t, 0.25, cfg.GPUUnderutilizedSMThreshold, 1e-9)

@@ -197,6 +197,7 @@ ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Business-hours feature, dual-stream ingestion, reship poller. |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Recalculate recommendations when tenant thresholds change. |
 | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch dollar savings from Koku masu (container, node, PVC, snapshot, VM). When `false`, VM API `savings` is always `null`. |
+| `ROS_SAVINGS_RECALCULATION_ENABLED` | `true` | Allow `POST /internal/recalculate-savings` after Koku cost model rate changes. When `false`, savings refresh only on the next ingestion cycle. Requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`. |
 
 ---
 
@@ -226,6 +227,21 @@ Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the conta
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Max consecutive reship failures. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel reship calls (see Performance Tuning). |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | Forward-only fallback after reship exhaustion. |
+
+### Savings recalculation callback (Koku worker / masu)
+
+After cost model costs are applied, Koku can notify ROS to recompute persisted dollar
+savings without re-ingesting CSVs. Configure on the **Koku** side (not ROS):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_API_HOST` | (unset) | ROS API hostname (e.g. `cost-onprem-ros-api.cost-onprem.svc.cluster.local`). When unset, Koku skips the callback unless `ROS_OCP_BACKEND_URL` is set. |
+| `ROS_API_PORT` | `8000` | ROS API port when using `ROS_API_HOST`. |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Fallback base URL when `ROS_API_HOST` is unset (cost-onprem chart). |
+| `ROS_SERVICE_TOKEN` | (unset) | Optional bearer token for `POST /internal/recalculate-savings`. When unset, Koku uses the Kubernetes service account token (same path as tag sync). |
+
+ROS gates the endpoint with `ROS_SAVINGS_RECALCULATION_ENABLED` (see Feature Flags).
+Details: [Cost Integration — Savings recalculation](architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
 
 ---
 
@@ -342,7 +358,7 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 |----------|--------------|-----------------|
 | Container sizing | `/settings/container` | `ROS_CONTAINER_*` |
 | Namespace sizing | `/settings/namespace` | `ROS_NAMESPACE_*` |
-| Node consolidation | `/settings/node` | `ROS_NODE_*` |
+| Node consolidation | `/settings/node` (alias: `/settings/thresholds?recommendation_type=node`) | `ROS_NODE_*` |
 | GPU classification | `/settings/gpu` | `ROS_GPU_*` |
 | PVC right-sizing | `/settings/pvc` | `ROS_PVC_*` |
 | OpenShift Virtualization | `/settings/vm`, `/settings/vm/terms` | `ROS_VM_*`, `ROS_TERMS_VM_*` (includes `ROS_VM_NETWORK_*`, `ROS_VM_NETWORK_QOS_*`, `ROS_VM_STORAGE_TIERING_*`, `ROS_VM_GPU_TIMESLICE_*`, `ROS_VM_ENABLE_NETWORK_SERIES`, `ROS_VM_ENABLE_PLACEMENT_CHECKS`, `ROS_VM_PLACEMENT_SKEW_RATIO`, `ROS_VM_ENABLE_SHARED_PVC_CORRELATION`, `ROS_VM_NUMA_NODE_MEMORY_GIB`, `ROS_VM_NUMA_ASSUMED_SOCKETS`, `ROS_VM_ENABLE_POWER_SCHEDULE`, `ROS_VM_POWER_OFF_MIN_IDLE_DAYS`, `ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD`) |
@@ -356,6 +372,13 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 Embedded GPU hardware catalogs (`gpu_catalog.yaml`, `vgpu_profiles.yaml`) are validated against
 official NVIDIA documentation. See [GPU Catalogs](architecture/gpu-catalogs.md) for data sources
 and update procedures.
+
+**Node pod scheduling headroom** (`ROS_NODE_POD_HEADROOM_*`, `/settings/node`): consolidation is
+suppressed when `pod_scheduling_headroom` &lt; `pod_headroom_consolidation_gate` (default **15%**);
+notification code **74** fires when headroom &lt; `pod_headroom_notification_threshold` (default
+**10%**). Requires `pod_capacity` in operator CSV / digests. See
+[Configurability — Node](architecture/configurability.md#node) and
+[List API — Node recommendations](architecture/configurability.md#list-api--node-recommendations).
 
 ---
 
@@ -538,6 +561,18 @@ reachability (see [Tag Filtering](features/tag-filtering.md#on-prem-default-shar
 |----------|---------|-------------|
 | `SOURCES_API_BASE_URL` | (platform) | Sources API base URL. |
 | `SOURCES_API_PREFIX` | `/api/sources/v3.1` | API path prefix. |
+
+---
+
+## List API (selected)
+
+Deployment env vars above; query parameters and response fields for list endpoints are in
+[Configurability Reference — List API](architecture/configurability.md#list-api--node-recommendations).
+
+| Endpoint | Notable query params / fields |
+|----------|-------------------------------|
+| `GET /recommendations/openshift/nodes` | `filter[stranded_resource]` (`cpu`, `memory`, `none`), `filter[instance_type]`, `filter[machineset_name]`; response `pod_capacity`, `pod_scheduling_headroom` (omitempty) |
+| `GET /recommendations/openshift/savings-summary` | `term` (`short`, `medium`, `long`; default `medium`) |
 
 ---
 

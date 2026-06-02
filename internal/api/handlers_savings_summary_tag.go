@@ -33,6 +33,7 @@ type fleetSavingsByTagQuery struct {
 	ClusterUUIDs    []string
 	NamespaceFilter string
 	EngineProfile   string
+	TermProfile     string
 	TagKey          string
 }
 
@@ -43,8 +44,9 @@ func queryFleetSavingsByTag(
 ) (FleetSavingsByTagResponse, error) {
 	resp := FleetSavingsByTagResponse{Data: []FleetTagSavingsRow{}}
 
-	clusterFilter, args, engineParam := savingsSummaryQueryArgsForColumn(q.OrgID, q.ClusterUUIDs, q.EngineProfile, "ock.cluster_uuid")
+	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgsForColumn(q.OrgID, q.ClusterUUIDs, q.EngineProfile, q.TermProfile, "ock.cluster_uuid")
 	engineRef := fmt.Sprintf("$%d", engineParam)
+	termRef := fmt.Sprintf("$%d", termParam)
 	argIdx := len(args) + 1
 
 	namespaceFilter := ""
@@ -67,7 +69,7 @@ func queryFleetSavingsByTag(
 			AND rs.namespace = ock.namespace
 			AND rs.workload = ock.workload
 			AND rs.container_name = ock.container_name
-			AND rs.term = 'medium'
+			AND rs.term = `+termRef+`
 			AND rs.engine = `+engineRef+`
 			AND rs.stale = false
 		WHERE ock.org_id = $1`+clusterFilter+namespaceFilter+`

@@ -691,30 +691,40 @@ func filterClustersByRBAC(clusterUUIDs []string, userPerms map[string][]string) 
 	return filtered
 }
 
+// openshiftNodeRBACScope reports whether node-level RBAC restricts visible node names.
+// When restrict is false, all nodes in allowed clusters are visible.
+func openshiftNodeRBACScope(userPerms map[string][]string) (restrict bool, allowed []string) {
+	if !config.GetConfig().RBACEnabled {
+		return false, nil
+	}
+	if _, ok := userPerms["*"]; ok {
+		return false, nil
+	}
+	nodePerms, hasNode := userPerms["openshift.node"]
+	if !hasNode {
+		return false, nil
+	}
+	if utils.StringInSlice("*", nodePerms) {
+		return false, nil
+	}
+	return true, nodePerms
+}
+
 // filterNodeRecsByRBAC restricts node recommendations to those whose NodeName
 // the user has openshift.node read permission for. Returns the full list when
 // RBAC is disabled, the user has a global wildcard, or node permissions are "*".
 func filterNodeRecsByRBAC(recs []model.NodeGPURecommendation, userPerms map[string][]string) []model.NodeGPURecommendation {
-	if !config.GetConfig().RBACEnabled {
+	restrict, allowed := openshiftNodeRBACScope(userPerms)
+	if !restrict {
 		return recs
 	}
-	if _, ok := userPerms["*"]; ok {
-		return recs
-	}
-	nodePerms, hasNode := userPerms["openshift.node"]
-	if !hasNode {
-		return recs
-	}
-	if utils.StringInSlice("*", nodePerms) {
-		return recs
-	}
-	allowed := make(map[string]bool, len(nodePerms))
-	for _, n := range nodePerms {
-		allowed[n] = true
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, n := range allowed {
+		allowedSet[n] = true
 	}
 	filtered := make([]model.NodeGPURecommendation, 0, len(recs))
 	for _, r := range recs {
-		if allowed[r.NodeName] {
+		if allowedSet[r.NodeName] {
 			filtered = append(filtered, r)
 		}
 	}

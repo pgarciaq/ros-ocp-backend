@@ -186,7 +186,7 @@ func TestValidateNodeThresholds_ValidInput(t *testing.T) {
 		OvercommitThreshold:   ptrFloat64(1.75),
 		CostTargetUtilization: ptrFloat64(0.75),
 		TrendMinDays:          ptrInt(5),
-	})
+	}, DefaultNodeThresholdSettings())
 	require.NoError(t, err)
 }
 
@@ -194,7 +194,7 @@ func TestValidateNodeThresholds_InvalidUtilization(t *testing.T) {
 	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
 		CostTargetUtilization: ptrFloat64(1.5),
 		UnderutilThreshold:    ptrFloat64(0.0),
-	})
+	}, DefaultNodeThresholdSettings())
 	require.Error(t, err)
 
 	var valErr *ThresholdValidationError
@@ -206,12 +206,85 @@ func TestValidateNodeThresholds_InvalidUtilization(t *testing.T) {
 func TestValidateNodeThresholds_OvercommitBelowUtilization(t *testing.T) {
 	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
 		OvercommitThreshold: ptrFloat64(0.80),
-	})
+	}, DefaultNodeThresholdSettings())
 	require.Error(t, err)
 
 	var valErr *ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Error(), "overcommit_threshold")
+}
+
+func TestValidateNodeThresholds_PodHeadroomValid(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		PodHeadroomConsolidationGate:     ptrFloat64(0.20),
+		PodHeadroomNotificationThreshold: ptrFloat64(0.08),
+	}, DefaultNodeThresholdSettings())
+	require.NoError(t, err)
+}
+
+func TestValidateNodeThresholds_PodHeadroomOutOfRange(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		PodHeadroomConsolidationGate: ptrFloat64(1.5),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "pod_headroom_consolidation_gate")
+
+	err = validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		PodHeadroomNotificationThreshold: ptrFloat64(-0.01),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "pod_headroom_notification_threshold")
+}
+
+func TestValidateNodeThresholds_PodHeadroomGateBelowNotification(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		PodHeadroomConsolidationGate:     ptrFloat64(0.05),
+		PodHeadroomNotificationThreshold: ptrFloat64(0.10),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "pod_headroom_consolidation_gate")
+}
+
+func TestValidateNodeThresholds_IdleZombieValid(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		ZombieCPUP95MC:   ptrInt64(150),
+		ZombieMaxPods:    ptrInt64(3),
+		IdleCPUUtilPct:   ptrInt64(8),
+		IdleMemUtilPct:   ptrInt64(12),
+		IdleMaxPods:      ptrInt64(8),
+	}, DefaultNodeThresholdSettings())
+	require.NoError(t, err)
+}
+
+func TestValidateNodeThresholds_IdleZombieOutOfRange(t *testing.T) {
+	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		ZombieCPUP95MC: ptrInt64(0),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "zombie_cpu_p95_mc")
+
+	err = validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		IdleCPUUtilPct: ptrInt64(101),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "idle_cpu_util_pct")
+
+	err = validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
+		ZombieMaxPods: ptrInt64(0),
+	}, DefaultNodeThresholdSettings())
+	require.Error(t, err)
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "zombie_max_pods")
 }
 
 func ptrFloat64(v float64) *float64 { return &v }

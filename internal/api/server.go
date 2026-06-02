@@ -183,6 +183,7 @@ func StartAPIServer(ctx context.Context) {
 	internal.Use(middleware.BodyLimit(cfg.TagsSyncBodyLimit()))
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
+	internal.POST("/recalculate-savings", PostRecalculateSavings)
 
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)

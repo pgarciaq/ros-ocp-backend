@@ -7,6 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
@@ -51,6 +54,24 @@ func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 	assert.InDelta(t, 7, float64(medium.RecommendationEngines.Performance.RecommendedCPUCores), 0.001)
 }
 
+func TestGroupNodeUtilizationRows_TermFilterSelectsPrimary(t *testing.T) {
+	rows := []nodeUtilRow{
+		{
+			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost",
+			CPUUtilP95: 0.10, IsUnderutilized: true,
+		},
+		{
+			Node: "worker-1", ClusterUUID: "c-1", Term: "short", Engine: "cost",
+			CPUUtilP95: 0.55, IsUnderutilized: false,
+		},
+	}
+
+	out := groupNodeUtilizationRows(rows, "", "short")
+	require.Len(t, out, 1)
+	assert.InDelta(t, 0.55, float64(out[0].Metrics.CPUUtilP95), 0.001)
+	assert.False(t, out[0].Classification.IsUnderutilized)
+}
+
 func TestGroupNodeUtilizationRows_EngineFilter(t *testing.T) {
 	rows := []nodeUtilRow{
 		{Node: "n1", ClusterUUID: "c-1", Term: "medium", Engine: "cost"},
@@ -70,4 +91,87 @@ func sqlNullFloat(v float64) sql.NullFloat64 {
 
 func sqlNullInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Valid: true, Int64: v}
+}
+
+func TestComputePodSchedulingHeadroom(t *testing.T) {
+	h := computePodSchedulingHeadroom(90, sqlNullInt64(100))
+	require.NotNil(t, h)
+	assert.InDelta(t, 0.1, float64(*h), 0.001)
+
+	assert.Nil(t, computePodSchedulingHeadroom(10, sql.NullInt64{}))
+	assert.Nil(t, computePodSchedulingHeadroom(10, sqlNullInt64(0)))
+}
+
+func TestGroupNodeUtilizationRows_PodCapacityFields(t *testing.T) {
+	rows := []nodeUtilRow{
+		{
+			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost",
+			PodCount: 95, PodCapacity: sqlNullInt64(100),
+		},
+	}
+
+	out := groupNodeUtilizationRows(rows, "", "")
+	require.Len(t, out, 1)
+	require.NotNil(t, out[0].PodCapacity)
+	assert.Equal(t, int64(100), *out[0].PodCapacity)
+	require.NotNil(t, out[0].PodSchedulingHeadroom)
+	assert.InDelta(t, 0.05, float64(*out[0].PodSchedulingHeadroom), 0.001)
+}
+
+func TestGroupNodeUtilizationRows_OmitsPodCapacityWhenMissing(t *testing.T) {
+	rows := []nodeUtilRow{
+		{Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost", PodCount: 12},
+	}
+
+	out := groupNodeUtilizationRows(rows, "", "")
+	require.Len(t, out, 1)
+	assert.Nil(t, out[0].PodCapacity)
+	assert.Nil(t, out[0].PodSchedulingHeadroom)
+}
+
+func TestFlattenNodeUtilizationForCSV(t *testing.T) {
+	savings := "12.500000"
+	rows := flattenNodeUtilizationForCSV([]model.NodeUtilizationRec{{
+		Node:        "n1",
+		ClusterUUID: "cluster-1",
+		Metrics:     model.NodeUtilizationMetrics{CPUUtilP95: 0.42, MemUtilP95: 0.51},
+		Classification: model.NodeUtilizationClassification{
+			IsUnderutilized: true,
+			IdleState:       "active",
+		},
+		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
+			"medium_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{
+						RecommendedCPUCores:     4,
+						RecommendedMemoryGiB:    16,
+						EstimatedMonthlySavings: &money.SavingsObject{Value: savings},
+					},
+				},
+			},
+		},
+	}})
+	require.Len(t, rows, 1)
+	assert.Equal(t, "n1", rows[0].Node)
+	assert.Equal(t, "medium", rows[0].Term)
+	assert.Equal(t, "cost", rows[0].Engine)
+	assert.Equal(t, "underutilized", rows[0].Classification)
+	assert.Equal(t, savings, rows[0].EstimatedMonthlySavings)
+}
+
+func TestNodeUtilClassificationLabel(t *testing.T) {
+	mem := "memory"
+	rec := model.NodeUtilizationRec{
+		Classification: model.NodeUtilizationClassification{
+			IsUnderutilized:  true,
+			IsOvercommitted:  true,
+			IdleState:        "idle",
+			StrandedResource: &mem,
+		},
+	}
+	label := nodeUtilClassificationLabel(rec)
+	assert.Contains(t, label, "underutilized")
+	assert.Contains(t, label, "overcommitted")
+	assert.Contains(t, label, "idle")
+	assert.Contains(t, label, "stranded_memory")
 }

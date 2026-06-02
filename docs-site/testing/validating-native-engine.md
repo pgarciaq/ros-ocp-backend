@@ -30,7 +30,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | **container** | CPU/memory right-sizing (core; was Kruize) | `ocp_ros_usage.csv` | `GET .../recommendations/openshift` |
 | **namespace** | Namespace quota targets | `ocp_ros_namespace_usage.csv` | `GET .../recommendations/openshift/namespace` |
 | **gpu** | MIG bin-packing + time-slicing + classification | Same as container (+ GPU metrics) | `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` |
-| **node** | Underutilized / overcommitted nodes | Piggybacks on container CSV | `GET .../nodes`, `/nodes/utilization` |
+| **node** | Underutilized nodes, fleet consolidation, pod headroom | Piggybacks on container CSV (+ `pod_capacity`) | `GET .../nodes` (filters, `format=csv`, RBAC) |
 | **pvc** | Oversized, near-full, growth projection | `ocp_storage_usage.csv` | `GET .../pvcs` |
 | **quota** | ResourceQuota tighten/raise/optimal | Namespace digests + `ocp_ros_cluster_quota.csv` context | `GET .../quota/` |
 | **cluster-quota** | ClusterResourceQuota vs namespace sums | `ocp_ros_cluster_quota.csv` | `GET .../cluster-quota/` |
@@ -46,7 +46,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Idle / zombie detection | `filter[idle_state]`, `idle_state`, `estimated_monthly_waste`, notification codes **5–7** |
 | Business hours | `business_hours` block on detail engines; settings `.../settings/business-hours` |
 | Fleet summary | `GET .../fleet-summary` |
-| Savings summary | `GET .../savings-summary?engine=cost` |
+| Savings summary | `GET .../savings-summary?engine=cost&term=medium` (defaults: cost + medium term) |
 | History & quality | `GET .../history`, `GET .../quality` |
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
@@ -702,12 +702,14 @@ JOIN daily_vm_digests d ON d.id = g.vm_digest_id
 WHERE d.org_id = '1234567'
 LIMIT 20;
 
--- Nodes
-SELECT node, term, engine, is_underutilized, notification_codes, updated_at
+-- Nodes (up to 6 rows per node: short/medium/long × cost/performance)
+SELECT node, term, engine, is_underutilized, idle_state, stranded_resource,
+       pod_capacity, pod_scheduling_headroom, node_count_reduction,
+       notification_codes, updated_at
 FROM node_recommendations
 WHERE org_id = '1234567'
-ORDER BY updated_at DESC
-LIMIT 10;
+ORDER BY node, term, engine
+LIMIT 20;
 
 -- PVCs
 SELECT namespace, persistentvolumeclaim, recommendation_type, recommended_bytes,
@@ -891,21 +893,152 @@ Data file: `ocp_ros_namespace_usage.csv`. Logs: `native namespace engine: wrote`
 
 ## Node recommendations validation
 
-Handlers: `internal/api/handlers_node_recs.go`. Feature doc: [Node recommendations](../features/node-recommendations.md).
+Handlers: `internal/api/handlers_node_utilization.go` (CPU/memory nodes). GPU time-slicing uses `internal/api/handlers_node_recs.go` at `GET .../gpu/timeslicing` — do not confuse the two paths.
+
+Design reference: [Known issues — Node recommendations](../known-issues.md) (engine behavior, thresholds, notification codes).
+
+### Prerequisites
+
+- Node metrics in ROS container CSVs (`node_allocatable_*`, `node_capacity_*`, optional `pod_capacity` / `node_capacity_pods`) → `daily_node_digests`
+- `node` plugin enabled (default); **≥ 3 days** of digests before medium/long terms are reliable (cold start returns empty or sparse lists)
+- Term decay: configure per term via `GET/PUT .../settings/terms?recommendation_type=node` (`decay_halflife_hours`; medium default **168h**, long **360h**)
+
+### Engine behavior to validate
+
+| Behavior | What to check |
+|----------|----------------|
+| **Term decay** | Medium/long utilization percentiles weight recent days (`DecayWeight` when `decay_halflife_hours` > 0). After changing half-life, PUT terms and re-ingest or trigger recalc; older spikes should weigh less. |
+| **Dual engines** | DB: up to **6 rows per node** (`short`/`medium`/`long` × `cost`/`performance`). API: **one object per node** with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Cost targets ~**80%** util; performance ~**55%** with stricter consolidation. |
+| **Fleet consolidation** | `node_count_reduction` > 0 on underutilized nodes in the same `instance_type` group (Level 3). When `instance_type` is empty, nodes group by **similar allocatable CPU/memory** (capacity key), not only per-node binary reduction. |
+| **Pod scheduling headroom** | `(pod_capacity - max_pod_count) / pod_capacity` when capacity known. Consolidation **suppressed** when headroom **< 15%**. Notification **74** when headroom **< 10%**. |
+| **Stranded resources** | `classification.stranded_resource` = `cpu` or `memory`; notification **13** includes `suggested_direction`: `memory-optimized` or `compute-optimized`. |
+| **Idle / zombie** | `classification.idle_state` per term (`active` / `idle` / `zombie`); notification **15** (`NODE_IDLE`) for idle/zombie — not MachineAutoscaler (code 15 definition fixed in migration 000121). |
+
+### API checklist
 
 | # | Check | How to verify | Expected |
 |---|--------|---------------|----------|
-| 1 | Node recs exist | `GET .../recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0 |
-| 2 | Engine filter | `?engine=cost` vs `?engine=performance` | Different target utilization / headroom |
-| 3 | Underutilized flag | `filter[is_underutilized]=true` | Nodes below cost threshold (~80% util target) |
-| 4 | Overcommitted nodes | High pod density scenarios in NISE | Notifications per node feature doc |
-| 5 | Utilization endpoint | `GET .../nodes/utilization` | Per-node CPU/memory util for charts |
-| 6 | DB consistency | `node_recommendations` table | Rows per node × term × engine |
-| 7 | Node thresholds | `GET .../settings/node` | PUT changes reflected after recalc |
+| 1 | Node recs exist | `GET .../recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0 (distinct nodes) |
+| 2 | Nested dual engines | Same response without `filter[engine]` | `recommendation_terms.medium_term.recommendation_engines.cost` and `.performance` both present when data allows |
+| 3 | Engine filter | `filter[engine]=cost` vs `performance` | Only the selected engine block under each term; sizing / `node_count_reduction` may differ |
+| 4 | Term filter | `filter[term]=medium` | Rows scoped to that term in DB-backed list |
+| 5 | Underutilized | `filter[is_underutilized]=true` | Nodes below threshold; notification **11** in engine `notifications` |
+| 6 | Overcommitted | High request/allocatable ratio in NISE | `filter[is_overcommitted]=true`; notification **12** |
+| 7 | Idle / zombie | Low-util nodes with few pods | `filter[idle_state]=idle` or `zombie`; code **15** |
+| 8 | Stranded filter | `filter[stranded_resource]=cpu` / `memory` / `none` | Matches `classification.stranded_resource`; `none` = not stranded |
+| 9 | Instance type / MachineSet | `filter[instance_type]=...`, `filter[machineset_name]=...` | Subset matches digest labels when present |
+| 9b | Instance type suggestion | Stranded node with multiple instance types in cluster | `suggested_instance_type`, `instance_type_reason` on JSON when applicable |
+| 9c | Single-node detail | `filter[node]=...&filter[cluster]=...&limit=1` | `meta.count` ≤ 1; full `recommendation_terms` on `data[0]` |
+| 10 | Pod capacity fields | Node with `pod_capacity` in CSV | `pod_count`, `pod_capacity`, `pod_scheduling_headroom` (0.0–1.0) on JSON; **omitted** when capacity unknown |
+| 11 | Deprecated alias | `GET .../nodes/utilization` | Same payload + `Deprecation: true` header; prefer `/nodes` |
+| 12 | RBAC | `RBAC_ENABLE=true`; user with subset of `openshift.cluster` and `openshift.node` | Only allowed clusters/nodes; empty list if no intersection |
+| 13 | CSV export | `?format=csv` or `Accept: text/csv` | One CSV row per node × term × engine; columns include `pod_capacity`, `pod_scheduling_headroom`, savings |
+| 14 | Node thresholds | `GET/PUT .../settings/node` | PUT changes reflected after recalc |
+| 15 | Term decay settings | `GET/PUT .../settings/terms?recommendation_type=node` | `decay_halflife_hours` persisted; invalid values **400** |
 
 Logs: `node recs:` (success or `persist failed`).
 
+### Example API response (abbreviated)
+
+```json
+{
+  "node": "worker-0",
+  "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
+  "instance_type": "m5.2xlarge",
+  "classification": {
+    "is_underutilized": true,
+    "is_overcommitted": false,
+    "idle_state": "active",
+    "stranded_resource": "memory"
+  },
+  "metrics": { "cpu_util_p95": 0.22, "mem_util_p95": 0.18 },
+  "pod_count": 95,
+  "pod_capacity": 110,
+  "pod_scheduling_headroom": 0.136,
+  "cpu_overcommit_ratio": 1.1,
+  "trend_slope": -0.02,
+  "recommendation_terms": {
+    "medium_term": {
+      "recommendation_engines": {
+        "cost": {
+          "recommended_cpu_cores": 4.0,
+          "recommended_memory_gib": 32.0,
+          "node_count_reduction": 1,
+          "estimated_monthly_savings": { "value": "420.00", "units": "USD" },
+          "notifications": {
+            "11": { "type": "INFO", "code": 11, "message": "Node resources underutilized — consider consolidation" },
+            "13": {
+              "type": "INFO",
+              "code": 13,
+              "message": "Imbalanced CPU/memory utilization — consider different instance family",
+              "suggested_direction": "memory-optimized"
+            }
+          }
+        },
+        "performance": {
+          "recommended_cpu_cores": 6.0,
+          "recommended_memory_gib": 48.0,
+          "node_count_reduction": 0
+        }
+      }
+    }
+  }
+}
+```
+
+When headroom is tight, expect code **74** and `node_count_reduction: 0` on the cost engine even if underutilized.
+
+### curl examples
+
+```bash
+BASE='http://localhost:8000/api/cost-management/v1'
+CLUSTER_UUID='02059694-68ab-4d58-8809-de1e91f1d0e5'
+
+# List with new filters
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[is_underutilized]=true&filter[term]=medium" \
+  | jq '{count: .meta.count, sample: (.data[0] | {node, pod_scheduling_headroom, stranded: .classification.stranded_resource})}'
+
+# Stranded + suggested_direction on notifications
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[stranded_resource]=memory" \
+  | jq '.data[0].recommendation_terms.medium_term.recommendation_engines.cost.notifications["13"]'
+
+# CSV export (flattened: one row per node/term/engine)
+curl -s -H "x-rh-identity: $IDENTITY" -H "Accept: text/csv" \
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&format=csv" \
+  | head -5
+
+# Savings summary respects term (compare to node_recommendations for same term/engine)
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/savings-summary?engine=cost&term=long" \
+  | jq '.by_plugin.nodes, .total'
+```
+
+### DB consistency
+
+```sql
+-- Expect up to 6 rows per (org_id, cluster_uuid, node)
+SELECT node, term, engine, idle_state, stranded_resource,
+       pod_capacity, pod_scheduling_headroom, node_count_reduction,
+       cardinality(notification_codes) AS n_codes
+FROM node_recommendations
+WHERE org_id = '1234567' AND cluster_uuid = '${CLUSTER_UUID}'
+ORDER BY node, term, engine;
+```
+
+### NISE / data hints
+
+| Scenario | Setup | Assert |
+|----------|-------|--------|
+| Underutilized + consolidation | Several similar workers, low CPU/mem P95 | Code **11**; cost `node_count_reduction` ≥ 1 in a fleet group |
+| Pod-saturated | High `pod_count` vs `pod_capacity` | Headroom < 0.15 → no consolidation; < 0.10 → code **74** |
+| Stranded CPU | CPU P95 ≫ mem P95 sustained | `stranded_resource=cpu`, notification **13** + `suggested_direction=compute-optimized` |
+| Idle / zombie | Near-zero util, ≤ few pods | `idle_state` idle/zombie, code **15** per term |
+| Missing instance type | Omit `instance_type` in static data | Consolidation still groups nodes with matching allocatable capacity |
+
 ---
+
 
 ## PVC recommendations validation
 
@@ -960,10 +1093,10 @@ Data: `ocp_snapshot_inventory.csv`.
 | **History** | After second ingest or threshold change: `GET .../history?limit=20` shows versioned entries |
 | **Quality** | `GET .../quality` returns stability/adoption metrics for containers |
 | **Fleet summary** | `GET .../fleet-summary` aggregates across clusters (multi-cluster NISE or multiple sources) |
-| **Savings summary** | `GET .../savings-summary?engine=cost`; compare with sum of row-level savings |
+| **Savings summary** | `GET .../savings-summary?engine=cost&term=medium`; repeat with `term=short` / `long` and compare node totals to `node_recommendations` for that term |
 | **Business hours** | Configure `PUT .../settings/business-hours`; verify `business_hours` on detail engines after reship |
 | **Capabilities** | `GET .../settings/capabilities` lists enabled plugins and `locked_fields` |
-| **CSV export** | List endpoints with `?format=csv` return headers including `currency` when savings enabled |
+| **CSV export** | List endpoints with `?format=csv` or `Accept: text/csv` (containers, **nodes**, PVCs, etc.); node CSV includes `pod_capacity`, `pod_scheduling_headroom` |
 
 ---
 
@@ -1482,9 +1615,9 @@ Both engines are computed on every ingest and stored separately. See [Dual Engin
 | Resource | API filter | What to compare |
 |----------|------------|-----------------|
 | **VM** | `filter[engine]=cost` or `filter[engine]=performance` | Cost uses CPU **P95**; performance **P99**. Performance may hold downsizes (**49**). |
-| **Node** | `?engine=cost` or `?engine=performance` | Cost targets **80%** util; performance **55%** with 2× headroom. |
+| **Node** | `filter[engine]=cost` or `performance` on `/nodes` | Cost targets **80%** util; performance **55%** with stricter consolidation. Pod headroom **< 15%** blocks `node_count_reduction`. |
 | **Container / namespace** | No list filter — both nested under `recommendation_terms.*.recommendation_engines` | Pick `cost` vs `performance` in JSON for same workload. |
-| **Fleet savings** | `GET .../savings-summary?engine=cost` | Defaults to cost engine. |
+| **Fleet savings** | `GET .../savings-summary?engine=cost&term=medium` | `term` query param (`short` \| `medium` \| `long`); defaults to **medium**. Node totals align with `node_recommendations` for that term. |
 
 ```bash
 BASE='http://localhost:8000/api/cost-management/v1'
@@ -1672,7 +1805,7 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 | **Detail response (code)** | `internal/model/detail_response.go` |
 | **Handlers (containers)** | `internal/api/handlers.go` |
 | **Handlers (VM)** | `internal/api/handlers_vm_recs.go` |
-| **Handlers (nodes)** | `internal/api/handlers_node_recs.go` |
+| **Handlers (nodes)** | `internal/api/handlers_node_utilization.go`; engine: `internal/engine/recommend_nodes.go` |
 | **Config (env vars)** | `internal/config/config.go` |
 | **UI integration** | [ui-integration-guide.md](../ui-integration-guide.md) |
 | **Notification codes (published)** | [architecture/notification-codes.md](../architecture/notification-codes.md) |
