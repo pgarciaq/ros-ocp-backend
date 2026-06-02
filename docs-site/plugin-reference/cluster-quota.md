@@ -60,6 +60,7 @@ per resource. See [feature documentation](../features/cluster-resource-quota.md#
 **Response fields (per list item):**
 
 - `cluster_uuid`, `cluster_quota_name`
+- `namespaces` — array of namespace names in the CRQ selector (from operator CSV `namespaces` column)
 - `recommendation_type`, `risk_level`
 - `quota_hard`, `quota_used`, `quota_recommended` — CPU/memory request and limit, storage request, pods
 - `utilization` — `cpu_request_percent`, `memory_request_percent`, `storage_request_percent`, `pods_percent`
@@ -141,6 +142,30 @@ Handlers: [`GetClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_
 [`DeleteClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go).
 
 Engine: [`ResolveClusterQuotaSettings`](../../internal/engine/cluster_quota_settings.go).
+
+### Notification codes
+
+CRQ rows may emit codes **70–73**. Filter the catalog with
+`GET .../notification-codes/?filter[plugin]=cluster-quota`.
+
+| Code | Name | Description |
+|------|------|-------------|
+| **70** | `QUOTA_NEAR_CAPACITY` | CRQ at high utilization risk |
+| **71** | `QUOTA_OVERSIZED` | CRQ tighten recommendation generated |
+| **72** | `QUOTA_BLOCKING` | CRQ resource blocking (used >= hard) |
+| **73** | `CLUSTER_QUOTA_AT_CAPACITY` | CRQ at capacity alert |
+
+Object-count resources (`count/deployments.apps`, `count/secrets`, etc.) contribute to
+**risk_level** and **blocking notifications** (code 72) only. They are not exposed in API
+`utilization` fields or used in `order_by=utilization`. See
+[ClusterResourceQuota Recommendations](../features/cluster-resource-quota.md#object-count-quotas-risk-and-notifications-only).
+
+### Savings recalculation
+
+When Koku cost model rates change, masu triggers
+`POST /api/cost-management/v1/internal/recalculate-savings` with
+`recommendation_types` including `cluster-quota`. ROS recomputes `estimated_savings` on
+existing tighten rows without re-ingestion. Requires `ROS_SAVINGS_RECALCULATION_ENABLED=true`.
 
 ## Engine
 

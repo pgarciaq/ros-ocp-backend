@@ -164,6 +164,33 @@ OpenAPI: [`openapi.json`](../../openapi.json). Public docs: [docs-site feature p
 
 ---
 
+## Savings recalculation
+
+Cluster-quota `estimated_savings` values are computed at ingestion time from Koku
+`configured_rates` when `ROS_SAVINGS_ESTIMATES_ENABLED=true` (tighten rows only).
+When cost model rates change, persisted savings can become stale until refreshed.
+
+**Automatic refresh:** After Koku applies updated cost model rates
+(`update_summary_cost_model_costs`), masu calls ROS:
+
+```
+POST /api/cost-management/v1/internal/recalculate-savings
+```
+
+Include `"cluster-quota"` in `recommendation_types` (along with `container`, `node`,
+`pvc`, and/or `quota` as needed). ROS recomputes `savings_dollars_monthly` on existing
+`tighten` rows without re-ingesting CSV data. Requires `ROS_SAVINGS_RECALCULATION_ENABLED=true`
+(default) and Koku→ROS connectivity (`KOKU_MASU_URL` / `ROS_API_HOST`).
+
+**What changes:** Dollar savings only — `recommendation_type`, `risk_level`, hard/used
+values, and notification codes are unchanged by savings recalc.
+
+Implementation: [`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go)
+(`TestRecalculateClusterQuotaSavings_Unit`). See also
+[cost-integration.md](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
+
+---
+
 ## Configuration
 
 Resolution order: **per-org Settings API** → **`ROS_CLUSTER_QUOTA_*` env vars** → **compiled defaults** (10 / 90 / 70).

@@ -338,6 +338,50 @@ func TestGetClusterQuotaRecommendations_OrderByRiskLevelDesc(t *testing.T) {
 	assert.Equal(t, "low", resp.Data[2].RiskLevel)
 }
 
+func TestGetClusterQuotaRecommendations_OrderByClusterQuotaNameAsc(t *testing.T) {
+	orgID := "org-crq-order-name-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440065"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "zebra-quota", 10)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "alpha-quota", 20)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "middle-quota", 30)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?order_by=cluster_quota_name&order_how=asc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 3)
+	assert.Equal(t, "alpha-quota", resp.Data[0].ClusterQuotaName)
+	assert.Equal(t, "middle-quota", resp.Data[1].ClusterQuotaName)
+	assert.Equal(t, "zebra-quota", resp.Data[2].ClusterQuotaName)
+}
+
+func TestGetClusterQuotaRecommendations_OrderByUtilizationDesc(t *testing.T) {
+	orgID := "org-crq-order-util-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440066"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "low-util", clusterQuotaRecOpts{cpuUtilPercent: 25})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "high-util", clusterQuotaRecOpts{cpuUtilPercent: 95})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "mid-util", clusterQuotaRecOpts{cpuUtilPercent: 60})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?order_by=utilization&order_how=desc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 3)
+	assert.Equal(t, "high-util", resp.Data[0].ClusterQuotaName)
+	assert.Equal(t, "mid-util", resp.Data[1].ClusterQuotaName)
+	assert.Equal(t, "low-util", resp.Data[2].ClusterQuotaName)
+}
+
 func TestGetClusterQuotaRecommendations_OrderByEstimatedMonthlySavingsDesc(t *testing.T) {
 	orgID := "org-crq-order-savings-" + uuid.New().String()[:8]
 	clusterUUID := "550e8400-e29b-41d4-a716-446655440070"

@@ -58,6 +58,18 @@ mkdir -p "$DOCS_DIR/operations"
 # are maintained in docs-site/features/ (not copied from docs/)
 mkdir -p "$DOCS_DIR/features"
 
+# ClusterResourceQuota — sync from internal feature doc with public-site path fixes
+if [ -f "$ROOT_DIR/docs/features/cluster-resource-quota.md" ]; then
+    sed -e 's|](\.\./\.\./internal/|](https://github.com/redhatinsights/ros-ocp-backend/tree/main/internal/|g' \
+        -e 's|](\.\./architecture/|](../architecture/|g' \
+        -e 's|](\.\./\.\./docs-site/features/cluster-resource-quota\.md)|](cluster-resource-quota.md)|g' \
+        -e 's|](\.\./\.\./openapi\.json)|](../openapi.md)|g' \
+        -e 's|](quota-recommendations\.md)|](../plugin-reference/quota.md)|g' \
+        -e 's|](\.\./known-issues\.md)|](../known-issues.md)|g' \
+        -e 's|](\.\./architecture/plugin-phases\.md)|](../architecture/plugin-phases.md)|g' \
+        "$ROOT_DIR/docs/features/cluster-resource-quota.md" > "$DOCS_DIR/features/cluster-resource-quota.md"
+fi
+
 # Top-level docs
 [ -f "$ROOT_DIR/docs/known-issues.md" ] && cp "$ROOT_DIR/docs/known-issues.md" "$DOCS_DIR/known-issues.md"
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
