@@ -94,6 +94,8 @@ func PutClusterQuotaSettings(c echo.Context) error {
 		})
 	}
 
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "cluster-quota")
+
 	resp, err := engine.GetClusterQuotaSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

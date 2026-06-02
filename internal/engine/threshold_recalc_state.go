@@ -39,6 +39,14 @@ func computeThresholdSettingsHash(ctx context.Context, pool *pgxpool.Pool, orgID
 		var s SnapshotSettings
 		s, err = ResolveSnapshotSettings(ctx, pool, orgID, nil)
 		payload = s
+	case "quota":
+		var s QuotaSettings
+		s, err = ResolveQuotaSettings(ctx, pool, orgID)
+		payload = s
+	case "cluster-quota":
+		var s ClusterQuotaSettings
+		s, err = ResolveClusterQuotaSettings(ctx, pool, orgID)
+		payload = s
 	default:
 		return "", fmt.Errorf("unsupported recommendation_type %q", recType)
 	}

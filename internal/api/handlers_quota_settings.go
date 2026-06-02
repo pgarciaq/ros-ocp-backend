@@ -94,6 +94,8 @@ func PutQuotaSettings(c echo.Context) error {
 		})
 	}
 
+	engine.TriggerThresholdRecalculationAsync(pool, orgID, "quota")
+
 	resp, err := engine.GetQuotaSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -103,6 +104,34 @@ func TestRegisterDisabledPluginRouteGuards_ClusterQuotaDisabled_Returns404(t *te
 	msg, ok := body["message"].(string)
 	require.True(t, ok)
 	require.Contains(t, msg, "plugin 'cluster-quota' is not enabled")
+}
+
+func TestPutClusterQuotaSettings_TriggersAsyncRecalculation(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+
+	orgID := "org-cluster-quota-settings-api-recalc"
+	e := setupClusterQuotaSettingsTestEcho(t, orgID)
+
+	var triggeredOrg, triggeredType string
+	engine.SetThresholdRecalcHookForTest(func(oid, rt string) {
+		triggeredOrg = oid
+		triggeredType = rt
+	})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{
+		"headroom_percent": 15,
+		"high_risk_threshold_percent": 85,
+		"medium_risk_threshold_percent": 65
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/cluster-quota", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, orgID, triggeredOrg)
+	assert.Equal(t, "cluster-quota", triggeredType)
 }
 
 func TestPutClusterQuotaSettings_UpdatesAndReturns(t *testing.T) {

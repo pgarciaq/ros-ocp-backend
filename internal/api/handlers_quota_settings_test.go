@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -63,6 +64,34 @@ func TestGetQuotaSettings_ReturnsDefaults(t *testing.T) {
 	locked, ok := resp["locked_fields"].([]interface{})
 	require.True(t, ok)
 	assert.Empty(t, locked)
+}
+
+func TestPutQuotaSettings_TriggersAsyncRecalculation(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+
+	orgID := "org-quota-settings-api-recalc"
+	e := setupQuotaSettingsTestEcho(t, orgID)
+
+	var triggeredOrg, triggeredType string
+	engine.SetThresholdRecalcHookForTest(func(oid, rt string) {
+		triggeredOrg = oid
+		triggeredType = rt
+	})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{
+		"headroom_percent": 15,
+		"high_risk_threshold_percent": 85,
+		"medium_risk_threshold_percent": 65
+	}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/quota", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, orgID, triggeredOrg)
+	assert.Equal(t, "quota", triggeredType)
 }
 
 func TestPutQuotaSettings_UpdatesAndReturns(t *testing.T) {
