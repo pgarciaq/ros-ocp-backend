@@ -158,7 +158,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
-| Savings stale until re-ingestion | Container/node/PVC `estimated_monthly_savings_usd` reflects rates from the last successful Masu fetch during ingestion; Koku cost model changes do not update ROS rows until the next report cycle | Low — by design | REQ-7.5 |
+| Savings stale after cost model change (degraded) | On-prem with Koku→ROS notification configured, cost model updates trigger `POST /internal/recalculate-savings`. If notification fails or ROS recalc is disabled, container/node/PVC savings stay at last-ingestion rates until the next report cycle | Low | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
 | Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
 
@@ -580,6 +580,21 @@ covered; multi-GPU training pods are rare outside dedicated ML clusters (see REQ
 the operator), a node-level consolidation model, and API/notification surfaces for
 "request fewer GPUs" or "co-locate these workloads." VMs already expose multi-GPU guidance
 via notification **54**; container path would follow deferred item **2** prerequisites.
+
+#### Node vs VM GPU time-slicing (do not conflate)
+
+Two separate recommendation surfaces use “time-slicing” terminology for different scopes.
+UI, docs, and API clients must keep them distinct.
+
+| Surface | API | Scope | What it recommends |
+|---------|-----|-------|-------------------|
+| **Node (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
+| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vms/{id}` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
+
+- Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
+- VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.
+
+See [ui-integration-guide.md](ui-integration-guide.md#gpu-time-slicing-separate-endpoint) and [configurability.md](architecture/configurability.md).
 
 #### ROS MIG recommendations UI (not shipped)
 

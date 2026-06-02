@@ -581,6 +581,21 @@ the operator), a node-level consolidation model, and API/notification surfaces f
 "request fewer GPUs" or "co-locate these workloads." VMs already expose multi-GPU guidance
 via notification **54**; container path would follow deferred item **2** prerequisites.
 
+#### Node vs VM GPU time-slicing (do not conflate)
+
+Two separate recommendation surfaces use “time-slicing” terminology for different scopes.
+UI, docs, and API clients must keep them distinct.
+
+| Surface | API | Scope | What it recommends |
+|---------|-----|-------|-------------------|
+| **Node (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
+| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vms/{id}` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
+
+- Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
+- VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.
+
+See [ui-integration-guide.md](ui-integration-guide.md#gpu-time-slicing-separate-endpoint) and [configurability.md](architecture/configurability.md) (container `ROS_GPU_TIMESLICING_*` vs VM `ROS_VM_GPU_TIMESLICE_*`).
+
 #### ROS MIG recommendations UI (not shipped)
 
 **koku-ui** has no Optimizations pages that consume the ROS GPU recommendation APIs:

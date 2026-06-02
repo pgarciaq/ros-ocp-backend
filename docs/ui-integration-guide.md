@@ -455,6 +455,15 @@ nodes in the same group (not a single global binary flag).
 
 ### GPU time-slicing (separate endpoint)
 
+!!! warning "Not the same as VM GPU time-slicing"
+    **Node time-slicing** (this section): `GET /recommendations/openshift/gpu/timeslicing` —
+    physical GPU sharing among containers on a worker node (`recommended_replicas`,
+    `nvidia.com/gpu.replicas`).
+
+    **VM GPU time-slicing**: `GET /recommendations/openshift/vms/{id}` only — vGPU profile and
+    slice count on the VM `gpu` object (`gpu_timeslice_*`, `recommended_vgpu_profile`,
+    notifications **56**–**57**). Configured via `PUT /settings/vm`, not `/settings/thresholds?recommendation_type=gpu`.
+
 Node-level GPU time-slicing is **not** under `/nodes`:
 
 ```http
@@ -463,6 +472,7 @@ GET /recommendations/openshift/gpu/timeslicing
 
 | Parameter | Description |
 |-----------|-------------|
+| `filter[cluster]` | Cluster UUID (alias: `cluster_uuid`, `cluster`) |
 | `node_name` | Filter by node |
 | `gpu_model` | Filter by GPU model |
 | `term` | Term filter |

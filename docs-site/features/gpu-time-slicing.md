@@ -164,9 +164,19 @@ MIG-recommended workloads are excluded from time-slicing candidate lists.
 - **Other node recommendation types** — Instance type and reserved instance
   recommendations will follow the same `node_recommendations` table pattern.
 
+## Not VM guest vGPU time-slicing
+
+OpenShift Virtualization VMs expose a **separate** time-slicing model on
+`GET /recommendations/openshift/vms/{id}` (`gpu_timeslice_*`, vGPU profiles,
+notifications **56**–**57**, settings under `PUT /settings/vm`). That path selects
+vGPU slice counts for a **virtual machine**; this endpoint recommends sharing a
+**physical** GPU across **containers** on a node. See
+[Known issues — Node vs VM GPU time-slicing](../known-issues.md#node-vs-vm-gpu-time-slicing-do-not-conflate).
+
 ## Related
 
 - [GPU MIG](gpu-mig.md) — Hardware partitioning alternative
+- [Virtual Machines](virtual-machines.md) — VM guest GPU and `gpu_timeslice_*` fields
 - [Node Consolidation & Right-Sizing](node-recommendations.md) — CPU/memory node recs (separate endpoint)
 - [Savings Estimations](savings-estimations.md) — GPU savings in fleet summary
 - [Recommendation Engines — GPU](../architecture/recommendation-engines.md#gpu-recommendations)
