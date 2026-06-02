@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/sirupsen/logrus"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -69,6 +72,7 @@ type ClusterQuotaRecommendationListItem struct {
 	EstimatedSavings     *ClusterQuotaSavingsMonthly                  `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	Namespaces           []string                                     `json:"namespaces,omitempty"`
+	Count                int                                          `json:"count,omitempty"`
 }
 
 // GetClusterQuotaRecommendations handles GET /recommendations/openshift/cluster-quota/.
@@ -150,6 +154,11 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
+	groupByCluster := queryparams.GroupByField(c, "cluster")
+	if groupByCluster {
+		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, filterSQL, args, argIdx, limit, offset)
+	}
+
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
 	if orderErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
@@ -201,6 +210,85 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	if err := rows.Err(); err != nil {
 		hlog.Errorf("cluster-quota recommendation iteration failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch cluster-quota recommendations"})
+	}
+
+	resp := ClusterQuotaRecommendationListResponse{}
+	resp.Meta.Count = total
+	resp.Meta.Limit = limit
+	resp.Meta.Offset = offset
+	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	resp.Data = data
+	if resp.Data == nil {
+		resp.Data = []ClusterQuotaRecommendationListItem{}
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func getClusterQuotaRecommendationsGrouped(
+	c echo.Context,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	hlog *logrus.Entry,
+	filterSQL string,
+	args []any,
+	argIdx, limit, offset int,
+) error {
+	countQuery := `SELECT COUNT(DISTINCT cluster_uuid::text) FROM cluster_quota_recommendation_sets WHERE org_id = $1` + filterSQL
+	var total int
+	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		hlog.Errorf("cluster-quota recommendation group count failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to count cluster-quota recommendation groups"})
+	}
+
+	query := `
+		SELECT cluster_uuid::text AS group_key,
+			COUNT(*) AS row_count,
+			COALESCE(SUM(savings_cpu_cores_freed), 0),
+			COALESCE(SUM(savings_memory_bytes_freed), 0),
+			COALESCE(SUM(savings_storage_bytes_freed), 0),
+			COALESCE(SUM(savings_pods_freed), 0),
+			COALESCE(SUM(savings_dollars_monthly), 0)
+		FROM cluster_quota_recommendation_sets
+		WHERE org_id = $1` + filterSQL + `
+		GROUP BY cluster_uuid::text
+		ORDER BY cluster_uuid::text
+		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
+	pageArgs := append(args, limit, offset)
+
+	rows, err := pool.Query(ctx, query, pageArgs...)
+	if err != nil {
+		hlog.Errorf("cluster-quota recommendation group query failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch cluster-quota recommendation groups"})
+	}
+	defer rows.Close()
+
+	var data []ClusterQuotaRecommendationListItem
+	for rows.Next() {
+		var groupKey string
+		var count int
+		var cpuCoresFreed, memFreed, storageFreed, podsFreed, savingsDollars int64
+		if err := rows.Scan(&groupKey, &count, &cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savingsDollars); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read cluster-quota recommendation groups"})
+		}
+		item := ClusterQuotaRecommendationListItem{
+			ClusterUUID: groupKey,
+			Count:       count,
+		}
+		if cpuCoresFreed > 0 || memFreed > 0 || storageFreed > 0 || podsFreed > 0 {
+			item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
+				CPUCoresFreed:       cpuCoresFreed,
+				MemoryBytes:         memFreed,
+				StorageRequestBytes: storageFreed,
+				PodsFreed:           podsFreed,
+			}
+		}
+		if savingsDollars > 0 {
+			item.EstimatedSavings = &ClusterQuotaSavingsMonthly{
+				Value: int(savingsDollars),
+				Units: "USD",
+			}
+		}
+		data = append(data, item)
 	}
 
 	resp := ClusterQuotaRecommendationListResponse{}

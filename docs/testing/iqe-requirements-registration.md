@@ -42,15 +42,26 @@ After merging plugin changes, release a new `iqe-cost-management-plugin` image/v
 
 ## app-interface registration (still required for filtered CI)
 
-Requirement-filtered IQE jobs (e.g. `--requirements=cost_ros_ocp_quota`) also need the requirement IDs registered in **app-interface** so the CI template knows which requirements exist and can map them to job parameters / feature toggles.
+Requirement-filtered IQE jobs (e.g. `--requirements=cost_ros_ocp_quota` or `--requirements=cost_ros_ocp_cluster_quota`) also need the requirement IDs registered in **app-interface** so the CI template knows which requirements exist and can map them to job parameters / feature toggles.
+
+**Register both quota types together** when opening the MR — namespace ResourceQuota and ClusterResourceQuota are separate plugins but share the same CI wiring pattern:
+
+| Requirement ID | Feature | Test file |
+|----------------|---------|-----------|
+| `cost_ros_ocp_quota` | Namespace ResourceQuota | `test_ros_quota_recommendations.py` |
+| `cost_ros_ocp_cluster_quota` | ClusterResourceQuota | `test_ros_cluster_quota_recommendations.py` |
 
 **Typical MR steps:**
 
-1. Open a merge request in [app-interface](https://gitlab.cee.redhat.com/service/app-interface) adding the new requirement IDs to the cost-management IQE job configuration (same pattern as existing `cost_ros_ocp` / `cost_ros_ocp_vm` entries).
-2. Get AppSRE review and merge to stage; validate a requirement-filtered job, for example:
+1. Open a merge request in [app-interface](https://gitlab.cee.redhat.com/service/app-interface) adding **both** requirement IDs to the cost-management IQE job configuration (same pattern as existing `cost_ros_ocp` / `cost_ros_ocp_vm` entries).
+2. Get AppSRE review and merge to stage; validate requirement-filtered jobs, for example:
    ```bash
    iqe tests plugin cost_management \
      --requirements=cost_ros_ocp_quota \
+     --requirements-priority=high
+
+   iqe tests plugin cost_management \
+     --requirements=cost_ros_ocp_cluster_quota \
      --requirements-priority=high
    ```
 3. Promote to prod after stage validation.
