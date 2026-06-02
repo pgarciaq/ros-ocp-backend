@@ -1134,3 +1134,74 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 		assert.Contains(t, resp.Links.Last, "offset=0")
 	})
 }
+
+func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	for i := 0; i < 7; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate: start.AddDate(0, 0, i),
+			OrgID:      testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+			Namespace: "payments", Workload: "api-deploy", WorkloadType: "deployment",
+			ContainerName:   "web",
+			CPURequestP50MC: 100, CPURequestP95MC: 120,
+			CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+			CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+			MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+			MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+			OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+			SampleCount: 96,
+		})
+	}
+
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+	basePath := "/api/cost-management/v1/recommendations/openshift"
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10"},
+		{"filter namespace alias", "?filter%5Bnamespace%5D=payments&limit=10"},
+		{"filter container", "?filter%5Bcontainer%5D=web&limit=10"},
+		{"filter workload", "?filter%5Bworkload%5D=api-deploy&limit=10"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, basePath+tc.query, nil)
+			req.Header.Set("X-Rh-Identity", identityHeader)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		})
+	}
+}

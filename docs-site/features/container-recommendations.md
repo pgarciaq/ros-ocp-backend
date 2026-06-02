@@ -151,12 +151,83 @@ endpoints use a Kruize-compatible shape with `recommendation_terms` and
 
 Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container--namespace).
 
-### Pagination
+### Filters
 
-Container lists support **keyset pagination** via `?after=<meta.next_cursor>` for stable
-iteration over large fleets. Offset pagination (`limit` / `offset`) remains available
-for legacy clients. See [API Pagination](../pagination.md) for the full contract,
-client patterns, and when to prefer cursor mode over offset.
+| Parameter | Purpose |
+|-----------|---------|
+| `filter[project]` | Namespace (partial match) |
+| `filter[namespace]` | Alias for `filter[project]` |
+| `filter[cluster]` | Cluster UUID (exact) or alias (partial) |
+| `filter[container]` | Container name (partial) |
+| `filter[workload]` | Workload name (partial) |
+| `filter[workload_type]` | Kubernetes kind (`deployment`, `statefulset`, …) |
+| `filter[has_gpu]` | `true` / `false` / `1` / `0` |
+| `filter[gpu_model]` | GPU model substring (repeatable, OR) |
+| `filter[idle_state]` | `active`, `idle`, and/or `zombie` (comma-separated) |
+| `filter[tag:<key>]` | Tag key/value (requires `ROS_TAGS_ENABLED=true`) |
+| `filter[engine]` | `cost` or `performance` — limits nested engines per term |
+
+Exact/exclude variants: `filter[exact:<field>]`, `exclude[<field>]`. Date window:
+`start_date`, `end_date` (`YYYY-MM-DD`) on `updated_at`.
+
+### Sorting (`order_by`)
+
+Use `order_by=<field>&order_how=asc|desc` or bracket form `order_by[<field>]=asc|desc`.
+Default: `last_reported` descending.
+
+| `order_by` value | Sorts by |
+|------------------|----------|
+| `cluster` | Cluster alias |
+| `project` | Namespace |
+| `workload_type` | Workload kind |
+| `workload` | Workload name |
+| `container` | Container name |
+| `last_reported` | Last reported timestamp |
+| `cpu_request_current` | Current CPU request |
+| `memory_request_current` | Current memory request |
+| `cpu_variation_short_cost` | Short-term cost CPU variation (%) |
+| `cpu_variation_short_performance` | Short-term performance CPU variation (%) |
+| `cpu_variation_medium_cost` | Medium-term cost CPU variation (%) |
+| `cpu_variation_medium_performance` | Medium-term performance CPU variation (%) |
+| `cpu_variation_long_cost` | Long-term cost CPU variation (%) |
+| `cpu_variation_long_performance` | Long-term performance CPU variation (%) |
+| `memory_variation_short_cost` | Short-term cost memory variation (%) |
+| `memory_variation_short_performance` | Short-term performance memory variation (%) |
+| `memory_variation_medium_cost` | Medium-term cost memory variation (%) |
+| `memory_variation_medium_performance` | Medium-term performance memory variation (%) |
+| `memory_variation_long_cost` | Long-term cost memory variation (%) |
+| `memory_variation_long_performance` | Long-term performance memory variation (%) |
+
+### Keyset pagination
+
+Request the first page with `limit` (and optional filters). When more rows exist,
+`meta.has_next` is `true` and `meta.next_cursor` holds an opaque cursor:
+
+```http
+GET /api/cost-management/v1/recommendations/openshift?limit=20
+GET /api/cost-management/v1/recommendations/openshift?limit=20&after=<meta.next_cursor>
+```
+
+Copy `next_cursor` verbatim — do not parse or construct it. When `after` is set,
+`offset` is ignored. Offset pagination (`limit` / `offset`) remains for legacy clients.
+Details: [API Pagination](../pagination.md).
+
+### History, quality, business hours, notifications
+
+- **History & quality** — `GET .../history` and `GET .../quality` track recommendation
+  changes and stability/adoption over time. See
+  [History & Quality](history-and-quality.md).
+- **Business hours** — Schedule-aware percentiles add a `business_hours` block on detail
+  engines when enabled. Configure via `.../settings/business-hours`. See
+  [Business Hours](business-hours.md).
+- **Notification codes** — Lookup catalog for container plugin notifications:
+
+  ```http
+  GET /api/cost-management/v1/recommendations/openshift/notification-codes?filter[plugin]=container
+  ```
+
+  See [Notification codes API](../api-reference/notification-codes.md) and the
+  [human-readable catalog](../architecture/notification-codes.md).
 
 ### CSV export
 
