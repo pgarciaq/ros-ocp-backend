@@ -1,0 +1,1 @@
+-- Reserved migration 000112: closes a gap in the golang-migrate sequence (no schema change).
