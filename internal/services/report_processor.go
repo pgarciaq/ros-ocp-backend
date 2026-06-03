@@ -586,14 +586,16 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		}
 		totalWritten += len(batch)
 
-		analytics := engine.WriteContainerBatchAnalytics(ctx, pool, batch, oldRecs, "")
-		if analytics.HistoryErr != nil {
-			log.Errorf("native engine: writing recommendation history failed: %v", analytics.HistoryErr)
+		if histErr := engine.WriteContainerHistory(ctx, pool, batch, ""); histErr != nil {
+			log.Errorf("native engine: writing recommendation history failed: %v", histErr)
 			pipelineDegraded = true
 		}
-		if analytics.QualityErr != nil {
-			log.Errorf("native engine: writing quality metrics failed: %v", analytics.QualityErr)
-			pipelineDegraded = true
+		if oldRecs != nil {
+			oomCounts := engine.OOMCountsByContainer(batch)
+			if qualErr := engine.WriteContainerQuality(ctx, pool, batch, oldRecs, oomCounts); qualErr != nil {
+				log.Errorf("native engine: writing quality metrics failed: %v", qualErr)
+				pipelineDegraded = true
+			}
 		}
 
 		return nil
@@ -778,7 +780,6 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
 
-	namespaceAnalyticsDegraded := false
 	bhWritten := 0
 	var bhResults []engine.NamespaceRec
 	bhResults, bhErr := engine.RecommendBusinessHoursNamespaces(ctx, pool, orgID, clusterUUID, start, now)
@@ -804,10 +805,13 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if bhWritten > 0 {
 		bhHistory = bhResults
 	}
-	if engine.WriteNamespaceBatchAnalytics(ctx, pool, results, bhHistory) {
-		namespaceAnalyticsDegraded = true
+	namespaceAnalyticsDegraded, histErr := engine.WriteNamespaceRecommendationHistories(
+		ctx, pool, results, bhHistory, isTransientKafkaProcessingError,
+	)
+	if histErr != nil {
+		log.Errorf("native namespace engine: writing history failed: %v", histErr)
+		return fmt.Errorf("write namespace history: %w", histErr)
 	}
-
 	if namespaceAnalyticsDegraded {
 		log.Warn("native namespace engine: analytics pipeline incomplete (history) — namespace recommendations were written")
 	}

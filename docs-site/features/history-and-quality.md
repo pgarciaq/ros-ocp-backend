@@ -55,7 +55,17 @@ GET /api/cost-management/v1/recommendations/openshift/quality
 
 Default `filter[engine]` is **cost** when omitted.
 
-Prometheus gauges (`ros_recommendation_stability`, `ros_recommendation_adoption_rate`, `ros_recommendation_oom_rate`) are updated after each ingestion quality write; gauge stability/adoption values use a **0–100** scale. See [Monitoring](../monitoring.md).
+Prometheus gauges (`ros_recommendation_stability`, `ros_recommendation_adoption_rate`, `ros_recommendation_oom_rate`) are updated after each ingestion quality write; gauge stability/adoption values use a **0–100** scale (API quality fields use **0.0–1.0**). See [Monitoring](../monitoring.md).
+
+## Retention and cleanup
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_HISTORY_RETENTION_DAYS` | 90 | Drop `recommendation_history` and `recommendation_quality` partitions older than this |
+| `ROS_STALE_CLEANUP_DAYS` | 30 | Delete `recommendation_sets` rows marked `stale = true` older than this (not archived first) |
+| `ROS_STALENESS_THRESHOLD_HOURS` | 48 | Hours without cluster report before marking recommendations stale |
+
+The ros-processor retention ticker runs every 24 hours. See [Configuration — Retention](../configuration.md#retention-and-data-lifecycle).
 
 **Not available for:** node and other non-container plugins. Confidence (`high` / `medium` / `low`) is on live recommendations and container history rows, not on `/quality` list rows.
 

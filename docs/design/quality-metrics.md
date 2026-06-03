@@ -42,15 +42,28 @@ The `/quality` endpoint aggregates post-hoc signals per container cycle: `stabil
 
 ## Pipeline behavior
 
-History and quality writes are **non-fatal**. If `WriteRecommendationHistory` or `WriteRecommendationQuality` fails, the pipeline:
+Recommendations are always persisted first. Analytics writes (history, quality) must not block delivery, but **transient** database errors on history must not leave gaps.
+
+### Container path (streaming batches)
+
+History and quality writes are **non-fatal for all errors** (the Kafka message cannot retry individual batches). If `WriteRecommendationHistory` or `WriteRecommendationQuality` fails, the pipeline:
 
 1. Logs an error
 2. Sets `pipelineDegraded=true`
-3. Still commits container recommendations via `WriteRecommendations`
+3. Continues processing; recommendations were already written in the same batch callback
 
-Recommendations remain available to users; quality tracking failures must not block cost optimization delivery. See [`internal/services/report_processor.go`](../../internal/services/report_processor.go) (streaming container path).
+See [`internal/services/report_processor.go`](../../internal/services/report_processor.go) (streaming container path).
 
 When `ReadClusterOldRecommendations` fails, quality metrics are skipped for that cycle (no prior row to compare) and the pipeline is also marked degraded.
+
+### Namespace path (single CSV / message)
+
+Namespace history runs after `WriteNamespaceRecommendations`. Behavior depends on error class (`isTransientKafkaProcessingError` in [`internal/services/kafka_processing_errors.go`](../../internal/services/kafka_processing_errors.go)):
+
+- **Transient** errors (connection loss, timeouts, deadlocks): return error → Kafka offset not committed → message redelivered → history eventually written
+- **Permanent** errors (constraint violations, bad data): log error, set analytics degraded, commit offset — recommendations remain available
+
+Orchestration: [`WriteNamespaceRecommendationHistories`](../../internal/engine/analytics_hooks.go) in the namespace ingest path in `report_processor.go`.
 
 ## Prometheus gauges
 
