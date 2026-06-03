@@ -358,3 +358,114 @@ func TestGetGPUMIGRecommendations_Unauthorized(t *testing.T) {
 	app.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
+
+func setupGPUMIGEchoWithSettings(pool *pgxpool.Pool) *echo.Echo {
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/gpu/mig", api.GetGPUMIGRecommendations)
+	api.RegisterThresholdSettingsRoutes(v1)
+	return app
+}
+
+func TestGPUMIGRecommendations_Pagination(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"mig-pag-a", "wl-a", "ctr-a", "gpu-node-1"},
+		{"mig-pag-b", "wl-b", "ctr-b", "gpu-node-1"},
+		{"mig-pag-c", "wl-c", "ctr-c", "gpu-node-1"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+	all := migListGET(t, app, "?limit=100")
+	require.GreaterOrEqual(t, all.Meta.Count, 3, "need multiple MIG rows for pagination")
+
+	page0 := migListGET(t, app, "?limit=1&offset=0&order_by=namespace&order_how=asc")
+	assert.Equal(t, all.Meta.Count, page0.Meta.Count)
+	assert.Equal(t, 1, page0.Meta.Limit)
+	assert.Equal(t, 0, page0.Meta.Offset)
+	require.Len(t, page0.Data, 1)
+
+	page1 := migListGET(t, app, "?limit=1&offset=1&order_by=namespace&order_how=asc")
+	assert.Equal(t, all.Meta.Count, page1.Meta.Count)
+	assert.Equal(t, 1, page1.Meta.Limit)
+	assert.Equal(t, 1, page1.Meta.Offset)
+	require.Len(t, page1.Data, 1)
+	assert.NotEqual(t, page0.Data[0].Namespace, page1.Data[0].Namespace)
+}
+
+func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	start := testutil.RecentStart()
+	seedIdle := func(ns, wl, cn, node string, smAvg, dramAvg float64) {
+		for day := 0; day < 7; day++ {
+			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				IntervalStart:       start.AddDate(0, 0, day),
+				ClusterUUID:         testutil.TestClusterUUID,
+				Namespace:           ns,
+				Workload:            wl,
+				WorkloadType:        "deployment",
+				ContainerName:       cn,
+				GPUModelName:        "NVIDIA A100-SXM4-40GB",
+				NodeName:            node,
+				FBUsageMinMiB:       400,
+				FBUsageMaxMiB:       1200,
+				FBUsageAvgMiB:       800,
+				TensorPipeActiveMin: 0.02,
+				TensorPipeActiveMax: 0.12,
+				TensorPipeActiveAvg: 0.08,
+				DRAMActiveMin:       dramAvg,
+				DRAMActiveMax:       dramAvg,
+				DRAMActiveAvg:       dramAvg,
+				SMActiveMin:         smAvg,
+				SMActiveMax:         smAvg,
+				SMActiveAvg:         smAvg,
+			})
+		}
+	}
+	seedIdle("mig-idle-ns", "wl-idle", "ctr-idle", "gpu-node-idle", 0.03, 0.03)
+	seedIdle("mig-active-ns", "wl-active", "ctr-active", "gpu-node-active", 0.10, 0.10)
+
+	app := setupGPUMIGEcho(pool)
+	unfiltered := migListGET(t, app, "?limit=100")
+	require.Greater(t, unfiltered.Meta.Count, 0)
+
+	filtered := migListGET(t, app, "?filter%5Bgpu_idle_state%5D=idle&limit=100")
+	require.Greater(t, filtered.Meta.Count, 0)
+	assert.LessOrEqual(t, filtered.Meta.Count, unfiltered.Meta.Count)
+	for _, row := range filtered.Data {
+		assert.Equal(t, "idle", row.GPUIdleState)
+	}
+	for _, row := range filtered.Data {
+		assert.Equal(t, "mig-idle-ns", row.Namespace)
+	}
+}
+
+func TestGPUMIGRecommendations_Settings(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	app := setupGPUMIGEchoWithSettings(pool)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/gpu", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 0.02, resp["idle_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 0.25, resp["underutilized_sm_threshold"].(float64), 1e-9)
+	assert.InDelta(t, 1.20, resp["fb_headroom_factor"].(float64), 1e-9)
+	assert.InDelta(t, 0.98, resp["mig_fb_percentile"].(float64), 1e-9)
+}
