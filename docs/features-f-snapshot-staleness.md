@@ -292,6 +292,10 @@ in `snapshot_settings`.
 estimated_monthly_cost_usd = (restore_size_bytes / 1073741824) * cost_per_gib_month_usd
 ```
 
+Snapshot savings currently use a flat `cost_per_gib_month_usd` approximation (default
+**$0.05/GiB**). This will be enhanced with billing-derived snapshot costs in
+[COST-7523](https://redhat.atlassian.net/browse/COST-7523).
+
 The API response includes a note that this is a ceiling estimate for
 providers with incremental snapshot behavior.
 

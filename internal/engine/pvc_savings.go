@@ -29,7 +29,7 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 }
 
 func computePVCSavings(rec *PVCRec, storageRatePerMonth float64) float64 {
-	if rec.RecommendedBytes == nil || storageRatePerMonth == 0 {
+	if storageRatePerMonth == 0 {
 		return 0
 	}
 
@@ -42,6 +42,17 @@ func computePVCSavings(rec *PVCRec, storageRatePerMonth float64) float64 {
 	}
 
 	currentGiB := float64(currentBytes) / bytesPerGiB
+
+	// Full monthly storage cost is recoverable when deleting an orphaned PVC.
+	if rec.RecommendationType == PVCRecTypeOrphaned {
+		total := currentGiB * storageRatePerMonth
+		return math.Round(total*100) / 100
+	}
+
+	if rec.RecommendedBytes == nil {
+		return 0
+	}
+
 	recommendedGiB := float64(*rec.RecommendedBytes) / bytesPerGiB
 	deltaGiB := currentGiB - recommendedGiB
 

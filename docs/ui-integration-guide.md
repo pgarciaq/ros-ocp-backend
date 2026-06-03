@@ -124,7 +124,9 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 > **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
 > list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
 > which engine to display. CSV export expands to one row per term × engine and includes
-> `estimated_monthly_savings` (string `value`) and `currency` columns (from the list row's cost model).
+> `estimated_monthly_savings` (string `value`) and `currency` columns for **container** list rows
+> (from the list row's cost model). Namespace recommendations provide CPU and memory sizing targets only;
+> no dollar savings field is included.
 
 Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `order_how`,
 `offset`, `limit`, and `format=csv`.
@@ -255,7 +257,7 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings` | Container/namespace row | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation |
+| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
 | `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
 | GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
@@ -341,7 +343,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - Highlight namespaces with memory growth trends using a trend arrow icon when notification code 9 is present.
 - Link each namespace row to a filtered container list (`?project=`) for container-level drill-down.
 - Use the same engine/term defaults as the container view for consistency.
-- Show `estimated_monthly_savings.value` / `units` at namespace level; when code 25 is present, show "—" instead of `$0.00`.
+- Do not display dollar savings at namespace level — recommendations are CPU/memory sizing targets only (no `estimated_monthly_savings` field).
 - Support CSV export and the same stale filter behavior as container recommendations.
 
 **Dual engine (cost vs performance)**
@@ -744,9 +746,13 @@ Fleet-wide aggregated savings for dashboard hero metrics.
 
 ### Query parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `engine` | `cost` | `cost` or `performance` |
+| Parameter | Values | Default | Notes |
+|-----------|--------|---------|-------|
+| `term` | `short`, `medium`, `long` | `medium` | Recommendation horizon |
+| `engine` | `cost`, `performance` | `cost` | Optimization engine |
+| `group_by[tag:<key>]` | `*` | — | Break down by tag value |
+| `group_by[idle_state]` | `*` | — | Break down by idle/active/zombie |
+| `filter[cluster]` | UUID | — | Scope results (only with `group_by`) |
 
 ### Response structure
 

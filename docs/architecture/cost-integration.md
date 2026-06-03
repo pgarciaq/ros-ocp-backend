@@ -9,6 +9,12 @@ For recommendation thresholds and term configuration (not cost-specific), see
 
 ROS-OCP-Backend fetches cost model rates from Koku to compute estimated monthly savings for each recommendation. The integration uses Koku's internal `effective_rates` endpoint.
 
+**Cost rate source:** Rates are sourced exclusively from Koku cost models via the
+`effective_rates` API. ROS does not provide a standalone cost-rate configuration
+endpoint. To change rates, update the cost model in Koku (which triggers rate refresh
+on the next ingestion cycle or via [savings recalculation](#savings-recalculation-after-cost-model-changes)
+when configured).
+
 ## Endpoint
 
 ```
@@ -204,10 +210,13 @@ current_gib     = request_bytes (or capacity_bytes if request is zero) / 1024³
 recommended_gib = recommended_bytes / 1024³
 delta_gib       = current_gib - recommended_gib
 
-estimated_monthly_savings = round(delta_gib × storage_rate, 2)
+estimated_monthly_savings = round(delta_gib × storage_rate, 2)   # oversized / near_full
+
+# orphaned (deletion): full provisioned capacity is recoverable
+estimated_monthly_savings = round(current_gib × storage_rate, 2)
 ```
 
-Positive `delta_gib` means the PVC is oversized; near-full/orphaned PVCs with no shrink recommendation return `$0`.
+Positive `delta_gib` means the PVC is oversized. **Orphaned** PVCs (zero usage, delete recommendation) use the full `current_gib × storage_rate` — all monthly storage cost is recoverable. Near-full PVCs without a shrink target may still return `$0` when upsizing is required.
 
 ### GPU Savings
 
@@ -238,6 +247,10 @@ with this priority:
 2. `ROS_SNAPSHOT_COST_PER_GIB_MONTH` env var — admin override (locked in Settings API)
 3. `storage_gb_usage_per_month` from Masu `effective_rates` — sum of infrastructure + supplementary from the cluster's OCP cost model (PVC storage usage rate; a better proxy than a hardcoded default)
 4. Compiled default `$0.05`/GiB/month
+
+> **Note:** Snapshot savings currently use a flat `cost_per_gib_month_usd` approximation
+> (default **$0.05/GiB**). This will be enhanced with billing-derived snapshot costs in
+> [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
 Step 3 runs only when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and the Masu fetch
 succeeds ([`processSnapshotCSVNative()`](../../internal/services/report_processor.go)
@@ -404,17 +417,28 @@ persisted savings across all clusters for the authenticated organization.
 
 Implementation: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
 
+Query parameters **`term`** (`short`, `medium`, `long`; default `medium`) and **`engine`** (`cost`, `performance`; default `cost`) select which persisted savings columns are summed. The handler passes these into SQL `WHERE term = $n AND engine = $m` clauses (PVC uses `term` only). **`filter[cluster]`** is only applied when **`group_by[tag:*]`** or **`group_by[idle_state]`** is active. On the default (ungrouped) savings-summary response, results aggregate across all RBAC-visible clusters — **`filter[cluster]`** has no effect.
+
 | Field | Source |
 |-------|--------|
-| `by_plugin.container` | `SUM(estimated_monthly_savings_usd)` on active `recommendation_sets` (medium/cost) |
-| `by_plugin.node` | `SUM(estimated_monthly_savings_usd)` on `node_recommendations` (medium term) |
-| `by_plugin.pvc` | `SUM(estimated_monthly_savings_usd)` on `pvc_recommendation_sets` (medium term) |
+| `by_plugin.container` | `SUM(estimated_monthly_savings_usd)` on active `recommendation_sets` for the requested `term` and `engine` |
+| `by_plugin.node` | `SUM(estimated_monthly_savings_usd)` on `node_recommendations` for the requested `term` and `engine` |
+| `by_plugin.pvc` | `SUM(estimated_monthly_savings_usd)` on `pvc_recommendation_sets` for the requested `term` (engine-agnostic) |
 | `by_plugin.snapshot` | `SUM(estimated_monthly_cost_usd)` on `snapshot_recommendation_sets` (recoverable holding cost) |
 | `by_plugin.gpu` | Always `$0` — see GPU limitation below |
 | `by_cluster.has_cost_data` | `false` when **every** container, node, and PVC recommendation in that cluster has notification code **25** (`NotifNoCostData`) |
 
 The response includes `gpu_savings_note` explaining that GPU dollar estimates
 are excluded because they are computed at API read time (see below).
+
+**GPU savings are excluded from fleet `savings-summary` totals** (`by_plugin.gpu` returns
+`0`). GPU savings are computed at API read-time per container/node detail request and
+are not persisted — they cannot be aggregated into fleet totals without a full table
+scan. Consumers must query individual container or node detail endpoints for GPU dollar
+savings.
+
+Quota and cluster-quota `estimated_savings` are also excluded from this rollup to avoid
+double-counting namespace-level capacity freed against container savings.
 
 ## Savings recalculation after cost model changes
 
@@ -575,3 +599,11 @@ aggregated cheaply for fleet-level summaries.
 
 v2 could persist GPU savings alongside container/node/PVC columns and include
 them in `by_plugin.gpu` once a cost-model change trigger exists.
+
+## Planned enhancements
+
+### Savings trends API
+
+`recommendation_history` stores `estimated_monthly_savings_usd` per snapshot. A future
+time-series aggregation endpoint could expose savings progression over time (for example,
+weekly or monthly deltas). Not yet implemented.

@@ -83,6 +83,23 @@ func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
 	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0))
 }
 
+func TestApplyPVCSavings_Orphaned(t *testing.T) {
+	recs := []PVCRec{
+		{
+			RecommendationType: PVCRecTypeOrphaned,
+			RequestBytes:       50 * 1024 * 1024 * 1024,
+		},
+	}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+		},
+	}
+	ApplyPVCSavings(recs, cd)
+	// 50 GiB * $0.10 = $5.00 (full monthly cost recoverable by deletion)
+	require.InDelta(t, 5.0, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
+}
+
 func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
 	recs := []PVCRec{
 		{

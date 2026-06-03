@@ -67,6 +67,9 @@ per resource. See [feature documentation](../features/cluster-resource-quota.md#
 - `capacity_freed` — `cpu_cores_freed`, `memory_bytes`, `storage_request_bytes`, `pods_freed` (on tighten)
 - `estimated_savings` — `value` (whole USD), `units` (CPU/memory/storage when cost data exists; pods not monetized)
 
+ClusterResourceQuota savings are **excluded from fleet `savings-summary` totals** to avoid
+double-counting container-level savings that quota recommendations encompass.
+
 Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_quota_recs.go).
 
 ### Settings
