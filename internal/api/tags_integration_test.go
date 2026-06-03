@@ -79,8 +79,31 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
 	v1.GET("/recommendations/openshift/namespaces", api.GetNamespaceRecommendationSetListWithFallback)
 	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+	v1.GET("/recommendations/openshift/quota", api.GetQuotaRecommendations)
+	v1.GET("/recommendations/openshift/cluster-quota", api.GetClusterQuotaRecommendations)
+	v1.GET("/recommendations/openshift/history", api.GetRecommendationHistory)
+	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
 
 	return app, makeIdentityHeader(testutil.TestOrgID), ctx, cleanup
+}
+
+func seedTagFilterWorkloadKeys(t *testing.T, ctx context.Context) {
+	t.Helper()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production","team":"platform"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
 }
 
 func withTagsEnabled(t *testing.T) {
@@ -258,4 +281,194 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 	require.Len(t, data, 1)
 	item := data[0].(map[string]interface{})
 	assert.Equal(t, testutil.TestNamespace, item["project"])
+}
+
+func TestTagFilters_VMList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterWorkloadKeys(t, ctx)
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+		) VALUES (
+			$1, $2, 'vm-prod', $3, 'linux',
+			4, 16, 2, 8,
+			true, 'high', 'medium_term', 'cost',
+			false, false, false, 10.00, 'USD', now()),
+			($1, $2, 'vm-stg', 'other-ns', 'linux',
+			4, 16, 2, 8,
+			true, 'high', 'medium_term', 'cost',
+			false, false, false, 20.00, 'USD', now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	meta, _ := body["meta"].(map[string]interface{})
+	require.NotNil(t, meta)
+	count, _ := meta["count"].(float64)
+	assert.Equal(t, float64(1), count)
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestNamespace, item["namespace"])
+}
+
+func TestTagFilters_QuotaList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterWorkloadKeys(t, ctx)
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace,
+			cpu_request_hard_millicores, cpu_request_used_millicores,
+			cpu_request_recommended_millicores,
+			cpu_request_utilization_bp, recommendation_type, risk_level,
+			last_observed_at
+		) VALUES ($1, $2, $3, 100000, 25000, 36000, 2500, 'tighten', 'low', NOW()),
+		       ($1, $2, 'other-ns', 100000, 25000, 36000, 2500, 'tighten', 'low', NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO UPDATE SET
+			recommendation_type = EXCLUDED.recommendation_type`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	meta, _ := body["meta"].(map[string]interface{})
+	count, _ := meta["count"].(float64)
+	assert.Equal(t, float64(1), count)
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestNamespace, item["namespace"])
+}
+
+func TestTagFilters_ClusterQuotaList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterWorkloadKeys(t, ctx)
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO cluster_quota_recommendation_sets (
+			org_id, cluster_uuid, cluster_quota_name,
+			cpu_request_hard, cpu_request_used, cpu_request_recommended,
+			recommendation_type, risk_level, namespaces,
+			utilization_cpu_request_percent,
+			savings_cpu_cores_freed, savings_memory_bytes_freed,
+			savings_storage_bytes_freed, savings_pods_freed,
+			savings_dollars_monthly, notification_codes
+		) VALUES ($1, $2, 'crq-prod', 100000, 25000, 36000, 'tighten', 'low', $3, 25,
+			2, 1073741824, 5368709120, 5, 42, '{}'),
+		       ($1, $2, 'crq-other', 100000, 25000, 36000, 'tighten', 'low', 'other-ns', 25,
+			2, 1073741824, 5368709120, 5, 20, '{}')
+		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name) DO UPDATE SET
+			namespaces = EXCLUDED.namespaces`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	meta, _ := body["meta"].(map[string]interface{})
+	count, _ := meta["count"].(float64)
+	assert.Equal(t, float64(1), count)
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, "crq-prod", item["cluster_quota_name"])
+}
+
+func TestTagFilters_HistoryList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterWorkloadKeys(t, ctx)
+
+	recordedAt := time.Now().UTC().Truncate(24 * time.Hour)
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO recommendation_history (
+			recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+			term, engine, rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib, notification_codes, confidence_level,
+			estimated_monthly_savings_usd, source_binary
+		) VALUES
+			($1, $2, $3, $4, 'w1', 'Deployment', 'c1', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 10000, 'test'),
+			($1, $2, $3, 'other-ns', 'w2', 'Deployment', 'c2', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 20000, 'test')
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at)
+		DO NOTHING`,
+		recordedAt, testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/history?filter%5Btag%3Aenvironment%5D=production&limit=50", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	meta, _ := body["meta"].(map[string]interface{})
+	count, _ := meta["count"].(float64)
+	assert.Equal(t, float64(1), count)
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestNamespace, item["namespace"])
+}
+
+func TestTagFilters_GPUTimeslicingList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterWorkloadKeys(t, ctx)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Btag%3Aenvironment%5D=production&limit=20", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	meta, _ := body["meta"].(map[string]interface{})
+	require.NotNil(t, meta)
+	_, hasCount := meta["count"]
+	assert.True(t, hasCount)
+	data, _ := body["data"].([]interface{})
+	require.NotNil(t, data)
 }
