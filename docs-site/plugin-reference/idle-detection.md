@@ -24,7 +24,7 @@ Peak and P95 come from daily container digests. `idle_since` is the first day th
 
 After container and GPU rows exist, namespace plugin aggregates: a namespace is **zombie** when every container and GPU row is zombie; **idle** when all rows are non-active but at least one is idle (a mix of idle and zombie counts as idle); otherwise **active**.
 
-Filter list results: `filter[idle_state]=idle` on `GET /recommendations/openshift/namespace`.
+Filter list results: `filter[idle_state]=idle,zombie` on `GET /recommendations/openshift/namespaces` (legacy singular `/namespace` alias supported).
 
 ## Node idle
 
@@ -73,6 +73,10 @@ Environment variables can lock fields (see `ROS_IDLE_*` in deployment docs). **A
 | 15 | NODE_IDLE | Node idle/zombie |
 | 26 | GPU_IDLE | GPU idle |
 
+## PVC orphan idle
+
+Orphaned PVCs (`recommendation_type=orphaned`) include `idle_since` and `idle_duration_days` fields tracking when zero usage was first detected.
+
 ## Waste calculation
 
 For containers and GPUs in **idle** or **zombie**, `estimated_monthly_waste` / `gpu_estimated_waste_cents` reflect **full monthly cost** of the workload (not rightsizing delta). Rightsizing `estimated_monthly_savings` is cleared on idle container rows.
@@ -91,9 +95,12 @@ PUT/DELETE trigger async threshold recalculation for **container**, **gpu**, **n
 
 ```http
 GET /api/cost-management/v1/recommendations/openshift?filter[idle_state]=zombie,idle
-GET /api/cost-management/v1/recommendations/openshift?filter[gpu_idle_state]=idle&filter[has_gpu]=true
+GET /api/cost-management/v1/recommendations/openshift?filter[gpu_idle_state]=idle,zombie&filter[has_gpu]=true
+GET /api/cost-management/v1/recommendations/openshift/namespaces?filter[idle_state]=idle,zombie
 GET /api/cost-management/v1/recommendations/openshift/savings-summary?group_by[idle_state]=*
+GET /api/cost-management/v1/recommendations/openshift?order_by=idle_state
 GET /api/cost-management/v1/recommendations/openshift?order_by=idle_duration_days&order_how=desc
+GET /api/cost-management/v1/recommendations/openshift?order_by=estimated_monthly_waste&order_how=desc
 ```
 
 ## Related

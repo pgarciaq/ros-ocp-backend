@@ -349,6 +349,28 @@ GET /api/cost-management/v1/recommendations/openshift
   ?filter[idle_state]=zombie,idle
 ```
 
+GPU idle on container list (and MIG list):
+
+```
+GET /api/cost-management/v1/recommendations/openshift
+  ?filter[gpu_idle_state]=idle,zombie
+```
+
+Namespace list — aggregated namespace idle state:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/namespaces
+  ?filter[idle_state]=idle,zombie
+```
+
+Container list — `order_by` (with `order_how=asc` or `desc`):
+
+```
+GET /api/cost-management/v1/recommendations/openshift?order_by=idle_state
+GET /api/cost-management/v1/recommendations/openshift?order_by=idle_duration_days
+GET /api/cost-management/v1/recommendations/openshift?order_by=estimated_monthly_waste
+```
+
 Follows existing filter infrastructure in
 [`internal/model`](../../internal/model) and
 [API Query Parameters](../operations/api-query-parameters.md).

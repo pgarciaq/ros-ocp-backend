@@ -29,11 +29,18 @@ curl -s -H "x-rh-identity: $IDENTITY" \
   'https://<ros-api>/api/cost-management/v1/recommendations/openshift?filter[idle_state]=zombie,idle'
 ```
 
-Namespace list:
+Namespace list (canonical plural path; `/namespace` alias also works):
 
 ```bash
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'https://<ros-api>/api/cost-management/v1/recommendations/openshift/namespace?filter[idle_state]=idle'
+  'https://<ros-api>/api/cost-management/v1/recommendations/openshift/namespaces?filter[idle_state]=idle,zombie'
+```
+
+Sort idle workloads:
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'https://<ros-api>/api/cost-management/v1/recommendations/openshift?order_by=idle_duration_days&order_how=desc'
 ```
 
 Node list uses the same `filter[idle_state]` on `GET .../recommendations/openshift/nodes`.
@@ -93,10 +100,11 @@ PUT and DELETE enqueue async recalculation for **container**, **gpu**, **namespa
 
 Key thresholds: utilization percents, `burst_ratio` (protects CronJobs), `minimum_observation_days`, GPU basis points, and zombie millicore guards. Fields listed in `locked_fields` cannot be changed via API when set by `ROS_IDLE_*` deployment env vars.
 
-## Node and GPU support
+## Node, GPU, and PVC support
 
 - **Nodes** — idle/zombie from node digests and pod counts; filter with `filter[idle_state]` on the node utilization API. Notification code **15** (`NODE_IDLE`).
-- **GPUs** — DCGM SM/DRAM basis points on container and MIG rows; `gpu_idle_state` on list/detail `gpu` blocks. Notification code **26** (`GPU_IDLE`).
+- **GPUs** — DCGM SM/DRAM basis points on container and MIG rows; `gpu_idle_state` on list/detail `gpu` blocks. Filter with `filter[gpu_idle_state]=idle,zombie`. Notification code **26** (`GPU_IDLE`).
+- **PVC orphans** — orphaned PVC recommendations (`recommendation_type=orphaned`) include `idle_since` and `idle_duration_days` tracking when zero usage was first detected.
 
 ## Notification codes
 
