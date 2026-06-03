@@ -158,11 +158,47 @@ Classification details: [GPU Classification](../architecture/gpu-classification.
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing
 ```
 
-Filters: `cluster_uuid`, `node_name`, `gpu_model`, `term`, `min_savings_usd`,
-pagination (`limit`, `offset`), and sort keys (`node_name`, `gpu_model`,
-`recommended_replicas`, `confidence`, `total_node_savings_usd`).
+### Filters
+
+| Filter | Alias | Description |
+|--------|-------|-------------|
+| `filter[cluster]` | `cluster`, `cluster_uuid` | Cluster UUID; empty list if unknown or not RBAC-visible |
+| `node_name` | — | Node name (case-insensitive exact match) |
+| `gpu_model` | `filter[gpu_model]` | GPU model (case-insensitive substring) |
+| `filter[tag:<key>]` | `tag=key:value` | Tag filter when `ROS_TAGS_ENABLED=true` |
+| `term` | — | Recommendation term (`short`, `medium`, `long`) |
+
+Bracket and flat query syntax are both supported — see
+[Query Parameters](../plugin-reference/query-parameters.md).
+
+### Sort (`order_by` / `order_how`)
+
+| `order_by` | JSON field |
+|------------|------------|
+| `node_name` (default) | `node_name` |
+| `cluster_uuid` | `cluster_uuid` |
+| `gpu_model` | `gpu_model` |
+| `recommended_replicas` | `recommended_replicas` |
+| `confidence` | `confidence` |
+| `total_node_savings` | `total_node_savings_usd` |
+
+`order_how`: `asc` or `desc` (default `desc`).
+
+### Pagination and export
+
+| Parameter | Description |
+|-----------|-------------|
+| `limit` / `offset` | Offset pagination (default limit 10; use `-1` for all) |
+| `format=csv` | CSV export; same columns as JSON (see OpenAPI). `Accept: text/csv` also works |
 
 Summary counts and links: `GET .../recommendations/openshift/gpu`.
+
+## RBAC
+
+Cluster list is restricted by `openshift.cluster` permissions. Rows are further
+filtered by `openshift.node` when node-scoped RBAC is configured. Callers with no
+ROS permissions receive **403** from middleware; a `filter[cluster]` for a
+cluster outside RBAC returns an **empty** list (200).
 
 ## Summary vs list count semantics
 

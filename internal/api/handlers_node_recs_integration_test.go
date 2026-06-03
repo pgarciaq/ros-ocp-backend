@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -302,6 +303,40 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 	assert.Greater(t, nodeRec.Confidence, float32(0))
 	assert.NotEmpty(t, nodeRec.CandidateContainers)
 	assert.Contains(t, nodeRec.NotificationCodes, engine.NotifGPUTimeSharingCandidate)
+}
+
+func TestGetNodeRecommendations_FormatCSV(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'gpu-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-t4-worker-csv")
+
+	app := setupNodeRecsEcho(pool)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?format=csv&limit=100", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+
+	reader := csv.NewReader(strings.NewReader(rec.Body.String()))
+	rows, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rows), 2)
+	header := rows[0]
+	assert.Contains(t, header, "cluster_uuid")
+	assert.Contains(t, header, "node_name")
 }
 
 func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
