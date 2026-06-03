@@ -589,7 +589,7 @@ UI, docs, and API clients must keep them distinct.
 | Surface | API | Scope | What it recommends |
 |---------|-----|-------|-------------------|
 | **Node (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
-| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vms/{id}` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
+| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vm` (list) or `GET /recommendations/openshift/vm/detail` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
 
 - Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
 - VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.

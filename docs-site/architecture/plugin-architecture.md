@@ -472,7 +472,7 @@ Plugins implementing **`TermProvider`** declare their domain-specific default re
 2. **Create package** `internal/plugins/vm/` with `init() { plugin.Register(&VMPlugin{}) }`.
 3. **Implement traits:**
    - **`CSVIngestor`** if a distinct CSV / payload type exists; otherwise **`IngestHook`** if VM metrics piggyback on an existing file.
-   - **`APIProvider`** for `/recommendations/openshift/vms` (exact paths follow OpenAPI policy).
+   - **`APIProvider`** for `/recommendations/openshift/vm` (list/detail) and `/recommendations/openshift/vms/{vm_name}/history` (exact paths follow OpenAPI policy).
    - **`RetentionProvider`** for `daily_vm_digests` and VM recommendation partitions.
    - **`MigrationProvider`** when DDL is plugin-owned.
    - **`TermProvider`** (optional) if recommendations are parameterized by configurable time windows. Implement `DefaultTerms()` (3 terms) and `MaxWindowDays()`. See [`internal/plugins/example/plugin.go`](../../internal/plugins/example/plugin.go) for a template.

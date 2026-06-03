@@ -529,7 +529,7 @@ List, detail, and history filter clusters using `openshift.cluster` permissions 
 
 **ROS `savings`** on list/detail estimates monthly savings from those same direct rates when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
 
-### Placement and NUMA
+### Placement and NUMA {#placement-and-numa}
 
 Cluster-wide placement checks run during `recommendVM()` when `placement.enable_placement_checks`
 is true (default). Redundant VMs are grouped primarily by namespace and derived VM name prefix
@@ -605,7 +605,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity for communicating VMs — [Smart co-location (future)](#smart-co-location-future) |
-| **Network QoS (simplified)** | Notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block |
+| **Network QoS (simplified)** | **Implemented** — notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block — [Network QoS hints](#network-qos-hints-6566) |
 | **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; Settings `storage_tiering` block — [Storage tiering hints](#storage-tiering-hints-6769) |
 | **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](../../docs/design/vm-recommendations.md#full-storage-tiering-future) |
 | **Power-off scheduling (simplified)** | Notification **64** for VMs idle on most days with occasional activity; Settings `power_schedule` block |
@@ -615,7 +615,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Live migration recommendations** | Target-node recommendations for live migration — see [Live migration (future)](#live-migration-future) |
 | **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](../../docs/design/vm-recommendations.md#full-network-qos-future) |
 
-### Network QoS hints (65–66)
+### Network QoS hints (65–66) {#network-qos-hints-6566}
 
 When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest metrics exceed thresholds, ROS may emit:
 
@@ -626,7 +626,7 @@ When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest
 
 Tune via `GET/PUT .../settings/vm` → `network_qos` or env vars `ROS_VM_NETWORK_QOS_*` (see [configuration](../configuration.md)).
 
-### Storage tiering hints (67–69)
+### Storage tiering hints (67–69) {#storage-tiering-hints-6769}
 
 When enough daily digests exist in the term window, ROS classifies each day’s disk I/O (same rules as aggregate `io_pattern`) and may emit:
 
