@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -449,6 +450,75 @@ func TestTagFilters_HistoryList(t *testing.T) {
 	assert.Equal(t, testutil.TestNamespace, item["namespace"])
 }
 
+// seedTagFilterGPUTimeslicingNode seeds underutilized GPU digests on one node so the
+// time-slicing engine emits a recommendation for containers in the given namespace.
+func seedTagFilterGPUTimeslicingNode(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	namespace string,
+	workloads [3]struct{ wl, cn string },
+	nodeName string,
+) {
+	t.Helper()
+	start := testutil.RecentStart()
+	smAvgs := [3]float64{0.12, 0.08, 0.15}
+	for i, w := range workloads {
+		for day := 0; day < 7; day++ {
+			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				IntervalStart:       start.AddDate(0, 0, day),
+				ClusterUUID:         testutil.TestClusterUUID,
+				Namespace:           namespace,
+				Workload:            w.wl,
+				WorkloadType:        "deployment",
+				ContainerName:       w.cn,
+				GPUModelName:        "NVIDIA T4",
+				NodeName:            nodeName,
+				FBUsageMinMiB:       500,
+				FBUsageMaxMiB:       2000,
+				FBUsageAvgMiB:       1200,
+				TensorPipeActiveMin: 0.01,
+				TensorPipeActiveMax: 0.10,
+				TensorPipeActiveAvg: 0.05,
+				DRAMActiveMin:       0.02,
+				DRAMActiveMax:       0.08,
+				DRAMActiveAvg:       0.05,
+				SMActiveMin:         smAvgs[i] - 0.03,
+				SMActiveMax:         smAvgs[i] + 0.05,
+				SMActiveAvg:         smAvgs[i],
+			})
+		}
+	}
+}
+
+func gpuTimeslicingListBody(t *testing.T, app *echo.Echo, identity, query string) map[string]interface{} {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing"+query, nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	return body
+}
+
+func candidateNamespacesFromGPUList(body map[string]interface{}) map[string]struct{} {
+	out := make(map[string]struct{})
+	data, _ := body["data"].([]interface{})
+	for _, raw := range data {
+		rec, _ := raw.(map[string]interface{})
+		cands, _ := rec["candidate_containers"].([]interface{})
+		for _, cRaw := range cands {
+			cand, _ := cRaw.(map[string]interface{})
+			if ns, ok := cand["namespace"].(string); ok && ns != "" {
+				out[ns] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
 func TestTagFilters_GPUTimeslicingList(t *testing.T) {
 	withTagsEnabled(t)
 
@@ -456,19 +526,55 @@ func TestTagFilters_GPUTimeslicingList(t *testing.T) {
 	defer cleanup()
 	seedTagFilterWorkloadKeys(t, ctx)
 
-	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Btag%3Aenvironment%5D=production&limit=20", nil)
-	req.Header.Set("X-Rh-Identity", identity)
-	rec := httptest.NewRecorder()
-	app.ServeHTTP(rec, req)
+	prodWorkloads := [3]struct{ wl, cn string }{
+		{"gpu-w1", "gpu-c1"},
+		{"gpu-w2", "gpu-c2"},
+		{"gpu-w3", "gpu-c3"},
+	}
+	stgWorkloads := [3]struct{ wl, cn string }{
+		{"gpu-s1", "gpu-s1"},
+		{"gpu-s2", "gpu-s2"},
+		{"gpu-s3", "gpu-s3"},
+	}
 
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	meta, _ := body["meta"].(map[string]interface{})
-	require.NotNil(t, meta)
-	_, hasCount := meta["count"]
-	assert.True(t, hasCount)
-	data, _ := body["data"].([]interface{})
-	require.NotNil(t, data)
+	for _, w := range prodWorkloads {
+		_, err := database.Pool.Exec(ctx, `
+			INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+			VALUES ($1, $2, $3, $4, 'Deployment', $5, '{"environment":"production"}'::jsonb)
+			ON CONFLICT (org_id, namespace, workload, container_name)
+			DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+			testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, w.wl, w.cn)
+		require.NoError(t, err)
+	}
+	for _, w := range stgWorkloads {
+		_, err := database.Pool.Exec(ctx, `
+			INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+			VALUES ($1, $2, 'other-ns', $3, 'Deployment', $4, '{"environment":"staging"}'::jsonb)
+			ON CONFLICT (org_id, namespace, workload, container_name)
+			DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+			testutil.TestOrgID, testutil.TestClusterUUID, w.wl, w.cn)
+		require.NoError(t, err)
+	}
+
+	seedTagFilterGPUTimeslicingNode(t, database.Pool, testutil.TestNamespace, prodWorkloads, "gpu-node-prod")
+	seedTagFilterGPUTimeslicingNode(t, database.Pool, "other-ns", stgWorkloads, "gpu-node-stg")
+
+	unfilteredBody := gpuTimeslicingListBody(t, app, identity, "?limit=20")
+	unfilteredData, _ := unfilteredBody["data"].([]interface{})
+	require.NotEmpty(t, unfilteredData)
+
+	unfilteredNS := candidateNamespacesFromGPUList(unfilteredBody)
+	_, hasStagingNS := unfilteredNS["other-ns"]
+	require.True(t, hasStagingNS, "unfiltered list must include staging-namespace GPU recs")
+
+	filteredBody := gpuTimeslicingListBody(t, app, identity,
+		"?filter%5Btag%3Aenvironment%5D=production&limit=20")
+	filteredData, _ := filteredBody["data"].([]interface{})
+	require.NotEmpty(t, filteredData)
+
+	filteredNS := candidateNamespacesFromGPUList(filteredBody)
+	_, stillHasStaging := filteredNS["other-ns"]
+	assert.False(t, stillHasStaging, "production tag filter should exclude other-ns candidates")
+	assert.Less(t, len(filteredData), len(unfilteredData),
+		"tag filter should drop node recs whose candidates are only in non-matching namespaces")
 }

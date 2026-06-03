@@ -4,12 +4,15 @@ Filter OpenShift optimization recommendations by labels (tags) that Cost Managem
 already tracks for billing. The same `filter[tag:key]=value` syntax works across ROS
 list APIs and matches Koku report filters.
 
-## Defaults
+## Self-gating
 
 Tag filtering is **enabled by default** on ROS (`ROS_TAGS_ENABLED=true` in the cost-onprem
-Helm chart). Which tag keys accept filters is controlled in Cost Management **Settings → Tags**.
-If no keys are enabled, `filter[tag:key]=value` returns all recommendations with
-`meta.warnings` explaining that the key is not in the enabled catalog.
+Helm chart). There is no separate deployment toggle to turn off tag support for operators.
+
+Which tag keys accept filters is controlled in Cost Management **Settings → Tags** (org
+admins enable or disable keys). If a filter uses a key that is not enabled, or no keys are
+enabled at all, the API returns **all** recommendations (no narrowing) and may include
+`meta.warnings` explaining that the key is unknown or not in the enabled catalog.
 
 | Variable | Default | On-prem | SaaS |
 |----------|---------|---------|------|
@@ -36,8 +39,16 @@ GET /api/cost-management/v1/recommendations/openshift/nodes?filter[tag:team]=pla
 | `filter[tag:key]=*` | Key present (any value) |
 | `?tag=key:value` | Legacy flat form (also accepted) |
 
-When a tag filter returns zero rows, responses may include `meta.warnings` with hints
-(unknown key, stale sync in SaaS `api` mode).
+### `meta.warnings`
+
+When `ROS_TAGS_ENABLED=true` and a tag filter returns **zero** rows, list responses may
+include `meta.warnings` (string array) with hints such as:
+
+- The tag key is **not enabled** in Settings → Tags (or is unknown to the org).
+- In SaaS **`api`** mode, tags may be **stale** — check
+  `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>` for `synced_at`.
+
+Warnings are omitted when results are non-empty or when tag filtering is disabled.
 
 ## Supported endpoints
 
@@ -46,18 +57,39 @@ When a tag filter returns zero rows, responses may include `meta.warnings` with 
 | Containers | `GET .../recommendations/openshift` |
 | Container history | `GET .../recommendations/openshift/history` |
 | Namespaces | `GET .../recommendations/openshift/namespaces` |
-| Nodes | `GET .../recommendations/openshift/nodes` |
+| Nodes (utilization) | `GET .../recommendations/openshift/nodes` |
 | PVCs | `GET .../recommendations/openshift/pvcs` |
-| GPU (MIG / time-slicing) | `GET .../recommendations/openshift/gpu/mig`, `.../gpu/timeslicing` |
+| GPU MIG | `GET .../recommendations/openshift/gpu/mig` |
+| GPU time-slicing | `GET .../recommendations/openshift/gpu/timeslicing` |
 | VMs | `GET .../recommendations/openshift/vm` |
 | Resource quotas | `GET .../recommendations/openshift/quota` |
 | Cluster resource quotas | `GET .../recommendations/openshift/cluster-quota` |
 
-**Group by tag (fleet savings):** `GET .../recommendations/openshift/savings-summary?group_by[tag:environment]=*`
-aggregates container savings per tag value. List and history endpoints do not support
-`group_by[tag:key]`.
+**Group by tag (fleet savings only):**
 
-## How labels reach ROS
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary?group_by[tag:environment]=*
+```
+
+Flat alias: `?group_by=tag:environment`. Response shape:
+
+```json
+{
+  "meta": { "count": 2 },
+  "data": [
+    { "tag_value": "production", "estimated_monthly_savings": { "value": "...", "units": "USD" } },
+    { "tag_value": "staging", "estimated_monthly_savings": { "value": "...", "units": "USD" } }
+  ]
+}
+```
+
+Only **container** savings are grouped per tag value; node, PVC, and snapshot totals are not
+split by tag. List and history endpoints do **not** support `group_by[tag:key]`.
+
+## Tag sync architecture
+
+Labels flow: **OpenShift cluster → koku-metrics-operator → Koku → ROS**. Koku is the
+authority on enabled keys; ROS does not read labels directly from the cluster.
 
 ```mermaid
 flowchart LR
@@ -66,11 +98,33 @@ flowchart LR
     KOKU --> ROS["ROS list APIs"]
 ```
 
-1. **koku-metrics-operator** collects pod, namespace, node, and PV labels from Prometheus.
-2. **Koku** ingests labels, resolves them, and controls which keys are enabled for filtering.
-3. **ROS** reads tags from Koku — SQL join on shared PostgreSQL (on-prem) or HTTP push (SaaS).
+### On-prem (`ROS_TAGS_SOURCE=db`) {#on-prem-default-shared-database}
 
-There is no direct operator → ROS path; Koku is the tag authority.
+Koku and ROS share one PostgreSQL instance. ROS **JOINs** Koku tenant tables at query time
+(`reporting_enabledtagkeys`, `reporting_ocptags_values`). No HTTP push or Celery sync is
+required.
+
+- **Freshness:** After the last Koku OCP summarization for the tenant.
+- **Schema:** `org` + bare `org_id` (e.g. `1234567` → `org1234567`).
+- **Risk:** Koku migrations that change tag tables can break ROS filters; validate tag
+  filters after Koku upgrades.
+
+### SaaS (`ROS_TAGS_SOURCE=api`) {#running-in-api-mode-saas}
+
+Koku and ROS use separate databases. After summarization or Settings changes, Koku pushes
+resolved namespace tags to ROS (`POST /internal/tags/sync`). List filters read
+`org_container_keys.resolved_tags`.
+
+| Trigger | Typical latency |
+|---------|-----------------|
+| Tag enabled/disabled in Settings | Seconds (Celery) |
+| OCP summarization complete | After summarization + push |
+| Periodic safety-net (every 6h) | Up to ~6 hours if event syncs fail |
+
+Monitor `GET /internal/tags/status?org_id=` — alert if `synced_at` is older than ~6 hours.
+
+See [Configuration → Tag Sync](../configuration.md#tag-sync) for auth, manual sync, and
+environment variables.
 
 ## Tag discovery
 
@@ -81,16 +135,21 @@ There is no direct operator → ROS path; Koku is the tag authority.
 
 ROS does not expose a public `/tags` endpoint; use Koku for tag key/value discovery.
 
-## Limitations and roadmap
+## Limitations
 
-- Tags are **filter-only** — recommendation responses do not include a `labels` field today.
-- Resolution is **namespace-scoped** (all containers in a namespace share the same tags).
-- **`group_by[tag:key]`** works only on `GET .../recommendations/openshift/savings-summary`
-  (fleet container savings per tag value). List endpoints (`/containers`, `/namespaces`,
-  `/nodes`, etc.) and history (`/history`) do **not** support `group_by[tag:key]`. List APIs
-  return one recommendation per workload; tag grouping would require a nested bucket response
-  instead of a flat list — a larger API change. Use `filter[tag:key]` on lists, or
-  `savings-summary` for tag-level aggregation; UIs can also aggregate filtered list results
-  client-side.
+- **Namespace-scoped resolution** — All containers in a namespace share the same resolved
+  tags for filtering. Pod-level labels are not individually resolvable.
+- **Filter-only** — Recommendation JSON does not include a `labels` or `tags` field; use
+  Koku Tags API or OpenShift console to inspect labels.
+- **`group_by[tag:key]`** — Supported only on
+  `GET .../recommendations/openshift/savings-summary`, not on list or history endpoints.
+
+## Future work
+
+| Item | Description |
+|------|-------------|
+| Tag display in responses | Expose resolved labels on list/detail payloads |
+| `group_by[tag:key]` on list/history | Nested bucket responses per tag value |
+| Pod-level tag overrides | Per-pod label resolution beyond namespace scope |
 
 Internal reference: [`docs/features/tag-filtering.md`](../../docs/features/tag-filtering.md).
