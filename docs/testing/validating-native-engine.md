@@ -496,6 +496,93 @@ This path uses **separate** `db-ros` on port **15432** and Kafka on **29092** �
 
 ---
 
+## Testing in Kruize-equivalent mode
+
+To validate the native engine against Kruize output, run `ros-ocp-backend` with configuration restricted to match Kruize's feature set. Use this mode for apples-to-apples A/B comparison before cutover (see also [Regression testing (native vs Kruize)](#regression-testing-native-vs-kruize)).
+
+### Environment variables
+
+```bash
+# Container recommendations only (no namespace, node, PVC, VM, GPU, quota)
+ROS_ENABLED_PLUGINS=container
+ROS_ENABLE_VM_RECS=false
+
+# No tag filtering (Kruize didn't support this)
+ROS_TAGS_ENABLED=false
+
+# No cost savings estimations (Kruize didn't compute dollar values)
+ROS_SAVINGS_ESTIMATES_ENABLED=false
+ROS_SAVINGS_RECALCULATION_ENABLED=false
+
+# No business hours (Kruize didn't support this)
+ROS_BUSINESS_HOURS_ENABLED=false
+
+# 15-day data lookback (matches Kruize's default retention)
+ROS_MAX_LOOKBACK_DAYS=15
+
+# Dual engine is always active — no env var needed
+# Both cost and performance engines are computed every ingest cycle
+```
+
+### What to compare
+
+| Aspect | Kruize | Native engine |
+|--------|--------|---------------|
+| Recommendation algorithms | Fixed percentiles (proprietary) | Configurable: P60/P95 (cost), P98/P100 (performance) |
+| Data window | 15 days rolling | 15 days (with `ROS_MAX_LOOKBACK_DAYS=15`) |
+| Terms | short (24h), medium (7d), long (15d) | Same defaults |
+| Engine selection | Single engine per request | Both always computed; select via `filter[engine]=cost` or `performance` |
+| Response format | ros-ocp-backend API (nested `recommendation_terms`) | Identical — same API contract |
+| OOM feedback | Not supported | Supported (bumps memory recommendation after OOM) |
+| Idle detection | Not supported | Active by default (`ROS_IDLE_DETECTION_ENABLED=true`) — disable with `=false` for pure equivalence |
+
+### Infrastructure changes
+
+When running native-only, you can **remove** these components:
+
+- `kruize-autotune` pod (Kruize server)
+- `ros-recommendation-poller` (polls Kruize for results)
+
+Only `ros-api` and `ros-processor` are required.
+
+### Validation steps
+
+1. Deploy both systems against the **same cluster** with the same data flowing to both.
+2. Wait for at least one full ingestion cycle (15 days of data for long-term term).
+3. Compare recommendations via API:
+
+   ```bash
+   # Native engine
+   curl -H "x-rh-identity: $IDENTITY" \
+     'http://<native-ros>/api/cost-management/v1/recommendations/openshift?filter[container]=<name>'
+
+   # Kruize-backed
+   curl -H "x-rh-identity: $IDENTITY" \
+     'http://<kruize-ros>/api/cost-management/v1/recommendations/openshift?filter[container]=<name>'
+   ```
+
+4. **Expected differences:**
+   - Values will differ slightly due to different percentile algorithms.
+   - Native engine populates **both** `cost` and `performance` engine blocks; Kruize may only populate one.
+   - Native engine may show `idle_state` classification (disable with `ROS_IDLE_DETECTION_ENABLED=false` for parity).
+
+### For exact Kruize parity (disable all native-only features)
+
+```bash
+ROS_ENABLED_PLUGINS=container
+ROS_TAGS_ENABLED=false
+ROS_SAVINGS_ESTIMATES_ENABLED=false
+ROS_SAVINGS_RECALCULATION_ENABLED=false
+ROS_BUSINESS_HOURS_ENABLED=false
+ROS_MAX_LOOKBACK_DAYS=15
+ROS_IDLE_DETECTION_ENABLED=false
+ROS_THRESHOLD_RECALCULATION_ENABLED=false
+```
+
+This gives the closest apples-to-apples comparison. Any remaining differences are algorithmic (percentile computation method).
+
+---
+
 ## Generating test data
 
 NISE mimics koku-metrics-operator CSV output. Use **`--write-monthly`** locally (not `--daily-reports`, which needs `INSIGHTS_ACCOUNT_ID` / `INSIGHTS_ORG_ID`). Use **`--ros-ocp-info`** for ROS files.
