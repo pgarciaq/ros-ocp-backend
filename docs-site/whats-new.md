@@ -39,7 +39,7 @@ first production-ready native engine release.
 
 - **[Tag filtering](features/tag-filtering.md)** — Filter recommendations by OpenShift labels synced from Koku.
 
-- **[Dual engine (cost vs performance)](features/dual-engine.md)** — Parallel cost-minimizing and headroom-maximizing perspectives for containers and namespaces.
+- **[Dual engine (cost vs performance)](features/dual-engine.md)** — Parallel cost-minimizing and headroom-maximizing perspectives for containers and namespaces. Percentile tuning: [Recommendation Engines](architecture/recommendation-engines.md).
 
 ## Financial and quality
 
