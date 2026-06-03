@@ -313,3 +313,56 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 	assert.InDelta(t, 900.00, perfSummary.ByPlugin.Node, 0.01)
 	assert.NotEqual(t, costSummary.EstimatedMonthlySavings.Value, perfSummary.EstimatedMonthlySavings.Value)
 }
+
+func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'snapshot-savings-cluster', 'src-snap', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	const snapshotMonthlyCostUSD = 42.50
+	_, err = pool.Exec(ctx, `
+		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_monthly_cost_usd, notification_codes, updated_at)
+		VALUES ($1, $2, 'ns1', 'snap-stale', now(), $3, '{}', now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID, snapshotMonthlyCostUSD)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var summary api.FleetSavingsSummaryResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &summary)
+	require.NoError(t, err)
+
+	assert.InDelta(t, snapshotMonthlyCostUSD, summary.ByPlugin.Snapshot, 0.01,
+		"by_plugin.snapshot should include persisted estimated_monthly_cost_usd from snapshot_recommendation_sets")
+	assert.Equal(t, "42.500000", summary.EstimatedMonthlySavings.Value)
+	require.Len(t, summary.ByCluster, 1)
+	assert.Equal(t, "42.500000", summary.ByCluster[0].EstimatedMonthlySavings.Value)
+	assert.Equal(t, testutil.TestClusterUUID, summary.ByCluster[0].ClusterUUID)
+}

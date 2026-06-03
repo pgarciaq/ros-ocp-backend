@@ -31,6 +31,10 @@ docs-site/plugin-reference/namespace.md
 !docs-site/plugin-reference/namespace.md
 docs-site/plugin-reference/snapshot.md
 !docs-site/plugin-reference/snapshot.md
+docs-site/plugin-reference/quota.md
+!docs-site/plugin-reference/quota.md
+docs-site/plugin-reference/cluster-quota.md
+!docs-site/plugin-reference/cluster-quota.md
 docs-site/plugin-reference/kruize.md
 docs-site/plugin-reference/vm.md
 !docs-site/plugin-reference/vm.md

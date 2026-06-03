@@ -11,7 +11,7 @@ Practical API reference for **koku-ui** developers building OpenShift Resource O
 - [Configurability Reference](architecture/configurability.md) — env vars, defaults, tuning by use case
 - [Recommendation Engines](architecture/recommendation-engines.md) — algorithm behavior
 - [Cost Integration](architecture/cost-integration.md) — savings formulas and currency
-- [Business Hours](features/business-hours.md) — schedule design and reship flow
+- [Business Hours](features-business-hours.md) — schedule design and reship flow
 
 ---
 
@@ -121,10 +121,10 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 | `memory-unit` | `bytes` (default on list), `MiB`, or `GiB`. |
 | `true-units` | When `false` (default), memory/CPU use k8s-style formats in legacy JSON paths. |
 
-> **Note:** Container and namespace list endpoints support `filter[engine]=cost|performance` (and legacy
-> flat `?engine=`). When omitted, both **cost** and **performance** engines are returned nested under
-> each `recommendation_terms.<term>.recommendation_engines`. CSV export expands to one row per term × engine
-> and includes `estimated_monthly_savings` (string `value`) and `currency` columns for **container** list rows
+> **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
+> list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
+> which engine to display. CSV export expands to one row per term × engine and includes
+> `estimated_monthly_savings` (string `value`) and `currency` columns for **container** list rows
 > (from the list row's cost model). Namespace recommendations provide CPU and memory sizing targets only;
 > no dollar savings field is included.
 
@@ -257,8 +257,7 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term; omitted when `idle_state != active`. Namespace recommendations have no dollar savings field — sizing targets only |
-| `estimated_monthly_waste` | Container row | Full terminate opportunity; present when `idle_state` is `idle` or `zombie` |
+| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
 | `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
 | GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
@@ -284,7 +283,7 @@ Notifications use a Kruize-compatible map:
 ```
 
 See [Notification codes reference](architecture/notification-codes.md) for the complete catalog (codes 1–54).
-The table below is a summary; VM codes 37–54 and reserved codes are documented in the full reference.
+The table below is a summary; VM codes 37–54 and reserved codes are in the full reference.
 
 ### Confidence score
 
@@ -309,24 +308,16 @@ A recommendation is **stale** when the cluster stopped sending metrics beyond
 
 Detail lookups exclude stale rows (`stale = false` in DB query).
 
-### Idle / zombie detection
+### Idle / abandoned classification
 
-List and detail responses include persisted fields (see [Idle / Zombie Detection](features/idle-detection.md)):
+Detected via notification codes (not a separate column):
 
-| Field | When present | UI guidance |
-|-------|--------------|-------------|
-| `idle_state` | Always | `active`, `idle`, or `zombie` — prefer over inferring from notification codes alone |
-| `estimated_monthly_waste` | `idle` / `zombie` | Full monthly cost if the workload is **terminated** |
-| `estimated_monthly_savings` | Usually `active` only | Rightsizing delta — **do not show** for idle/zombie rows (API omits it) |
-| `idle_recommendation` | Non-active | `action: "terminate"` → surface **waste**, not savings |
-| `idle_duration_days` | Non-active | As-of last recommendation run (±1 day), not live |
+| Code | Classification | Savings behavior |
+|------|----------------|------------------|
+| **5** | Idle — usage below CPU/memory idle thresholds but not all zero | 100% of current request cost recoverable |
+| **8** | Abandoned — zero CPU **and** zero memory across the window | 100% recoverable; supersedes idle |
 
-**Never sum** `estimated_monthly_savings` + `estimated_monthly_waste`.
-
-Filter idle workloads: `?filter[idle_state]=zombie,idle`. Fleet waste rollup:
-`?group_by[idle_state]=*` on savings-summary.
-
-Notification codes **5** (idle) and **8** (abandoned) remain for backward compatibility.
+Highlight these rows for potential decommissioning. Show full savings estimate when present.
 
 ### UI Integration Recommendations
 
@@ -364,7 +355,7 @@ Notification codes **5** (idle) and **8** (abandoned) remain for backward compat
 - On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
 - When `business_hours` is present, add tabs: "All hours" and "Business hours" with side-by-side comparison.
 - Namespace list/detail: `business_hours` is populated when BH is enabled and reship is complete
-  (engine persists `schedule_type=business_hours` rows; see [Namespace recommendations](features/namespace-recommendations.md#business-hours)).
+  (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](../docs-site/features/namespace-recommendations.md#business-hours)).
 - Negative savings: phrase as "Additional resources needed" with absolute usage delta, not negative currency.
 
 ---
@@ -483,7 +474,7 @@ GET /recommendations/openshift/gpu/timeslicing
 
 | Parameter | Description |
 |-----------|-------------|
-| `filter[cluster]` | Filter by cluster UUID (exact match). Aliases: `cluster`, `cluster_uuid` |
+| `filter[cluster]` | Cluster UUID (alias: `cluster_uuid`, `cluster`) |
 | `node_name` | Filter by node |
 | `gpu_model` | Filter by GPU model |
 | `term` | Term filter |
@@ -514,40 +505,6 @@ GET /recommendations/openshift/gpu/timeslicing
 
 Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on container `gpu` objects.
 
-#### Which count to use (summary vs list)
-
-The GPU **summary** and **time-slicing list** both expose counts; they are **not
-equivalent**.
-
-```http
-GET /recommendations/openshift/gpu
-→ { "timeslicing": { "count": N, "link": "..." } }
-
-GET /recommendations/openshift/gpu/timeslicing
-→ { "meta": { "count": M }, "data": [ ... ] }
-```
-
-| Field | Typical relation | Semantics | UI usage |
-|-------|------------------|-----------|----------|
-| `timeslicing.count` (**N**) | N ≥ M | Monitored **node×GPU-model** groups with fresh `gpu_container_digests` telemetry (coverage / navigation) | Show the time-slicing **section** or link when N &gt; 0; do **not** use for recommendation badges |
-| `meta.count` (**M**) | M ≤ N | Groups that **passed** the time-slicing engine (underutilized majority, safe `recommended_replicas`, no MIG conflict, fresh node, etc.) | **Badges**, notification counts, “N recommendations available” |
-| `len(data)` on one page | ≤ M | Rows returned for the current `offset`/`limit` only | Table body; may be &lt; M when paginating |
-
-**Rules for koku-ui:**
-
-1. **Recommendation badge / Optimizations card count** → `meta.count` from
-   `GET .../gpu/timeslicing` (or count containers with notification **36**).
-2. **Section visibility** (“Time-slicing” tab or card) → `timeslicing.count`
-   from `GET .../gpu` (fleet has GPU ROS coverage).
-3. **Never** display copy like “`timeslicing.count` recommendations” — users
-   will see fewer rows than the badge implies.
-4. **Empty list, non-zero summary** → copy such as: “GPU usage is monitored on
-   this fleet, but no nodes currently qualify for time-slicing” (well-utilized,
-   MIG, or threshold gates).
-
-Operational prerequisites (DCGM, namespace labels, cost model rates, plugin
-enablement): [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#prerequisites).
-
 ### UI Integration Recommendations
 
 **Node CPU/memory utilization**
@@ -567,9 +524,6 @@ enablement): [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#p
 
 **GPU time-slicing**
 
-- Use **`meta.count`** from the list endpoint for recommendation badges; use
-  **`timeslicing.count`** from the summary endpoint only to decide whether to
-  show the time-slicing navigation entry (see [Which count to use](#which-count-to-use-summary-vs-list)).
 - Show a node-level view with GPU utilization **ProgressBar** per GPU model.
 - Display `recommended_replicas` prominently as the primary action metric.
 - Compare current vs recommended time-slicing configuration in a side-by-side layout.
@@ -585,28 +539,17 @@ enablement): [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#p
 
 ```http
 GET /recommendations/openshift/pvcs
-GET /recommendations/openshift/pvcs/detail
 ```
 
-### Query parameters (list)
+### Query parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `filter[cluster]` | — | Cluster UUID (`cluster`, `cluster_uuid`) |
-| `filter[project]` | — | Namespace (`namespace`, `project`) |
-| `filter[recommendation_type]` | — | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `filter[term]` | `medium` | `short`, `medium`, or `long` |
-| `filter[storageclass]` | — | Storage tier / class name (e.g. `gp3-csi`, `ocs-storagecluster-ceph-rbd`) |
-| `filter[tag:<key>]` | — | Tag filter when tags are enabled |
-| `order_by` | `usage_ratio` | `usage_ratio`, `estimated_monthly_savings`, `pvc_name`, `capacity_bytes` |
-| `order_how` | `desc` | `asc` or `desc` |
+| `cluster_uuid` | — | Filter by cluster |
+| `namespace` | — | Filter by namespace |
+| `recommendation_type` | — | `oversized`, `near_full`, `orphaned`, `healthy` |
+| `term` | `medium` | `short`, `medium`, or `long` |
 | `offset`, `limit` | 0, 20 | Max limit 100 |
-
-### Query parameters (detail)
-
-Required: `cluster_uuid`, `namespace`, `persistentvolumeclaim` (flat or
-`filter[cluster]` / `filter[project]`). Returns all terms plus `historical_usage`
-for charts. Use for row drill-down from the list table.
 
 ### Response structure
 
@@ -666,11 +609,7 @@ current usage is below 85%.
 
 ### UI Integration Recommendations
 
-- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings. Wire column sort to `order_by` + `order_how` (server-side).
-- Show `mounted_by` as workload context (e.g. "Mounted by: virt-launcher-…") when non-empty; omit when empty.
-- Show `vm_name` when present (authoritative KubeVirt VM from operator storage CSV); link to VM recommendation detail when integrating VM views.
-- Add a **Storage class** filter dropdown bound to `filter[storageclass]` for tier-specific views.
-- Open detail on row click via `GET .../pvcs/detail` — render `terms` side-by-side and `historical_usage` as a usage-over-time chart.
+- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
 - When `growth_bytes_per_day` and `days_to_full` are available, show a growth projection line or "full in N days" callout.
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
@@ -681,7 +620,6 @@ current usage is below 85%.
 - Surface notification codes 20, 29, 30 inline with severity-appropriate badges.
 - Link PVC rows to namespace and cluster context; group by namespace in fleet views when helpful.
 - Default term to `medium`; expose term selector when comparing short vs long observation windows.
-- **No koku-ui PVC view yet** — API-only until UI catches up; see [known issues](known-issues.md#pvc--storage-rightsizing-req-63).
 
 ---
 
@@ -689,7 +627,7 @@ current usage is below 85%.
 
 Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** recommendations are
 **API-ready**; there is **no dedicated koku-ui view yet** (deferred — see
-[Deferred: Quota UI](known-issues.md#deferred-quota-ui) and
+[Deferred: Quota UI](../docs-site/known-issues.md#deferred-quota-ui) and
 [quota feature roadmap](features/quota-recommendations.md#roadmap--future-work)).
 
 ### Namespace ResourceQuota
@@ -957,15 +895,6 @@ Per-tenant sizing and classification thresholds (native engine only).
 GET    /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
 PUT    /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
 DELETE /recommendations/openshift/settings/{container|namespace|node|gpu|pvc}
-
-Deprecated alias (returns `Deprecation: true` and `Link` successor header):
-
-GET    /recommendations/openshift/settings/thresholds?recommendation_type={type}
-PUT    /recommendations/openshift/settings/thresholds?recommendation_type={type}
-DELETE /recommendations/openshift/settings/thresholds?recommendation_type={type}
-GET    /recommendations/openshift/settings/idle-detection
-PUT    /recommendations/openshift/settings/idle-detection
-DELETE /recommendations/openshift/settings/idle-detection
 ```
 
 `recommendation_type`: `container`, `namespace`, `node`, `gpu`, `pvc`.
@@ -1188,7 +1117,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).
 - Show `off_hours_weight` with slider or **NumberInput** (0.0–1.0) and explain its effect on off-hours sample weighting.
 - Provide `enabled` toggle per scope; disabling stops business-hours digest generation for that scope.
-- Link to [Business Hours feature doc](features/business-hours.md) for reship flow details.
+- Link to [Business Hours feature doc](features-business-hours.md) for reship flow details.
 - On recommendation detail, default to all-hours view; switch to business-hours tab when user opts in.
 
 ---
@@ -1255,25 +1184,7 @@ Lightweight entry point for GPU optimization views. Returns counts and links to 
 }
 ```
 
-Use this endpoint for dashboard cards that **link** to MIG and time-slicing
-drill-downs — not for recommendation badge totals.
-
-**`timeslicing.count` (N) vs list `meta.count` (M):**
-
-| | Summary `timeslicing.count` | List `meta.count` |
-|--|------------------------------|-------------------|
-| **Measures** | GPU telemetry coverage (distinct node×GPU-model in digests) | Actionable time-slicing rows after engine gates |
-| **Typical size** | Larger (N ≥ M) | Smaller — source of truth for “how many recs” |
-| **UI role** | Show/hide time-slicing section; “we have GPU ROS data” | Badges, “N recommendations”, notification rollups |
-
-The summary does **not** run `ComputeNodeTimeslicingRec` (performance trade-off).
-The list drops groups that are well-utilized, memory-bound, idle-only, MIG-first,
-below the majority threshold, or cannot reach `recommended_replicas` ≥ 2.
-
-**Do not** show `timeslicing.count` as “N time-slicing recommendations.” Use
-`GET .../gpu/timeslicing` → `meta.count`, notification **36**, or paginated
-`data` length. Full semantics:
-[GPU time-slicing — Summary vs list count](features/gpu-time-slicing.md#summary-vs-list-count-semantics).
+Use this endpoint for dashboard cards that link to MIG and time-slicing drill-downs.
 
 ### GPU MIG profile recommendations
 
@@ -1459,25 +1370,10 @@ Complements `GET /recommendations/openshift/savings-summary` (Section 6) with wo
 
 ### Pagination
 
-**Authoritative reference:** [API Pagination](pagination.md).
-
-| List type | Parameters | Response hints |
-|-----------|------------|------------------|
-| Container / namespace lists | Prefer `after` + `limit`; `offset` + `limit` still supported | `meta.has_next`, `meta.next_cursor` when using keyset |
-| All other lists (PVC, GPU, nodes, history, VM, quota, …) | `offset` + `limit` | `meta.count`, `links.first\|previous\|next\|last` |
+Standard `offset` + `limit` with `meta.count` and `links.first|previous|next|last`.
 
 Container/namespace lists paginate by **distinct containers/namespaces**, not by raw DB rows
 (each container row includes all term × engine combinations).
-
-**Keyset flow (recommended for large orgs):**
-
-```http
-GET /api/cost-management/v1/recommendations/openshift?limit=50
-GET /api/cost-management/v1/recommendations/openshift?limit=50&after=<meta.next_cursor>
-```
-
-Repeat while `meta.has_next` is `true`. Do not parse `next_cursor`. When `after` is sent,
-`offset` is ignored (`meta.offset` is `0`).
 
 ### Sorting
 
@@ -1547,8 +1443,7 @@ When `currency` is absent, fall back to `USD` (server default).
 | 35 | INFO | Backup-tool managed snapshot | Caution — review retention policy |
 | 36 | INFO | GPU time-slicing candidate | Link to time-slicing view |
 
-Reference endpoint: `GET /recommendations/openshift/notification-codes` (no identity header required).  
-Full catalog: [Notification codes](architecture/notification-codes.md).
+Reference endpoint (if enabled): `GET /recommendations/openshift/notification-codes`.
 
 Severity mapping for badges: `CRITICAL` → error, `WARNING` → warning, `INFO` → info.
 
@@ -1575,4 +1470,4 @@ These patterns apply across multiple feature sections above. See each feature's 
 
 ## Appendix: Notification codes endpoint
 
-`GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are documented in [Notification codes](architecture/notification-codes.md) (and summarized in [Section 16](#notification-codes-reference) above).
+`GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are documented in [Notification codes](architecture/notification-codes.md).
