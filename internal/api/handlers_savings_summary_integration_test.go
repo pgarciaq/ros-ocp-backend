@@ -142,6 +142,70 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	assert.False(t, dev.HasCostData)
 }
 
+func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES
+			(1, $1, 'prod-1', 'src-1', now()),
+			(1, $2, 'dev-1', 'src-2', now())
+		ON CONFLICT DO NOTHING`, testutil.TestClusterUUID, savingsSummaryCluster2)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 50000, now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 90000, now())`,
+		testutil.TestOrgID, savingsSummaryCluster2)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+
+	callSummary := func(query string) api.FleetSavingsSummaryResponse {
+		url := "/api/cost-management/v1/recommendations/openshift/savings-summary"
+		if query != "" {
+			url += "?" + query
+		}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "query=%q body: %s", query, rec.Body.String())
+		var summary api.FleetSavingsSummaryResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &summary))
+		return summary
+	}
+
+	unfiltered := callSummary("")
+	withClusterFilter := callSummary("filter%5Bcluster%5D=" + savingsSummaryCluster2)
+
+	assert.Equal(t, unfiltered, withClusterFilter,
+		"bare filter[cluster] must not narrow default rollup; org-wide totals should match")
+}
+
 func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

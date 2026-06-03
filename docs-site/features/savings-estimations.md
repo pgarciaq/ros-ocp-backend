@@ -49,6 +49,8 @@ Aggregates **persisted** savings for the organization:
 
 Optional `group_by[idle_state]=*` and `group_by[tag:<key>]=*` for container-focused rollups (see API cheatsheet).
 
+> **Note:** `filter[cluster]` only applies when `group_by[tag:*]` or `group_by[idle_state]` is active. On the default (ungrouped) response, results aggregate across all RBAC-visible clusters regardless of this filter.
+
 ## Idle waste vs rightsizing
 
 | Concept | Field | Meaning |
