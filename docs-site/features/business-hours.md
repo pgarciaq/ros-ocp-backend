@@ -7,7 +7,7 @@
     **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
     **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete  
-    **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `false`)
+    **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
 **Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E)
 
@@ -29,7 +29,7 @@ spike during business hours but share nodes with overnight batch jobs.
 billing. Not every cluster has a cost model; settings live in ros-ocp-backend
 alongside snapshot staleness and recommendation terms.
 
-Full design rationale: [features-business-hours.md](features-business-hours.md).
+Full design rationale: [features-business-hours.md](../../docs/features-business-hours.md).
 
 ## Architecture
 
@@ -69,7 +69,7 @@ Key code:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_BUSINESS_HOURS_ENABLED` | `false` | Kill-switch — when `false`, BH routes return 404 and capabilities omit the feature |
+| `ROS_BUSINESS_HOURS_ENABLED` | `true` | Kill-switch — when `false`, BH routes return 404 and capabilities omit the feature |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | After max reship retries, transition cluster to `forward_only` (new ingest only, no historical backfill) |
 
 Helm (cost-onprem-chart): set under `ros-api` and `ros-processor` env blocks;
@@ -109,6 +109,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/business-
 | GET | `/` | Org default (inherited view) |
 | PUT | `/` | Set org default (202 Accepted) |
 | DELETE | `/` | Remove org default |
+| GET | `/effective` | Resolved schedule for optional `cluster_id` / `namespace` query params + `resolved_from` |
 | GET | `/clusters/{cluster_id}` | Effective cluster schedule + `reship_status` |
 | PUT | `/clusters/{cluster_id}` | Set cluster override |
 | DELETE | `/clusters/{cluster_id}` | Remove cluster override (inherit org) |
@@ -149,6 +150,26 @@ Capabilities: `GET .../settings/capabilities` → `{ "business_hours": true }`.
 ```
 
 `reship_status` values: `complete`, `pending`, `forward_only`.
+
+### Example GET effective response
+
+`GET .../settings/business-hours/effective?cluster_id={uuid}&namespace=team-a`
+
+```json
+{
+  "timezone": "America/New_York",
+  "schedule": {
+    "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+    "start_time": "09:00",
+    "end_time": "17:00"
+  },
+  "off_hours_weight": 0.3,
+  "enabled": true,
+  "resolved_from": "namespace"
+}
+```
+
+When no schedule applies at any level, `enabled` is `false` and `resolved_from` is `none`.
 
 OpenAPI: `/api/cost-management/v1/openapi.json` (when feature enabled).
 

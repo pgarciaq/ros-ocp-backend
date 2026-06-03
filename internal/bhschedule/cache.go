@@ -240,17 +240,26 @@ func (c *Cache) ProducesBusinessHoursDigests() bool {
 
 // Resolve returns the effective schedule for namespace using inheritance.
 func (c *Cache) Resolve(namespace string) Schedule {
+	sched, _ := c.ResolveWithSource(namespace)
+	return sched
+}
+
+// ResolveWithSource returns the effective schedule and which scope supplied it
+// (namespace, cluster, org, or none when no row exists in the inheritance chain).
+func (c *Cache) ResolveWithSource(namespace string) (Schedule, string) {
 	if c == nil {
-		return AllHoursSchedule()
+		return AllHoursSchedule(), "none"
 	}
-	if row, ok := c.namespace[namespace]; ok {
-		return row
+	if namespace != "" {
+		if row, ok := c.namespace[namespace]; ok {
+			return row, "namespace"
+		}
 	}
 	if c.cluster != nil {
-		return *c.cluster
+		return *c.cluster, "cluster"
 	}
 	if c.org != nil {
-		return *c.org
+		return *c.org, "org"
 	}
-	return AllHoursSchedule()
+	return AllHoursSchedule(), "none"
 }

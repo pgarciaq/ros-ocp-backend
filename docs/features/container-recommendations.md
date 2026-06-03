@@ -201,7 +201,7 @@ GET/PUT/DELETE .../settings/terms?recommendation_type=container
 ```
 
 Business hours (optional nested `business_hours` on engine blocks when a schedule
-applies): see [business-hours.md](../architecture/business-hours.md) and
+applies): see [business-hours.md](business-hours.md) and
 `GET/PUT/DELETE .../settings/business-hours`.
 
 Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.

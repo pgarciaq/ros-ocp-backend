@@ -1003,3 +1003,125 @@ func TestSettingsAPI_PUT_InvalidIANA(t *testing.T) {
 	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-invalid-iana", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
+
+const effectivePath = "/api/cost-management/v1/recommendations/openshift/settings/business-hours/effective"
+
+func serveBHEffective(t *testing.T, e *echo.Echo, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	url := effectivePath
+	if query != "" {
+		url += "?" + query
+	}
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func parseEffectiveResponse(t *testing.T, rec *httptest.ResponseRecorder) businessHoursEffectiveResponse {
+	t.Helper()
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp businessHoursEffectiveResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	return resp
+}
+
+func TestGetEffectiveSchedule_Org(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-effective-org"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: engine.OrgClusterSentinelUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday"}, StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}))
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	resp := parseEffectiveResponse(t, serveBHEffective(t, e, ""))
+	assert.Equal(t, "org", resp.ResolvedFrom)
+	assert.Equal(t, "America/New_York", resp.Timezone)
+	assert.True(t, resp.Enabled)
+}
+
+func TestGetEffectiveSchedule_ClusterOverride(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-effective-cluster"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: engine.OrgClusterSentinelUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday"}, StartTime: "08:00", EndTime: "17:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	resp := parseEffectiveResponse(t, serveBHEffective(t, e, "cluster_id="+cluster))
+	assert.Equal(t, "cluster", resp.ResolvedFrom)
+	assert.Equal(t, "America/Chicago", resp.Timezone)
+}
+
+func TestGetEffectiveSchedule_NamespaceOverride(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-effective-ns"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+	ctx := context.Background()
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: engine.OrgClusterSentinelUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday"}, StartTime: "08:00", EndTime: "17:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "",
+		Timezone: "America/Chicago", Days: []string{"tuesday"}, StartTime: "09:00", EndTime: "18:00", Enabled: true,
+	}))
+	require.NoError(t, engine.UpsertBusinessHoursSchedule(ctx, pool, engine.BusinessHoursSchedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "team-a",
+		Timezone: "America/Denver", Days: []string{"wednesday"}, StartTime: "10:00", EndTime: "15:00", Enabled: true,
+	}))
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	resp := parseEffectiveResponse(t, serveBHEffective(t, e, "cluster_id="+cluster+"&namespace=team-a"))
+	assert.Equal(t, "namespace", resp.ResolvedFrom)
+	assert.Equal(t, "America/Denver", resp.Timezone)
+}
+
+func TestGetEffectiveSchedule_None(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-effective-none"
+	cluster := testutil.TestClusterUUID
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, cluster)
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
+	resp := parseEffectiveResponse(t, serveBHEffective(t, e, ""))
+	assert.Equal(t, "none", resp.ResolvedFrom)
+	assert.False(t, resp.Enabled)
+
+	resp = parseEffectiveResponse(t, serveBHEffective(t, e, "cluster_id="+cluster))
+	assert.Equal(t, "none", resp.ResolvedFrom)
+	assert.False(t, resp.Enabled)
+}

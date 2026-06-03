@@ -1699,6 +1699,56 @@
         }
       }
     },
+    "/recommendations/openshift/settings/business-hours/effective": {
+      "get": {
+        "tags": [
+          "Business Hours Settings"
+        ],
+        "summary": "Get effective business hours schedule",
+        "description": "Resolves the inheritance chain (namespace → cluster → org) for optional cluster_id and namespace query parameters and returns the effective schedule with resolved_from metadata.",
+        "operationId": "getBusinessHoursEffective",
+        "x-plugin-required": "business-hours",
+        "parameters": [
+          {
+            "name": "cluster_id",
+            "in": "query",
+            "required": false,
+            "description": "OpenShift cluster UUID; when omitted, returns the org default only",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "description": "Kubernetes namespace name; requires cluster_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective business hours schedule",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHoursEffectiveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          },
+          "404": {
+            "description": "Feature disabled or cluster not found"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}": {
       "get": {
         "tags": ["Business Hours Settings"],
@@ -4664,6 +4714,31 @@
                 "type": "array",
                 "items": { "type": "string" },
                 "description": "Non-fatal warnings (e.g. storage impact)"
+              }
+            }
+          }
+        ]
+      },
+      "BusinessHoursEffectiveResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BusinessHoursSettingsResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "resolved_from"
+            ],
+            "properties": {
+              "resolved_from": {
+                "type": "string",
+                "enum": [
+                  "namespace",
+                  "cluster",
+                  "org",
+                  "none"
+                ],
+                "description": "Scope that supplied the effective schedule (none when no schedule applies)"
               }
             }
           }

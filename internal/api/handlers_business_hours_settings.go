@@ -59,6 +59,11 @@ type businessHoursPutResponse struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
+type businessHoursEffectiveResponse struct {
+	businessHoursSettingsResponse
+	ResolvedFrom string `json:"resolved_from"`
+}
+
 // BusinessHoursSettingsHandler serves org/cluster/namespace business-hours settings.
 type BusinessHoursSettingsHandler struct {
 	Reship reship.Triggerer
@@ -80,6 +85,7 @@ func RegisterBusinessHoursRoutes(v1 *echo.Group, h *BusinessHoursSettingsHandler
 	v1.GET("/recommendations/openshift/settings/business-hours", h.GetOrgDefault)
 	v1.PUT("/recommendations/openshift/settings/business-hours", h.PutOrgDefault)
 	v1.DELETE("/recommendations/openshift/settings/business-hours", h.DeleteOrgDefault)
+	v1.GET("/recommendations/openshift/settings/business-hours/effective", h.GetEffective)
 
 	v1.GET("/recommendations/openshift/settings/business-hours/clusters/:cluster_id", h.GetCluster)
 	v1.PUT("/recommendations/openshift/settings/business-hours/clusters/:cluster_id", h.PutCluster)
@@ -92,6 +98,63 @@ func RegisterBusinessHoursRoutes(v1 *echo.Group, h *BusinessHoursSettingsHandler
 
 func (h *BusinessHoursSettingsHandler) GetOrgDefault(c echo.Context) error {
 	return h.getSettings(c, engine.OrgClusterSentinelUUID, "", false, false)
+}
+
+func (h *BusinessHoursSettingsHandler) GetEffective(c echo.Context) error {
+	xrhid, err := requireXRHID(c)
+	if err != nil {
+		return err
+	}
+	orgID := xrhid.Identity.OrgID
+
+	if engine.IsSettingsLocked("business_hours") {
+		return c.JSON(http.StatusOK, businessHoursEffectiveResponse{
+			businessHoursSettingsResponse: businessHoursSettingsResponse{Enabled: false, SettingsLocked: true},
+			ResolvedFrom:                  "none",
+		})
+	}
+
+	clusterID := c.QueryParam("cluster_id")
+	namespace := c.QueryParam("namespace")
+	if namespace != "" && clusterID == "" {
+		return badRequest(c, "cluster_id is required when namespace is specified")
+	}
+	if clusterID != "" {
+		if _, err := uuid.Parse(clusterID); err != nil {
+			return badRequest(c, "cluster_id must be a valid UUID")
+		}
+	}
+
+	pool := db.GetPool()
+	if pool == nil {
+		return serviceUnavailable(c, "database connection unavailable")
+	}
+
+	ctx := c.Request().Context()
+
+	if clusterID == "" {
+		row, found, err := loadScheduleRow(ctx, pool, orgID, engine.OrgClusterSentinelUUID, "")
+		if err != nil {
+			requestLogger(c, orgID).Errorf("load org business hours schedule: %v", err)
+			return serviceUnavailable(c, "unable to read business hours settings")
+		}
+		if !found {
+			return c.JSON(http.StatusOK, scheduleToEffectiveResponse(engine.AllHoursSchedule(), "none"))
+		}
+		return c.JSON(http.StatusOK, scheduleToEffectiveResponse(row, "org"))
+	}
+
+	if err := h.ensureClusterExists(ctx, pool, orgID, clusterID); err != nil {
+		return err
+	}
+
+	cache, err := engine.LoadSchedules(ctx, pool, orgID, clusterID)
+	if err != nil {
+		requestLogger(c, orgID).Errorf("load business hours schedules: %v", err)
+		return serviceUnavailable(c, "unable to read business hours settings")
+	}
+	sched, source := cache.ResolveWithSource(namespace)
+	return c.JSON(http.StatusOK, scheduleToEffectiveResponse(sched, source))
 }
 
 func (h *BusinessHoursSettingsHandler) PutOrgDefault(c echo.Context) error {
@@ -505,6 +568,19 @@ func scheduleToResponse(sched engine.BusinessHoursSchedule) businessHoursSetting
 			StartTime: sched.StartTime,
 			EndTime:   sched.EndTime,
 		},
+	}
+}
+
+func scheduleToEffectiveResponse(sched engine.BusinessHoursSchedule, resolvedFrom string) businessHoursEffectiveResponse {
+	if resolvedFrom == "none" {
+		return businessHoursEffectiveResponse{
+			businessHoursSettingsResponse: businessHoursSettingsResponse{Enabled: false},
+			ResolvedFrom:                  "none",
+		}
+	}
+	return businessHoursEffectiveResponse{
+		businessHoursSettingsResponse: scheduleToResponse(sched),
+		ResolvedFrom:                  resolvedFrom,
 	}
 }
 

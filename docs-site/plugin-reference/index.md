@@ -60,9 +60,10 @@ Use the sidebar to navigate to individual plugin documentation. Each page includ
 
 Hand-maintained API reference pages (settings, filters, notification codes):
 
-| Plugin | Page |
-|--------|------|
+| Plugin / feature | Page |
+|------------------|------|
 | container | [container](container.md) |
+| business-hours | [business-hours](business-hours.md) (cross-cutting enrichment, not a plugin) |
 | idle-detection | [idle-detection](idle-detection.md) |
 | cluster-quota | [cluster-quota](cluster-quota.md) |
 | node | [node](node.md) |
