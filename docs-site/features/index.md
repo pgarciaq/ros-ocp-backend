@@ -51,6 +51,7 @@ dollar impact using Koku cost model rates.
 | [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**Preview Beta**) |
 | [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health (**planned**) |
+| [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload (**planned**) |
 
 ## Capabilities
 
@@ -133,6 +134,13 @@ recommend reductions in expensive internet egress, fix DNS latency outliers, and
 packet-drop paths; SaaS deployments add egress cost attribution by namespace. Cross-zone co-location
 hints are planned for v2 after classification quality gates. Gated behind `ROS_ENABLE_NETWORK_RECS`.
 Technical design: [`docs/design/network-recommendations.md`](../../docs/design/network-recommendations.md).
+
+**[Local Mode](local-mode.md)** — *Planned.* Run the recommendation engine on-cluster
+within the koku-metrics-operator. Queries Prometheus/Thanos directly (no CSV upload),
+writes to PostgreSQL (in-cluster or external), and pushes lightweight recommendation
+JSON to central Cost Management for fleet-wide visibility and dollar savings
+enrichment. A lightweight local API (ros-ocp-api) serves recommendations on-cluster.
+Enables disconnected, low-latency, and single-cluster deployments.
 
 ## Planned recommendation types
 

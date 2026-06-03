@@ -62,6 +62,7 @@ docs-site/features/
 !docs-site/features/tag-filtering.md
 !docs-site/features/gpu-mig.md
 !docs-site/features/gpu-time-slicing.md
+!docs-site/features/local-mode.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output
