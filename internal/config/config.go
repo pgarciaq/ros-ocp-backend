@@ -314,8 +314,8 @@ type Config struct {
 	// before treating the cluster as abandoned for snapshot_recommendation_sets cleanup.
 	SnapshotStaleGraceHours int `mapstructure:"ROS_SNAPSHOT_STALE_GRACE_HOURS"`
 
-	// Tag sync (Koku → ROS resolved tags on org_container_keys).
-	// Disabled by default; enable with ROS_TAGS_ENABLED=true.
+	// Tag filtering and sync (Koku → ROS resolved tags on org_container_keys).
+	// Enabled by default; gated by Koku's enabled tag keys in Settings > Tags.
 	TagsEnabled                bool   `mapstructure:"ROS_TAGS_ENABLED"`
 	TagsSource                 string `mapstructure:"ROS_TAGS_SOURCE"`
 	TagsAllowedServiceAccounts string `mapstructure:"ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS"`
@@ -720,7 +720,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_FRESH_HOURS", 6)
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
-	viper.SetDefault("ROS_TAGS_ENABLED", false)
+	viper.SetDefault("ROS_TAGS_ENABLED", true)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
 	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_MIB", 10)
 	viper.SetDefault("ROS_ENABLED_PLUGINS", "")
