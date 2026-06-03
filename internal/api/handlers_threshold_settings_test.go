@@ -255,6 +255,27 @@ func TestGetThresholdSettings_Node_ReturnsDefaults(t *testing.T) {
 
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assertNodeThresholdDefaults(t, resp)
+}
+
+func TestGetNodeSettings_CanonicalPath_ReturnsDefaults(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-node-settings-canonical"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/node", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assertNodeThresholdDefaults(t, resp)
+}
+
+func assertNodeThresholdDefaults(t *testing.T, resp map[string]interface{}) {
+	t.Helper()
 	assert.InDelta(t, 0.80, resp["cost_target_utilization"].(float64), 1e-9)
 	assert.InDelta(t, 0.30, resp["underutil_threshold"].(float64), 1e-9)
 	assert.InDelta(t, 1.50, resp["overcommit_threshold"].(float64), 1e-9)
