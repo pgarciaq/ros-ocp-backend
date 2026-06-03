@@ -42,6 +42,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `filter[project]` | CRQs whose `namespaces` membership includes the value (`filter[namespace]` alias) |
 | `filter[recommendation_type]` | `tighten`, `raise`, `optimal`, `none` |
 | `filter[risk_level]` | `high`, `medium`, `low`, `none` |
+| `filter[tag:<key>]` | Namespace tag filter when `ROS_TAGS_ENABLED=true` (CRQs whose selector includes a matching namespace) |
 | `group_by[cluster]` | Aggregate per cluster (`count`, summed savings and capacity_freed) |
 | `order_by` | `cluster_quota_name`, `utilization`, `risk_level`, `estimated_monthly_savings` |
 | `order_how` | `asc` or `desc` |

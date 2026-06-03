@@ -48,7 +48,9 @@ GET /api/cost-management/v1/recommendations/openshift/vms/{vm_name}/history
 | `GET .../vm/detail` | Single VM with `daily_digests[]` |
 | `GET .../vms/{vm_name}/history` | Append-only recommendation history (plural `vms` + path param) |
 
-List filters include `filter[cluster]`, `filter[project]` / `filter[namespace]`, `filter[vm_name]`, `filter[engine]`, `filter[term]`, `filter[is_idle]`, `filter[has_gpu]`, and others. Routes return **404** when `ROS_ENABLE_VM_RECS=false`.
+List filters include `filter[cluster]`, `filter[project]` / `filter[namespace]`, `filter[vm_name]`, `filter[engine]`, `filter[term]`, `filter[is_idle]`, `filter[has_gpu]`, `filter[tag:<key>]` (when `ROS_TAGS_ENABLED=true`), and others. Routes return **404** when `ROS_ENABLE_VM_RECS=false`.
+
+Tag filter syntax: `filter[tag:<key>]=<value>` (see [Query parameters](query-parameters.md)).
 
 Handlers: [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go), [`internal/api/handlers_vm_history.go`](../../internal/api/handlers_vm_history.go).
 
@@ -62,6 +64,8 @@ Each VM recommendation includes a `savings` object (`value` + `units`) computed 
 - **GPU reduction:** GPU count delta × GPU rate
 
 When no cost data is available, `savings` returns `null` (unlike container/node/PVC which return $0 with notification code 25).
+
+`savings.value` can be **negative** when current VM allocation is already below the recommended target. Display as additional monthly cost, not as a savings opportunity.
 
 VM savings are included in fleet `savings-summary` totals under `by_plugin.vm`.
 

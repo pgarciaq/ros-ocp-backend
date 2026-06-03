@@ -53,6 +53,9 @@ List and summary filters include `filter[cluster]`, `filter[project]`, and
 which snapshots are aggregated into each group (counts and reclaimable totals reflect
 only matching rows).
 
+**Tag filtering is not supported** on snapshot list or summary endpoints (`filter[tag:*]` is ignored).
+Use container, namespace, or PVC routes for label-based filtering.
+
 Handlers: [`GetSnapshotRecommendations`](../../internal/api/handlers_snapshot.go),
 [`GetSnapshotSummary`](../../internal/api/handlers_snapshot_summary.go).
 
@@ -78,7 +81,7 @@ Snapshot savings use a flat **$0.05/GiB/month** approximation (`cost_per_gib_mon
 
 When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, dollar fields are omitted (recommendations still classify).
 
-Snapshot totals are included in fleet `GET /recommendations/openshift/savings-summary` when the plugin is enabled and cost data exists.
+Snapshot totals are included in fleet `GET /recommendations/openshift/savings-summary` when the plugin is enabled and cost data exists. Snapshot's fleet contribution is **term-independent** — all snapshot recommendations are summed regardless of the `term` query parameter.
 
 ## Architecture
 

@@ -64,6 +64,10 @@ Classification uses DCGM basis points (defaults: idle at 5% SM/DRAM, zombie at 1
 - Container list: `filter[gpu_idle_state]=idle,zombie` (often with `filter[has_gpu]=true`)
 - MIG list: `filter[gpu_idle_state]` on `GET .../gpu/mig`
 
+### Tag filtering
+
+MIG and time-slicing list endpoints support `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (namespace label scope). Syntax matches other ROS list APIs — see [Query parameters](query-parameters.md).
+
 See [Idle / zombie detection](idle-detection.md#gpu-idle).
 
 ## MIG support

@@ -71,6 +71,14 @@ Handlers: [`internal/plugins/node/routes.go`](../../internal/plugins/node/routes
 
 Filter list/detail with `?term=short|medium|long` and `?engine=cost|performance`.
 
+### Tag filtering
+
+| Parameter | Description |
+|-----------|-------------|
+| `filter[tag:<key>]` | Namespace label filter when `ROS_TAGS_ENABLED=true` (nodes match when any workload namespace on the cluster has the label) |
+
+Syntax: `filter[tag:<key>]=<value>`, comma-separated OR within a key, multiple `filter[tag:*]` keys ANDed. See [Query parameters](query-parameters.md).
+
 ### Consolidation and MachineSets
 
 When nodes are underutilized, the engine recommends reducing node count within instance-type (or capacity-based) groups. List rows may include `machineset_name` when present on digests; `GET .../machinesets` aggregates fleet savings by MachineSet.
@@ -97,6 +105,8 @@ Per-node `estimated_monthly_savings` on each `recommendation_engines.{cost|perfo
 - Consolidation contributes via `node_count_reduction` (fewer nodes × per-node cost).
 
 When no cost data is available, code **25** applies and savings are `$0` or omitted.
+
+`estimated_monthly_savings.value` can be **negative** when current node capacity is already below the recommended target (upsize for headroom). Display as additional monthly cost, not as a savings opportunity.
 
 Node savings roll into fleet totals: `GET .../savings-summary` → `by_plugin.node`.
 
