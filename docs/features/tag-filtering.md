@@ -40,6 +40,10 @@ Tag filters apply to these list endpoints (and container **history**):
 | Resource quota | `GET .../recommendations/openshift/quota` | Per-namespace quota rows |
 | Cluster resource quota | `GET .../recommendations/openshift/cluster-quota` | Match when any namespace in the CRQ scope matches |
 
+**Note:** Snapshot endpoints (`GET /snapshots`, `GET /snapshots/summary`) do **not** support `filter[tag:key]`.
+
+**Fleet history vs per-resource detail:** `filter[tag:key]` is supported on the **fleet history** endpoint (`GET .../recommendations/openshift/history`). It is **not** supported on per-resource detail endpoints (for example `GET .../containers/{id}` or `GET .../namespaces/{id}/history`).
+
 Fleet savings summary supports **`group_by[tag:key]`** (container savings only):
 `GET .../recommendations/openshift/savings-summary`.
 
@@ -564,6 +568,16 @@ is disabled. Check `GET /internal/tags/status?org_id=<org_id>` for SaaS freshnes
 With tags enabled and `db` source, ROS probes `reporting_enabledtagkeys` at startup
 ([`internal/tags/verify.go`](../../internal/tags/verify.go)). Failure disables tag filtering
 for the process lifetime. The probe confirms table reachability, not column-level schema compatibility.
+
+### RBAC interaction
+
+When the caller identity has restricted cluster or project access, tag filter results are the
+**intersection** of RBAC-allowed clusters/namespaces **and** tag matches. A workload in a cluster
+the user cannot access is never returned, even if the tag predicate would match globally.
+
+Requests that scope to an unauthorized cluster with an otherwise valid tag return **200** with an
+empty list (`meta.count: 0`), not **403**. RBAC still applies to the result set; the tag filter
+only narrows rows the caller is already permitted to see.
 
 ---
 

@@ -22,6 +22,9 @@ GET /api/cost-management/v1/recommendations/openshift?tag=environment:production
 
 Full parameter reference: [Query parameters](../plugin-reference/query-parameters.md).
 
+The machine-readable parameter catalog is in [`openapi.json`](../openapi.md). All list endpoints
+(except snapshots) document `filter[tag:environment]` and other tag keys as query parameters.
+
 ## Supported endpoints
 
 Tag filters apply to these list APIs (and container **history**). **Snapshot** list and summary endpoints do **not** support `filter[tag:key]`.
@@ -38,6 +41,11 @@ Tag filters apply to these list APIs (and container **history**). **Snapshot** l
 | GPU time-slicing | `GET .../recommendations/openshift/gpu/timeslicing` |
 | Resource quota | `GET .../recommendations/openshift/quota` |
 | Cluster resource quota | `GET .../recommendations/openshift/cluster-quota` |
+
+**Fleet history vs per-resource detail:** `filter[tag:key]` works on **fleet history**
+(`GET .../recommendations/openshift/history`). It does **not** apply to per-resource detail or
+per-resource history routes (for example `GET .../containers/{id}` or
+`GET .../namespaces/{id}/history`).
 
 ## Configuration
 
@@ -61,9 +69,15 @@ Enable keys in **Settings → Tags** before filtering. If a key is unknown or ha
 
 Operators can monitor tag sync freshness (SaaS) via `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
 
-## RBAC
+## RBAC interaction
 
-Tag filters intersect with cluster and project RBAC scope. A row must match **both** the caller's permitted clusters/namespaces **and** the tag predicate. Restricted users never see recommendations outside their scope, even when a tag would match globally.
+Tag filters intersect with cluster and project RBAC scope. A row must match **both** the caller's
+permitted clusters/namespaces **and** the tag predicate. Restricted users never see recommendations
+outside their scope, even when a tag would match globally.
+
+When identity has restricted cluster access, results are the intersection of RBAC-allowed scope
+and tag matches. A valid tag filter scoped to a cluster the caller cannot access returns **200**
+with an empty list, not **403**.
 
 ## Group by tag (fleet savings summary)
 
