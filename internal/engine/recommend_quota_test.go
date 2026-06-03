@@ -121,6 +121,37 @@ func TestComputeQuotaRecommendation_Optimal(t *testing.T) {
 	assert.Zero(t, rec.CapacityFreed.CPUMillicores)
 }
 
+func TestComputeQuotaRecommendation_ObjectCountHighRisk(t *testing.T) {
+	cfg := QuotaRecConfig{
+		HeadroomBasisPoints:   11000,
+		HighRiskThresholdBP:   9000,
+		MediumRiskThresholdBP: 7000,
+	}
+	snap := NamespaceQuotaSnapshot{
+		Namespace:        "app",
+		ObjectCountHard:  100,
+		ObjectCountUsed:  95,
+		CPURequestHardMC: 1000000,
+		CPURequestUsedMC: 1000,
+	}
+	rec := computeQuotaRecommendation("org1", "cluster1", snap, ContainerQuotaAggregate{}, cfg)
+
+	assert.Equal(t, QuotaRiskHigh, rec.RiskLevel)
+	assert.Equal(t, QuotaRecTypeRaise, rec.RecommendationType)
+	require.NotNil(t, rec.Utilization.ObjectCountBP)
+	assert.Equal(t, 9500, *rec.Utilization.ObjectCountBP)
+}
+
+func TestQuotaNotificationCodes_ObjectCountBlocking(t *testing.T) {
+	snap := NamespaceQuotaSnapshot{
+		ObjectCountHard: 50,
+		ObjectCountUsed: 50,
+	}
+	rec := QuotaRec{RiskLevel: QuotaRiskLow, RecommendationType: QuotaRecTypeOptimal}
+	codes := QuotaNotificationCodes(snap, rec)
+	assert.Contains(t, codes, NotifQuotaBlocking)
+}
+
 func TestComputeQuotaRecommendation_MediumRisk(t *testing.T) {
 	cfg := QuotaRecConfig{
 		HeadroomBasisPoints:   10000,

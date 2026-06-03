@@ -47,8 +47,31 @@ GET /api/cost-management/v1/recommendations/openshift/quota/
 | `order_how` | `asc` or `desc` (default `desc` when `order_by` is set) |
 | `limit` | Page size (1–100, default 20) |
 | `offset` | Pagination offset |
+| `format` | `json` (default) or `csv` — flattened list export (`Accept: text/csv` also supported) |
+| `filter[tag:<key>]` | Namespace tag filter (requires `ROS_TAGS_ENABLED=true`) |
 
 Handler: [`GetQuotaRecommendations`](../../internal/api/handlers_quota_recs.go).
+
+#### CSV export
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quota/?format=csv&limit=100
+```
+
+Returns `text/csv` with columns: `cluster_uuid`, `namespace`, `quota_name`,
+`recommendation_type`, `risk_level`, `estimated_savings_value`, `estimated_savings_units`,
+`last_observed_at`, `count`. Same filters, sort, and pagination as the JSON list.
+
+#### RBAC
+
+When `RBAC_ENABLE=true`, the list endpoint scopes results to clusters the caller may read
+(`openshift.cluster` permission). `filter[cluster]` for an unknown or unauthorized cluster
+UUID returns **200** with an empty `data` array (not 403), consistent with other ROS list APIs.
+Project-level filtering uses `openshift.project` where configured.
+
+ResourceQuota recommendations are **not** engine- or term-selectable: the engine uses fixed
+`term=medium` and `engine=cost` container aggregates only (no `filter[term]` or dual-engine
+toggle on this API).
 
 ### Detail
 

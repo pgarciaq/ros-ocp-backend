@@ -199,8 +199,23 @@ but container sums remain from the **previous** cycle until container CSV is pro
 
 ```http
 GET /api/cost-management/v1/recommendations/openshift/quota/
+GET /api/cost-management/v1/recommendations/openshift/quota/?format=csv
 GET /api/cost-management/v1/recommendations/openshift/quota/detail
 ```
+
+### CSV export
+
+Append `format=csv` (or send `Accept: text/csv`) on the list endpoint to download a flattened
+CSV with the same filters, sort, and pagination as JSON. Columns include `cluster_uuid`,
+`namespace`, `quota_name`, `recommendation_type`, `risk_level`, savings fields,
+`last_observed_at`, and `count` (for `group_by` rows).
+
+### RBAC
+
+When `RBAC_ENABLE=true`, list results are scoped to clusters the caller may read
+(`openshift.cluster` permission). `filter[cluster]` for a cluster UUID that is unknown or not
+authorized returns **HTTP 200** with an empty `data` array (not 403), matching other ROS list
+endpoints.
 
 ### List filters, sorting, and grouping
 
@@ -212,6 +227,8 @@ GET /api/cost-management/v1/recommendations/openshift/quota/detail
 | `filter[resource_quota_name]` | `team-alpha-budget` | Alias for `filter[quota_name]` |
 | `filter[recommendation_type]` | `tighten,raise` | Filter by type |
 | `filter[risk_level]` | `high,medium` | Filter by risk |
+| `filter[tag:<key>]` | `production` | Namespace tag filter (requires `ROS_TAGS_ENABLED=true`) |
+| `format` | `csv` | Flattened CSV export (`Accept: text/csv` also supported) |
 | `order_by` | `utilization` | Sort key: `namespace`, `quota_name`, `utilization`, `estimated_monthly_savings`, `risk_level` |
 | `order_how` | `desc` | `asc` (default) or `desc` |
 | `group_by[cluster]` | — | Aggregate rows per cluster (sums capacity freed and savings) |
