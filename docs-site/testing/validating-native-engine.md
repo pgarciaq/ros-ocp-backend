@@ -583,6 +583,76 @@ This gives the closest apples-to-apples comparison. Any remaining differences ar
 
 ---
 
+## Cross-Repository Dependencies
+
+The native engine spans multiple repositories, but **not all features require changes to all repos**. This section clarifies what you can validate with just ros-ocp-backend deployed against a stock (upstream) koku and koku-metrics-operator.
+
+### What works with ONLY ros-ocp-backend changes
+
+These features work by deploying **only** the native engine ros-ocp-backend (ros-api + ros-processor) against the stock upstream koku-metrics-operator and stock koku:
+
+| Feature | Notes |
+|---------|-------|
+| Container recommendations | Full functionality — stock operator collects all required pod CPU/memory metrics |
+| Namespace recommendations | Full functionality — stock operator collects namespace-level aggregates |
+| Dual engine (cost + performance) | Both engines always computed; no external dependency |
+| Business hours | ros-only scheduling logic |
+| Idle detection | Container-level idle/zombie classification |
+| Settings API | Per-tenant threshold tuning |
+| History and Quality tracking | Recommendation change history |
+| RBAC | Standard platform RBAC integration |
+| On-prem tag filtering | Uses shared PostgreSQL tables (`ROS_TAGS_SOURCE=db`) |
+
+**This means you can start validating container and namespace recommendations immediately by deploying only ros-ocp-backend — no need for our forked koku-metrics-operator or koku.**
+
+### What requires the phase12 koku-metrics-operator
+
+These features need additional CSV columns/files that only our operator branch provides:
+
+| Feature | Operator addition required |
+|---------|---------------------------|
+| PVC recommendations | `ros-openshift-storage-*` CSV in `resource_optimization_files` |
+| VM recommendations | `ros-openshift-vm-usage-*` and `ros-openshift-vm-gpu-device-*` CSVs |
+| ClusterResourceQuota | `ros-openshift-cluster-quota-*` CSV |
+| Snapshot staleness | `ros-openshift-snapshot-*` CSV |
+| Rich node recommendations (consolidation, instance types) | `node_capacity_*`, `node_allocatable_*`, `instance_type`, `machineset_name` columns on container CSV |
+| Rich GPU recommendations (MIG, time-slicing) | `tensor_pipe_active_*`, `dram_active_*`, `sm_active_*` profiling columns |
+| Full ResourceQuota (used counts) | `*_namespace_used` + per-quota rows on namespace CSV |
+
+Without the operator changes, basic node recommendations and GPU recommendations still work but with reduced signal (no capacity/allocatable data for consolidation, no profiling metrics for GPU classification).
+
+### What requires koku integration changes
+
+These features need changes deployed to the koku backend:
+
+| Feature | Koku dependency |
+|---------|-----------------|
+| Cost savings estimates ($) | `GET /api/cost-management/v1/effective_rates/` endpoint on masu |
+| SaaS tag filtering (push mode) | `ros_tag_sync` task + push API (`ROS_TAGS_SOURCE=api`) |
+| Savings recalculation on cost model change | `ros_savings_recalc` notification hook |
+
+Without koku changes, recommendations still compute correctly — only dollar-value savings fields will be empty/zero.
+
+### Recommended validation sequence
+
+1. **Phase 1 — Container + Namespace (ros-ocp-backend only)**
+   - Deploy ros-api + ros-processor with `ROS_ENABLED_PLUGINS=container,namespace`
+   - Use stock operator and stock koku
+   - Validate recommendations against Kruize output (see [Testing in Kruize-equivalent mode](#testing-in-kruize-equivalent-mode))
+
+2. **Phase 2 — Add operator changes**
+   - Deploy phase12 koku-metrics-operator
+   - Enable additional plugins: `ROS_ENABLED_PLUGINS=container,namespace,node,gpu,pvc,vm,quota,cluster-quota`
+   - Validate new recommendation types
+
+3. **Phase 3 — Add koku integration**
+   - Deploy koku ROS integration branch
+   - Enable savings: `ROS_SAVINGS_ESTIMATES_ENABLED=true`
+   - Enable SaaS tags: `ROS_TAGS_SOURCE=api`, `ROS_TAGS_ENABLED=true`
+   - Validate dollar values and tag filtering
+
+---
+
 ## Generating test data
 
 NISE mimics koku-metrics-operator CSV output. Use **`--write-monthly`** locally (not `--daily-reports`, which needs `INSIGHTS_ACCOUNT_ID` / `INSIGHTS_ORG_ID`). Use **`--ros-ocp-info`** for ROS files.
