@@ -176,33 +176,61 @@ Native recommendations run in the **processor** after CSV ingestion (`process*CS
 
 ### Repositories and branches
 
-Clone all sibling repos under one parent directory (for example `~/dev/koku/`). Native-engine integration work typically tracks the same feature branch across **koku** and **ros-ocp-backend**; confirm with your team before cutting a release.
+Clone all sibling repos under one parent directory (for example `~/dev/koku/`). Which branch you checkout depends on whether you are validating the **full native engine** (all recommendation types) or **Kruize comparison** (container + namespace only). See [Cross-Repository Dependencies](#cross-repository-dependencies) for the feature-by-feature breakdown.
+
+#### Full native engine (all recommendation types)
+
+Deploy **phase12** on all three core repos. PVC, VM, GPU (rich), node (rich), ResourceQuota, ClusterResourceQuota, and cost savings estimates require the operator and koku integration changes on this branch — not just ros-ocp-backend.
+
+| Repository | Branch | Remote |
+|---|---|---|
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
+| `koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
+| `koku` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
+
+#### Kruize comparison (container + namespace only)
+
+Container and namespace recommendations work with **stock upstream `main`** on koku and koku-metrics-operator. Only ros-ocp-backend needs the phase12 branch.
+
+| Repository | Branch | Notes |
+|---|---|---|
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase12` | Native engine |
+| `koku-metrics-operator` | `main` (upstream) | Stock operator — provides all data needed for container/namespace recs |
+| `koku` | `main` (upstream) | Stock koku — no integration changes needed |
+
+#### Other repositories
 
 | Repository | Path | Branch / tag | Purpose |
 |------------|------|--------------|---------|
-| **ros-ocp-backend** | `~/dev/koku/ros-ocp-backend` | Feature branch with native engine (e.g. **`pgarciaq-rosocp-superpowers-phase12`**) or team integration branch | Go API + processor (native engine) |
-| **koku-metrics-operator** | `~/dev/koku/koku-metrics-operator` | **`main`** (upstream) or downstream stable channel on cluster | Collects Prometheus metrics → tarball upload (real OpenShift only) |
-| **koku** | `~/dev/koku/koku` | Same integration branch as ROS when testing end-to-end; otherwise **`main`** | Listener, ROS shipper, cost pipeline, nginx proxy to ROS |
 | **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
 | **nise** | `~/dev/koku/nise` | **`main`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
 | **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
 | **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
 
-**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on the active ROS feature branch (check `git log` / release notes). **Koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
+On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase12-only CSV columns.
+
+**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase12` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
 
 ```bash
-# Example clone and checkout (adjust remotes and branch names to your forks)
+# Example clone and checkout (pgarciaq remote for phase12 repos)
 cd ~/dev/koku
-git clone <remote>/ros-ocp-backend.git ros-ocp-backend
-git clone <remote>/koku.git koku
-git clone <remote>/nise.git nise
-git clone <remote>/cost-onprem-chart.git cost-onprem-chart
-git clone <remote>/koku-ui.git koku-ui          # optional
-git clone <remote>/koku-metrics-operator.git koku-metrics-operator  # cluster only
+git clone git@github.com:pgarciaq/ros-ocp-backend.git ros-ocp-backend
+git clone git@github.com:pgarciaq/koku.git koku
+git clone git@github.com:pgarciaq/koku-metrics-operator.git koku-metrics-operator
+git clone git@github.com:RedHatInsights/nise.git nise
+git clone git@github.com:RedHatInsights/cost-onprem-chart.git cost-onprem-chart
+git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 
+# Full native engine — all three on phase12
 git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase12
-git -C koku checkout pgarciaq-rosocp-superpowers-phase12   # or main if integrated
+git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase12
+git -C koku checkout pgarciaq-rosocp-superpowers-phase12
 git -C nise checkout main
+
+# Kruize comparison (container + namespace) — stock koku + operator
+# git -C koku-metrics-operator checkout main
+# git -C koku checkout main
+# (ros-ocp-backend stays on pgarciaq-rosocp-superpowers-phase12)
 ```
 
 ### Build order
