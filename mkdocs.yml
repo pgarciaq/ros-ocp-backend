@@ -91,6 +91,7 @@ nav:
       - Virtual Machine Recommendations: features/virtual-machines.md
       - Java & JVM Optimization (Planned): features/java-jvm.md
       - Network Optimization (Planned): features/network.md
+      - Local Mode (Planned): features/local-mode.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md
