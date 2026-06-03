@@ -288,14 +288,140 @@ func TestParseVMNotifications_LegacyIntArray(t *testing.T) {
 	assert.Equal(t, float64(19), out[1])
 }
 
+func TestVMRecommendations_ListFilterProjectAliasMatchesNamespace(t *testing.T) {
+	orgID := "org-vm-project-alias-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupVMRecommendationsHandler(t, orgID)
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1::uuid, 'vm-proj-alias', 1, NOW()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	targetNS := "payments-ns"
+	otherNS := "other-ns"
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, last_recommended_at
+		) VALUES
+			($1, $2, 'vm-pay', $3, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, now()),
+			($1, $2, 'vm-other', $4, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, now())`,
+		orgID, clusterUUID, targetNS, otherNS)
+	require.NoError(t, err)
+
+	for _, filter := range []string{
+		"filter%5Bnamespace%5D=" + targetNS,
+		"filter%5Bproject%5D=" + targetNS,
+	} {
+		t.Run(filter, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/cost-management/v1/recommendations/openshift/vm?"+filter, nil)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+			var resp VMRecommendationListResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			require.Equal(t, 1, resp.Meta.Count)
+			require.Len(t, resp.Data, 1)
+			assert.Equal(t, targetNS, resp.Data[0].Namespace)
+			assert.Equal(t, "vm-pay", resp.Data[0].VMName)
+		})
+	}
+}
+
+func TestVMRecommendations_ListOrderBySavings(t *testing.T) {
+	orgID := "org-vm-order-savings-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupVMRecommendationsHandler(t, orgID)
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1::uuid, 'vm-savings-sort', 1, NOW()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+		) VALUES
+			($1, $2, 'vm-low', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 5.00, 'USD', now()),
+			($1, $2, 'vm-high', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 50.00, 'USD', now())`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?order_by=savings&order_how=desc", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp VMRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 2)
+	require.NotNil(t, resp.Data[0].Savings)
+	require.NotNil(t, resp.Data[1].Savings)
+	assert.Equal(t, "vm-high", resp.Data[0].VMName)
+	assert.Equal(t, "vm-low", resp.Data[1].VMName)
+}
+
+func TestVMRecommendations_ListCSVExport(t *testing.T) {
+	orgID := "org-vm-csv-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupVMRecommendationsHandler(t, orgID)
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1::uuid, 'vm-csv', 1, NOW()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+		) VALUES ($1, $2, 'csv-vm', 'csv-ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, true, 12.50, 'USD', now())`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?format=csv", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
+	body := rec.Body.String()
+	assert.Contains(t, body, "vm_name")
+	assert.Contains(t, body, "csv-vm")
+}
+
 func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	for apiKey, dbCol := range vmRecAllowedOrderBy {
+		if apiKey == "savings" {
+			assert.Equal(t, "savings_amount", dbCol)
+			continue
+		}
 		assert.Equal(t, apiKey, dbCol, "API key should match DB column for %q", apiKey)
 	}
 	expected := []string{
 		"vm_name", "namespace", "current_vcpu", "current_memory_gib", "guest_os",
 		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_abandoned", "is_oversized",
-		"confidence", "last_recommended_at",
+		"confidence", "last_recommended_at", "savings", "savings_amount",
 	}
 	for _, key := range expected {
 		_, ok := vmRecAllowedOrderBy[key]

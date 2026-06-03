@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
@@ -25,10 +29,15 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		return err
 	}
 	orgID := xrhid.Identity.OrgID
+	userPerms := get_user_permissions(c)
+	hlog := requestLogger(c, orgID)
 
 	clusterID := strings.TrimSpace(c.QueryParam("cluster_uuid"))
 	if clusterID == "" {
 		clusterID = strings.TrimSpace(c.QueryParam("cluster_id"))
+	}
+	if clusterID == "" {
+		clusterID = queryparams.FirstFilter(c, "cluster")
 	}
 	if clusterID == "" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "cluster_uuid is required"})
@@ -39,6 +48,9 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		vmName = strings.TrimSpace(c.QueryParam("vm_name"))
 	}
 	namespace := strings.TrimSpace(c.QueryParam("namespace"))
+	if namespace == "" {
+		namespace = queryparams.FirstFilter(c, "project")
+	}
 	if vmName == "" || namespace == "" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "vm_name and namespace are required"})
 	}
@@ -50,6 +62,11 @@ func GetVMRecommendationHistory(c echo.Context) error {
 	engineName := strings.TrimSpace(c.QueryParam("engine"))
 	if engineName == "" {
 		engineName = "cost"
+	}
+
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
 	}
 
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
@@ -66,14 +83,46 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		})
 	}
 
+	ctx := c.Request().Context()
+	allClusters, clusterErr := getClustersForOrg(ctx, orgID)
+	if clusterErr != nil {
+		hlog.Errorf("GetVMRecommendationHistory: resolve clusters: %v", clusterErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
+	if !clusterAllowed(allowedClusters, clusterID) {
+		setRecommendationNoStore(c)
+		if responseFormat == listoptions.ResponseFormatCSV {
+			return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
+				return generateVMHistoryCSV(ctx, w, nil)
+			})
+		}
+		return c.JSON(http.StatusOK, VMRecommendationHistoryResponse{
+			Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
+			Data: []engine.VMRecommendationHistoryRow{},
+		})
+	}
+
 	rows, total, listErr := engine.ListVMRecommendationHistory(
-		c.Request().Context(), pool, orgID, clusterID, vmName, namespace, term, engineName, limit, offset,
+		ctx, pool, orgID, clusterID, vmName, namespace, term, engineName, limit, offset,
 	)
 	if listErr != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": listErr.Error()})
 	}
 
-	_ = total
+	setRecommendationNoStore(c)
+	if responseFormat == listoptions.ResponseFormatCSV {
+		if rows == nil {
+			rows = []engine.VMRecommendationHistoryRow{}
+		}
+		return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
+			return generateVMHistoryCSV(ctx, w, rows)
+		})
+	}
+
 	resp := VMRecommendationHistoryResponse{
 		Meta: Metadata{
 			Count:  int(total),

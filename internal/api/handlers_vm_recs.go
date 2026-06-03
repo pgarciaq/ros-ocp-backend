@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -135,6 +136,8 @@ var vmRecAllowedOrderBy = map[string]string{
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
+	"savings":                "savings_amount",
+	"savings_amount":         "savings_amount",
 }
 
 const vmRecDefaultOrderBy = "vm_name"
@@ -194,6 +197,11 @@ func GetVMRecommendations(c echo.Context) error {
 			})
 		}
 		offset = v
+	}
+
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
 	}
 
 	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, vmRecAllowedOrderBy, vmRecDefaultOrderBy, listoptions.OrderAsc)
@@ -279,7 +287,7 @@ func GetVMRecommendations(c echo.Context) error {
 
 	filters := engine.VMRecommendationFilters{
 		ClusterUUIDs:       allowedClusters,
-		Namespace:          queryparams.FirstFilter(c, "namespace"),
+		Namespace:          queryparams.FirstFilter(c, "project"),
 		VMName:             queryparams.FirstFilter(c, "vm_name"),
 		Term:               queryparams.FirstFilter(c, "term"),
 		Engine:             engineFilter,
@@ -320,6 +328,12 @@ func GetVMRecommendations(c echo.Context) error {
 	}
 
 	setRecommendationNoStore(c)
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("vm-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateVMRecCSV(ctx, w, data)
+		})
+	}
+
 	resp := VMRecommendationListResponse{
 		Meta:  Metadata{Count: int(total), Limit: limit, Offset: offset},
 		Links: buildLinks(c.Request(), int(total), limit, offset),

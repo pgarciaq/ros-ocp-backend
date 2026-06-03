@@ -50,6 +50,8 @@ var vmRecOrderColumns = map[string]string{
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
+	"savings":                "savings_amount",
+	"savings_amount":         "savings_amount",
 }
 
 // ListVMRecommendations returns a page of VM recommendations and total count.
