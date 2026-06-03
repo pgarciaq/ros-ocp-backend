@@ -51,10 +51,11 @@ rows already in memory (no second DB pass).
   results persist on `recommendation_sets` (`idle_state`, `idle_since`,
   `estimated_waste_cents`, peaks, etc.).
 - **Namespaces** — after the namespace plugin writes `namespace_recommendation_sets`,
-  [`AggregateNamespaceIdleState()`](../../internal/engine/idle_classification.go) marks a
-  namespace idle when **all** container rows are non-active **and** all GPU rows in the
-  namespace are non-active (or no GPUs). Plugin **priority** guarantees `container` (10)
-  and `gpu` (20) run before `namespace` (90).
+  [`AggregateNamespaceIdleState()`](../../internal/engine/idle_classification.go) rolls up
+  container and GPU `idle_state`: **zombie** when every workload in the namespace is
+  zombie; **idle** when all are non-active but at least one is idle (a mix of idle and
+  zombie counts as idle); otherwise **active**. Plugin **priority** guarantees
+  `container` (10) and `gpu` (20) run before `namespace` (90).
 
 Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) / [`DetectAbandoned()`](../../internal/engine/detect_idle.go)
 remain for notification codes; `DetectAbandoned` is still invoked for
@@ -760,9 +761,9 @@ until Phase 2 validation completes.
 
 ## Deferred / future work
 
-- **Pod annotation opt-out (item 13):** Allow workload owners to annotate Pods with `ros.openshift.io/idle-detection-exclude: true` to skip classification. Requires operator CSV export of annotations and ingestion pipeline changes. Namespace/workload-type exclusions via Settings API cover most cases today.
+- **Pod annotation opt-out** — Allow workload owners to annotate Pods with `ros.openshift.io/idle-detection-exclude: "true"` to prevent idle/zombie classification. Requires operator changes to export annotations in ROS CSV, plus ingestion and engine changes. Current workaround: use namespace globs or workload-type exclusions in the Settings API, which cover most cases (e.g., exclude CronJob, exclude kube-system).
 
-- **Sidecar / workload grouping (item 14):** Post-pass downgrade: after classifying all containers in a workload, if any non-sidecar container is active, downgrade sidecars to active/supporting. Requires workload grouping key (namespace, workload_name, workload_type) and known-sidecar heuristic.
+- **Sidecar / workload grouping** — Currently each container is classified independently. In sidecar-heavy clusters (istio-proxy, fluentd, etc.), infrastructure sidecars may appear as zombie when their parent workload is active. A future post-classification pass would group containers by workload (Deployment/StatefulSet) and downgrade sidecars to `active` when any primary container in the same workload is active. Workaround: use namespace or workload-type exclusions in Settings API.
 
 - **Org-level idle notification (item 15):** Fire org-level notification when idle container count exceeds configurable threshold. Deferred — requires notification delivery infrastructure (email/webhook) not yet built.
 

@@ -133,13 +133,13 @@ func RecommendWorkloadsStreaming(
 		if maxIdleWindowDays > 0 {
 			idleRows = filterByWindow(digests, latest.BucketDate, maxIdleWindowDays)
 		}
-		// ClassifyIdleState supersedes legacy DetectIdle for persisted idle_state;
-		// DetectAbandoned below remains for NotifIdleWorkload backward compatibility.
 		idleResult := ClassifyIdleState(
 			idleRows, currentCPUReqMC, currentMemReqKiB,
 			key.WorkloadType, key.Namespace, idleCfg,
 		)
-		classifiedIdle := idleResult.State != IdleStateActive
+		idleClassified := idleClassificationAuthoritative(
+			idleCfg, key.WorkloadType, key.Namespace, idleRows,
+		)
 
 		for _, tc := range terms {
 			windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
@@ -165,8 +165,16 @@ func RecommendWorkloadsStreaming(
 
 				cpuRec := RecommendCPU(windowRows, cpuCfg)
 				memRec := RecommendMemory(windowRows, memCfg)
-				// DetectAbandoned: all-zero usage; kept for NotifIdleWorkload (zombie allows non-zero peak).
-				abandoned := DetectAbandoned(windowRows)
+
+				var isIdle, isAbandoned bool
+				if idleClassified {
+					isIdle = idleResult.State == IdleStateIdle || idleResult.State == IdleStateZombie
+					// ClassifyIdleState is authoritative for codes 5/8; zombie subsumes abandoned.
+					isAbandoned = false
+				} else {
+					isIdle = cpuRec.IsIdle
+					isAbandoned = DetectAbandoned(windowRows)
+				}
 
 				var recCPUReq, recCPULim, recMemReq, recMemLim int64
 				if profile == "performance" {
@@ -201,8 +209,8 @@ func RecommendWorkloadsStreaming(
 					ConfidenceLevel:      confidence,
 					CPUTrendSlope:        cpuRec.TrendSlope,
 					MemTrendSlope:        memRec.TrendSlope,
-					IsIdle:               classifiedIdle || cpuRec.IsIdle,
-					IsAbandoned:          abandoned,
+					IsIdle:               isIdle,
+					IsAbandoned:          isAbandoned,
 					IdleState:            idleResult.State,
 					IdleSince:            idleResult.IdleSince,
 					IdleDurationDays:     idleResult.DurationDays,

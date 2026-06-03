@@ -22,7 +22,7 @@ Peak and P95 come from daily container digests. `idle_since` is the first day th
 
 ## Namespace idle
 
-After container and GPU rows exist, namespace plugin aggregates: a namespace is **idle** when every non-excluded container is idle or zombie and every GPU row is non-active, with at least one container present.
+After container and GPU rows exist, namespace plugin aggregates: a namespace is **zombie** when every container and GPU row is zombie; **idle** when all rows are non-active but at least one is idle (a mix of idle and zombie counts as idle); otherwise **active**.
 
 Filter list results: `filter[idle_state]=idle` on `GET /recommendations/openshift/namespace`.
 
@@ -85,7 +85,7 @@ For containers and GPUs in **idle** or **zombie**, `estimated_monthly_waste` / `
 | PUT | `/api/cost-management/v1/recommendations/openshift/settings/idle-detection` |
 | DELETE | `/api/cost-management/v1/recommendations/openshift/settings/idle-detection` |
 
-PUT/DELETE trigger async threshold recalculation for **container**, **gpu**, **namespace**, and **node** plugins.
+PUT/DELETE trigger async threshold recalculation for **container**, **gpu**, **namespace**, **node**, and **pvc** plugins.
 
 ## List API examples
 

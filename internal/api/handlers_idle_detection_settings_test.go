@@ -113,7 +113,7 @@ func TestPutIdleDetectionSettings_TriggersAsyncRecalculation(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, orgID, triggeredOrg)
-	assert.ElementsMatch(t, []string{"container", "gpu", "namespace", "node"}, triggeredTypes)
+	assert.ElementsMatch(t, []string{"container", "gpu", "namespace", "node", "pvc"}, triggeredTypes)
 }
 
 func TestPutIdleDetectionSettings_ForbiddenWhenEnvLocksField(t *testing.T) {

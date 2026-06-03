@@ -259,9 +259,26 @@ func idleStateForWrite(s IdleState) string {
 	return string(s)
 }
 
-// AggregateNamespaceIdleState marks namespaces idle when all containers and GPUs in the
-// namespace are non-active. Call after container recommendations are written (container
-// plugin priority 10 runs before namespace priority 90).
+// idleClassificationAuthoritative reports whether ClassifyIdleState applied full
+// observation-window rules (not early-return active from disabled/excluded/insufficient data).
+func idleClassificationAuthoritative(cfg IdleConfig, workloadType, namespace string, rows []DigestRow) bool {
+	if !cfg.Enabled || len(rows) == 0 {
+		return false
+	}
+	if isExcludedWorkloadType(workloadType, cfg.ExcludeWorkloadTypes) {
+		return false
+	}
+	if isExcludedNamespace(namespace, cfg.ExcludeNamespaces) {
+		return false
+	}
+	return len(rows) >= cfg.MinObservationDays
+}
+
+// AggregateNamespaceIdleState rolls container and GPU idle_state up to namespaces.
+// Zombie only when every workload in the namespace is zombie; idle when all are
+// non-active but at least one is idle (mix of idle and zombie counts as idle).
+// Call after container recommendations are written (container plugin priority 10
+// runs before namespace priority 90).
 func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE namespace_recommendation_sets ns
@@ -271,24 +288,32 @@ func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID,
 				WHERE rs.org_id = ns.org_id
 				  AND rs.cluster_uuid = ns.cluster_uuid
 				  AND rs.namespace = ns.namespace_name
+			) THEN 'active'
+			WHEN EXISTS (
+				SELECT 1 FROM recommendation_sets rs
+				WHERE rs.org_id = ns.org_id
+				  AND rs.cluster_uuid = ns.cluster_uuid
+				  AND rs.namespace = ns.namespace_name
 				  AND rs.idle_state = 'active'
-			)
-			AND NOT EXISTS (
+			) OR EXISTS (
 				SELECT 1 FROM recommendation_sets rs
 				WHERE rs.org_id = ns.org_id
 				  AND rs.cluster_uuid = ns.cluster_uuid
 				  AND rs.namespace = ns.namespace_name
 				  AND rs.has_gpu = true
 				  AND rs.gpu_idle_state = 'active'
-			)
-			AND EXISTS (
+			) THEN 'active'
+			WHEN NOT EXISTS (
 				SELECT 1 FROM recommendation_sets rs
 				WHERE rs.org_id = ns.org_id
 				  AND rs.cluster_uuid = ns.cluster_uuid
 				  AND rs.namespace = ns.namespace_name
-			)
-			THEN 'idle'
-			ELSE 'active'
+				  AND (
+					COALESCE(rs.idle_state, 'active') <> 'zombie'
+					OR (rs.has_gpu = true AND COALESCE(rs.gpu_idle_state, 'active') <> 'zombie')
+				  )
+			) THEN 'zombie'
+			ELSE 'idle'
 		END
 		WHERE ns.org_id = $1 AND ns.cluster_uuid = $2::uuid
 		  AND ns.schedule_type = 'all_hours'`,
