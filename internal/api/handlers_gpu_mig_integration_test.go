@@ -8,17 +8,23 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -468,4 +474,156 @@ func TestGPUMIGRecommendations_Settings(t *testing.T) {
 	assert.InDelta(t, 0.25, resp["underutilized_sm_threshold"].(float64), 1e-9)
 	assert.InDelta(t, 1.20, resp["fb_headroom_factor"].(float64), 1e-9)
 	assert.InDelta(t, 0.98, resp["mig_fb_percentile"].(float64), 1e-9)
+}
+
+func seedContainerDigestsForMIGContainer(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	start time.Time,
+	days int,
+	namespace, workload, container string,
+) {
+	t.Helper()
+	for i := 0; i < days; i++ {
+		cpuVal := int64(200 + i*10)
+		memVal := int64(524288 + i*1024)
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:       start.AddDate(0, 0, i),
+			OrgID:            testutil.TestOrgID,
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        namespace,
+			Workload:         workload,
+			WorkloadType:     "deployment",
+			ContainerName:    container,
+			CPURequestP50MC:  cpuVal - 20,
+			CPURequestP95MC:  cpuVal + 10,
+			CPUUsageP50MC:    cpuVal - 10,
+			CPUUsageP95MC:    cpuVal,
+			CPUUsageP98MC:    cpuVal + 5,
+			CPUUsageP99MC:    cpuVal + 8,
+			CPUUsageMaxMC:    cpuVal + 15,
+			CPUThrottleP95MC: 5,
+			CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: memVal - 1024,
+			MemRequestP60KiB: memVal - 512,
+			MemRequestP95KiB: memVal + 512,
+			MemRequestP98KiB: memVal + 768,
+			MemRequestP99KiB: memVal + 900,
+			MemUsageP50KiB:   memVal - 512,
+			MemUsageP60KiB:   memVal,
+			MemUsageP95KiB:   memVal + 512,
+			MemUsageP98KiB:   memVal + 768,
+			MemUsageP99KiB:   memVal + 900,
+			MemUsageMaxKiB:   memVal + 1024,
+			MemRSSP95KiB:     memVal - 256,
+			MemRSSMaxKiB:     memVal + 512,
+			OOMCountSum:      0,
+			CPUUsageMeanMC:   cpuVal - 5,
+			MemUsageMeanKiB:  memVal - 256,
+			SampleCount:      96,
+		})
+	}
+}
+
+func TestGPUMIGRecommendations_NotificationCodes(t *testing.T) {
+	const (
+		migNS  = "mig-notif-ns"
+		migWL  = "wl-notif"
+		migCtr = "ctr-notif"
+	)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		 VALUES (1, $1, 'mig-notif-cluster', 'src-mig-notif', now()) ON CONFLICT DO NOTHING`,
+		testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	seedContainerDigestsForMIGContainer(t, pool, start, 7, migNS, migWL, migCtr)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{migNS, migWL, migCtr, "gpu-node-notif"},
+	})
+	require.NoError(t, engine.MarkContainersWithGPU(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID))
+	require.NoError(t, engine.StoreGPUClassifications(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, engine.DefaultTerms(), nil))
+
+	migList := migListGET(t, setupGPUMIGEcho(pool), "?filter%5Bproject%5D="+migNS+"&limit=10")
+	require.Greater(t, migList.Meta.Count, 0)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
+
+	containerID := model.NativeContainerID(
+		testutil.TestClusterUUID, migNS, migWL, "deployment", migCtr,
+	)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var detail model.DetailResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	require.NotEmpty(t, detail.GPU)
+
+	migCodes := map[int16]bool{
+		engine.NotifGPUUnderutilized:   true,
+		engine.NotifGPUIdle:            true,
+		engine.NotifGPUMemBound:        true,
+		engine.NotifGPUNoProfilingData: true,
+	}
+	found := false
+	for _, gpuRec := range detail.GPU {
+		for _, code := range gpuRec.Notifications {
+			if migCodes[code] {
+				found = true
+				break
+			}
+		}
+	}
+	assert.True(t, found, "container detail gpu.*.notifications should include MIG advisory codes 10, 26, 27, or 28")
+}
+
+func TestGPUMIGRecommendations_PluginDisabled(t *testing.T) {
+	t.Setenv("ROS_ENABLED_PLUGINS", "container")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	api.RegisterV1RoutesForTest(v1, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/mig", nil)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code, rec.Body.String())
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "not_found", body["status"])
+	msg, ok := body["message"].(string)
+	require.True(t, ok)
+	require.Contains(t, msg, "plugin 'gpu' is not enabled")
 }
