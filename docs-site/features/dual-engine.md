@@ -18,6 +18,8 @@ Think of it as answering two questions:
 - *"How small can we safely go?"* → **cost**
 - *"How much headroom do we need for spikes and SLAs?"* → **performance**
 
+Default container/namespace percentiles (cost **P60** CPU / **P95** memory; performance **P98** CPU / **P100** memory) and node target utilization (cost **80%**, performance **55%**) are documented in the [Recommendation Engines reference](../architecture/recommendation-engines.md#engine-percentiles-and-sizing) and [node engine parameters](../architecture/recommendation-engines.md#engine-specific-parameters).
+
 ## Cost engine
 
 Optimizes for **lower resource cost** and higher cluster density:

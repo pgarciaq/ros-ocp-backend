@@ -29,8 +29,11 @@ docs-site/plugin-reference/kruize.md
 docs-site/plugin-reference/vm.md
 docs-site/plugin-reference/example.md
 # Copied from docs/ by generate-docs.sh
-docs-site/architecture/
+docs-site/architecture/*
 !docs-site/architecture/notification-codes.md
+!docs-site/architecture/configurability.md
+!docs-site/architecture/recommendation-engines.md
+!docs-site/architecture/plugin-architecture.md
 docs-site/operations/
 docs-site/features/
 !docs-site/features/seasonality.md

@@ -428,6 +428,7 @@ func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 		return amount, ok
 	}
 
+	diverged := false
 	for _, item := range listResp.Data {
 		detailReq := httptest.NewRequest(http.MethodGet,
 			"/api/cost-management/v1/recommendations/openshift/"+item.ID, nil)
@@ -440,6 +441,8 @@ func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 		require.NoError(t, json.Unmarshal(detailRec.Body.Bytes(), &detail))
 		terms := detail["recommendations"].(map[string]interface{})["recommendation_terms"].(map[string]interface{})
 
+		foundCost := false
+		foundPerf := false
 		for _, termRaw := range terms {
 			term, ok := termRaw.(map[string]interface{})
 			if !ok {
@@ -451,18 +454,28 @@ func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 			}
 			costEng, costOK := engines["cost"].(map[string]interface{})
 			perfEng, perfOK := engines["performance"].(map[string]interface{})
+			if costOK {
+				foundCost = true
+			}
+			if perfOK {
+				foundPerf = true
+			}
 			if !costOK || !perfOK {
 				continue
 			}
 			costCPU, costHas := engineCPUAmount(costEng)
 			perfCPU, perfHas := engineCPUAmount(perfEng)
 			if costHas && perfHas && costCPU != perfCPU {
-				return
+				diverged = true
 			}
 		}
+		assert.True(t, foundCost, "detail %s should include recommendation_engines.cost", item.ID)
+		assert.True(t, foundPerf, "detail %s should include recommendation_engines.performance", item.ID)
 	}
 
-	t.Skip("cost and performance CPU request amounts equal for all sampled containers; use nise/examples/ocp_dual_engine for divergent fixtures")
+	if !diverged {
+		t.Log("cost and performance values are equal for this test data; divergence not verifiable (use nise/examples/ocp_dual_engine for divergent fixtures)")
+	}
 }
 
 func TestGetNamespaceList_FilterEngine(t *testing.T) {
