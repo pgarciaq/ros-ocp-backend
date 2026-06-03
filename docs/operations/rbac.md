@@ -70,7 +70,9 @@ Each handler applies RBAC filtering via helper functions:
 | `GET /recommendations/openshift/gpu` | cluster |
 | `GET /recommendations/openshift/gpu/timeslicing` | cluster |
 | `GET /recommendations/openshift/gpu/mig` | cluster |
-| `GET /recommendations/openshift/nodes` | cluster |
+| `GET /recommendations/openshift/nodes` | cluster, node |
+| `GET /recommendations/openshift/nodes/{node}` | cluster, node |
+| `GET /recommendations/openshift/machinesets` | cluster, node |
 | `GET /recommendations/openshift/history` | cluster, project |
 | `GET /recommendations/openshift/quality` | cluster, project |
 | `GET .../fleet-summary` | cluster |
@@ -88,6 +90,24 @@ Each handler applies RBAC filtering via helper functions:
 | `RBAC_PROTOCOL` | `http` | Protocol for RBAC calls |
 
 When `RBAC_ENABLE=false`, no RBAC middleware is applied (all users get full access). This is used in development and on-prem deployments where Keycloak provides authorization instead.
+
+## Node recommendations
+
+Node list, detail, CSV export, and MachineSet aggregation require the
+`cost-management:openshift.node:read` permission (resource type `openshift.node` in the
+aggregated permission map). Cluster scoping still applies via `openshift.cluster` when
+that resource type is present on the caller's roles.
+
+| Caller state | HTTP result | Data |
+|--------------|-------------|------|
+| Zero ROS permissions (RBAC returns no cost-management ACLs) | **403 Forbidden** | — (rejected in `Rbac` middleware before the handler) |
+| Valid ROS permissions but no `openshift.node` scope (or node names that do not match) | **200 OK** | Empty `data[]` / empty machineset list (filtered in handler) |
+| `openshift.node` wildcard (`*`) or matching node names | **200 OK** | Rows for allowed clusters and nodes |
+
+Handlers apply `filterClustersByRBAC` and `filterNodeRecsByRBAC` (see
+[`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go)).
+Missing node permission does **not** return 403; it returns an empty result set so
+callers with container-only access are not blocked from other ROS endpoints.
 
 ## Security Notes
 

@@ -3,6 +3,8 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1208,6 +1210,57 @@ func setupNodeUtilizationEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms ma
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
 	v1.GET("/recommendations/openshift/nodes/:node", api.GetNodeUtilizationDetail)
 	return app
+}
+
+// setupNodeUtilizationEchoWithPlatformRBAC wires Identity + platform Rbac middleware
+// against a test RBAC server (used to assert HTTP 403 before the node list handler).
+func setupNodeUtilizationEchoWithPlatformRBAC(t *testing.T, rbacServer *httptest.Server) *echo.Echo {
+	t.Helper()
+	cfg := config.GetConfig()
+	origEnabled := cfg.RBACEnabled
+	origHost := cfg.RBACHost
+	origPort := cfg.RBACPort
+	origProtocol := cfg.RBACProtocol
+	cfg.RBACEnabled = true
+	addr := rbacServer.Listener.Addr().(*net.TCPAddr)
+	cfg.RBACProtocol = "http"
+	cfg.RBACHost = addr.IP.String()
+	cfg.RBACPort = fmt.Sprintf("%d", addr.Port)
+	t.Cleanup(func() {
+		cfg.RBACEnabled = origEnabled
+		cfg.RBACHost = origHost
+		cfg.RBACPort = origPort
+		cfg.RBACProtocol = origProtocol
+	})
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.Use(ros_middleware.Rbac)
+	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
+	return app
+}
+
+// TestGetNodeList_RBAC_NoPermissions_Returns403 verifies callers with zero ROS
+// permissions receive 403 from Rbac middleware (not an empty list from the handler).
+func TestGetNodeList_RBAC_NoPermissions_Returns403(t *testing.T) {
+	rbacSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	t.Cleanup(rbacSrv.Close)
+
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	app := setupNodeUtilizationEchoWithPlatformRBAC(t, rbacSrv)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
 }
 
 func TestGetNodeUtilization_RBAC_FiltersByNode(t *testing.T) {
