@@ -68,30 +68,25 @@ pushes only pre-computed recommendation JSON (~1 MB/day).
 
 ## Architecture overview
 
-```
-┌─ OpenShift Cluster ───────────────────────────────────────────────────┐
-│                                                                        │
-│  Prometheus/Thanos ──PromQL──▶ koku-metrics-operator (local-recs mode) │
-│                                         │                              │
-│  Kubernetes API ────labels───▶          │ writes                       │
-│                                         ▼                              │
-│                          PostgreSQL (in-cluster or external) ◀─ reads  │
-│                                         ▲                         │    │
-│                                         │                         │    │
-│                                    ros-ocp-api ───────────────────┘    │
-│                                         │                              │
-│                               Route + Auth (JWT / OAuth proxy)         │
-│                                         │                              │
-└─────────────────────────────────────────┼──────────────────────────────┘
-                                          │
-                                UI / CLI / Automation
+```mermaid
+flowchart TD
+    subgraph cluster["OpenShift Cluster"]
+        prom["Prometheus / Thanos"]
+        k8s["Kubernetes API"]
+        operator["koku-metrics-operator\n(local-recs mode)"]
+        api["ros-ocp-api\n(lightweight, read-only)"]
+        route["Route + Auth\n(JWT / OAuth proxy)"]
 
-         Push recommendations JSON ─────────────────────────────────────▶
-         (via existing tar.gz upload)
-                                                                         │
-                                                                         ▼
-                                                         Central Cost Management
-                                                   (fleet view + $ enrichment + cloud tags)
+        prom -- "PromQL" --> operator
+        k8s -- "labels" --> operator
+        operator -- "writes" --> pg
+        pg -- "reads" --> api
+        api --> route
+    end
+
+    pg[("PostgreSQL\n(in-cluster or external)")]
+    route --> ui["UI / CLI / Automation"]
+    operator -- "push JSON\n(tar.gz upload)" --> central["Central Cost Management\n(fleet view + $ enrichment + cloud tags)"]
 ```
 
 The operator computes recommendations and writes them to PostgreSQL (which

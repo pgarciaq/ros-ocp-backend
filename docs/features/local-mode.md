@@ -17,20 +17,15 @@ enrichment.
 
 ## Architecture
 
-```
-Prometheus/Thanos ──PromQL──▶ koku-metrics-operator (engine embedded)
-Kubernetes API ────labels──▶          │
-                                      ├──writes──▶ PostgreSQL (in-cluster or external)
-                                      │                   ▲
-                                      │                   │ reads
-                                      │            ros-ocp-api (lightweight, read-only)
-                                      │                   │
-                                      │            Route + Auth (JWT / OAuth proxy)
-                                      │                   │
-                                      │            UI / CLI / automation
-                                      │
-                                      └──push───▶ Central Cost Management
-                                                  (fleet view + $ enrichment + cloud tags)
+```mermaid
+flowchart TD
+    prom["Prometheus / Thanos"] -- "PromQL" --> operator["koku-metrics-operator\n(engine embedded)"]
+    k8s["Kubernetes API"] -- "labels" --> operator
+    operator -- "writes" --> pg[("PostgreSQL\n(in-cluster or external)")]
+    pg -- "reads" --> api["ros-ocp-api\n(lightweight, read-only)"]
+    api --> route["Route + Auth\n(JWT / OAuth proxy)"]
+    route --> ui["UI / CLI / automation"]
+    operator -- "push JSON" --> central["Central Cost Management\n(fleet view + $ enrichment + cloud tags)"]
 ```
 
 ## Key design decisions
@@ -55,15 +50,22 @@ into a single filterable namespace. Local Mode preserves full tag functionality.
 
 ### Data flow
 
-```
-On-cluster:  K8s API labels ──▶ pushed with recommendation JSON (ALL labels, unfiltered)
-                                          │
-Central enrichment step:                  ▼
-  1. Apply enabled/disabled policy (query-time, no data loss)
-  2. Resolve tag mappings (ocp:app → aws:Application aliasing)
-  3. Re-associate cloud tags via OCP-on-cloud correlation:
-     recommendation.node → cloud instance → cloud tags
-  4. Index merged tag set on recommendation_sets
+```mermaid
+flowchart LR
+    subgraph on_cluster["On-cluster"]
+        k8s["K8s API labels"]
+    end
+
+    subgraph central["Central enrichment"]
+        step1["1. Apply enabled/disabled policy\n(query-time, no data loss)"]
+        step2["2. Resolve tag mappings\n(ocp:app → aws:Application)"]
+        step3["3. Re-associate cloud tags\nnode → cloud instance → tags"]
+        step4["4. Index merged tag set\non recommendation_sets"]
+
+        step1 --> step2 --> step3 --> step4
+    end
+
+    k8s -- "ALL labels\n(unfiltered, in rec JSON)" --> step1
 ```
 
 ### Design decisions
