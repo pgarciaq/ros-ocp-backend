@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -995,6 +996,66 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 	assert.Equal(t, "450.000000", medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value)
 	require.NotNil(t, medium.RecommendationEngines.Performance.EstimatedMonthlySavings)
 	assert.Equal(t, "120.000000", medium.RecommendationEngines.Performance.EstimatedMonthlySavings.Value)
+	assert.GreaterOrEqual(t, medium.RecommendationEngines.Cost.NodeCountReduction, 0)
+	assert.Equal(t, 1, medium.RecommendationEngines.Cost.NodeCountReduction)
+}
+
+func TestGetNodeList_SortBySavings(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'savings-sort-cluster', 'src-ss', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+			estimated_monthly_savings_usd
+		) VALUES
+			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
+			($1, $2::uuid, 'zulu-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?order_by=estimated_monthly_savings&order_how=desc&limit=20", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.GreaterOrEqual(t, len(resp.Data), 2)
+
+	firstSavings := nodeUtilEngineSavingsValue(t, resp.Data[0])
+	secondSavings := nodeUtilEngineSavingsValue(t, resp.Data[1])
+	assert.GreaterOrEqual(t, firstSavings, secondSavings)
+	assert.Equal(t, "zulu-node", resp.Data[0].Node)
+	assert.Equal(t, "alpha-node", resp.Data[1].Node)
+}
+
+func nodeUtilEngineSavingsValue(t *testing.T, rec model.NodeUtilizationRec) float64 {
+	t.Helper()
+	medium, ok := rec.RecommendationTerms["medium_term"]
+	require.True(t, ok)
+	require.NotNil(t, medium.RecommendationEngines)
+	require.NotNil(t, medium.RecommendationEngines.Cost)
+	require.NotNil(t, medium.RecommendationEngines.Cost.EstimatedMonthlySavings)
+	v, err := strconv.ParseFloat(medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value, 64)
+	require.NoError(t, err)
+	return v
 }
 
 func TestGetNodeUtilization_FilterEngine(t *testing.T) {
