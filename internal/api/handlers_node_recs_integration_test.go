@@ -1641,3 +1641,128 @@ func TestGetNodeList_FilterTag(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "node-prod", resp.Data[0].Node)
 }
+
+func TestGetNodeList_FilterByNodeName(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'node-name-filter-cluster', 'src-nnf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'target-node-filter', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			($1, $2::uuid, 'other-node-filter', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter%5Bnode%5D=target-node-filter", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "target-node-filter", resp.Data[0].Node)
+}
+
+func TestGetNodeList_FilterTermShort(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'term-short-filter-cluster', 'src-tsf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'term-node', 'short', 'cost',
+			 0.55, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}'),
+			($1, $2::uuid, 'term-node', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter%5Bterm%5D=short", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "term-node", resp.Data[0].Node)
+	assert.False(t, resp.Data[0].Classification.IsUnderutilized)
+	require.NotNil(t, resp.Data[0].RecommendationTerms["short_term"])
+	require.NotNil(t, resp.Data[0].RecommendationTerms["short_term"].RecommendationEngines.Cost)
+	assert.NotContains(t, resp.Data[0].RecommendationTerms, "medium_term")
+}
+
+func TestGetNodeList_FilterTermLong(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'term-long-filter-cluster', 'src-tlf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'term-node-long', 'long', 'cost',
+			 0.45, 0.5, 0.4, 0.45, 1.2, false, true, 'active', NULL, 15, 0, '{}'),
+			($1, $2::uuid, 'term-node-long', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter%5Bterm%5D=long", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "term-node-long", resp.Data[0].Node)
+	assert.True(t, resp.Data[0].Classification.IsOvercommitted)
+	require.NotNil(t, resp.Data[0].RecommendationTerms["long_term"])
+	require.NotNil(t, resp.Data[0].RecommendationTerms["long_term"].RecommendationEngines.Cost)
+	assert.NotContains(t, resp.Data[0].RecommendationTerms, "medium_term")
+}

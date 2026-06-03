@@ -399,6 +399,17 @@ func TestPutNodeSettings(t *testing.T) {
 	engine.SetThresholdRecalcHookForTest(func(string, string) {})
 	defer engine.ClearThresholdRecalcHookForTest()
 
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/node", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+
+	var original map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &original))
+	origCostTarget, ok := original["cost_target_utilization"].(float64)
+	require.True(t, ok, "GET should return cost_target_utilization")
+	assert.Contains(t, original, "locked_fields")
+
 	putBody := bytes.NewReader([]byte(`{"underutil_threshold": 0.28}`))
 	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/node", putBody)
 	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -409,15 +420,18 @@ func TestPutNodeSettings(t *testing.T) {
 	var putResp map[string]interface{}
 	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &putResp))
 	assert.InDelta(t, 0.28, putResp["underutil_threshold"].(float64), 1e-9)
+	assert.InDelta(t, origCostTarget, putResp["cost_target_utilization"].(float64), 1e-9)
+	assert.Contains(t, putResp, "locked_fields")
+	assert.IsType(t, []interface{}{}, putResp["locked_fields"])
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/node", nil)
-	getRec := httptest.NewRecorder()
-	e.ServeHTTP(getRec, getReq)
-	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+	getRec2 := httptest.NewRecorder()
+	e.ServeHTTP(getRec2, getReq)
+	require.Equal(t, http.StatusOK, getRec2.Code, getRec2.Body.String())
 
 	var getResp map[string]interface{}
-	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getResp))
+	require.NoError(t, json.Unmarshal(getRec2.Body.Bytes(), &getResp))
 	assert.InDelta(t, 0.28, getResp["underutil_threshold"].(float64), 1e-9)
+	assert.InDelta(t, origCostTarget, getResp["cost_target_utilization"].(float64), 1e-9)
 }
 
 func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
