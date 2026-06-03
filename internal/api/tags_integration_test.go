@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -76,6 +77,7 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
 	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
+	v1.GET("/recommendations/openshift/namespaces", api.GetNamespaceRecommendationSetListWithFallback)
 	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
 
 	return app, makeIdentityHeader(testutil.TestOrgID), ctx, cleanup
@@ -213,4 +215,47 @@ func TestTagFilters_NodeUtilizationList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	data, _ := body["data"].([]interface{})
 	require.NotEmpty(t, data)
+}
+
+func TestTagFilters_NamespaceList(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+
+	monEnd := time.Now().UTC().Add(-24 * time.Hour)
+	monStart := monEnd.Add(-7 * 24 * time.Hour)
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO namespace_recommendation_sets (
+			org_id, cluster_uuid, namespace_name, term, engine, schedule_type, stale,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib,
+			current_cpu_request_millicores, current_cpu_limit_millicores,
+			current_memory_request_kib, current_memory_limit_kib,
+			variation_cpu_request_pct, variation_cpu_limit_pct,
+			variation_memory_request_pct, variation_memory_limit_pct,
+			confidence_level, notification_codes, monitoring_start_time, monitoring_end_time, updated_at
+		) VALUES
+			($1, $2, $3, 'medium', 'cost', 'all_hours', false,
+			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
+			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW()),
+			($1, $2, 'other-ns', 'medium', 'cost', 'all_hours', false,
+			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
+			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW())
+		ON CONFLICT DO NOTHING`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, monEnd, monStart)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/namespaces?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestNamespace, item["project"])
 }

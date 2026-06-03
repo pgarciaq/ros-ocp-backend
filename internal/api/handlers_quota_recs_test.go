@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -164,6 +164,49 @@ func TestGetQuotaRecommendations_FilterByCluster(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, 1, resp.Meta.Count)
 	assert.Equal(t, clusterA, resp.Data[0].ClusterUUID)
+}
+
+func TestGetQuotaList_FilterTag(t *testing.T) {
+	orgID := "org-quota-tag-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupQuotaRecommendationsHandler(t, orgID)
+	config.ResetTagsForTest()
+	config.ResetTagsRuntimeForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
+	require.True(t, config.TagsFeatureEnabled())
+
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	insertQuotaRecommendation(t, orgID, clusterUUID, testutil.TestNamespace)
+	insertQuotaRecommendation(t, orgID, clusterUUID, "other-ns")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/quota?tag=environment:production", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp QuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, testutil.TestNamespace, resp.Data[0].Namespace)
 }
 
 func TestGetQuotaRecommendations_FilterByProject(t *testing.T) {

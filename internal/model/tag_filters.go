@@ -324,3 +324,124 @@ func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters [
 	inner += ")))"
 	return inner, args, idx
 }
+
+// TagFilterExistsClauseForCommaSeparatedNamespaces matches rows when any namespace listed in a
+// comma-separated namespaces column matches the tag predicates (cluster-quota recommendations).
+func TagFilterExistsClauseForCommaSeparatedNamespaces(
+	orgID, clusterExpr, namespacesExpr string,
+	filters []TagFilter,
+	nextArg int,
+) (clause string, args []interface{}, next int) {
+	if len(filters) == 0 || !config.TagsFeatureEnabled() {
+		return "", nil, nextArg
+	}
+	if config.TagsSource() == "api" {
+		return tagFilterAPIExistsClauseCommaNamespaces(orgID, clusterExpr, namespacesExpr, filters, nextArg)
+	}
+	return tagFilterDBExistsClauseCommaNamespaces(orgID, clusterExpr, namespacesExpr, filters, nextArg)
+}
+
+func tagFilterAPIExistsClauseCommaNamespaces(
+	orgID, clusterExpr, namespacesExpr string,
+	filters []TagFilter,
+	nextArg int,
+) (string, []interface{}, int) {
+	args := []interface{}{orgID}
+	idx := nextArg + 1
+	inner := fmt.Sprintf(`EXISTS (
+		SELECT 1
+		FROM unnest(string_to_array(COALESCE(%s, ''), ',')) AS member(ns),
+		     org_container_keys ock
+		WHERE ock.org_id = $%d
+		  AND %s = ock.cluster_uuid
+		  AND trim(both ' ' from member.ns) = ock.namespace`, namespacesExpr, nextArg, clusterExpr)
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			inner += fmt.Sprintf(" AND ock.resolved_tags ? $%d", idx)
+			args = append(args, f.Key)
+			idx++
+			continue
+		}
+		if len(f.Values) == 1 {
+			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
+			if err != nil {
+				continue
+			}
+			inner += fmt.Sprintf(" AND ock.resolved_tags @> $%d::jsonb", idx)
+			args = append(args, string(payload))
+			idx++
+			continue
+		}
+		inner += fmt.Sprintf(" AND ock.resolved_tags->>$%d IN (", idx)
+		args = append(args, f.Key)
+		idx++
+		placeholders := make([]string, len(f.Values))
+		for i := range f.Values {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, f.Values[i])
+			idx++
+		}
+		inner += strings.Join(placeholders, ", ") + ")"
+	}
+	inner += ")"
+	return inner, args, idx
+}
+
+func tagFilterDBExistsClauseCommaNamespaces(
+	orgID, clusterExpr, namespacesExpr string,
+	filters []TagFilter,
+	nextArg int,
+) (string, []interface{}, int) {
+	schema, err := tags.TenantSchema(orgID)
+	if err != nil {
+		log.Warnf("TagFilterExistsClauseForCommaSeparatedNamespaces: invalid org_id %q: %v", orgID, err)
+		return "", nil, nextArg
+	}
+	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
+	args := []interface{}{orgID}
+	idx := nextArg + 1
+	inner := fmt.Sprintf(`EXISTS (
+		SELECT 1
+		FROM unnest(string_to_array(COALESCE(%s, ''), ',')) AS member(ns),
+		     org_container_keys ock
+		WHERE ock.org_id = $%d
+		  AND %s = ock.cluster_uuid
+		  AND trim(both ' ' from member.ns) = ock.namespace
+		  AND EXISTS (
+			SELECT 1 FROM %s tv,
+			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
+			WHERE t.cluster_id = ock.cluster_uuid::text
+			  AND t.namespace = ock.namespace`, namespacesExpr, nextArg, clusterExpr, tagValuesTable)
+
+	tagPredicates := make([]string, 0, len(filters))
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d", idx))
+			args = append(args, f.Key)
+			idx++
+			continue
+		}
+		tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d AND tv.value IN (", idx))
+		args = append(args, f.Key)
+		idx++
+		placeholders := make([]string, len(f.Values))
+		for i := range f.Values {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, f.Values[i])
+			idx++
+		}
+		tagPredicates[len(tagPredicates)-1] += strings.Join(placeholders, ", ") + ")"
+	}
+	if len(tagPredicates) == 0 {
+		return "", nil, nextArg
+	}
+	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
+	inner += ")))"
+	return inner, args, idx
+}

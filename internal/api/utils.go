@@ -503,6 +503,9 @@ func MapNamespaceQueryParameters(c echo.Context) (map[string]any, error) {
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}
+	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {
+		return queryParams, err
+	}
 
 	return queryParams, nil
 }

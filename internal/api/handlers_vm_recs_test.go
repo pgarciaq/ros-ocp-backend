@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -61,6 +64,78 @@ func TestVMRecommendations_ListEmpty(t *testing.T) {
 	assert.Equal(t, 0, resp.Meta.Count)
 	assert.NotNil(t, resp.Data)
 	assert.Empty(t, resp.Data)
+}
+
+func TestGetVMList_FilterTag(t *testing.T) {
+	orgID := "org-vm-tag-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupVMRecommendationsHandler(t, orgID)
+	config.ResetTagsForTest()
+	config.ResetTagsRuntimeForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
+	require.True(t, config.TagsFeatureEnabled())
+
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1::uuid, 'vm-tag-test', 1, NOW()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO vm_recommendations (
+			org_id, cluster_uuid, vm_name, namespace, guest_os,
+			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
+			guest_agent_detected, confidence, term, engine,
+			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+		) VALUES (
+			$1, $2, 'vm-prod', $3, 'linux',
+			4, 16, 2, 8,
+			true, 'high', 'medium_term', 'cost',
+			false, false, false, 10.00, 'USD', now()),
+			($1, $2, 'vm-stg', 'other-ns', 'linux',
+			4, 16, 2, 8,
+			true, 'high', 'medium_term', 'cost',
+			false, false, false, 20.00, 'USD', now())`,
+		orgID, clusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	_, total, listErr := engine.ListVMRecommendations(ctx, database.Pool, orgID, engine.VMRecommendationFilters{
+		ClusterUUIDs: []string{clusterUUID},
+		TagFilters:   []model.TagFilter{{Key: "environment", Values: []string{"production"}}},
+	})
+	require.NoError(t, listErr)
+	require.Equal(t, int64(1), total, "engine tag filter should return one VM")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/vm?tag=environment:production", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp VMRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, testutil.TestNamespace, resp.Data[0].Namespace)
 }
 
 func TestVMRecommendations_ListAcceptsFilters(t *testing.T) {

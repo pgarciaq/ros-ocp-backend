@@ -59,6 +59,7 @@ docs-site/features/
 !docs-site/features/container-recommendations.md
 !docs-site/features/dual-engine.md
 !docs-site/features/savings-estimations.md
+!docs-site/features/tag-filtering.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output

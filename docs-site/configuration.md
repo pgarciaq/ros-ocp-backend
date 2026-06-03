@@ -385,7 +385,8 @@ notification code **74** fires when headroom &lt; `pod_headroom_notification_thr
 
 ## Tag Sync
 
-Tag filtering requires `ROS_TAGS_ENABLED=true` on ROS. **How tags reach list queries**
+Tag filtering requires **`ROS_TAGS_ENABLED=true`** on ROS. The default is **`false`**;
+you must enable it explicitly in Helm values or deployment env. **How tags reach list queries**
 is controlled by `ROS_TAGS_SOURCE`:
 
 | Value | Deployment | Mechanism |
@@ -393,8 +394,10 @@ is controlled by `ROS_TAGS_SOURCE`:
 | `db` (default) | On-prem — shared PostgreSQL | ROS SQL-joins Koku tenant tag tables at query time |
 | `api` | SaaS — separate databases | Koku Celery pushes tags to ROS internal HTTP API |
 
-Use **`db`** when Koku and ROS share one PostgreSQL instance (cost-onprem chart). No
-Koku-side tag sync configuration is required — enable tags in Settings and set ROS env vars.
+Use **`db`** when Koku and ROS share one PostgreSQL instance (cost-onprem chart). ROS must
+use the chart's shared database connection to Koku tenant schemas (`reporting_enabledtagkeys`,
+`reporting_ocptags_values`). No Koku-side tag sync configuration is required — enable tags
+in Settings and set `ROS_TAGS_ENABLED=true` on ROS.
 
 Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery tasks,
 `ROS_OCP_BACKEND_URL`, and ServiceAccount (or dev token) authentication.

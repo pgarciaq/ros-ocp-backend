@@ -17,9 +17,28 @@ GET /api/cost-management/v1/recommendations/openshift?filter[tag:environment]=pr
 GET /api/cost-management/v1/recommendations/openshift/nodes?filter[tag:environment]=production
 ```
 
-The feature is gated by `ROS_TAGS_ENABLED` on ROS. Tag filters apply to **container** and
-**node** list endpoints (nodes match when at least one workload on the node has a namespace
-with the tag). Namespace, PVC, and other list APIs do not support tag filters in v1. **How tags reach ROS list queries**
+The feature is gated by `ROS_TAGS_ENABLED` on ROS (default **`false`** — must be set
+explicitly on the ROS deployment). On-prem with `ROS_TAGS_SOURCE=db` requires ROS to use
+the same PostgreSQL instance as Koku so tenant tag tables can be joined at query time.
+
+Tag filters apply to these list endpoints (and container **history**):
+
+| Endpoint | Path | Notes |
+|----------|------|-------|
+| Container | `GET .../recommendations/openshift` | Two-step query via `org_container_keys` |
+| Container history | `GET .../recommendations/openshift/history` | Same tag resolution as container list |
+| Namespace | `GET .../recommendations/openshift/namespaces` | Native engine; namespace-scoped tags |
+| Node utilization | `GET .../recommendations/openshift/nodes` | Node included when any namespace on the node matches |
+| PVC | `GET .../recommendations/openshift/pvcs` | Namespace-scoped |
+| GPU (MIG / time-slicing lists) | `GET .../recommendations/openshift/gpu/mig`, `.../gpu/timeslicing` | Container-level workloads |
+| VM | `GET .../recommendations/openshift/vm` | Namespace-scoped |
+| Resource quota | `GET .../recommendations/openshift/quota` | Per-namespace quota rows |
+| Cluster resource quota | `GET .../recommendations/openshift/cluster-quota` | Match when any namespace in the CRQ scope matches |
+
+Fleet savings summary supports **`group_by[tag:key]`** (container savings only):
+`GET .../recommendations/openshift/savings-summary`.
+
+**How tags reach ROS list queries**
 depends on deployment topology, controlled by `ROS_TAGS_SOURCE`:
 
 | Mode | `ROS_TAGS_SOURCE` | Typical deployment |
@@ -29,6 +48,29 @@ depends on deployment topology, controlled by `ROS_TAGS_SOURCE`:
 
 Both modes expose the **same public filter syntax** to clients. Only the internal
 data path, configuration, freshness guarantees, and failure modes differ.
+
+---
+
+## Architecture: Label Pipeline
+
+Labels flow through the ecosystem as:
+
+1. **koku-metrics-operator** collects pod, namespace, node, and PV labels from Prometheus
+2. **Koku** ingests labels from CSVs, resolves them, and manages enabled/disabled keys via Settings
+3. **ros-ocp-backend** reads resolved tags from Koku (via shared PostgreSQL in on-prem mode, or push sync in SaaS mode)
+
+There is no direct operator → ROS tag path. This is by design: Koku is the authority on which tag keys are enabled for filtering.
+
+---
+
+## Tag discovery (by design)
+
+| Audience | API | Purpose |
+|----------|-----|---------|
+| Operators / sync monitoring | `GET /api/cost-management/v1/internal/tags/status?org_id=` | Freshness (`synced_at`), enabled-key catalog (internal/admin) |
+| End users / UI typeahead | `GET /api/cost-management/v1/tags/openshift/` (Koku) | Tag keys and values for filters and cost reports |
+
+ROS does **not** expose a public `/tags` endpoint. End-user tag discovery uses Koku's Tags API to avoid duplicating tag catalogs.
 
 ---
 
@@ -501,9 +543,8 @@ GET .../savings-summary?group_by=tag:environment
 Response shape: `{ "meta": { "count": N }, "data": [ { "tag_value": "production", "estimated_monthly_savings": { "value": "...", "units": "USD" } }, ... ] }`.
 Only **container** savings are grouped; node/PVC/snapshot totals are not split per tag value.
 
-List endpoints that support tag **filters** (not `group_by[tag:key]`): container
-(`GET .../recommendations/openshift`), node (`GET .../nodes`). Other plugins use filters
-without tag keys.
+See the endpoint table in [Overview](#overview) for the full list of tag-filter-capable APIs.
+`group_by[tag:key]` is supported on **savings-summary only**, not on list or history responses.
 
 ### Empty results (`meta.warnings`)
 
@@ -612,17 +653,23 @@ Monitor SaaS sync duration and Koku `ROS tag sync failed` logs. Alert on stale
 
 ---
 
-## Future Enhancements
+## Known limitations
 
-| Enhancement | Description |
-|-------------|-------------|
-| mTLS authentication | Transport-layer mutual auth for SaaS push; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
-| `group_by[tag:key]` on list endpoints | Savings summary supports tag grouping today; list/history group-by remains future work |
-| Tag value autocomplete API | UI typeahead from tag catalog (db: live query; api: `org_tag_sync_metadata`) |
-| Tag-based cost allocation | Correlate ROS savings with Koku tag breakdown reports |
-| Webhook instant sync | Reduce reliance on 6-hour safety-net |
-| Pod-level tag overrides | Support pod labels distinct from namespace defaults (v1 uses namespace-level only) |
-| Cross-provider tag unification | Align AWS/Azure/GCP tag keys with OCP for hybrid dashboards |
+- **Namespace-scoped resolution:** All containers in a namespace share the same resolved tags for filtering. Pod-level labels are not individually resolvable (Koku summarizes at namespace level).
+- **Workaround:** Use namespace-level labels consistently; control granularity via Koku Settings → enabled tags.
+- **Future:** Per-pod label storage would be required for pod-level tag resolution in ROS.
+
+## Future work
+
+| Item | Description |
+|------|-------------|
+| **Tag display in responses** | Tags are filter-only today; list/detail JSON does not include a `labels` or `tags` field. Workaround: Koku Tags API or OpenShift console. |
+| **`group_by[tag:key]` on list/history** | Supported on savings-summary only; list/history grouping would need response restructuring. |
+| **mTLS authentication** | Transport-layer mutual auth for SaaS push; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
+| **Tag-based cost allocation** | Correlate ROS savings with Koku tag breakdown reports |
+| **Webhook instant sync** | Reduce reliance on 6-hour safety-net |
+| **Pod-level tag overrides** | Per-pod label resolution (see [Known limitations](#known-limitations)) |
+| **Cross-provider tag unification** | Align AWS/Azure/GCP tag keys with OCP for hybrid dashboards |
 
 ---
 

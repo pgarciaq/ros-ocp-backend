@@ -16,6 +16,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -295,6 +296,13 @@ func GetVMRecommendations(c echo.Context) error {
 		OrderDesc:          orderHow == listoptions.OrderDesc,
 		Limit:              limit,
 		Offset:             offset,
+	}
+	if config.TagsFeatureEnabled() {
+		tagFilters, tagErr := parseTagFiltersFromRequest(c)
+		if tagErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+		}
+		filters.TagFilters = tagFilters
 	}
 
 	recs, total, err := engine.ListVMRecommendations(ctx, pool, orgID, filters)

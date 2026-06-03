@@ -349,6 +349,48 @@ func TestGetClusterQuotaRecommendations_FilterByCluster(t *testing.T) {
 	assert.Equal(t, clusterA, resp.Data[0].ClusterUUID)
 }
 
+func TestGetClusterQuotaList_FilterTag(t *testing.T) {
+	orgID := "org-crq-tag-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
+	require.True(t, config.TagsFeatureEnabled())
+
+	ctx := context.Background()
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "crq-prod", clusterQuotaRecOpts{namespaces: testutil.TestNamespace})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterUUID, "crq-other", clusterQuotaRecOpts{namespaces: "other-ns"})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter%5Btag%3Aenvironment%5D=production", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "crq-prod", resp.Data[0].ClusterQuotaName)
+}
+
 func TestGetClusterQuotaRecommendations_FilterByNamespace(t *testing.T) {
 	orgID := "org-crq-filter-ns-" + uuid.New().String()[:8]
 	clusterUUID := "550e8400-e29b-41d4-a716-446655440040"

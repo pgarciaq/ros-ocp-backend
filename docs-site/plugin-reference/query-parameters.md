@@ -102,8 +102,8 @@ See [node plugin reference](node.md) and [UI integration â€” node recommendation
 
 ## Tag filtering
 
-Tag filters narrow container recommendation lists by OpenShift labels tracked in Cost
-Management. The feature requires **`ROS_TAGS_ENABLED=true`** on the ROS API deployment.
+Tag filters narrow recommendation lists by OpenShift labels tracked in Cost Management.
+The feature requires **`ROS_TAGS_ENABLED=true`** on the ROS API (default **`false`**).
 When disabled, tag parameters are ignored.
 
 ### Syntax
@@ -150,9 +150,9 @@ Which tags are available depends on **`ROS_TAGS_SOURCE`** (see [Configuration â†
 filters match push-synced data. Check
 `GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
 
-Tag filters apply to **container list** endpoints (workloads/containers/GPU lists that
-resolve through `org_container_keys`). See [Tag Filtering](../features/tag-filtering.md)
-for operator configuration, troubleshooting, and lifecycle scenarios.
+Tag filters apply to container, namespace, node, PVC, GPU (MIG/time-slicing), VM, quota,
+and cluster-quota list endpoints, plus container history. See [Tag Filtering](../features/tag-filtering.md)
+for the full endpoint table, tag discovery (Koku Tags API), and operator configuration.
 
 ### Group by tag (savings summary)
 

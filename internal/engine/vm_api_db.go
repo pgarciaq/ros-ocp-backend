@@ -34,6 +34,7 @@ type VMRecommendationFilters struct {
 	OrderDesc          bool
 	Limit              int
 	Offset             int
+	TagFilters         []model.TagFilter
 }
 
 var vmRecOrderColumns = map[string]string{
@@ -362,7 +363,14 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 			clauses = append(clauses, "AND ("+strings.Join(guestClauses, " OR ")+")")
 		}
 	}
-	_ = argIdx
+	if len(filters.TagFilters) > 0 {
+		tagClause, tagArgs, _ := model.TagFilterExistsClause(
+			orgID, "vm_recommendations.cluster_uuid", "vm_recommendations.namespace", filters.TagFilters, argIdx)
+		if tagClause != "" {
+			clauses = append(clauses, "AND "+tagClause)
+			args = append(args, tagArgs...)
+		}
+	}
 	return " " + strings.Join(clauses, " "), args
 }
 

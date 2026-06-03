@@ -3,6 +3,8 @@ package engine
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,4 +25,17 @@ func TestBuildVMRecWhere_GuestOS(t *testing.T) {
 	require.Len(t, args, 3)
 	assert.Equal(t, "%linux%", args[1])
 	assert.Equal(t, "%windows%", args[2])
+}
+
+func TestBuildVMRecWhere_TagFilter(t *testing.T) {
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
+
+	where, args := buildVMRecWhere("org-1", VMRecommendationFilters{
+		TagFilters: []model.TagFilter{{Key: "environment", Values: []string{"production"}}},
+	})
+	assert.Contains(t, where, "EXISTS")
+	assert.Contains(t, where, "org_container_keys")
+	require.GreaterOrEqual(t, len(args), 2)
 }

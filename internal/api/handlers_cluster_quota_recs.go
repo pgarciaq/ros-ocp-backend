@@ -11,7 +11,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
@@ -152,6 +154,22 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		)`
 		args = append(args, namespaceFilter)
 		argIdx++
+	}
+
+	if config.TagsFeatureEnabled() {
+		tagFilters, tagErr := parseTagFiltersFromRequest(c)
+		if tagErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+		}
+		if len(tagFilters) > 0 {
+			tagClause, tagArgs, nextIdx := model.TagFilterExistsClauseForCommaSeparatedNamespaces(
+				orgID, "cluster_uuid", "namespaces", tagFilters, argIdx)
+			if tagClause != "" {
+				filterSQL += " AND " + tagClause
+				args = append(args, tagArgs...)
+				argIdx = nextIdx
+			}
+		}
 	}
 
 	groupByCluster := queryparams.GroupByField(c, "cluster")
