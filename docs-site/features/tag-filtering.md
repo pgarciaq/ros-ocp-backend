@@ -80,6 +80,12 @@ ROS does not expose a public `/tags` endpoint; use Koku for tag key/value discov
 
 - Tags are **filter-only** — recommendation responses do not include a `labels` field today.
 - Resolution is **namespace-scoped** (all containers in a namespace share the same tags).
-- `group_by[tag:key]` on list/history is **not** supported (savings-summary only).
+- **`group_by[tag:key]`** works only on `GET .../recommendations/openshift/savings-summary`
+  (fleet container savings per tag value). List endpoints (`/containers`, `/namespaces`,
+  `/nodes`, etc.) and history (`/history`) do **not** support `group_by[tag:key]`. List APIs
+  return one recommendation per workload; tag grouping would require a nested bucket response
+  instead of a flat list — a larger API change. Use `filter[tag:key]` on lists, or
+  `savings-summary` for tag-level aggregation; UIs can also aggregate filtered list results
+  client-side.
 
 Internal reference: [`docs/features/tag-filtering.md`](../../docs/features/tag-filtering.md).

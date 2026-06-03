@@ -664,12 +664,35 @@ Monitor SaaS sync duration and Koku `ROS tag sync failed` logs. Alert on stale
 | Item | Description |
 |------|-------------|
 | **Tag display in responses** | Tags are filter-only today; list/detail JSON does not include a `labels` or `tags` field. Workaround: Koku Tags API or OpenShift console. |
-| **`group_by[tag:key]` on list/history** | Supported on savings-summary only; list/history grouping would need response restructuring. |
+| **`group_by[tag:key]` on list/history** | See [Group by tag on list and history](#group-by-tag-on-list-and-history) below. |
 | **mTLS authentication** | Transport-layer mutual auth for SaaS push; see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
 | **Tag-based cost allocation** | Correlate ROS savings with Koku tag breakdown reports |
 | **Webhook instant sync** | Reduce reliance on 6-hour safety-net |
 | **Pod-level tag overrides** | Per-pod label resolution (see [Known limitations](#known-limitations)) |
 | **Cross-provider tag unification** | Align AWS/Azure/GCP tag keys with OCP for hybrid dashboards |
+
+### Group by tag on list and history
+
+`group_by[tag:key]=*` is supported **only** on the fleet savings summary endpoint:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary?group_by[tag:environment]=*
+```
+
+It is **not** supported on list endpoints (`/containers`, `/namespaces`, `/nodes`, `/pvcs`,
+`/vm`, GPU lists, quota lists, etc.) or on history endpoints (`/history`).
+
+**Rationale:** List and history APIs return individual recommendations (one row per workload).
+Grouping by tag would require restructuring the response from a flat list into nested buckets
+per tag value — a significant API contract change (pagination, sorting, RBAC scoping, and
+OpenAPI shapes would all need redesign).
+
+**Estimated effort:** Medium (3–5 days) per resource family if pursued.
+
+**Current pattern:** Filter by tag (`filter[tag:key]=value`), then inspect individual
+recommendations. That covers the primary operator workflow. Tag grouping on list is mainly a
+dashboard aggregation; the UI can build that client-side from filtered list results or use
+`savings-summary` for fleet-level tag breakdowns.
 
 ---
 
