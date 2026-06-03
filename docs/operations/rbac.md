@@ -79,6 +79,13 @@ Each handler applies RBAC filtering via helper functions:
 | `GET .../namespace/recommendations` | cluster |
 | `GET .../pvcs` | cluster |
 | `GET .../snapshots` | cluster |
+| `GET .../vm` | cluster |
+| `GET .../vm/detail` | cluster |
+| `GET .../vms/{vm_name}/history` | cluster |
+
+### Virtual machines
+
+VM list, detail, and history use **`openshift.cluster`** for RBAC filtering (same as PVC and quota list endpoints). There is no `openshift.vm` resource type yet; dedicated VM scope is tracked in **COST-7240**.
 
 ## Configuration
 

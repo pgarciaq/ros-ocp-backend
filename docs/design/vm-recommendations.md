@@ -538,10 +538,11 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 |-----------|-------------|
 | `limit` | 1–100 (default 10) |
 | `offset` | Pagination offset |
-| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at` |
+| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `savings` / `savings_amount` |
 | `order_how` | `asc` or `desc` |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
-| `filter[namespace]` | Namespace |
+| `filter[namespace]` / `filter[project]` | Namespace (project alias; same as container list APIs) |
+| `format` | `csv` or `Accept: text/csv` for CSV export |
 | `filter[vm_name]` | VM name |
 | `filter[term]` | `short_term`, `medium_term`, `long_term` |
 | `filter[engine]` | `cost` or `performance` |
@@ -612,6 +613,27 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 Adds `daily_digests[]` with per-day percentile fields for charts.
 
+### Recommendation history
+
+`GET /recommendations/openshift/vms/{vm_name}/history`
+
+**Required:** `cluster_uuid`, `vm_name`, `namespace` (or `filter[project]` alias)  
+**Optional:** `term`, `engine`, `limit`, `offset`, `format=csv`
+
+History is **RBAC-scoped** the same way as the VM list: callers without `openshift.cluster` access to the requested cluster receive an empty result set.
+
+### RBAC
+
+VM list, detail, and history enforce `filterClustersByRBAC` using `openshift.cluster` permissions (same convention as containers and nodes). VMs do not have a dedicated `openshift.vm` resource type today; a separate permission is tracked in **COST-7240**.
+
+### Tag filtering
+
+`filter[tag:<key>]=value` is supported on the VM list when `ROS_TAGS_ENABLED=true` (default). Tag keys must be enabled in Cost Management Settings → Tags; resolved tags are populated automatically during ingestion. This is **production-ready**, not behind a feature flag.
+
+### Cost model application (intentional design)
+
+VM line items in Koku use **direct** cost model rates (`vm_cost_per_month`, `vm_core_cost_per_hour`, CPU/memory usage rates, GPU monthly rates) rather than participating in **platform** or **worker** overhead distribution. Rationale: VMs typically consume dedicated node resources; applying shared cluster overhead distribution would double-count infrastructure already attributed at the node level. This is by design, not a product gap.
+
 ---
 
 ## Placement, correlated workloads, and NUMA (codes 60–63)
@@ -664,7 +686,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Power-off scheduling (simplified)** | **Implemented** — notification **64**, `is_power_off_candidate`, `power_off_idle_pct`; daily digest idle-day ratio (not per-hour). See [Power-off scheduling](#power-off-scheduling-simplified) |
 | **Node consolidation** | Detect low-utilization nodes and bin-pack VMs to free nodes — see [Node consolidation](#node-consolidation-future) |
 | **Full power-off scheduling** | Per-hour idle tracking, cron expressions, business hours — see [Full power-off scheduling](#full-power-off-scheduling-future) |
-| **Live migration recommendations** | No awareness of migration in progress |
+| **Live migration recommendations** | See [Live migration (future)](#live-migration-future) below |
 | **Savings in fleet summary** | VM savings persist on `vm_recommendations` but are not rolled into `GET .../savings-summary` yet |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 | **koku-ui** | No dedicated VM optimizations view |
@@ -821,6 +843,18 @@ Planned approach (not implemented):
    - Tenant preference via Settings API (`/settings/vm` → `gpu` block)
 
 Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, tensor, DRAM) — correct for most OpenShift AI and batch GPU VMs, not for pure graphics guests.
+
+### Live migration (future) {#live-migration-future}
+
+**Today:** Placement and redundancy detection (notifications **60**–**63**, `is_redundant_placement`, correlated workload groups) identify VMs that share a node or profile without recommending a destination.
+
+**Future work:** Recommend **target nodes** for live migration when:
+
+- A VM is oversized or idle on a hot node and a cooler node has capacity
+- Redundant placement or consolidation opportunities require moving guests
+- Migration is feasible (shared storage, no blocking GPU passthrough constraints)
+
+**Prerequisites:** Operator or API signals for migration-in-progress, node capacity headroom, storage class mobility, and optional KubeVirt migration object status. ROS will not suggest migration targets until those signals exist.
 
 ### Full storage tiering (future) {#full-storage-tiering-future}
 

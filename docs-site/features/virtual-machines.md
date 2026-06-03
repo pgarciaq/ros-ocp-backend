@@ -443,9 +443,11 @@ GET /api/cost-management/v1/recommendations/openshift/vm
 | Parameter | Description |
 |-----------|-------------|
 | `limit` / `offset` | Pagination (limit 1–100, default 10) |
-| `order_by` / `order_how` | Sort by `vm_name`, `namespace`, `confidence`, `is_idle`, `is_abandoned`, sizing fields, etc. |
+| `order_by` / `order_how` | Sort by `vm_name`, `namespace`, `confidence`, `is_idle`, `is_abandoned`, sizing fields, `savings` (maps to `savings_amount`), etc. |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
-| `filter[namespace]` / `filter[vm_name]` | Scope |
+| `filter[namespace]` / `filter[project]` | Namespace (project is a Koku-aligned alias) |
+| `filter[vm_name]` | VM name |
+| `format` | `csv` or `Accept: text/csv` for bulk export |
 | `filter[term]` | `short_term`, `medium_term`, `long_term` |
 | `filter[engine]` | `cost` or `performance` |
 | `filter[confidence]` | `high`, `moderate`, `low` |
@@ -501,6 +503,31 @@ GET /api/cost-management/v1/recommendations/openshift/vm/detail
 **Optional:** `term` (default `medium_term`), `engine` (default `cost`)
 
 Adds `daily_digests[]` with per-day percentile fields for charts.
+
+### Recommendation history
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/vms/{vm_name}/history
+```
+
+**Required:** `cluster_uuid`, `vm_name`, `namespace` (or `filter[project]`)  
+**Optional:** `term`, `engine`, `limit`, `offset`, `format=csv`
+
+History results respect the same **cluster RBAC** filtering as the VM list.
+
+### Tag filtering
+
+VM list supports `filter[tag:<key>]=value` when tags are enabled in Cost Management (default: `ROS_TAGS_ENABLED=true`). Keys must be enabled under Settings → Tags; tag values are resolved automatically during ingestion. See [Tag filtering](tag-filtering.md) — this is **production-ready**, not an MVP-only feature flag.
+
+### Access control (RBAC)
+
+List, detail, and history filter clusters using `openshift.cluster` permissions (same as other ROS OpenShift endpoints). A dedicated `openshift.vm` permission is planned; tracked as **COST-7240**. Until then, cluster-scoped roles are sufficient for VM recommendations.
+
+### Cost in Koku vs ROS savings
+
+**Koku cost reporting** for VMs uses direct cost model rates (`vm_cost_per_month`, `vm_core_cost_per_hour`, and usage-based CPU/memory/GPU rates). VMs do **not** receive platform or worker **overhead distribution** applied to container projects — that is intentional: VMs usually map to dedicated node capacity, and distributing shared overhead again would double-count node-level costs.
+
+**ROS `savings`** on list/detail estimates monthly savings from those same direct rates when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
 
 ### Placement and NUMA
 
@@ -564,7 +591,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **Network metrics dependency** | **n1** active recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv`; without them, `is_network_bound` stays false |
 | **Placement / NUMA (60–63)** | Implemented; see [Placement and NUMA](#placement-and-numa) below. App labels and per-VM PVC names on ROS CSV are future operator enhancements |
-| **No live migration awareness** | Recommendations do not account for migration in progress |
+| **Live migration targets** | Placement/redundancy detection exists today; recommending destination nodes for live migration is [future work](#live-migration-future) |
 | **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
 | **Recommendation history** | `GET /recommendations/openshift/vms/{vm_name}/history`; retention days read-only on `GET .../settings/vm` as `history_retention_days` (env `ROS_VM_REC_HISTORY_RETENTION_DAYS`, default 90) |
@@ -585,7 +612,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Node consolidation** | Bin-pack VMs onto fewer nodes to free hosts — see design doc |
 | **Full power-off scheduling** | Per-hour idle, cron stop/start, business hours — future |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes when node utilization is low — **effort:** high (3–4 weeks); **value:** high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku `node_cost_per_month`, live-migration feasibility, autoscaler awareness. See [design doc](../../docs/design/vm-recommendations.md#node-consolidation-future) |
-| **Live migration recommendations** | Migration-in-progress awareness |
+| **Live migration recommendations** | Target-node recommendations for live migration — see [Live migration (future)](#live-migration-future) |
 | **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](../../docs/design/vm-recommendations.md#full-network-qos-future) |
 
 ### Network QoS hints (65–66)
@@ -612,6 +639,14 @@ When enough daily digests exist in the term window, ROS classifies each day’s 
 These hints do not name a StorageClass or compute dollar savings; full tiering is [future work](../../docs/design/vm-recommendations.md#full-storage-tiering-future).
 
 Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STORAGE_TIERING_*` (see [configuration](../configuration.md)).
+
+### Live migration (future) {#live-migration-future}
+
+**Today:** ROS detects redundant or uneven VM placement (notifications **60**–**63**) and surfaces metadata such as `is_redundant_placement` and `has_shared_storage`.
+
+**Planned:** Recommend **which node** to migrate a VM to for consolidation, HA spread, or hot-spot relief — including feasibility checks (shared storage, GPU passthrough, migration already running).
+
+This is separate from sizing recommendations: migration guidance will appear when the operator and API expose enough node capacity and migration state.
 
 ### Smart co-location (future) {#smart-co-location-future}
 
