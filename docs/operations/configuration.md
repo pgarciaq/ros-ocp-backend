@@ -235,7 +235,7 @@ exposed for list filtering when tag sync is enabled.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch for tag list filters (and push API when source=api). |
+| `ROS_TAGS_ENABLED` | `true` | Master switch for tag list filters (and push API when source=api); cost-onprem chart default. |
 | `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |

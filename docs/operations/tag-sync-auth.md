@@ -85,7 +85,7 @@ Set the **same** token on Koku (`ROS_TAGS_DEV_TOKEN`) and ROS.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch for tag sync API and list filters |
+| `ROS_TAGS_ENABLED` | `true` | Master switch for tag sync API and list filters (cost-onprem chart default) |
 | `ROS_TAGS_SOURCE` | `db` | Must be `api` for push endpoints to accept traffic |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated SA names; empty accepts any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only static bearer token |

@@ -4,15 +4,20 @@ Filter OpenShift optimization recommendations by labels (tags) that Cost Managem
 already tracks for billing. The same `filter[tag:key]=value` syntax works across ROS
 list APIs and matches Koku report filters.
 
-## Enable the feature
+## Defaults
+
+Tag filtering is **enabled by default** on ROS (`ROS_TAGS_ENABLED=true` in the cost-onprem
+Helm chart). Which tag keys accept filters is controlled in Cost Management **Settings → Tags**.
+If no keys are enabled, `filter[tag:key]=value` returns all recommendations with
+`meta.warnings` explaining that the key is not in the enabled catalog.
 
 | Variable | Default | On-prem | SaaS |
 |----------|---------|---------|------|
-| `ROS_TAGS_ENABLED` | **`false`** | Set `true` on ROS | Set `true` on ROS |
+| `ROS_TAGS_ENABLED` | **`true`** | `true` (chart default) | `true` |
 | `ROS_TAGS_SOURCE` | `db` | `db` (shared PostgreSQL with Koku) | `api` (Koku push sync) |
 
 On-prem: ROS must connect to the **same PostgreSQL** as Koku when `ROS_TAGS_SOURCE=db`.
-Enable OCP tag keys in Cost Management **Settings → Tags** before filtering.
+Enable OCP tag keys in **Settings → Tags** before filters narrow results by label value.
 
 See [Configuration → Tag Sync](../configuration.md#tag-sync) for full variable reference.
 

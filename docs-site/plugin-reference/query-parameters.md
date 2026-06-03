@@ -103,8 +103,9 @@ See [node plugin reference](node.md) and [UI integration — node recommendation
 ## Tag filtering
 
 Tag filters narrow recommendation lists by OpenShift labels tracked in Cost Management.
-The feature requires **`ROS_TAGS_ENABLED=true`** on the ROS API (default **`false`**).
-When disabled, tag parameters are ignored.
+Tag filtering is **enabled by default** on the ROS API (`ROS_TAGS_ENABLED=true`). Which
+keys are filterable is controlled in **Settings → Tags**. Set `ROS_TAGS_ENABLED=false` to
+ignore tag parameters entirely.
 
 ### Syntax
 

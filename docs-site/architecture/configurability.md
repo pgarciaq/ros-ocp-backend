@@ -340,7 +340,7 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Deprecated native-engine flag <br><em>Historical; native engine is default (`true`).</em> | true | `ROS_USE_NATIVE_ENGINE` | — | — | No |
 | Plugin allowlist (CSV); empty = all native <br><em>CSV of plugins to run; empty = all registered.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>CSV of plugins to skip; overrides allowlist.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
-| Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | false | `ROS_TAGS_ENABLED` | — | — | No |
+| Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | true | `ROS_TAGS_ENABLED` | — | — | No |
 | Tag source (`db` or `api`) <br><em>`db` = ROS-stored tags; `api` = live Koku (slower, fresher).</em> | `db` | `ROS_TAGS_SOURCE` | — | — | No |
 | Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; empty may deny all.</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
 | Tag sync dev bearer token <br><em>Dev-only static token; never in production.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |

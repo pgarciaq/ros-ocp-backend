@@ -17,9 +17,14 @@ GET /api/cost-management/v1/recommendations/openshift?filter[tag:environment]=pr
 GET /api/cost-management/v1/recommendations/openshift/nodes?filter[tag:environment]=production
 ```
 
-The feature is gated by `ROS_TAGS_ENABLED` on ROS (default **`false`** — must be set
-explicitly on the ROS deployment). On-prem with `ROS_TAGS_SOURCE=db` requires ROS to use
-the same PostgreSQL instance as Koku so tenant tag tables can be joined at query time.
+Tag filtering on ROS is **enabled by default** (`ROS_TAGS_ENABLED=true` in the cost-onprem
+Helm chart). The feature is **self-gating** through Koku's enabled tag keys: if no tags are
+enabled in **Settings → Tags**, `filter[tag:key]=value` returns all results with a helpful
+`meta.warnings` message. Org admins control which keys are filterable in Koku; there is no
+separate deployment-level kill switch for on-prem.
+
+On-prem with `ROS_TAGS_SOURCE=db` requires ROS to use the same PostgreSQL instance as Koku
+so tenant tag tables can be joined at query time.
 
 Tag filters apply to these list endpoints (and container **history**):
 
@@ -420,15 +425,16 @@ See [tag-sync-auth.md](../operations/tag-sync-auth.md) for TokenReview authentic
 
 | Variable | Default | On-Prem | SaaS | Description |
 |----------|---------|---------|------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Required `true` | Required `true` | Master switch: list filters + push API (api only) |
+| `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters + push API (api only) |
 | `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = Koku table JOIN; `api` = `resolved_tags` |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | N/A | Optional | Comma-separated SA names allowed to push; empty = any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | N/A | Dev only | Static bearer when SA token unavailable (must match Koku) |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | N/A | Optional | Max body size (MiB) for `POST /internal/tags/sync` |
 
-**On-prem example (cost-onprem chart):**
+**On-prem example (cost-onprem chart defaults):**
 
 ```yaml
+# ros.api.tagsEnabled: true, ros.api.tagsSource: db (values.yaml)
 env:
   ROS_TAGS_ENABLED: "true"
   ROS_TAGS_SOURCE: "db"

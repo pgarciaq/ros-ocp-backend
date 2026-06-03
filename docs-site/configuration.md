@@ -385,9 +385,11 @@ notification code **74** fires when headroom &lt; `pod_headroom_notification_thr
 
 ## Tag Sync
 
-Tag filtering requires **`ROS_TAGS_ENABLED=true`** on ROS. The default is **`false`**;
-you must enable it explicitly in Helm values or deployment env. **How tags reach list queries**
-is controlled by `ROS_TAGS_SOURCE`:
+Tag filtering is **enabled by default** on ROS (`ROS_TAGS_ENABLED=true` in the cost-onprem
+Helm chart). Filterable tag keys are controlled in **Settings → Tags**; if none are enabled,
+tag filters return all results with `meta.warnings`. Set `ROS_TAGS_ENABLED=false` only to
+disable tag filters entirely. **How tags reach list queries** is controlled by
+`ROS_TAGS_SOURCE`:
 
 | Value | Deployment | Mechanism |
 |-------|------------|-----------|
@@ -396,8 +398,8 @@ is controlled by `ROS_TAGS_SOURCE`:
 
 Use **`db`** when Koku and ROS share one PostgreSQL instance (cost-onprem chart). ROS must
 use the chart's shared database connection to Koku tenant schemas (`reporting_enabledtagkeys`,
-`reporting_ocptags_values`). No Koku-side tag sync configuration is required — enable tags
-in Settings and set `ROS_TAGS_ENABLED=true` on ROS.
+`reporting_ocptags_values`). No Koku-side tag sync configuration is required — enable tag
+keys in **Settings → Tags** (ROS tag filtering is on by default).
 
 Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery tasks,
 `ROS_OCP_BACKEND_URL`, and ServiceAccount (or dev token) authentication.
@@ -406,7 +408,7 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 
 | Variable | Default | On-Prem | SaaS | Description |
 |----------|---------|---------|------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Set `true` | Set `true` | Master switch: list filters; push API active only when source=`api` |
+| `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters; push API active only when source=`api` |
 | `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags` |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Optional | Comma-separated SA names allowed to call push API; empty = any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only | Static bearer token when projected SA token unavailable; must match Koku |
