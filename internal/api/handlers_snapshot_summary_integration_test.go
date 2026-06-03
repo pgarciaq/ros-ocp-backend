@@ -189,6 +189,40 @@ func TestGetSnapshotSummary_FilterByCluster(t *testing.T) {
 	assert.Equal(t, clusterAllowed, resp.Data[0].ClusterUUID)
 }
 
+func TestGetSnapshotSummary_FilterByRecommendationType(t *testing.T) {
+	orgID := "org-snap-sum-type-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-stale-1", "stale", 120)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-active-1", "active", 1)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "data", "snap-orphan-1", "orphaned", 45)
+
+	app := setupSnapshotSummaryEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?filter%5Brecommendation_type%5D=stale&limit=50",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotSummaryListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "apps", resp.Data[0].Namespace)
+	assert.Equal(t, 1, resp.Data[0].SnapshotCount)
+	assert.Equal(t, 1, resp.Data[0].ActionableSnapshotCount)
+	assert.Equal(t, 1, resp.Data[0].CountsByType["stale"])
+	assert.Equal(t, 0, resp.Data[0].CountsByType["active"])
+	assert.Equal(t, 0, resp.Data[0].CountsByType["orphaned"])
+}
+
 func TestGetSnapshotSummary_FilterByProject(t *testing.T) {
 	orgID := "org-snap-sum-proj-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)

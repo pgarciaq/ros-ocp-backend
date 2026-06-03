@@ -47,9 +47,14 @@ GET /api/cost-management/v1/recommendations/openshift/snapshots/summary
 GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot
 ```
 
-List filters include `filter[cluster]`, `filter[project]`, and `filter[recommendation_type]` (`orphaned`, `never_restored`, `redundant`, `stale`, `managed`, `active`).
+List and summary filters include `filter[cluster]`, `filter[project]`, and
+`filter[recommendation_type]` (`orphaned`, `never_restored`, `redundant`, `stale`,
+`managed`, `active`). On the summary endpoint, `filter[recommendation_type]` restricts
+which snapshots are aggregated into each group (counts and reclaimable totals reflect
+only matching rows).
 
-Handlers: [`GetSnapshotRecommendations`](../../internal/api/handlers_snapshot.go), [`GetSnapshotSummary`](../../internal/api/handlers_snapshot.go).
+Handlers: [`GetSnapshotRecommendations`](../../internal/api/handlers_snapshot.go),
+[`GetSnapshotSummary`](../../internal/api/handlers_snapshot_summary.go).
 
 ## Notification codes
 

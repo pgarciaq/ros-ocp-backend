@@ -581,7 +581,8 @@ caller may read (`openshift.cluster` permission), consistent with quota, PVC, an
   cluster outside the caller's scope returns **200** with an empty `data` array (not **403**).
 - **No ROS permissions:** **403** from identity middleware.
 
-Integration coverage: `TestGetSnapshotSummary_RBAC_FiltersByCluster` in
+Integration coverage: `TestGetSnapshotSummary_FilterByRecommendationType`,
+`TestGetSnapshotSummary_RBAC_FiltersByCluster` in
 `internal/api/handlers_snapshot_summary_integration_test.go`; list handler uses the same
 cluster allowlist pattern as other OCP plugins.
 

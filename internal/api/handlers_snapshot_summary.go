@@ -120,6 +120,7 @@ func GetSnapshotSummary(c echo.Context) error {
 
 	clusterFilter := strings.TrimSpace(queryparams.FirstFilter(c, "cluster"))
 	namespaceFilter := strings.TrimSpace(queryparams.FirstFilter(c, "project"))
+	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
 	userPerms := get_user_permissions(c)
 	ctx := c.Request().Context()
 
@@ -151,6 +152,11 @@ func GetSnapshotSummary(c echo.Context) error {
 			args = append(args, nsArg)
 		}
 		argIdx = nextIdx
+	}
+	if typeFilter != "" {
+		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
+		args = append(args, typeFilter)
+		argIdx++
 	}
 
 	groupBySQL, selectNamespace := snapshotSummaryGroupBySQL(groupBy)
