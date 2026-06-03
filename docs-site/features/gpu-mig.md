@@ -250,6 +250,54 @@ cluster outside RBAC returns an **empty** list (200).
 
 Details: [Known issues — GPU MIG](../known-issues.md#gpu-mig--known-limitations-gap-5).
 
+## Test data generation
+
+Generate OCP payloads with GPU ROS metrics using
+[nise](https://github.com/project-koku/nise):
+
+```bash
+nise report ocp \
+  --static-report-file /path/to/ocp_static_data.yml \
+  --ocp-cluster-id <cluster_uuid> \
+  --ros-ocp-info \
+  --write-monthly
+```
+
+Use a static YAML that defines GPU-enabled workloads (A100/H100 nodes, containers
+with low SM/DRAM utilization for MIG candidates). The `--ros-ocp-info` flag emits
+container-level ROS CSVs (`ocp_ros_usage.csv`, `ocp_ros_namespace_usage.csv`)
+required by the ros-ocp-backend processor.
+
+GPU usage CSVs from cost ingestion (`ocp_gpu_usage.csv`) should include:
+
+| Column | Role |
+|--------|------|
+| `gpu_model` | NVIDIA model name (must match the engine GPU catalog) |
+| `gpu_uuid` | Device identity |
+| `instance_name` | MIG instance / profile when partitioned |
+| `utilization` | Utilization signal (with DCGM-derived SM/DRAM/FB in ROS GPU digests) |
+
+Package typed monthly files into a tarball with `manifest.json` (`start`/`end`
+dates, `files`, `resource_optimization_files`) and upload via ingress. See
+[Validating the native engine](../testing/validating-native-engine.md) for
+on-prem E2E flow.
+
+## Plugin enablement
+
+GPU MIG routes are provided by the **`gpu`** recommendation plugin. Control
+which plugins run with:
+
+| Variable | Behavior |
+|----------|----------|
+| `ROS_ENABLED_PLUGINS` | When non-empty, allowlist only (e.g. `container,gpu,node`). Omit `gpu` to disable GPU routes. |
+| `ROS_DISABLED_PLUGINS` | When the allowlist is empty, subtract plugins from the default native set (e.g. `gpu`). |
+
+When the `gpu` plugin is disabled, `GET .../recommendations/openshift/gpu/mig`
+and related `/gpu/*` paths return **404** (`plugin 'gpu' is not enabled`), not an
+empty list. GPU threshold settings (`GET .../settings/gpu`) follow the same
+gating. See [Configuration](../configuration.md) and
+[Plugin architecture](../architecture/plugin-architecture.md).
+
 ## Related
 
 - [GPU Catalogs](../architecture/gpu-catalogs.md) — NVIDIA data sources and catalog validation
