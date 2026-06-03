@@ -58,8 +58,11 @@ rows already in memory (no second DB pass).
   `container` (10) and `gpu` (20) run before `namespace` (90).
 
 Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) / [`DetectAbandoned()`](../../internal/engine/detect_idle.go)
-remain for notification codes; `DetectAbandoned` is still invoked for
-`NotifIdleWorkload` compatibility.
+remain for notification codes. When [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
+is authoritative (idle detection enabled, workload not excluded, sufficient observation days),
+it is the sole source for codes 5 and 8 — `DetectAbandoned` is skipped because zombie
+classification subsumes abandoned. Legacy paths (`DetectAbandoned` and decay `IsIdle`) only
+fire when classification cannot run (disabled, excluded namespace/workload, or insufficient data).
 
 See [Plugin execution phases](../architecture/plugin-phases.md).
 
