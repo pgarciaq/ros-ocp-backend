@@ -70,10 +70,11 @@ Returns one row per classified VolumeSnapshot.
 | `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
 | `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
 | `filter[recommendation_type]` | enum | `orphaned`, `never_restored`, `redundant`, `stale`, `managed`, `active` |
-| `order_by` | string | Sort column (when supported on list) |
-| `order_how` | string | `asc` or `desc` |
 | `limit` | int | Results per page (1–100, default 20) |
 | `offset` | int | Pagination offset |
+
+List rows are sorted by `age_days` descending. `order_by` and `order_how` apply only on
+`GET /snapshots/summary` (see below), not on the list endpoint.
 
 Bracket syntax is preferred; see [API query parameters](../plugin-reference/query-parameters.md).
 
