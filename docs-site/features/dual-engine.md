@@ -96,6 +96,20 @@ Engine behavior is controlled by percentile and target parameters:
 
 Tune via [Configurable Thresholds](configurable-thresholds.md) or admin env vars.
 
+## Verifying divergence
+
+Cost and performance engines are always computed together, but sizing may match on
+uniform workloads. To **force** different CPU/memory recommendations:
+
+1. Ingest cluster data from the NISE fixture [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`).
+2. Call a list or detail endpoint without `filter[engine]` and compare
+   `recommendation_terms.<term>.recommendation_engines.cost` vs `.performance`.
+3. Expect higher CPU/memory on the **performance** engine for spike-prone containers;
+   node list may show different `recommended_cpu_cores` / `node_count_reduction` per engine.
+
+E2E and IQE tests assert both engines are present; when values are equal they emit a
+warning and point to this fixture rather than skipping.
+
 ## Future work
 
 - **UI settings:** Expose cost vs performance percentile tuning in the UI (backend already supports this via `GET/PUT .../settings/container`).

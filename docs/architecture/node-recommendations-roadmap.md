@@ -16,6 +16,7 @@ Tier 1 is **shipped**, including:
 | `POST .../internal/recalculate-savings` after cost model changes | Done |
 | Savings summary `?term=` alignment | Done |
 | Dedicated `GET .../nodes/{node}` path | Done |
+| `filter[engine]=cost\|performance` on node list | Done — limits nested `recommendation_engines`; cost vs performance target utilization differs (80% vs 55%) |
 | Node recommendation history time series | **Future** (Tier 2) |
 | Cloud instance catalog (AWS/Azure/GCP specs + pricing) | **Future** (Tier 2) |
 | `GET .../machinesets/{name}` detail | **Future** (Tier 2) |

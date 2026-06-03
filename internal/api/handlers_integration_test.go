@@ -366,6 +366,8 @@ func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
 	assert.True(t, foundPerf, "detail should include recommendation_engines.performance")
 }
 
+// TestContainerDetail_EngineValuesDiverge requires both engines on detail; for divergent
+// sizing in manual/E2E runs, ingest nise/examples/ocp_dual_engine/.
 func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

@@ -1844,6 +1844,14 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 **Validation:** Performance engine requests should be **≥** cost engine for CPU/memory on spike-prone VMs (`downsize-unstable-vm` may show code **49** on performance only).
 
+### Testing divergence
+
+Automated tests (cost-onprem-chart E2E, IQE plugins, `TestContainerDetail_EngineValuesDiverge`)
+require **both** `cost` and `performance` blocks. When sizing is identical on generic fixtures,
+they `warnings.warn` and reference [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md).
+Re-ingest that data, then re-run container/node list or detail calls to confirm different
+`config.requests` (containers) or `recommended_cpu_cores` (nodes).
+
 ---
 
 ## GPU recommendations testing

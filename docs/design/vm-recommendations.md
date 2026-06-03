@@ -34,6 +34,10 @@ VM recommendations are **always** produced by the built-in Go engine ([`recommen
 | **Dual engine** | Native **cost** vs **performance** sizing for the same VM (`vmEngineCost` / `vmEnginePerformance`); select with `filter[engine]=cost\|performance`. Not Kruize vs native. |
 | **Coexistence** | On default native deployments, the `vm` plugin runs alongside container/namespace/node plugins. Legacy `ROS_ENABLED_PLUGINS=kruize` disables all native plugins (including `vm`); VM recs require native mode. |
 
+**Engine filter:** `GET .../recommendations/openshift/vm?filter[engine]=cost` or `filter[engine]=performance`
+(legacy flat `?engine=`). List/detail omit the non-selected engine when filtered; unfiltered responses
+nest both under each term. Cross-cutting query syntax: [api-query-parameters.md](../operations/api-query-parameters.md).
+
 ---
 
 ## Implementation status

@@ -60,6 +60,12 @@ Use `filter[field]` with comma-separated values (OR within the same field):
 ?filter[stale]=only
 ```
 
+**Engine filter** (`filter[engine]` or flat `?engine=`): `cost` or `performance` on container,
+namespace, node, VM, history, and quality list endpoints. Omitted engine blocks are excluded
+from nested `recommendation_engines` on list responses. Fleet rollup uses
+`GET .../savings-summary?engine=cost|performance` (default `cost`). See
+[validating-native-engine.md](../testing/validating-native-engine.md#dual-engine-testing-cost-vs-performance).
+
 ## Filtering (flat syntax)
 
 Equivalent flat parameters:
@@ -120,6 +126,7 @@ Response: `terms` (all configured terms), `historical_usage` (daily digests), `m
 
 **Node utilization filters** (`GET .../recommendations/openshift/nodes`):
 
+- `filter[engine]` — `cost` or `performance` (flat `?engine=`). Limits nested engine blocks per term; default list sort uses the cost engine.
 - `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.
 - `is_overcommitted` — `true` / `false` / omit. When `true`, only nodes where pod CPU requests exceed the overcommit threshold × allocatable (default threshold 1.5).
 - `filter[idle_state]` — Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`). Maps to `node_recommendations.idle_state`.
@@ -174,6 +181,21 @@ Unchanged from Koku conventions (no brackets):
 ?limit=10&offset=0
 ?limit=10&after=<cursor>          # keyset pagination on large container/namespace lists
 ```
+
+## History, quality, and fleet savings
+
+**History** (`GET .../recommendations/openshift/history`):
+
+- `filter[engine]` — `cost` or `performance` (flat `?engine=`). Each row is one container × term × engine snapshot.
+
+**Quality** (`GET .../recommendations/openshift/quality`):
+
+- `filter[engine]` — `cost` or `performance`; defaults to **cost** when omitted.
+
+**Fleet savings** (`GET .../recommendations/openshift/savings-summary`):
+
+- `engine` — `cost` or `performance` (default `cost`). Aggregates container and node savings for the selected engine.
+- `term` — `short`, `medium`, or `long` (default `medium`).
 
 ## Date range
 

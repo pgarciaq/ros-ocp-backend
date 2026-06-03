@@ -208,6 +208,20 @@ Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.
 
 ---
 
+## Fleet savings summary
+
+Cross-plugin monthly savings rollup (container, node, PVC, snapshot, VM when enabled):
+
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cost&term=medium
+```
+
+Query `engine` (`cost` or `performance`; default `cost`) and `term` (`short`, `medium`, `long`;
+default `medium`) select which persisted engine rows are aggregated. See
+[cost-integration.md](../architecture/cost-integration.md#fleet-savings-summary).
+
+---
+
 ## History endpoint
 
 Fleet-wide recommendation snapshots (native engine only):
@@ -218,7 +232,8 @@ GET /api/cost-management/v1/recommendations/openshift/history
 
 Handler: [`handlers_history.go`](../../internal/api/handlers_history.go).
 
-Filters: `cluster`, `project`, `workload`, `container`, `term`, `engine`,
+Filters: `cluster`, `project`, `workload`, `container`, `term`,
+`filter[engine]` (`cost` or `performance`; flat `?engine=`),
 `start_date`, `end_date`, `limit`, `offset`, `format=csv`.
 
 Each row represents one container + term + engine snapshot at `recorded_at`.
@@ -235,8 +250,9 @@ GET /api/cost-management/v1/recommendations/openshift/quality
 
 Handler: [`handlers_quality.go`](../../internal/api/handlers_quality.go).
 
-Filters: `cluster`, `project`, `workload`, `container`, date range, `order_by`,
-`format=csv`.
+Filters: `cluster`, `project`, `workload`, `container`, date range,
+`filter[engine]` (`cost` or `performance`; defaults to **cost** when omitted),
+`order_by`, `format=csv`.
 
 ---
 
