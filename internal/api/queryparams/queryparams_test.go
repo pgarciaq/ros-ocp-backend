@@ -37,6 +37,17 @@ func TestIncludeValues(t *testing.T) {
 		assert.Equal(t, []string{"payments"}, IncludeValues(c, "project"))
 	})
 
+	t.Run("bracket filter namespace alias for project", func(t *testing.T) {
+		c := newEchoContext("filter%5Bnamespace%5D=payments")
+		assert.Equal(t, []string{"payments"}, IncludeValues(c, "project"))
+	})
+
+	t.Run("bracket filter project preferred over namespace alias", func(t *testing.T) {
+		c := newEchoContext("filter%5Bproject%5D=alpha&filter%5Bnamespace%5D=beta")
+		assert.Equal(t, []string{"alpha", "beta"}, IncludeValues(c, "project"))
+		assert.Equal(t, "alpha", FirstFilter(c, "project"))
+	})
+
 	t.Run("koku bracket comma separated", func(t *testing.T) {
 		c := newEchoContext("filter%5Bproject%5D=payments,frontend")
 		assert.Equal(t, []string{"payments", "frontend"}, IncludeValues(c, "project"))

@@ -99,7 +99,7 @@ Bracket syntax (`filter[field]`) and legacy flat params are both accepted
 | Filter | Flat alias | Bracket form | Description |
 |--------|------------|--------------|-------------|
 | Cluster | `cluster`, `cluster_uuid` | `filter[cluster]` | Partial match on alias; exact on UUID |
-| Project | `project`, `namespace` | `filter[project]` or `filter[namespace]` | Namespace (partial match); `filter[namespace]` is an alias for `filter[project]` |
+| Project | `project`, `namespace` | `filter[project]` | Namespace (partial match); `filter[namespace]` is an undocumented alias |
 | Workload | `workload` | `filter[workload]` | Workload name (partial) |
 | Workload type | `workload_type` | `filter[workload_type]` | `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset` |
 | Container | `container` | `filter[container]` | Container name (partial) |

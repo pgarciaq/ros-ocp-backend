@@ -107,6 +107,24 @@ func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
 	assert.Equal(t, []string{"%payments%"}, result["rs.namespace ILIKE ?"])
 }
 
+func TestMapHistoryQueryParameters_ProjectFilterAlias(t *testing.T) {
+	for _, rawQuery := range []string{
+		"filter%5Bproject%5D=payments",
+		"filter%5Bnamespace%5D=payments",
+	} {
+		t.Run(rawQuery, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			result, err := MapHistoryQueryParameters(c)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"payments"}, result["h.namespace IN ?"])
+		})
+	}
+}
+
 func TestMapQueryParametersFilterClauses(t *testing.T) {
 	containerCol := "recommendation_sets.container_name"
 	workloadCol := "workloads.workload_name"

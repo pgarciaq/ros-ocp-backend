@@ -124,10 +124,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	}
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
 	riskFilter := queryparams.FirstFilter(c, "risk_level")
-	namespaceFilter := queryparams.FirstFilter(c, "namespace")
-	if namespaceFilter == "" {
-		namespaceFilter = queryparams.FirstFilter(c, "project")
-	}
+	namespaceFilter := queryparams.FirstFilter(c, "project")
 
 	ctx := c.Request().Context()
 	filterSQL := ""

@@ -58,6 +58,7 @@ func filterParamNames(name string) []string {
 	case "cluster":
 		return []string{"cluster", "cluster_uuid"}
 	case "project":
+		// Canonical API name is project; flat/bracket namespace params are backward-compatible aliases.
 		return []string{"project", "namespace"}
 	case "node":
 		return []string{"node", "node_name"}

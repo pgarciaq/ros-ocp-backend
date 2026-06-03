@@ -48,7 +48,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 
 | Parameter | Flat (ROS) | Bracket (Koku) | Description |
 |-----------|------------|----------------|-------------|
-| Project | `project`, `namespace` | `filter[project]` | Namespace (comma-separated OR) |
+| Project | `project`, `namespace` | `filter[project]` | Namespace (comma-separated OR); undocumented alias `filter[namespace]` |
 | Cluster | `cluster`, `cluster_uuid` | `filter[cluster]` | Cluster UUID or alias |
 | Workload | `workload` | `filter[workload]` | Workload name |
 | Workload type | `workload_type` | `filter[workload_type]` | Kubernetes workload kind |
@@ -72,6 +72,10 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
+
+**Backward compatibility:** `filter[namespace]` and flat `namespace` still work on every list
+endpoint that filters by OpenShift namespace. They are aliases for `filter[project]` and are
+omitted from OpenAPI; use `filter[project]` in new integrations.
 
 ## Node utilization filters
 

@@ -117,7 +117,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `filter[cluster_quota_name]`, `filter[cluster_resource_quota]`, or `filter[crq]` | `cluster_quota_name` |
 | `filter[recommendation_type]` | `tighten` \| `raise` \| `optimal` \| `none` |
 | `filter[risk_level]` | `high` \| `medium` \| `low` \| `none` |
-| `filter[namespace]` or `filter[project]` | CRQs whose namespace membership includes the value |
+| `filter[project]` | CRQs whose namespace membership includes the value (`filter[namespace]` accepted as alias) |
 | `group_by[cluster]` | Aggregate per cluster (sum `capacity_freed` and `estimated_savings`; row includes `count`) |
 | `order_by`, `order_how` | Sort — see [order_by values](#order_by-values) |
 | `limit`, `offset` | Pagination (default limit 20, max 100) |

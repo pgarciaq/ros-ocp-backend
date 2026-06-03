@@ -541,7 +541,7 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 | `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `savings` / `savings_amount` |
 | `order_how` | `asc` or `desc` |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
-| `filter[namespace]` / `filter[project]` | Namespace (project alias; same as container list APIs) |
+| `filter[project]` | Namespace (OpenShift namespace; `filter[namespace]` accepted as alias) |
 | `format` | `csv` or `Accept: text/csv` for CSV export |
 | `filter[vm_name]` | VM name |
 | `filter[term]` | `short_term`, `medium_term`, `long_term` |

@@ -43,6 +43,10 @@ Repeated values and comma-separated lists work in both forms:
 
 Implementation: [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
 
+**Backward compatibility:** `filter[namespace]` and flat `namespace` remain accepted on all list
+endpoints that filter by OpenShift namespace. They are aliases for `filter[project]` and are not
+documented in OpenAPI; prefer `filter[project]` in new clients.
+
 ## Filtering (bracket syntax)
 
 Use `filter[field]` with comma-separated values (OR within the same field):
@@ -86,7 +90,7 @@ Equivalent flat parameters:
 
 | Logical field | Flat aliases | Koku `filter[…]` |
 |---------------|--------------|------------------|
-| `project` | `project`, `namespace` | `filter[project]` |
+| `project` | `project`, `namespace` | `filter[project]` (undocumented alias: `filter[namespace]`) |
 | `cluster` | `cluster`, `cluster_uuid` | `filter[cluster]` |
 | `workload` | `workload` | `filter[workload]` |
 | `workload_type` | `workload_type` | `filter[workload_type]` |

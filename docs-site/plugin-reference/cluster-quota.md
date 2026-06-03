@@ -39,7 +39,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID |
 | `filter[cluster_quota_name]` | CRQ name (aliases: `filter[cluster_resource_quota]`, `filter[crq]`) |
-| `filter[namespace]` / `filter[project]` | CRQs whose `namespaces` membership includes the value |
+| `filter[project]` | CRQs whose `namespaces` membership includes the value (`filter[namespace]` alias) |
 | `filter[recommendation_type]` | `tighten`, `raise`, `optimal`, `none` |
 | `filter[risk_level]` | `high`, `medium`, `low`, `none` |
 | `group_by[cluster]` | Aggregate per cluster (`count`, summed savings and capacity_freed) |
