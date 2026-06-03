@@ -891,7 +891,7 @@ manages per-org thresholds and cost rate with env-var locking.
 **UI status:** Not implemented. No snapshot recommendations view or settings
 page in koku-ui.
 
-See [features-f-snapshot-staleness.md](./features-f-snapshot-staleness.md)
+See [snapshot staleness](./features/snapshot-staleness.md)
 for full design details.
 
 ---

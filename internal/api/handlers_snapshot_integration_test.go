@@ -152,6 +152,74 @@ func TestGetSnapshotRecommendations_WithData(t *testing.T) {
 	assert.Equal(t, 30, resp.Data[0].AgeDays)
 }
 
+func TestSnapshotRecommendations_FilterByCluster(t *testing.T) {
+	orgID := "org-snap-cluster-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	otherCluster := "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'snap-cluster-a', 1, NOW()),
+		       (1, $2, 'snap-cluster-b', 2, NOW())
+		ON CONFLICT DO NOTHING`, testutil.TestClusterUUID, otherCluster)
+	require.NoError(t, err)
+
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-cluster-filter-a", "orphaned", 14)
+	insertSnapshotRecommendation(t, orgID, otherCluster, "apps", "snap-cluster-filter-b", "orphaned", 14)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?filter[cluster]="+testutil.TestClusterUUID+"&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, testutil.TestClusterUUID, resp.Data[0].ClusterUUID)
+	assert.Equal(t, "snap-cluster-filter-a", resp.Data[0].SnapshotName)
+}
+
+func TestSnapshotRecommendations_FilterByProject(t *testing.T) {
+	orgID := "org-snap-project-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "target-ns", "snap-project-target", "orphaned", 14)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "other-ns", "snap-project-other", "orphaned", 14)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?filter[project]=target-ns&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "target-ns", resp.Data[0].Namespace)
+	assert.Equal(t, "snap-project-target", resp.Data[0].SnapshotName)
+}
+
 func TestGetSnapshotRecommendations_FilterByRecommendationType(t *testing.T) {
 	orgID := "org-snap-type-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)
