@@ -1518,3 +1518,126 @@ func TestGetNodeUtilizationDetail_RBAC_DeniedNode404(t *testing.T) {
 	app.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
+
+func TestGetNodeList_FilterIsUnderutilized(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'underutil-filter-cluster', 'src-uf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'underutil-yes', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			($1, $2::uuid, 'underutil-no', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[is_underutilized]=true", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "underutil-yes", resp.Data[0].Node)
+	assert.True(t, resp.Data[0].Classification.IsUnderutilized)
+}
+
+func TestGetNodeList_FilterIsOvercommitted(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'overcommit-filter-cluster', 'src-of', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES
+			($1, $2::uuid, 'overcommit-yes', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 2.0, false, true, 'active', NULL, 20, 0, '{}'),
+			($1, $2::uuid, 'overcommit-no', 'medium', 'cost',
+			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[is_overcommitted]=true", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "overcommit-yes", resp.Data[0].Node)
+	assert.True(t, resp.Data[0].Classification.IsOvercommitted)
+}
+
+func TestGetNodeList_FilterTag(t *testing.T) {
+	withTagsEnabled(t)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'tag-filter-cluster', 'src-tf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
+			notification_codes, estimated_monthly_savings_usd, updated_at)
+		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now()),
+		       ($1, $2, 'node-other', 'medium', 'cost', false, false, 50, 60, 50, 60, 1, 5, 0, '{}', 10000, now())
+		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "node-prod", resp.Data[0].Node)
+}

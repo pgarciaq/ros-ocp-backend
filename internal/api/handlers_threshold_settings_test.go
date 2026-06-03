@@ -391,6 +391,35 @@ func TestPutThresholdSettings_Node_PodHeadroomPersistsAndReturns(t *testing.T) {
 	assert.InDelta(t, 0.08, resp["pod_headroom_notification_threshold"].(float64), 1e-9)
 }
 
+func TestPutNodeSettings(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-settings-node-put"
+	e := setupThresholdTestEcho(t, pool, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	putBody := bytes.NewReader([]byte(`{"underutil_threshold": 0.28}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/node", putBody)
+	putReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	putRec := httptest.NewRecorder()
+	e.ServeHTTP(putRec, putReq)
+	require.Equal(t, http.StatusOK, putRec.Code, putRec.Body.String())
+
+	var putResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &putResp))
+	assert.InDelta(t, 0.28, putResp["underutil_threshold"].(float64), 1e-9)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/node", nil)
+	getRec := httptest.NewRecorder()
+	e.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+
+	var getResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getResp))
+	assert.InDelta(t, 0.28, getResp["underutil_threshold"].(float64), 1e-9)
+}
+
 func TestPutThresholdSettings_Node_PersistsAndReturns(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-api-put-node"

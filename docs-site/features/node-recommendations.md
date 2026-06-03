@@ -353,6 +353,13 @@ Tier 1 (this document) is **implemented**. Planned work is grouped by tier below
 - Autonomous scaling recommendations
 - Operator: MachineSet replica time-series, autoscaler CR metrics
 
+## History and quality
+
+Node history and quality endpoints do not exist. History and quality are available
+for container recommendations only (`GET .../history`, `GET .../quality`). Per-node
+trend data is not exposed via a dedicated history API; use list/detail metrics and
+notifications instead.
+
 ## Related
 
 - [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — MachineSet and MachineAutoscaler planned work
