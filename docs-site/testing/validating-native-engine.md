@@ -940,7 +940,7 @@ Each ROS recommendation area has a **`requirements:` marker** in test docstrings
 | Node | `cost_ros_ocp_nodes` | `test_ros_node_recommendations.py` |
 | GPU | `cost_ros_ocp_gpu` | `test_ros_gpu_recommendations.py` |
 | PVC | `cost_ros_ocp_pvc` | `test_ros_pvc_recommendations.py` |
-| Snapshot | `cost_ros_ocp_snapshot` | `test_ros_snapshot_recommendations.py` |
+| Snapshot | `cost_ros_ocp_snapshot` | `iqe_ros_ocp/tests/rest/test_snapshot_recommendations.py` |
 | ClusterResourceQuota | `cost_ros_ocp_cluster_quota` | `test_ros_cluster_quota_recommendations.py` |
 | Namespace ResourceQuota | `cost_ros_ocp_quota` | `test_ros_quota_recommendations.py` |
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -48,6 +50,30 @@ func insertSnapshotRecommendation(t *testing.T, orgID, clusterUUID, namespace, s
 			age_days = EXCLUDED.age_days,
 			updated_at = NOW()`,
 		orgID, clusterUUID, namespace, snapshotName, recType, ageDays,
+	)
+	require.NoError(t, err)
+}
+
+func insertSnapshotRecommendationWithCodes(
+	t *testing.T,
+	orgID, clusterUUID, namespace, snapshotName, recType string,
+	ageDays int,
+	codes []int16,
+) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO snapshot_recommendation_sets (
+			org_id, cluster_uuid, namespace, snapshot_name,
+			recommendation_type, age_days, notification_codes, creation_timestamp, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() - ($6::int * INTERVAL '1 day'), NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
+		DO UPDATE SET recommendation_type = EXCLUDED.recommendation_type,
+			age_days = EXCLUDED.age_days,
+			notification_codes = EXCLUDED.notification_codes,
+			updated_at = NOW()`,
+		orgID, clusterUUID, namespace, snapshotName, recType, ageDays, codes,
 	)
 	require.NoError(t, err)
 }
@@ -236,6 +262,67 @@ func TestGetSnapshotRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 	for _, row := range resp.Data {
 		assert.Equal(t, clusterAllowed, row.ClusterUUID)
 	}
+}
+
+func TestSnapshotRecommendations_NotificationCodes(t *testing.T) {
+	orgID := "org-snap-notif-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	cases := []struct {
+		snapshotName string
+		recType      string
+		ageDays      int
+		wantCode     int16
+	}{
+		{"snap-orphan-nc", "orphaned", 30, engine.NotifSnapshotOrphaned},
+		{"snap-never-nc", "never_restored", 45, engine.NotifSnapshotNeverUsed},
+		{"snap-redundant-nc", "redundant", 100, engine.NotifSnapshotRedundant},
+		{"snap-stale-nc", "stale", 120, engine.NotifSnapshotStale},
+		{"snap-managed-nc", "managed", 25, engine.NotifSnapshotManaged},
+	}
+	for _, tc := range cases {
+		insertSnapshotRecommendationWithCodes(
+			t, orgID, testutil.TestClusterUUID, "apps", tc.snapshotName, tc.recType, tc.ageDays,
+			[]int16{tc.wantCode},
+		)
+	}
+	insertSnapshotRecommendationWithCodes(
+		t, orgID, testutil.TestClusterUUID, "apps", "snap-active-nc", "active", 2, []int16{},
+	)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?limit=50",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.GreaterOrEqual(t, resp.Meta.Count, len(cases))
+
+	byName := make(map[string]api.SnapshotRecommendationResponse, len(resp.Data))
+	for _, row := range resp.Data {
+		byName[row.SnapshotName] = row
+	}
+	for _, tc := range cases {
+		row, ok := byName[tc.snapshotName]
+		require.True(t, ok, "missing row %s", tc.snapshotName)
+		codeKey := strconv.Itoa(int(tc.wantCode))
+		entry, ok := row.Notifications[codeKey]
+		require.True(t, ok, "%s: notifications missing code %s: %v", tc.snapshotName, codeKey, row.Notifications)
+		assert.Equal(t, tc.wantCode, int16(entry.Code))
+		assert.NotEmpty(t, entry.Message)
+	}
+	activeRow := byName["snap-active-nc"]
+	assert.Empty(t, activeRow.Notifications)
 }
 
 func TestGetSnapshotRecommendations_Unauthorized(t *testing.T) {

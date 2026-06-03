@@ -15,7 +15,7 @@ This document lists ROS-related requirements, what is registered in the plugin, 
 | `cost_ros_ocp_nodes` | `test_ros_node_recommendations.py`, `test_ros_node_utilization.py` | Yes (added 2026-06-02) | Node right-sizing + utilization |
 | `cost_ros_ocp_gpu` | `test_ros_gpu_recommendations.py` | Yes (added 2026-06-02) | GPU recommendations |
 | `cost_ros_ocp_pvc` | `test_ros_pvc_recommendations.py` | Yes (added 2026-06-02) | PVC / storage recommendations |
-| `cost_ros_ocp_snapshot` | `test_ros_snapshot_recommendations.py` | Yes (added 2026-06-02) | Snapshot inventory / staleness |
+| `cost_ros_ocp_snapshot` | `iqe_ros_ocp/tests/rest/test_snapshot_recommendations.py` | Yes (added 2026-06-02) | Snapshot inventory / staleness |
 | `cost_ros_ocp_cluster_quota` | `test_ros_cluster_quota_recommendations.py` | Yes (added 2026-06-02) | ClusterResourceQuota recommendations |
 | `cost_ros_ocp_quota` | `test_ros_quota_recommendations.py` | Yes (added 2026-06-02) | Namespace ResourceQuota recommendations |
 
