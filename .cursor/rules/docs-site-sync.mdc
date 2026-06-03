@@ -1,0 +1,47 @@
+---
+description: Ensure docs-site is updated when docs/ changes affect public-facing content
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# docs-site Sync Rule
+
+`docs/` contains internal developer documentation (77+ files).
+`docs-site/` contains the public-facing documentation website (curated subset, ~21 files).
+
+## When editing any file under `docs/`
+
+Check whether a corresponding `docs-site/` page exists that covers the same topic:
+
+| Internal docs path | Public docs-site equivalent |
+|---|---|
+| `docs/operations/configuration.md` | `docs-site/configuration.md` |
+| `docs/testing/validating-native-engine.md` | `docs-site/testing/validating-native-engine.md` |
+| `docs/testing/iqe-requirements-registration.md` | `docs-site/testing/iqe-requirements-registration.md` |
+| `docs/ui-integration-guide.md` | `docs-site/ui-integration-guide.md` |
+| `docs/operations/monitoring.md` | `docs-site/monitoring.md` |
+| `docs/operations/query-performance.md` | `docs-site/query-performance.md` |
+| `docs/known-issues.md` | `docs-site/known-issues.md` |
+| `docs/features/idle-detection.md` | `docs-site/plugin-reference/idle-detection.md` |
+| `docs/features/business-hours.md` | `docs-site/plugin-reference/business-hours.md` |
+| `docs/features/quota-recommendations.md` | `docs-site/plugin-reference/quota.md` |
+| `docs/features/cluster-resource-quota.md` | `docs-site/plugin-reference/cluster-quota.md` |
+| `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
+| `docs/architecture/recommendation-engines.md` | (no public equivalent yet) |
+| `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
+
+## Action required
+
+If the edited content is **customer-relevant** (API behavior, configuration, features, query parameters, known issues):
+
+1. Find the matching `docs-site/` file from the table above
+2. Apply the same change, adapted for external audience (omit internal implementation details, roadmap items, and internal team references)
+3. If no `docs-site/` equivalent exists but the content is customer-facing, suggest creating one
+
+## What stays internal-only (never sync to docs-site)
+
+- Architecture decisions and design docs (`docs/architecture/`, `docs/design/`)
+- Implementation plans (`docs/plans/`)
+- Phase notes and archives (`docs/archive/`, `docs/phase*`)
+- Test plans and audits (`docs/audits/`, `docs/architecture/test-plan.md`)
+- Internal tooling docs (`docs/bruno/`)
