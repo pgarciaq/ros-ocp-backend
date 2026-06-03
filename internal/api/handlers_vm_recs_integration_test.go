@@ -116,6 +116,78 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 	assert.True(t, resp.Data[0].Metadata.IsAbandoned)
 }
 
+func TestVMRecommendations_ListFilterEngine(t *testing.T) {
+	orgID := "org-vm-engine-filter-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetForTest()
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	_ = config.GetConfig()
+
+	seedVMRecCluster(t, orgID)
+
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	now := time.Now().UTC()
+	costVM := model.VMRecommendation{
+		OrgID:                orgID,
+		ClusterUUID:          clusterID,
+		VMName:               "engine-cost-vm",
+		Namespace:            "vm-ns",
+		GuestOS:              "linux",
+		CurrentVCPU:          4,
+		CurrentMemoryGiB:     8,
+		RecommendedVCPU:      2,
+		RecommendedMemoryGiB: 4,
+		Confidence:           "high",
+		Term:                 "medium_term",
+		Engine:               "cost",
+		LastRecommendedAt:    now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	perfVM := costVM
+	perfVM.VMName = "engine-perf-vm"
+	perfVM.Engine = "performance"
+	perfVM.RecommendedVCPU = 3
+	perfVM.RecommendedMemoryGiB = 6
+
+	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{costVM, perfVM}, nil))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/vm", api.GetVMRecommendations)
+
+	for _, wantEngine := range []string{"cost", "performance"} {
+		req := httptest.NewRequest(
+			http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/vm?filter%5Bengine%5D="+wantEngine+"&limit=20",
+			nil,
+		)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "engine=%s body: %s", wantEngine, rec.Body.String())
+
+		var resp struct {
+			Data []struct {
+				VMName   string `json:"vm_name"`
+				Metadata struct {
+					Engine string `json:"engine"`
+				} `json:"metadata"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.NotEmpty(t, resp.Data)
+		for _, row := range resp.Data {
+			assert.Equal(t, wantEngine, row.Metadata.Engine)
+		}
+	}
+}
+
 func TestVMList_Filter_IsNetworkBound(t *testing.T) {
 	orgID := "org-vm-network-bound-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)

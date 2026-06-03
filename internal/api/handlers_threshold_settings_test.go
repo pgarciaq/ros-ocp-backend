@@ -44,6 +44,37 @@ func setupThresholdTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *ech
 	return e
 }
 
+func TestGetSettings_DualPercentileFields(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	e := setupThresholdTestEcho(t, pool, "org-threshold-dual-percentiles")
+
+	for _, path := range []string{
+		"/api/cost-management/v1/recommendations/openshift/settings/container",
+		"/api/cost-management/v1/recommendations/openshift/settings/namespace",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "GET %s: %s", path, rec.Body.String())
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		for _, key := range []string{
+			"cpu_cost_percentile",
+			"cpu_perf_percentile",
+			"mem_cost_percentile",
+			"mem_perf_percentile",
+		} {
+			val, ok := resp[key]
+			require.True(t, ok, "%s missing %s", path, key)
+			pct, ok := val.(float64)
+			require.True(t, ok, "%s %s should be a number", path, key)
+			assert.Greater(t, pct, 0.0)
+			assert.LessOrEqual(t, pct, 1.0)
+		}
+	}
+}
+
 func TestGetDedicatedContainerSettings_AllEnginePercentileKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupThresholdTestEcho(t, pool, "org-threshold-percentile-keys")

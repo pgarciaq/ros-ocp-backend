@@ -129,6 +129,44 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("filter by engine cost", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/history?filter%5Bengine%5D=cost&limit=100", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response struct {
+			Data []model.HistoryRow `json:"data"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		require.NotEmpty(t, response.Data)
+		for _, row := range response.Data {
+			assert.Equal(t, "cost", row.Engine)
+		}
+	})
+
+	t.Run("filter by engine performance", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/history?filter%5Bengine%5D=performance&limit=100", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response struct {
+			Data []model.HistoryRow `json:"data"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		require.NotEmpty(t, response.Data)
+		for _, row := range response.Data {
+			assert.Equal(t, "performance", row.Engine)
+		}
+	})
+
 	t.Run("filter by container", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/history?filter%5Bcontainer%5D="+testutil.TestContainer, nil)
 		req.Header.Set("X-Rh-Identity", identityHeader)

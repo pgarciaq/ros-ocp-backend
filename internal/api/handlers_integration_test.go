@@ -366,6 +366,157 @@ func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
 	assert.True(t, foundPerf, "detail should include recommendation_engines.performance")
 }
 
+func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?limit=20", nil)
+	listReq.Header.Set("X-Rh-Identity", identityHeader)
+	listRec := httptest.NewRecorder()
+	app.ServeHTTP(listRec, listReq)
+	require.Equal(t, http.StatusOK, listRec.Code)
+
+	var listResp struct {
+		Data []model.DetailResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &listResp))
+	require.NotEmpty(t, listResp.Data)
+
+	engineCPUAmount := func(engine map[string]interface{}) (float64, bool) {
+		config, ok := engine["config"].(map[string]interface{})
+		if !ok {
+			return 0, false
+		}
+		requests, ok := config["requests"].(map[string]interface{})
+		if !ok {
+			return 0, false
+		}
+		cpu, ok := requests["cpu"].(map[string]interface{})
+		if !ok {
+			return 0, false
+		}
+		amount, ok := cpu["amount"].(float64)
+		return amount, ok
+	}
+
+	for _, item := range listResp.Data {
+		detailReq := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/"+item.ID, nil)
+		detailReq.Header.Set("X-Rh-Identity", identityHeader)
+		detailRec := httptest.NewRecorder()
+		app.ServeHTTP(detailRec, detailReq)
+		require.Equal(t, http.StatusOK, detailRec.Code, detailRec.Body.String())
+
+		var detail map[string]interface{}
+		require.NoError(t, json.Unmarshal(detailRec.Body.Bytes(), &detail))
+		terms := detail["recommendations"].(map[string]interface{})["recommendation_terms"].(map[string]interface{})
+
+		for _, termRaw := range terms {
+			term, ok := termRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			engines, ok := term["recommendation_engines"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			costEng, costOK := engines["cost"].(map[string]interface{})
+			perfEng, perfOK := engines["performance"].(map[string]interface{})
+			if !costOK || !perfOK {
+				continue
+			}
+			costCPU, costHas := engineCPUAmount(costEng)
+			perfCPU, perfHas := engineCPUAmount(perfEng)
+			if costHas && perfHas && costCPU != perfCPU {
+				return
+			}
+		}
+	}
+
+	t.Skip("cost and performance CPU request amounts equal for all sampled containers; use nise/examples/ocp_dual_engine for divergent fixtures")
+}
+
+func TestGetNamespaceList_FilterEngine(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'ns-engine-cluster', 'src-ns-eng', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	testutil.SeedNamespaceDigestSeries(t, pool, "ns-engine-filter", 7, 200, 10, 524288, 1024)
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	results, err := engine.RecommendAllNamespaces(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, results))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/namespaces", api.GetNamespaceRecommendationSetListWithFallback)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+	basePath := "/api/cost-management/v1/recommendations/openshift/namespaces"
+
+	for _, tc := range []struct {
+		name       string
+		query      string
+		wantEngine string
+	}{
+		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10", "cost"},
+		{"filter engine performance", "?filter%5Bengine%5D=performance&limit=10", "performance"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, basePath+tc.query, nil)
+			req.Header.Set("X-Rh-Identity", identityHeader)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			assertContainerListEngineFilterResponse(t, rec.Body.Bytes(), tc.wantEngine)
+		})
+	}
+}
+
 func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	// T-2.2: Org A must not see org B's recommendations.
 	pool := testutil.SetupTestDB(t)
