@@ -134,6 +134,167 @@ func countProjects(body map[string]interface{}) int {
 	return len(projects)
 }
 
+func seedTagFilterMultiKeyWorkloads(t *testing.T, ctx context.Context) {
+	t.Helper()
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', '{"environment":"production","team":"platform"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'prod-other-team', 'w3', 'Deployment', 'c3', '{"environment":"production","team":"billing"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	for _, ns := range []string{testutil.TestNamespace, "prod-other-team", "other-ns"} {
+		wl, cn := "w1", "c1"
+		if ns == "prod-other-team" {
+			wl, cn = "w3", "c3"
+		} else if ns == "other-ns" {
+			wl, cn = "w2", "c2"
+		}
+		_, err = database.Pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+			VALUES ($1, $2, $3, $4, 'Deployment', $5, 'medium', 'cost', false, '{}', 10000, now())
+			ON CONFLICT DO NOTHING`,
+			testutil.TestOrgID, testutil.TestClusterUUID, ns, wl, cn)
+		require.NoError(t, err)
+	}
+}
+
+func TestTagFilters_MultiKeyAND_NarrowsResults(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedTagFilterMultiKeyWorkloads(t, ctx)
+
+	envOnlyURL := "/api/cost-management/v1/recommendations/openshift?limit=50&filter%5Btag%3Aenvironment%5D=production"
+	reqEnv := httptest.NewRequest(http.MethodGet, envOnlyURL, nil)
+	reqEnv.Header.Set("X-Rh-Identity", identity)
+	recEnv := httptest.NewRecorder()
+	app.ServeHTTP(recEnv, reqEnv)
+	require.Equal(t, http.StatusOK, recEnv.Code, recEnv.Body.String())
+
+	var envBody map[string]interface{}
+	require.NoError(t, json.Unmarshal(recEnv.Body.Bytes(), &envBody))
+	envCount := countProjects(envBody)
+	require.Equal(t, 2, envCount, "production tag should match two namespaces")
+
+	dualURL := "/api/cost-management/v1/recommendations/openshift?limit=50" +
+		"&filter%5Btag%3Aenvironment%5D=production&filter%5Btag%3Ateam%5D=platform"
+	reqDual := httptest.NewRequest(http.MethodGet, dualURL, nil)
+	reqDual.Header.Set("X-Rh-Identity", identity)
+	recDual := httptest.NewRecorder()
+	app.ServeHTTP(recDual, reqDual)
+
+	require.Equal(t, http.StatusOK, recDual.Code, recDual.Body.String())
+	var dualBody map[string]interface{}
+	require.NoError(t, json.Unmarshal(recDual.Body.Bytes(), &dualBody))
+	dualCount := countProjects(dualBody)
+	assert.Equal(t, 1, dualCount)
+	assert.Less(t, dualCount, envCount, "AND across tag keys should narrow results")
+
+	data, _ := dualBody["data"].([]interface{})
+	require.NotEmpty(t, data)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestNamespace, item["project"])
+}
+
+func TestTagFilters_WithRBACScope_Intersection(t *testing.T) {
+	withTagsEnabled(t)
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	clusterAllowed := testutil.TestClusterUUID
+	clusterDenied := "b2222222-2222-2222-2222-222222222222"
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'tag-rbac-allowed', 'src-1', now()), (1, $2, 'tag-rbac-denied', 'src-2', now()) ON CONFLICT DO NOTHING`,
+		clusterAllowed, clusterDenied)
+	require.NoError(t, err)
+
+	for _, cl := range []struct{ uuid, ns string }{
+		{clusterAllowed, testutil.TestNamespace},
+		{clusterDenied, "denied-ns"},
+	} {
+		_, err = pool.Exec(ctx, `
+			INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+			VALUES ($1, $2, $3, 'rbac-w', 'Deployment', 'rbac-c', '{"environment":"production"}'::jsonb)
+			ON CONFLICT (org_id, namespace, workload, container_name)
+			DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+			testutil.TestOrgID, cl.uuid, cl.ns)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+			VALUES ($1, $2, $3, 'rbac-w', 'Deployment', 'rbac-c', 'medium', 'cost', false, '{}', 10000, now())
+			ON CONFLICT DO NOTHING`, testutil.TestOrgID, cl.uuid, cl.ns)
+		require.NoError(t, err)
+	}
+
+	cfg := config.GetConfig()
+	origRBAC := cfg.RBACEnabled
+	cfg.RBACEnabled = true
+	t.Cleanup(func() { cfg.RBACEnabled = origRBAC })
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("user.permissions", map[string][]string{
+				"openshift.cluster": {clusterAllowed},
+				"openshift.project": {"*"},
+			})
+			return next(c)
+		}
+	})
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identity := makeIdentityHeader(testutil.TestOrgID)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift?limit=50&filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, 1, countProjects(body))
+
+	data, _ := body["data"].([]interface{})
+	require.Len(t, data, 1)
+	item := data[0].(map[string]interface{})
+	assert.Equal(t, clusterAllowed, item["cluster_uuid"])
+	assert.Equal(t, testutil.TestNamespace, item["project"])
+}
+
 func TestTagFilters_ContainerList_BracketSyntax(t *testing.T) {
 	withTagsEnabled(t)
 

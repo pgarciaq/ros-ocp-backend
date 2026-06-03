@@ -53,6 +53,10 @@ type openAPIPathItem struct {
 }
 
 type openAPIOperation struct {
+	Parameters []struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	} `json:"parameters"`
 	Responses map[string]openAPIResponse `json:"responses"`
 }
 
@@ -176,6 +180,20 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"count":                   {},
 		"quota_name":              {},
 		"capacity_freed":          {},
+		"idle_since":              {},
+		"idle_duration_days":      {},
+		"recommended_bytes":       {},
+		"days_to_full":            {},
+		"growth_bytes_per_day":    {},
+		"mounted_by":              {},
+		"vm_name":                 {},
+		"persistentvolume":        {},
+		"resize_note":             {},
+		"estimated_monthly_savings": {},
+		"usage_bytes_max":         {},
+		"data_days":               {},
+		"historical_usage":        {},
+		"terms":                   {},
 	}
 }
 
@@ -830,6 +848,108 @@ func TestOpenAPI_GPUThresholdSettings_ResponseFields(t *testing.T) {
 	})
 }
 
+func seedOpenAPIPVCRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (namespace, pvcName string) {
+	t.Helper()
+	ctx := context.Background()
+	namespace = "openapi-pvc-ns"
+	pvcName = "openapi-pvc-01"
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-pvc', 1, NOW()) ON CONFLICT DO NOTHING`,
+		testutil.TestClusterUUID,
+	)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			storageclass, recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+			notification_codes, data_days, updated_at
+		) VALUES ($1, $2, $3, $4, 'medium', 'gp3-csi', 'oversized', 0.1, 10737418240, 1073741824, '{}', 14, NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term) DO NOTHING`,
+		orgID, testutil.TestClusterUUID, namespace, pvcName,
+	)
+	require.NoError(t, err)
+	return namespace, pvcName
+}
+
+func seedOpenAPIPVCDetailData(t *testing.T, pool *pgxpool.Pool, orgID, namespace, pvcName string) {
+	t.Helper()
+	ctx := context.Background()
+	for _, term := range []string{"short", "medium", "long"} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO pvc_recommendation_sets (
+				org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+				recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+				notification_codes, data_days, updated_at
+			) VALUES ($1, $2, $3, $4, $5, 'near_full', 0.9, 10737418240, 9663676416, '{}', 30, NOW())
+			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term) DO NOTHING`,
+			orgID, testutil.TestClusterUUID, namespace, pvcName, term,
+		)
+		require.NoError(t, err)
+	}
+
+	bucketDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := bucketDate.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("daily_pvc_digests_%s", bucketDate.Format("200601"))
+	_, err := pool.Exec(ctx, fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_pvc_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, bucketDate.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	))
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO daily_pvc_digests (
+			bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim,
+			capacity_bytes, usage_bytes_min, usage_bytes_max, usage_bytes_avg, sample_count
+		) VALUES ($1::date, $2, $3, $4, $5, 10737418240, 5000000000, 9000000000, 7000000000, 24)
+		ON CONFLICT (cluster_uuid, namespace, persistentvolumeclaim, bucket_date) DO NOTHING`,
+		bucketDate.Format("2006-01-02"), orgID, testutil.TestClusterUUID, namespace, pvcName,
+	)
+	require.NoError(t, err)
+}
+
+func TestOpenAPI_PVCList_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-pvc-list"
+	_, _ = seedOpenAPIPVCRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/pvcs?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("PVCRecommendation"))
+}
+
+func TestOpenAPI_PVCDetail_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-pvc-detail"
+	namespace, pvcName := seedOpenAPIPVCRecommendation(t, pool, orgID)
+	seedOpenAPIPVCDetailData(t, pool, orgID, namespace, pvcName)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/pvcs/detail?cluster_uuid=%s&namespace=%s&persistentvolumeclaim=%s",
+			apiV1Prefix, testutil.TestClusterUUID, namespace, pvcName))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	detailSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs/detail", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), detailSchema)
+}
+
 func TestOpenAPI_PVCThresholdSettings_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
@@ -1129,6 +1249,64 @@ func TestOpenAPI_BusinessHoursNamespaceSettings_ResponseFields(t *testing.T) {
 		"200",
 	)
 	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
+}
+
+func openAPIPathHasQueryParam(spec openAPISpecDoc, path, method, paramName string) bool {
+	pathRaw, ok := spec.Paths[path]
+	if !ok {
+		return false
+	}
+	var item openAPIPathItem
+	if err := json.Unmarshal(pathRaw, &item); err != nil {
+		return false
+	}
+	var op *openAPIOperation
+	switch strings.ToUpper(method) {
+	case http.MethodGet:
+		op = item.Get
+	case http.MethodPut:
+		op = item.Put
+	case http.MethodPost:
+		op = item.Post
+	case http.MethodDelete:
+		op = item.Delete
+	}
+	if op == nil {
+		return false
+	}
+	for _, p := range op.Parameters {
+		if p.In == "query" && p.Name == paramName {
+			return true
+		}
+	}
+	return false
+}
+
+func TestOpenAPI_TagFilter_QueryParameters(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	tagFilter := "filter[tag:environment]"
+	tagGroupBy := "group_by[tag:environment]"
+
+	pathsWithTagFilter := []string{
+		"/recommendations/openshift",
+		"/recommendations/openshift/namespaces",
+		"/recommendations/openshift/nodes",
+		"/recommendations/openshift/pvcs",
+		"/recommendations/openshift/vm",
+		"/recommendations/openshift/gpu/mig",
+		"/recommendations/openshift/gpu/timeslicing",
+		"/recommendations/openshift/quota",
+		"/recommendations/openshift/cluster-quota",
+	}
+	for _, path := range pathsWithTagFilter {
+		assert.True(t, openAPIPathHasQueryParam(spec, path, http.MethodGet, tagFilter),
+			"path %s should document %s", path, tagFilter)
+	}
+
+	assert.False(t, openAPIPathHasQueryParam(spec, "/recommendations/openshift/snapshots", http.MethodGet, tagFilter),
+		"snapshot list must not expose tag filters")
+	assert.True(t, openAPIPathHasQueryParam(spec, "/recommendations/openshift/savings-summary", http.MethodGet, tagGroupBy),
+		"savings-summary should document group_by[tag:environment]")
 }
 
 func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
