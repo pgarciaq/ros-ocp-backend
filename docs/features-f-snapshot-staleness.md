@@ -466,11 +466,46 @@ locked (read-only via API).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cluster_uuid` | UUID | Filter by cluster |
-| `namespace` | string | Filter by namespace |
-| `recommendation_type` | enum | `orphaned`, `never_restored`, `redundant`, `stale`, `managed`, `active` |
+| `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
+| `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
+| `filter[recommendation_type]` | enum | `orphaned`, `never_restored`, `redundant`, `stale`, `managed`, `active` |
 | `limit` | int | Results per page (1-100, default 20) |
 | `offset` | int | Pagination offset |
+
+### Snapshot Summary
+
+`GET /api/cost-management/v1/recommendations/openshift/snapshots/summary`
+
+Aggregates classified snapshots per namespace (default) or per cluster for prioritization
+by reclaimable storage and holding cost.
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `group_by` | enum | `namespace` (default) or `cluster` |
+| `filter[cluster]` | UUID | Filter by cluster |
+| `filter[project]` | string | Filter by namespace |
+| `filter[recommendation_type]` | enum | Same values as list |
+| `order_by` | string | `reclaimable_monthly_holding_cost_usd`, `reclaimable_restore_size_gib`, `actionable_snapshot_count`, `snapshot_count` |
+| `order_how` | string | `asc` or `desc` (default `desc` when sorting by reclaimable cost) |
+| `limit` | int | Results per page (1-100, default 10) |
+| `offset` | int | Pagination offset |
+
+#### Response Shape (summary row)
+
+Grouped rows include:
+
+| Field | Description |
+|-------|-------------|
+| `snapshot_count` | Total snapshots in the group |
+| `actionable_snapshot_count` | Snapshots excluding `active` |
+| `counts_by_type` | Map of `recommendation_type` → count |
+| `reclaimable_restore_size_bytes` | Sum of restore size for orphaned/stale/never_restored/redundant |
+| `reclaimable_monthly_holding_cost_usd` | Sum of estimated monthly cost for reclaimable types |
+
+Also includes `namespace`, `cluster_uuid`, `total_restore_size_bytes`, `total_monthly_holding_cost_usd`,
+and `age_days` min/max per group. Handler: `GetSnapshotSummary` in `internal/api/handlers_snapshot_summary.go`.
 
 #### Response Shape
 
@@ -533,7 +568,24 @@ locked (read-only via API).
 See "Settings API" in the Configuration section above. The unified endpoint
 covers both classification thresholds and cost rate.
 
-## Notification Codes (Proposed)
+`DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot` removes
+per-org overrides and restores compiled defaults.
+
+## RBAC
+
+When `RBAC_ENABLE=true`, snapshot list and summary handlers scope queries to clusters the
+caller may read (`openshift.cluster` permission), consistent with quota, PVC, and node APIs.
+
+- **Permission:** `openshift.cluster:*:*` (cluster UUID in RBAC scope).
+- **Behavior:** Only allowed clusters appear in list/summary results. `filter[cluster]` for a
+  cluster outside the caller's scope returns **200** with an empty `data` array (not **403**).
+- **No ROS permissions:** **403** from identity middleware.
+
+Integration coverage: `TestGetSnapshotSummary_RBAC_FiltersByCluster` in
+`internal/api/handlers_snapshot_summary_integration_test.go`; list handler uses the same
+cluster allowlist pattern as other OCP plugins.
+
+## Notification Codes
 
 Current allocation: codes 1-30 are in use (see `internal/engine/notifications.go`).
 Snapshot codes continue the sequence:
