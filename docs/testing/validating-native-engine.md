@@ -1105,6 +1105,14 @@ Handlers: `internal/api/handlers_node_utilization.go` (CPU/memory nodes). GPU ti
 
 Design reference: [Known issues — Node recommendations](../known-issues.md) (engine behavior, thresholds, notification codes).
 
+**Business hours** are not applicable to node recommendations; they apply to container and
+namespace recommendations only. Node idle behavior uses `idle_state` and `/settings/node`
+idle/zombie thresholds.
+
+**List API RBAC:** With `RBAC_ENABLE=true`, `GET .../nodes` requires `openshift.cluster` and
+`openshift.node` permissions (same as CSV export and detail). Restricted users see only
+allowed clusters/nodes.
+
 ### Prerequisites
 
 - Node metrics in ROS container CSVs (`node_allocatable_*`, `node_capacity_*`, optional `pod_capacity` / `node_capacity_pods`) → `daily_node_digests`

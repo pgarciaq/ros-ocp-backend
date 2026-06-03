@@ -256,8 +256,10 @@ See [Configuration → Tag Sync](../configuration.md#tag-sync) for the full vari
 
 ## API usage
 
-Tag filters apply to **container list** recommendation endpoints when
-`ROS_TAGS_ENABLED=true`.
+Tag filters apply to **container** and **node** list recommendation endpoints when
+`ROS_TAGS_ENABLED=true`. For nodes, a row matches when at least one workload on that node
+runs in a namespace with the requested tag (same tag tables / `resolved_tags` path as
+containers).
 
 ### Filter syntax
 
@@ -282,11 +284,18 @@ GET /api/cost-management/v1/recommendations/openshift
 | Multiple tag keys | AND across keys |
 | `filter[tag:environment]=*` | Tag key present (any value) |
 
-**Example — production deployments only:**
+**Example — production deployments only (containers):**
 
 ```bash
 curl -s -H "x-rh-identity: $IDENTITY" \
   'https://ros.example.com/api/cost-management/v1/recommendations/openshift?filter[tag:environment]=production&limit=20'
+```
+
+**Example — nodes hosting production workloads:**
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'https://ros.example.com/api/cost-management/v1/recommendations/openshift/nodes?filter[tag:environment]=production&limit=20'
 ```
 
 **Example — platform team in staging or production:**

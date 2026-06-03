@@ -202,6 +202,10 @@ GET /api/cost-management/v1/recommendations/openshift/nodes
 GET /api/cost-management/v1/recommendations/openshift/nodes?format=csv
 ```
 
+When `RBAC_ENABLE=true`, the list is scoped by Insights permissions on
+`openshift.cluster` and `openshift.node` (same as detail and CSV export). Users
+without access to a cluster or node see an empty list rather than partial rows.
+
 | Parameter | Description |
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID |
@@ -214,6 +218,7 @@ GET /api/cost-management/v1/recommendations/openshift/nodes?format=csv
 | `filter[stranded_resource]` | `cpu`, `memory`, `none` |
 | `filter[instance_type]` | Exact instance type |
 | `filter[machineset_name]` | Exact MachineSet name |
+| `filter[tag:<key>]` | Tag value filter when `ROS_TAGS_ENABLED=true` (node must host workloads with matching namespace tags) |
 | `order_by` | `estimated_monthly_savings` (default) or `node` |
 | `limit` / `offset` | Pagination |
 
@@ -281,7 +286,19 @@ Deprecated list alias: `GET .../nodes/utilization`.
 
 ## Configurable thresholds
 
-`GET/PUT/DELETE .../settings/thresholds?recommendation_type=node`
+Canonical path:
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/settings/node
+PUT /api/cost-management/v1/recommendations/openshift/settings/node
+DELETE /api/cost-management/v1/recommendations/openshift/settings/node
+```
+
+Deprecated alias (returns `Deprecation: true` and a `Link` header to `/settings/node`):
+
+```http
+GET/PUT/DELETE .../settings/thresholds?recommendation_type=node
+```
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|

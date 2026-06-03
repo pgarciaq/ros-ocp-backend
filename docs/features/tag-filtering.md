@@ -14,9 +14,12 @@ available to ROS list APIs via:
 
 ```
 GET /api/cost-management/v1/recommendations/openshift?filter[tag:environment]=production
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[tag:environment]=production
 ```
 
-The feature is gated by `ROS_TAGS_ENABLED` on ROS. **How tags reach ROS list queries**
+The feature is gated by `ROS_TAGS_ENABLED` on ROS. Tag filters apply to **container** and
+**node** list endpoints (nodes match when at least one workload on the node has a namespace
+with the tag). Namespace, PVC, and other list APIs do not support tag filters in v1. **How tags reach ROS list queries**
 depends on deployment topology, controlled by `ROS_TAGS_SOURCE`:
 
 | Mode | `ROS_TAGS_SOURCE` | Typical deployment |
@@ -498,7 +501,9 @@ GET .../savings-summary?group_by=tag:environment
 Response shape: `{ "meta": { "count": N }, "data": [ { "tag_value": "production", "estimated_monthly_savings": { "value": "...", "units": "USD" } }, ... ] }`.
 Only **container** savings are grouped; node/PVC/snapshot totals are not split per tag value.
 
-List endpoints support tag **filters** only (not `group_by[tag:key]`).
+List endpoints that support tag **filters** (not `group_by[tag:key]`): container
+(`GET .../recommendations/openshift`), node (`GET .../nodes`). Other plugins use filters
+without tag keys.
 
 ### Empty results (`meta.warnings`)
 

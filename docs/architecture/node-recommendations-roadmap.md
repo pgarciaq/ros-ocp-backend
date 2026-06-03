@@ -29,6 +29,11 @@ Tier 1 is **shipped**, including:
 
 This document describes Tier 2 (MachineSet) and Tier 3 (MachineAutoscaler).
 
+**Business hours:** Not applicable to node recommendations. Business-hours schedules
+apply to container and namespace recommendations only. Node idle classification uses
+`idle_state` (`active` / `idle` / `zombie`) and tenant-configurable idle/zombie thresholds
+via `/settings/node`.
+
 ---
 
 ## Tier overview

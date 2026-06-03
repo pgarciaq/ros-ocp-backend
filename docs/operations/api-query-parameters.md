@@ -126,6 +126,10 @@ Response: `terms` (all configured terms), `historical_usage` (daily digests), `m
 
 **Node utilization filters** (`GET .../recommendations/openshift/nodes`):
 
+- **RBAC** — When `RBAC_ENABLE=true`, results are limited to clusters and nodes the caller
+  may access via `openshift.cluster` and `openshift.node` (same rules as list CSV export).
+- **Tag filters** — `filter[tag:<key>]=value` when `ROS_TAGS_ENABLED=true` (nodes with at
+  least one matching workload namespace tag). See [Tag Filtering](../features/tag-filtering.md).
 - `filter[engine]` — `cost` or `performance` (flat `?engine=`). Limits nested engine blocks per term; default list sort uses the cost engine.
 - `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.
 - `is_overcommitted` — `true` / `false` / omit. When `true`, only nodes where pod CPU requests exceed the overcommit threshold × allocatable (default threshold 1.5).
@@ -191,6 +195,8 @@ Unchanged from Koku conventions (no brackets):
 **Quality** (`GET .../recommendations/openshift/quality`):
 
 - `filter[engine]` — `cost` or `performance`; defaults to **cost** when omitted.
+- **Scope:** Container recommendations only. There is no quality endpoint for node,
+  namespace, PVC, or other plugins — use node list/detail metrics and notifications instead.
 
 **Fleet savings** (`GET .../recommendations/openshift/savings-summary`):
 
