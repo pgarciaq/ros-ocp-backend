@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -107,6 +109,11 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		}
 	}
 
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
+	}
+
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	crqFilter := queryparams.FirstFilter(c, "cluster_quota_name")
 	if crqFilter == "" {
@@ -174,7 +181,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	if groupByCluster {
-		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, filterSQL, args, argIdx, limit, offset)
+		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, filterSQL, args, argIdx, limit, offset, responseFormat)
 	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
@@ -239,6 +246,11 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	if resp.Data == nil {
 		resp.Data = []ClusterQuotaRecommendationListItem{}
 	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("cluster-quota-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateClusterQuotaRecCSV(ctx, w, resp.Data)
+		})
+	}
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -250,6 +262,7 @@ func getClusterQuotaRecommendationsGrouped(
 	filterSQL string,
 	args []any,
 	argIdx, limit, offset int,
+	responseFormat string,
 ) error {
 	countQuery := `SELECT COUNT(DISTINCT cluster_uuid::text) FROM cluster_quota_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
@@ -317,6 +330,11 @@ func getClusterQuotaRecommendationsGrouped(
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []ClusterQuotaRecommendationListItem{}
+	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("cluster-quota-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateClusterQuotaRecCSV(ctx, w, resp.Data)
+		})
 	}
 	return c.JSON(http.StatusOK, resp)
 }

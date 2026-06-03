@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -184,25 +185,13 @@ func GetNodeRecommendations(c echo.Context) error {
 	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
 	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
 
-	setRecommendationNoStore(c)
 	nodeCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
 	} else if len(clusterUUIDs) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterUUIDs[0])
 	}
-	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
-		Meta: model.NodeRecommendationMeta{
-			Count:           totalCount,
-			Limit:           opts.Limit,
-			Offset:          opts.Offset,
-			TotalSavingsUSD: totalSavings,
-		},
-		Data:     paged,
-		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
-		Warnings: warnings,
-		Currency: nodeCurrency,
-	})
+	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency)
 }
 
 // restrictClustersToQueryFilter narrows clusterUUIDs when filter[cluster] or the
@@ -325,12 +314,32 @@ func respondNodeGPURecommendationsTripleSQL(
 		totalSavings = &sum
 	}
 
-	setRecommendationNoStore(c)
 	nodeCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
 	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
+	}
+	return respondNodeGPURecommendations(c, opts, totalCount, allRecs, totalSavings, warnings, nodeCurrency)
+}
+
+func respondNodeGPURecommendations(
+	c echo.Context,
+	opts listoptions.ListOptions,
+	totalCount int,
+	data []model.NodeGPURecommendation,
+	totalSavings *float32,
+	warnings []string,
+	nodeCurrency string,
+) error {
+	setRecommendationNoStore(c)
+	if opts.Format == listoptions.ResponseFormatCSV {
+		if data == nil {
+			data = []model.NodeGPURecommendation{}
+		}
+		return streamCSV(c, csvFilename("gpu-timeslicing"), func(ctx context.Context, w io.Writer) error {
+			return generateNodeGPURecCSV(ctx, w, data)
+		})
 	}
 	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
@@ -339,7 +348,7 @@ func respondNodeGPURecommendationsTripleSQL(
 			Offset:          opts.Offset,
 			TotalSavingsUSD: totalSavings,
 		},
-		Data:     allRecs,
+		Data:     data,
 		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
 		Warnings: warnings,
 		Currency: nodeCurrency,

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -107,6 +109,11 @@ func GetQuotaRecommendations(c echo.Context) error {
 		}
 	}
 
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
+	}
+
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	namespaceFilter := queryparams.FirstFilter(c, "project")
 	quotaNameFilter := queryparams.FirstFilter(c, "quota_name")
@@ -173,7 +180,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 	}
 
 	if groupByCluster || groupByProject {
-		return getQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, groupByCluster, clusterFilter)
+		return getQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, groupByCluster, clusterFilter, responseFormat)
 	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, quotaAllowedOrderBy, quotaDefaultOrderBy, quotaDefaultOrderHow)
@@ -241,6 +248,11 @@ func GetQuotaRecommendations(c echo.Context) error {
 	if resp.Data == nil {
 		resp.Data = []QuotaRecommendationListItem{}
 	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("quota-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateQuotaRecCSV(ctx, w, resp.Data)
+		})
+	}
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -254,6 +266,7 @@ func getQuotaRecommendationsGrouped(
 	argIdx, limit, offset int,
 	groupByCluster bool,
 	clusterFilter string,
+	responseFormat string,
 ) error {
 	groupCol := "namespace"
 	orderCol := "namespace"
@@ -328,6 +341,11 @@ func getQuotaRecommendationsGrouped(
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []QuotaRecommendationListItem{}
+	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("quota-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateQuotaRecCSV(ctx, w, resp.Data)
+		})
 	}
 	return c.JSON(http.StatusOK, resp)
 }

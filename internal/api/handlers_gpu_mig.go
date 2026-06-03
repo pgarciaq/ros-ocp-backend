@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -34,10 +36,6 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
-	if opts.Format == listoptions.ResponseFormatCSV {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "csv format is not supported for this endpoint"})
-	}
-
 	pool := database.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -189,6 +187,11 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(paged))
 	gpuResp.Warnings = gpuResp.Meta.Warnings
+	if opts.Format == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateGPUMIGCSV(ctx, w, paged)
+		})
+	}
 	return c.JSON(http.StatusOK, gpuResp)
 }
 

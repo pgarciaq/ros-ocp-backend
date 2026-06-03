@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -94,6 +97,11 @@ func GetPVCRecommendations(c echo.Context) error {
 		}
 	}
 
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
+	}
+
 	// Optional filters: filter[cluster], filter[project], filter[recommendation_type], filter[term], filter[storageclass]
 	listFilters := parsePVCListFilters(c)
 
@@ -168,5 +176,13 @@ func GetPVCRecommendations(c echo.Context) error {
 	}
 
 	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data))
+	if responseFormat == listoptions.ResponseFormatCSV {
+		if resp.Data == nil {
+			resp.Data = []PVCRecommendationResponse{}
+		}
+		return streamCSV(c, csvFilename("pvc-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generatePVCRecCSV(ctx, w, resp.Data)
+		})
+	}
 	return c.JSON(http.StatusOK, resp)
 }

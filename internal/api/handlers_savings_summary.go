@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -94,6 +96,19 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 	if termProfile != "short" && termProfile != "medium" && termProfile != "long" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid term"})
+	}
+
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
+	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		if queryparams.GroupByIdleState(c) || queryparams.GroupByTagKey(c) != "" {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": "CSV export is not supported with group_by on savings-summary",
+			})
+		}
 	}
 
 	pool := db.GetPool()
@@ -215,6 +230,11 @@ func GetFleetSavingsSummary(c echo.Context) error {
 
 	summary.GPUSavingsNote = gpuSavingsFleetSummaryNote
 	setRecommendationNoStore(c)
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("savings-summary"), func(ctx context.Context, w io.Writer) error {
+			return generateFleetSavingsSummaryCSV(ctx, w, summary)
+		})
+	}
 	return c.JSON(http.StatusOK, summary)
 }
 
