@@ -1,5 +1,7 @@
 # ros-ocp-backend with Superpowers — Requirements Document
 
+> **Current implementation (v4.0+):** The native Go engine does **not** use t-digest. Percentiles are **exact**, computed in Go via `slices.Sort()` on values loaded from **daily digest** rows (hourly metrics aggregated at ingestion). TimescaleDB, `tvondra/tdigest`, and `ROS_USE_TDIGEST` were explored and **not adopted** (Fifteenth / Twenty-first reviews below).
+
 > **Date:** 2026-03-26 (last updated: 2026-05-11)
 > **Last triage:** 2026-03-26 — all repos triaged against `main` (autotune: `mvp_demo`). Added REQ-5.6 (cost-aware GPU recs leveraging Koku MIG support). All existing requirements remain valid.
 > **Risk review:** 2026-03-26 — 17 architectural risks/gaps identified and resolved. Added: decay workaround for `rollup()`, separate hypertables per metric domain, OOM column, continuous aggregate refresh policy, recommendation history hypertable, RBAC/pagination for new endpoints, Koku cost integration, Go-side CSV validation, Kafka partitioning by cluster, UI pending notes, recommendation quality metrics, per-capability feature flags.
@@ -940,8 +942,8 @@ Phase 3 adds exponential decay weighting in the Go recommendation engine, enable
 
 **Fallback (if S3 originals are unavailable):** If the original CSVs have been deleted from S3 (past retention), the Go binary falls back to a conservative merge: take the MAX of existing and new MAX columns, weighted-average the mean columns by `sample_count`, and **take the higher value** for each percentile column (safe for right-sizing — overestimates rather than underestimates). This fallback is logged as a warning with `ros_ingestion_late_data_fallback_total` counter.
 
-This replaces:
-- Custom Go t-digest implementation (~300 lines eliminated)
+This replaces (superseded design paths that were **not implemented**):
+- Hypothetical custom Go t-digest sketch (~300 lines) — rejected in favor of exact `slices.Sort()` on ingestion samples
 - Manual serialization/deserialization of digest blobs to `BYTEA`
 - End-of-day cron job for digest snapshots
 - Any dependency on PostgreSQL extensions for statistical computation

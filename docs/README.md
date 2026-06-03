@@ -29,7 +29,7 @@
 | [native-migration.md](architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
 | [performance-analysis.md](architecture/performance-analysis.md) | Legacy pipeline performance analysis (historical — see staleness notice) |
 | [test-plan.md](architecture/test-plan.md) | TDD test plan covering all phases |
-| [koku-tdigest-idea.md](architecture/koku-tdigest-idea.md) | Historical: t-digest exploration (superseded by Go-side exact percentiles) |
+| [koku-tdigest-idea.md](architecture/koku-tdigest-idea.md) | **Not adopted** — historical Koku/ROS t-digest feasibility study; shipped engine uses exact Go percentiles on daily digests |
 
 ## Operations & Maintenance
 

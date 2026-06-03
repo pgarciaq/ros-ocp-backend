@@ -590,7 +590,9 @@ This is called ~6 times per container (CPU p60, CPU p98, memory max, memory spik
 | GC pressure                 | Severe (trillions of short-lived `Double` objects) |
 
 
-### Alternative: T-Digest
+### Alternative: T-Digest (historical evaluation — not v4.0)
+
+> **Not implemented.** The shipped native engine uses **exact** percentiles via `slices.Sort()` (see v4.0 note at §10). The following compares approximate t-digest to exact sort for **legacy Kruize** and **optional** sketch-based designs only.
 
 T-digest is a streaming approximate percentile algorithm that maintains a compressed distribution using ~~200 centroids (~~3.2 KB), regardless of how many values are fed in.
 
@@ -3322,11 +3324,13 @@ If forward-compatibility requires a blob column (unknown future fields), protobu
 
 ---
 
-## 28. Alternative Metrics Store: TimescaleDB vs Thanos
+## 28. Alternative Metrics Store: TimescaleDB vs Thanos (historical — not v4.0)
+
+> **Not the shipped design.** v4.0 uses **plain PostgreSQL 16+** daily digest tables and **exact** Go percentiles (`slices.Sort()`). This section compares **hypothetical** Thanos vs TimescaleDB stacks for readers tracing design history; it does **not** describe current ros-ocp-backend behavior.
 
 ### Context
 
-The original proposal (§3) recommended Thanos as the metrics store to replace JSONB. This section evaluates **TimescaleDB** (a PostgreSQL extension) as a simpler alternative that achieves the same goals with less infrastructure.
+The original proposal (§3) recommended Thanos as the metrics store to replace JSONB. This section evaluates **TimescaleDB** (a PostgreSQL extension) as a simpler alternative that achieves the same goals with less infrastructure — **as a design alternative that was not adopted** for the native engine.
 
 ### Architecture Comparison
 
@@ -3346,7 +3350,7 @@ The original proposal (§3) recommended Thanos as the metrics store to replace J
 | **Operational complexity**  | High (distributed system, 3-4 services)                     | Low (single PostgreSQL extension)                        |
 
 
-### Why TimescaleDB Is Better for This Use Case
+### Why TimescaleDB Would Have Been Better (hypothetical — not adopted)
 
 **1. CSV ingestion is native and extremely fast**
 
@@ -3359,9 +3363,9 @@ Performance: **300,000-1,000,000 rows/sec** via `COPY FROM`.
 
 The Thanos path requires: parse CSV → build protobuf remote write request → snappy compress → HTTP POST → Thanos Receive → WAL → compaction. Implementing the Prometheus remote write protocol in Go is non-trivial (~300-500 lines + retry logic + batching).
 
-**2. Native t-digest eliminates custom implementation**
+**2. Native t-digest would have eliminated a custom sketch implementation (hypothetical)**
 
-TimescaleDB Toolkit provides built-in t-digest that integrates with continuous aggregates:
+In the **superseded** TimescaleDB design, Toolkit provides built-in t-digest that integrates with continuous aggregates:
 
 ```sql
 -- Pre-compute daily t-digests (auto-updating)
@@ -3477,16 +3481,16 @@ Operator → CSV → Kafka → ros-ocp-backend with superpowers
 **Services (hypothetical):** ros-ocp-backend (Go), PostgreSQL (with TimescaleDB + Toolkit extensions)
 **Eliminated vs Thanos proposal:** Thanos Receive, Thanos Store Gateway, Thanos Compactor, object storage
 
-### Impact on §25 Performance Model
+### Impact on §25 Performance Model (hypothetical Thanos vs TimescaleDB only)
 
 
-| Metric                                   | With Thanos                                 | With TimescaleDB                          | Delta                                            |
+| Metric                                   | With Thanos (hypothetical)                  | With TimescaleDB (hypothetical)           | Delta                                            |
 | ---------------------------------------- | ------------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
 | Ingestion throughput                     | ~15,000 containers/sec                      | ~15,000-20,000 containers/sec             | Same or slightly better (`COPY` vs remote write) |
-| Recommendation throughput                | ~60,000 containers/sec                      | ~60,000 containers/sec                    | Same (t-digest in both cases)                    |
+| Recommendation throughput                | ~60,000 containers/sec                      | ~60,000 containers/sec                    | Same (sketch-based percentiles in both hypothetical paths) |
 | Infrastructure services                  | 2 (ros-ocp + PG) + Thanos (3-4) = 5-6 total | 2 (ros-ocp + PG w/ TimescaleDB) = 2 total | **3-4 fewer services**                           |
 | Implementation effort (metrics pipeline) | ~3-4 weeks                                  | ~1-2 weeks                                | **~2 weeks saved**                               |
-| T-digest implementation                  | Custom Go (~300 lines)                      | Built-in (`timescaledb_toolkit`)          | **~300 lines saved**                             |
+| Percentile implementation (hypothetical) | Custom Go t-digest sketch (~300 lines)      | Built-in (`timescaledb_toolkit`)          | Toolkit avoids custom sketch code — **neither path shipped** |
 | Custom timeframe support                 | Custom merge + decay logic                  | `rollup()` + continuous aggregates        | **Simpler**                                      |
 
 

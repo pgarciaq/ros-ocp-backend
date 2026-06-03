@@ -1,5 +1,11 @@
 # T-Digest for Koku Cost Analytics — Feasibility Analysis
 
+> **Status: NOT ADOPTED.** This document is a **historical exploration / proposal** only. It was **not implemented** in ros-ocp-backend or in Koku cost analytics as of the native Go engine (v4.0+).
+>
+> **Shipped ROS approach:** Streaming aggregation during ingestion → **daily digest** rows in plain PostgreSQL → **exact percentiles** in Go (`slices.Sort()` on `[]int64` samples). No t-digest extension, no TimescaleDB, no approximate sketch columns.
+>
+> The superseded TimescaleDB + t-digest ROS design is preserved at git tag `v1.0-timescaledb`. See [`requirements.md`](requirements.md) (Fifteenth / Twenty-first reviews) and [`performance-analysis.md`](performance-analysis.md) (v4.0 header).
+
 ## 1. Current State
 
 Koku's entire cost calculation pipeline uses **simple additive aggregations** — `SUM`, `MAX`, `MIN`, `COUNT`, `GROUP BY`. There are no percentile, variance, or distribution-aware computations anywhere in the codebase:
@@ -204,7 +210,7 @@ This is a **fairer** allocation model for shared infrastructure costs. Note: thi
 | **Variance-weighted allocation** | Medium | High (policy) | Yes | Yes | Yes (mergeability required for cross-dimension rollup) |
 | **Cross-tenant analytics (SaaS)** | High | High | N/A | Yes | **Yes** (`percentile_cont` breaks at 10K+ tenant scale) |
 
-## 6. Recommendation
+## 6. Recommendation (exploration only — not implemented)
 
 ### For on-prem Koku (1-10 clusters, ≤3 years)
 
@@ -219,16 +225,16 @@ This is a **fairer** allocation model for shared infrastructure costs. Note: thi
 
 **The tvondra/tdigest extension is the right tool**. At SaaS scale, cross-tenant analytics and per-tenant anomaly detection require mergeable, pre-computed summaries. `percentile_cont` cannot scale to billions of daily summary rows across thousands of schemas.
 
-However, if TimescaleDB is already deployed (as proposed in the ROS superpowers architecture), its built-in `timescaledb_toolkit` provides an equivalent t-digest implementation. No need for a separate extension.
+> **ROS note:** An early ros-ocp-backend design considered TimescaleDB + `timescaledb_toolkit` t-digest; that path was **rejected** (AWS RDS has no TimescaleDB; exact Go percentiles on daily digests proved sufficient). The table below applies to **Koku cost analytics** exploration only, not the shipped ROS engine.
 
-### Extension choice summary
+### Extension choice summary (Koku exploration only — not ros-ocp-backend v4.0)
 
-| Deployment | Recommended Approach |
+| Deployment | Explored approach (not adopted for ROS) |
 |---|---|
 | On-prem, simple | `percentile_cont` (built-in) |
 | On-prem, advanced (anomaly detection, pre-computed dashboards) | tvondra/tdigest (standalone, lightweight) |
-| SaaS with TimescaleDB (ROS superpowers) | `timescaledb_toolkit` t-digest (already included) |
-| SaaS without TimescaleDB | tvondra/tdigest |
+| SaaS with TimescaleDB (superseded ROS design) | `timescaledb_toolkit` t-digest — **not shipped** |
+| SaaS without TimescaleDB | tvondra/tdigest — **not shipped** |
 
 ## 7. Implementation Sketch (if pursued)
 
