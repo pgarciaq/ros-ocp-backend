@@ -64,6 +64,28 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
+	if clusterFilterMiss {
+		setRecommendationNoStore(c)
+		gpuResp := model.GPUMIGListResponse{
+			Meta: model.GPUMIGListMeta{
+				Count:  0,
+				Limit:  opts.Limit,
+				Offset: opts.Offset,
+			},
+			Data: []model.GPUMIGRecommendationEntry{},
+		}
+		attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, 0)
+		gpuResp.Warnings = gpuResp.Meta.Warnings
+		if opts.Format == listoptions.ResponseFormatCSV {
+			return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
+				return generateGPUMIGCSV(ctx, w, gpuResp.Data)
+			})
+		}
+		return c.JSON(http.StatusOK, gpuResp)
+	}
+
 	var warnings []string
 	var gpuClusterErrors []error
 	var entries []model.GPUMIGRecommendationEntry
@@ -122,6 +144,10 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	entries = filterGPUMIGEntriesByRBAC(entries, userPerms)
+
+	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
+		entries = filterGPUMIGEntriesByNamespaces(entries, projects)
+	}
 
 	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
 		states, idleErr := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
@@ -216,6 +242,20 @@ func gpuMIGEntryRBACVisible(nodeName string, userPerms map[string][]string) bool
 		}
 	}
 	return false
+}
+
+func filterGPUMIGEntriesByNamespaces(entries []model.GPUMIGRecommendationEntry, namespaces []string) []model.GPUMIGRecommendationEntry {
+	allowed := make(map[string]struct{}, len(namespaces))
+	for _, ns := range namespaces {
+		allowed[ns] = struct{}{}
+	}
+	filtered := entries[:0]
+	for _, e := range entries {
+		if _, ok := allowed[e.Namespace]; ok {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
 }
 
 func filterGPUMIGEntriesByRBAC(entries []model.GPUMIGRecommendationEntry, userPerms map[string][]string) []model.GPUMIGRecommendationEntry {

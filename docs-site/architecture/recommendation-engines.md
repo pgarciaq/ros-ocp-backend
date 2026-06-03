@@ -141,6 +141,12 @@ Default terms: same as container (1d / 7d / 15d). See [Cost Integration — Node
 
 No cost/performance engine split. One classification per (container, GPU model, term).
 
+`filter[engine]=cost|performance` applies to container, namespace, node, and VM list
+routes only. GPU plugin APIs (`GET .../gpu/mig`, `GET .../gpu/timeslicing`, container
+detail `gpu.{term}`) use **recommendation terms** (`short` / `medium` / `long`) instead.
+See [GPU MIG](../features/gpu-mig.md#recommendation-terms-vs-dual-engine) and
+[GPU Time-Slicing](../features/gpu-time-slicing.md).
+
 ### Classification thresholds
 
 Evaluated in order on daily-average DCGM metrics across the term window:
