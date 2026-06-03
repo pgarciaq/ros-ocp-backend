@@ -8,7 +8,7 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 
 1. **Partitioned digest/sample tables** — monthly partitions older than `ROS_RETENTION_MONTHS`
 2. **History/quality tables** — monthly partitions older than `ROS_HISTORY_RETENTION_DAYS`
-3. **Stale recommendations** — recommendation_sets marked `stale = true` older than `ROS_STALE_ARCHIVE_DAYS`
+3. **Stale recommendations** — recommendation_sets marked `stale = true` older than `ROS_STALE_CLEANUP_DAYS`
 4. **Snapshot inventory** — raw snapshot rows older than `ROS_SNAPSHOT_INVENTORY_RETENTION_H`
 
 ## Configuration
@@ -17,7 +17,7 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 |---------------------|---------|-------------|
 | `ROS_RETENTION_MONTHS` | 6 | Months to retain digest/sample partitions |
 | `ROS_HISTORY_RETENTION_DAYS` | 90 | Days to retain recommendation history and quality data |
-| `ROS_STALE_ARCHIVE_DAYS` | 30 | Days before stale recommendations are deleted |
+| `ROS_STALE_CLEANUP_DAYS` | 30 | Days before stale recommendations are deleted |
 | `ROS_SNAPSHOT_INVENTORY_RETENTION_H` | 48 | Hours to retain raw snapshot inventory rows |
 
 ## Tables Swept
@@ -53,7 +53,7 @@ Partitions are named `<parent_table>_YYYYMM` (e.g., `daily_container_digests_202
 
 ## Stale Recommendation Cleanup
 
-Recommendations in `recommendation_sets` with `stale = true` AND `updated_at` older than `ROS_STALE_ARCHIVE_DAYS` are permanently deleted. This prevents indefinite accumulation of recommendations for decommissioned workloads.
+Recommendations in `recommendation_sets` with `stale = true` AND `updated_at` older than `ROS_STALE_CLEANUP_DAYS` are permanently deleted. This prevents indefinite accumulation of recommendations for decommissioned workloads.
 
 ## Plugin Integration
 

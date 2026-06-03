@@ -20,6 +20,30 @@ var qualityPartitionMissing = promauto.NewCounter(prometheus.CounterOpts{
 	Help: "Number of recommendation_quality writes that failed due to missing partition",
 })
 
+var (
+	QualityOOMRate = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ros_recommendation_oom_rate",
+			Help: "Rate of OOM events after recommendation, per org/cluster",
+		},
+		[]string{"org_id", "cluster_id"},
+	)
+	QualityStability = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ros_recommendation_stability",
+			Help: "Average recommendation stability percentage, per org/cluster",
+		},
+		[]string{"org_id", "cluster_id"},
+	)
+	QualityAdoptionRate = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ros_recommendation_adoption_rate",
+			Help: "Percentage of recommendations where adoption was detected, per org/cluster",
+		},
+		[]string{"org_id", "cluster_id"},
+	)
+)
+
 // OldRecommendation holds previous recommendation values read from
 // recommendation_sets before WriteRecommendations overwrites them.
 type OldRecommendation struct {
@@ -194,6 +218,7 @@ func WriteRecommendationQuality(
 		engine string
 	}
 	seen := map[qualityKey]bool{}
+	clusterAggs := map[qualityClusterAggKey]*qualityClusterAgg{}
 	batch := &pgx.Batch{}
 
 	for _, r := range newRecs {
@@ -232,6 +257,19 @@ func WriteRecommendationQuality(
 
 		oomEventsAfter := oomCountsByContainer[key]
 
+		ck := qualityClusterAggKey{orgID: r.OrgID, clusterUUID: r.ClusterUUID}
+		agg := clusterAggs[ck]
+		if agg == nil {
+			agg = &qualityClusterAgg{}
+			clusterAggs[ck] = agg
+		}
+		agg.stabilitySum += float64(stabilityPct)
+		if adopted {
+			agg.adopted++
+		}
+		agg.oomSum += float64(oomEventsAfter)
+		agg.n++
+
 		batch.Queue(`
 			INSERT INTO recommendation_quality (
 				measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, engine,
@@ -265,7 +303,36 @@ func WriteRecommendationQuality(
 			return fmt.Errorf("WriteRecommendationQuality batch exec: %w", err)
 		}
 	}
+
+	emitQualityGaugeMetrics(clusterAggs)
+
 	return nil
+}
+
+type qualityClusterAggKey struct {
+	orgID       string
+	clusterUUID string
+}
+
+type qualityClusterAgg struct {
+	stabilitySum float64
+	adopted      int
+	oomSum       float64
+	n            int
+}
+
+// emitQualityGaugeMetrics publishes per-cluster aggregates after a successful quality write batch.
+// DB/API stability_pct is 0.0–1.0; Prometheus stability and adoption gauges use 0–100 per metric help.
+func emitQualityGaugeMetrics(clusterAggs map[qualityClusterAggKey]*qualityClusterAgg) {
+	for key, agg := range clusterAggs {
+		if agg == nil || agg.n == 0 {
+			continue
+		}
+		n := float64(agg.n)
+		QualityStability.WithLabelValues(key.orgID, key.clusterUUID).Set(agg.stabilitySum / n * 100)
+		QualityAdoptionRate.WithLabelValues(key.orgID, key.clusterUUID).Set(float64(agg.adopted) / n * 100)
+		QualityOOMRate.WithLabelValues(key.orgID, key.clusterUUID).Set(agg.oomSum / n)
+	}
 }
 
 func isPartitionMissing(err error) bool {

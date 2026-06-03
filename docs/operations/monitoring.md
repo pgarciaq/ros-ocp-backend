@@ -165,13 +165,27 @@ Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT
 
 GPU recommendation duration is recorded under `rosocp_recommendation_duration_seconds{type="gpu"}` (API enrichment path in `internal/api/handlers_node_recs.go`).
 
+### Recommendation quality (processor)
+
+Emitted after each successful `WriteRecommendationQuality` batch during container ingestion. Label `cluster_id` is the cluster UUID.
+
+| Metric | Type | Labels | What it measures |
+|--------|------|--------|------------------|
+| `ros_recommendation_oom_rate` | Gauge | `org_id`, `cluster_id` | Mean `oom_events_after_rec` per quality row written in the batch |
+| `ros_recommendation_stability` | Gauge | `org_id`, `cluster_id` | Mean recommendation stability (0–100; 100 = no change vs prior cycle) |
+| `ros_recommendation_adoption_rate` | Gauge | `org_id`, `cluster_id` | Percentage of quality rows in the batch with `adoption_detected` |
+
+**Source file:** `internal/engine/quality.go`
+
+The `/recommendations/openshift/quality` API returns `stability_pct` on a **0.0–1.0** scale; Prometheus stability uses 0–100.
+
 ### Retention
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
 | `rosocp_retention_partitions_dropped_total` | Counter | — | Monthly partitions dropped by the retention sweep |
 
-Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_ARCHIVE_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_H`. See [retention.md](retention.md).
+Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_H`. See [retention.md](retention.md).
 
 ---
 

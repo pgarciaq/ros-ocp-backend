@@ -364,12 +364,12 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_ARCHIVE_DAYS` for deletion timing.</em> | 48 | `ROS_STALENESS_THRESHOLD_HOURS`, `ROS_STALE_DATA_THRESHOLD_HOURS` (alias) | — | — | No |
+| Staleness threshold (hours) <br><em>Hours without a cluster usage report before recommendations are marked **stale**. Stale rows stay visible but flagged. Lower (48) surfaces ingest gaps sooner; higher (120+) tolerates long upload holidays. Works with `ROS_STALE_CLEANUP_DAYS` for deletion timing.</em> | 48 | `ROS_STALENESS_THRESHOLD_HOURS`, `ROS_STALE_DATA_THRESHOLD_HOURS` (alias) | — | — | No |
 | Max digest lookback (days) <br><em>Hard cap on digest history queries. Lower speeds DB work; raise for seasonal analysis if partitions retained. Must stay within `ROS_RETENTION_MONTHS` data still on disk.</em> | 90 | `ROS_MAX_LOOKBACK_DAYS` | — | — | No |
 | OOM memory bump base factor <br><em>Log-scaling constant after OOMKill events. Higher → larger memory bumps; pairs with `ROS_OOM_MAX_BUMP` cap.</em> | 0.15 | `ROS_OOM_BASE_BUMP` | — | — | No |
 | OOM memory bump max multiplier <br><em>Max memory recommendation multiplier after repeated OOMs (1.60 = +60% cap). Prevents runaway suggestions from crash loops.</em> | 1.60 | `ROS_OOM_MAX_BUMP` | — | — | No |
 | Recommendation history retention (days) <br><em>Archived prior recommendation versions kept for audit. Independent of digest partition retention.</em> | 90 | `ROS_HISTORY_RETENTION_DAYS` | — | — | No |
-| Stale recommendation archive (days) <br><em>Permanently delete stale recommendations after this many days. 30d default grace before UI cleanup.</em> | 30 | `ROS_STALE_ARCHIVE_DAYS` | — | — | No |
+| Stale recommendation cleanup (days) <br><em>Permanently delete stale recommendations after this many days. 30d default grace before UI cleanup. `ROS_STALE_ARCHIVE_DAYS` is a deprecated alias.</em> | 30 | `ROS_STALE_CLEANUP_DAYS` | — | — | No |
 | Digest partition retention (months) <br><em>Drop monthly digest partitions older than N months. **Irreversible**—align with lookback and compliance needs.</em> | 6 | `ROS_RETENTION_MONTHS` | — | — | No |
 | Plugin allowlist (CSV) <br><em>Only listed plugins run; empty = all. See General / Infrastructure for deploy-focused notes.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>Skipped plugins; overrides allowlist. Example: `gpu,snapshot` without DCGM or inventory.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |

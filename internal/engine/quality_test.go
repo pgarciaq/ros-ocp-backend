@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	promtest "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,6 +35,24 @@ func TestStabilityPct(t *testing.T) {
 			assert.InDelta(t, tt.want, got, 0.001)
 		})
 	}
+}
+
+func TestEmitQualityGaugeMetrics(t *testing.T) {
+	orgID := "org123"
+	clusterUUID := "cluster-uuid-1"
+
+	emitQualityGaugeMetrics(map[qualityClusterAggKey]*qualityClusterAgg{
+		{orgID: orgID, clusterUUID: clusterUUID}: {
+			stabilitySum: 1.5,
+			adopted:      1,
+			oomSum:       4,
+			n:            2,
+		},
+	})
+
+	assert.InDelta(t, 75.0, promtest.ToFloat64(QualityStability.WithLabelValues(orgID, clusterUUID)), 0.01)
+	assert.InDelta(t, 50.0, promtest.ToFloat64(QualityAdoptionRate.WithLabelValues(orgID, clusterUUID)), 0.01)
+	assert.InDelta(t, 2.0, promtest.ToFloat64(QualityOOMRate.WithLabelValues(orgID, clusterUUID)), 0.01)
 }
 
 func TestAdoptionDetection(t *testing.T) {

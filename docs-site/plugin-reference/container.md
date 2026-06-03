@@ -36,12 +36,23 @@ See [Container recommendations](../features/container-recommendations.md) and [D
 ```
 GET /api/cost-management/v1/recommendations/openshift
 GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
-GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}/history
 ```
 
 Legacy aliases: `GET .../openshift/recommendations`, `GET .../detail`.
 
-Handlers: [`GetRecommendationSetListWithFallback`](../../internal/api/handlers.go), detail and history handlers in `internal/api/`.
+Handlers: [`GetRecommendationSetListWithFallback`](../../internal/api/handlers.go), detail handlers in `internal/api/`.
+
+### History
+
+Container recommendation history is available via the fleet history endpoint:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/history?filter[container]=<name>&filter[cluster]=<id>
+```
+
+There is no per-container-ID history sub-resource. Use query filters on the fleet endpoint to retrieve history for a specific container.
+
+See [Recommendation History & Quality](../features/history-and-quality.md#history).
 
 ## Key features
 

@@ -124,3 +124,41 @@ func TestNonClowderConfigurationLoads(t *testing.T) {
 		t.Errorf("DBCACert = %q, want %q", config.DBCACert, "test-ca-cert")
 	}
 }
+
+func TestLegacyStaleArchiveDaysEnv(t *testing.T) {
+	t.Setenv("CLOWDER_ENABLED", "false")
+	t.Setenv("ROS_STALE_CLEANUP_DAYS", "")
+	t.Setenv("ROS_STALE_ARCHIVE_DAYS", "45")
+	t.Setenv("DB_HOST", "test-postgres")
+	t.Setenv("DB_PORT", "5432")
+
+	viper.Reset()
+	cfg = nil
+
+	config := GetConfig()
+	if config == nil {
+		t.Fatal("GetConfig() returned nil")
+	}
+	if config.StaleCleanupDays != 45 {
+		t.Errorf("StaleCleanupDays = %d, want 45 (from deprecated ROS_STALE_ARCHIVE_DAYS)", config.StaleCleanupDays)
+	}
+}
+
+func TestStaleCleanupDaysEnvTakesPrecedenceOverLegacy(t *testing.T) {
+	t.Setenv("CLOWDER_ENABLED", "false")
+	t.Setenv("ROS_STALE_CLEANUP_DAYS", "21")
+	t.Setenv("ROS_STALE_ARCHIVE_DAYS", "45")
+	t.Setenv("DB_HOST", "test-postgres")
+	t.Setenv("DB_PORT", "5432")
+
+	viper.Reset()
+	cfg = nil
+
+	config := GetConfig()
+	if config == nil {
+		t.Fatal("GetConfig() returned nil")
+	}
+	if config.StaleCleanupDays != 21 {
+		t.Errorf("StaleCleanupDays = %d, want 21 (ROS_STALE_CLEANUP_DAYS overrides legacy)", config.StaleCleanupDays)
+	}
+}

@@ -253,7 +253,7 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Recommendation history retention. |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours before recommendations marked stale. |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS`. |
-| `ROS_STALE_ARCHIVE_DAYS` | `30` | Delete stale recommendations after N days. |
+| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations after N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Max digest lookback for queries. |
 
 ---

@@ -1033,11 +1033,11 @@ Additional fixes from the P0/P1 pass:
 - Repo: ros-ocp-backend
 - Operators must bounce pods for every tuning change—slow iteration and higher outage windows.
 
-**#196 — `ROS_STALE_ARCHIVE_DAYS` has no `viper.SetDefault`**
+**#196 — `ROS_STALE_CLEANUP_DAYS` (formerly `ROS_STALE_ARCHIVE_DAYS`) has no `viper.SetDefault`**
 - **Status: ✅ FIXED** (P2 batch 7)
 - Repo: ros-ocp-backend
 - Missing `viper.SetDefault` means unset env vars read as Go zero values without surfacing misconfiguration.
-- **Fix:** Added `viper.SetDefault("ROS_STALE_ARCHIVE_DAYS", 30)` and validation in `validateLoadedConfig`.
+- **Fix:** Added `viper.SetDefault("ROS_STALE_CLEANUP_DAYS", 30)` and validation in `validateLoadedConfig`.
 
 **#197 — `PutTermSettings` has no request body size limit**
 - **Status:** **Fixed** in `f56c2d2`

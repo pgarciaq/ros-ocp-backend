@@ -136,13 +136,13 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		}
 	}
 
-	// Stale recommendation archive: delete stale recommendations that haven't
-	// received new data in staleArchiveDays (default 30 days).
-	staleArchiveDays := cfg.StaleArchiveDays
-	if staleArchiveDays <= 0 {
-		staleArchiveDays = 30
+	// Stale recommendation cleanup: delete stale recommendations that haven't
+	// received new data in staleCleanupDays (default 30 days).
+	staleCleanupDays := cfg.StaleCleanupDays
+	if staleCleanupDays <= 0 {
+		staleCleanupDays = 30
 	}
-	staleCutoff := time.Now().UTC().AddDate(0, 0, -staleArchiveDays)
+	staleCutoff := time.Now().UTC().AddDate(0, 0, -staleCleanupDays)
 	tag, err := pool.Exec(ctx,
 		"DELETE FROM recommendation_sets WHERE stale = true AND updated_at < $1",
 		staleCutoff,

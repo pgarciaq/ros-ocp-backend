@@ -586,17 +586,14 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		}
 		totalWritten += len(batch)
 
-		if histErr := engine.WriteRecommendationHistory(ctx, pool, batch, ""); histErr != nil {
-			log.Errorf("native engine: writing recommendation history failed: %v", histErr)
+		analytics := engine.WriteContainerBatchAnalytics(ctx, pool, batch, oldRecs, "")
+		if analytics.HistoryErr != nil {
+			log.Errorf("native engine: writing recommendation history failed: %v", analytics.HistoryErr)
 			pipelineDegraded = true
 		}
-
-		if oldRecs != nil {
-			oomCounts := engine.OOMCountsByContainer(batch)
-			if qualErr := engine.WriteRecommendationQuality(ctx, pool, batch, oldRecs, oomCounts); qualErr != nil {
-				log.Errorf("native engine: writing quality metrics failed: %v", qualErr)
-				pipelineDegraded = true
-			}
+		if analytics.QualityErr != nil {
+			log.Errorf("native engine: writing quality metrics failed: %v", analytics.QualityErr)
+			pipelineDegraded = true
 		}
 
 		return nil
@@ -781,8 +778,11 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
 
+	namespaceAnalyticsDegraded := false
 	bhWritten := 0
-	if bhResults, bhErr := engine.RecommendBusinessHoursNamespaces(ctx, pool, orgID, clusterUUID, start, now); bhErr != nil {
+	var bhResults []engine.NamespaceRec
+	bhResults, bhErr := engine.RecommendBusinessHoursNamespaces(ctx, pool, orgID, clusterUUID, start, now)
+	if bhErr != nil {
 		log.Errorf("native namespace engine: business hours recommendation failed: %v", bhErr)
 		return fmt.Errorf("recommend business hours namespaces: %w", bhErr)
 	} else if len(bhResults) > 0 {
@@ -791,12 +791,6 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 			return fmt.Errorf("write business hours namespace recommendations: %w", err)
 		}
 		bhWritten = len(bhResults)
-		if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, bhResults); err != nil {
-			log.Errorf("native namespace engine: writing business hours history failed: %v", err)
-			if isTransientKafkaProcessingError(err) {
-				return fmt.Errorf("write business hours namespace history: %w", err)
-			}
-		}
 	}
 
 	if err := engine.AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
@@ -806,11 +800,16 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	metrics.IncRecommendationsWritten("namespace", len(results)+bhWritten)
 	log.Infof("native namespace engine: wrote %d all-hours and %d business-hours recommendations", len(results), bhWritten)
 
-	if err := engine.WriteNamespaceRecommendationHistory(ctx, pool, results); err != nil {
-		log.Errorf("native namespace engine: writing history failed: %v", err)
-		if isTransientKafkaProcessingError(err) {
-			return fmt.Errorf("write namespace history: %w", err)
-		}
+	var bhHistory []engine.NamespaceRec
+	if bhWritten > 0 {
+		bhHistory = bhResults
+	}
+	if engine.WriteNamespaceBatchAnalytics(ctx, pool, results, bhHistory) {
+		namespaceAnalyticsDegraded = true
+	}
+
+	if namespaceAnalyticsDegraded {
+		log.Warn("native namespace engine: analytics pipeline incomplete (history) — namespace recommendations were written")
 	}
 
 	if plugin.EnabledFor("quota") {

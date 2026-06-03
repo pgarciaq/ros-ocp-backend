@@ -25,7 +25,7 @@ digest `bucket_date`).
 |-----------|--------|
 | `now - latest_bucket_date > threshold` | `recommendation_sets.stale = true` |
 | New data arrives within threshold | `stale` reset to `false` on next run |
-| Stale for > `ROS_STALE_ARCHIVE_DAYS` (default 30) | Deleted by retention sweep |
+| Stale for > `ROS_STALE_CLEANUP_DAYS` (default 30) | Deleted by retention sweep |
 
 ### Notification
 
@@ -48,14 +48,14 @@ digest `bucket_date`).
 | Env Var | Default | Description |
 |---------|---------|-------------|
 | `ROS_STALENESS_THRESHOLD_HOURS` | 48 | Hours without data before marking stale |
-| `ROS_STALE_ARCHIVE_DAYS` | 30 | Days after which stale recs are deleted |
+| `ROS_STALE_CLEANUP_DAYS` | 30 | Days after which stale recs are deleted |
 
 ### Key Files
 
 - `internal/engine/recommend_all.go` — `StalenessThreshold()`, staleness evaluation
 - `internal/engine/recommend_namespace.go` — Same logic for namespace recs
 - `internal/engine/notifications.go` — `NotifStaleData` emission
-- `internal/engine/retention.go` — Stale archive sweep
+- `internal/engine/retention.go` — Stale cleanup sweep
 - `internal/api/handlers.go` — `?stale` query parameter parsing
 - `internal/model/recommendation_set_native.go` — Removed hardcoded `WHERE stale = false`
 - `internal/config/config.go` — Config fields
@@ -299,7 +299,7 @@ GPU persistence, COST-7523 snapshot metric).
 
 - `internal/engine/detect_idle_test.go` — Idle/abandoned detection
 - `internal/engine/notifications_test.go` — Notification emission logic
-- `internal/engine/retention_test.go` — Stale archive sweep
+- `internal/engine/retention_test.go` — Stale cleanup sweep
 - `internal/engine/adoption_test.go` — Adoption detection
 - `internal/engine/recommend_all_test.go` — Configurable staleness
 

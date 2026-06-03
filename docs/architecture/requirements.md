@@ -37,7 +37,7 @@
 > **Historical tracking and quality API (2026-05-01):** `GET .../history` and `GET .../quality` endpoints with pagination, filtering, and CSV export. `cluster_uuid` columns migrated from TEXT to UUID. Separate retention policy for history and quality tables.
 > **GPU recommendations (2026-05-01 – 2026-05-03):** Full GPU recommendation engine: DCGM profiling metric classification (idle/underutilized/memory-bound/compute-bound/well-utilized/no-profiling). MIG profile selection (A100/A30/H100/H200/B100/B200). Two-tier GPU support (Turing+ full profiling, Volta/Pascal frame-buffer only). GPU ingestion pipeline (`gpu_container_digests` table) wired end-to-end. GPU savings estimation from Koku cost data (`effective_rates` endpoint). API filters (`has_gpu`, `gpu_model`, `gpu_classification`). OpenAPI documentation for GPU query parameters.
 > **GPU time-slicing (2026-05-03 – 2026-05-04):** Node-level time-slicing recommendations (`GET /recommendations/openshift/gpu/timeslicing`; historically `/recommendations/openshift/nodes`) with pagination and RBAC. Lightweight **`GET /recommendations/openshift/gpu`** summary (counts + links to timeslicing/MIG listings). Container-level time-slicing cross-reference (`time_slicing_node`, `time_slicing_replicas`). Per-container time-slicing dollar savings (`estimated_monthly_timeslicing_savings_usd`). `gpu_container_digests` added to retention sweep. `gpu_model_name` added to unique constraint. Explicit `no_profiling` GPU classification. GPU audit fixes (migration test, OpenAPI enum, rate dedup).
-> **Staleness, idle, adoption, fleet summary (2026-05-04 – 2026-05-05):** Stale data detection (`?stale=` API filter, configurable threshold, archive sweep, `NotifStaleData`). Idle/abandoned workload detection (CPU+memory idle < 10mc/10MiB, zero-usage abandoned, 100% savings estimate). Adoption detection (compares current requests to prior rec with 15% tolerance). Fleet summary endpoint (`GET .../fleet-summary`). Feature docs consolidated into repository.
+> **Staleness, idle, adoption, fleet summary (2026-05-04 – 2026-05-05):** Stale data detection (`?stale=` API filter, configurable threshold, stale cleanup sweep (delete after N days), `NotifStaleData`). Idle/abandoned workload detection (CPU+memory idle < 10mc/10MiB, zero-usage abandoned, 100% savings estimate). Adoption detection (compares current requests to prior rec with 5% tolerance). Fleet summary endpoint (`GET .../fleet-summary`). Feature docs consolidated into repository.
 > **PVC right-sizing (2026-05-05 – 2026-05-06):** PVC right-sizing recommendations (F27). Classifications: oversized (< 20% usage), near-full (> 85%), orphaned (zero usage 3+ days), healthy. Growth trend projection via linear regression. `GET /recommendations/openshift/pvcs` API endpoint. Notification codes 20 (orphaned), 29 (oversized), 30 (near-full).
 > **Snapshot staleness detection (2026-05-06 – 2026-05-09):** Snapshot staleness design doc and file routing architecture. Classification rules (orphaned, stale, never-restored, redundant, managed, active). Unified settings API with env-var locking. Snapshot recommendation removal policy. End-to-end implementation: ingestion, classification, API (`GET .../snapshots`, `GET|PUT .../settings/snapshot`). Retention sweep for snapshot inventory. Notification codes 31–35. Critical filename substring convention documented.
 > **Node right-sizing and feature enablement (2026-05-10):** (1) **Node/namespace recs enabled by default**: Removed `ROS_ENABLE_NODE_RECS` feature gate. Namespace recs unconditional on-prem; cloud gated by Unleash kill switch `rosocp.namespace_disabled`. (2) **Tier 2 operator capacity data**: koku-metrics-operator emits `node_capacity_cpu_cores`/`node_capacity_memory_bytes` in ROS CSVs; parser and digest pipeline wired; `resolveAllocatable()` prefers capacity over request-based fallback. (3) **EMA trend smoothing**: configurable `ROS_NODE_EMA_ALPHA` (default 0.3) applied to daily CPU utilization before linear regression. (4) **EMA imbalance stranded detection**: Replaced two fixed thresholds with single `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default 0.6) using EMA-smoothed `|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)`. (5) **Nise**: ROS CSV generator updated for node capacity columns. (6) **3 correctness bugs fixed** in recommendation engine. (7) **Documentation**: known-issues updated, keyset pagination documented as future improvement.
@@ -204,9 +204,9 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
 |---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
 | F53 | **Recommendation quality metrics** | OOM rate after recs, recommendation stability (drift between cycles), adoption detection. Prometheus metrics + `/quality` endpoint. | 10 | REQ-10.6 | No | Active | **YES** | **Net-new** — Legacy has Prometheus metrics (Echo middleware) for request counts/latency, but no recommendation quality metrics (OOM rate, stability, adoption). Kruize has Micrometer logging for notification-level metrics tags but nothing application-facing. | Simplified: dropped `accuracy_score` (needs app-level feedback unavailable). |
-| F54 | **Recommendation adoption detection** | Compare current resource requests vs prior recommendation. If within 15% tolerance, mark "likely applied". Track adoption rate per cluster/org. | 10 | REQ-10.7 | No | Active | **YES** | **Net-new** — No adoption detection in legacy pipeline. | `recommendation_applied_at` column + `RECOMMENDATION_APPLIED` notification. |
-| F55 | **Recommendation staleness detection** | Flag recs with no new data for >48h. Archive after 30d. API `?stale=false` filter. | 10 | REQ-10.8 | No | Active | **YES** | **Net-new** — Legacy has `RecommendationPollIntervalHours` for re-polling cadence and `NeedRecommOnFirstOfMonth` logic, but no explicit staleness flag or API filter. | `stale` column + `STALE_DATA` notification. |
-| F56 | **Recommendation history** | Time-series of all past recommendations in `recommendation_history` partitioned table. Retained 90d (old partitions dropped). API endpoint `/:id/history`. | 10 | R5 (risk resolution), §18 | No | Active | **YES** | **Enhanced** — Legacy has `HistoricalRecommendationSet` and `HistoricalNamespaceRecommendationSet` tables (JSONB, partitioned, upsert on conflict). New system: `recommendation_history` partitioned table with 90d retention and a dedicated `/:id/history` API endpoint (legacy has no history API). | Replaces `historical_recommendation_sets` JSONB table. |
+| F54 | **Recommendation adoption detection** | Compare current resource requests vs prior recommendation. If within 5% tolerance, mark "likely applied". Track adoption rate per cluster/org. | 10 | REQ-10.7 | No | Active | **YES** | **Net-new** — No adoption detection in legacy pipeline. | `recommendation_applied_at` column + `RECOMMENDATION_APPLIED` notification. |
+| F55 | **Recommendation staleness detection** | Flag recs with no new data for >48h. Delete stale recommendations after N days (default 30); archiving to `recommendation_history` before deletion is future work. API `?stale=false` filter. | 10 | REQ-10.8 | No | Active | **YES** | **Net-new** — Legacy has `RecommendationPollIntervalHours` for re-polling cadence and `NeedRecommOnFirstOfMonth` logic, but no explicit staleness flag or API filter. | `stale` column + `STALE_DATA` notification. |
+| F56 | **Recommendation history** | Time-series of all past recommendations in `recommendation_history` partitioned table. Retained 90d (old partitions dropped). Fleet API `GET /recommendations/openshift/history` (filter by container/cluster/project). | 10 | R5 (risk resolution), §18 | No | Active | **YES** | **Enhanced** — Legacy has `HistoricalRecommendationSet` and `HistoricalNamespaceRecommendationSet` tables (JSONB, partitioned, upsert on conflict). New system: `recommendation_history` partitioned table with 90d retention and fleet history API (legacy has no history API). | Replaces `historical_recommendation_sets` JSONB table. |
 
 ### Critical Bug Fixes (Current Codebase)
 
@@ -2199,7 +2199,7 @@ These are starting points — adjust based on production profiling. The Go binar
 **Required behavior:** Detect when users apply recommendations by monitoring resource request/limit changes:
 
 1. **Compare:** On each ingestion cycle, compare `current_period_request_mc` with `previous_period_request_mc` (from the prior data point for the same container).
-2. **Detect:** If `abs(current - previous) > threshold` (default: 10% change) AND `abs(current - our_recommendation) / our_recommendation < tolerance` (default: 15%), mark recommendation as **"likely applied"**.
+2. **Detect:** If `abs(current - previous) > threshold` (default: 10% change) AND `abs(current - our_recommendation) / our_recommendation < tolerance` (default: 5%), mark recommendation as **"likely applied"**.
 3. **Record:** Store `recommendation_applied_at TIMESTAMPTZ` on the `recommendation_sets` row. Emit `RECOMMENDATION_APPLIED` (code 6) notification.
 4. **Report:** Expose adoption rate per cluster and per org via `/recommendations/openshift/quality` endpoint and Prometheus metric `ros_recommendation_adoption_rate`.
 
@@ -2213,7 +2213,7 @@ These are starting points — adjust based on production profiling. The Go binar
 
 1. **Threshold:** If no new metrics data has been received for a container for > 48 hours (configurable via `ROS_STALE_DATA_THRESHOLD_HOURS`), mark the recommendation as stale.
 2. **Notification:** Emit `STALE_DATA` (code 2) on the recommendation response. API response includes `"stale": true` flag and `"last_reported"` timestamp.
-3. **Cleanup:** Recommendations stale for > 30 days (configurable via `ROS_STALE_CLEANUP_DAYS`) are archived to `recommendation_history` and removed from `recommendation_sets`.
+3. **Cleanup:** Recommendations stale for > 30 days (configurable via `ROS_STALE_CLEANUP_DAYS`) are deleted from `recommendation_sets` during the retention sweep. Archiving to `recommendation_history` before deletion is future work (see `docs-site/features/history-and-quality.md`).
 4. **API behavior:** Stale recommendations are still returned by default but can be excluded via `?stale=false` query parameter.
 
 ---
@@ -2381,7 +2381,7 @@ All new endpoints follow the same patterns as existing recommendation endpoints:
 | Method | Path | Purpose | Phase |
 |---|---|---|---|
 | GET | `/api/cost-management/v1/recommendations/openshift/summary` | Cluster-wide savings summary (aggregated total_savings across all workloads) | 7 |
-| GET | `/api/cost-management/v1/recommendations/openshift/:id/history` | Historical recommendation trend for a specific container | 5 (Q5) |
+| GET | `/api/cost-management/v1/recommendations/openshift/history` | Fleet recommendation history (filter by container, cluster, project, workload, term, engine) | 5 (Q5) |
 | GET | `/api/cost-management/v1/recommendations/openshift/virtual-machines` | VM right-sizing recommendations | 8b |
 | GET | `/api/cost-management/v1/recommendations/openshift/virtual-machines/:id` | Individual VM recommendation detail | 8b |
 | GET | `/api/cost-management/v1/recommendations/openshift/nodes` | Node utilization recommendations (Tier 1) | 8c |
@@ -2949,7 +2949,7 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | `ROS_COPY_BATCH_SIZE` | 5000 | Rows per COPY FROM batch |
 | ~~`ROS_COMPRESSION_POLICY_INTERVAL`~~ | ~~2 days~~ | ~~Removed (v2.0) — no TimescaleDB chunks; plain PostgreSQL partitions~~ |
 | `ROS_DIGEST_RETENTION_DAYS` | 45 | Drop daily digest partitions older than this (REQ-2.6) |
-| `ROS_REC_HISTORY_RETENTION_DAYS` | 90 | Drop recommendation history partitions older than this (REQ-2.6) |
+| `ROS_HISTORY_RETENTION_DAYS` | 90 | Drop recommendation history and quality partitions older than this (REQ-2.6) |
 | `ROS_ENABLE_SHADOW_MODE` | false | Shadow mode: run new binary alongside old binary, compare recommendation outputs per-container and log divergence (REQ-1.12) |
 | `ROS_ENABLE_REALTIME_RECS` | false | Enable on-demand recommendation computation |
 | ~~`ROS_USE_TDIGEST`~~ | ~~auto~~ | ~~Removed (v2.0) — no t-digest; exact percentiles computed in Go~~ |
@@ -2965,7 +2965,7 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | `ROS_MACHINESET_TARGET_UTIL` | 0.70 | MachineSet target utilization for replica sizing |
 | `ROS_MIN_MACHINESET_REPLICAS` | 2 | Minimum replica count for HA |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | 48 | Mark recommendation stale after this many hours without data |
-| `ROS_STALE_CLEANUP_DAYS` | 30 | Archive stale recommendations after this many days |
+| `ROS_STALE_CLEANUP_DAYS` | 30 | Delete stale recommendations older than N days |
 | `ROS_ENABLE_EPHEMERAL_STORAGE` | false | Ephemeral storage recs (informational only — cadvisor metrics unreliable through OCP 4.21) |
 | `ROS_ENABLE_NODEJS_RECS` | false | Node.js heap informational recs (OFF by default) |
 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` | 0.6 | EMA-smoothed normalized imbalance threshold for stranded resource detection |

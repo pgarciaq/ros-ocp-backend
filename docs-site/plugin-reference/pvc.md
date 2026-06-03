@@ -69,6 +69,10 @@ Storage patterns are slow-moving; max window is **365 days** (unlike CPU/memory 
 
 Recommendations respect `storageclass` from CSV rows; list filters can scope by class.
 
+## History
+
+PVC detail exposes **usage time-series** data (historical capacity and usage observations), not recommendation snapshots over time. There is no `recommendation_history` equivalent for PVCs. This aligns with the PVC recommendation model which is based on current capacity vs. observed peak usage rather than evolving multi-engine recommendations.
+
 ## Notification codes
 
 PVC rows may emit sizing and risk codes; code **25** (`NotifNoCostData`) when Masu storage rates are unavailable.

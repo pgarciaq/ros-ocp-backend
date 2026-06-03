@@ -189,6 +189,16 @@ There is no exported cache hit/miss metric. Observable effects:
 - Permission changes may take up to TTL seconds to propagate for cached identities.
 - Set `ROS_RBAC_CACHE_TTL=0` temporarily when debugging authorization issues.
 
+### Recommendation quality (processor)
+
+Updated after each container ingestion quality write. Label `cluster_id` is the cluster UUID.
+
+| Metric | Type | Labels | What to watch |
+|--------|------|--------|---------------|
+| `ros_recommendation_oom_rate` | Gauge | `org_id`, `cluster_id` | Mean OOM events per quality row in the last batch |
+| `ros_recommendation_stability` | Gauge | `org_id`, `cluster_id` | Mean stability (0–100 on gauge; API uses 0.0–1.0) |
+| `ros_recommendation_adoption_rate` | Gauge | `org_id`, `cluster_id` | Percent of batch rows with adoption detected |
+
 ### Retention
 
 | Metric | Type | Labels | What to watch |

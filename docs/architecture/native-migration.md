@@ -136,7 +136,7 @@ Native-era data remains in the database but is not served. Tables age out via re
 When switching engines, recommendations from the disabled engine stop receiving updates. They will:
 
 1. Be marked `stale = true` after `ROS_STALENESS_THRESHOLD_HOURS` (default 48h)
-2. Be deleted after `ROS_STALE_ARCHIVE_DAYS` (default 30 days)
+2. Be deleted after `ROS_STALE_CLEANUP_DAYS` (default 30 days)
 
 No manual cleanup is required.
 

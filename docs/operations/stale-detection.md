@@ -43,7 +43,7 @@ Implementation: [`isStaleRecommendation`](../../internal/engine/recommend_all.go
 |---------------------|---------|-------------|
 | `ROS_STALENESS_THRESHOLD_HOURS` | **48** | Hours without a cluster report before marking recommendations stale |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS` (requirements spec name) |
-| `ROS_STALE_ARCHIVE_DAYS` | 30 | Days before stale rows are deleted in the retention sweep |
+| `ROS_STALE_CLEANUP_DAYS` | 30 | Days before stale rows are deleted in the retention sweep |
 
 See also [configurability](../architecture/configurability.md) and
 [retention](retention.md).
@@ -80,7 +80,7 @@ Emitters: [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifica
 Cluster reporting → last_reported_at refreshed → stale = false
         ↓ (no report for > threshold, default 48h)
 stale = true, notification code 2
-        ↓ (stale for > ROS_STALE_ARCHIVE_DAYS, default 30d)
+        ↓ (stale for > ROS_STALE_CLEANUP_DAYS, default 30d)
 Deleted by retention sweep
 ```
 

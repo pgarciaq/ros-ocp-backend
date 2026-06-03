@@ -39,14 +39,14 @@ Node recommendation endpoints require the `openshift.node:read` permission.
 Callers without this permission receive empty result sets. Callers with no
 ROS permissions at all receive HTTP 403.
 
-## Endpoints Not Available for Nodes
+## History and quality
 
-The following endpoints are container-scoped only and do not apply to node recommendations:
+Node recommendations do **not** have per-node history or quality API endpoints.
 
-- **History** (`/containers/{id}/history`) — tracks recommendation changes over time
-- **Quality** (`/containers/{id}/quality`) — tracks data quality metrics
+- **History** — Use the fleet container history endpoint with `filter[cluster]`, `filter[project]`, `filter[workload]`, or `filter[container]` as needed: `GET /api/cost-management/v1/recommendations/openshift/history`. That API is container-scoped; it does not store node-level recommendation history and has no `filter[node]`.
+- **Quality** — Quality metrics (`GET /recommendations/openshift/quality`) are **container-only** (stability, adoption, OOM). They do not apply to node recommendations.
 
-Node recommendations are computed from cluster-level utilization data and do not have per-node history or quality tracking.
+See [Recommendation History & Quality](../features/history-and-quality.md).
 
 ## Endpoints
 
