@@ -357,10 +357,10 @@ All notifications are JSON objects in the `notifications` array:
 | **57** | `NotifVMGPUTimeSliceUnsafeFB` | `warning` | Time-slicing unsafe — frame-buffer usage above safety threshold |
 | **58** | `NotifVMIOSequential` | `info` | `io_pattern == sequential` — throughput-oriented storage |
 | **59** | `NotifVMIORandom` | `info` | `io_pattern == random` — IOPS-oriented storage |
-| **60** | `NotifVMRedundantColocation` | `warning` | `metadata.is_redundant_placement` — redundant VMs co-located on same node |
-| **61** | `NotifVMUnevenNodeDistribution` | `info` | Uneven node spread for profile/prefix group (skew ratio) |
-| **62** | `NotifVMSharedStorage` | `info` | `metadata.has_shared_storage` — correlated workload group in namespace |
-| **63** | `NotifVMNUMAOversized` | `warning` | `metadata.numa_oversized` — recommended memory exceeds per-NUMA cap |
+| **60** | `NotifVMRedundantColocation` | `warning` | Redundant VMs co-located on same node — consider adding anti-affinity rules (`is_redundant_placement`) |
+| **61** | `NotifVMUnevenNodeDistribution` | `info` | Uneven VM distribution across nodes — consider topologySpreadConstraints |
+| **62** | `NotifVMSharedStorage` | `info` | VM shares storage with other VMs — correlated workload group detected (`has_shared_storage`) |
+| **63** | `NotifVMNUMAOversized` | `warning` | VM memory exceeds single NUMA node capacity — NUMA pinning not possible (`numa_oversized`) |
 | **64** | `NotifVMPowerOffSchedule` | `info` | `metadata.is_power_off_candidate` — mostly idle, not abandoned |
 | **65** | `NotifVMNetworkQoSSRIOV` | `info` | Network-bound VM with high throughput or packet drops — SR-IOV hint |
 | **66** | `NotifVMNetworkQoSDPDK` | `info` | Network-bound VM with high PPS and small packets — DPDK hint |

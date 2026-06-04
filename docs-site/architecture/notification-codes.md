@@ -101,10 +101,10 @@ having no actionable savings.
 | 57 | WARNING | VM | GPU time-slicing unsafe (frame buffer) | Do not time-slice; resize GPU or reduce FB pressure |
 | 58 | INFO | VM | Sequential I/O pattern | Consider storage optimized for throughput |
 | 59 | INFO | VM | Random I/O pattern | Consider storage optimized for IOPS |
-| 60 | WARNING | VM | Redundant VMs on same node | Add pod anti-affinity or topology spread |
-| 61 | INFO | VM | Uneven VM spread across nodes | Consider `topologySpreadConstraints` |
-| 62 | INFO | VM | Correlated workload group (shared profile) | Review HA pairs; true PVC correlation pending operator field |
-| 63 | WARNING | VM | Memory exceeds single NUMA node | Reduce memory or use hosts with larger NUMA nodes |
+| 60 | WARNING | VM | Redundant VMs co-located on same node — consider adding anti-affinity rules | Set `metadata.is_redundant_placement`; spread HA peers with anti-affinity or topology spread |
+| 61 | INFO | VM | Uneven VM distribution across nodes — consider topologySpreadConstraints | Rebalance profile/prefix groups across nodes (skew ratio) |
+| 62 | INFO | VM | VM shares storage with other VMs — correlated workload group detected | Review coupled workloads; `metadata.has_shared_storage` (profile proxy until PVC on ROS CSV) |
+| 63 | WARNING | VM | VM memory exceeds single NUMA node capacity — NUMA pinning not possible | Reduce memory or use hosts with larger NUMA nodes (`metadata.numa_oversized`) |
 | 64 | INFO | VM | Periodically idle (power-off schedule) | Schedule power-off during inactive periods; see `is_power_off_candidate` |
 | 65 | INFO | VM | Network-bound — SR-IOV may help | High throughput or packet drops on network-bound VM |
 | 66 | INFO | VM | Network-bound — DPDK may help | High PPS with small packets on network-bound VM |

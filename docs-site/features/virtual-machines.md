@@ -341,10 +341,10 @@ All VM codes below appear in the `notifications` array on list and detail respon
 | **57** | warning | GPU time-slicing not safe — frame-buffer pressure |
 | **58** | info | Sequential I/O pattern — throughput-oriented storage |
 | **59** | info | Random I/O pattern — IOPS-oriented storage |
-| **60** | warning | Redundant VMs co-located on same node — consider anti-affinity |
-| **61** | info | Uneven VM distribution across nodes — consider topology spread |
-| **62** | info | Correlated workload group (shared storage proxy) in namespace |
-| **63** | warning | Recommended memory exceeds single NUMA node capacity |
+| **60** | warning | Redundant VMs co-located on same node — consider adding anti-affinity rules |
+| **61** | info | Uneven VM distribution across nodes — consider topologySpreadConstraints |
+| **62** | info | VM shares storage with other VMs — correlated workload group detected |
+| **63** | warning | VM memory exceeds single NUMA node capacity — NUMA pinning not possible |
 | **64** | info | Mostly idle on observed days — consider scheduling power-off |
 | **65** | info | Network-bound with high throughput or drops — SR-IOV may help |
 | **66** | info | Network-bound with high PPS and small packets — DPDK may help |
