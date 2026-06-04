@@ -23,10 +23,10 @@ Rates are fetched from Koku Masu `GET /api/cost-management/v1/effective_rates/` 
 | **Node** | `estimated_monthly_savings` (per engine) | Ingestion | `cost` (80% target) and `performance` (55%); consolidation + right-sizing |
 | **GPU** | `estimated_monthly_gpu_savings`, `estimated_monthly_timeslicing_savings` | API read | MIG, idle GPU, node time-slicing; not in fleet rollup |
 | **PVC** | `estimated_monthly_savings` | Ingestion | Oversized: `(current − recommended) × storage rate`; **orphaned:** full `current × storage rate` (deletion) |
-| **VM** | `estimated_monthly_savings` | Ingestion | Rightsizing vs current VM allocation |
+| **VM** | `savings` | Ingestion | Rightsizing vs current VM allocation; JSON **`null`** when rates are unavailable or savings kill-switch is active (**no** notification code **25**) |
 | **Quota** | `estimated_savings` | Ingestion | Tighten rows only; **excluded** from fleet `savings-summary` |
 | **Cluster-quota (CRQ)** | `estimated_savings` / `savings_dollars_monthly` | Ingestion | Tighten rows only; **excluded** from fleet rollup |
-| **Snapshot** | `estimated_monthly_cost` (recoverable) | Ingestion | `restore_size × cost_per_gib_month`; flat rate default **$0.05/GiB** until [COST-7523](https://redhat.atlassian.net/browse/COST-7523) |
+| **Snapshot** | `estimated_monthly_cost_usd` (recoverable) | Ingestion | `restore_size × cost_per_gib_month`; flat rate default **$0.05/GiB** until [COST-7523](https://redhat.atlassian.net/browse/COST-7523) |
 
 ## Fleet `savings-summary`
 
@@ -39,6 +39,9 @@ Aggregates **persisted** savings for the organization:
 | `engine` | `cost` | Container, node, and VM totals use `cost` or `performance` engine rows |
 | `term` | `medium` | Aligns with list APIs (`short`, `medium`, `long`) |
 
+- **PVC** — rollup is **engine-agnostic**; only `term` selects which PVC rows contribute.
+- **Snapshot** — rollup is **term-independent**; snapshot totals are always included regardless of `term`.
+
 **Included plugins:** container, node, PVC, snapshot, VM.
 
 **Exclusions:**
@@ -49,7 +52,14 @@ Aggregates **persisted** savings for the organization:
 
 Optional `group_by[idle_state]=*` and `group_by[tag:<key>]=*` for container-focused rollups (see API cheatsheet).
 
-> **Note:** `filter[cluster]` only applies when `group_by[tag:*]` or `group_by[idle_state]` is active. On the default (ungrouped) response, results aggregate across all RBAC-visible clusters regardless of this filter.
+Scoped filters (only when a `group_by` parameter is present):
+
+| Filter | Applies with | Effect |
+|--------|--------------|--------|
+| `filter[cluster]` | `group_by[tag:*]`, `group_by[idle_state]` | Limit grouped rollups to one cluster UUID |
+| `filter[project]` | `group_by[tag:*]` only | Limit container savings in tag groups to one namespace |
+
+> **Note:** `filter[cluster]` and `filter[project]` have no effect on the default (ungrouped) fleet summary. Without `group_by`, results aggregate across all RBAC-visible clusters and namespaces.
 
 ## Idle waste vs rightsizing
 
@@ -70,7 +80,20 @@ Recoverable monthly cost uses `restore_size_bytes × cost_per_gib_month_usd`. Un
 
 Set `ROS_SAVINGS_ESTIMATES_ENABLED=false` on **ros-processor** and **ros-api** to disable Masu fetches. Recommendations still run; dollar fields are `$0` or omitted, and notification code **25** (`NotifNoCostData`) applies to container, node, and PVC where relevant.
 
+**VM exception:** When the kill-switch is active or Masu rates are unavailable at ingestion, VM list/detail return `savings: null` (not `$0` and not code **25**). Fleet `savings-summary` omits VM dollars when rows have no persisted `savings_amount`.
+
 Requires `KOKU_MASU_URL` pointing at the Masu service when enabled.
+
+## Threshold changes vs savings recalculation
+
+Operators debugging unexpected savings changes should distinguish two update paths:
+
+| Trigger | API / action | What changes | Sizing |
+|---------|--------------|--------------|--------|
+| **Threshold PUT** | `PUT .../settings/{container,node,pvc,...}` (or terms) | Full recommendation recalculation on next ingest (or reship) | CPU/memory/storage targets may change; savings update as a side effect |
+| **Cost model update** | Koku → `POST /api/cost-management/v1/internal/recalculate-savings` | Dollar fields only (`estimated_monthly_savings_usd`, etc.) | Unchanged — same recommended requests/limits |
+
+Threshold tuning can change *whether* a workload is rightsized and therefore the savings delta. Cost model recalculation only reapplies rates to existing recommendations.
 
 ## Accuracy and limitations
 

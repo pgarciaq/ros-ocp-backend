@@ -22,6 +22,7 @@ formulas, see [Cost Integration](cost-integration.md).
 | **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) |
 | **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
 | **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (short / medium / long) | Yes (ingestion); API field `savings` | [`recommend_vm.go`](../../internal/engine/recommend_vm.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
@@ -263,7 +264,7 @@ reclaimable holding cost and restore size; see
 | 3 | Koku `effective_rates` → `storage_gb_usage_per_month` (infra + supplementary) |
 | 4 | Compiled default **$0.05**/GiB/month |
 
-Formula: `estimated_monthly_cost = restore_size_gib × cost_per_gib_month`.
+Formula: `estimated_monthly_cost_usd = restore_size_gib × cost_per_gib_month`.
 
 v1 rates are **placeholders** (Settings/env/default, optional PVC storage proxy).
 Provider-accurate costing is upstream **[COST-7523](https://redhat.atlassian.net/browse/COST-7523)**
@@ -271,6 +272,38 @@ Provider-accurate costing is upstream **[COST-7523](https://redhat.atlassian.net
 safe-delete, or Velero/OADP workflows.
 
 See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates).
+
+---
+
+## VM (OpenShift Virtualization) Recommendations
+
+KubeVirt VMs use **whole vCPU / whole GiB** sizing with separate cost and performance
+engine rows per term. Source: [`recommendVM()`](../../internal/engine/recommend_vm.go).
+
+| Engine | CPU percentile | Memory percentile | Notes |
+|--------|----------------|-------------------|-------|
+| **cost** | P60 (default) | P95 + margin | Adaptive CPU margin 15–50%; downsize hysteresis |
+| **performance** | P98 (default) | P99 + margin | Higher headroom for burst workloads |
+
+### Default terms (VM only — longer windows)
+
+| Term | Window | Min data days |
+|------|--------|---------------|
+| short | 7 days | 1 |
+| medium | 15 days | 3 |
+| long | 30 days | 7 |
+
+Plugin defaults and tenant overrides: `GET/PUT/DELETE .../settings/vm/terms`.
+Max window: **90 days** (`ROS_VM_REC_HISTORY_RETENTION_DAYS` for history table).
+
+### Savings
+
+Monthly `savings` (`value` + `units`) is computed at ingestion and returned on list/detail.
+When `ROS_SAVINGS_ESTIMATES_ENABLED=false` or rates are missing, `savings` is JSON **`null`**
+(no notification code **25**). Fleet rollup: `GET .../savings-summary` → `by_plugin.vm`.
+
+See [Virtual Machine recommendations](../features/virtual-machines.md) and
+[Plugin reference — vm](../plugin-reference/vm.md).
 
 ---
 

@@ -83,7 +83,7 @@ See [Notification codes — Namespaces](../architecture/notification-codes.md#na
 
 ## Savings
 
-Namespace recommendations provide sizing guidance only — **no dollar savings field** is included. Savings are computed at the container level and can be aggregated by namespace using `group_by[project]` on the container list or `GET /recommendations/openshift/savings-summary` (GPU still excluded from fleet totals).
+Namespace recommendations provide sizing guidance only — **no dollar savings field** is included. Savings are computed at the container level and can be aggregated by namespace using `filter[project]` on the container list or `GET /recommendations/openshift/savings-summary` with `filter[project]` (requires `group_by[tag:*]` to be active; GPU still excluded from fleet totals).
 
 ## Related features
 

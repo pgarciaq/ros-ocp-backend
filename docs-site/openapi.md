@@ -47,8 +47,11 @@ You can view it interactively using:
 | Settings | `/recommendations/openshift/settings/business-hours/clusters/{cluster_id}` | GET/PUT/DELETE | Cluster override |
 | Settings | `/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}` | GET/PUT/DELETE | Namespace override (most specific wins) |
 | Settings | `/recommendations/openshift/settings/business-hours/effective` | GET | Resolved schedule for `cluster_id` and `namespace` query params (`resolved_from`: org, cluster, namespace, or none) |
-| VMs | `/recommendations/openshift/vm` | GET | VM rightsizing list |
+| VMs | `/recommendations/openshift/vm` | GET | VM rightsizing list — filters include `filter[is_idle]`, `filter[is_abandoned]`, `filter[engine]`, `filter[term]`; `format=csv` or `Accept: text/csv` for export; `savings` object or `null` (not code **25**) |
 | VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests |
+| VMs | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — `format=csv` supported |
+| VMs | `/recommendations/openshift/instance-types` | GET | Available instance types and preferences per cluster (`cluster_uuid` required) |
+| VMs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=vm` for codes **18**–**69** |
 
 When `ROS_SETTINGS_LOCKED=true`, settings GET responses include `settings_locked: true`; PUT/DELETE
 return `403`. See [Configuration — Global Settings Lock](configuration.md#global-settings-lock).
@@ -94,3 +97,31 @@ The PVC plugin (`pvc`) exposes list and detail endpoints documented in
 alongside container, node, VM, and other plugins. PVC totals filter by `term` only (not `engine`).
 Snapshot totals are **term-independent** (all snapshot recommendations are summed regardless of `term`).
 Container, node, and VM totals honor both `engine` and `term`.
+
+## VM (OpenShift Virtualization) recommendations
+
+The `vm` plugin exposes list, detail, history, and instance-type endpoints documented in
+[plugin-reference/vm.md](plugin-reference/vm.md) and
+[features/virtual-machines.md](features/virtual-machines.md).
+
+**List filters:** `filter[cluster]`, `filter[namespace]` / `filter[project]`, `filter[vm_name]`,
+`filter[term]`, `filter[engine]`, `filter[is_idle]`, `filter[is_abandoned]`, `filter[is_oversized]`,
+`filter[has_gpu]`, `filter[is_network_bound]`, `filter[guest_os]`, `filter[tag:<key>]` (when tags enabled).
+
+**Savings:** `savings` is `{value, units}` when rates exist at ingestion, or JSON **`null`** when
+`ROS_SAVINGS_ESTIMATES_ENABLED=false` or Masu has no rates — VMs do **not** emit notification code **25**.
+
+**CSV export:** `GET .../vm?format=csv` and `GET .../vms/{vm_name}/history?format=csv` (or `Accept: text/csv`).
+
+**Notification codes** (catalog: `GET .../notification-codes?filter[plugin]=vm`):
+
+| Range | Topics |
+|-------|--------|
+| 18–19 | Idle, oversized |
+| 37–54 | Sizing, disk, guest agent, GPU |
+| 55–59 | Network-bound, vGPU, I/O pattern |
+| 60–63 | Placement, NUMA |
+| 64 | Power-off candidate |
+| 65–69 | Network QoS, storage tiering |
+
+**Business hours:** not applicable to VMs.

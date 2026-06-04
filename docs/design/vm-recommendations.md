@@ -357,10 +357,20 @@ All notifications are JSON objects in the `notifications` array:
 | **57** | `NotifVMGPUTimeSliceUnsafeFB` | `warning` | Time-slicing unsafe — frame-buffer usage above safety threshold |
 | **58** | `NotifVMIOSequential` | `info` | `io_pattern == sequential` — throughput-oriented storage |
 | **59** | `NotifVMIORandom` | `info` | `io_pattern == random` — IOPS-oriented storage |
+| **60** | `NotifVMRedundantColocation` | `warning` | `metadata.is_redundant_placement` — redundant VMs co-located on same node |
+| **61** | `NotifVMUnevenNodeDistribution` | `info` | Uneven node spread for profile/prefix group (skew ratio) |
+| **62** | `NotifVMSharedStorage` | `info` | `metadata.has_shared_storage` — correlated workload group in namespace |
+| **63** | `NotifVMNUMAOversized` | `warning` | `metadata.numa_oversized` — recommended memory exceeds per-NUMA cap |
+| **64** | `NotifVMPowerOffSchedule` | `info` | `metadata.is_power_off_candidate` — mostly idle, not abandoned |
+| **65** | `NotifVMNetworkQoSSRIOV` | `info` | Network-bound VM with high throughput or packet drops — SR-IOV hint |
+| **66** | `NotifVMNetworkQoSDPDK` | `info` | Network-bound VM with high PPS and small packets — DPDK hint |
+| **67** | `NotifVMStorageTierCold` | `info` | Sustained minimal daily I/O — move to lower-cost storage tier |
+| **68** | `NotifVMStorageTierIOPS` | `info` | Sustained random high IOPS — IOPS-optimized storage tier |
+| **69** | `NotifVMStorageTierThroughput` | `info` | Sustained sequential high throughput — throughput-optimized tier |
 
 Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
-**Full catalog (all plugins, codes 1–59):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**59**),
+**Full catalog (all plugins, codes 1–69):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**69**),
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
 
 ---
@@ -687,7 +697,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 | **Node consolidation** | Detect low-utilization nodes and bin-pack VMs to free nodes — see [Node consolidation](#node-consolidation-future) |
 | **Full power-off scheduling** | Per-hour idle tracking, cron expressions, business hours — see [Full power-off scheduling](#full-power-off-scheduling-future) |
 | **Live migration recommendations** | See [Live migration (future)](#live-migration-future) below |
-| **Savings in fleet summary** | VM savings persist on `vm_recommendations` but are not rolled into `GET .../savings-summary` yet |
+| **Savings in fleet summary** | **Completed** — `GET .../savings-summary` includes `by_plugin.vm` (medium-term rows for the selected `engine`) |
 | **Per-mountpoint disk** | Single filesystem aggregate; no `/var` vs `/` split |
 | **koku-ui** | No dedicated VM optimizations view |
 | **Network metrics dependency** | **n1** requires KubeVirt `net_*` on `ros-openshift-vm-usage-*.csv` |

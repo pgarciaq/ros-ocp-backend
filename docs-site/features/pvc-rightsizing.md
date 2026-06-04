@@ -8,7 +8,7 @@
     **API:** `GET /api/cost-management/v1/recommendations/openshift/pvcs`  
     **Configurable:** Yes — per-org Settings API + admin env vars (`ROS_PVC_*`)  
     **Key thresholds:** oversized when max usage &lt; 20% of capacity (default), near-full &gt; 85%, orphaned zero usage 3+ days  
-    **Savings:** Yes on **oversized** rows when `KOKU_MASU_URL` and savings estimates are enabled
+    **Savings:** Yes on **oversized** (capacity reduction) and **orphaned** (full capacity reclaim) when `KOKU_MASU_URL` and savings estimates are enabled
 
 ## Overview
 
@@ -54,12 +54,14 @@ changes are required for data collection.
 > **File routing (implemented):** The storage CSV is in the manifest `files`
 > array (cost pipeline). The Koku listener was updated to also route it to the
 > ROS Kafka topic — see `koku/masu/external/kafka_msg_handler.py` (the
-> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](features-f-snapshot-staleness.md#two-strategies-both-documented) for the
+> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](snapshot-staleness.md#two-strategies-both-documented) for the
 > architectural rationale behind this "Strategy A" approach.
 
 **CSV columns used:**
 - `interval_start`, `interval_end` — time window
 - `namespace`, `persistentvolumeclaim`, `persistentvolume`, `storageclass`
+- `pod` — mounting pod name (API `mounted_by`, persisted as `last_seen_pod`)
+- `vm_name` — KubeVirt VM name when the operator storage CSV includes it
 - `persistentvolumeclaim_capacity_bytes` — provisioned capacity
 - `persistentvolumeclaim_usage_byte_seconds` — usage × seconds (converted to bytes)
 - `volume_request_storage_byte_seconds` — request × seconds
@@ -110,25 +112,36 @@ for storage you don't use.
 ## Dollar savings estimates
 
 When `KOKU_MASU_URL` is configured and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default),
-ROS computes `estimated_monthly_savings_usd` at ingestion for **oversized** PVCs using
-storage rates from Masu `effective_rates`:
+ROS computes `estimated_monthly_savings` at ingestion (structured `{value, units}` in API
+responses) using storage rates from Masu `effective_rates`:
 
-```
-(current_gib - recommended_gib) × storage_gb_request_per_month
-```
+| Classification | Formula |
+|----------------|---------|
+| **Oversized** | `(current_gib − recommended_gib) × storage_gb_request_per_month` (falls back to `storage_gb_usage_per_month` when the request rate is zero) |
+| **Orphaned** | `current_gib × storage_gb_request_per_month` — full monthly cost of provisioned capacity recoverable by deleting the PVC |
 
-(falls back to `storage_gb_usage_per_month` when the request rate is zero).
-
-Requires migration **000070**. When Masu is unavailable or savings are disabled,
-the field is `$0` / null and notification code **25** (`NotifNoCostData`) is appended.
+**Near-full** and **healthy** PVCs do not receive positive savings estimates (expansion
+would imply additional monthly cost). Requires migration **000070**. When Masu is
+unavailable or savings are disabled, savings are omitted or zero and notification code
+**25** (`NotifNoCostData`) is appended.
 
 Full plugin matrix and troubleshooting: [architecture/cost-integration.md](architecture/cost-integration.md).
+
+## Fleet savings rollup
+
+Fleet-level PVC savings visibility is available on the cross-plugin summary endpoint:
+
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+
+The response includes `by_plugin.pvc` with total estimated monthly savings across all PVC
+recommendations for the selected `engine` (default `cost`) and `term` (default `medium`). Pair this
+with the PVC list endpoint when building Optimizations overview totals.
 
 ## Realizing PVC savings (migration path)
 
 Most CSI drivers and cloud block storage backends **do not support in-place PVC
-shrinking**. When ROS classifies a PVC as oversized, the `estimated_monthly_savings_usd`
-field reflects the monthly cost difference between the current provisioned size
+shrinking**. When ROS classifies a PVC as oversized, `estimated_monthly_savings`
+reflects the monthly cost difference between the current provisioned size
 and the recommended size — but realizing that savings requires a manual migration:
 
 1. Create a new PVC at the recommended (smaller) size.
@@ -172,7 +185,7 @@ from `daily_pvc_digests`).
 ### Query Parameters (list)
 
 Bracket syntax is preferred; flat ROS aliases are also accepted. See
-[API query parameters](../../docs/operations/api-query-parameters.md).
+[API query parameters](../plugin-reference/query-parameters.md).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -186,6 +199,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 | `order_how` | string | `asc` or `desc` (default `desc`) |
 | `limit` | int | Results per page (1–100, default 20) |
 | `offset` | int | Pagination offset |
+| `format` | string | `csv` for CSV export (`Accept: text/csv` also supported) |
 
 **Allowed `order_by` values:** `usage_ratio`, `estimated_monthly_savings` (alias
 `estimated_monthly_savings_usd`), `pvc_name` / `persistentvolumeclaim`,
@@ -210,6 +224,8 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
       "usage_ratio": 0.0,
       "recommendation_type": "orphaned",
       "recommended_bytes": null,
+      "idle_since": "2026-05-01",
+      "idle_duration_days": 14,
       "days_to_full": null,
       "growth_bytes_per_day": 0,
       "estimated_monthly_savings": { "value": "12.50", "units": "USD" },
@@ -227,6 +243,25 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 `mounted_by` is the most recently observed pod that mounted the PVC (from the storage
 CSV `pod` column, persisted as `last_seen_pod`). It is display context only — not a
 stable workload identity for VM correlation (see [known issues](../known-issues.md#pvc-storage-rightsizing-req-63)).
+
+`vm_name` is set when the mounting pod is a `virt-launcher-*` workload and the operator
+storage CSV includes the `vm_name` column (authoritative KubeVirt VM link).
+
+**Orphan idle fields:** `idle_since` (first date with zero usage, `YYYY-MM-DD`) and
+`idle_duration_days` (days since `idle_since` at the last classification run) appear on
+**orphaned** PVCs only.
+
+### CSV export
+
+List endpoint supports flattened export for spreadsheets and integrations:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/pvcs?format=csv
+```
+
+Use `Accept: text/csv` for explicit content negotiation. Export respects the same
+filters as the JSON list (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
+Pagination uses `limit` and `offset` (max 1000 records per request).
 
 ### Detail response (excerpt)
 
@@ -254,6 +289,31 @@ stable workload identity for VM correlation (see [known issues](../known-issues.
 }
 ```
 
+## Settings
+
+Per-organization PVC classification thresholds are managed at:
+
+- `GET /api/cost-management/v1/recommendations/openshift/settings/pvc`
+- `PUT /api/cost-management/v1/recommendations/openshift/settings/pvc`
+- `DELETE /api/cost-management/v1/recommendations/openshift/settings/pvc` (reset to defaults)
+
+Key threshold fields:
+
+| Field | Purpose |
+|-------|---------|
+| `oversized_threshold` | Max usage / capacity below this fraction → **oversized** (default `0.20`) |
+| `near_full_threshold` | Usage / capacity above this fraction → **near_full** (default `0.85`) |
+| `min_trend_days` | Minimum days of usage data before computing a growth slope |
+| `days_to_full_alert` | Fire a near-full alert when projected days-to-full falls below this value (default `30`) |
+
+Orphaned classification requires sustained zero usage for at least the active term's
+`min_data_days` (for example 3 days on the default short/medium windows). Term windows themselves
+are configured at `GET/PUT .../settings/terms?recommendation_type=pvc`.
+
+Administrators can lock fields with `ROS_PVC_*` environment variables. See the
+[PVC section in Configurability](../architecture/configurability.md#pvc) for the full parameter
+matrix, defaults, and env var names.
+
 ## Database Tables
 
 ### `daily_pvc_digests` (partitioned by `bucket_date`)
@@ -262,8 +322,8 @@ Daily aggregated PVC metrics. Unique on `(cluster_uuid, namespace, pvc, date)`.
 
 ### `pvc_recommendation_sets`
 
-Current PVC recommendations. Unique on `(org_id, cluster_uuid, namespace, pvc)`.
-Overwritten on each ingestion cycle.
+Current PVC recommendations. Unique on `(org_id, cluster_uuid, namespace, pvc, term)`.
+Overwritten on each ingestion cycle (one row per term).
 
 ## Key Files
 
@@ -293,7 +353,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 # Filter by type:
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs?recommendation_type=oversized'
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs?filter[recommendation_type]=oversized'
 
 # Check digest data directly:
 psql -c "SELECT * FROM daily_pvc_digests LIMIT 10;"

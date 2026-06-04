@@ -33,6 +33,8 @@ Package: [`internal/plugins/node`](../../internal/plugins/node/)
 
 See [Node recommendations](../features/node-recommendations.md).
 
+**Business hours:** not applicable. Business-hours weighting applies to container and namespace recommendations only.
+
 ## Permissions
 
 Node recommendation endpoints require the `openshift.node:read` permission.

@@ -7,7 +7,8 @@
     **Settings:** `GET/PUT/DELETE .../settings/vm`, `GET/PUT/DELETE .../settings/vm/terms`  
     **Configurable:** Yes (Settings API + env-var locks)  
     **Engines:** cost, performance (`filter[engine]=cost|performance`) — native only; Kruize does not support VMs  
-    **Savings:** `savings` object on list/detail when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Koku rates are available; otherwise `null`
+    **Savings:** `savings` object on list/detail when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Koku rates are available; otherwise `null`  
+    **Business hours:** not applicable (container and namespace only)
 
 ## Overview
 
@@ -338,8 +339,22 @@ All VM codes below appear in the `notifications` array on list and detail respon
 | **55** | warning | Network-saturated workload — recommend **n1** network-optimized instance type |
 | **56** | info | vGPU profile recommended (`recommended_vgpu_profile`) |
 | **57** | warning | GPU time-slicing not safe — frame-buffer pressure |
+| **58** | info | Sequential I/O pattern — throughput-oriented storage |
+| **59** | info | Random I/O pattern — IOPS-oriented storage |
+| **60** | warning | Redundant VMs co-located on same node — consider anti-affinity |
+| **61** | info | Uneven VM distribution across nodes — consider topology spread |
+| **62** | info | Correlated workload group (shared storage proxy) in namespace |
+| **63** | warning | Recommended memory exceeds single NUMA node capacity |
+| **64** | info | Mostly idle on observed days — consider scheduling power-off |
+| **65** | info | Network-bound with high throughput or drops — SR-IOV may help |
+| **66** | info | Network-bound with high PPS and small packets — DPDK may help |
+| **67** | info | Sustained minimal disk I/O — lower-cost storage tier candidate |
+| **68** | info | Sustained random high IOPS — IOPS-optimized storage recommended |
+| **69** | info | Sustained sequential high throughput — throughput-optimized storage |
 
-Abandoned VMs emit **43** only (not **18**).
+Abandoned VMs emit **43** only (not **18**). Power-off candidate (**64**) applies when a VM is
+mostly idle but not abandoned. Placement flags: `is_redundant_placement` (**60**),
+`has_shared_storage` (**62**), `numa_oversized` (**63**).
 
 ## Configuration
 
@@ -608,7 +623,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Network QoS (simplified)** | **Implemented** — notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block — [Network QoS hints](#network-qos-hints-6566) |
 | **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; Settings `storage_tiering` block — [Storage tiering hints](#storage-tiering-hints-6769) |
 | **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](../../docs/design/vm-recommendations.md#full-storage-tiering-future) |
-| **Power-off scheduling (simplified)** | Notification **64** for VMs idle on most days with occasional activity; Settings `power_schedule` block |
+| **Power-off scheduling (simplified)** | **Implemented** — notification **64**, `is_power_off_candidate`, `power_off_idle_pct`; Settings `power_schedule` block |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes to free hosts — see design doc |
 | **Full power-off scheduling** | Per-hour idle, cron stop/start, business hours — future |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes when node utilization is low — **effort:** high (3–4 weeks); **value:** high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku `node_cost_per_month`, live-migration feasibility, autoscaler awareness. See [design doc](../../docs/design/vm-recommendations.md#node-consolidation-future) |

@@ -21,16 +21,16 @@ This is still useful: repeated non-zero values across consecutive ingestion batc
 
 **Future enhancement:** cumulative OOM tracking anchored to `first_recommended_at` (or `recommendation_applied_at`) would provide a stronger quality signal for under-sized memory recommendations.
 
-## Confidence levels (recommendations only)
+## Confidence (recommendations only)
 
-Confidence levels (`high`, `medium`, `low`) apply to **individual recommendations**, not to `/quality` API rows.
+`confidence_level` is a **float from 0.0 to 1.0** (1.0 = highest confidence) on **individual recommendations**, not on `/quality` API rows.
 
 | Where | Field |
 |-------|--------|
 | Live recommendations | `recommendation_sets.confidence_level` |
 | Historical snapshots | `recommendation_history.confidence_level` |
 
-Confidence is computed during ingestion (`ComputeConfidence` in the recommendation engine) from digest coverage vs `min_data_days` and stability signals. Low confidence emits notification code 1 (`LOW_CONFIDENCE`).
+Confidence is computed during ingestion (`ComputeConfidence` in the recommendation engine) from digest coverage vs `min_data_days` and stability signals. When `confidence_level` is below `low_confidence_threshold` (container settings; default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence` / `LOW_CONFIDENCE`) is emitted.
 
 The `/quality` endpoint aggregates post-hoc signals per container cycle: `stability_pct`, `adoption_detected`, `oom_events_after_rec`, `recommendation_age_hours`. It does **not** expose a confidence field.
 

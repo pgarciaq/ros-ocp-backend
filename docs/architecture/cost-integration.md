@@ -131,6 +131,8 @@ to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
 2. Look up per-namespace aggregates in `namespace_aggregates` (includes `infrastructure_cost` from OCP-on-cloud correlation when available)
 3. Compute savings in [`ApplySavingsEstimates()`](../../internal/engine/savings.go) and persist `estimated_monthly_savings_usd` on ingest (exposed as `estimated_monthly_savings_usd` in API JSON)
 
+Savings always use the **`all_hours`** recommendation row. The optional `business_hours` perspective on container and namespace detail responses affects sizing only, not `estimated_monthly_savings_usd` or fleet savings totals.
+
 **Formula** (`hours_per_month = 730`, replica count from `desired_replicas` or `pod_count_avg`):
 
 ```
@@ -182,7 +184,7 @@ backward compatibility with older operator builds.
 
 **List API:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Shared classification and metrics come from the medium-term cost row when present. Pagination and default sort (`order_by=estimated_monthly_savings_usd`) operate on distinct nodes.
 
-Fleet savings summary aggregates container and node savings for the selected **`engine`** and **`term`** query parameters on `GET /recommendations/openshift/savings-summary` (defaults: **`cost`**, **`medium`**), consistent with container list behavior. PVC and snapshot totals are engine-agnostic.
+Fleet savings summary aggregates container, node, and VM savings for the selected **`engine`** and **`term`** query parameters on `GET /recommendations/openshift/savings-summary` (defaults: **`cost`**, **`medium`**), consistent with container list behavior. PVC totals honor **`term`** only (engine-agnostic). Snapshot totals are **term-independent** (all snapshot rows are summed).
 
 **Formula** (rates = infrastructure + supplementary from `configured_rates`):
 
@@ -217,6 +219,28 @@ estimated_monthly_savings = round(current_gib × storage_rate, 2)
 ```
 
 Positive `delta_gib` means the PVC is oversized. **Orphaned** PVCs (zero usage, delete recommendation) use the full `current_gib × storage_rate` — all monthly storage cost is recoverable. Near-full PVCs without a shrink target may still return `$0` when upsizing is required.
+
+### VM Savings
+
+Computed at **ingestion** during VM CSV processing:
+
+1. [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches `effective_rates` when savings are enabled
+2. [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) compares current vs recommended vCPU and memory using **effective** hourly rates (`max(request, usage)` per metric from `configured_rates`)
+3. Optional `vm_cost_per_month` and `gpu_cost_per_month` contribute for idle/abandoned, power-off, and GPU reduction scenarios
+4. Persisted on `vm_recommendations` as `savings_amount` / `savings_currency` (API field `savings`)
+
+**Formula** (rates = infrastructure + supplementary from `configured_rates`; `hours_per_month = 730`):
+
+```
+# Downsize (default)
+cpu_savings = (current_vCPU − recommended_vCPU) × effective_cpu_rate × 730
+mem_savings = (current_mem_GiB − recommended_mem_GiB) × effective_mem_rate × 730
+
+# Idle / abandoned / power-off: full current allocation (+ vm_cost_per_month when configured)
+estimated_monthly_savings = round(cpu_savings + mem_savings + vm_monthly + gpu_component, 2)
+```
+
+When Masu rates are unavailable or `ROS_SAVINGS_ESTIMATES_ENABLED=false`, API `savings` is JSON `null` (VM does not emit notification code **25**).
 
 ### GPU Savings
 
@@ -293,6 +317,7 @@ breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 | **Node** (CPU/memory utilization) | Yes | Ingestion | Masu `effective_rates` → DB per engine (`cost` 80%, `performance` 55%) → nested API `estimated_monthly_savings_usd` |
 | **Namespace** | No | — | CPU/memory recommendations only; no USD field |
 | **PVC** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_monthly_savings_usd` (API: `estimated_monthly_savings_usd`) |
+| **VM** | Yes | Ingestion | Masu `effective_rates` → DB `savings_amount` (API: `savings`) — delta between current and recommended VM spec cost |
 | **Snapshot** | Yes (recoverable cost) | Ingestion | Settings API / env / effective-rates `storage_gb_usage_per_month` / default |
 
 Migration **000070** adds `estimated_monthly_savings_usd` to `node_recommendations` and
@@ -417,14 +442,15 @@ persisted savings across all clusters for the authenticated organization.
 
 Implementation: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
 
-Query parameters **`term`** (`short`, `medium`, `long`; default `medium`) and **`engine`** (`cost`, `performance`; default `cost`) select which persisted savings columns are summed. The handler passes these into SQL `WHERE term = $n AND engine = $m` clauses (PVC uses `term` only). **`filter[cluster]`** is only applied when **`group_by[tag:*]`** or **`group_by[idle_state]`** is active. On the default (ungrouped) savings-summary response, results aggregate across all RBAC-visible clusters — **`filter[cluster]`** has no effect.
+Query parameters **`term`** (`short`, `medium`, `long`; default `medium`) and **`engine`** (`cost`, `performance`; default `cost`) select which persisted savings columns are summed. The handler passes these into SQL `WHERE term = $n AND engine = $m` clauses (PVC uses `term` only; snapshot has no `term` filter). **`filter[cluster]`** is only applied when **`group_by[tag:*]`** or **`group_by[idle_state]`** is active. **`filter[project]`** is only applied when **`group_by[tag:*]`** is active (scopes container savings in tag-grouped responses). On the default (ungrouped) savings-summary response, results aggregate across all RBAC-visible clusters — **`filter[cluster]`** and **`filter[project]`** have no effect.
 
 | Field | Source |
 |-------|--------|
 | `by_plugin.container` | `SUM(estimated_monthly_savings_usd)` on active `recommendation_sets` for the requested `term` and `engine` |
 | `by_plugin.node` | `SUM(estimated_monthly_savings_usd)` on `node_recommendations` for the requested `term` and `engine` |
 | `by_plugin.pvc` | `SUM(estimated_monthly_savings_usd)` on `pvc_recommendation_sets` for the requested `term` (engine-agnostic) |
-| `by_plugin.snapshot` | `SUM(estimated_monthly_cost_usd)` on `snapshot_recommendation_sets` (recoverable holding cost) |
+| `by_plugin.snapshot` | `SUM(estimated_monthly_cost_usd)` on `snapshot_recommendation_sets` (recoverable holding cost; **term-independent**) |
+| `by_plugin.vm` | `SUM(savings_amount)` on `vm_recommendations` for the requested `term` and `engine` |
 | `by_plugin.gpu` | Always `$0` — see GPU limitation below |
 | `by_cluster.has_cost_data` | `false` when **every** container, node, and PVC recommendation in that cluster has notification code **25** (`NotifNoCostData`) |
 

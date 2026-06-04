@@ -1063,13 +1063,15 @@ DELETE /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid
 
 Resolution order: **namespace → cluster → org default**.
 
+Use `GET .../settings/business-hours/effective?cluster_id={uuid}&namespace={name}` to show the inherited schedule before editing; the response includes `resolved_from` (`namespace`, `cluster`, `org`, or `none`).
+
 ### Schedule format (PUT body)
 
 ```json
 {
   "timezone": "America/New_York",
   "enabled": true,
-  "off_hours_weight": 0.1,
+  "off_hours_weight": 0.0,
   "schedule": {
     "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
     "start_time": "08:00",
@@ -1083,7 +1085,7 @@ Resolution order: **namespace → cluster → org default**.
 | `timezone` | IANA timezone name |
 | `days[]` | Lowercase English day names |
 | `start_time`, `end_time` | `HH:MM` 24-hour format |
-| `off_hours_weight` | 0.0–1.0 — weight for samples outside the window (default 0.1) |
+| `off_hours_weight` | 0.0–1.0 — weight for samples outside the window (default 0.0) |
 | `enabled` | `false` disables business-hours digests for the scope |
 
 PUT returns `warnings` including storage-doubling notice when enabling.

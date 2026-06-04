@@ -142,6 +142,93 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	assert.False(t, dev.HasCostData)
 }
 
+func TestSavingsSummary_IncludesPVCPlugin(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	orgID := "org-pvc-by-plugin-key"
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	byPlugin, ok := raw["by_plugin"].(map[string]interface{})
+	require.True(t, ok, "response must include by_plugin object")
+	_, hasPVC := byPlugin["pvc"]
+	assert.True(t, hasPVC, "by_plugin must include pvc key for fleet rollup")
+}
+
+func TestSavingsSummary_PVCRollup(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	orgID := "org-pvc-rollup-only"
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'pvc-rollup', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			recommendation_type, estimated_monthly_savings_usd, notification_codes, updated_at
+		) VALUES ($1, $2, 'storage', 'rollup-vol', 'medium', 'oversized', 12345, '{}', now())`,
+		orgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/savings-summary", api.GetFleetSavingsSummary)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var summary api.FleetSavingsSummaryResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &summary))
+	assert.InDelta(t, 123.45, summary.ByPlugin.PVC, 0.01)
+	assert.Greater(t, summary.ByPlugin.PVC, 0.0)
+}
+
 func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

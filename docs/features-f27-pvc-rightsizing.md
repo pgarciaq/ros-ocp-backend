@@ -28,6 +28,8 @@ changes are required for data collection.
 - `persistentvolumeclaim_capacity_bytes` — provisioned capacity
 - `persistentvolumeclaim_usage_byte_seconds` — usage × seconds (converted to bytes)
 - `volume_request_storage_byte_seconds` — request × seconds
+- `pod` — mounting pod (API `mounted_by`)
+- `vm_name` — KubeVirt VM when virt-launcher (API `vm_name`)
 
 ## Pipeline
 
@@ -84,25 +86,36 @@ for storage you don't use.
 ## Dollar savings estimates
 
 When `KOKU_MASU_URL` is configured and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default),
-ROS computes `estimated_monthly_savings_usd` at ingestion for **oversized** PVCs using
+ROS computes `estimated_monthly_savings` at ingestion (API: structured `{value, units}`) using
 storage rates from Masu `effective_rates`:
 
-```
-(current_gib - recommended_gib) × storage_gb_request_per_month
-```
+| Classification | Formula |
+|----------------|---------|
+| **Oversized** | `(current_gib − recommended_gib) × storage_gb_request_per_month` (falls back to `storage_gb_usage_per_month` when the request rate is zero) |
+| **Orphaned** | `current_gib × storage_gb_request_per_month` — full monthly cost recoverable by deletion |
 
-(falls back to `storage_gb_usage_per_month` when the request rate is zero).
-
-Requires migration **000070**. When Masu is unavailable or savings are disabled,
-the field is `$0` / null and notification code **25** (`NotifNoCostData`) is appended.
+Near-full and healthy rows do not receive positive savings. Requires migration **000070**.
+When Masu is unavailable or savings are disabled, savings are omitted/zero and notification
+code **25** (`NotifNoCostData`) is appended.
 
 Full plugin matrix and troubleshooting: [architecture/cost-integration.md](architecture/cost-integration.md).
+
+## Fleet savings rollup
+
+PVC savings contribute to the cross-plugin fleet summary:
+
+`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+
+Optional query params include `engine` (default `cost`) and `term` (default `medium`). The response
+`by_plugin.pvc` object totals estimated monthly savings across all PVC recommendations for the
+selected engine and term — use it for Optimizations overview cards alongside container, node, and
+other plugins.
 
 ## Realizing PVC savings (migration path)
 
 Most CSI drivers and cloud block storage backends **do not support in-place PVC
-shrinking**. When ROS classifies a PVC as oversized, the `estimated_monthly_savings_usd`
-field reflects the monthly cost difference between the current provisioned size
+shrinking**. When ROS classifies a PVC as oversized, `estimated_monthly_savings`
+reflects the monthly cost difference between the current provisioned size
 and the recommended size — but realizing that savings requires a manual migration:
 
 1. Create a new PVC at the recommended (smaller) size.
@@ -129,19 +142,80 @@ See [notification-codes.md](architecture/notification-codes.md) for triggers, em
 
 ## API
 
-`GET /api/cost-management/v1/recommendations/openshift/pvcs`
+List: `GET /api/cost-management/v1/recommendations/openshift/pvcs`
 
-### Query Parameters
+Detail: `GET /api/cost-management/v1/recommendations/openshift/pvcs/detail`
+
+Bracket syntax is preferred; flat ROS aliases are also accepted. See
+[API query parameters](operations/api-query-parameters.md).
+
+## Settings API
+
+Per-organization PVC classification thresholds:
+
+- `GET /api/cost-management/v1/recommendations/openshift/settings/pvc`
+- `PUT /api/cost-management/v1/recommendations/openshift/settings/pvc`
+- `DELETE /api/cost-management/v1/recommendations/openshift/settings/pvc` (reset to defaults)
+
+| Field | Purpose |
+|-------|---------|
+| `oversized_threshold` | Max usage / capacity below this fraction → **oversized** (default `0.20`) |
+| `near_full_threshold` | Usage / capacity above this fraction → **near_full** (default `0.85`) |
+| `min_trend_days` | Minimum days of usage data before computing a growth slope |
+| `days_to_full_alert` | Fire a near-full alert when projected days-to-full falls below this value (default `30`) |
+
+The response includes `locked_fields`: threshold names that cannot be changed via PUT
+because an administrator set the matching `ROS_PVC_*` environment variable on the
+deployment. PUT returns `403 Forbidden` when the body contains a locked field.
+
+Term windows (`short`, `medium`, `long`) are configured separately at
+`GET|PUT|DELETE .../settings/terms?recommendation_type=pvc`. See
+[Configurability](architecture/configurability.md) for env var names and defaults.
+
+## CSV export
+
+The list endpoint supports flattened export for spreadsheets and integrations:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/pvcs?format=csv
+```
+
+`Accept: text/csv` is also supported. Export returns all matching PVC recommendations
+(up to `limit`, max 1000 per request) with CSV columns aligned to the JSON list fields
+(`cluster_uuid`, `namespace`, `persistentvolumeclaim`, `recommendation_type`, `term`,
+`usage_ratio`, `estimated_monthly_savings`, `idle_since`, `idle_duration_days`,
+`days_to_full`, `growth_bytes_per_day`, and others). The same filters as the JSON list
+apply (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
+
+### List query parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cluster_uuid` | UUID | Filter by cluster |
-| `namespace` | string | Filter by namespace |
-| `recommendation_type` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `limit` | int | Results per page (1-100, default 20) |
+| `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
+| `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
+| `filter[recommendation_type]` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
+| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`) |
+| `filter[storageclass]` | string | Filter by StorageClass name |
+| `filter[tag:<key>]` | string | Tag filter (when `ROS_TAGS_ENABLED=true`) |
+| `order_by` | string | `usage_ratio`, `estimated_monthly_savings`, `pvc_name`, `capacity_bytes` |
+| `order_how` | string | `asc` or `desc` (default `desc`) |
+| `limit` | int | 1–100 (default 20) |
 | `offset` | int | Pagination offset |
+| `format` | string | `csv` for CSV export (`Accept: text/csv` also supported) |
 
-### Response
+Each list row includes `term` for the selected window. Orphaned rows may include
+`idle_since` and `idle_duration_days`.
+
+### Detail query parameters
+
+Required: `cluster_uuid` (or `filter[cluster]`), `namespace` (or `filter[project]`),
+`persistentvolumeclaim` (or `pvc_name`).
+
+Response includes `terms` (`short`, `medium`, `long`), `historical_usage` (daily
+digests), `mounted_by`, and optional `vm_name`. Term rows include `days_to_full` and
+`growth_bytes_per_day` when growth projection applies.
+
+### List response (excerpt)
 
 ```json
 {
@@ -151,20 +225,17 @@ See [notification-codes.md](architecture/notification-codes.md) for triggers, em
       "cluster_uuid": "aaaaaaaa-...",
       "namespace": "production",
       "persistentvolumeclaim": "old-logs",
-      "persistentvolume": "pv-123",
+      "mounted_by": "virt-launcher-old-logs-x9y8z",
+      "vm_name": "fedora-vm",
       "storageclass": "gp3",
       "capacity_bytes": 107374182400,
-      "usage_bytes_max": 0,
       "usage_ratio": 0.0,
       "recommendation_type": "orphaned",
-      "days_to_full": null,
-      "growth_bytes_per_day": 0,
-      "notifications": {
-        "20": { "type": "WARNING", "message": "PVC has zero usage...", "code": 20 }
-      },
-      "data_days": 14,
-      "estimated_monthly_savings_usd": 12.50,
-      "resize_note": "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
+      "idle_since": "2026-05-01",
+      "idle_duration_days": 14,
+      "estimated_monthly_savings": { "value": "12.50", "units": "USD" },
+      "term": "medium",
+      "resize_note": "This PVC has zero usage..."
     }
   ]
 }
@@ -178,7 +249,7 @@ Daily aggregated PVC metrics. Unique on `(cluster_uuid, namespace, pvc, date)`.
 
 ### `pvc_recommendation_sets`
 
-Current PVC recommendations. Unique on `(org_id, cluster_uuid, namespace, pvc)`.
+Per-term PVC recommendations. Unique on `(org_id, cluster_uuid, namespace, pvc, term)`.
 Overwritten on each ingestion cycle.
 
 ## Key Files
@@ -188,10 +259,13 @@ Overwritten on each ingestion cycle.
 | `internal/ingestion/pvc.go` | CSV parsing, digest computation, upsert |
 | `internal/engine/pvc_recommend.go` | Classification, growth trend, DB write |
 | `internal/engine/pvc_savings.go` | Dollar savings from Masu storage rates |
-| `internal/api/handlers_pvc.go` | API handler |
+| `internal/api/handlers_pvc.go` | List API handler |
+| `internal/api/handlers_pvc_detail.go` | Detail handler (multi-term + historical usage) |
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
 | `migrations/000048_add_pvc_notification_codes.up.sql` | Notification seed |
 | `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_monthly_savings_usd` column |
+| `migrations/000113_fix_pvc_recommendation_term_unique.up.sql` | Per-term unique key |
+| `migrations/000114_add_pvc_last_seen_pod.up.sql` | `last_seen_pod` / `mounted_by` |
 
 ## Manual QE Verification
 
@@ -206,7 +280,11 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 # Filter by type:
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs?recommendation_type=oversized'
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs?filter[recommendation_type]=oversized'
+
+# Detail (all terms + historical_usage):
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs/detail?cluster_uuid=UUID&namespace=NS&persistentvolumeclaim=NAME'
 
 # Check digest data directly:
 psql -c "SELECT * FROM daily_pvc_digests LIMIT 10;"

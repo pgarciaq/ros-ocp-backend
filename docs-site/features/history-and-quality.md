@@ -67,7 +67,22 @@ Prometheus gauges (`ros_recommendation_stability`, `ros_recommendation_adoption_
 
 The ros-processor retention ticker runs every 24 hours. See [Configuration — Retention](../configuration.md#retention-and-data-lifecycle).
 
-**Not available for:** node and other non-container plugins. Confidence (`high` / `medium` / `low`) is on live recommendations and container history rows, not on `/quality` list rows.
+**Not available for:** node and other non-container plugins.
+
+### Confidence on recommendations and history
+
+`confidence_level` is a **float from 0.0 to 1.0** (1.0 = highest confidence) on live container recommendations and on container history rows. It is **not** exposed on `/quality` list rows.
+
+When `confidence_level` is below `low_confidence_threshold` (configurable via container settings; default **0.5**) and digest data exists (`data_days > 0`), notification code **1** (`NotifLowConfidence`) is emitted. See [Notification codes — Containers](../architecture/notification-codes.md#containers).
+
+### Pipeline resilience
+
+History and quality writes are **non-fatal**: if the analytics pipeline fails (database error, timeout), container recommendations are still persisted successfully.
+
+- **Containers:** Failed `WriteRecommendationHistory` or `WriteRecommendationQuality` calls log an error, set `pipelineDegraded`, and processing continues — recommendations are not blocked by analytics failures.
+- **Namespaces:** Transient database errors return a Kafka retry so history is written on redelivery; permanent errors skip history but keep recommendations available.
+
+This design ensures recommendations are never blocked by analytics failures.
 
 ### Future work
 
