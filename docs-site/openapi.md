@@ -17,11 +17,19 @@ You can view it interactively using:
 | Group | Path | Method | Description |
 |-------|------|--------|-------------|
 | Containers | `/recommendations/openshift/workloads` | GET | Container recommendations |
+| History & quality | `/recommendations/openshift/history` | GET | Container recommendation history — filters: `filter[engine]`, `filter[term]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]`, `filter[tag:<key>]` |
+| History & quality | `/recommendations/openshift/quality` | GET | Container recommendation quality metrics — filters: `filter[engine]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]` |
+| History & quality | `/recommendations/openshift/namespaces/{id}/history` | GET | Namespace recommendation history — filters: `filter[term]`, `filter[engine]` |
+| History & quality | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — requires `cluster_uuid` (or `cluster_id`), `namespace`; optional `term`, `engine` |
 | GPU | `/recommendations/openshift/gpu` | GET | GPU utilization summary |
 | GPU | `/recommendations/openshift/gpu/timeslicing` | GET | Time-slicing recommendations |
 | GPU | `/recommendations/openshift/gpu/mig` | GET | MIG partition recommendations |
 | Nodes | `/recommendations/openshift/nodes` | GET | Node utilization recommendations |
-| PVCs | `/recommendations/openshift/pvcs` | GET | PVC right-sizing recommendations |
+| PVCs | `/recommendations/openshift/pvcs` | GET | PVC right-sizing list — filters: `filter[cluster]`, `filter[project]`, `filter[storageclass]`, `filter[term]`, `filter[recommendation_type]`, `filter[tag:<key>]`; list rows include `estimated_monthly_savings`, `mounted_by`, `vm_name`, growth (`days_to_full`, `growth_bytes_per_day` on near-full/oversized when projected), orphan idle (`idle_since`, `idle_duration_days` on orphaned); `format=csv` or `Accept: text/csv` for export |
+| PVCs | `/recommendations/openshift/pvcs/detail` | GET | PVC detail — requires `cluster_uuid`, `namespace`, `persistentvolumeclaim`; returns all terms (with per-term growth fields when present), `mounted_by`, `vm_name`, plus `historical_usage` daily digests |
+| PVCs | `/recommendations/openshift/settings/pvc` | GET/PUT/DELETE | PVC utilization thresholds (`oversized_threshold`, `near_full_threshold`, `min_trend_days`, `days_to_full_alert`, `locked_fields`) |
+| PVCs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=pvc` for codes **20**, **25**, **29**, **30** (orphaned, no cost data, oversized, near-full) |
+| Fleet | `/recommendations/openshift/savings-summary` | GET | Fleet savings rollup — `by_plugin.pvc` honors `term` only (engine-agnostic); `by_plugin.snapshot` is term-independent (sums all snapshot rows); container, node, and VM honor `engine` (default `cost`) and `term` (default `medium`) |
 | Quota | `/recommendations/openshift/quota` | GET | Namespace ResourceQuota right-sizing (`quota` plugin) |
 | Namespaces | `/recommendations/openshift/namespaces` | GET | Namespace quota recommendations |
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
@@ -35,12 +43,18 @@ You can view it interactively using:
 | Settings | `/recommendations/openshift/settings/idle-detection` | GET/PUT/DELETE | Idle/zombie classification thresholds |
 | Settings | `/recommendations/openshift/settings/quota` | GET/PUT/DELETE | ResourceQuota headroom and risk thresholds (`quota` plugin) |
 | Settings | `/recommendations/openshift/settings/cluster-quota` | GET/PUT/DELETE | ClusterResourceQuota thresholds (`cluster-quota` plugin) |
-| Settings | `/recommendations/openshift/settings/business-hours` | GET/PUT/DELETE | Org default business-hours schedule |
+| Settings | `/recommendations/openshift/settings/business-hours` | GET/PUT/DELETE | Org default business-hours schedule (PUT returns 202, triggers reship) |
+| Settings | `/recommendations/openshift/settings/business-hours/clusters/{cluster_id}` | GET/PUT/DELETE | Cluster override |
+| Settings | `/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}` | GET/PUT/DELETE | Namespace override (most specific wins) |
+| Settings | `/recommendations/openshift/settings/business-hours/effective` | GET | Resolved schedule for `cluster_id` and `namespace` query params (`resolved_from`: org, cluster, namespace, or none) |
 | VMs | `/recommendations/openshift/vm` | GET | VM rightsizing list |
 | VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests |
 
 When `ROS_SETTINGS_LOCKED=true`, settings GET responses include `settings_locked: true`; PUT/DELETE
 return `403`. See [Configuration — Global Settings Lock](configuration.md#global-settings-lock).
+`ROS_SETTINGS_LOCKED_BUSINESS_HOURS` applies the same lock to business-hours settings only.
+
+Container and namespace **detail** responses and **list** responses (when business-hours enrichment is enabled) may include `recommendations.recommendation_terms.*.recommendation_engines.{cost,performance}.business_hours` (schedule-weighted sizing; omitted when no schedule applies). Use the **effective** settings GET for timezone, `schedule`, `off_hours_weight`, and `enabled`.
 
 ## Authentication
 
@@ -50,3 +64,33 @@ See the [API Versioning](architecture/api-versioning.md) doc for compatibility p
 Query parameters use Koku bracket notation (`filter[project]`, `order_by[field]`); see
 [Query Parameters](plugin-reference/query-parameters.md). **mTLS** is the planned auth upgrade
 for on-prem service accounts; bracket syntax is unchanged.
+
+## PVC right-sizing (list and detail)
+
+The PVC plugin (`pvc`) exposes list and detail endpoints documented in
+[plugin-reference/pvc.md](plugin-reference/pvc.md) and
+[features/pvc-rightsizing.md](features/pvc-rightsizing.md).
+
+**List response highlights** (default term `medium`):
+
+| Field | When present | Description |
+|-------|----------------|-------------|
+| `estimated_monthly_savings` | Oversized/orphaned when Masu rates available | Structured `{value, units}` monthly savings |
+| `idle_since`, `idle_duration_days` | `recommendation_type=orphaned` | First zero-usage date and days idle |
+| `days_to_full`, `growth_bytes_per_day` | Near-full/oversized with growth projection | Capacity runway from WLS trend |
+| `mounted_by` | When storage CSV reported a pod | Last-seen mounting pod name |
+| `vm_name` | KubeVirt VM disk (`virt-launcher-*` + operator `vm_name` column) | Linked VM name |
+
+**Notification codes** (catalog: `GET .../notification-codes?filter[plugin]=pvc`):
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| 20 | WARNING | Zero usage across all intervals |
+| 25 | INFO | No cost data — savings not computed |
+| 29 | INFO | Capacity exceeds sustained usage — consider shrinking |
+| 30 | WARNING | Usage approaching capacity or growth alert |
+
+**Fleet rollup:** `GET /recommendations/openshift/savings-summary` includes `by_plugin.pvc`
+alongside container, node, VM, and other plugins. PVC totals filter by `term` only (not `engine`).
+Snapshot totals are **term-independent** (all snapshot recommendations are summed regardless of `term`).
+Container, node, and VM totals honor both `engine` and `term`.

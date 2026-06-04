@@ -156,8 +156,10 @@ filters match push-synced data. Check
 `GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
 
 Tag filters apply to container, namespace, node, PVC, GPU (MIG/time-slicing), VM, quota,
-and cluster-quota list endpoints, plus container history. See [Tag Filtering](../features/tag-filtering.md)
-for the full endpoint table, tag discovery (Koku Tags API), and operator configuration.
+and cluster-quota list endpoints, plus fleet container history (`GET .../history`). They do
+**not** apply to per-resource detail or per-resource history routes (for example
+`GET .../containers/{id}`). See [Tag Filtering](../features/tag-filtering.md) for the full
+endpoint table, tag discovery (Koku Tags API), RBAC intersection behavior, and operator configuration.
 
 ### Group by tag (savings summary)
 

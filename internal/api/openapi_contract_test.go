@@ -1289,6 +1289,7 @@ func TestOpenAPI_TagFilter_QueryParameters(t *testing.T) {
 
 	pathsWithTagFilter := []string{
 		"/recommendations/openshift",
+		"/recommendations/openshift/history",
 		"/recommendations/openshift/namespaces",
 		"/recommendations/openshift/nodes",
 		"/recommendations/openshift/pvcs",
