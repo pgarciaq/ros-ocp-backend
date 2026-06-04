@@ -90,6 +90,38 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?group_by=t
 
 Optional scoping when grouping: `filter[cluster]`, `filter[project]` (see [Query parameters](../plugin-reference/query-parameters.md)).
 
+## Caveats and operational risks
+
+On-prem (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku tenant tables
+(`reporting_enabledtagkeys`, `reporting_ocptags_values`). A Koku upgrade that renames
+tables or changes `cluster_ids[]` / `namespaces[]` semantics can break tag filters without
+any ROS code change.
+
+| Check | Covers | Does not cover |
+|-------|--------|----------------|
+| Startup DB probe | `reporting_enabledtagkeys` exists and is queryable | Column renames, JOIN semantics drift |
+| Runtime SQL errors | Obvious breakage after deploy | Silent wrong filters (rare) |
+
+Pin compatible Koku and ROS versions for on-prem and smoke-test `filter[tag:key]=value`
+after Koku upgrades. See [Configuration → Tag Sync](../configuration.md#tag-sync) for
+deployment settings.
+
+## SaaS operations (`ROS_TAGS_SOURCE=api`)
+
+When Koku and ROS use separate databases, tags flow **one way (Koku → ROS)** via
+`POST /api/cost-management/v1/internal/tags/sync`. Event-driven sync runs within seconds
+of Settings changes or OCP summarization; a Celery Beat safety-net runs every **6 hours**.
+Alert if `GET /internal/tags/status?org_id=` shows `synced_at` older than ~7 hours.
+
+Sync triggers, example Helm env vars, manual sync commands, and authentication are documented
+in [Configuration → Tag Sync](../configuration.md#tag-sync).
+
+## On-prem startup health check (`ROS_TAGS_SOURCE=db`)
+
+With `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=db`, ROS probes
+`reporting_enabledtagkeys` at startup. Failure disables tag filtering for the process
+lifetime. The probe confirms table reachability, not full column-level schema compatibility.
+
 ## Related documentation
 
 - [Query parameters](../plugin-reference/query-parameters.md) — full filter and pagination syntax

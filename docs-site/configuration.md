@@ -250,7 +250,8 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_RETENTION_MONTHS` | `6` | Digest partition retention (months). |
-| `ROS_HISTORY_RETENTION_DAYS` | `90` | Recommendation history retention. |
+| `ROS_HISTORY_RETENTION_DAYS` | `90` | Container recommendation history and quality partition retention. |
+| `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | VM recommendation history snapshot retention (`vm_recommendation_history`). Exposed read-only as `history_retention_days` on `GET /settings/vm`. See [Configurability — VM](architecture/configurability.md#vm--admin-only-no-settings-api-field). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours before recommendations marked stale. |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS`. |
 | `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations after N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
@@ -450,7 +451,7 @@ Push endpoints return 404 in this mode.
 `reporting_ocptags_values`). Koku schema changes can break tag filters; the startup DB probe
 only verifies table reachability, not column compatibility. Pin compatible Koku/ROS versions
 and validate tag filters after Koku upgrades. Details:
-[Tag Filtering → Caveats and operational risks](../docs/features/tag-filtering.md#caveats-and-operational-risks).
+[Tag Filtering → Caveats and operational risks](features/tag-filtering.md#caveats-and-operational-risks).
 
 ### SaaS (`ROS_TAGS_SOURCE=api`)
 
@@ -529,7 +530,7 @@ Alert if `synced_at` is **>6 hours** old. Koku worker logs: grep for
 `ROS tag sync completed` or `ROS tag sync failed`.
 
 On failure, the failed org is retried on the next event or periodic cycle; other orgs
-are unaffected. See [Tag Filtering → SaaS operations](../docs/features/tag-filtering.md#saas-operations-ros_tags_sourceapi).
+are unaffected. See [Tag Filtering → SaaS operations](features/tag-filtering.md#saas-operations-ros_tags_sourceapi).
 
 ### Authentication (api source only)
 
@@ -557,7 +558,7 @@ Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filt
 `group_by=tag:key`) aggregates container savings per tag value when `ROS_TAGS_ENABLED=true`.
 List endpoints support tag **filters** and `meta.warnings` on empty results; they do not support
 `group_by[tag:key]` yet. With `ROS_TAGS_SOURCE=db`, startup probes `reporting_enabledtagkeys`
-reachability (see [Tag Filtering](../docs/features/tag-filtering.md#on-prem-startup-health-check-ros_tags_sourcedb)).
+reachability (see [Tag Filtering](features/tag-filtering.md#on-prem-startup-health-check-ros_tags_sourcedb)).
 
 ---
 
