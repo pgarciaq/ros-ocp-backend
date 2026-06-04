@@ -33,6 +33,7 @@ var nativeRecDetailOnlyQueryKeys = map[string]struct{}{
 	"rs.gpu_classification IN ?": {},
 	"rs.idle_state IN ?":         {},
 	"rs.gpu_idle_state IN ?":     {},
+	"rs.term IN ?":               {},
 }
 
 func usesOrgContainerKeys(queryParams map[string]interface{}) bool {

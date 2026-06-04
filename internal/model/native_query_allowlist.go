@@ -13,6 +13,7 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.idle_state IN ?":         {},
 	"rs.gpu_idle_state IN ?":   {},
 	"rs.engine IN ?":             {},
+	"rs.term IN ?":               {},
 
 	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
 	"c.cluster_alias IN ?": {},

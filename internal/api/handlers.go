@@ -384,6 +384,28 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if err := applyNativeEngineQueryFilter(c, queryParams, "rs.engine"); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
+
+	// Term filter
+	termVals := queryparams.AllFilterValues(c, "term")
+	if len(termVals) > 0 {
+		validTerms := map[string]string{
+			"short_term":  "short",
+			"medium_term": "medium",
+			"long_term":   "long",
+		}
+		var terms []string
+		for _, t := range termVals {
+			if dbTerm, ok := validTerms[t]; ok {
+				terms = append(terms, dbTerm)
+			} else {
+				filterErrs = append(filterErrs, fmt.Errorf("invalid filter[term] value: %q (valid: short_term, medium_term, long_term)", t))
+			}
+		}
+		if len(terms) > 0 {
+			queryParams["rs.term IN ?"] = terms
+		}
+	}
+
 	if len(filterErrs) > 0 {
 		return queryParams, errors.Join(filterErrs...)
 	}

@@ -1469,6 +1469,90 @@ func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
 	}
 }
 
+func TestGetContainerList_FilterTerm(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'term-filter-cluster', 'src-tf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	for i := 0; i < 7; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate: start.AddDate(0, 0, i),
+			OrgID:      testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+			Namespace: "payments", Workload: "api-deploy", WorkloadType: "deployment",
+			ContainerName:   "web",
+			CPURequestP50MC: 100, CPURequestP95MC: 120,
+			CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+			CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+			MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+			MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+			OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+			SampleCount: 96,
+		})
+	}
+
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift?filter%5Bterm%5D=short_term&limit=10", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assertContainerListTermFilterResponse(t, rec.Body.Bytes(), "short_term")
+}
+
+func assertContainerListTermFilterResponse(t *testing.T, body []byte, wantTerm string) {
+	t.Helper()
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	require.Contains(t, resp, "data")
+
+	data, ok := resp["data"].([]interface{})
+	require.True(t, ok, "data must be an array")
+	require.NotEmpty(t, data, "expected non-empty data")
+
+	for _, rawItem := range data {
+		item, ok := rawItem.(map[string]interface{})
+		require.True(t, ok)
+		recs, ok := item["recommendations"].(map[string]interface{})
+		require.True(t, ok, "list item missing recommendations")
+		terms, ok := recs["recommendation_terms"].(map[string]interface{})
+		require.True(t, ok, "recommendations missing recommendation_terms")
+
+		require.Contains(t, terms, wantTerm, "filter[term]=%s should include %q", wantTerm, wantTerm)
+		for termKey := range terms {
+			assert.Equal(t, wantTerm, termKey,
+				"filter[term]=%s should omit other recommendation terms", wantTerm)
+		}
+	}
+}
+
 func assertContainerListEngineFilterResponse(t *testing.T, body []byte, wantEngine string) {
 	t.Helper()
 

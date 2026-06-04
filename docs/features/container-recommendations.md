@@ -145,6 +145,9 @@ Allowed keys are defined in
 | `memory_variation_medium_performance` | Medium-term performance memory variation (%) |
 | `memory_variation_long_cost` | Long-term cost memory variation (%) |
 | `memory_variation_long_performance` | Long-term performance memory variation (%) |
+| `idle_state` | Idle classification (`active`, `idle`, `zombie`) |
+| `idle_duration_days` | Days in current idle state |
+| `estimated_monthly_waste` | Monthly waste for idle/zombie workloads (USD cents in DB) |
 
 Direction: `order_how=asc|desc` or `order_by[field]=asc|desc`. Default order:
 `last_reported` descending.

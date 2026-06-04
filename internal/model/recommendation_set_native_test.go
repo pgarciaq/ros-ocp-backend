@@ -166,6 +166,43 @@ func TestSmallintArray_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestNativeContainerSortExpr_LastReported(t *testing.T) {
+	expr, filter := nativeContainerSortExpr("clusters.last_reported_at")
+	if expr != "c.last_reported_at" {
+		t.Errorf("sort expr = %q, want c.last_reported_at", expr)
+	}
+	if filter != "" {
+		t.Errorf("filter = %q, want empty", filter)
+	}
+}
+
+func TestNativeContainerSortExpr_Variation(t *testing.T) {
+	expr, filter := nativeContainerSortExpr("recommendation_sets.cpu_variation_short_cost_pct")
+	if expr != "rs.variation_cpu_request_pct" {
+		t.Errorf("sort expr = %q, want rs.variation_cpu_request_pct", expr)
+	}
+	wantFilter := "rs.term = 'short_term' AND rs.engine = 'cost'"
+	if filter != wantFilter {
+		t.Errorf("filter = %q, want %q", filter, wantFilter)
+	}
+}
+
+func TestAssembleNativeResults_PreservesRowOrder(t *testing.T) {
+	older := time.Date(2026, 5, 1, 13, 17, 17, 0, time.UTC)
+	newer := time.Date(2026, 5, 1, 14, 17, 16, 0, time.UTC)
+	rows := []NativeRecommendationRow{
+		{ClusterUUID: "c-new", Namespace: "ns-b", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: newer},
+		{ClusterUUID: "c-old", Namespace: "ns-a", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: older},
+	}
+	results := assembleNativeResults(rows)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 containers, got %d", len(results))
+	}
+	if results[0].ClusterUUID != "c-new" || results[1].ClusterUUID != "c-old" {
+		t.Errorf("order not preserved: got %s then %s", results[0].ClusterUUID, results[1].ClusterUUID)
+	}
+}
+
 func TestAssembleNativeResults_WithPodCounts(t *testing.T) {
 	now := time.Now().UTC()
 	cpuReq := int64(500)

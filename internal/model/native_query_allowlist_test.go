@@ -59,6 +59,7 @@ func TestNativeQueryAllowlist_MapNativeQueryParameters(t *testing.T) {
 		"stale":                   {"only"},
 		"start_date":              {"2025-01-15"},
 		"end_date":                {"2025-01-20"},
+		"filter[term]":            {"short_term"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapNativeQueryParameters(c)
