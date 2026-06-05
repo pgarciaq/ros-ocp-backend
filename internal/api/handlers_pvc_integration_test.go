@@ -2,10 +2,12 @@ package api_test
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -407,6 +409,44 @@ func TestGetPVCRecommendationDetail_AllTermsAndHistory(t *testing.T) {
 	assert.Equal(t, int64(9000000000), detail.HistoricalUsage[0].UsageBytesMax)
 }
 
+func insertPVCRecommendationForCSV(
+	t *testing.T,
+	orgID, namespace, pvcName, storageClass, recType, lastSeenPod, vmName, pv string,
+	usageRatio float64,
+	recommendedBytes int64,
+	daysToFull int,
+	growthBytesPerDay int64,
+	dataDays int,
+) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			storageclass, last_seen_pod, vm_name, persistentvolume,
+			recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+			recommended_bytes, days_to_full, growth_bytes_per_day,
+			notification_codes, data_days, updated_at
+		) VALUES ($1, $2, $3, $4, 'medium', $5, $6, $7, $8, $9, $10,
+			10737418240, 1073741824, $11, $12, $13, '{}', $14, NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
+		DO UPDATE SET storageclass = EXCLUDED.storageclass,
+			last_seen_pod = EXCLUDED.last_seen_pod,
+			vm_name = EXCLUDED.vm_name,
+			persistentvolume = EXCLUDED.persistentvolume,
+			recommendation_type = EXCLUDED.recommendation_type,
+			usage_ratio = EXCLUDED.usage_ratio,
+			recommended_bytes = EXCLUDED.recommended_bytes,
+			days_to_full = EXCLUDED.days_to_full,
+			growth_bytes_per_day = EXCLUDED.growth_bytes_per_day,
+			data_days = EXCLUDED.data_days`,
+		orgID, testutil.TestClusterUUID, namespace, pvcName, storageClass, lastSeenPod, vmName, pv,
+		recType, usageRatio, recommendedBytes, daysToFull, growthBytesPerDay, dataDays,
+	)
+	require.NoError(t, err)
+}
+
 func TestGetPVCRecommendations_CSVExport(t *testing.T) {
 	orgID := "org-pvc-csv-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)
@@ -414,7 +454,11 @@ func TestGetPVCRecommendations_CSVExport(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	seedPVCRecCluster(t, orgID)
-	insertPVCRecommendation(t, orgID, "apps", "csv-pvc", "gp3-csi", "oversized", "", "", 0.05)
+	insertPVCRecommendationForCSV(
+		t, orgID, "apps", "csv-pvc", "gp3-csi", "oversized",
+		"deploy/my-app", "my-vm", "pv-csv-001", 0.05,
+		2147483648, 30, 1048576, 14,
+	)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -432,11 +476,39 @@ func TestGetPVCRecommendations_CSVExport(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
 
-	body := rec.Body.String()
-	assert.Contains(t, body, "cluster_uuid")
-	assert.Contains(t, body, "persistentvolumeclaim")
-	assert.Contains(t, body, "recommendation_type")
-	assert.Contains(t, body, "csv-pvc")
+	reader := csv.NewReader(strings.NewReader(rec.Body.String()))
+	rows, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rows), 2)
+
+	expectedHeader := []string{
+		"cluster_uuid", "namespace", "persistentvolumeclaim", "mounted_by", "vm_name",
+		"persistentvolume", "storageclass", "recommendation_type", "usage_ratio",
+		"capacity_bytes", "usage_bytes_max", "recommended_bytes", "days_to_full",
+		"growth_bytes_per_day", "estimated_monthly_savings_value", "estimated_monthly_savings_units",
+		"idle_since", "idle_duration_days", "data_days", "term",
+	}
+	assert.Equal(t, expectedHeader, rows[0])
+
+	headerIndex := make(map[string]int, len(rows[0]))
+	for i, col := range rows[0] {
+		headerIndex[col] = i
+	}
+	dataRow := rows[1]
+	assert.Equal(t, testutil.TestClusterUUID, dataRow[headerIndex["cluster_uuid"]])
+	assert.Equal(t, "apps", dataRow[headerIndex["namespace"]])
+	assert.Equal(t, "csv-pvc", dataRow[headerIndex["persistentvolumeclaim"]])
+	assert.Equal(t, "deploy/my-app", dataRow[headerIndex["mounted_by"]])
+	assert.Equal(t, "my-vm", dataRow[headerIndex["vm_name"]])
+	assert.Equal(t, "pv-csv-001", dataRow[headerIndex["persistentvolume"]])
+	assert.Equal(t, "oversized", dataRow[headerIndex["recommendation_type"]])
+	assert.Equal(t, "2147483648", dataRow[headerIndex["recommended_bytes"]])
+	assert.Equal(t, "30", dataRow[headerIndex["days_to_full"]])
+	assert.Equal(t, "1048576", dataRow[headerIndex["growth_bytes_per_day"]])
+	assert.Equal(t, "14", dataRow[headerIndex["data_days"]])
+	assert.Equal(t, "medium", dataRow[headerIndex["term"]])
+	assert.Empty(t, dataRow[headerIndex["idle_since"]])
+	assert.Empty(t, dataRow[headerIndex["idle_duration_days"]])
 }
 
 func TestGetPVCRecommendations_FilterTerm(t *testing.T) {
