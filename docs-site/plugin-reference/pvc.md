@@ -44,7 +44,8 @@ GET /api/cost-management/v1/recommendations/openshift/pvcs/detail
 
 List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]`,
 `filter[recommendation_type]` (`oversized`, `near_full`, `orphaned`, `healthy`),
-`filter[term]` (`short`, `medium`, `long`), and `filter[tag:<key>]` (when
+`filter[term]` (`short`, `medium`, `long`; aliases `short_term`, `medium_term`,
+`long_term`), and `filter[tag:<key>]` (when
 `ROS_TAGS_ENABLED=true`).
 
 ### List query parameters
@@ -55,7 +56,7 @@ List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]
 | `filter[project]` | Namespace |
 | `filter[storageclass]` | StorageClass name |
 | `filter[recommendation_type]` | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `filter[term]` | `short`, `medium`, `long` (default `medium`) |
+| `filter[term]` | `short`, `medium`, `long` (default `medium`); `short_term`, `medium_term`, `long_term` aliases |
 | `filter[tag:<key>]` | Tag value filter on namespace scope |
 | `format` | `csv` for flattened export (`Accept: text/csv` also supported) |
 
@@ -74,7 +75,7 @@ List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]
 Growth and idle fields are omitted when not applicable (for example **healthy** PVCs without
 a growth projection, or non-orphaned rows for idle fields).
 
-Handlers: [`internal/plugins/pvc/routes.go`](../../internal/plugins/pvc/routes.go), [`GetPVCRecommendations`](../../internal/api/handlers_pvc.go).
+Handlers: [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.go) (`RegisterRoutes`), [`GetPVCRecommendations`](../../internal/api/handlers_pvc.go), [`GetPVCRecommendationDetail`](../../internal/api/handlers_pvc_detail.go).
 
 ## Key features
 

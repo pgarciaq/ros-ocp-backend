@@ -481,6 +481,47 @@ func TestGetPVCRecommendations_FilterTerm(t *testing.T) {
 	assert.Equal(t, "pvc-medium", resp.Data[0].PersistentVolumeClaim)
 }
 
+func TestGetPVCRecommendations_FilterTermShortTermAlias(t *testing.T) {
+	orgID := "org-pvc-term-alias-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			recommendation_type, usage_ratio, notification_codes, data_days, updated_at
+		) VALUES ($1, $2, 'apps', 'pvc-short-alias', 'short', 'healthy', 0.5, '{}', 7, NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term) DO NOTHING`,
+		orgID, testutil.TestClusterUUID,
+	)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?filter[term]=short_term&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "short", resp.Data[0].Term)
+	assert.Equal(t, "pvc-short-alias", resp.Data[0].PersistentVolumeClaim)
+}
+
 func TestGetPVCRecommendations_FilterTag(t *testing.T) {
 	orgID := "org-pvc-tag-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)

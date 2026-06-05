@@ -103,7 +103,10 @@ func GetPVCRecommendations(c echo.Context) error {
 	}
 
 	// Optional filters: filter[cluster], filter[project], filter[recommendation_type], filter[term], filter[storageclass]
-	listFilters := parsePVCListFilters(c)
+	listFilters, filterErr := parsePVCListFilters(c)
+	if filterErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": filterErr.Error()})
+	}
 
 	ctx := c.Request().Context()
 

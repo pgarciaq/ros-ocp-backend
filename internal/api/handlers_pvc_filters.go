@@ -17,10 +17,16 @@ type pvcListFilters struct {
 	storageclassFilter string
 }
 
-func parsePVCListFilters(c echo.Context) pvcListFilters {
+func parsePVCListFilters(c echo.Context) (pvcListFilters, error) {
 	termFilter := queryparams.FirstFilter(c, "term")
 	if termFilter == "" {
 		termFilter = "medium"
+	} else {
+		normalized, err := queryparams.NormalizeRecommendationTermFilter(termFilter)
+		if err != nil {
+			return pvcListFilters{}, err
+		}
+		termFilter = normalized
 	}
 	return pvcListFilters{
 		termFilter:         termFilter,
@@ -28,7 +34,7 @@ func parsePVCListFilters(c echo.Context) pvcListFilters {
 		namespaceFilter:    queryparams.FirstFilter(c, "project"),
 		typeFilter:         queryparams.FirstFilter(c, "recommendation_type"),
 		storageclassFilter: queryparams.FirstFilter(c, "storageclass"),
-	}
+	}, nil
 }
 
 // buildPVCRecommendationFilterSQL returns WHERE clause suffix (starts with " AND term = $2")

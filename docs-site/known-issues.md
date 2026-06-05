@@ -858,7 +858,7 @@ Requires migration **000070**. See [architecture/cost-integration.md](./architec
 Oversized recommendations include `resize_note` on list and detail responses (for example:
 "Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
 provisioning a smaller PVC, migrating data, and deleting the original. See
-[features-f27-pvc-rightsizing.md](./features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
+[PVC right-sizing](features/pvc-rightsizing.md#realizing-pvc-savings-migration-path).
 
 **Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 

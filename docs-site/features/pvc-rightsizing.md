@@ -192,7 +192,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 | `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
 | `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
 | `filter[recommendation_type]` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`) |
+| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`); aliases `short_term`, `medium_term`, `long_term` also accepted |
 | `filter[storageclass]` | string | Filter by StorageClass name |
 | `filter[tag:<key>]` | string | Tag filter (when `ROS_TAGS_ENABLED=true`) |
 | `order_by` | string | Sort column (default `usage_ratio`) |
@@ -261,7 +261,12 @@ GET /api/cost-management/v1/recommendations/openshift/pvcs?format=csv
 
 Use `Accept: text/csv` for explicit content negotiation. Export respects the same
 filters as the JSON list (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
-Pagination uses `limit` and `offset` (max 1000 records per request).
+Pagination uses `limit` and `offset` (max **100** records per request; default 20).
+
+CSV columns: `cluster_uuid`, `namespace`, `persistentvolumeclaim`, `storageclass`,
+`recommendation_type`, `usage_ratio`, `capacity_bytes`, `usage_bytes_max`,
+`estimated_monthly_savings_value`, `estimated_monthly_savings_units`, `term`.
+Growth, idle, and notification fields are JSON-only (not exported to CSV today).
 
 ### Detail response (excerpt)
 

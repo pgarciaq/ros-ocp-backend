@@ -180,12 +180,14 @@ The list endpoint supports flattened export for spreadsheets and integrations:
 GET /api/cost-management/v1/recommendations/openshift/pvcs?format=csv
 ```
 
-`Accept: text/csv` is also supported. Export returns all matching PVC recommendations
-(up to `limit`, max 1000 per request) with CSV columns aligned to the JSON list fields
-(`cluster_uuid`, `namespace`, `persistentvolumeclaim`, `recommendation_type`, `term`,
-`usage_ratio`, `estimated_monthly_savings`, `idle_since`, `idle_duration_days`,
-`days_to_full`, `growth_bytes_per_day`, and others). The same filters as the JSON list
-apply (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
+`Accept: text/csv` is also supported. Export returns matching PVC recommendations
+(up to `limit`, max **100** per request; default 20) with columns:
+`cluster_uuid`, `namespace`, `persistentvolumeclaim`, `storageclass`,
+`recommendation_type`, `usage_ratio`, `capacity_bytes`, `usage_bytes_max`,
+`estimated_monthly_savings_value`, `estimated_monthly_savings_units`, `term`.
+Growth, idle, and notification fields are JSON-only (not exported to CSV today).
+The same filters as the JSON list apply (`filter[cluster]`, `filter[project]`,
+`filter[term]`, etc.).
 
 ### List query parameters
 
@@ -194,7 +196,7 @@ apply (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
 | `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
 | `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
 | `filter[recommendation_type]` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
-| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`) |
+| `filter[term]` | enum | `short`, `medium`, `long` (default `medium`); aliases `short_term`, `medium_term`, `long_term` also accepted |
 | `filter[storageclass]` | string | Filter by StorageClass name |
 | `filter[tag:<key>]` | string | Tag filter (when `ROS_TAGS_ENABLED=true`) |
 | `order_by` | string | `usage_ratio`, `estimated_monthly_savings`, `pvc_name`, `capacity_bytes` |

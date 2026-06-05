@@ -2633,13 +2633,16 @@
           {
             "name": "filter[term]",
             "in": "query",
-            "description": "Filter by recommendation term (`short`, `medium`, `long`). Default is `medium` when omitted.",
+            "description": "Filter by recommendation term. Accepts `short`, `medium`, `long` or aliases `short_term`, `medium_term`, `long_term`. Default is `medium` when omitted.",
             "schema": {
               "type": "string",
               "enum": [
                 "short",
                 "medium",
-                "long"
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
               ],
               "default": "medium"
             }
