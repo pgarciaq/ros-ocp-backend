@@ -7,7 +7,7 @@
     **Plugin:** `pvc` (priority 30, on by default in the native engine)  
     **API:** `GET /api/cost-management/v1/recommendations/openshift/pvcs`  
     **Configurable:** Yes — per-org Settings API + admin env vars (`ROS_PVC_*`)  
-    **Key thresholds:** oversized when max usage &lt; 20% of capacity (default), near-full &gt; 85%, orphaned zero usage 3+ days  
+    **Key thresholds:** oversized when max usage &lt; 20% of capacity (default), near-full &gt; 85%, orphaned zero usage for `min_trend_days` (default 2)  
     **Savings:** Yes on **oversized** (capacity reduction) and **orphaned** (full capacity reclaim) when `KOKU_MASU_URL` and savings estimates are enabled
 
 ## Overview
@@ -25,7 +25,7 @@ flowchart TD
   Util --> Compare{vs thresholds}
   Compare -->|under 20% utilization| Oversized[oversized — resize down]
   Compare -->|over 85% or growth trend| NearFull[near_full — expand]
-  Compare -->|zero usage 3+ days| Orphaned[orphaned — delete candidate]
+  Compare -->|zero usage min_trend_days+| Orphaned[orphaned — delete candidate]
   Compare -->|20–85%| Healthy[healthy — no change]
   Oversized --> API[GET .../pvcs]
   NearFull --> API
@@ -75,14 +75,14 @@ changes are required for data collection.
 
 | Type | Condition | Action |
 |------|-----------|--------|
-| **Oversized** | max usage / capacity < 20% (sustained 3+ days) | Recommends 2× max usage (min 1 GiB) |
+| **Oversized** | max usage / capacity < 20% (sustained `min_trend_days`, default 2) | Recommends 2× max usage (min 1 GiB) |
 | **Near-full** | max usage / capacity > 85% | Recommends expansion to 2× current usage |
-| **Orphaned** | zero usage for 3+ days | Recommends deletion |
+| **Orphaned** | zero usage for `min_trend_days`+ (default 2) | Recommends deletion |
 | **Healthy** | usage between 20-85% | No action needed |
 
 ### Minimum data requirements
 
-- **3 days** minimum for orphaned/oversized classification (avoids false positives on new PVCs)
+- **`min_trend_days`** (default **2**) minimum for orphaned/oversized classification; early signal with lower `confidence_level` until term `MinDataDays` is met
 - **7 days** minimum for growth trend projection
 
 ## Growth Trend Projection

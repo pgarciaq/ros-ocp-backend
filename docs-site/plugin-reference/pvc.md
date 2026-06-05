@@ -88,9 +88,9 @@ Handlers: [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.g
 
 | Type | Condition (defaults) | Action |
 |------|----------------------|--------|
-| **oversized** | Max usage &lt; 20% of capacity (3+ days) | Resize down (~2× max usage, min 1 GiB) |
+| **oversized** | Max usage &lt; 20% of capacity (`min_trend_days`+, default 2) | Resize down (~2× max usage, min 1 GiB) |
 | **near_full** | Usage &gt; 85% or growth trend | Expand capacity |
-| **orphaned** | Zero usage 3+ days | Delete candidate |
+| **orphaned** | Zero usage for `min_trend_days`+ (default 2) | Delete candidate |
 | **healthy** | 20–85% utilization | No change |
 
 ### Terms
