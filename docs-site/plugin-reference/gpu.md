@@ -24,6 +24,14 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | APIProvider | Yes — fleet summary, time-slicing, MIG list |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
+## Classification logic
+
+Workloads are classified with a **multi-metric decision tree** (SM, tensor, DRAM)
+—not a single utilization threshold. Each class maps to a distinct action (deallocate,
+MIG partition, time-slicing, or no change). See [GPU Classification](../features/gpu-classification.md)
+for workload examples and [GPU Classification — Architecture](../architecture/gpu-classification.md)
+for thresholds and implementation.
+
 ## What it does
 
 GPU metrics piggyback on container ingestion (DCGM SM/DRAM/FB profiling, model, MIG profile). The engine classifies workloads and exposes:

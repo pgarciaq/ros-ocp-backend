@@ -9,6 +9,9 @@ For **NVIDIA documentation sources and catalog validation** when editing `gpu_ca
 For the full cross-plugin parameter reference (including time-slicing and term defaults),
 see [Recommendation Engine Reference](recommendation-engines.md).
 
+User-facing guide (workload examples, what to do for each class):
+[GPU Workload Classification](../features/gpu-classification.md).
+
 ## Classification Algorithm
 
 GPU classification uses three DCGM profiling metrics averaged across all daily digests within the term window:
@@ -51,51 +54,15 @@ else                             → well_utilized  → no action
 
 ## Why Multi-Metric Classification Beats a Single Threshold
 
-A common naive approach classifies any GPU with SM Active below 10% as
-"underutilized" and recommends the same remediation (MIG or removal). That
-collapses distinct workload shapes into one bucket and produces wrong actions.
+GPU utilization is multidimensional (compute vs memory vs tensor). A single
+10% SM threshold collapses distinct workload shapes into one bucket and produces
+wrong remediations — for example, labeling memory-bound LLM inference as generic
+"underutilized" instead of sizing MIG to framebuffer usage.
 
-**GPU utilization is multidimensional.** DCGM exposes three independent signals:
-
-| Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
-| SM Active | Streaming-multiprocessor occupancy | General compute intensity |
-| Tensor Pipe Active | Tensor-core utilization | ML training/inference signature |
-| DRAM Active | Memory-bandwidth pressure | Memory-bound vs compute-bound |
-
-Different combinations imply **different actionable recommendations**:
-
-- **Idle** (SM &lt; 2%) → remove the GPU allocation entirely
-- **Memory-bound** (high DRAM, low tensor) → MIG profile sized to framebuffer, not time-slicing
-- **Underutilized** (low SM *and* low tensor) → MIG partition or node time-slicing
-- **Compute-bound underutil** (moderate SM/tensor, low DRAM) → time-slicing without MIG memory isolation
-- **Well utilized** → no change
-
-**Separates idle from underutilized.** A dev notebook at 1% SM and a batch
-inference job at 18% SM both fall below a 10% single threshold, but only the
-notebook should be deallocated. The tree's 2% idle gate (step 2) fires before
-the 25% underutilized check (step 4), so idle workloads never receive a
-partitioning recommendation they do not need.
-
-**Catches workloads a single threshold misses.** Memory-bound LLM inference can
-show 8–15% SM while DRAM exceeds 60%. A 10% SM rule labels it "underutilized"
-(MIG or time-slice); the tree labels it `memory_bound` and sizes MIG to
-framebuffer usage instead.
-
-Implementation: [`GPUThresholds.Classify()`](../../internal/engine/gpu_recommender.go).
-
-## Misclassification Examples
-
-Typical DCGM averages over a 7–30 day term window. Values below are illustrative.
-
-| Workload | SM | DRAM | Tensor | Single 10% threshold | Multi-metric class | Correct action |
-|----------|-----|------|--------|----------------------|-------------------|----------------|
-| LLM inference (memory-bound) | 8% | 75% | 5% | "Underutilized" — misses memory binding | `memory_bound` | MIG profile sized to FB (e.g. `3g.20gb`) |
-| Dev notebook (idle) | 1% | 2% | 0% | "Idle" (accidentally correct) | `idle` | Deallocate GPU; reclaim full device cost |
-| Distributed training (compute-bound underutil) | 35% | 15% | 20% | "Well utilized" — SM above 10% | `compute_bound_underutil` | Node time-slicing; keep full GPU per job |
-| Batch inference (underutilized) | 18% | 25% | 8% | "Underutilized" (same bucket as idle-ish workloads) | `underutilized` | MIG partition or time-slicing on MIG-capable node |
-
-Public-facing summary: [GPU Classification (feature doc)](../../docs-site/features/gpu-classification.md).
+The tree evaluates metrics in priority order so **idle** (&lt;2% SM) is
+separated from **underutilized** (&lt;25% SM), and **memory-bound** (high DRAM,
+low tensor) is detected before generic underutilization checks. See
+[workload examples](../features/gpu-classification.md#why-not-a-single-threshold).
 
 ## Threshold Configuration
 
@@ -112,17 +79,14 @@ Public-facing summary: [GPU Classification (feature doc)](../../docs-site/featur
 
 | Classification | Meaning | User action | Notification codes |
 |---------------|---------|-------------|-------------------|
-| `idle` | GPU allocated but essentially unused (&lt;2% SM) | Remove GPU request/limit from the workload spec; reclaim the device for other tenants | **26** (GPU idle) |
-| `underutilized` | Low compute *and* low tensor (SM &lt;25%, tensor &lt;15%) | Enable MIG on the node and assign a smaller profile, or enable GPU time-slicing for software multiplexing | **10** (GPU underutilized) |
-| `memory_bound` | High DRAM (&gt;60%) with low tensor (&lt;15%) — weights/activations dominate | MIG profile sized to P98 framebuffer × headroom; avoid time-slicing (no memory isolation) | **27** (GPU memory-bound) |
-| `compute_bound_underutil` | Moderate SM/tensor, low DRAM (&lt;30%) — compute present but device mostly idle | Prefer node-level time-slicing over MIG; workload benefits from shared device, not memory partition | **36** (time-slicing candidate, node scope) |
-| `well_utilized` | None of the underutilization predicates match | No change; GPU sizing matches workload shape | — |
-| `no_profiling` | Volta/Pascal — frame-buffer only, no SM/tensor/DRAM | FB-based MIG sizing only; treat confidence as lower | **28** (no profiling data) |
+| `idle` | GPU allocated but essentially unused (&lt;2% SM) | Remove GPU from workload spec | **26** |
+| `underutilized` | Low SM (&lt;25%) and low tensor (&lt;15%) | MIG partition or time-slicing | **10** |
+| `memory_bound` | High DRAM (&gt;60%), low tensor (&lt;15%) | MIG sized to framebuffer; not time-slicing | **27** |
+| `compute_bound_underutil` | Moderate compute, low DRAM (&lt;30%) | Node time-slicing | **36** (node) |
+| `well_utilized` | Healthy utilization | No action | — |
+| `no_profiling` | Volta/Pascal — FB only | FB-based MIG sizing; lower confidence | **28** |
 
-All recommendations are **advisory**. The operator collects metrics; ROS computes
-classifications; the user applies changes manually (or via their own GitOps
-pipeline). See [HPA/VPA and deployment modes](hpa-vpa-deployment-modes.md) for
-the broader actuation model.
+All recommendations are **advisory** — apply changes manually or via GitOps.
 
 ## MIG Profile Selection
 

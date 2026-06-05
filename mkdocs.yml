@@ -75,6 +75,7 @@ nav:
       - Namespace Quota Optimization: features/namespace-recommendations.md
       - Node Consolidation: features/node-recommendations.md
       - GPU MIG Profiling: features/gpu-mig.md
+      - GPU Workload Classification: features/gpu-classification.md
       - GPU Time-Slicing: features/gpu-time-slicing.md
       - PVC Right-Sizing: features/pvc-rightsizing.md
       - ResourceQuota Recommendations: features/quota-recommendations.md

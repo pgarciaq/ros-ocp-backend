@@ -45,6 +45,7 @@ docs-site/architecture/*
 !docs-site/architecture/configurability.md
 !docs-site/architecture/recommendation-engines.md
 !docs-site/architecture/plugin-architecture.md
+!docs-site/architecture/gpu-classification.md
 docs-site/operations/
 docs-site/features/
 !docs-site/features/seasonality.md
@@ -62,6 +63,7 @@ docs-site/features/
 !docs-site/features/savings-estimations.md
 !docs-site/features/tag-filtering.md
 !docs-site/features/gpu-mig.md
+!docs-site/features/gpu-classification.md
 !docs-site/features/gpu-time-slicing.md
 !docs-site/features/local-mode.md
 docs-site/contributing.md

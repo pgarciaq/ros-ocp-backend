@@ -62,7 +62,9 @@ flowchart TD
 5. **Confidence** — Tiered by days of data (3 / 7 / 14 days) with penalties for
    bursty usage and missing profiling.
 
-Decision tree: [GPU Classification](../architecture/gpu-classification.md).
+User guide (why multi-metric beats a single threshold, workload examples):
+[GPU Classification](gpu-classification.md). Technical reference:
+[GPU Classification — Architecture](../architecture/gpu-classification.md).
 
 ## MIG slice profiles
 
