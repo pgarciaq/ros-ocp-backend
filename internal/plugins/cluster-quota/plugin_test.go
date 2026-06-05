@@ -25,7 +25,11 @@ func TestClusterQuotaPlugin_Metadata(t *testing.T) {
 	assert.Equal(t, plugin.PhaseProduce, p.Phase())
 	assert.Equal(t, 36, p.Priority())
 	assert.Equal(t, []string{string(types.PayloadTypeClusterQuota)}, p.SupportedCSVTypes())
-	assert.Equal(t, []string{"cluster_quota_recommendation_sets", "daily_cluster_quota_digests"}, p.RetentionTables())
+	assert.Equal(t, []string{
+		"cluster_quota_recommendation_sets",
+		"cluster_quota_recommendation_history",
+		"daily_cluster_quota_digests",
+	}, p.RetentionTables())
 }
 
 func TestClusterQuotaPlugin_RegisterRoutes_NativeEngine(t *testing.T) {

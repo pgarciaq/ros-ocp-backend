@@ -58,14 +58,19 @@ func (p *ClusterQuotaPlugin) RetentionTables() []string {
 }
 
 func (p *ClusterQuotaPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
-	_, err := pool.Exec(ctx,
+	if _, err := pool.Exec(ctx,
 		`DELETE FROM cluster_quota_recommendation_sets WHERE updated_at < $1`,
 		olderThan,
-	)
-	if err != nil {
+	); err != nil {
 		return err
 	}
-	_, err = pool.Exec(ctx,
+	if _, err := pool.Exec(ctx,
+		`DELETE FROM cluster_quota_recommendation_history WHERE recorded_at < $1`,
+		olderThan,
+	); err != nil {
+		return err
+	}
+	_, err := pool.Exec(ctx,
 		`DELETE FROM daily_cluster_quota_digests WHERE created_at < $1`,
 		olderThan,
 	)

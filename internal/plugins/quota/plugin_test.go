@@ -34,7 +34,7 @@ func TestQuotaPlugin_Metadata(t *testing.T) {
 	assert.Equal(t, "quota", p.Name())
 	assert.Equal(t, plugin.PhaseProduce, p.Phase())
 	assert.Equal(t, 35, p.Priority())
-	assert.Equal(t, []string{"quota_recommendation_sets"}, p.RetentionTables())
+	assert.Equal(t, []string{"quota_recommendation_sets", "quota_recommendation_history"}, p.RetentionTables())
 }
 
 func TestQuotaPlugin_EnabledByDefault(t *testing.T) {

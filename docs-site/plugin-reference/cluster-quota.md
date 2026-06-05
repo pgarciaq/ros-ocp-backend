@@ -14,7 +14,7 @@ recommendation totals.
 | Phase | 1 (Produce) |
 | Priority | 36 (after `quota` at 35) |
 | CSV types | `cluster-quota` (`PayloadTypeClusterQuota`) |
-| Retention tables | `cluster_quota_recommendation_sets`, `daily_cluster_quota_digests` |
+| Retention tables | `cluster_quota_recommendation_sets`, `cluster_quota_recommendation_history`, `daily_cluster_quota_digests` |
 
 ## Traits
 
@@ -48,6 +48,19 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `order_how` | `asc` or `desc` |
 | `limit` | Page size (1–100, default 20) |
 | `offset` | Pagination offset |
+| `format` | `json` (default) or `csv` — flattened list export (`Accept: text/csv` also supported) |
+
+Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_quota_recs.go).
+
+#### CSV export
+
+```
+GET /api/cost-management/v1/recommendations/openshift/cluster-quota/?format=csv&limit=100
+```
+
+Returns `text/csv` with columns: `cluster_uuid`, `cluster_quota_name`,
+`recommendation_type`, `risk_level`, `estimated_savings_value`, `estimated_savings_units`,
+`namespaces`, `count`. Same filters, sort, and pagination as the JSON list.
 
 ### Detail
 
@@ -70,8 +83,6 @@ per resource. See [feature documentation](../features/cluster-resource-quota.md#
 
 ClusterResourceQuota savings are **excluded from fleet `savings-summary` totals** to avoid
 double-counting container-level savings that quota recommendations encompass.
-
-Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_quota_recs.go).
 
 ### Settings
 

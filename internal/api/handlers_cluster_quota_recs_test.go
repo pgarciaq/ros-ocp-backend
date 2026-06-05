@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -145,6 +147,30 @@ func TestGetClusterQuotaRecommendations_EmptyFleet_Returns200WithEmptyData(t *te
 	assert.Equal(t, 0, resp.Meta.Count)
 	assert.NotNil(t, resp.Data)
 	assert.Len(t, resp.Data, 0)
+}
+
+func TestGetClusterQuotaRecommendations_FormatCSV(t *testing.T) {
+	orgID := "org-crq-csv-" + uuid.New().String()[:8]
+	clusterUUID := "550e8400-e29b-41d4-a716-446655440002"
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "csv-crq", 10)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?format=csv&limit=100", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+
+	reader := csv.NewReader(strings.NewReader(rec.Body.String()))
+	rows, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rows), 2)
+	assert.Equal(t, "cluster_uuid", rows[0][0])
+	assert.Equal(t, "cluster_quota_name", rows[0][1])
+	assert.Equal(t, clusterUUID, rows[1][0])
+	assert.Equal(t, "csv-crq", rows[1][1])
 }
 
 func TestGetClusterQuotaRecommendations_WithData_Returns200(t *testing.T) {

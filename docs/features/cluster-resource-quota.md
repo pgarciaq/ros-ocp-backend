@@ -121,6 +121,12 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `group_by[cluster]` | Aggregate per cluster (sum `capacity_freed` and `estimated_savings`; row includes `count`) |
 | `order_by`, `order_how` | Sort — see [order_by values](#order_by-values) |
 | `limit`, `offset` | Pagination (default limit 20, max 100) |
+| `format` | `json` (default) or `csv` — flattened list export (`Accept: text/csv` also supported) |
+
+**CSV export:** `GET .../cluster-quota/?format=csv` returns `text/csv` with columns
+`cluster_uuid`, `cluster_quota_name`, `recommendation_type`, `risk_level`,
+`estimated_savings_value`, `estimated_savings_units`, `namespaces`, `count`. Same filters
+and pagination as the JSON list.
 
 ### order_by values
 

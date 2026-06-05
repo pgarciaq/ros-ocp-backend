@@ -1527,8 +1527,8 @@ persists `quota_recommendation_sets`; exposes `GET /api/cost-management/v1/recom
 **Algorithm (implemented):**
 1. Sum container `term=medium` / `engine=cost` request/limit recommendations per namespace.
 2. Utilization = max(quota used, container sums) vs hard limits (per resource).
-3. `tighten` when recommended hard &lt; current hard; `raise` when utilization ≥ high-risk threshold (default 80%).
-4. Risk bands: high ≥ 80%, medium ≥ 60%, low otherwise.
+3. `tighten` when recommended hard &lt; current hard; `raise` when utilization ≥ high-risk threshold (default 90%, configurable via settings/env).
+4. Risk bands: high ≥ 90%, medium ≥ 70%, low otherwise (defaults; overridable per org).
 
 **Future (namespace quota):** Storage/pod quota resources, per-quota object identity (multiple ResourceQuotas per namespace).
 
