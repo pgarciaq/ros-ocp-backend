@@ -2,7 +2,7 @@
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
-Use this page as a single lookup for **all 69 codes** across containers, namespaces, nodes,
+Use this page as a single lookup for **all notification codes** across containers, namespaces, nodes,
 GPUs, PVCs, snapshots, and virtual machines.
 
 **Maintainer reference** (emitters, constants, migrations): `docs/architecture/notification-codes.md` in the repository.
@@ -11,7 +11,8 @@ GPUs, PVCs, snapshots, and virtual machines.
 
 | Resource | List / detail fields | Notes |
 |----------|----------------------|-------|
-| Containers, namespaces, nodes, PVCs, snapshots | `notification_codes` (array) and `notifications` (map keyed by code string) | Map entries include `type`, `message`, `code` (Kruize-compatible shape) |
+| Containers, namespaces, PVCs, snapshots | `notification_codes` (array) and `notifications` (map keyed by code string) | Map entries include `type`, `message`, `code` (Kruize-compatible shape) |
+| Nodes | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` | Map keyed by code string (`"11"`, `"13"`, …); no top-level `notification_codes` on list rows. Detail also exposes aggregated top-level `notifications`. Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. |
 | Virtual machines | `notifications` (JSON array) | `type` is lowercase: `info`, `warning`, `critical` |
 
 Example (container):
@@ -56,7 +57,7 @@ having no actionable savings.
 | 12 | WARNING | Node | Node overcommitted (requests ≫ allocatable) | Reduce requests or add capacity |
 | 13 | INFO | Node | CPU/memory imbalance on node | Consider different instance family / balance workloads |
 | 14 | WARNING | Node (reserved) | Autoscaler at maxReplicas | *Not emitted today* |
-| 15 | INFO | Node (reserved) | Autoscaler at minReplicas | *Not emitted today* |
+| 15 | INFO | Node | Node idle or zombie | Review idle detection; consider consolidation or decommission |
 | 16 | WARNING | Node (reserved) | Autoscaler flapping | *Not emitted today* |
 | 17 | INFO | Node (reserved) | No autoscaler on variable load | *Not emitted today* |
 | 18 | WARNING | VM | VM idle | Power off, delete, or resize down |
@@ -111,6 +112,9 @@ having no actionable savings.
 | 67 | INFO | VM | Sustained minimal disk I/O | Consider lower-cost storage tier |
 | 68 | INFO | VM | Sustained random high IOPS | IOPS-optimized storage recommended |
 | 69 | INFO | VM | Sustained sequential high throughput | Throughput-optimized storage recommended |
+| 74 | WARNING | Node | Near pod scheduling limit | Limited headroom for additional pods — review before consolidation |
+| 75 | INFO | Node (reserved) | Autoscaler at minReplicas | *Not emitted today* |
+| 76 | INFO | Node | Fleet consolidation (MachineSet) | Review `node_count_reduction` and scale down MachineSet manually |
 
 ---
 
@@ -141,7 +145,7 @@ ResourceQuota codes **70–72** are documented under the [quota plugin](../plugi
 
 ### Nodes
 
-Codes **11–13**, **25**, plus reserved **4**, **14–17**, **23–24**. See [Node consolidation](../features/node-recommendations.md).
+Emitted: **11**, **12**, **13**, **15**, **25**, **74**, **76**. Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
 
 ### GPU (containers) and time-slicing
 

@@ -236,8 +236,10 @@ func tagFilterAPIExistsClause(orgID, clusterExpr, namespaceExpr string, filters 
 	inner := fmt.Sprintf(`EXISTS (
 		SELECT 1 FROM org_container_keys ock
 		WHERE ock.org_id = $%d
-		  AND %s = ock.cluster_uuid
-		  AND %s = ock.namespace`, nextArg, clusterExpr, namespaceExpr)
+		  AND %s = ock.cluster_uuid`, nextArg, clusterExpr)
+	if namespaceExpr != "" {
+		inner += fmt.Sprintf(" AND %s = ock.namespace", namespaceExpr)
+	}
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
@@ -285,13 +287,16 @@ func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters [
 	inner := fmt.Sprintf(`EXISTS (
 		SELECT 1 FROM org_container_keys ock
 		WHERE ock.org_id = $%d
-		  AND %s = ock.cluster_uuid
-		  AND %s = ock.namespace
+		  AND %s = ock.cluster_uuid`, idx, clusterExpr)
+	if namespaceExpr != "" {
+		inner += fmt.Sprintf(" AND %s = ock.namespace", namespaceExpr)
+	}
+	inner += fmt.Sprintf(`
 		  AND EXISTS (
 			SELECT 1 FROM %s tv,
 			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
 			WHERE t.cluster_id = ock.cluster_uuid::text
-			  AND t.namespace = ock.namespace`, idx, clusterExpr, namespaceExpr, tagValuesTable)
+			  AND t.namespace = ock.namespace`, tagValuesTable)
 	args = append(args, orgID)
 	idx++
 
@@ -321,7 +326,7 @@ func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters [
 		return "", nil, nextArg
 	}
 	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
-	inner += ")))"
+	inner += "))"
 	return inner, args, idx
 }
 
@@ -442,6 +447,6 @@ func tagFilterDBExistsClauseCommaNamespaces(
 		return "", nil, nextArg
 	}
 	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
-	inner += ")))"
+	inner += "))"
 	return inner, args, idx
 }

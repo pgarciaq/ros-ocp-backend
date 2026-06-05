@@ -10,7 +10,7 @@ Package: [`internal/plugins/node`](../../internal/plugins/node/)
 |----------|-------|
 | Name | `node` |
 | Phase | 1 (Produce) |
-| Priority | 20 |
+| Priority | 30 |
 | CSV types | (none — `IngestHook` after `container`) |
 | Retention tables | `daily_node_digests`, `node_recommendations` |
 
@@ -59,7 +59,7 @@ GET /api/cost-management/v1/recommendations/openshift/nodes/utilization
 GET /api/cost-management/v1/recommendations/openshift/machinesets
 ```
 
-Handlers: [`internal/plugins/node/routes.go`](../../internal/plugins/node/routes.go) and node handlers in `internal/api/`.
+Handlers: [`internal/plugins/node/plugin.go`](../../internal/plugins/node/plugin.go) (`RegisterRoutes`) and node handlers in `internal/api/handlers_node_utilization.go`, `internal/api/handlers_node_detail.go`.
 
 ## Key features
 

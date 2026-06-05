@@ -49,7 +49,7 @@ See [configurability](../architecture/configurability.md#gpu).
 ## Notifications
 
 Container detail may include GPU advisory codes **10**, **26–28** (MIG right-sizing / idle).
-Time-slicing uses code **36** on node recommendations.
+Time-slicing uses code **36** on `GET .../gpu/timeslicing` responses (gpu plugin catalog).
 
 Reference: [notification-codes](../architecture/notification-codes.md).
 

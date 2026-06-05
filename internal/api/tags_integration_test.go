@@ -16,10 +16,13 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/google/uuid"
+
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -89,6 +92,33 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	return app, makeIdentityHeader(testutil.TestOrgID), ctx, cleanup
 }
 
+func seedKokuTagValuesForFilter(t *testing.T, ctx context.Context) {
+	t.Helper()
+	schema, err := tags.TenantSchema(testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		CREATE SCHEMA IF NOT EXISTS `+schema+`;
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocptags_values (
+			uuid UUID PRIMARY KEY,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			cluster_ids TEXT[] NOT NULL,
+			cluster_aliases TEXT[] NOT NULL DEFAULT '{}',
+			namespaces TEXT[] NOT NULL,
+			nodes TEXT[],
+			UNIQUE (key, value)
+		);
+	`)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO `+schema+`.reporting_ocptags_values (
+			uuid, key, value, cluster_ids, cluster_aliases, namespaces
+		) VALUES ($1, 'environment', 'production', ARRAY[$2], ARRAY['alias'], ARRAY[$3])
+		ON CONFLICT DO NOTHING`,
+		uuid.New(), testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+}
+
 func seedTagFilterWorkloadKeys(t *testing.T, ctx context.Context) {
 	t.Helper()
 	_, err := database.Pool.Exec(ctx, `
@@ -113,6 +143,15 @@ func withTagsEnabled(t *testing.T) {
 	t.Setenv("ROS_TAGS_ENABLED", "true")
 	t.Setenv("ROS_TAGS_SOURCE", "api")
 	require.True(t, config.TagsFeatureEnabled())
+}
+
+func withTagsDBEnabled(t *testing.T) {
+	t.Helper()
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "db")
+	require.True(t, config.TagsFeatureEnabled())
+	require.Equal(t, "db", config.TagsSource())
 }
 
 func withTagsDisabled(t *testing.T) {
@@ -381,6 +420,33 @@ func TestTagFilters_NodeUtilizationList(t *testing.T) {
 
 	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
 	defer cleanup()
+
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
+			notification_codes, estimated_monthly_savings_usd, updated_at)
+		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
+		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?filter%5Btag%3Aenvironment%5D=production", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	data, _ := body["data"].([]interface{})
+	require.NotEmpty(t, data)
+}
+
+func TestTagFilters_NodeUtilizationList_DBSource(t *testing.T) {
+	withTagsDBEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+	seedKokuTagValuesForFilter(t, ctx)
 
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,

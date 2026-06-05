@@ -278,7 +278,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		}
 		if len(tagFilters) > 0 {
 			// Nodes are included when any workload namespace on the cluster matches the tag filter.
-			tagClause, tagArgs, nextIdx := model.TagFilterExistsClause(orgID, "nr.cluster_uuid", "ock.namespace", tagFilters, argIdx)
+			tagClause, tagArgs, nextIdx := model.TagFilterExistsClause(orgID, "nr.cluster_uuid", "", tagFilters, argIdx)
 			if tagClause != "" {
 				baseFrom += " AND " + tagClause
 				args = append(args, tagArgs...)
