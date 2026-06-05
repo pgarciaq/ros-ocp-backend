@@ -39,7 +39,7 @@ Savings: list (`total_node_savings_usd`, `savings_per_gpu_usd`) and container de
 
 `order_by`: `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`,
 `total_node_savings` (maps to `total_node_savings_usd`). `order_how`: `asc` / `desc`.
-`limit` / `offset` (default 10; `-1` = all). `format=csv` or `Accept: text/csv`.
+`limit` / `offset` (default 100, max 1000). `format=csv` or `Accept: text/csv`.
 
 No `filter[project]` — node-level scope only.
 

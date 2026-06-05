@@ -257,6 +257,7 @@ func TestGetGPUMIGRecommendations_FormatCSV(t *testing.T) {
 	require.GreaterOrEqual(t, len(rows), 2)
 	assert.Equal(t, "cluster_uuid", rows[0][0])
 	assert.Equal(t, "namespace", rows[0][1])
+	assert.Contains(t, rows[0], "gpu_classification")
 }
 
 func TestGetGPUMIGRecommendations_FilterTag(t *testing.T) {

@@ -61,10 +61,10 @@ func GetNodeRecommendations(c echo.Context) error {
 	ctx := c.Request().Context()
 	ctx = WithEnrichmentCache(ctx, orgIDStr)
 
-	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr, "node")
+	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr, "gpu")
 	if err != nil {
 		hlog.Warnf("GetNodeRecommendations: load term config failed: %v", err)
-		terms = engine.DefaultTermsForPlugin("node")
+		terms = engine.DefaultTermsForPlugin("gpu")
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 

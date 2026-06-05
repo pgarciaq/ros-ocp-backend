@@ -166,7 +166,7 @@ GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing
 | `node_name` | — | Node name (case-insensitive exact match) |
 | `gpu_model` | `filter[gpu_model]` | GPU model (case-insensitive substring) |
 | `filter[tag:<key>]` | `tag=key:value` | Tag filter when `ROS_TAGS_ENABLED=true` |
-| `term` | — | Recommendation term (`short`, `medium`, `long`) |
+| `filter[term]` | `term` | `short_term`, `medium_term`, or `long_term` |
 
 Bracket and flat query syntax are both supported — see
 [Query Parameters](../plugin-reference/query-parameters.md).
@@ -188,7 +188,7 @@ Bracket and flat query syntax are both supported — see
 
 | Parameter | Description |
 |-----------|-------------|
-| `limit` / `offset` | Offset pagination (default limit 10; use `-1` for all) |
+| `limit` / `offset` | Offset pagination (default limit **100**, max **1000**; negative `limit` is rejected) |
 | `format=csv` | CSV export; same columns as JSON (see OpenAPI). `Accept: text/csv` also works |
 
 Summary counts and links: `GET .../recommendations/openshift/gpu`.

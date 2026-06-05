@@ -117,7 +117,7 @@ func generateGPUMIGCSV(_ context.Context, w io.Writer, data []model.GPUMIGRecomm
 	writer := csv.NewWriter(w)
 	header := []string{
 		"cluster_uuid", "namespace", "workload", "container", "node_name", "gpu_model",
-		"term", "recommended_gpu_profile", "current_gpu_profile", "classification", "confidence", "gpu_idle_state",
+		"term", "recommended_gpu_profile", "current_gpu_profile", "gpu_classification", "confidence", "gpu_idle_state",
 	}
 	if err := writer.Write(header); err != nil {
 		return err

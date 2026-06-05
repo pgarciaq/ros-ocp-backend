@@ -89,7 +89,7 @@ Container list/detail (`GET /recommendations/openshift`, `.../detail`) include t
 
 ## Notification codes
 
-GPU-related codes include **10** (GPU underutilized), **26–28** (MIG/time-slicing), and **36**. Idle/zombie GPU workloads may also surface container idle codes **5** / **8** on the parent row.
+GPU-related codes include **10** (GPU underutilized), **26** (GPU idle), **27** (GPU memory-bound), **28** (no profiling data), and **36** (time-slicing candidate). Idle/zombie GPU workloads may also surface container idle codes **5** / **8** on the parent row.
 
 Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=gpu`.
 
