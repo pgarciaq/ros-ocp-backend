@@ -324,12 +324,82 @@ Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.
 
 Full env var catalog: [Configurability Reference](../architecture/configurability.md#container).
 
+## Validating recommendations with VPA
+
+You can increase confidence in container rightsizing recommendations **today**
+using Kubernetes Vertical Pod Autoscaler (VPA) in `updateMode: Off` — no VPA
+plugin, feature flag, or additional ROS configuration required.
+
+### How it works
+
+| Component | `updateMode: Off` behavior |
+|-----------|---------------------------|
+| VPA **recommender** | Runs and writes targets to `.status.recommendation` |
+| VPA **admission controller** | Inactive — no automatic resize on pod create |
+| VPA **updater** | Inactive — no eviction to apply new requests |
+
+ROS and VPA therefore act as **independent advisors**: ROS from historical CSV
+digests and percentile engines; VPA from live in-cluster metrics with exponential
+histogram decay.
+
+### Steps
+
+1. Create VPA CRs with `updateMode: Off` for workloads you plan to rightsizing
+   (or use [Goldilocks](https://github.com/FairwindsOps/goldilocks) to generate them).
+2. Wait for the VPA recommender to populate
+   `.status.recommendation.containerRecommendations[].target` (CPU and memory).
+3. Fetch ROS recommendations for the same container:
+
+   ```http
+   GET /api/cost-management/v1/recommendations/openshift?filter[namespace]=<ns>&filter[workload]=<name>&filter[container]=<container>
+   ```
+
+4. Compare VPA target vs ROS recommended request (pick `cost` or `performance`
+   engine to match your apply policy — see [Dual Engine](dual-engine.md)).
+
+### Interpreting results
+
+| Result | Meaning | Suggested action |
+|--------|---------|------------------|
+| **Agreement** (targets within ~15% of ROS request) | Two independent algorithms align | High confidence to apply — manually or via [external automation](../features/hpa-recommendations.md#external-automation) |
+| **Divergence** | Different time windows, bursty traffic, idle classification, or VPA `minAllowed` bounds | Investigate before apply; check ROS term (`short` vs `medium` vs `long`) and VPA policy |
+| **VPA higher than ROS** | VPA may see recent spikes ROS smooths with percentiles | Consider performance engine or longer ROS term |
+| **ROS higher than VPA** | ROS may include OOM bump or performance headroom | Review OOM notifications (code **3**) and margin settings |
+
+Example comparison (pseudocode):
+
+```python
+vpa_cpu = vpa_status["containerRecommendations"][0]["target"]["cpu"]
+ros_cpu = rec["recommendations"]["recommendation_terms"]["medium_term"]["recommendation_engines"]["cost"]["config"]["requests"]["cpu"]["amount"]
+delta_pct = abs(vpa_cpu - ros_cpu) / ros_cpu
+high_confidence = delta_pct < 0.15
+```
+
+### Deployment modes
+
+This pattern works in **all** ROS deployment modes:
+
+- **SaaS** (console.redhat.com) — poll ROS API; compare against in-cluster VPA status
+- **On-prem** (cost-onprem chart) — same API contract, local ingress URL
+- **Hybrid fleet** — per-cluster VPA CRs; central ROS API for container recs
+
+### When the VPA plugin ships
+
+The planned [VPA Recommendations](vpa-recommendations.md) plugin will automate
+this comparison in the API and UI (divergence notifications, `updateMode` promotion
+suggestions). Until then, the manual dual-advisor workflow above delivers most of
+the validation value with zero backend changes.
+
+Use [safety gates](../features/vpa-recommendations.md#safety-gates) before promoting
+from `Off` to `Initial` or `Auto`, or before applying ROS recommendations via automation.
+
 ## Related
 
 - [API Pagination](../pagination.md) — Keyset (`after`) vs offset pagination
 - [Savings Estimations](savings-estimations.md) — Dollar impact per container
 - [Business Hours](business-hours.md) — Schedule-aware percentiles
 - [History & Quality](history-and-quality.md) — Track recommendation changes over time
+- [VPA Recommendations](vpa-recommendations.md) — planned VPA policy plugin (Phase 2 Enrich)
 
 ## Future work
 

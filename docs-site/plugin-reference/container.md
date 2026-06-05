@@ -101,6 +101,19 @@ List filters: `filter[idle_state]`, `filter[has_gpu]`, `filter[cluster]`, `filte
 
 See [Idle / zombie detection](idle-detection.md).
 
+### VPA dual-advisor validation
+
+Validate container rightsizing confidence **today** with Kubernetes VPA in
+`updateMode: Off` — compare VPA `.status.recommendation.containerRecommendations[].target`
+against ROS recommended requests. Agreement between the two independent advisors
+signals high confidence to apply; divergence warrants investigation before changing
+resources.
+
+Works in SaaS, on-prem, and hybrid deployments. No additional ROS configuration.
+
+See [Validating recommendations with VPA](../features/container-recommendations.md#validating-recommendations-with-vpa)
+and [VPA Recommendations (planned)](../features/vpa-recommendations.md).
+
 ### Business hours
 
 When `ROS_BUSINESS_HOURS_ENABLED=true`, parallel `all_hours` and `business_hours` digest streams produce dual recommendations on detail responses after reship completes.

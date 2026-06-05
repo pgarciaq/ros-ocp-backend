@@ -304,9 +304,31 @@ See [idle-detection.md](idle-detection.md) for classification rules and
 
 ---
 
+## Validating recommendations with VPA (`updateMode: Off`)
+
+Available **today** without the planned VPA plugin. Internal design context:
+[hpa-vpa-deployment-modes.md](../architecture/hpa-vpa-deployment-modes.md#5-vpa-updatemode-off--dual-advisor-validation-available-today).
+
+### Pattern
+
+1. Create VPA CRs with `updateMode: Off` (or Goldilocks-generated CRs).
+2. VPA recommender writes `.status.recommendation.containerRecommendations[].target`.
+3. Poll `GET /api/cost-management/v1/recommendations/openshift` for the same container.
+4. Compare VPA target CPU/memory vs ROS `recommendation_engines.{cost,performance}.config.requests`.
+5. **Agreement** (~15% delta) → high confidence apply. **Divergence** → investigate
+   (percentile terms vs VPA histogram decay, OOM bump, idle state, `minAllowed`).
+
+No ROS feature flag or write path required. Works in SaaS, on-prem, and hybrid fleet modes.
+
+Public-facing guide: [docs-site/features/container-recommendations.md](../../docs-site/features/container-recommendations.md#validating-recommendations-with-vpa).
+
+---
+
 ## Related documentation
 
 - [Query parameters (bracket syntax)](../../docs-site/plugin-reference/query-parameters.md)
 - [API pagination](../../docs-site/pagination.md)
 - [Recommendation engines](../architecture/recommendation-engines.md)
 - [Tag filtering](tag-filtering.md)
+- [HPA/VPA deployment modes](../architecture/hpa-vpa-deployment-modes.md)
+- [VPA recommendations (planned)](../../docs-site/features/vpa-recommendations.md)

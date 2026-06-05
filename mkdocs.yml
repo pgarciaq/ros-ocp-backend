@@ -91,6 +91,8 @@ nav:
       - Seasonality & Proactive Recs (Planned): features/seasonality.md
       - Virtual Machine Recommendations: features/virtual-machines.md
       - Java & JVM Optimization (Planned): features/java-jvm.md
+      - HPA Recommendations (Planned): features/hpa-recommendations.md
+      - VPA Recommendations (Planned): features/vpa-recommendations.md
       - Network Optimization (Planned): features/network.md
       - Local Mode (Planned): features/local-mode.md
   - Architecture:

@@ -25,6 +25,8 @@ dollar impact using Koku cost model rates.
 | Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
 | Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
 | Java / JVM Optimization | java (planned) | cost, performance | Planned | Planned |
+| HPA Recommendations | hpa (planned) | single | Planned | Planned |
+| VPA Recommendations | vpa (planned) | single | Planned | Planned |
 | Network Optimization | network (planned) | single | Planned (SaaS $) | Planned |
 
 ## All feature pages
@@ -50,6 +52,8 @@ dollar impact using Koku cost model rates.
 | [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
 | [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**Preview Beta**) |
 | [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
+| [hpa-recommendations.md](hpa-recommendations.md) | Horizontal Pod Autoscaler tuning (**planned**) |
+| [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance (**planned**) |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health (**planned**) |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload (**planned**) |
 
