@@ -2,8 +2,8 @@
 //
 // This plugin aggregates container-level metrics at the namespace granularity
 // to recommend namespace resource quotas (CPU and memory requests/limits).
-// It supports multiple recommendation "engines" (profiles) per term: conservative
-// and aggressive, giving cluster admins a range of options.
+// It supports multiple recommendation "engines" (profiles) per term: cost
+// and performance, giving cluster admins a range of options.
 //
 // # Ingestion
 //
@@ -15,8 +15,8 @@
 //
 // The namespace engine ([engine.RecommendAllNamespaces]) processes digests within
 // each term's window using percentile-based sizing per engine profile:
-//   - Conservative: higher percentiles → fewer OOM kills, more headroom
-//   - Aggressive: lower percentiles → tighter packing, higher utilization
+//   - Cost: lower percentiles → tighter packing, higher utilization
+//   - Performance: higher percentiles → more headroom, fewer OOM kills
 //
 // Each (namespace × term × engine) combination produces one recommendation.
 //

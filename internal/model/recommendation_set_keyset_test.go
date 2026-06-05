@@ -64,7 +64,11 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
-	opts := listoptions.ListOptions{Limit: 1}
+	opts := listoptions.ListOptions{
+		Limit:    1,
+		OrderBy:  listoptions.DefaultContainerRecsDBColumn,
+		OrderHow: listoptions.OrderDesc,
+	}
 	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
 	require.NoError(t, err)
 	require.Len(t, page1.Results, 1)
@@ -72,9 +76,12 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	assert.True(t, page1.HasNext)
 
 	opts.HasCursor = true
-	opts.AfterNamespace = page1.Results[0].Project
-	opts.AfterWorkload = page1.Results[0].Workload
-	opts.AfterContainer = page1.Results[0].Container
+	opts.AfterNamespace = page1.LastAnchor.Namespace
+	opts.AfterWorkload = page1.LastAnchor.Workload
+	opts.AfterContainer = page1.LastAnchor.ContainerName
+	opts.AfterContainerClusterUUID = page1.LastAnchor.ClusterUUID
+	opts.AfterContainerSortPresent = true
+	opts.AfterContainerSortValue = page1.LastAnchor.SortValue
 	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
 	require.NoError(t, err)
 	require.Len(t, page2.Results, 1)

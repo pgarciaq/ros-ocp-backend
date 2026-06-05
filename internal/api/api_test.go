@@ -107,6 +107,68 @@ func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
 	assert.Equal(t, []string{"%payments%"}, result["rs.namespace ILIKE ?"])
 }
 
+func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
+	workloadCol := "rs.workload"
+	workloadTypeCol := "rs.workload_type"
+
+	tests := []struct {
+		name        string
+		queryParams map[string][]string
+		wantErr     bool
+		errContains string
+		checkResult func(t *testing.T, result map[string]interface{})
+	}{
+		{
+			name:        "workload filter allows display names with parentheses",
+			queryParams: map[string][]string{"filter[workload]": {"my-app (prod)"}},
+			wantErr:     false,
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"%my-app (prod)%"}, result[workloadCol+" ILIKE ?"])
+			},
+		},
+		{
+			name:        "workload_type filter uses exact match not partial",
+			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"deployment"}, result[workloadTypeCol+" = ?"])
+				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
+			},
+		},
+		{
+			name:        "workload_type invalid value returns error",
+			queryParams: map[string][]string{"filter[workload_type]": {"not-a-real-type"}},
+			wantErr:     true,
+			errContains: "invalid workload_type",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			for k, vals := range tt.queryParams {
+				for _, v := range vals {
+					c.QueryParams().Add(k, v)
+				}
+			}
+			result, err := MapNativeQueryParameters(c)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+			if tt.checkResult != nil {
+				tt.checkResult(t, result)
+			}
+		})
+	}
+}
+
 func TestMapHistoryQueryParameters_ProjectFilterAlias(t *testing.T) {
 	for _, rawQuery := range []string{
 		"filter%5Bproject%5D=payments",

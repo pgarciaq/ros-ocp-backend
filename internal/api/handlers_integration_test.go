@@ -903,11 +903,95 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	require.Greater(t, response.Meta.Count, 0, "RBAC-filtered results should not be empty")
+	assert.Equal(t, len(response.Data), response.Meta.Count,
+		"meta.count must reflect RBAC-filtered total, not org-wide count")
 
 	for _, d := range response.Data {
 		assert.Equal(t, cluster1, d.ClusterUUID,
 			"RBAC should restrict results to the permitted cluster only")
 	}
+}
+
+func TestGetNativeRecommendationSetList_RBAC_MetaCountZeroWhenNoAccessibleClusters(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	connStr := pool.Config().ConnString()
+	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	database.DB = gormDB
+	t.Cleanup(func() { database.DB = nil })
+
+	clusterWithData := "a1111111-1111-1111-1111-111111111111"
+	clusterDenied := "b2222222-2222-2222-2222-222222222222"
+
+	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'rbac-data-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterWithData)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	for i := 0; i < 7; i++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate: start.AddDate(0, 0, i),
+			OrgID:      testutil.TestOrgID, ClusterUUID: clusterWithData,
+			Namespace: "ns-rbac-deny", Workload: "deploy", WorkloadType: "deployment",
+			ContainerName:   "app",
+			CPURequestP50MC: 100, CPURequestP95MC: 120,
+			CPUUsageP50MC: 90, CPUUsageP95MC: 110, CPUUsageP98MC: 115,
+			CPUUsageP99MC: 118, CPUUsageMaxMC: 125,
+			CPUThrottleP95MC: 5, CPUThrottleMaxMC: 10,
+			MemRequestP50KiB: 524288, MemRequestP95KiB: 524800,
+			MemUsageP50KiB: 524000, MemUsageP95KiB: 524288,
+			MemUsageMaxKiB: 525312, MemRSSP95KiB: 524000, MemRSSMaxKiB: 525000,
+			OOMCountSum: 0, CPUUsageMeanMC: 95, MemUsageMeanKiB: 523000,
+			SampleCount: 96,
+		})
+	}
+
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, clusterWithData, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+
+	cfg := config.GetConfig()
+	origRBAC := cfg.RBACEnabled
+	cfg.RBACEnabled = true
+	defer func() { cfg.RBACEnabled = origRBAC }()
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("user.permissions", map[string][]string{
+				"openshift.cluster": {clusterDenied},
+				"openshift.project": {"*"},
+			})
+			return next(c)
+		}
+	})
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response struct {
+		Data []model.DetailResponse `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Empty(t, response.Data)
+	assert.Equal(t, 0, response.Meta.Count,
+		"meta.count must be zero when RBAC denies all clusters with data")
 }
 
 func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
@@ -1330,7 +1414,7 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 		assert.Contains(t, resp.Links.First, "offset=0")
 		assert.Contains(t, resp.Links.First, "limit=2")
 		assert.Empty(t, resp.Links.Previous, "first page should have no previous link")
-		assert.Contains(t, resp.Links.Next, "offset=2")
+		assert.Contains(t, resp.Links.Next, "after=")
 		assert.Contains(t, resp.Links.Last, "offset=4")
 	})
 
@@ -1345,7 +1429,7 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 
 		assert.Contains(t, resp.Links.First, "offset=0")
 		assert.Contains(t, resp.Links.Previous, "offset=0")
-		assert.Contains(t, resp.Links.Next, "offset=4")
+		assert.Contains(t, resp.Links.Next, "after=")
 		assert.Contains(t, resp.Links.Last, "offset=4")
 	})
 

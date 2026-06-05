@@ -21,6 +21,15 @@ func applyContainerListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	opts.AfterNamespace = cursor.Namespace
 	opts.AfterWorkload = cursor.Workload
 	opts.AfterContainer = cursor.ContainerName
+	opts.AfterContainerClusterUUID = cursor.ClusterUUID
+	if len(cursor.SortValue) > 0 {
+		sortVal, decodeErr := model.DecodePaginationSortValue(cursor.SortValue)
+		if decodeErr != nil {
+			return fmt.Errorf("invalid after parameter: %w", decodeErr)
+		}
+		opts.AfterContainerSortPresent = true
+		opts.AfterContainerSortValue = sortVal
+	}
 	return nil
 }
 
@@ -36,29 +45,40 @@ func applyNamespaceListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	opts.HasCursor = true
 	opts.AfterNamespaceName = cursor.Namespace
 	opts.AfterNSClusterUUID = cursor.ClusterUUID
+	if len(cursor.SortValue) > 0 {
+		sortVal, decodeErr := model.DecodePaginationSortValue(cursor.SortValue)
+		if decodeErr != nil {
+			return fmt.Errorf("invalid after parameter: %w", decodeErr)
+		}
+		opts.AfterNSSortPresent = true
+		opts.AfterNSSortValue = sortVal
+	}
 	return nil
 }
 
-func containerNextCursor(results []model.NativeContainerResult) string {
-	if len(results) == 0 {
+func containerNextCursor(page model.NativeListPage) string {
+	if !page.HasNext || page.LastAnchor == nil {
 		return ""
 	}
-	last := results[len(results)-1]
+	anchor := page.LastAnchor
 	return EncodeContainerCursor(ContainerCursor{
-		Namespace:     last.Project,
-		Workload:      last.Workload,
-		ContainerName: last.Container,
+		Namespace:     anchor.Namespace,
+		Workload:      anchor.Workload,
+		ContainerName: anchor.ContainerName,
+		ClusterUUID:   anchor.ClusterUUID,
+		SortValue:     model.PaginationSortValueJSON(anchor.SortValue),
 	})
 }
 
-func namespaceNextCursor(results []model.NativeNamespaceResult) string {
-	if len(results) == 0 {
+func namespaceNextCursor(page model.NativeNamespaceListPage) string {
+	if !page.HasNext || page.LastAnchor == nil {
 		return ""
 	}
-	last := results[len(results)-1]
+	anchor := page.LastAnchor
 	return EncodeNamespaceCursor(NamespaceCursor{
-		Namespace:   last.Project,
-		ClusterUUID: last.ClusterUUID,
+		Namespace:   anchor.Namespace,
+		ClusterUUID: anchor.ClusterUUID,
+		SortValue:   model.PaginationSortValueJSON(anchor.SortValue),
 	})
 }
 
@@ -70,7 +90,7 @@ func buildContainerListMeta(c echo.Context, page model.NativeListPage, opts list
 
 	nextCursor := ""
 	if page.HasNext {
-		nextCursor = containerNextCursor(page.Results)
+		nextCursor = containerNextCursor(page)
 	}
 
 	return PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
@@ -84,7 +104,7 @@ func buildNamespaceListMeta(c echo.Context, page model.NativeNamespaceListPage, 
 
 	nextCursor := ""
 	if page.HasNext {
-		nextCursor = namespaceNextCursor(page.Results)
+		nextCursor = namespaceNextCursor(page)
 	}
 
 	return PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)

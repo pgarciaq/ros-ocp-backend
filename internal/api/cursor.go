@@ -8,15 +8,20 @@ import (
 
 // ContainerCursor is the decoded keyset position for container list pagination.
 type ContainerCursor struct {
-	Namespace     string `json:"ns"`
-	Workload      string `json:"wl"`
-	ContainerName string `json:"cn"`
+	Namespace     string          `json:"ns"`
+	Workload      string          `json:"wl"`
+	ContainerName string          `json:"cn"`
+	ClusterUUID   string          `json:"cu,omitempty"`
+	SortValue     json.RawMessage `json:"sv,omitempty"`
 }
 
 // NamespaceCursor is the decoded keyset position for namespace list pagination.
 type NamespaceCursor struct {
-	Namespace   string `json:"ns"`
-	ClusterUUID string `json:"cu"`
+	Namespace   string          `json:"ns"`
+	ClusterUUID string          `json:"cu"`
+	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
+	OrderHow    string          `json:"oh,omitempty"`
 }
 
 // EncodeContainerCursor returns an opaque base64url cursor for the next page.

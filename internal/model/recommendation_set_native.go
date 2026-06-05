@@ -232,6 +232,8 @@ type NativeRecommendationRow struct {
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
 	LastReported time.Time `gorm:"column:last_reported_at"`
+
+	PageSortText *string `gorm:"column:ros_container_page_sort"`
 }
 
 func (NativeRecommendationRow) TableName() string {
@@ -263,6 +265,9 @@ type NativeContainerResult struct {
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
+
+	// PaginationSort is the list order-by value for this container (not serialized).
+	PaginationSort interface{} `json:"-"`
 }
 
 // NativeContainerID generates a deterministic UUID v5 from the composite key.
@@ -330,73 +335,96 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	db := database.GetDB()
 	keysParams, detailParams := splitNativeListQueryParams(queryParams)
 
-	keysQuery := db.Table("org_container_keys ock").
-		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.container_name, ock.workload_type").
+	limit := opts.Limit
+	if opts.Format == listoptions.ResponseFormatCSV {
+		limit = config.GetConfig().RecordLimitCSV
+	}
+	pageLimit := limit + 1
+
+	sortExpr, sortFilter := nativeContainerPageSortExpr(opts.OrderBy)
+	orderHow := nativeContainerOrderHow(opts.OrderHow)
+
+	ockExists := db.Table("org_container_keys ock").
+		Select("1").
+		Where("ock.org_id = ?", orgID).
+		Where("ock.cluster_uuid = rs.cluster_uuid").
+		Where("ock.namespace = rs.namespace").
+		Where("ock.workload = rs.workload").
+		Where("ock.container_name = rs.container_name")
+	ockExists = ApplyNativeRBAC(ockExists, userPerms, "ock.namespace")
+	ockExists = ApplyQueryParamsToKeys(ockExists, keysParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		ockExists = ApplyTagFiltersToKeys(ockExists, orgID, tagFilters)
+	}
+
+	distinctSubquery := db.Table("recommendation_sets rs").
+		Select(fmt.Sprintf(
+			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, (%s)::text AS ros_container_page_sort",
+			sortExpr,
+		)).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Where("rs.org_id = ?", orgID).
+		Where("rs.stale = false").
+		Where("EXISTS (?)", ockExists)
+	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
+	distinctSubquery = ApplyQueryParams(distinctSubquery, detailParams)
+	if sortFilter != "" {
+		distinctSubquery = distinctSubquery.Where(sortFilter)
+	}
+	distinctSubquery = distinctSubquery.Order(nativeContainerDistinctOnOrder(sortExpr, orderHow))
+	distinctSubquery = applyNativeContainerPageSeek(distinctSubquery, opts, sortExpr)
+
+	countQuery := db.Table("org_container_keys ock").
+		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.container_name").
 		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
 		Where("ock.org_id = ?", orgID)
-	keysQuery = ApplyNativeRBAC(keysQuery, userPerms, "ock.namespace")
-	keysQuery = ApplyQueryParamsToKeys(keysQuery, keysParams)
+	countQuery = ApplyNativeRBAC(countQuery, userPerms, "ock.namespace")
+	countQuery = ApplyQueryParamsToKeys(countQuery, keysParams)
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
-		keysQuery = ApplyTagFiltersToKeys(keysQuery, orgID, tagFilters)
+		countQuery = ApplyTagFiltersToKeys(countQuery, orgID, tagFilters)
 	}
 
-	if opts.HasCursor {
-		keysQuery = keysQuery.Where(
-			"(ock.namespace, ock.workload, ock.container_name) > (?, ?, ?)",
-			opts.AfterNamespace, opts.AfterWorkload, opts.AfterContainer,
-		)
+	pageSubquery := db.Table("(?) AS page", distinctSubquery).
+		Select("page.cluster_uuid, page.namespace, page.workload, page.container_name, page.ros_container_page_sort").
+		Order(nativeContainerPageOrder("page", orderHow))
+	if !opts.HasCursor {
+		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
-
-	pageLimit := opts.Limit + 1
-	if opts.HasCursor {
-		keysQuery = keysQuery.Order("ock.namespace, ock.workload, ock.container_name")
-		keysQuery = keysQuery.Limit(pageLimit)
-	} else {
-		orderHow := nativeContainerOrderHow(opts.OrderHow)
-		sortExpr, sortFilter := nativeContainerSortExpr(opts.OrderBy)
-		if sortFilter == "" && nativeContainerSortUsesOrgKeysOnly(sortExpr) {
-			keysQuery = keysQuery.Order(listoptions.SQLOrderByFragment(sortExpr, orderHow)).
-				Order("ock.namespace, ock.workload, ock.container_name")
-		} else {
-			keysQuery = keysQuery.Order("ock.namespace, ock.workload, ock.container_name")
-		}
-		keysQuery = keysQuery.Offset(opts.Offset).Limit(pageLimit)
-	}
-
-	pageSubquery := db.Table("(?) AS page_keys", keysQuery).
-		Select("page_keys.cluster_uuid, page_keys.namespace, page_keys.workload, page_keys.container_name, page_keys.workload_type")
+	pageSubquery = pageSubquery.Limit(pageLimit)
 
 	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
-	detailQuery := db.Table("recommendation_sets rs").
-		Select(nativeDetailSelect).
+	err := db.Table("recommendation_sets rs").
+		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
 			AND page.container_name = rs.container_name`, pageSubquery).
-		Where("rs.org_id = ?", orgID).
-		Where("rs.stale = false")
-	detailQuery = ApplyQueryParams(detailQuery, detailParams)
-	detailOrder := "rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine"
-	if !opts.HasCursor {
-		orderHow := nativeContainerOrderHow(opts.OrderHow)
-		sortExpr, _ := nativeContainerSortExpr(opts.OrderBy)
-		detailOrder = listoptions.SQLOrderByFragment(sortExpr, orderHow) + ", rs.term, rs.engine"
-	}
-	err := detailQuery.Order(detailOrder).Find(&rows).Error
+		Where("rs.stale = false").
+		Order(nativeContainerDetailOrder(orderHow)).
+		Find(&rows).Error
 	if err != nil {
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, sortExpr)
 
-	hasNext := len(results) > opts.Limit
+	hasNext := len(results) > limit
+	var lastAnchor *ContainerPaginationAnchor
 	if hasNext {
-		results = results[:opts.Limit]
+		last := results[limit-1]
+		lastAnchor = &ContainerPaginationAnchor{
+			SortValue:     last.PaginationSort,
+			ClusterUUID:   last.ClusterUUID,
+			Namespace:     last.Project,
+			Workload:      last.Workload,
+			ContainerName: last.Container,
+		}
+		results = results[:limit]
 	}
 
-	totalContainers, err := resolveOrgContainerCount(orgID, db, nil)
+	totalContainers, err := resolveOrgContainerCount(orgID, db, countQuery)
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -404,94 +432,81 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	log.Infof("native list query: %dms (%d containers, %d rows)", time.Since(t0).Milliseconds(), totalContainers, len(rows))
 
 	return NativeListPage{
-		Results: results,
-		Count:   int(totalContainers),
-		HasNext: hasNext,
+		Results:    results,
+		Count:      int(totalContainers),
+		HasNext:    hasNext,
+		LastAnchor: lastAnchor,
 	}, nil
 }
 
 func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
 	db := database.GetDB()
-	pageLimit := opts.Limit + 1
-
-	var pageSubquery *gorm.DB
-	var countDistinct *gorm.DB
-
-	if opts.HasCursor {
-		distinctSubquery := db.Table("recommendation_sets rs").
-			Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name").
-			Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-			Where("rs.org_id = ?", orgID).
-			Where("rs.stale = false")
-		distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
-		distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
-		distinctSubquery = distinctSubquery.Where(
-			"(rs.namespace, rs.workload, rs.container_name) > (?, ?, ?)",
-			opts.AfterNamespace, opts.AfterWorkload, opts.AfterContainer,
-		)
-		countDistinct = distinctSubquery
-		pageSubquery = db.Table("(?) AS dc", distinctSubquery).
-			Select(`dc.cluster_uuid, dc.namespace, dc.workload, dc.container_name`).
-			Order("dc.namespace, dc.workload, dc.container_name").
-			Limit(pageLimit)
-	} else {
-		orderHow := nativeContainerOrderHow(opts.OrderHow)
-		sortExpr, sortFilter := nativeContainerSortExpr(opts.OrderBy)
-		distinctOnOrder := fmt.Sprintf(
-			"rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, %s %s, rs.term ASC, rs.engine ASC",
-			sortExpr, orderHow,
-		)
-
-		distinctSubquery := db.Table("recommendation_sets rs").
-			Select(fmt.Sprintf(
-				"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, %s AS ros_container_page_sort",
-				sortExpr,
-			)).
-			Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-			Where("rs.org_id = ?", orgID).
-			Where("rs.stale = false")
-		distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
-		distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
-		if sortFilter != "" {
-			distinctSubquery = distinctSubquery.Where(sortFilter)
-		}
-		distinctSubquery = distinctSubquery.Order(distinctOnOrder)
-		countDistinct = db.Table("(?) AS dn", distinctSubquery).
-			Select("dn.cluster_uuid, dn.namespace, dn.workload, dn.container_name")
-
-		pageSubquery = db.Table("(?) AS page", distinctSubquery).
-			Order(fmt.Sprintf("page.ros_container_page_sort %s, page.cluster_uuid, page.namespace, page.workload, page.container_name", orderHow)).
-			Offset(opts.Offset).
-			Limit(pageLimit)
+	limit := opts.Limit
+	if opts.Format == listoptions.ResponseFormatCSV {
+		limit = config.GetConfig().RecordLimitCSV
 	}
+	pageLimit := limit + 1
+
+	sortExpr, sortFilter := nativeContainerPageSortExpr(opts.OrderBy)
+	orderHow := nativeContainerOrderHow(opts.OrderHow)
+
+	distinctSubquery := db.Table("recommendation_sets rs").
+		Select(fmt.Sprintf(
+			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, (%s)::text AS ros_container_page_sort",
+			sortExpr,
+		)).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Where("rs.org_id = ?", orgID).
+		Where("rs.stale = false")
+	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
+	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
+	if sortFilter != "" {
+		distinctSubquery = distinctSubquery.Where(sortFilter)
+	}
+	distinctSubquery = distinctSubquery.Order(nativeContainerDistinctOnOrder(sortExpr, orderHow))
+	distinctSubquery = applyNativeContainerPageSeek(distinctSubquery, opts, sortExpr)
+
+	countDistinct := db.Table("(?) AS dn", distinctSubquery).
+		Select("dn.cluster_uuid, dn.namespace, dn.workload, dn.container_name")
+
+	pageSubquery := db.Table("(?) AS page", distinctSubquery).
+		Select("page.cluster_uuid, page.namespace, page.workload, page.container_name, page.ros_container_page_sort").
+		Order(nativeContainerPageOrder("page", orderHow))
+	if !opts.HasCursor {
+		pageSubquery = pageSubquery.Offset(opts.Offset)
+	}
+	pageSubquery = pageSubquery.Limit(pageLimit)
 
 	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
-	detailOrder := "rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine"
-	if !opts.HasCursor {
-		orderHow := nativeContainerOrderHow(opts.OrderHow)
-		sortExpr, _ := nativeContainerSortExpr(opts.OrderBy)
-		detailOrder = listoptions.SQLOrderByFragment(sortExpr, orderHow) + ", rs.term, rs.engine"
-	}
 	err := db.Table("recommendation_sets rs").
-		Select(nativeDetailSelect).
+		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
 			AND page.container_name = rs.container_name`, pageSubquery).
 		Where("rs.stale = false").
-		Order(detailOrder).
+		Order(nativeContainerDetailOrder(orderHow)).
 		Find(&rows).Error
 	if err != nil {
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, sortExpr)
 
-	hasNext := len(results) > opts.Limit
+	hasNext := len(results) > limit
+	var lastAnchor *ContainerPaginationAnchor
 	if hasNext {
-		results = results[:opts.Limit]
+		last := results[limit-1]
+		lastAnchor = &ContainerPaginationAnchor{
+			SortValue:     last.PaginationSort,
+			ClusterUUID:   last.ClusterUUID,
+			Namespace:     last.Project,
+			Workload:      last.Workload,
+			ContainerName: last.Container,
+		}
+		results = results[:limit]
 	}
 
 	totalContainers, err := resolveOrgContainerCount(orgID, db, countDistinct)
@@ -502,9 +517,10 @@ func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions
 	log.Infof("native list query: %dms (%d containers, %d rows)", time.Since(t0).Milliseconds(), totalContainers, len(rows))
 
 	return NativeListPage{
-		Results: results,
-		Count:   int(totalContainers),
-		HasNext: hasNext,
+		Results:    results,
+		Count:      int(totalContainers),
+		HasNext:    hasNext,
+		LastAnchor: lastAnchor,
 	}, nil
 }
 
@@ -616,7 +632,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 	}
 
 	if len(rows) > 0 {
-		results := assembleNativeResults(rows)
+		results := assembleNativeResults(rows, "")
 		if len(results) > 0 {
 			return &results[0], nil
 		}
@@ -686,7 +702,7 @@ func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerm
 		return nil, nil
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -694,7 +710,7 @@ func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerm
 }
 
 // assembleNativeResults groups flat rows into nested NativeContainerResult structs.
-func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResult {
+func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []NativeContainerResult {
 	type containerKey struct {
 		ClusterUUID   string
 		Namespace     string
@@ -742,6 +758,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			}
 		}
 
+		pageSort := nativeContainerParseSortText(sortExpr, first.PageSortText)
 		result := NativeContainerResult{
 			ID:               NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
 			ClusterAlias:     first.ClusterAlias,
@@ -755,6 +772,7 @@ func assembleNativeResults(rows []NativeRecommendationRow) []NativeContainerResu
 			Replicas:         replicas,
 			MonitoringEndTime: maxMonEnd,
 			Recommendations:  make(map[string]TermRecommendation),
+			PaginationSort:   pageSort,
 		}
 		idleRow := pickIdleSourceRow(rowGroup)
 		savingsEnabled := idleRow.EstimatedSavingsCents != nil || idleRow.EstimatedWasteCents != nil

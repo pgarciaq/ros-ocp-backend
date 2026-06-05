@@ -72,13 +72,13 @@ func TestGetNotificationCodes_PluginFilterNamespace(t *testing.T) {
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 7, resp.Meta.Count)
+	require.Equal(t, 4, resp.Meta.Count)
 
 	codes := make([]int16, len(resp.Data))
 	for i, entry := range resp.Data {
 		codes[i] = entry.Code
 	}
-	assert.ElementsMatch(t, []int16{1, 2, 7, 9, 70, 71, 72}, codes)
+	assert.ElementsMatch(t, []int16{1, 2, 7, 9}, codes)
 }
 
 func TestGetNotificationCodes_PluginFilterContainer(t *testing.T) {

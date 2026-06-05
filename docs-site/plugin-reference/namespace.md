@@ -65,9 +65,11 @@ List filter: `filter[idle_state]=idle,zombie` (comma-separated `active`, `idle`,
 | Parameter | Description |
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID |
-| `filter[project]` / `namespace` | Namespace name |
+| `filter[project]` | Namespace name (`filter[namespace]` is a backward-compatible alias) |
+| `filter[idle_state]` | `active`, `idle`, or `zombie` (comma-separated OR) |
+| `filter[engine]` | `cost` or `performance` (omits the other engine from each item) |
 | `filter[tag:<key>]` | Label filter when `ROS_TAGS_ENABLED=true` |
-| `order_by` / `order_how` | Sort (e.g. `namespace`, variation fields) |
+| `order_by` / `order_how` | Sort by `project`, `cluster`, `last_reported`, or variation columns (`order_how=desc` for descending) |
 
 ## Business hours
 
@@ -77,9 +79,21 @@ See [Business hours](business-hours.md) and [Business Hours feature](../features
 
 ## Notification codes
 
-Namespace rows use codes **1** (low confidence), **7** (new workload), and **9** (memory trending up). Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=namespace`.
+Namespace rows may emit:
+
+| Code | Name | Severity | Message |
+|------|------|----------|---------|
+| **1** | `LOW_CONFIDENCE` | WARNING | Less than 4 days of data available for this workload |
+| **2** | `STALE_DATA` | WARNING | No new metrics data received for more than 48 hours |
+| **7** | `NEW_WORKLOAD` | INFO | Less than 24 hours of data — recommendation may be unstable |
+| **9** | `MEMORY_TRENDING_UP` | WARNING | Memory usage trend suggests capacity risk within 30 days |
+
+Catalog: `GET /recommendations/openshift/notification-codes?filter[plugin]=namespace`.
 
 See [Notification codes — Namespaces](../architecture/notification-codes.md#namespaces).
+
+!!! note
+    Codes **70–72** belong to the [ResourceQuota](quota.md) plugin, not namespace sizing.
 
 ## Savings
 

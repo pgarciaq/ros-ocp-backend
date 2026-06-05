@@ -127,8 +127,17 @@ and [Idle / zombie detection](../features/idle-detection.md).
 
 ### Namespaces
 
-Codes **1**, **7**, **9** only. See [Namespace recommendations](../features/namespace-recommendations.md).
-Namespace-level memory trend uses a higher slope threshold than containers.
+Codes **1**, **2**, **7**, **9** only (namespace sizing plugin). See [Namespace recommendations](../features/namespace-recommendations.md).
+
+| Code | Name | Message |
+|------|------|---------|
+| 1 | `LOW_CONFIDENCE` | Less than 4 days of data available for this workload |
+| 2 | `STALE_DATA` | No new metrics data received for more than 48 hours |
+| 7 | `NEW_WORKLOAD` | Less than 24 hours of data — recommendation may be unstable |
+| 9 | `MEMORY_TRENDING_UP` | Memory usage trend suggests capacity risk within 30 days |
+
+Namespace-level memory trend uses a higher slope threshold than containers (500 KiB/day vs 100 KiB/day).
+ResourceQuota codes **70–72** are documented under the [quota plugin](../plugin-reference/quota.md), not here.
 
 ### Nodes
 

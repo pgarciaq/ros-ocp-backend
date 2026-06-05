@@ -25,7 +25,7 @@ type CatalogResponse struct {
 // pluginCatalogCodes lists codes relevant to each recommendation plugin (includes reserved codes).
 var pluginCatalogCodes = map[string][]int16{
 	"container": {1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25},
-	"namespace": {1, 2, 7, 9, 70, 71, 72},
+	"namespace": {1, 2, 7, 9},
 	"node":      {4, 11, 12, 13, 14, 15, 16, 17, 23, 24, 25, 36, 74, 75, 76},
 	"gpu":       {10, 26, 27, 28, 36},
 	"pvc":       {20, 25, 29, 30},

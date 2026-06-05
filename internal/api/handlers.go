@@ -299,19 +299,19 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if err := validateWorkloadTypeValues(workloadTypeVals); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true, false); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "project", "rs.namespace", model.NamespaceMaxLen, false); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "project", "rs.namespace", model.NamespaceMaxLen, false, false); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "workload", "rs.workload", model.ClusterMaxLen, true); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "workload", "rs.workload", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "workload_type", "rs.workload_type", model.NamespaceMaxLen, false); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "workload_type", "rs.workload_type", model.NamespaceMaxLen, false, SkipSanitizationForContainer, true); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "container", "rs.container_name", model.NamespaceMaxLen, false); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "container", "rs.container_name", model.NamespaceMaxLen, false, false); err != nil {
 		filterErrs = append(filterErrs, err)
 	}
 	if idleVals := queryparams.IncludeValues(c, "idle_state"); len(idleVals) > 0 {

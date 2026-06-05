@@ -57,6 +57,7 @@ docs-site/features/
 !docs-site/features/cluster-resource-quota.md
 !docs-site/features/snapshot-staleness.md
 !docs-site/features/container-recommendations.md
+!docs-site/features/namespace-recommendations.md
 !docs-site/features/dual-engine.md
 !docs-site/features/savings-estimations.md
 !docs-site/features/tag-filtering.md

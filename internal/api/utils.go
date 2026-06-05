@@ -82,6 +82,14 @@ func PaginatedCollectionResponse(collection []interface{}, req *http.Request, co
 	resp.Meta.HasNext = hasNext
 	if nextCursor != "" {
 		resp.Meta.NextCursor = nextCursor
+		if hasNext {
+			q := req.URL.Query()
+			q.Set("limit", strconv.Itoa(limit))
+			q.Del("offset")
+			q.Set("after", nextCursor)
+			params, _ := url.PathUnescape(q.Encode())
+			resp.Links.Next = fmt.Sprintf("%v?%v", req.URL.Path, params)
+		}
 	}
 	return resp
 }
@@ -539,7 +547,7 @@ func parseNativeClusterParams(value string, mode string) ([]string, []string, er
 
 // buildNativeModeClause builds SQL clause with mode support for native queries.
 // Uses parseNativeClusterParams for cluster params, standard logic for others.
-func buildNativeModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool) (map[string]any, error) {
+func buildNativeModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool, skipSanitize bool) (map[string]any, error) {
 	if len(vals) == 0 {
 		return nil, nil
 	}
@@ -563,7 +571,7 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 			allSQLClauses = append(allSQLClauses, sqlClauses...)
 			allParamVals = append(allParamVals, paramVals...)
 		default:
-			s, err := sanitizeParamValue(param, val, maxLen, allowDot, false)
+			s, err := sanitizeParamValue(param, val, maxLen, allowDot, skipSanitize)
 			if err != nil {
 				return nil, err
 			}
@@ -582,14 +590,21 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 }
 
 // buildNativeSQLClauseWithFilterType handles include/exclude/exact for native queries.
-func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, excludeVals []string, column string, maxLen int, allowDot bool) (map[string]any, error) {
+func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, excludeVals []string, column string, maxLen int, allowDot bool, skipSanitize bool, treatIncludeAsExact bool) (map[string]any, error) {
 	hasExclude, hasExact, hasInclude := len(excludeVals) > 0, len(exactVals) > 0, len(includeVals) > 0
+
+	if treatIncludeAsExact {
+		exactVals = append(includeVals, exactVals...)
+		includeVals = nil
+		hasInclude = false
+		hasExact = len(exactVals) > 0
+	}
 
 	if !hasExclude && !hasExact {
 		if !hasInclude {
 			return nil, nil
 		}
-		return buildNativeModeClause(param, column, FilterModeInclude, includeVals, maxLen, allowDot)
+		return buildNativeModeClause(param, column, FilterModeInclude, includeVals, maxLen, allowDot, skipSanitize)
 	}
 
 	if hasExclude {
@@ -605,7 +620,7 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 
 	clauseMap := make(map[string]any)
 	if len(excludeVals) > 0 {
-		clause, err := buildNativeModeClause(param, column, FilterModeExclude, excludeVals, maxLen, allowDot)
+		clause, err := buildNativeModeClause(param, column, FilterModeExclude, excludeVals, maxLen, allowDot, skipSanitize)
 		if err != nil {
 			return nil, err
 		}
@@ -614,7 +629,7 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 		}
 	}
 	if len(exactVals) > 0 {
-		clause, err := buildNativeModeClause(param, column, FilterModeExact, exactVals, maxLen, allowDot)
+		clause, err := buildNativeModeClause(param, column, FilterModeExact, exactVals, maxLen, allowDot, skipSanitize)
 		if err != nil {
 			return nil, err
 		}
@@ -637,7 +652,7 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 		includeValsFiltered = includeVals
 	}
 	if len(includeValsFiltered) > 0 {
-		clause, err := buildNativeModeClause(param, column, FilterModeInclude, includeValsFiltered, maxLen, allowDot)
+		clause, err := buildNativeModeClause(param, column, FilterModeInclude, includeValsFiltered, maxLen, allowDot, skipSanitize)
 		if err != nil {
 			return nil, err
 		}
@@ -648,7 +663,15 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 	return clauseMap, nil
 }
 
-func applyNativeParamFilter(c echo.Context, queryParams map[string]any, param, column string, maxLen int, allowDot bool) error {
+func applyNativeParamFilter(
+	c echo.Context,
+	queryParams map[string]any,
+	param, column string,
+	maxLen int,
+	allowDot bool,
+	skipSanitize bool,
+	treatIncludeAsExact ...bool,
+) error {
 	cfg := config.GetConfig()
 	includeVals := queryparams.IncludeValues(c, param)
 	excludeVals := queryparams.ExcludeValues(c, param)
@@ -665,7 +688,8 @@ func applyNativeParamFilter(c echo.Context, queryParams map[string]any, param, c
 	if len(includeVals) == 0 && len(excludeVals) == 0 && len(exactVals) == 0 {
 		return nil
 	}
-	clauseMap, err := buildNativeSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot)
+	useExactForInclude := len(treatIncludeAsExact) > 0 && treatIncludeAsExact[0]
+	clauseMap, err := buildNativeSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot, skipSanitize, useExactForInclude)
 	if err != nil {
 		return err
 	}
@@ -711,10 +735,10 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 	queryParams["ns.monitoring_end_time < ?"] = endTimestamp
 
 	var errs []error
-	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true, false); err != nil {
 		errs = append(errs, err)
 	}
-	if err := applyNativeParamFilter(c, queryParams, "project", "ns.namespace_name", model.NamespaceMaxLen, false); err != nil {
+	if err := applyNativeParamFilter(c, queryParams, "project", "ns.namespace_name", model.NamespaceMaxLen, false, false); err != nil {
 		errs = append(errs, err)
 	}
 	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {

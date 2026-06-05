@@ -55,6 +55,9 @@ type NativeNamespaceRow struct {
 	SourceID          string     `gorm:"column:source_id"`
 	ClusterAlias      string     `gorm:"column:cluster_alias"`
 	LastReported      time.Time  `gorm:"column:last_reported_at"`
+
+	// PageSortText is the list sort key as text from the pagination subquery (not an API field).
+	PageSortText *string `gorm:"column:ros_ns_page_sort"`
 }
 
 func (NativeNamespaceRow) TableName() string {
@@ -75,6 +78,9 @@ type NativeNamespaceResult struct {
 	LastReported    string         `json:"last_reported"`
 	IdleState       string         `json:"idle_state"`
 	Recommendations map[string]any `json:"recommendations"`
+
+	// PaginationSort is the list order-by value for this namespace (not serialized).
+	PaginationSort interface{} `json:"-"`
 }
 
 const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, ns.engine,
@@ -112,82 +118,63 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	}
 	pageLimit := limit + 1
 
-	var pageSubquery *gorm.DB
-	var countDistinct *gorm.DB
-
-	if opts.HasCursor {
-		distinctNS := db.Table("namespace_recommendation_sets ns").
-			Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
-			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-			Where("ns.org_id = ?", orgID).
-			Where("ns.term IS NOT NULL").
-			Where("ns.schedule_type = 'all_hours'")
-		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
-		distinctNS = applyNSQueryParams(distinctNS, queryParams)
-		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
-			distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
-		}
-		distinctNS = distinctNS.Where(
-			"(ns.namespace_name, ns.cluster_uuid) > (?, ?)",
-			opts.AfterNamespaceName, opts.AfterNSClusterUUID,
-		)
-		countDistinct = distinctNS
-
-		pageSubquery = db.Table("(?) AS page", distinctNS).
-			Select("page.cluster_uuid, page.namespace_name").
-			Order("page.namespace_name, page.cluster_uuid").
-			Limit(pageLimit)
-	} else {
-		sortExpr := remapNativeNSOrderBy(opts.OrderBy)
-		distinctOnOrder := fmt.Sprintf(
-			"ns.cluster_uuid, ns.namespace_name, %s %s, ns.term ASC, ns.engine ASC",
-			sortExpr, opts.OrderHow,
-		)
-
-		distinctNS := db.Table("namespace_recommendation_sets ns").
-			Select(fmt.Sprintf(
-				"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, %s AS ros_ns_page_sort",
-				sortExpr,
-			)).
-			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-			Where("ns.org_id = ?", orgID).
-			Where("ns.term IS NOT NULL").
-			Where("ns.schedule_type = 'all_hours'")
-		distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
-		distinctNS = applyNSQueryParams(distinctNS, queryParams)
-		if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
-			distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
-		}
-		distinctNS = distinctNS.Order(distinctOnOrder)
-		countDistinct = db.Table("(?) AS dn", distinctNS).
-			Select("dn.cluster_uuid, dn.namespace_name")
-
-		pageSubquery = db.Table("(?) AS page", distinctNS).
-			Order(fmt.Sprintf("page.ros_ns_page_sort %s, page.cluster_uuid, page.namespace_name", opts.OrderHow)).
-			Offset(opts.Offset).
-			Limit(pageLimit)
+	sortExpr := nativeNSPageSortExpr(opts.OrderBy)
+	orderHow := opts.OrderHow
+	if orderHow == "" {
+		orderHow = listoptions.OrderDesc
 	}
+
+	distinctNS := db.Table("namespace_recommendation_sets ns").
+		Select(fmt.Sprintf(
+			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, (%s)::text AS ros_ns_page_sort",
+			sortExpr,
+		)).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Where("ns.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'")
+	distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
+	distinctNS = applyNSQueryParams(distinctNS, queryParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
+	}
+	distinctNS = distinctNS.Order(nativeNSDistinctOnOrder(sortExpr, orderHow))
+	distinctNS = applyNativeNSPageSeek(distinctNS, opts, sortExpr)
+
+	countDistinct := db.Table("(?) AS dn", distinctNS).
+		Select("dn.cluster_uuid, dn.namespace_name")
+
+	pageSubquery := db.Table("(?) AS page", distinctNS).
+		Select("page.cluster_uuid, page.namespace_name, page.ros_ns_page_sort").
+		Order(nativeNSPageOrder("page", orderHow))
+	if !opts.HasCursor {
+		pageSubquery = pageSubquery.Offset(opts.Offset)
+	}
+	pageSubquery = pageSubquery.Limit(pageLimit)
 
 	var rows []NativeNamespaceRow
 	t0 := time.Now().UTC()
-	orderClause := "ns.namespace_name, ns.cluster_uuid, ns.term, ns.engine"
-	if !opts.HasCursor {
-		sortExpr := remapNativeNSOrderBy(opts.OrderBy)
-		orderClause = sortExpr + " " + opts.OrderHow + ", ns.term, ns.engine"
-	}
 
 	err := query.
 		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
-		Order(orderClause).
+		Select(nativeNSSelect + ", page.ros_ns_page_sort").
+		Order(nativeNSDetailOrder(orderHow)).
 		Find(&rows).Error
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, sortExpr)
 
 	hasNext := len(results) > limit
+	var lastAnchor *NamespacePaginationAnchor
 	if hasNext {
+		last := results[limit-1]
+		lastAnchor = &NamespacePaginationAnchor{
+			SortValue:   last.PaginationSort,
+			ClusterUUID: last.ClusterUUID,
+			Namespace:   last.Project,
+		}
 		results = results[:limit]
 	}
 
@@ -198,13 +185,22 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	log.Infof("native namespace list query: %dms (%d namespaces)", time.Since(t0).Milliseconds(), totalNamespaces)
 
 	return NativeNamespaceListPage{
-		Results: results,
-		Count:   int(totalNamespaces),
-		HasNext: hasNext,
+		Results:    results,
+		Count:      int(totalNamespaces),
+		HasNext:    hasNext,
+		LastAnchor: lastAnchor,
 	}, nil
 }
 
 func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.DB) (int64, error) {
+	if filteredDistinct != nil {
+		var total int64
+		if err := db.Table("(?) AS dn", filteredDistinct).Count(&total).Error; err != nil {
+			return 0, err
+		}
+		return total, nil
+	}
+
 	if count, ok, err := GetOrgNamespaceCount(orgID); err != nil {
 		return 0, err
 	} else if ok {
@@ -212,7 +208,13 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 	}
 
 	var total int64
-	if err := db.Table("(?) AS dn", filteredDistinct).Count(&total).Error; err != nil {
+	if err := db.Table("namespace_recommendation_sets ns").
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Where("ns.org_id = ?", orgID).
+		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
+		Distinct("ns.cluster_uuid", "ns.namespace_name").
+		Count(&total).Error; err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -240,7 +242,7 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 	}
 
 	if len(rows) > 0 {
-		results := assembleNativeNamespaceResults(rows)
+		results := assembleNativeNamespaceResults(rows, "")
 		if len(results) > 0 {
 			return &results[0], nil
 		}
@@ -304,7 +306,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		return nil, nil
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -312,7 +314,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 }
 
 // assembleNativeNamespaceResults groups flat rows into nested NativeNamespaceResult structs.
-func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespaceResult {
+func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string) []NativeNamespaceResult {
 	type nsKey struct {
 		ClusterUUID   string
 		NamespaceName string
@@ -347,6 +349,7 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow) []NativeNamespace
 			LastReported:    first.LastReported.Format(time.RFC3339),
 			IdleState:       idleState,
 			Recommendations: make(map[string]any),
+			PaginationSort:  nativeNSParseSortText(sortExpr, first.PageSortText),
 		}
 
 		if first.MonitoringEndTime != nil {

@@ -35,6 +35,9 @@ func TestEncodeDecodeNamespaceCursor(t *testing.T) {
 	original := NamespaceCursor{
 		Namespace:   "openshift-config",
 		ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		SortValue:   []byte(`"2020-01-01T00:00:00Z"`),
+		OrderBy:     "last_reported",
+		OrderHow:    "desc",
 	}
 	encoded := EncodeNamespaceCursor(original)
 	require.NotEmpty(t, encoded)
@@ -45,29 +48,31 @@ func TestEncodeDecodeNamespaceCursor(t *testing.T) {
 }
 
 func TestContainerNextCursor(t *testing.T) {
+	anchor := &model.ContainerPaginationAnchor{
+		Namespace: "b", Workload: "w2", ContainerName: "c2",
+	}
 	results := []struct {
 		name string
-		in   []model.NativeContainerResult
+		page model.NativeListPage
 		want string
 	}{
 		{
-			name: "empty",
-			in:   nil,
+			name: "no next page",
+			page: model.NativeListPage{HasNext: false},
 			want: "",
 		},
 		{
-			name: "uses last row",
-			in: []model.NativeContainerResult{
-				{Project: "a", Workload: "w1", Container: "c1"},
-				{Project: "b", Workload: "w2", Container: "c2"},
-			},
-			want: EncodeContainerCursor(ContainerCursor{Namespace: "b", Workload: "w2", ContainerName: "c2"}),
+			name: "uses last anchor",
+			page: model.NativeListPage{HasNext: true, LastAnchor: anchor},
+			want: EncodeContainerCursor(ContainerCursor{
+				Namespace: "b", Workload: "w2", ContainerName: "c2",
+			}),
 		},
 	}
 
 	for _, tt := range results {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, containerNextCursor(tt.in))
+			assert.Equal(t, tt.want, containerNextCursor(tt.page))
 		})
 	}
 }

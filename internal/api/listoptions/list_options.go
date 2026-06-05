@@ -41,6 +41,12 @@ type ListOptions struct {
 	AfterContainer       string
 	AfterNSClusterUUID   string
 	AfterNamespaceName   string
+	AfterNSSortPresent bool        // true when cursor includes primary sort key (new cursors)
+	AfterNSSortValue   interface{} // decoded sort key; only valid when AfterNSSortPresent
+
+	AfterContainerClusterUUID   string
+	AfterContainerSortPresent bool        // true when cursor includes primary sort key (new cursors)
+	AfterContainerSortValue   interface{} // decoded sort key; only valid when AfterContainerSortPresent
 }
 
 // OrderByMap maps allowed JSON keys to DB columns.

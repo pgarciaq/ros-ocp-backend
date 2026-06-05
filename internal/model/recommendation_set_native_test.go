@@ -194,7 +194,7 @@ func TestAssembleNativeResults_PreservesRowOrder(t *testing.T) {
 		{ClusterUUID: "c-new", Namespace: "ns-b", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: newer},
 		{ClusterUUID: "c-old", Namespace: "ns-a", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: older},
 	}
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 2 {
 		t.Fatalf("expected 2 containers, got %d", len(results))
 	}
@@ -228,7 +228,7 @@ func TestAssembleNativeResults_WithPodCounts(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -265,7 +265,7 @@ func TestAssembleNativeResults_NilPodCounts(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -297,7 +297,7 @@ func TestAssembleNativeResults_ZeroPodCountMax(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -335,7 +335,7 @@ func TestAssembleNativeResults_SourceFieldKubeStateMetrics(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -378,7 +378,7 @@ func TestAssembleNativeResults_SourceFieldDerived(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -424,7 +424,7 @@ func TestAssembleNativeResults_SourceFieldDerived_ZeroDesired(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows)
+	results := assembleNativeResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -447,7 +447,7 @@ func TestDerefInt(t *testing.T) {
 }
 
 func TestAssembleNativeNamespaceResults_Empty(t *testing.T) {
-	results := assembleNativeNamespaceResults(nil)
+	results := assembleNativeNamespaceResults(nil, "")
 	if len(results) != 0 {
 		t.Errorf("expected 0 results for nil input, got %d", len(results))
 	}
@@ -509,7 +509,7 @@ func TestAssembleNativeNamespaceResults_GroupsCorrectly(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results (2 namespaces), got %d", len(results))
@@ -573,7 +573,7 @@ func TestAssembleNativeNamespaceResults_IDGeneration(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -600,7 +600,7 @@ func TestAssembleNativeNamespaceResults_MonitoringEndTime(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -634,7 +634,7 @@ func TestAssembleNativeNamespaceResults_NilMonitoringEndTime(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -661,7 +661,7 @@ func TestAssembleNativeNamespaceResults_NilNotificationCodes(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows)
+	results := assembleNativeNamespaceResults(rows, "")
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

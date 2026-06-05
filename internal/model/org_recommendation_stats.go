@@ -27,6 +27,8 @@ type NativeListPage struct {
 	Results []NativeContainerResult
 	Count   int
 	HasNext bool
+	// LastAnchor is set when HasNext is true for keyset cursor encoding.
+	LastAnchor *ContainerPaginationAnchor
 }
 
 // NativeNamespaceListPage is the paginated result from native namespace list queries.
@@ -34,6 +36,8 @@ type NativeNamespaceListPage struct {
 	Results []NativeNamespaceResult
 	Count   int
 	HasNext bool
+	// LastAnchor is set when HasNext is true for keyset cursor encoding.
+	LastAnchor *NamespacePaginationAnchor
 }
 
 // GetOrgContainerCount returns the pre-computed container count for an org when available.
