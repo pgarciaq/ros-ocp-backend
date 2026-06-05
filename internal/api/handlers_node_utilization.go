@@ -128,6 +128,14 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		offset = o
 	}
 
+	utilCursor, hasUtilCursor, utilCursorErr := applyNodeUtilCursor(c)
+	if utilCursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": utilCursorErr.Error()})
+	}
+	if hasUtilCursor {
+		offset = 0
+	}
+
 	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, nodeUtilAllowedOrderBy, nodeUtilDefaultOrderBy, nodeUtilDefaultOrderHow)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
@@ -314,18 +322,62 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	}
 
 	orderFragment := listoptions.SQLOrderByFragment(orderCol, orderHow)
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	nodeKeysSeek := ""
+	pageArgs := append(append([]interface{}{}, args...), sortTerm, sortEngine)
+	seekIdx := argIdx + 2
+	if hasUtilCursor {
+		sortCol := "sort_savings"
+		if orderCol == "f.node" {
+			sortCol = "nk.node"
+		}
+		sortOp := ">"
+		if orderHow == listoptions.OrderDesc {
+			sortOp = "<"
+		}
+		tie := "(nk.cluster_uuid, nk.node)"
+		if len(utilCursor.SortValue) > 0 {
+			sortVal, decodeErr := decodeCursorSortValue(utilCursor.SortValue)
+			if decodeErr != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": decodeErr.Error()})
+			}
+			nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d)))`,
+				sortCol, sortOp, seekIdx, sortCol, seekIdx, tie, seekIdx+1, seekIdx+2)
+			pageArgs = append(pageArgs, sortVal, sortVal, utilCursor.ClusterUUID, utilCursor.Node)
+			seekIdx += 4
+		} else {
+			nodeKeysSeek = fmt.Sprintf(` WHERE %s > ($%d, $%d)`, tie, seekIdx, seekIdx+1)
+			pageArgs = append(pageArgs, utilCursor.ClusterUUID, utilCursor.Node)
+			seekIdx += 2
+		}
+	}
+	limitClause := ""
+	if pageLimit > 0 {
+		limitClause = ` LIMIT $` + strconv.Itoa(seekIdx)
+		pageArgs = append(pageArgs, pageLimit)
+		seekIdx++
+		if !hasUtilCursor {
+			limitClause += ` OFFSET $` + strconv.Itoa(seekIdx)
+			pageArgs = append(pageArgs, offset)
+		}
+	}
 	pageSQL := `
 		WITH filtered AS (
 			SELECT nr.*` + baseFrom + `
 		),
-		node_page AS (
+		node_keys AS (
 			SELECT f.cluster_uuid, f.node,
 				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
 					THEN f.estimated_monthly_savings_usd END) AS sort_savings
 			FROM filtered f
 			GROUP BY f.cluster_uuid, f.node
-			ORDER BY ` + orderFragment + `, f.node ASC
-			LIMIT $` + strconv.Itoa(argIdx+2) + ` OFFSET $` + strconv.Itoa(argIdx+3) + `
+		),
+		node_page AS (
+			SELECT nk.cluster_uuid, nk.node, nk.sort_savings FROM node_keys nk` + nodeKeysSeek + `
+			ORDER BY ` + strings.ReplaceAll(orderFragment, "f.", "nk.") + `, nk.node ASC` + limitClause + `
 		)
 		SELECT f.node, f.cluster_uuid, f.instance_type, f.machineset_name, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
 			COALESCE(f.cpu_util_p50, 0), COALESCE(f.cpu_util_p95, 0),
@@ -342,8 +394,6 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		FROM filtered f
 		INNER JOIN node_page np ON f.cluster_uuid = np.cluster_uuid AND f.node = np.node
 		ORDER BY np.sort_savings ` + orderHow + ` NULLS LAST, f.node, f.term, f.engine`
-
-	pageArgs := append(append([]interface{}{}, args...), sortTerm, sortEngine, limit, offset)
 
 	rows, err := pool.Query(ctx, pageSQL, pageArgs...)
 	if err != nil {
@@ -394,15 +444,34 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		pagedRecs = []model.NodeUtilizationRec{}
 	}
 
+	hasNext := limit > 0 && len(pagedRecs) > limit
+	var nextCursor string
+	if hasNext {
+		last := pagedRecs[limit-1]
+		sortVal := nodeUtilSortValue(last, orderByKey)
+		nextCursor = nodeUtilNextCursor(last, sortVal)
+		pagedRecs = pagedRecs[:limit]
+	}
+
 	resp := model.NodeUtilizationListResponse{
 		Meta: model.NodeUtilizationMeta{
-			Count:    totalCount,
-			Limit:    limit,
-			Offset:   offset,
-			Currency: fetchClusterCurrency(ctx, orgID, clusterFilter),
+			Count:      totalCount,
+			Limit:      limit,
+			Offset:     offset,
+			HasNext:    hasNext,
+			NextCursor: nextCursor,
+			Currency:   fetchClusterCurrency(ctx, orgID, clusterFilter),
 		},
 		Data:  pagedRecs,
 		Links: buildUtilLinks(c.Request(), totalCount, limit, offset),
+	}
+	if hasNext && nextCursor != "" {
+		q := c.Request().URL.Query()
+		q.Set("limit", strconv.Itoa(limit))
+		q.Del("offset")
+		q.Set("after", nextCursor)
+		params, _ := url.PathUnescape(q.Encode())
+		resp.Links.Next = fmt.Sprintf("%s?%s", c.Request().URL.Path, params)
 	}
 	if scanErrors > 0 {
 		rowWord := "rows"

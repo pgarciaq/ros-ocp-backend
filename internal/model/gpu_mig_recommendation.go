@@ -18,10 +18,12 @@ type GPUMIGRecommendationEntry struct {
 
 // GPUMIGListMeta paginates the MIG-focused GPU list.
 type GPUMIGListMeta struct {
-	Count    int      `json:"count"`
-	Limit    int      `json:"limit"`
-	Offset   int      `json:"offset"`
-	Warnings []string `json:"warnings,omitempty"`
+	Count      int      `json:"count"`
+	Limit      int      `json:"limit"`
+	Offset     int      `json:"offset"`
+	HasNext    bool     `json:"has_next"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 // GPUMIGListResponse is returned by GET /recommendations/openshift/gpu/mig.

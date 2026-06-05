@@ -57,9 +57,39 @@ type PVCRec struct {
 	EstimatedMonthlySavingsCents int64
 	NotificationCodes            []int16
 	DataDays                     int
+	ConfidenceLevel              float32
 	Term                         string
 	IdleSince                    *time.Time
 	IdleDurationDays             int
+}
+
+// PVCConfidenceLevel returns 0.0–1.0 based on data coverage vs the term minimum.
+func PVCConfidenceLevel(dataDays, minDataDays int) float32 {
+	if dataDays <= 0 || minDataDays <= 0 {
+		return 0
+	}
+	ratio := float32(dataDays) / float32(minDataDays)
+	if ratio > 1.0 {
+		return 1.0
+	}
+	return ratio
+}
+
+func pvcMinClassifyDays(tc TermConfig, settings PVCThresholdSettings) int {
+	min := settings.MinTrendDays
+	if min < 1 {
+		min = 1
+	}
+	return min
+}
+
+// EvaluatePVCNotifications appends low-confidence and other contextual codes to PVC recommendations.
+func EvaluatePVCNotifications(rec PVCRec, th NotificationThresholds) []int16 {
+	codes := append([]int16(nil), rec.NotificationCodes...)
+	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
+		codes = append(codes, NotifLowConfidence)
+	}
+	return codes
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
@@ -204,15 +234,15 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		}
 	}
 
-	// Classification requires MinDataDays
+	minClassify := pvcMinClassifyDays(tc, settings)
 	switch {
-	case allZero && len(digests) >= tc.MinDataDays:
+	case allZero && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOrphaned
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
 		rec.IdleSince = findPVCOrphanedSince(digests)
 		rec.IdleDurationDays = computeIdleDuration(rec.IdleSince)
 
-	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= tc.MinDataDays:
+	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOversized
 		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
 		minRecommended := int64(settings.MinRecommendedGiB) << 30
@@ -237,6 +267,9 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	if rec.DaysToFull != nil && *rec.DaysToFull < settings.DaysToFullAlert && *rec.DaysToFull > 0 {
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
 	}
+
+	rec.ConfidenceLevel = PVCConfidenceLevel(rec.DataDays, tc.MinDataDays)
+	rec.NotificationCodes = EvaluatePVCNotifications(rec, NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
 
 	return rec
 }

@@ -145,7 +145,26 @@ func TestComputePVCRecommendation_GrowthTrend(t *testing.T) {
 }
 
 func TestComputePVCRecommendation_InsufficientData(t *testing.T) {
-	// Only 2 days of zero usage — should NOT be classified as orphaned (medium needs 3)
+	// Only 1 day of zero usage — below min classify threshold (2 days)
+	digests := []PVCDigestRow{
+		{
+			BucketDate:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			Namespace:     "test",
+			PVC:           "new-pvc",
+			CapacityBytes: 10 << 30,
+			UsageBytesMax: 0,
+		},
+	}
+
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
+
+	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
+	assert.InDelta(t, 1.0/3.0, float64(rec.ConfidenceLevel), 0.01)
+}
+
+func TestComputePVCRecommendation_LowConfidenceOrphaned(t *testing.T) {
+	mediumTerm := TermConfig{Name: "medium", WindowDays: 30, MinDataDays: 14, DecayHalfLifeHours: 0}
+	// 2 days of zero usage — classifies as orphaned with proportional confidence (2/14)
 	digests := []PVCDigestRow{
 		{
 			BucketDate:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
@@ -163,9 +182,11 @@ func TestComputePVCRecommendation_InsufficientData(t *testing.T) {
 		},
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
+	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", mediumTerm, DefaultPVCThresholdSettings())
 
-	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
+	assert.Equal(t, PVCRecTypeOrphaned, rec.RecommendationType)
+	assert.InDelta(t, 2.0/14.0, float64(rec.ConfidenceLevel), 0.01)
+	assert.Contains(t, rec.NotificationCodes, NotifLowConfidence)
 }
 
 func TestComputePVCRecommendation_ShortTermSeesBurst(t *testing.T) {
@@ -239,9 +260,10 @@ func TestComputePVCRecommendation_ShortTermInsufficientButLongTermClassifies(t *
 	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultPVCThresholdSettings())
 	assert.Equal(t, PVCRecTypeOrphaned, recShort.RecommendationType)
 
-	// Medium term with min_data=3 → insufficient data → healthy
+	// Medium term with min_data=3 but 2 days meets min classify threshold → orphaned with low confidence
 	recMedium := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultPVCThresholdSettings())
-	assert.Equal(t, PVCRecTypeHealthy, recMedium.RecommendationType)
+	assert.Equal(t, PVCRecTypeOrphaned, recMedium.RecommendationType)
+	assert.InDelta(t, 2.0/3.0, float64(recMedium.ConfidenceLevel), 0.01)
 }
 
 func TestWindowDigests(t *testing.T) {

@@ -49,14 +49,21 @@ changes are required for data collection.
 
 | Type | Condition | Action |
 |------|-----------|--------|
-| **Oversized** | max usage / capacity < 20% (sustained 3+ days) | Recommends 2× max usage (min 1 GiB) |
-| **Near-full** | max usage / capacity > 85% | Recommends expansion to 2× current usage |
-| **Orphaned** | zero usage for 3+ days | Recommends deletion |
+| **Oversized** | max usage / capacity < 20% (sustained min_trend_days, default 2) | Recommends 2× max usage (min 1 GiB); `confidence_level` proportional until term MinDataDays |
+| **Near-full** | max usage / capacity > 85% | Recommends expansion to 2× current usage (no MinDataDays gate) |
+| **Orphaned** | zero usage for min_trend_days+ | Recommends deletion; low-confidence notification code 1 when below threshold |
 | **Healthy** | usage between 20-85% | No action needed |
+
+### Confidence level
+
+- `confidence_level` is `data_days / MinDataDays` capped at `1.0` for the active term
+- Notification code **1** (`NotifLowConfidence`) when `confidence_level < 0.5` and `data_days > 0`
+- Early oversized/orphaned classifications appear once `data_days >= min_trend_days` (default 2), before full term MinDataDays
 
 ### Minimum data requirements
 
-- **3 days** minimum for orphaned/oversized classification (avoids false positives on new PVCs)
+- **min_trend_days** (default 2) minimum for orphaned/oversized classification (early signal with lower confidence)
+- **MinDataDays** per term for full confidence (`1.0`)
 - **7 days** minimum for growth trend projection
 
 ## Growth Trend Projection

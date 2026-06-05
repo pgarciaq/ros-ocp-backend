@@ -41,6 +41,8 @@ type NodeRecommendationMeta struct {
 	Count           int      `json:"count"`
 	Limit           int      `json:"limit"`
 	Offset          int      `json:"offset"`
+	HasNext         bool     `json:"has_next"`
+	NextCursor      string   `json:"next_cursor,omitempty"`
 	TotalSavingsUSD *float32 `json:"total_savings_usd,omitempty"`
 }
 

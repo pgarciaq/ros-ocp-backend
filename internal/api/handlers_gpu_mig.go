@@ -86,6 +86,14 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusOK, gpuResp)
 	}
 
+	cursor, hasCursor, cursorErr := applyGPUMIGCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		opts.Offset = 0
+	}
+
 	var warnings []string
 	var gpuClusterErrors []error
 	var entries []model.GPUMIGRecommendationEntry
@@ -197,17 +205,21 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	sortGPUMIGEntries(entries, opts.OrderBy, opts.OrderHow)
-
 	totalCount := len(entries)
-	paged := applyGPUMIGPagination(entries, opts.Offset, opts.Limit)
+	paged, hasNext, nextCursor, pageErr := paginateGPUMIGEntries(entries, opts, cursor, hasCursor)
+	if pageErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
+	}
 
 	setRecommendationNoStore(c)
 	gpuResp := model.GPUMIGListResponse{
 		Meta: model.GPUMIGListMeta{
-			Count:    totalCount,
-			Limit:    opts.Limit,
-			Offset:   opts.Offset,
-			Warnings: warnings,
+			Count:      totalCount,
+			Limit:      opts.Limit,
+			Offset:     opts.Offset,
+			HasNext:    hasNext,
+			NextCursor: nextCursor,
+			Warnings:   warnings,
 		},
 		Data: paged,
 	}
@@ -219,6 +231,118 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, gpuResp)
+}
+
+func paginateGPUMIGEntries(entries []model.GPUMIGRecommendationEntry, opts listoptions.ListOptions, cursor GPUMIGCursor, hasCursor bool) ([]model.GPUMIGRecommendationEntry, bool, string, error) {
+	if len(entries) == 0 {
+		return []model.GPUMIGRecommendationEntry{}, false, "", nil
+	}
+	start := 0
+	if hasCursor {
+		found := false
+		for i, e := range entries {
+			if migEntryAfterCursor(e, cursor, opts.OrderBy, opts.OrderHow) {
+				start = i
+				found = true
+				break
+			}
+		}
+		if !found {
+			return []model.GPUMIGRecommendationEntry{}, false, "", nil
+		}
+	} else if opts.Offset > 0 {
+		if opts.Offset >= len(entries) {
+			return []model.GPUMIGRecommendationEntry{}, false, "", nil
+		}
+		start = opts.Offset
+	}
+	end := len(entries)
+	if opts.Limit > 0 {
+		end = start + opts.Limit + 1
+		if end > len(entries) {
+			end = len(entries)
+		}
+	}
+	slice := entries[start:end]
+	hasNext := opts.Limit > 0 && len(slice) > opts.Limit
+	var nextCursor string
+	if hasNext {
+		last := slice[opts.Limit-1]
+		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy))
+		slice = slice[:opts.Limit]
+	}
+	return slice, hasNext, nextCursor, nil
+}
+
+func migEntryAfterCursor(e model.GPUMIGRecommendationEntry, cursor GPUMIGCursor, orderBy, orderHow string) bool {
+	if len(cursor.SortValue) > 0 {
+		sortVal, err := decodeCursorSortValue(cursor.SortValue)
+		if err != nil {
+			return false
+		}
+		cur := gpuMIGSortValue(e, orderBy)
+		if orderHow == listoptions.OrderDesc {
+			return compareMIGSort(cur, sortVal) < 0 || (compareMIGSort(cur, sortVal) == 0 && migEntryTieAfter(e, cursor))
+		}
+		return compareMIGSort(cur, sortVal) > 0 || (compareMIGSort(cur, sortVal) == 0 && migEntryTieAfter(e, cursor))
+	}
+	return migEntryTieAfter(e, cursor)
+}
+
+func migEntryTieAfter(e model.GPUMIGRecommendationEntry, cursor GPUMIGCursor) bool {
+	tie := e.ClusterUUID + "\x00" + e.Namespace + "\x00" + e.Container + "\x00" + e.GPUModel + "\x00" + e.Term
+	cur := cursor.ClusterUUID + "\x00" + cursor.Namespace + "\x00" + cursor.Container + "\x00" + cursor.GPUModel + "\x00" + cursor.Term
+	return tie > cur
+}
+
+func compareMIGSort(a, b interface{}) int {
+	switch av := a.(type) {
+	case string:
+		bv, _ := b.(string)
+		if av < bv {
+			return -1
+		}
+		if av > bv {
+			return 1
+		}
+		return 0
+	case float32:
+		var bf float32
+		switch x := b.(type) {
+		case float32:
+			bf = x
+		case float64:
+			bf = float32(x)
+		}
+		if av < bf {
+			return -1
+		}
+		if av > bf {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+func gpuMIGSortValue(e model.GPUMIGRecommendationEntry, orderBy string) interface{} {
+	switch orderBy {
+	case "namespace":
+		return e.Namespace
+	case "workload":
+		return e.Workload
+	case "container":
+		return e.Container
+	case "term":
+		return e.Term
+	case "gpu_model":
+		return e.GPUModel
+	case "confidence":
+		return e.Confidence
+	default:
+		return e.ClusterUUID
+	}
 }
 
 // gpuMIGEntryRBACVisible reports whether a row scoped to nodeName is visible under openshift.node permissions.

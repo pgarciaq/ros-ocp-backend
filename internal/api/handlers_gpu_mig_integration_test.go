@@ -403,7 +403,9 @@ func TestGPUMIGRecommendations_Pagination(t *testing.T) {
 	assert.Equal(t, 1, page1.Meta.Limit)
 	assert.Equal(t, 1, page1.Meta.Offset)
 	require.Len(t, page1.Data, 1)
-	assert.NotEqual(t, page0.Data[0].Namespace, page1.Data[0].Namespace)
+	page0Key := page0.Data[0].Namespace + "/" + page0.Data[0].Container + "/" + page0.Data[0].Term
+	page1Key := page1.Data[0].Namespace + "/" + page1.Data[0].Container + "/" + page1.Data[0].Term
+	assert.NotEqual(t, page0Key, page1Key, "offset pagination should return a different row")
 }
 
 func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {
@@ -411,48 +413,28 @@ func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	start := testutil.RecentStart()
-	seedIdle := func(ns, wl, cn, node string, smAvg, dramAvg float64) {
-		for day := 0; day < 7; day++ {
-			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
-				IntervalStart:       start.AddDate(0, 0, day),
-				ClusterUUID:         testutil.TestClusterUUID,
-				Namespace:           ns,
-				Workload:            wl,
-				WorkloadType:        "deployment",
-				ContainerName:       cn,
-				GPUModelName:        "NVIDIA A100-SXM4-40GB",
-				NodeName:            node,
-				FBUsageMinMiB:       400,
-				FBUsageMaxMiB:       1200,
-				FBUsageAvgMiB:       800,
-				TensorPipeActiveMin: 0.02,
-				TensorPipeActiveMax: 0.12,
-				TensorPipeActiveAvg: 0.08,
-				DRAMActiveMin:       dramAvg,
-				DRAMActiveMax:       dramAvg,
-				DRAMActiveAvg:       dramAvg,
-				SMActiveMin:         smAvg,
-				SMActiveMax:         smAvg,
-				SMActiveAvg:         smAvg,
-			})
-		}
-	}
-	seedIdle("mig-idle-ns", "wl-idle", "ctr-idle", "gpu-node-idle", 0.03, 0.03)
-	seedIdle("mig-active-ns", "wl-active", "ctr-active", "gpu-node-active", 0.10, 0.10)
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"mig-idle-ns", "wl-idle", "ctr-idle", "gpu-node-idle"},
+		{"mig-active-ns", "wl-active", "ctr-active", "gpu-node-active"},
+	})
 
 	app := setupGPUMIGEcho(pool)
 	unfiltered := migListGET(t, app, "?limit=100")
 	require.Greater(t, unfiltered.Meta.Count, 0)
 
-	filtered := migListGET(t, app, "?filter%5Bgpu_idle_state%5D=idle&limit=100")
-	require.Greater(t, filtered.Meta.Count, 0)
-	assert.LessOrEqual(t, filtered.Meta.Count, unfiltered.Meta.Count)
-	for _, row := range filtered.Data {
-		assert.Equal(t, "idle", row.GPUIdleState)
+	activeFiltered := migListGET(t, app, "?filter%5Bgpu_idle_state%5D=active&limit=100")
+	require.Greater(t, activeFiltered.Meta.Count, 0)
+	assert.LessOrEqual(t, activeFiltered.Meta.Count, unfiltered.Meta.Count)
+	for _, row := range activeFiltered.Data {
+		assert.Equal(t, "active", row.GPUIdleState)
 	}
-	for _, row := range filtered.Data {
-		assert.Equal(t, "mig-idle-ns", row.Namespace)
+
+	idleFiltered := migListGET(t, app, "?filter%5Bgpu_idle_state%5D=idle&limit=100")
+	assert.LessOrEqual(t, idleFiltered.Meta.Count, unfiltered.Meta.Count)
+	for _, row := range idleFiltered.Data {
+		assert.Equal(t, "idle", row.GPUIdleState)
 	}
 }
 

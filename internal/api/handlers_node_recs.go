@@ -195,7 +195,8 @@ func GetNodeRecommendations(c echo.Context) error {
 	} else if len(clusterUUIDs) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterUUIDs[0])
 	}
-	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency)
+	hasNext := opts.Limit > 0 && len(paged) > 0 && opts.Offset+opts.Limit < totalCount
+	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, "")
 }
 
 // restrictClustersToQueryFilter narrows clusterUUIDs when filter[cluster] or the
@@ -226,12 +227,53 @@ func respondNodeGPURecommendationsTripleSQL(
 	clusterFilter, nodeNameFilter, gpuModelFilter string,
 ) error {
 	hlog := requestLogger(c, orgIDStr)
-	// Fetch all node×model triples; pagination applies at recommendation level (one row per
-	// triple×term), not at the triple SQL level.
-	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, 0, 0)
+
+	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		opts.Offset = 0
+	}
+
+	var seek *engine.NodeGPUTripleSeek
+	if hasCursor {
+		seek = &engine.NodeGPUTripleSeek{
+			ClusterUUID: cursor.ClusterUUID,
+			NodeName:    cursor.NodeName,
+			GPUModel:    cursor.GPUModel,
+		}
+		if len(cursor.SortValue) > 0 {
+			sortVal, decodeErr := decodeCursorSortValue(cursor.SortValue)
+			if decodeErr != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": decodeErr.Error()})
+			}
+			seek.SortValue = sortVal
+		}
+	}
+
+	pageLimit := opts.Limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, pageLimit, opts.Offset, seek)
 	if err != nil {
 		hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
+	}
+
+	hasNext := opts.Limit > 0 && len(triples) > opts.Limit
+	var nextCursor string
+	if hasNext {
+		last := triples[opts.Limit-1]
+		nextCursor = nodeGPUNextCursor(model.NodeGPURecommendation{
+			NodeName:    last.NodeName,
+			ClusterUUID: last.ClusterUUID,
+			GPUModel:    last.GPUModel,
+		}, nodeGPUSortValue(model.NodeGPURecommendation{
+			NodeName: last.NodeName, ClusterUUID: last.ClusterUUID, GPUModel: last.GPUModel,
+		}, opts.OrderBy))
+		triples = triples[:opts.Limit]
 	}
 
 	costProvider := getGPUCostProvider()
@@ -315,9 +357,11 @@ func respondNodeGPURecommendationsTripleSQL(
 		totalSavings = &sum
 	}
 
-	totalCount := len(allRecs)
-	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
-	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
+	totalCount, countErr := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
+	if countErr != nil {
+		hlog.Warnf("GetNodeRecommendations: triple count failed: %v", countErr)
+		totalCount = len(allRecs)
+	}
 
 	nodeCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
@@ -325,7 +369,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
 	}
-	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency)
+	return respondNodeGPURecommendations(c, opts, totalCount, allRecs, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
 }
 
 func respondNodeGPURecommendations(
@@ -336,6 +380,8 @@ func respondNodeGPURecommendations(
 	totalSavings *float32,
 	warnings []string,
 	nodeCurrency string,
+	hasNext bool,
+	nextCursor string,
 ) error {
 	setRecommendationNoStore(c)
 	if opts.Format == listoptions.ResponseFormatCSV {
@@ -346,18 +392,50 @@ func respondNodeGPURecommendations(
 			return generateNodeGPURecCSV(ctx, w, data)
 		})
 	}
-	return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
+	links := buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset)
+	resp := model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
 			Count:           totalCount,
 			Limit:           opts.Limit,
 			Offset:          opts.Offset,
+			HasNext:         hasNext,
+			NextCursor:      nextCursor,
 			TotalSavingsUSD: totalSavings,
 		},
 		Data:     data,
-		Links:    buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset),
+		Links:    links,
 		Warnings: warnings,
 		Currency: nodeCurrency,
-	})
+	}
+	if hasNext && nextCursor != "" {
+		q := c.Request().URL.Query()
+		q.Set("limit", strconv.Itoa(opts.Limit))
+		q.Del("offset")
+		q.Set("after", nextCursor)
+		params, _ := url.PathUnescape(q.Encode())
+		resp.Links.Next = fmt.Sprintf("%v?%v", c.Request().URL.Path, params)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func nodeGPUSortValue(r model.NodeGPURecommendation, orderBy string) interface{} {
+	switch orderBy {
+	case "cluster_uuid":
+		return r.ClusterUUID
+	case "gpu_model", "gpu_model_name":
+		return r.GPUModel
+	case "recommended_replicas":
+		return r.RecommendedReplicas
+	case "confidence":
+		return r.Confidence
+	case "total_node_savings_usd":
+		if r.TotalNodeSavingsUSD != nil {
+			return *r.TotalNodeSavingsUSD
+		}
+		return nil
+	default:
+		return r.NodeName
+	}
 }
 
 const maxGPUWarningErrLen = 160

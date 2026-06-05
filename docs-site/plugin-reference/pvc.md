@@ -59,6 +59,8 @@ List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]
 | `filter[term]` | `short`, `medium`, `long` (default `medium`); `short_term`, `medium_term`, `long_term` aliases |
 | `filter[tag:<key>]` | Tag value filter on namespace scope |
 | `format` | `csv` for flattened export (`Accept: text/csv` also supported) |
+| `after` | Keyset cursor from `meta.next_cursor` (ignores `offset` when set) |
+| `limit` / `offset` | Page size (default 20, max 100) and legacy offset pagination |
 
 ### List response fields
 
@@ -71,6 +73,9 @@ List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]
 | `idle_since` | `recommendation_type=orphaned` | First date with zero usage (`YYYY-MM-DD`) |
 | `idle_duration_days` | Orphaned | Days since `idle_since` at the last classification run |
 | `estimated_monthly_savings` | Oversized/orphaned when cost rates exist | Structured `{value, units}` monthly savings |
+| `confidence_level` | Always | `0.0`–`1.0`; `1.0` when `data_days >= MinDataDays` for the term; proportional below threshold. Code **1** (`NotifLowConfidence`) when below threshold. |
+
+Early **oversized** / **orphaned** classifications appear once `data_days >= min_trend_days` (default 2), even before the term `MinDataDays` is met.
 
 Growth and idle fields are omitted when not applicable (for example **healthy** PVCs without
 a growth projection, or non-orphaned rows for idle fields).

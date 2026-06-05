@@ -62,6 +62,7 @@ having no actionable savings.
 | 17 | INFO | Node (reserved) | No autoscaler on variable load | *Not emitted today* |
 | 18 | WARNING | VM | VM idle | Power off, delete, or resize down |
 | 19 | WARNING | VM | VM oversized | Reduce vCPU/memory (may need restart) |
+| 1 | WARNING | Container, Namespace, PVC | Low confidence — insufficient data for full term | Treat as early signal; confidence rises with more days |
 | 20 | WARNING | PVC | PVC orphaned (zero usage) | Delete PVC if truly unused |
 | 21 | WARNING | Container (reserved) | HPA at maxReplicas | *Not emitted today* |
 | 22 | INFO | Container (reserved) | HPA-managed workload | *Not emitted today* |
@@ -153,7 +154,7 @@ Codes **10**, **26–28**, **36**. See [GPU MIG](../features/gpu-mig.md) and [GP
 
 ### PVCs
 
-Codes **20**, **25**, **29**, **30**. See [PVC right-sizing](../features/pvc-rightsizing.md).
+Codes **1**, **20**, **25**, **29**, **30**. Code **1** appears when `confidence_level` is below the low-confidence threshold (proportional to `data_days / MinDataDays`). See [PVC plugin reference](../plugin-reference/pvc.md).
 Always show `resize_note` for oversized PVCs — Kubernetes cannot shrink volumes in place.
 
 ### Snapshots

@@ -71,40 +71,83 @@ SELECT COUNT(*) FROM (
 	return n, nil
 }
 
+// NodeGPUTripleSeek is the keyset cursor position for GPU triple pagination.
+type NodeGPUTripleSeek struct {
+	SortValue   interface{}
+	ClusterUUID string
+	NodeName    string
+	GPUModel    string
+}
+
 // ListNodeGPUTriplesPage returns one page of distinct (cluster, node, gpu_model) keys
 // after excluding nodes outside the GPU freshness window (see CountNodeGPUTriples).
-func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string, orderByColumn string, orderDesc bool, limit, offset int) ([]NodeGPUTriple, error) {
+// When seek is non-nil, offset is ignored and a keyset seek is applied after seek.SortValue.
+func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string, orderByColumn string, orderDesc bool, limit, offset int, seek *NodeGPUTripleSeek) ([]NodeGPUTriple, error) {
 	_ = orgID
 	if len(clusterUUIDs) == 0 {
 		return nil, nil
 	}
 	orderSQL := gpuTripleOrderExpr(orderByColumn, orderDesc)
+	sortCol := "node_name"
+	switch orderByColumn {
+	case "cluster_uuid":
+		sortCol = "cluster_uuid"
+	case "gpu_model", "gpu_model_name":
+		sortCol = "gpu_model_name"
+	}
 	startD := start.Format("2006-01-02")
 	endD := end.Format("2006-01-02")
 	cutoff := now.Add(-time.Duration(defaultGPUThresholdSettings.NodeFreshnessDays) * 24 * time.Hour)
 	q := `
-SELECT g.cluster_uuid::text, g.node_name, g.gpu_model_name
-FROM gpu_container_digests g
-INNER JOIN (
-  SELECT g3.cluster_uuid, g3.node_name
-  FROM gpu_container_digests g3
-  WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
-    AND g3.cluster_uuid::text = ANY($3::text[])
-  GROUP BY g3.cluster_uuid, g3.node_name
-  HAVING MAX(g3.interval_start) >= $6::timestamptz
-) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
-WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
-  AND g.cluster_uuid::text = ANY($3::text[])
-  AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
-  AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
-GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
-ORDER BY ` + orderSQL
+SELECT page_keys.cluster_uuid, page_keys.node_name, page_keys.gpu_model_name
+FROM (
+  SELECT g.cluster_uuid::text AS cluster_uuid, g.node_name, g.gpu_model_name
+  FROM gpu_container_digests g
+  INNER JOIN (
+    SELECT g3.cluster_uuid, g3.node_name
+    FROM gpu_container_digests g3
+    WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+      AND g3.cluster_uuid::text = ANY($3::text[])
+    GROUP BY g3.cluster_uuid, g3.node_name
+    HAVING MAX(g3.interval_start) >= $6::timestamptz
+  ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
+  WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+    AND g.cluster_uuid::text = ANY($3::text[])
+    AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
+    AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
+  GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
+) page_keys`
 
 	args := []any{startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff}
+	argIdx := 7
+	if seek != nil && seek.ClusterUUID != "" {
+		sortOp := ">"
+		if orderDesc {
+			sortOp = "<"
+		}
+		tie := "(page_keys.cluster_uuid, page_keys.node_name, page_keys.gpu_model_name)"
+		if seek.SortValue != nil {
+			q += fmt.Sprintf(` WHERE ((page_keys.%s) %s $%d OR ((page_keys.%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d, $%d)))`,
+				sortCol, sortOp, argIdx, sortCol, argIdx,
+				tie, argIdx+1, argIdx+2, argIdx+3)
+			args = append(args, seek.SortValue, seek.SortValue, seek.ClusterUUID, seek.NodeName, seek.GPUModel)
+			argIdx += 5
+		} else {
+			q += fmt.Sprintf(` WHERE %s > ($%d, $%d, $%d)`, tie, argIdx, argIdx+1, argIdx+2)
+			args = append(args, seek.ClusterUUID, seek.NodeName, seek.GPUModel)
+			argIdx += 3
+		}
+	}
+	q += ` ORDER BY ` + strings.ReplaceAll(orderSQL, "g.", "page_keys.")
+
 	if limit > 0 {
-		q += `
-LIMIT $7 OFFSET $8`
-		args = append(args, limit, offset)
+		q += fmt.Sprintf(` LIMIT $%d`, argIdx)
+		args = append(args, limit)
+		argIdx++
+		if seek == nil && offset > 0 {
+			q += fmt.Sprintf(` OFFSET $%d`, argIdx)
+			args = append(args, offset)
+		}
 	}
 
 	rows, err := pool.Query(ctx, q, args...)

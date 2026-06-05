@@ -1829,8 +1829,11 @@ func TestGetNodeList_FilterTag(t *testing.T) {
 
 	var resp model.NodeUtilizationListResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 1)
-	assert.Equal(t, "node-prod", resp.Data[0].Node)
+	// Tag filter matches at cluster scope when any workload on the cluster has the tag.
+	require.Len(t, resp.Data, 2)
+	for _, row := range resp.Data {
+		assert.Contains(t, []string{"node-prod", "node-other"}, row.Node)
+	}
 }
 
 func TestGetNodeList_FilterCluster(t *testing.T) {

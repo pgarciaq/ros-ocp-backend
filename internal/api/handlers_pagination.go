@@ -109,3 +109,88 @@ func buildNamespaceListMeta(c echo.Context, page model.NativeNamespaceListPage, 
 
 	return PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
 }
+
+func applyPVCCursor(c echo.Context) (PVCCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return PVCCursor{}, false, nil
+	}
+	cursor, err := DecodePVCCursor(after)
+	if err != nil {
+		return PVCCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyNodeUtilCursor(c echo.Context) (NodeUtilCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return NodeUtilCursor{}, false, nil
+	}
+	cursor, err := DecodeNodeUtilCursor(after)
+	if err != nil {
+		return NodeUtilCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyNodeGPUCursor(c echo.Context) (NodeGPUCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return NodeGPUCursor{}, false, nil
+	}
+	cursor, err := DecodeNodeGPUCursor(after)
+	if err != nil {
+		return NodeGPUCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyGPUMIGCursor(c echo.Context) (GPUMIGCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return GPUMIGCursor{}, false, nil
+	}
+	cursor, err := DecodeGPUMIGCursor(after)
+	if err != nil {
+		return GPUMIGCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func pvcNextCursor(orderCol string, last PVCRecommendationResponse, sortValue interface{}) string {
+	return EncodePVCCursor(PVCCursor{
+		ClusterUUID:           last.ClusterUUID,
+		Namespace:             last.Namespace,
+		PersistentVolumeClaim: last.PersistentVolumeClaim,
+		SortValue:             model.PaginationSortValueJSON(sortValue),
+	})
+}
+
+func nodeUtilNextCursor(last model.NodeUtilizationRec, sortValue interface{}) string {
+	return EncodeNodeUtilCursor(NodeUtilCursor{
+		ClusterUUID: last.ClusterUUID,
+		Node:        last.Node,
+		SortValue:   model.PaginationSortValueJSON(sortValue),
+	})
+}
+
+func nodeGPUNextCursor(last model.NodeGPURecommendation, sortValue interface{}) string {
+	return EncodeNodeGPUCursor(NodeGPUCursor{
+		ClusterUUID: last.ClusterUUID,
+		NodeName:    last.NodeName,
+		GPUModel:    last.GPUModel,
+		SortValue:   model.PaginationSortValueJSON(sortValue),
+	})
+}
+
+func gpuMIGNextCursor(last model.GPUMIGRecommendationEntry, sortValue interface{}) string {
+	return EncodeGPUMIGCursor(GPUMIGCursor{
+		ClusterUUID: last.ClusterUUID,
+		Namespace:   last.Namespace,
+		Container:   last.Container,
+		GPUModel:    last.GPUModel,
+		Term:        last.Term,
+		SortValue:   model.PaginationSortValueJSON(sortValue),
+	})
+}

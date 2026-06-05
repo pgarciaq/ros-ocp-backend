@@ -18,7 +18,7 @@ func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationR
 		"persistentvolume", "storageclass", "recommendation_type", "usage_ratio",
 		"capacity_bytes", "usage_bytes_max", "recommended_bytes", "days_to_full",
 		"growth_bytes_per_day", "estimated_monthly_savings_value", "estimated_monthly_savings_units",
-		"idle_since", "idle_duration_days", "data_days", "term",
+		"confidence_level", "idle_since", "idle_duration_days", "data_days", "term",
 	}
 	if err := writer.Write(header); err != nil {
 		return err
@@ -55,6 +55,7 @@ func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationR
 			strconv.FormatInt(r.CapacityBytes, 10), strconv.FormatInt(r.UsageBytesMax, 10),
 			recommendedBytes, daysToFull, growthBytesPerDay,
 			savingsVal, savingsUnits,
+			fmt.Sprintf("%g", r.ConfidenceLevel),
 			idleSince, idleDurationDays, strconv.Itoa(r.DataDays), r.Term,
 		}); err != nil {
 			return err

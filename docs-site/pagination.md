@@ -13,17 +13,16 @@ in the future.
 
 | Strategy | When to use | Endpoints |
 |----------|-------------|-----------|
-| **Keyset (`after`)** | Large, unbounded org-wide lists (thousands+ rows) | Container list, namespace list |
-| **Offset (`offset` / `limit`)** | Small or bounded result sets | History, PVC, GPU, nodes, quota, VM, quality, snapshots, fleet summaries |
+| **Keyset (`after`)** | Large or growing org-wide lists | Container, namespace, PVC, GPU (MIG/time-slicing), node utilization |
+| **Offset (`offset` / `limit`)** | Small or bounded result sets (backward compatible) | History, quota, VM, quality, snapshots, fleet summaries |
 
-Only **container** and **namespace** recommendation lists routinely reach thousands of
-distinct rows per organization in large enterprises. Those two endpoints support **keyset
-pagination** so latency stays flat at any page depth. Everything else uses offset
-pagination today because cardinality or retention bounds make `OFFSET` cost negligible.
+**Container** and **namespace** lists were the first keyset endpoints (thousands+ rows).
+**PVC**, **GPU MIG**, **GPU time-slicing**, and **node utilization** now also support
+`after` cursors with offset fallback for existing clients.
 
 ---
 
-## Keyset pagination (container and namespace lists)
+## Keyset pagination
 
 ### Endpoints
 
@@ -33,6 +32,10 @@ pagination today because cardinality or retention bounds make `OFFSET` cost negl
 | `GET` | `/recommendations/openshift/namespaces` | Namespace recommendations (canonical path) |
 | `GET` | `/recommendations/openshift/namespace` | Legacy alias — same handler as `namespaces` |
 | `GET` | `/openshift/namespace/recommendations` | Legacy alias — same handler |
+| `GET` | `/recommendations/openshift/pvcs` | PVC recommendations (tie-break: cluster + namespace + PVC name) |
+| `GET` | `/recommendations/openshift/nodes` | Node CPU/memory utilization (tie-break: cluster + node) |
+| `GET` | `/recommendations/openshift/gpu/timeslicing` | GPU time-slicing (tie-break: cluster + node + GPU model) |
+| `GET` | `/recommendations/openshift/gpu/mig` | GPU MIG profiles (tie-break: cluster + namespace + container + GPU model) |
 
 List responses paginate by **distinct container or namespace**, not by raw database rows.
 Each list item can still expose multiple **term × engine** nested objects.
@@ -82,8 +85,12 @@ Cursors encode the last row’s sort position so the database can seek with
 
 | List | Default sort | Cursor fields (decoded internally) |
 |------|--------------|-----------------------------------|
-| Containers | `last_reported` DESC (configurable via `order_by` / `order_how`) | `namespace`, `workload`, `container_name` |
+| Containers | `last_reported` DESC (configurable via `order_by` / `order_how`) | `namespace`, `workload`, `container_name`, `cluster_uuid` |
 | Namespaces | Cluster + namespace order | `namespace`, `cluster_uuid` |
+| PVCs | `usage_ratio` DESC (configurable) | `cluster_uuid`, `namespace`, `persistentvolumeclaim` |
+| Nodes | `estimated_monthly_savings` DESC (configurable) | `cluster_uuid`, `node` |
+| GPU time-slicing | `node_name` (configurable) | `cluster_uuid`, `node_name`, `gpu_model` |
+| GPU MIG | `cluster_uuid` (configurable) | `cluster_uuid`, `namespace`, `container`, `gpu_model` |
 
 The `ORDER BY` used for a request must stay **stable** across pages (same filters and
 sort). Changing filters or sort between pages can skip or duplicate rows.
@@ -147,10 +154,10 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 | `GET /recommendations/openshift/history` | Offset only | Default **current month**; retention ~90 days | Bounded time window; filtered history is tens–low hundreds of rows per query |
 | `GET /recommendations/openshift/namespaces/{id}/history` | Offset only | ~14–90 days × terms × engines per namespace | Per-entity history; max ~30–60 rows typical |
 | `GET /recommendations/openshift/vms/{vm_name}/history` | Offset only | Same as namespace history | Per-VM bounded snapshots |
-| `GET /recommendations/openshift/pvcs` | Offset only | Tens–low hundreds per cluster | PVC count per cluster is small; keyset complexity not justified |
-| `GET /recommendations/openshift/gpu/mig` | Offset only | Tens–low hundreds org-wide | In-memory filter/sort/paginate over digest-derived list; GPU hardware is sparse |
-| `GET /recommendations/openshift/gpu/timeslicing` (and related GPU list routes) | Offset only | Same as MIG | Full list built per request then sliced in memory |
-| `GET /recommendations/openshift/nodes` | Offset only | Nodes per cluster (tens–low hundreds) | Recommendations computed at read time; cardinality ≈ node count |
+| `GET /recommendations/openshift/pvcs` | **Keyset + offset** | Tens–low hundreds per cluster | SQL keyset on `pvc_recommendation_sets` |
+| `GET /recommendations/openshift/gpu/mig` | **Keyset + offset** | Tens–low hundreds org-wide | SQL keyset on digest keys, then MIG engine per page |
+| `GET /recommendations/openshift/gpu/timeslicing` | **Keyset + offset** | Same as MIG | SQL triple pagination + per-triple engine |
+| `GET /recommendations/openshift/nodes` | **Keyset + offset** | Nodes per cluster (tens–low hundreds) | SQL keyset on grouped node keys |
 | `GET /recommendations/openshift/quota` | Offset only | ResourceQuotas per namespace | Small cardinality |
 | `GET /recommendations/openshift/cluster-quota` | Offset only | ClusterResourceQuotas per cluster | Small cardinality |
 | `GET /recommendations/openshift/vm` | Offset only | Moderate (VMs per org) | Not yet at scale requiring keyset |
