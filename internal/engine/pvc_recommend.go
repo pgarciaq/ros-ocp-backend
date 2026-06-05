@@ -367,6 +367,10 @@ func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) flo
 func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec, validTerms []string) error {
 	var errs []error
 	for _, rec := range recs {
+		notificationCodes := rec.NotificationCodes
+		if notificationCodes == nil {
+			notificationCodes = []int16{}
+		}
 		_, err := pool.Exec(ctx, `
 			INSERT INTO pvc_recommendation_sets (
 				org_id, cluster_uuid, namespace, persistentvolumeclaim,
@@ -407,7 +411,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 			rec.LastSeenPod, rec.VMName, rec.PV, rec.StorageClass, rec.CapacityBytes,
 			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
 			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
-			rec.NotificationCodes, rec.DataDays, rec.Term,
+			notificationCodes, rec.DataDays, rec.Term,
 			rec.EstimatedMonthlySavingsCents,
 			rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
 		)
