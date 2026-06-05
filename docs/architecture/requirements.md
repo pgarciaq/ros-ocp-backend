@@ -1491,6 +1491,8 @@ kube_horizontalpodautoscaler_labels
 
 **Architecture:** Both are planned as **separate Phase 2 Enrich plugins** that depend on container recommendations, not new CSV ingestors. See [plugin-phases.md](plugin-phases.md) and [plugin-architecture.md](plugin-architecture.md).
 
+**Deployment and automation:** HPA/VPA recommendations are advisory in all shipped modes (SaaS, on-prem, fleet). ROS does not ship an in-product actuator; customers may automate apply today via external tools (Ansible, SonataFlow, GitOps, CronJobs) that read the REST API, with safety gates (PDB, maintenance windows, canary, confidence, rollback). VPA `updateMode: Off` enables dual-advisor validation against ROS container rightsizing without auto-apply. See [hpa-vpa-deployment-modes.md](hpa-vpa-deployment-modes.md).
+
 ### REQ-8.2: Ephemeral storage recommendations [LOW — informational only, pending upstream fix] — NOT IMPLEMENTED
 
 **Source:** Analysis §23.6
