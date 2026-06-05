@@ -12,7 +12,7 @@ Package: [`internal/plugins/pvc`](../../internal/plugins/pvc/)
 | Phase | 1 (Produce) |
 | Priority | 30 |
 | CSV types | `storage` (storage usage CSV from koku-metrics-operator) |
-| Retention tables | `daily_pvc_digests`, `pvc_recommendation_sets` |
+| Retention tables | `daily_pvc_digests` (partition sweep via `RetentionProvider`) |
 
 ## Traits
 
