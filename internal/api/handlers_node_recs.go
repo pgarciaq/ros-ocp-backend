@@ -226,12 +226,9 @@ func respondNodeGPURecommendationsTripleSQL(
 	clusterFilter, nodeNameFilter, gpuModelFilter string,
 ) error {
 	hlog := requestLogger(c, orgIDStr)
-	totalCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
-	if err != nil {
-		hlog.Errorf("GetNodeRecommendations: triple count failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
-	}
-	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, opts.Limit, opts.Offset)
+	// Fetch all node×model triples; pagination applies at recommendation level (one row per
+	// triple×term), not at the triple SQL level.
+	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, 0, 0)
 	if err != nil {
 		hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
@@ -318,13 +315,17 @@ func respondNodeGPURecommendationsTripleSQL(
 		totalSavings = &sum
 	}
 
+	totalCount := len(allRecs)
+	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
+	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
+
 	nodeCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
 	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
 	}
-	return respondNodeGPURecommendations(c, opts, totalCount, allRecs, totalSavings, warnings, nodeCurrency)
+	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency)
 }
 
 func respondNodeGPURecommendations(

@@ -98,10 +98,16 @@ WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
   AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
   AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
 GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
-ORDER BY ` + orderSQL + `
-LIMIT $7 OFFSET $8`
+ORDER BY ` + orderSQL
 
-	rows, err := pool.Query(ctx, q, startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff, limit, offset)
+	args := []any{startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff}
+	if limit > 0 {
+		q += `
+LIMIT $7 OFFSET $8`
+		args = append(args, limit, offset)
+	}
+
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list node GPU triples page: %w", err)
 	}
