@@ -388,18 +388,22 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	// Term filter
 	termVals := queryparams.AllFilterValues(c, "term")
 	if len(termVals) > 0 {
-		validTerms := map[string]string{
-			"short_term":  "short",
-			"medium_term": "medium",
-			"long_term":   "long",
-		}
 		var terms []string
+		seen := make(map[string]struct{}, len(termVals))
 		for _, t := range termVals {
-			if dbTerm, ok := validTerms[t]; ok {
-				terms = append(terms, dbTerm)
-			} else {
-				filterErrs = append(filterErrs, fmt.Errorf("invalid filter[term] value: %q (valid: short_term, medium_term, long_term)", t))
+			dbTerm, termErr := queryparams.NormalizeRecommendationTermFilter(t)
+			if termErr != nil {
+				filterErrs = append(filterErrs, termErr)
+				continue
 			}
+			if dbTerm == "" {
+				continue
+			}
+			if _, ok := seen[dbTerm]; ok {
+				continue
+			}
+			seen[dbTerm] = struct{}{}
+			terms = append(terms, dbTerm)
 		}
 		if len(terms) > 0 {
 			queryParams["rs.term IN ?"] = terms

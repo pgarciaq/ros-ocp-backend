@@ -167,7 +167,11 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	nodeFilter := queryparams.FirstFilter(c, "node")
-	termFilter := queryparams.FirstFilter(c, "term")
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	underutilFilter := queryparams.FirstFilter(c, "is_underutilized")
 	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted")

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -262,13 +261,7 @@ func resolveMachineSetTerm(c echo.Context) (string, error) {
 	if term == "" {
 		return nodeUtilPrimaryTerm, nil
 	}
-	term = strings.TrimSuffix(term, "_term")
-	switch term {
-	case "short", "medium", "long":
-		return term, nil
-	default:
-		return "", fmt.Errorf("invalid term; must be short, medium, or long")
-	}
+	return queryparams.NormalizeRecommendationTermFilter(term)
 }
 
 // machinesetNameFilterClause builds an exact or ILIKE filter for machineset_name.

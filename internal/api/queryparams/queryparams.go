@@ -308,6 +308,26 @@ func flatOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiFiel
 	return field, dir, true, nil
 }
 
+// NormalizeRecommendationTermFilter maps filter[term] API values to DB term names
+// (short, medium, long). Canonical API values are short_term, medium_term, long_term;
+// legacy short, medium, long are also accepted for backward compatibility.
+func NormalizeRecommendationTermFilter(raw string) (dbTerm string, err error) {
+	original := strings.TrimSpace(raw)
+	normalized := strings.ToLower(original)
+	if normalized == "" {
+		return "", nil
+	}
+	if strings.HasSuffix(normalized, "_term") {
+		normalized = strings.TrimSuffix(normalized, "_term")
+	}
+	switch normalized {
+	case "short", "medium", "long":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("invalid filter[term] value: %q (valid: short_term, medium_term, long_term)", original)
+	}
+}
+
 func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, err error) {
 	for key, values := range c.QueryParams() {
 		if !strings.HasPrefix(key, OrderByPrefix) || !strings.HasSuffix(key, "]") {

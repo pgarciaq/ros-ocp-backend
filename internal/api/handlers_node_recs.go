@@ -97,7 +97,11 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	nodeNameFilter := queryparams.FirstFilter(c, "node")
 	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model")
-	termFilter := queryparams.FirstFilter(c, "term")
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
 
 	useTripleSQL := termFilter == "" &&
 		opts.Format != listoptions.ResponseFormatCSV &&

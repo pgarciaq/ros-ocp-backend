@@ -130,6 +130,33 @@ func TestParseOrderBy(t *testing.T) {
 	})
 }
 
+func TestNormalizeRecommendationTermFilter(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"", "", false},
+		{"short_term", "short", false},
+		{"medium_term", "medium", false},
+		{"long_term", "long", false},
+		{"short", "short", false},
+		{"medium", "medium", false},
+		{"long", "long", false},
+		{"SHORT_TERM", "short", false},
+		{"invalid", "", true},
+	}
+	for _, tc := range tests {
+		got, err := NormalizeRecommendationTermFilter(tc.in)
+		if tc.wantErr {
+			require.Error(t, err, "input %q", tc.in)
+			continue
+		}
+		require.NoError(t, err, "input %q", tc.in)
+		assert.Equal(t, tc.want, got, "input %q", tc.in)
+	}
+}
+
 func TestParseOrderByAPIKey(t *testing.T) {
 	allowed := map[string]string{"node": "f.node", "estimated_monthly_savings_usd": "sort_savings"}
 	c := newEchoContext("order_by%5Bestimated_monthly_savings_usd%5D=desc")

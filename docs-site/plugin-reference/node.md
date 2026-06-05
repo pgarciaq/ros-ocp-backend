@@ -71,7 +71,7 @@ Handlers: [`internal/plugins/node/plugin.go`](../../internal/plugins/node/plugin
 | `medium` | 7 days | 3 days |
 | `long` | 15 days | 7 days |
 
-Filter list/detail with `?term=short|medium|long` and `?engine=cost|performance`.
+Filter list/detail with `filter[term]=short_term|medium_term|long_term` (legacy `short|medium|long` accepted) and `filter[engine]=cost|performance`.
 
 ### Tag filtering
 
