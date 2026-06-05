@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -457,9 +456,8 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 	}
 	defer tx.Rollback(ctx)
 
-	batch := &pgx.Batch{}
 	for _, r := range recs {
-		batch.Queue(`
+		_, err := tx.Exec(ctx, `
 			UPDATE recommendation_sets
 			SET estimated_monthly_savings_usd = $1,
 			    notification_codes = $2,
@@ -470,12 +468,8 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 			r.EstimatedSavingsCents, r.NotificationCodes,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
 		)
-	}
-	br := tx.SendBatch(ctx, batch)
-	defer br.Close()
-	for range recs {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("update container savings: %w", err)
+		if err != nil {
+			return fmt.Errorf("update container savings %s/%s/%s: %w", r.Namespace, r.Workload, r.ContainerName, err)
 		}
 	}
 	return tx.Commit(ctx)
