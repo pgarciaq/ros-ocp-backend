@@ -82,6 +82,7 @@ type NodeGPUCursor struct {
 	ClusterUUID string          `json:"cu"`
 	NodeName    string          `json:"node"`
 	GPUModel    string          `json:"gm"`
+	Term        string          `json:"term,omitempty"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
 }
 

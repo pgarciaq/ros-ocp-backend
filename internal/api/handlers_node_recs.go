@@ -236,44 +236,10 @@ func respondNodeGPURecommendationsTripleSQL(
 		opts.Offset = 0
 	}
 
-	var seek *engine.NodeGPUTripleSeek
-	if hasCursor {
-		seek = &engine.NodeGPUTripleSeek{
-			ClusterUUID: cursor.ClusterUUID,
-			NodeName:    cursor.NodeName,
-			GPUModel:    cursor.GPUModel,
-		}
-		if len(cursor.SortValue) > 0 {
-			sortVal, decodeErr := decodeCursorSortValue(cursor.SortValue)
-			if decodeErr != nil {
-				return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": decodeErr.Error()})
-			}
-			seek.SortValue = sortVal
-		}
-	}
-
-	pageLimit := opts.Limit
-	if pageLimit > 0 {
-		pageLimit++
-	}
-	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, pageLimit, opts.Offset, seek)
+	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, 0, 0, nil)
 	if err != nil {
 		hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
-	}
-
-	hasNext := opts.Limit > 0 && len(triples) > opts.Limit
-	var nextCursor string
-	if hasNext {
-		last := triples[opts.Limit-1]
-		nextCursor = nodeGPUNextCursor(model.NodeGPURecommendation{
-			NodeName:    last.NodeName,
-			ClusterUUID: last.ClusterUUID,
-			GPUModel:    last.GPUModel,
-		}, nodeGPUSortValue(model.NodeGPURecommendation{
-			NodeName: last.NodeName, ClusterUUID: last.ClusterUUID, GPUModel: last.GPUModel,
-		}, opts.OrderBy))
-		triples = triples[:opts.Limit]
 	}
 
 	costProvider := getGPUCostProvider()
@@ -357,10 +323,11 @@ func respondNodeGPURecommendationsTripleSQL(
 		totalSavings = &sum
 	}
 
-	totalCount, countErr := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter)
-	if countErr != nil {
-		hlog.Warnf("GetNodeRecommendations: triple count failed: %v", countErr)
-		totalCount = len(allRecs)
+	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
+	totalCount := len(allRecs)
+	paged, hasNext, nextCursor, pageErr := paginateNodeGPURecs(allRecs, opts, cursor, hasCursor)
+	if pageErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
 	}
 
 	nodeCurrency := costdata.DefaultCurrency
@@ -369,7 +336,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
 	}
-	return respondNodeGPURecommendations(c, opts, totalCount, allRecs, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
+	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
 }
 
 func respondNodeGPURecommendations(
@@ -622,7 +589,6 @@ func filterNodeRecs(recs []model.NodeGPURecommendation, nodeName, gpuModel, term
 }
 
 // sortNodeRecs sorts recommendations in-place by the given column and direction.
-// Uses unstable sort; SQL ORDER BY provides base ordering for paginated triple-SQL paths.
 func sortNodeRecs(recs []model.NodeGPURecommendation, orderBy, orderHow string) {
 	if len(recs) <= 1 {
 		return
@@ -632,21 +598,39 @@ func sortNodeRecs(recs []model.NodeGPURecommendation, orderBy, orderHow string) 
 		if desc {
 			a, b = b, a
 		}
-		switch orderBy {
-		case "cluster_uuid":
-			return strings.Compare(a.ClusterUUID, b.ClusterUUID)
-		case "gpu_model", "gpu_model_name":
-			return strings.Compare(a.GPUModel, b.GPUModel)
-		case "recommended_replicas":
-			return cmpInt(a.RecommendedReplicas, b.RecommendedReplicas)
-		case "confidence":
-			return cmpFloat32(a.Confidence, b.Confidence)
-		case "total_node_savings_usd":
-			return cmpFloat32(derefFloat32(a.TotalNodeSavingsUSD), derefFloat32(b.TotalNodeSavingsUSD))
-		default: // node_name
-			return strings.Compare(a.NodeName, b.NodeName)
-		}
+		return compareNodeRecs(a, b, orderBy)
 	})
+}
+
+func compareNodeRecs(a, b model.NodeGPURecommendation, orderBy string) int {
+	var primary int
+	switch orderBy {
+	case "cluster_uuid":
+		primary = strings.Compare(a.ClusterUUID, b.ClusterUUID)
+	case "gpu_model", "gpu_model_name":
+		primary = strings.Compare(a.GPUModel, b.GPUModel)
+	case "recommended_replicas":
+		primary = cmpInt(a.RecommendedReplicas, b.RecommendedReplicas)
+	case "confidence":
+		primary = cmpFloat32(a.Confidence, b.Confidence)
+	case "total_node_savings_usd":
+		primary = cmpFloat32(derefFloat32(a.TotalNodeSavingsUSD), derefFloat32(b.TotalNodeSavingsUSD))
+	default: // node_name
+		primary = strings.Compare(a.NodeName, b.NodeName)
+	}
+	if primary != 0 {
+		return primary
+	}
+	if c := strings.Compare(a.ClusterUUID, b.ClusterUUID); c != 0 {
+		return c
+	}
+	if c := strings.Compare(a.NodeName, b.NodeName); c != 0 {
+		return c
+	}
+	if c := strings.Compare(a.GPUModel, b.GPUModel); c != 0 {
+		return c
+	}
+	return strings.Compare(a.Term, b.Term)
 }
 
 func cmpInt(a, b int) int {
@@ -717,6 +701,68 @@ func applyNodePagination(recs []model.NodeGPURecommendation, offset, limit int) 
 		recs = recs[:limit]
 	}
 	return recs
+}
+
+func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.ListOptions, cursor NodeGPUCursor, hasCursor bool) ([]model.NodeGPURecommendation, bool, string, error) {
+	if len(recs) == 0 {
+		return []model.NodeGPURecommendation{}, false, "", nil
+	}
+	start := 0
+	if hasCursor {
+		found := false
+		for i, r := range recs {
+			if nodeGPURecAfterCursor(r, cursor, opts.OrderBy, opts.OrderHow) {
+				start = i
+				found = true
+				break
+			}
+		}
+		if !found {
+			return []model.NodeGPURecommendation{}, false, "", nil
+		}
+	} else if opts.Offset > 0 {
+		if opts.Offset >= len(recs) {
+			return []model.NodeGPURecommendation{}, false, "", nil
+		}
+		start = opts.Offset
+	}
+	end := len(recs)
+	if opts.Limit > 0 {
+		end = start + opts.Limit + 1
+		if end > len(recs) {
+			end = len(recs)
+		}
+	}
+	slice := recs[start:end]
+	hasNext := opts.Limit > 0 && len(slice) > opts.Limit
+	var nextCursor string
+	if hasNext {
+		last := slice[opts.Limit-1]
+		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy))
+		slice = slice[:opts.Limit]
+	}
+	return slice, hasNext, nextCursor, nil
+}
+
+func nodeGPURecAfterCursor(r model.NodeGPURecommendation, cursor NodeGPUCursor, orderBy, orderHow string) bool {
+	if len(cursor.SortValue) > 0 {
+		sortVal, err := decodeCursorSortValue(cursor.SortValue)
+		if err != nil {
+			return false
+		}
+		cur := nodeGPUSortValue(r, orderBy)
+		if orderHow == listoptions.OrderDesc {
+			return compareMIGSort(cur, sortVal) < 0 || (compareMIGSort(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
+		}
+		return compareMIGSort(cur, sortVal) > 0 || (compareMIGSort(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
+	}
+	return nodeGPURecTieAfter(r, cursor)
+}
+
+func nodeGPURecTieAfter(r model.NodeGPURecommendation, cursor NodeGPUCursor) bool {
+	tie := r.ClusterUUID + "\x00" + r.NodeName + "\x00" + r.GPUModel + "\x00" + r.Term
+	cur := cursor.ClusterUUID + "\x00" + cursor.NodeName + "\x00" + cursor.GPUModel + "\x00" + cursor.Term
+	return tie > cur
 }
 
 // buildNodeLinks produces pagination links consistent with the standard Collection shape.

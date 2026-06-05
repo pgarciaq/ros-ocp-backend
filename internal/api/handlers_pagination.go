@@ -180,6 +180,7 @@ func nodeGPUNextCursor(last model.NodeGPURecommendation, sortValue interface{}) 
 		ClusterUUID: last.ClusterUUID,
 		NodeName:    last.NodeName,
 		GPUModel:    last.GPUModel,
+		Term:        last.Term,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
 	})
 }

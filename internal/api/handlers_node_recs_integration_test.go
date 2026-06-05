@@ -783,6 +783,35 @@ func TestGetNodeRecommendations_PaginationMeta(t *testing.T) {
 	assert.NotEmpty(t, resp.Links.First)
 }
 
+func TestGetNodeRecommendations_LimitOnePerRecommendation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'limit-one-cluster', 'src-l1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-ts-node-1")
+
+	app := setupNodeRecsEcho(pool)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?limit=1", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Greater(t, resp.Meta.Count, 1, "fixture should expand one triple into multiple term recommendations")
+	assert.Len(t, resp.Data, 1)
+	assert.True(t, resp.Meta.HasNext)
+}
+
 func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
