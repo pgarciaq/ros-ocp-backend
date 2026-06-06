@@ -22,7 +22,7 @@ formulas, see [Cost Integration](cost-integration.md).
 | **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) |
 | **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
 | **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) |
-| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (short / medium / long) | Yes (ingestion); API field `savings` | [`recommend_vm.go`](../../internal/engine/recommend_vm.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (short / medium / long) | Yes (ingestion); API field `savings` | [`recommend_vm.go`](../../internal/engine/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
@@ -278,7 +278,7 @@ See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynam
 ## VM (OpenShift Virtualization) Recommendations
 
 KubeVirt VMs use **whole vCPU / whole GiB** sizing with separate cost and performance
-engine rows per term. Source: [`recommendVM()`](../../internal/engine/recommend_vm.go).
+engine rows per term. Source: [`recommendVM()`](../../internal/engine/vm_recommender.go).
 
 | Engine | CPU percentile | Memory percentile | Notes |
 |--------|----------------|-------------------|-------|

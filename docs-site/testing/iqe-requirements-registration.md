@@ -93,5 +93,5 @@ All eight ROS requirement IDs are now declared in the plugin. **app-interface MR
 ## Related docs
 
 - On-prem IQE setup: `cost-onprem-chart/docs/development/iqe-testing-setup.md`
-- Cluster quota IQE case catalog: [iqe-cluster-quota-coverage.md](./iqe-cluster-quota-coverage.md)
+- Cluster quota IQE case catalog: [iqe-cluster-quota-coverage.md](../../docs/testing/iqe-cluster-quota-coverage.md)
 - Skipped IQE groups (on-prem): `cost-onprem-chart/docs/development/skipped-iqe-tests.md`

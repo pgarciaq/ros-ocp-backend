@@ -131,4 +131,4 @@ Env locks: `ROS_NODE_*`. See [Configurability](../architecture/configurability.m
 - [Node recommendations (feature)](../features/node-recommendations.md)
 - [Recommendation engines](../architecture/recommendation-engines.md)
 - [Cost integration](../architecture/cost-integration.md)
-- Internal design: [`docs/features/node-recommendations.md`](../../docs/features/node-recommendations.md)
+- Internal design: [`docs/features/node-recommendations.md`](../features/node-recommendations.md)

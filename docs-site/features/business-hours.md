@@ -57,10 +57,10 @@ flowchart TD
 
 Key code:
 
-- Settings: [`internal/api/handlers_business_hours_settings.go`](../internal/api/handlers_business_hours_settings.go)
-- Schedule eval: [`internal/bhschedule/schedule.go`](../internal/bhschedule/schedule.go)
-- Dual digest pipeline: [`internal/ingestion/pipeline_business_hours.go`](../internal/ingestion/pipeline_business_hours.go)
-- Reship client: [`internal/reship/service.go`](../internal/reship/service.go)
+- Settings: [`internal/api/handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go)
+- Schedule eval: [`internal/bhschedule/schedule.go`](../../internal/bhschedule/schedule.go)
+- Dual digest pipeline: [`internal/ingestion/pipeline_business_hours.go`](../../internal/ingestion/pipeline_business_hours.go)
+- Reship client: [`internal/reship/service.go`](../../internal/reship/service.go)
 - Masu endpoint: koku `masu/api/views.py` (`reship_ros`)
 
 ## Configuration
@@ -91,7 +91,7 @@ when both Koku sources are configured — no ROS-side correlation work is needed
 
 Plugin coverage, OCP-on-cloud details, currency field, fleet savings summary
 (`GET .../savings-summary`), and troubleshooting:
-[architecture/cost-integration.md](architecture/cost-integration.md).
+[../architecture/cost-integration.md](../architecture/cost-integration.md).
 
 ### Schedule inheritance
 

@@ -127,8 +127,8 @@ the next predictable peak.
 
 **Design references (planned only):**
 
-- [Seasonality plugin design](design/seasonality-plugin.md)
-- [Product overview (docs-site)](../docs-site/features/seasonality.md)
+- [Seasonality plugin design](../docs/design/seasonality-plugin.md)
+- [Product overview (docs-site)](features/seasonality.md)
 
 ### Not Planned for Current MVP
 
@@ -421,7 +421,7 @@ otherwise falls back to `ROS_NODE_ALLOCATABLE_FACTOR` × request totals.
 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | 10 | Idle: memory util % of allocatable |
 | `ROS_NODE_IDLE_MAX_PODS` | 10 | Idle: max pod count |
 
-**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
+**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../internal/engine/recommend_nodes.go)
 groups underutilized nodes by `instance_type` and distributes `node_count_reduction`
 across the fleet (not per-node binary only).
 
@@ -445,7 +445,7 @@ reflects the Koku cost model unit. Deprecated alias:
 
 **Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 15 (node idle/zombie), 25 (`NotifNoCostData` when savings cannot be computed).
 
-**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
+**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
 **UI status:** Not implemented. Requires a node recommendations view and a null
 state for the 3-day cold start period.
@@ -549,11 +549,11 @@ below, not as defects.
 
 #### MIG list in-memory pagination
 
-`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../../internal/api/handlers_gpu_mig.go))
+`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../internal/api/handlers_gpu_mig.go))
 loads MIG recommendations for every cluster in the org by calling
 `QueryGPURecommendations` per cluster, builds the full result set in memory, then applies
 RBAC, tag filters, sort, and `offset`/`limit` pagination in Go. Filter and sort keys are
-not pushed to SQL (see [`GpuMigAllowedOrderBy`](../../internal/api/listoptions/list_options.go)).
+not pushed to SQL (see [`GpuMigAllowedOrderBy`](../internal/api/listoptions/list_options.go)).
 
 **Why this is acceptable now:** Typical fleets have tens to low hundreds of MIG-enabled
 containers. The in-memory path adds well under ~50 ms of API latency at that scale.
@@ -845,12 +845,12 @@ Responses include `estimated_monthly_savings` when Masu storage rates are availa
 CSV includes a `pod` column (often a `virt-launcher-*` name). ROS does not ingest either
 field today: `ParseVMCSVRows` ignores PVC/pod columns on VM usage, and PVC ingestion
 did not persist `pod` until migration **000114**. VM shared-storage notifications
-([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) therefore use a
+([`DetectSharedPVCs`](../internal/engine/vm_pvc_correlation.go)) therefore use a
 namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
 requires ROS to ingest `pod` on storage digests and either `vm_persistentvolumeclaim_name`
 or `exported_pod` on VM digests (operator ROS VM CSV would need the latter column added).
 
-**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
+**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
 Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
@@ -898,7 +898,7 @@ for full design details.
 
 ## Recently Implemented Lifecycle Features
 
-See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full details.
+See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full details.
 
 - **Staleness detection (F55, REQ-10.8):** `?stale=` API filter, configurable threshold,
   archive sweep, `NotifStaleData` notification.
@@ -945,9 +945,9 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
 (opaque base64url cursor), with `meta.has_next` and `meta.next_cursor`. Offset/limit remains
 as a backward-compatible fallback on those two routes only.
 
-**Authoritative public reference:** [API Pagination](../docs-site/pagination.md) — full endpoint matrix,
+**Authoritative public reference:** [API Pagination](pagination.md) — full endpoint matrix,
 API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
-thresholds for future keyset work. See also [operations/query-performance.md](operations/query-performance.md).
+thresholds for future keyset work. See also [../docs/operations/query-performance.md](../docs/operations/query-performance.md).
 
 **Koku** report/tag APIs use Django REST Framework pagination in a separate service.
 
@@ -961,7 +961,7 @@ missing prerequisites, not a backend defect.
 
 | Prerequisite | Symptom when missing | Fix |
 |--------------|----------------------|-----|
-| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing — Prerequisites](../docs-site/features/gpu-time-slicing.md#prerequisites)) |
+| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing — Prerequisites](features/gpu-time-slicing.md#prerequisites)) |
 | **Namespace label** `cost_management_optimizations: "true"` (or legacy `insights_cost_management_optimizations`) | Cost CSV has GPUs; ROS `gpu_container_digests` empty for namespace | Label GPU workload namespaces; wait for operator ROS upload + ingest |
 | **GPU cost model rate** `gpu_core_usage_per_hour` | Recommendations with utilization and replicas but no dollar savings fields | Assign cost model with GPU rates to the cluster |
 | **`gpu` plugin enabled** (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) | `404` on `/recommendations/openshift/gpu/*` | Include `gpu` in enabled plugins (default) |
@@ -969,7 +969,7 @@ missing prerequisites, not a backend defect.
 **E2E / IQE:** GPU suites skip on CPU-only clusters — see
 [GPU E2E and IQE test data prerequisite](#gpu-e2e-and-iqe-test-data-prerequisite).
 
-Authoritative detail: [docs-site/features/gpu-time-slicing.md](../docs-site/features/gpu-time-slicing.md).
+Authoritative detail: [docs-site/features/gpu-time-slicing.md](features/gpu-time-slicing.md).
 
 ---
 
@@ -1024,8 +1024,8 @@ actionable node-level guidance.
 - **Section visibility / navigation** → summary `timeslicing.count`
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
-See docs-site [Summary vs list count semantics](../docs-site/features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](../docs-site/ui-integration-guide.md#which-count-to-use-summary-vs-list).
+See docs-site [Summary vs list count semantics](features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
+[UI Integration Guide](ui-integration-guide.md#which-count-to-use-summary-vs-list).
 
 ### Resolution options (if product requires alignment later)
 

@@ -2,7 +2,7 @@
 
 This document describes how ROS-OCP-Backend classifies GPU workload utilization for the **container** `gpu` plugin (Pods, Jobs, and OpenShift AI workloads on the same code path).
 
-For **how sharing mechanisms differ by workload type** (containers vs KubeVirt VMs, catalogs, API fields), see [GPU sharing mechanisms by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type). VM guests additionally use `vgpu_profiles.yaml` (VM-only) for `recommended_vgpu_profile`.
+For **how sharing mechanisms differ by workload type** (containers vs KubeVirt VMs, catalogs, API fields), see [GPU sharing mechanisms by workload type](../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type). VM guests additionally use `vgpu_profiles.yaml` (VM-only) for `recommended_vgpu_profile`.
 
 For **NVIDIA documentation sources and catalog validation** when editing `gpu_catalog.yaml` or `vgpu_profiles.yaml`, see [GPU Catalogs — Data Sources and Validation](gpu-catalogs.md).
 

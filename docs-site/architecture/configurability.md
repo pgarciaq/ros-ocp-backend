@@ -174,7 +174,7 @@ whether each is currently enabled, so clients do not hard-code plugin lists.
   return `404` and the field is omitted or `false` in capabilities.
 
 Implementation: [`GetCapabilities`](../../internal/api/handlers_capabilities.go) iterates
-[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/traits.go)
+[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/plugin.go)
 trait for `supports_terms`.
 
 ### Settings PUT side effects
@@ -719,9 +719,9 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Storage tiering high IOPS threshold <br><em>Peak daily read+write IOPS for random high-IOPS day.</em> | 5000 | `ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD` | `PUT /settings/vm` | `storage_tiering.high_iops_threshold` | Yes |
 | Storage tiering high throughput (bps) <br><em>Peak daily read+write BPS for sequential high-throughput day.</em> | 104857600 | `ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS` | `PUT /settings/vm` | `storage_tiering.high_throughput_bps` | Yes |
 
-**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 
-See [VM recommendations design](../design/vm-recommendations.md).
+See [VM recommendations design](../../docs/design/vm-recommendations.md).
 
 ---
 
@@ -981,7 +981,7 @@ A generic `ResolveSettings[T]` function using Go generics that encapsulates the
 full three-tier resolution for any settings struct:
 
 ```go
-func ResolveSettings[T any](
+func ResolveSettings[T any] (
     ctx context.Context,
     pool *pgxpool.Pool,
     orgID, recType string,

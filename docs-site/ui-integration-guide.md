@@ -11,7 +11,7 @@ Practical API reference for **koku-ui** developers building OpenShift Resource O
 - [Configurability Reference](architecture/configurability.md) — env vars, defaults, tuning by use case
 - [Recommendation Engines](architecture/recommendation-engines.md) — algorithm behavior
 - [Cost Integration](architecture/cost-integration.md) — savings formulas and currency
-- [Business Hours](features-business-hours.md) — schedule design and reship flow
+- [Business Hours](features/business-hours.md) — schedule design and reship flow
 
 ---
 
@@ -355,7 +355,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
 - When `business_hours` is present, add tabs: "All hours" and "Business hours" with side-by-side comparison.
 - Namespace list/detail: `business_hours` is populated when BH is enabled and reship is complete
-  (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](../docs-site/features/namespace-recommendations.md#business-hours)).
+  (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](features/namespace-recommendations.md#business-hours)).
 - Negative savings: phrase as "Additional resources needed" with absolute usage delta, not negative currency.
 
 ---
@@ -628,7 +628,7 @@ current usage is below 85%.
 
 Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** recommendations are
 **API-ready**; there is **no dedicated koku-ui view yet** (deferred — see
-[Deferred: Quota UI](../docs-site/known-issues.md#deferred-quota-ui) and
+[Deferred: Quota UI](known-issues.md#deferred-quota-ui) and
 [quota feature roadmap](features/quota-recommendations.md#roadmap--future-work)).
 
 ### Namespace ResourceQuota
@@ -1120,7 +1120,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).
 - Show `off_hours_weight` with slider or **NumberInput** (0.0–1.0) and explain its effect on off-hours sample weighting.
 - Provide `enabled` toggle per scope; disabling stops business-hours digest generation for that scope.
-- Link to [Business Hours feature doc](features-business-hours.md) for reship flow details.
+- Link to [Business Hours feature doc](features/business-hours.md) for reship flow details.
 - On recommendation detail, default to all-hours view; switch to business-hours tab when user opts in.
 
 ---
