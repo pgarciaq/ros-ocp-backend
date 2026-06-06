@@ -1077,7 +1077,7 @@ Show a **warning banner** on the Business Hours recommendations section for a cl
 **API check:**
 
 ```
-GET /api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}
+GET /api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/{cluster_id}
 ```
 
 Response fields (v1):

@@ -63,7 +63,7 @@ Key code:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_BUSINESS_HOURS_ENABLED` | `false` | Kill-switch — when `false`, BH routes return 404 and capabilities omit the feature |
+| `ROS_BUSINESS_HOURS_ENABLED` | `true` | Kill-switch — when `false`, BH routes return 404 and capabilities omit the feature |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | After max reship retries, transition cluster to `forward_only` (new ingest only, no historical backfill) |
 
 Helm (cost-onprem-chart): set under `ros-api` and `ros-processor` env blocks;

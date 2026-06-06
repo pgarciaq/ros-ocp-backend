@@ -1749,7 +1749,7 @@
         }
       }
     },
-    "/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}": {
+    "/recommendations/openshift/settings/business-hours/clusters/{cluster_id}": {
       "get": {
         "tags": ["Business Hours Settings"],
         "summary": "Get cluster business hours schedule",
@@ -1758,7 +1758,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
@@ -1786,7 +1786,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
@@ -1824,7 +1824,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
@@ -1837,7 +1837,7 @@
         }
       }
     },
-    "/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}": {
+    "/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}": {
       "get": {
         "tags": ["Business Hours Settings"],
         "summary": "Get namespace business hours schedule",
@@ -1846,7 +1846,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
@@ -1881,7 +1881,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
@@ -1926,7 +1926,7 @@
         "x-plugin-required": "business-hours",
         "parameters": [
           {
-            "name": "cluster_uuid",
+            "name": "cluster_id",
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",

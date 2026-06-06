@@ -295,7 +295,7 @@ frequent source churn).
 ### Prerequisites
 
 - Koku `reship_ros` endpoint must be deployed first (koku branch: `feature/reship-ros-endpoint`)
-- `ROS_BUSINESS_HOURS_ENABLED` defaults to `false` — set to `true` to activate
+- `ROS_BUSINESS_HOURS_ENABLED` defaults to `true` — set to `false` to disable (kill-switch)
 - See [Configurability Reference — Business Hours](architecture/configurability.md#business-hours) for all BH env vars
 
 ### Migration sequence

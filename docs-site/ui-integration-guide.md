@@ -1049,17 +1049,17 @@ DELETE /recommendations/openshift/settings/business-hours
 ### Cluster override
 
 ```http
-GET    /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}
-PUT    /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}
-DELETE /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}
+GET    /recommendations/openshift/settings/business-hours/clusters/{cluster_id}
+PUT    /recommendations/openshift/settings/business-hours/clusters/{cluster_id}
+DELETE /recommendations/openshift/settings/business-hours/clusters/{cluster_id}
 ```
 
 ### Namespace override
 
 ```http
-GET    /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}
-PUT    /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}
-DELETE /recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}
+GET    /recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}
+PUT    /recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}
+DELETE /recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}
 ```
 
 Resolution order: **namespace → cluster → org default**.

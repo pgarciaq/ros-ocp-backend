@@ -1220,7 +1220,7 @@ func TestOpenAPI_BusinessHoursClusterSettings_ResponseFields(t *testing.T) {
 
 	schema := getResponseSchema(
 		spec,
-		"/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}",
+		"/recommendations/openshift/settings/business-hours/clusters/{cluster_id}",
 		http.MethodGet,
 		"200",
 	)
@@ -1244,7 +1244,7 @@ func TestOpenAPI_BusinessHoursNamespaceSettings_ResponseFields(t *testing.T) {
 
 	schema := getResponseSchema(
 		spec,
-		"/recommendations/openshift/settings/business-hours/clusters/{cluster_uuid}/namespaces/{namespace}",
+		"/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}",
 		http.MethodGet,
 		"200",
 	)

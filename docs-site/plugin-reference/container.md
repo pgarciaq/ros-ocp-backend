@@ -118,7 +118,7 @@ and [VPA Recommendations (planned)](../planned-features/vpa-recommendations.md).
 
 When `ROS_BUSINESS_HOURS_ENABLED=true`, parallel `all_hours` and `business_hours` digest streams produce dual recommendations on detail responses after reship completes.
 
-See [Business hours](business-hours.md) and [Business Hours feature](../../docs/features/business-hours.md).
+See [Business hours](business-hours.md) and [Business Hours feature](../features/business-hours.md).
 
 ## Notification codes
 

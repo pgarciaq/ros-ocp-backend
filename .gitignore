@@ -72,6 +72,7 @@ docs-site/planned-features/
 !docs-site/features/gpu-mig.md
 !docs-site/features/gpu-classification.md
 !docs-site/features/gpu-time-slicing.md
+!docs-site/features/business-hours.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output
