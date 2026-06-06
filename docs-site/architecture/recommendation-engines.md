@@ -187,6 +187,13 @@ fits → `"full_gpu"`.
 
 Default terms: same as container (1d / 7d / 15d). Max window: 90 days.
 
+**Savings:** `total_node_savings` and `savings_per_gpu` on the time-slicing list, plus
+`estimated_monthly_timeslicing_savings` on container `gpu.{term}`, are computed at
+**API read time** from Masu `effective_rates` — not stored on ingest. This is
+intentional: candidate sets and per-GPU shares change as the node fleet and workloads
+evolve, so persisted totals would drift from the recommendation shown. GPU savings are
+excluded from `GET .../savings-summary`. See [GPU plugin — Savings](../plugin-reference/gpu.md#savings).
+
 ---
 
 ## PVC Recommendations

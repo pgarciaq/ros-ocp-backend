@@ -96,6 +96,35 @@ Syntax: `filter[tag:<key>]=<value>`, comma-separated OR within a key, multiple `
 
 When nodes are underutilized, the engine recommends reducing node count within instance-type (or capacity-based) groups. List rows may include `machineset_name` when present on digests; `GET .../machinesets` aggregates fleet savings by MachineSet.
 
+#### MachineSet aggregation API (`GET .../machinesets`)
+
+Tier 1 **aggregation only** — groups existing `node_recommendations` rows (cost engine,
+non-empty `machineset_name`). There is no separate `machineset` engine or
+`machineset_recommendations` table yet (Tier 2 planned).
+
+| Filter | Alias | Notes |
+|--------|-------|-------|
+| `filter[cluster]` | `cluster_uuid` | RBAC-scoped; unknown cluster → empty 200 |
+| `filter[machineset_name]` | `machineset_name` | Exact or `*` wildcard (`*` → SQL `LIKE`) |
+| `filter[term]` | `term` | `short` / `medium` / `long` (default `medium`) |
+
+**Pagination:** `limit` (default 10), `offset`, or keyset `after` from `meta.next_cursor`
+(sort: total monthly savings descending; tie-break: machineset name + cluster). **No**
+`order_by` parameter.
+
+**Response (per group):** `machineset_name`, `cluster_uuid`, `cluster_alias`,
+`instance_type`, `current_node_count`, `recommended_node_count`, `excess_nodes`,
+`total_monthly_savings` (`MoneyAmount`), `avg_cpu_utilization`, `avg_memory_utilization`,
+`nodes`. `meta.currency` carries the ISO 4217 code (default `USD`). **No**
+`confidence_level` — apply confidence on per-node list/detail instead.
+
+**CSV:** `?format=csv` or `Accept: text/csv` (filename prefix `machineset-recommendations-`).
+
+**Notifications:** MachineSet list rows do not include notification maps. Code **76**
+(fleet consolidation) on node list/detail may reference the MachineSet name in its message.
+
+See [node-recommendations roadmap](../architecture/node-recommendations-roadmap.md) for Tier 2/3 scope.
+
 ### Instance type hints
 
 For stranded-resource nodes, responses may include `suggested_instance_type`, `instance_type_reason`, or notification **13** (`suggested_direction`).

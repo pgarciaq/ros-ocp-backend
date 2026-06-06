@@ -19,6 +19,28 @@ Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]
 Savings: list (`total_node_savings`, `savings_per_gpu` as `MoneyAmount`; currency in `meta.currency`) and container detail
 (`estimated_monthly_timeslicing_savings` on `gpu.{term}`).
 
+### Read-time savings (intentional)
+
+Node GPU time-slicing dollar estimates are **computed at API read time**, not persisted to
+`node_recommendations` or any savings summary table. The handler calls
+[`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) with Masu
+`effective_rates` when the list or container-detail request is served.
+
+**Why not persist?**
+
+1. **Fleet-level aggregation** — Savings depend on which containers are time-slicing
+   *candidates* on a node at query time. As workloads move, idle out, or become MIG
+   candidates, the candidate set and per-GPU share change without a new ingestion cycle.
+2. **Node fleet evolution** — Replica recommendations use live digest aggregates; a node
+   that was a strong sharing target yesterday may not be after scheduling changes.
+3. **Cost model freshness** — GPU monthly rates come from the current Koku cost model.
+   Persisting would require a recalculation path parallel to container/node savings
+   recalc for marginal benefit at current fleet sizes.
+
+GPU time-slicing savings are therefore **excluded from** `GET .../savings-summary`
+(`by_plugin.gpu` is always 0). Query `GET .../gpu/timeslicing` or container detail for
+dollar fields. See [cost-integration — GPU savings](../architecture/cost-integration.md#gpu-savings).
+
 ## Flow
 
 1. Daily [`gpu_container_digests`](../../internal/testutil/fixtures.go) (DCGM aggregates, per container × node).

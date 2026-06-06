@@ -89,7 +89,8 @@ These boolean filters apply to **`GET /api/cost-management/v1/recommendations/op
 | Idle state | `idle_state` | `filter[idle_state]` | `active`, `idle`, or `zombie` (comma-separated OR). |
 | Stranded resource | `stranded_resource` | `filter[stranded_resource]` | `cpu`, `memory`, or `none` (EMA imbalance classification). |
 | Instance type | `instance_type` | `filter[instance_type]` | Exact match on operator-reported instance type. |
-| MachineSet | `machineset_name` | `filter[machineset_name]` | Exact match on MachineSet name when present in ROS CSV. |
+| MachineSet (node list) | `machineset_name` | `filter[machineset_name]` | Exact match on MachineSet name when present in ROS CSV. |
+| MachineSet (aggregation list) | `machineset_name` | `filter[machineset_name]` | On `GET .../machinesets` only: exact match or `*` wildcard (`worker*` → `worker%`). |
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=true

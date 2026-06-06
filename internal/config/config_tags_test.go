@@ -7,8 +7,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTagsFeatureEnabled_DefaultFalse(t *testing.T) {
+func TestTagsFeatureEnabled_DefaultTrue(t *testing.T) {
 	ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "")
+	cfg := GetConfig()
+	assert.True(t, cfg.TagsEnabled)
+	assert.True(t, TagsFeatureEnabled())
+}
+
+func TestTagsFeatureEnabled_ExplicitFalse(t *testing.T) {
+	ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "false")
 	cfg := GetConfig()
 	assert.False(t, cfg.TagsEnabled)
 	assert.False(t, TagsFeatureEnabled())

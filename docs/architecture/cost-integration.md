@@ -252,6 +252,15 @@ Computed at **API read time** (not stored on ingest):
 4. For MIG candidates: savings = `(1 - recommended_slices / total_slices) × gpu_cost_per_month`
 5. Node GPU time-slicing: [`internal/api/handlers_node_recs.go`](../../internal/api/handlers_node_recs.go) calls [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) with the same rates → `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) and per-container `estimated_monthly_timeslicing_savings`
 
+**Why time-slicing savings are read-time (not persisted):** Candidate selection is
+fleet-level — which containers share a physical GPU depends on live classification and
+scheduling on that node. Replica math and per-GPU dollar shares change when workloads
+move, when nodes join or leave the fleet, or when cost model GPU rates update. Persisting
+would require a recalculation pipeline and would still lag the actionable recommendation
+rows. Container MIG/idle GPU savings use the same read-time pattern on list enrichment.
+At current scale, API-side computation is fast enough; materialization is a future
+optimization if GPU node counts grow ~10× (see [known-issues](../known-issues.md)).
+
 GPU API enrichment does **not** append `NotifNoCostData`; savings fields are omitted or `$0` when Masu is unavailable.
 
 ### Snapshot cost (dynamic default from effective-rates)
