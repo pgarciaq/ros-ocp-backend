@@ -941,13 +941,24 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					r.IdleState,
 					optionalIdleSinceStr(r.IdleSince),
 					optionalIntPtrStr(r.IdleDurationDays),
+					optionalInt64Str(r.PeakCPUMillicores),
+					optionalInt64Str(r.PeakMemoryBytes),
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),
 					optionalInt64Str(eng.rec.CPULimitMillicores),
 					optionalInt64Str(eng.rec.MemRequestKiB),
 					optionalInt64Str(eng.rec.MemLimitKiB),
+					optionalInt64Str(eng.rec.CurrentCPURequestMC),
+					optionalInt64Str(eng.rec.CurrentCPULimitMC),
+					optionalInt64Str(eng.rec.CurrentMemRequestKiB),
+					optionalInt64Str(eng.rec.CurrentMemLimitKiB),
+					optionalInt32Str(eng.rec.VariationCPURequestPct),
+					optionalInt32Str(eng.rec.VariationCPULimitPct),
+					optionalInt32Str(eng.rec.VariationMemRequestPct),
+					optionalInt32Str(eng.rec.VariationMemLimitPct),
 					optionalFloat32Str(eng.rec.ConfidenceLevel),
+					int16SliceStr(eng.rec.NotificationCodes),
 				}
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)
@@ -996,6 +1007,7 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 					r.Project,
 					r.LastReported,
 					r.SourceID,
+					r.IdleState,
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),
@@ -1011,6 +1023,7 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 					optionalInt32Str(eng.rec.VariationMemRequestPct),
 					optionalInt32Str(eng.rec.VariationMemLimitPct),
 					optionalFloat32Str(eng.rec.ConfidenceLevel),
+					int16SliceStr(eng.rec.NotificationCodes),
 				}
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)

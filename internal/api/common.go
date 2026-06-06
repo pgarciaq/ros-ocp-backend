@@ -83,6 +83,7 @@ type Metadata struct {
 	Offset     int      `json:"offset,omitempty"`
 	HasNext    bool     `json:"has_next"`
 	NextCursor string   `json:"next_cursor,omitempty"`
+	Currency   string   `json:"currency"`
 	Warnings   []string `json:"warnings,omitempty"`
 }
 
@@ -159,21 +160,8 @@ var NativeCSVHeader = []string{
 	"idle_state",
 	"idle_since",
 	"idle_duration_days",
-	"recommendation_term",
-	"recommendation_engine",
-	"rec_cpu_request_millicores",
-	"rec_cpu_limit_millicores",
-	"rec_memory_request_kib",
-	"rec_memory_limit_kib",
-	"confidence_level",
-}
-
-var NativeNSCSVHeader = []string{
-	"cluster_uuid",
-	"cluster_alias",
-	"project",
-	"last_reported",
-	"source_id",
+	"peak_cpu_millicores",
+	"peak_memory_bytes",
 	"recommendation_term",
 	"recommendation_engine",
 	"rec_cpu_request_millicores",
@@ -189,6 +177,32 @@ var NativeNSCSVHeader = []string{
 	"variation_memory_request_pct",
 	"variation_memory_limit_pct",
 	"confidence_level",
+	"notification_codes",
+}
+
+var NativeNSCSVHeader = []string{
+	"cluster_uuid",
+	"cluster_alias",
+	"project",
+	"last_reported",
+	"source_id",
+	"idle_state",
+	"recommendation_term",
+	"recommendation_engine",
+	"rec_cpu_request_millicores",
+	"rec_cpu_limit_millicores",
+	"rec_memory_request_kib",
+	"rec_memory_limit_kib",
+	"current_cpu_request_millicores",
+	"current_cpu_limit_millicores",
+	"current_memory_request_kib",
+	"current_memory_limit_kib",
+	"variation_cpu_request_pct",
+	"variation_cpu_limit_pct",
+	"variation_memory_request_pct",
+	"variation_memory_limit_pct",
+	"confidence_level",
+	"notification_codes",
 }
 
 // setRecommendationNoStore marks recommendation JSON as non-cacheable (volatile).

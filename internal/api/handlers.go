@@ -481,7 +481,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		for i := range results {
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
 		}
-		response := buildContainerListMeta(c, page, apiListOptions)
+		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
 		response.Data = interfaceSlice
 		attachTagWarningsToCollection(response, c, OrgID, len(results))
 		setRecommendationNoStore(c)
@@ -629,10 +629,14 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		for i := range results {
 			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, results[i].MonitoringEndTime)
 		}
-		response := buildContainerListMeta(c, page, opts)
-		response.Data = interfaceSlice
+		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
-			attachTagWarningsToCollection(response, c, xrhid.Identity.OrgID, len(results))
+			orgID = xrhid.Identity.OrgID
+		}
+		response := buildContainerListMeta(c, orgID, page, opts)
+		response.Data = interfaceSlice
+		if orgID != "" {
+			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
@@ -814,10 +818,14 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		for i := range results {
 			interfaceSlice[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
 		}
-		response := buildNamespaceListMeta(c, page, opts)
-		response.Data = interfaceSlice
+		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
-			attachTagWarningsToCollection(response, c, xrhid.Identity.OrgID, len(results))
+			orgID = xrhid.Identity.OrgID
+		}
+		response := buildNamespaceListMeta(c, orgID, page, opts)
+		response.Data = interfaceSlice
+		if orgID != "" {
+			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)

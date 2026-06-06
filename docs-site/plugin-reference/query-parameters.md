@@ -232,6 +232,31 @@ cost model (typically `USD`).
 Plugin breakdown totals inside `by_plugin` remain numeric floats for aggregation;
 the fleet-level total uses the structured object above.
 
+## CSV export (`format=csv`)
+
+Append `format=csv` (or send `Accept: text/csv`) on list endpoints to download a flat
+attachment instead of JSON. Nested JSON (recommendation terms, engines, savings objects)
+is flattened into columns. Savings use `*_value` and `*_units` column pairs. List fields
+(nodes, namespaces) use semicolon separators. Notification codes use bracketed lists
+(e.g. `[5,8]`).
+
+| Endpoint | CSV filename prefix | Notes |
+|----------|---------------------|-------|
+| `GET .../recommendations/openshift` | `recommendations-` | One row per container × term × engine; includes current/variation metrics and `notification_codes` |
+| `GET .../recommendations/openshift/namespaces` | `namespace-recommendations-` | One row per namespace × term × engine |
+| `GET .../recommendations/openshift/nodes` | `node-utilization-` | One row per node × term × engine |
+| `GET .../recommendations/openshift/pvcs` | `pvc-recommendations-` | One row per PVC recommendation |
+| `GET .../recommendations/openshift/gpu/mig` | `gpu-mig-recommendations-` | One row per MIG profile recommendation |
+| `GET .../recommendations/openshift/gpu/timeslicing` | `gpu-timeslicing-` | One row per node GPU time-slicing recommendation |
+| `GET .../recommendations/openshift/quota` | `quota-recommendations-` | Flattened quota hard/used/recommended/utilization/capacity columns |
+| `GET .../recommendations/openshift/cluster-quota` | `cluster-quota-recommendations-` | Flattened CRQ metrics and `namespaces` list |
+| `GET .../recommendations/openshift/vm` | `vm-recommendations-` | VM sizing, metadata, GPU, disk projection, savings |
+| `GET .../recommendations/openshift/machinesets` | `machineset-recommendations-` | Aggregated MachineSet rows for the active `term` filter |
+
+CSV exports use `RecordLimitCSV` (see [Configuration](../configuration.md)) instead of the
+default JSON page size. Nested recommendation maps (all three terms) are expanded into
+separate rows rather than embedded JSON cells.
+
 ## Authentication
 
 All endpoints require the `x-rh-identity` header. On-prem deployments may adopt **mTLS**

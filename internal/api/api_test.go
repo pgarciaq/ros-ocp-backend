@@ -861,16 +861,16 @@ func TestGenerateNativeCSV(t *testing.T) {
 	assert.Equal(t, "", costRow[13])  // estimated_monthly_waste_currency
 	assert.Equal(t, "", costRow[14])  // currency (nil savings)
 	assert.Equal(t, "active", costRow[15]) // idle_state default
-	assert.Equal(t, "short_term", costRow[18])
-	assert.Equal(t, "cost", costRow[19])
-	assert.Equal(t, "100", costRow[20])
-	assert.Equal(t, "200", costRow[21])
-	assert.Equal(t, "2048", costRow[22])
-	assert.Equal(t, "4096", costRow[23])
+	assert.Equal(t, "short_term", costRow[20])
+	assert.Equal(t, "cost", costRow[21])
+	assert.Equal(t, "100", costRow[22])
+	assert.Equal(t, "200", costRow[23])
+	assert.Equal(t, "2048", costRow[24])
+	assert.Equal(t, "4096", costRow[25])
 
 	perfRow := records[2]
-	assert.Equal(t, "performance", perfRow[19])
-	assert.Equal(t, "300", perfRow[20])
+	assert.Equal(t, "performance", perfRow[21])
+	assert.Equal(t, "300", perfRow[22])
 }
 
 func TestGenerateNativeCSV_Empty(t *testing.T) {

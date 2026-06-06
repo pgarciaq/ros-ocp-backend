@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -56,9 +59,26 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		offset = o
 	}
 
+	cursor, hasCursor, cursorErr := applyMachineSetCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		offset = 0
+	}
+
 	term, termErr := resolveMachineSetTerm(c)
 	if termErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
+	}
+	if responseFormat == listoptions.ResponseFormatCSV {
+		limit = config.GetConfig().RecordLimitCSV
+		offset = 0
 	}
 
 	pool := database.GetPool()
@@ -84,7 +104,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.MachineSetRecommendationListResponse{
-			Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset},
+			Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 			Data:  []model.MachineSetRecommendation{},
 			Links: buildMachineSetLinks(c.Request(), 0, limit, offset),
 		})
@@ -105,7 +125,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		if !found {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, model.MachineSetRecommendationListResponse{
-				Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset},
+				Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 				Data:  []model.MachineSetRecommendation{},
 				Links: buildMachineSetLinks(c.Request(), 0, limit, offset),
 			})
@@ -153,7 +173,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		if len(allowedNodes) == 0 {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, model.MachineSetRecommendationListResponse{
-				Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset},
+				Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 				Data:  []model.MachineSetRecommendation{},
 				Links: buildMachineSetLinks(c.Request(), 0, limit, offset),
 			})
@@ -187,10 +207,34 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		})
 	}
 
-	pageSQL := groupedSQL + `
-		ORDER BY total_savings_cents DESC, nr.machineset_name ASC
-		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(append([]interface{}{}, args...), limit, offset)
+	pageSQL := `SELECT machineset_name, cluster_uuid, cluster_alias, instance_type, current_node_count,
+		excess_nodes, total_savings_cents, avg_cpu, avg_memory, nodes
+		FROM (` + groupedSQL + `) ms_groups`
+
+	if hasCursor {
+		seekSQL, seekArgs, nextIdx, seekErr := machineSetSeekSQL(cursor, len(cursor.SortValue) > 0, argIdx)
+		if seekErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
+		}
+		pageSQL += ` WHERE ` + seekSQL
+		args = append(args, seekArgs...)
+		argIdx = nextIdx
+	}
+
+	pageSQL += ` ORDER BY total_savings_cents DESC, machineset_name ASC, cluster_uuid ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	pageSQL += ` LIMIT $` + strconv.Itoa(argIdx)
+	pageArgs := append(append([]interface{}{}, args...), pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		pageSQL += ` OFFSET $` + strconv.Itoa(argIdx)
+		pageArgs = append(pageArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, pageSQL, pageArgs...)
 	if err != nil {
@@ -222,7 +266,10 @@ func GetMachineSetRecommendations(c echo.Context) error {
 			hlog.Warnf("GetMachineSetRecommendations: scan failed (skipping row): %v", scanErr)
 			continue
 		}
-		rec.TotalMonthlySavingsUSD = money.CentsToUSD(totalCents)
+		if totalCents > 0 {
+			currency := resolveListCurrencyFromRequest(c, orgID)
+			rec.TotalMonthlySavings = money.FormatCentsToSavingsPtr(&totalCents, currency)
+		}
 		rec.RecommendedNodeCount = rec.CurrentNodeCount - rec.ExcessNodes
 		if rec.RecommendedNodeCount < 0 {
 			rec.RecommendedNodeCount = 0
@@ -245,11 +292,32 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		data = []model.MachineSetRecommendation{}
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		nextCursor = machineSetNextCursor(last, machineSetSortCents(last))
+		data = data[:limit]
+	}
+
+	links := buildMachineSetLinks(c.Request(), totalCount, limit, offset)
+	applyModelKeysetNextLink(&links, c.Request(), limit, hasNext, nextCursor)
+
 	setRecommendationNoStore(c)
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("machineset-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateMachineSetRecCSV(ctx, w, term, data)
+		})
+	}
 	return c.JSON(http.StatusOK, model.MachineSetRecommendationListResponse{
-		Meta:  model.MachineSetRecommendationMeta{Count: totalCount, Limit: limit, Offset: offset},
+		Meta: model.MachineSetRecommendationMeta{
+			Count: totalCount, Limit: limit, Offset: offset,
+			HasNext: hasNext, NextCursor: nextCursor,
+			Currency: resolveListCurrencyFromRequest(c, orgID),
+		},
 		Data:  data,
-		Links: buildMachineSetLinks(c.Request(), totalCount, limit, offset),
+		Links: links,
 	})
 }
 

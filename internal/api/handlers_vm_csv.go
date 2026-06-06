@@ -13,11 +13,15 @@ import (
 
 var vmRecCSVHeader = []string{
 	"vm_name", "namespace", "cluster_uuid", "guest_os",
-	"current_vcpu", "current_memory_gib", "recommended_vcpu", "recommended_memory_gib",
-	"recommended_instance_type", "confidence", "term", "engine",
+	"current_vcpu", "current_memory_gib", "current_disk_gib",
+	"recommended_vcpu", "recommended_memory_gib", "recommended_disk_gib",
+	"recommended_instance_type", "recommended_series", "confidence", "term", "engine",
 	"is_idle", "is_abandoned", "is_oversized", "is_network_bound",
-	"guest_agent_detected", "savings_value", "savings_units",
-	"last_recommended_at",
+	"is_power_off_candidate", "is_redundant_placement", "has_shared_storage", "numa_oversized",
+	"guest_agent_detected",
+	"gpu_count", "gpu_model", "gpu_classification", "recommended_gpu_action",
+	"io_pattern", "days_until_full", "growth_gib_per_day", "recommended_expand_gib",
+	"savings_value", "savings_units", "notification_codes", "last_recommended_at",
 }
 
 func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendationItem) error {
@@ -35,6 +39,25 @@ func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendation
 		if item.Recommended.InstanceType != nil {
 			instType = *item.Recommended.InstanceType
 		}
+		series := ""
+		if item.Recommended.Series != nil {
+			series = *item.Recommended.Series
+		}
+		currentDisk := ""
+		if item.Current.DiskGiB != nil {
+			currentDisk = strconv.FormatInt(int64(*item.Current.DiskGiB), 10)
+		}
+		recommendedDisk := ""
+		if item.Recommended.DiskGiB != nil {
+			recommendedDisk = strconv.FormatInt(int64(*item.Recommended.DiskGiB), 10)
+		}
+		gpuCount, gpuModel, gpuClass, gpuAction := "", "", "", ""
+		if item.GPU != nil {
+			gpuCount = strconv.FormatInt(int64(item.GPU.GPUCount), 10)
+			gpuModel = item.GPU.GPUModel
+			gpuClass = item.GPU.GPUClassification
+			gpuAction = item.GPU.RecommendedGPUAction
+		}
 		record := []string{
 			item.VMName,
 			item.Namespace,
@@ -42,9 +65,12 @@ func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendation
 			item.GuestOS,
 			strconv.FormatInt(int64(item.Current.VCPU), 10),
 			strconv.FormatInt(int64(item.Current.MemoryGiB), 10),
+			currentDisk,
 			strconv.FormatInt(int64(item.Recommended.VCPU), 10),
 			strconv.FormatInt(int64(item.Recommended.MemoryGiB), 10),
+			recommendedDisk,
 			instType,
+			series,
 			item.Metadata.Confidence,
 			item.Metadata.Term,
 			item.Metadata.Engine,
@@ -52,9 +78,22 @@ func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendation
 			strconv.FormatBool(item.Metadata.IsAbandoned),
 			strconv.FormatBool(item.Metadata.IsOversized),
 			strconv.FormatBool(item.Metadata.IsNetworkBound),
+			strconv.FormatBool(item.Metadata.IsPowerOffCandidate),
+			strconv.FormatBool(item.Metadata.IsRedundantPlacement),
+			strconv.FormatBool(item.Metadata.HasSharedStorage),
+			strconv.FormatBool(item.Metadata.NUMAOversized),
 			strconv.FormatBool(item.Metadata.GuestAgentDetected),
+			gpuCount,
+			gpuModel,
+			gpuClass,
+			gpuAction,
+			item.IOProfile.Pattern,
+			optionalInt32CSV(item.DiskProjection.DaysUntilFull),
+			optionalFloat64CSV(item.DiskProjection.GrowthGiBPerDay),
+			optionalInt32CSV(item.DiskProjection.RecommendedExpandGiB),
 			savingsVal,
 			savingsUnits,
+			vmNotificationsCSV(item.Notifications),
 			item.LastRecommendedAt,
 		}
 		if err := writer.Write(record); err != nil {
