@@ -4,6 +4,12 @@ ALTER TABLE pvc_recommendation_sets
     DROP CONSTRAINT IF EXISTS pvc_recommendation_sets_org_id_cluster_uuid_namespace_persist_key;
 
 ALTER TABLE pvc_recommendation_sets
+    DROP CONSTRAINT IF EXISTS pvc_recommendation_sets_org_id_cluster_uuid_namespace_persi_key;
+
+ALTER TABLE pvc_recommendation_sets
+    DROP CONSTRAINT IF EXISTS pvc_recommendation_sets_org_id_cluster_uuid_namespace_persist_k;
+
+ALTER TABLE pvc_recommendation_sets
     ADD COLUMN IF NOT EXISTS term TEXT NOT NULL DEFAULT 'medium';
 
 ALTER TABLE pvc_recommendation_sets

@@ -116,7 +116,7 @@ func ReadOldRecommendations(
 		if i > 0 {
 			sb.WriteString(",")
 		}
-		base := 3 + i*3
+		base := 4 + i*3
 		fmt.Fprintf(&sb, "($%d,$%d,$%d)", base, base+1, base+2)
 		args = append(args, k.Namespace, k.Workload, k.ContainerName)
 	}
