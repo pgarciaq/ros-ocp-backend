@@ -84,13 +84,13 @@ Bracket syntax is preferred; see [API query parameters](../plugin-reference/quer
 GET /snapshots/summary
 ```
 
-Rolls up metrics per namespace (default `group_by=namespace`) or per cluster (`group_by=cluster`).
+Rolls up metrics per namespace (default; use `group_by=project` or `group_by=namespace`) or per cluster (`group_by=cluster`).
 Use reclaimable fields to prioritize namespaces with orphaned, stale, never-restored, or
 redundant snapshots (excludes **active** and **managed** from reclaimable totals).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `group_by` | enum | `namespace` (default) or `cluster` |
+| `group_by` | enum | `project` or `namespace` (default per-namespace rollup) or `cluster` |
 | `filter[cluster]` | UUID | Filter by cluster |
 | `filter[project]` | string | Filter by namespace |
 | `filter[recommendation_type]` | enum | Same values as list |
@@ -165,9 +165,10 @@ estimated_monthly_cost_usd = (restore_size_bytes / 1073741824) * cost_per_gib_mo
 **Reclaimable** totals on the summary endpoint sum **orphaned**, **stale**, **never_restored**,
 and **redundant** rows only (not **managed** or **active**).
 
-When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, dollar fields are omitted from list rows; classifications
-still apply. Fleet rollup: `GET /recommendations/openshift/savings-summary` includes snapshot
-plugin totals when enabled.
+When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, ingestion skips Masu effective-rates lookup; dollar
+fields still use the per-org Settings API value, env-locked rate, or compiled `$0.05`/GiB default.
+Classifications always apply. Fleet rollup: `GET /recommendations/openshift/savings-summary`
+includes snapshot plugin totals from persisted `estimated_monthly_cost_usd` values.
 
 Rate resolution: per-org Settings API → `ROS_SNAPSHOT_COST_PER_GIB_MONTH` env → Koku
 `storage_gb_usage_per_month` from effective rates (when Masu is available) → compiled default

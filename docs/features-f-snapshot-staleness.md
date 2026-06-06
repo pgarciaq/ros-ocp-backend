@@ -483,7 +483,7 @@ by reclaimable storage and holding cost.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `group_by` | enum | `namespace` (default) or `cluster` |
+| `group_by` | enum | `project` or `namespace` (default per-namespace rollup) or `cluster` |
 | `filter[cluster]` | UUID | Filter by cluster |
 | `filter[project]` | string | Filter by namespace |
 | `filter[recommendation_type]` | enum | Same values as list |

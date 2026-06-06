@@ -11,7 +11,7 @@ Package: [`internal/plugins/snapshot`](../../internal/plugins/snapshot/)
 | Name | `snapshot` |
 | Phase | 1 (Produce) |
 | Priority | 40 |
-| CSV types | `snapshot-inventory` (`ocp_snapshot_inventory.csv`) |
+| CSV types | `snapshot-inventory` (`ocp_snapshot_inventory.csv`, `ros-openshift-snapshot-inventory-*.csv`, `cm-openshift-snapshot-inventory-*.csv`) |
 | Retention tables | (none — inventory reconciled per ingest) |
 
 ## Traits
@@ -79,7 +79,7 @@ See [Notification codes — Snapshots](../architecture/notification-codes.md#sna
 
 Snapshot savings use a flat **$0.05/GiB/month** approximation (`cost_per_gib_month_usd`, default aligned with `ROS_SNAPSHOT_COST_PER_GIB_MONTH`). Reclaimable totals appear on list rows and the namespace/cluster **summary** endpoint. Enhanced billing-derived costs are planned in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
-When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, dollar fields are omitted (recommendations still classify).
+`estimated_monthly_cost_usd` uses the resolved `cost_per_gib_month_usd` rate (Settings API, env, or compiled default). When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, Masu effective-rates lookup is skipped during ingestion; dollar fields still use the static or per-org configured rate.
 
 Snapshot totals are included in fleet `GET /recommendations/openshift/savings-summary` when the plugin is enabled and cost data exists. Snapshot's fleet contribution is **term-independent** — all snapshot recommendations are summed regardless of the `term` query parameter.
 

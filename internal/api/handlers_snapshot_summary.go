@@ -291,7 +291,8 @@ func resolveSnapshotSummaryGroupBy(c echo.Context) (string, error) {
 	if queryparams.GroupByField(c, "cluster") {
 		return snapshotSummaryGroupCluster, nil
 	}
-	if queryparams.GroupByField(c, "project") {
+	// project is canonical; namespace is a backward-compatible alias (Koku uses "project" for OpenShift namespaces).
+	if queryparams.GroupByField(c, "project") || queryparams.GroupByField(c, "namespace") {
 		return snapshotSummaryGroupProject, nil
 	}
 	for _, raw := range c.QueryParams()["group_by"] {
@@ -299,19 +300,19 @@ func resolveSnapshotSummaryGroupBy(c echo.Context) (string, error) {
 			switch strings.TrimSpace(part) {
 			case "cluster":
 				return snapshotSummaryGroupCluster, nil
-			case "project":
+			case "project", "namespace":
 				return snapshotSummaryGroupProject, nil
 			case "":
 			default:
-				return "", fmt.Errorf("invalid group_by; must be project or cluster")
+				return "", fmt.Errorf("invalid group_by; must be project, namespace, or cluster")
 			}
 		}
 	}
 	for key := range c.QueryParams() {
 		if strings.HasPrefix(key, queryparams.GroupByPrefix) && strings.HasSuffix(key, "]") {
 			field := strings.TrimSpace(key[len(queryparams.GroupByPrefix) : len(key)-1])
-			if field != "project" && field != "cluster" {
-				return "", fmt.Errorf("invalid group_by; must be project or cluster")
+			if field != "project" && field != "namespace" && field != "cluster" {
+				return "", fmt.Errorf("invalid group_by; must be project, namespace, or cluster")
 			}
 		}
 	}

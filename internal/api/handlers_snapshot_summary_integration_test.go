@@ -362,6 +362,33 @@ func TestGetSnapshotSummary_RBAC_FiltersByCluster(t *testing.T) {
 	assert.Equal(t, clusterAllowed, resp.Data[0].ClusterUUID)
 }
 
+func TestGetSnapshotSummary_GroupByNamespaceAlias(t *testing.T) {
+	orgID := "org-snap-sum-ns-alias-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-ns-alias", "orphaned", 10)
+
+	app := setupSnapshotSummaryEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?group_by=namespace",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotSummaryListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	assert.Equal(t, "apps", resp.Data[0].Namespace)
+	assert.Equal(t, 1, resp.Data[0].SnapshotCount)
+}
+
 func TestGetSnapshotSummary_GroupByCluster(t *testing.T) {
 	orgID := "org-snap-sum-grp-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)

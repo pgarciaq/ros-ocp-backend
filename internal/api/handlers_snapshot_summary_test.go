@@ -53,6 +53,12 @@ func TestResolveSnapshotSummaryGroupBy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, snapshotSummaryGroupProject, groupBy)
 
+	req = httptest.NewRequest(http.MethodGet, "/snapshots/summary?group_by=namespace", nil)
+	c = e.NewContext(req, httptest.NewRecorder())
+	groupBy, err = resolveSnapshotSummaryGroupBy(c)
+	require.NoError(t, err)
+	assert.Equal(t, snapshotSummaryGroupProject, groupBy)
+
 	req = httptest.NewRequest(http.MethodGet, "/snapshots/summary?group_by=invalid", nil)
 	c = e.NewContext(req, httptest.NewRecorder())
 	_, err = resolveSnapshotSummaryGroupBy(c)
