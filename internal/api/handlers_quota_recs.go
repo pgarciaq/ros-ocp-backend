@@ -51,11 +51,13 @@ type QuotaCapacityFreedResponse struct {
 // QuotaRecommendationListResponse wraps quota recommendation list output.
 type QuotaRecommendationListResponse struct {
 	Meta struct {
-		Count    int      `json:"count"`
-		Limit    int      `json:"limit"`
-		Offset   int      `json:"offset"`
-		Currency string   `json:"currency"`
-		Warnings []string `json:"warnings,omitempty"`
+		Count      int      `json:"count"`
+		Limit      int      `json:"limit"`
+		Offset     int      `json:"offset"`
+		HasNext    bool     `json:"has_next"`
+		NextCursor string   `json:"next_cursor,omitempty"`
+		Currency   string   `json:"currency"`
+		Warnings   []string `json:"warnings,omitempty"`
 	} `json:"meta"`
 	Links Links                           `json:"links"`
 	Data  []QuotaRecommendationListItem   `json:"data"`
@@ -107,6 +109,14 @@ func GetQuotaRecommendations(c echo.Context) error {
 		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
 			offset = v
 		}
+	}
+
+	cursor, hasCursor, cursorErr := applyQuotaCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		offset = 0
 	}
 
 	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
@@ -180,7 +190,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 	}
 
 	if groupByCluster || groupByProject {
-		return getQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, groupByCluster, clusterFilter, responseFormat)
+		return getQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, groupByCluster, clusterFilter, responseFormat, cursor, hasCursor)
 	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, quotaAllowedOrderBy, quotaDefaultOrderBy, quotaDefaultOrderHow)
@@ -213,9 +223,33 @@ func GetQuotaRecommendations(c echo.Context) error {
 			storage_freed_bytes, pods_freed,
 			estimated_savings_cents, currency, notification_codes, last_observed_at
 		FROM quota_recommendation_sets
-		WHERE org_id = $1` + filterSQL +
-		` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(args, limit, offset)
+		WHERE org_id = $1` + filterSQL
+
+	if hasCursor {
+		seekSQL, seekArgs, nextIdx, seekErr := quotaSeekSQL(orderCol, orderDir, cursor, len(cursor.SortValue) > 0, argIdx)
+		if seekErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
+		}
+		query += ` AND ` + seekSQL
+		args = append(args, seekArgs...)
+		argIdx = nextIdx
+	}
+
+	query += ` ORDER BY ` + quotaOrderNulls(orderCol, orderDir) +
+		`, cluster_uuid ASC, namespace ASC, quota_name ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += ` LIMIT $` + strconv.Itoa(argIdx)
+	pageArgs := append(args, pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		query += ` OFFSET $` + strconv.Itoa(argIdx)
+		pageArgs = append(pageArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
@@ -238,12 +272,24 @@ func GetQuotaRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch quota recommendations"})
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		nextCursor = quotaNextCursor(orderCol, last, quotaSortValue(last, orderCol))
+		data = data[:limit]
+	}
+
 	resp := QuotaRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.HasNext = hasNext
+	resp.Meta.NextCursor = nextCursor
 	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []QuotaRecommendationListItem{}
@@ -267,12 +313,12 @@ func getQuotaRecommendationsGrouped(
 	groupByCluster bool,
 	clusterFilter string,
 	responseFormat string,
+	cursor QuotaCursor,
+	hasCursor bool,
 ) error {
 	groupCol := "namespace"
-	orderCol := "namespace"
 	if groupByCluster {
 		groupCol = "cluster_uuid::text"
-		orderCol = "cluster_uuid::text"
 	}
 
 	countQuery := `SELECT COUNT(DISTINCT ` + groupCol + `) FROM quota_recommendation_sets WHERE org_id = $1` + filterSQL
@@ -282,22 +328,43 @@ func getQuotaRecommendationsGrouped(
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to count quota recommendation groups"})
 	}
 
-	query := `
+	innerQuery := `
 		SELECT ` + groupCol + ` AS group_key,
 			COUNT(*) AS row_count,
-			COALESCE(SUM(cpu_freed_millicores), 0),
-			COALESCE(SUM(memory_freed_bytes), 0),
-			COALESCE(SUM(storage_freed_bytes), 0),
-			COALESCE(SUM(pods_freed), 0),
-			COALESCE(SUM(estimated_savings_cents), 0),
-			MAX(currency),
-			MAX(last_observed_at)
+			COALESCE(SUM(cpu_freed_millicores), 0) AS cpu_freed,
+			COALESCE(SUM(memory_freed_bytes), 0) AS mem_freed,
+			COALESCE(SUM(storage_freed_bytes), 0) AS storage_freed,
+			COALESCE(SUM(pods_freed), 0) AS pods_freed,
+			COALESCE(SUM(estimated_savings_cents), 0) AS savings_cents,
+			MAX(currency) AS currency,
+			MAX(last_observed_at) AS last_observed_at
 		FROM quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL + `
-		GROUP BY ` + groupCol + `
-		ORDER BY ` + orderCol + `
-		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(args, limit, offset)
+		GROUP BY ` + groupCol
+
+	query := `SELECT group_key, row_count, cpu_freed, mem_freed, storage_freed, pods_freed, savings_cents, currency, last_observed_at
+		FROM (` + innerQuery + `) quota_groups`
+
+	if hasCursor && cursor.GroupKey != "" {
+		query += ` WHERE group_key > $` + strconv.Itoa(argIdx)
+		args = append(args, cursor.GroupKey)
+		argIdx++
+	}
+
+	query += ` ORDER BY group_key ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += ` LIMIT $` + strconv.Itoa(argIdx)
+	pageArgs := append(args, pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		query += ` OFFSET $` + strconv.Itoa(argIdx)
+		pageArgs = append(pageArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
@@ -332,12 +399,28 @@ func getQuotaRecommendationsGrouped(
 		data = append(data, item)
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		if groupByCluster {
+			nextCursor = quotaGroupNextCursor(last.ClusterUUID)
+		} else {
+			nextCursor = quotaGroupNextCursor(last.Namespace)
+		}
+		data = data[:limit]
+	}
+
 	resp := QuotaRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.HasNext = hasNext
+	resp.Meta.NextCursor = nextCursor
 	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []QuotaRecommendationListItem{}

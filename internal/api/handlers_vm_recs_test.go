@@ -171,7 +171,7 @@ func TestVMRecSavingsObject(t *testing.T) {
 	got := vmRecSavingsObject(&amt, &cur)
 	require.NotNil(t, got)
 	assert.Equal(t, "EUR", got.Units)
-	assert.Equal(t, "123.450000", got.Value)
+	assert.Equal(t, "123.45", got.Value)
 }
 
 func TestParseVMRecBoolFilter_InvalidValue(t *testing.T) {

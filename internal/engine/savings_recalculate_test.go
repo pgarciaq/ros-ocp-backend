@@ -335,7 +335,7 @@ func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 		ClusterQuotaName:   "crq1",
 		RecommendationType: QuotaRecTypeTighten,
 		CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 2000},
-		SavingsDollarsMonthly: 1,
+		EstimatedSavingsCents: 100,
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
@@ -343,5 +343,5 @@ func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd)
-	require.Greater(t, recs[0].SavingsDollarsMonthly, 1)
+	require.Greater(t, recs[0].EstimatedSavingsCents, int64(100))
 }

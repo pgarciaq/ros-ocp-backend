@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"strings"
 
+	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -34,4 +37,13 @@ func resolveClusterCurrency(ctx context.Context, orgID, clusterUUID string) stri
 		return costdata.DefaultCurrency
 	}
 	return fetchClusterCurrency(ctx, orgID, clusterUUID)
+}
+
+// resolveListCurrencyFromRequest returns ISO currency for list endpoints using cluster filter when set.
+func resolveListCurrencyFromRequest(c echo.Context, orgID string) string {
+	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	if clusterFilter == "" {
+		clusterFilter = strings.TrimSpace(c.QueryParam("cluster_uuid"))
+	}
+	return resolveClusterCurrency(c.Request().Context(), orgID, clusterFilter)
 }

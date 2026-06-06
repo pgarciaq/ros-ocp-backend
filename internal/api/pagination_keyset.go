@@ -60,11 +60,23 @@ func applyKeysetNextLink(links *Links, req *http.Request, limit int, hasNext boo
 	if !hasNext || nextCursor == "" {
 		return
 	}
+	links.Next = keysetNextURL(req, limit, nextCursor)
+}
+
+// applyModelKeysetNextLink updates model.PaginationLinks.next for keyset pagination.
+func applyModelKeysetNextLink(links *model.PaginationLinks, req *http.Request, limit int, hasNext bool, nextCursor string) {
+	if !hasNext || nextCursor == "" {
+		return
+	}
+	links.Next = keysetNextURL(req, limit, nextCursor)
+}
+
+func keysetNextURL(req *http.Request, limit int, nextCursor string) string {
 	q := req.URL.Query()
 	q.Set("limit", strconv.Itoa(limit))
 	q.Del("offset")
 	q.Set("after", nextCursor)
-	links.Next = fmt.Sprintf("%s?%s", req.URL.Path, q.Encode())
+	return fmt.Sprintf("%s?%s", req.URL.Path, q.Encode())
 }
 
 func decodeCursorSortValue(raw []byte) (interface{}, error) {

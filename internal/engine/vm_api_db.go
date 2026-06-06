@@ -34,6 +34,8 @@ type VMRecommendationFilters struct {
 	OrderDesc          bool
 	Limit              int
 	Offset             int
+	UseKeyset          bool
+	KeysetCursor       VMListCursor
 	TagFilters         []model.TagFilter
 }
 
@@ -89,10 +91,12 @@ func ListVMRecommendations(
 	if offset < 0 {
 		offset = 0
 	}
+	if filters.UseKeyset {
+		offset = 0
+	}
 
-	listArgs := append(append([]any{}, args...), limit, offset)
-	argLimit := len(args) + 1
-	argOffset := len(args) + 2
+	listArgs := append([]any{}, args...)
+	argIdx := len(args) + 1
 
 	query := `
 		SELECT
@@ -113,8 +117,33 @@ func ListVMRecommendations(
 			gpu_utilization_avg_bp,
 			savings_amount, savings_currency,
 			last_recommended_at, created_at, updated_at
-		FROM vm_recommendations` + where +
-		fmt.Sprintf(` ORDER BY %s %s LIMIT $%d OFFSET $%d`, orderCol, orderHow, argLimit, argOffset)
+		FROM vm_recommendations` + where
+
+	if filters.UseKeyset {
+		seekSQL, seekArgs, nextIdx, seekErr := vmKeysetSeekClause(orderCol, orderHow, filters.KeysetCursor, argIdx)
+		if seekErr != nil {
+			return nil, 0, seekErr
+		}
+		query += ` AND ` + seekSQL
+		listArgs = append(listArgs, seekArgs...)
+		argIdx = nextIdx
+	}
+
+	query += ` ORDER BY ` + vmOrderNulls(orderCol, orderHow) +
+		`, cluster_uuid ASC, vm_name ASC, namespace ASC, term ASC, engine ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += fmt.Sprintf(` LIMIT $%d`, argIdx)
+	listArgs = append(listArgs, pageLimit)
+	argIdx++
+
+	if !filters.UseKeyset {
+		query += fmt.Sprintf(` OFFSET $%d`, argIdx)
+		listArgs = append(listArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, query, listArgs...)
 	if err != nil {

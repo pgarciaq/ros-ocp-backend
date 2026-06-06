@@ -16,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
@@ -31,10 +32,10 @@ type ClusterQuotaResourceValues struct {
 
 // ClusterQuotaUtilizationPercents exposes utilization as human-readable percentages.
 type ClusterQuotaUtilizationPercents struct {
-	CPURequestPercent     *int `json:"cpu_request_percent,omitempty"`
-	MemoryRequestPercent  *int `json:"memory_request_percent,omitempty"`
-	StorageRequestPercent *int `json:"storage_request_percent,omitempty"`
-	PodsPercent           *int `json:"pods_percent,omitempty"`
+	CPURequestPercent     *float64 `json:"cpu_request_percent,omitempty"`
+	MemoryRequestPercent  *float64 `json:"memory_request_percent,omitempty"`
+	StorageRequestPercent *float64 `json:"storage_request_percent,omitempty"`
+	PodsPercent           *float64 `json:"pods_percent,omitempty"`
 }
 
 // ClusterQuotaCapacityFreedResponse is capacity that could be reclaimed by tightening CRQ.
@@ -45,18 +46,15 @@ type ClusterQuotaCapacityFreedResponse struct {
 	PodsFreed           int64 `json:"pods_freed,omitempty"`
 }
 
-// ClusterQuotaSavingsMonthly is estimated monthly savings in whole dollars.
-type ClusterQuotaSavingsMonthly struct {
-	Value int `json:"value"`
-	Units string `json:"units"`
-}
-
 // ClusterQuotaRecommendationListResponse wraps cluster-quota list output.
 type ClusterQuotaRecommendationListResponse struct {
 	Meta struct {
-		Count  int `json:"count"`
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Count      int    `json:"count"`
+		Limit      int    `json:"limit"`
+		Offset     int    `json:"offset"`
+		HasNext    bool   `json:"has_next"`
+		NextCursor string `json:"next_cursor,omitempty"`
+		Currency   string `json:"currency"`
 	} `json:"meta"`
 	Links Links                                `json:"links"`
 	Data  []ClusterQuotaRecommendationListItem `json:"data"`
@@ -73,7 +71,7 @@ type ClusterQuotaRecommendationListItem struct {
 	QuotaRecommended     *ClusterQuotaResourceValues      `json:"quota_recommended,omitempty"`
 	Utilization          *ClusterQuotaUtilizationPercents `json:"utilization,omitempty"`
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *ClusterQuotaSavingsMonthly                  `json:"estimated_savings,omitempty"`
+	EstimatedSavings     *money.SavingsObject                         `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	Namespaces           []string                                     `json:"namespaces,omitempty"`
 	Count                int                                          `json:"count,omitempty"`
@@ -107,6 +105,14 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
 			offset = v
 		}
+	}
+
+	cursor, hasCursor, cursorErr := applyClusterQuotaCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		offset = 0
 	}
 
 	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
@@ -178,7 +184,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	if groupByCluster {
-		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, filterSQL, args, argIdx, limit, offset, responseFormat)
+		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, responseFormat, cursor, hasCursor)
 	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
@@ -207,11 +213,35 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes, namespaces
+			estimated_savings_cents, notification_codes, namespaces
 		FROM cluster_quota_recommendation_sets
-		WHERE org_id = $1` + filterSQL +
-		` ORDER BY ` + orderCol + ` ` + orderDir + ` LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(args, limit, offset)
+		WHERE org_id = $1` + filterSQL
+
+	if hasCursor {
+		seekSQL, seekArgs, nextIdx, seekErr := clusterQuotaSeekSQL(orderCol, orderDir, cursor, len(cursor.SortValue) > 0, argIdx)
+		if seekErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
+		}
+		query += ` AND ` + seekSQL
+		args = append(args, seekArgs...)
+		argIdx = nextIdx
+	}
+
+	query += ` ORDER BY ` + clusterQuotaOrderNulls(orderCol, orderDir) +
+		`, cluster_uuid ASC, cluster_quota_name ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += ` LIMIT $` + strconv.Itoa(argIdx)
+	pageArgs := append(args, pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		query += ` OFFSET $` + strconv.Itoa(argIdx)
+		pageArgs = append(pageArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
@@ -220,9 +250,10 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
+	currency := resolveListCurrencyFromRequest(c, orgID)
 	var data []ClusterQuotaRecommendationListItem
 	for rows.Next() {
-		item, scanErr := scanClusterQuotaListItem(rows)
+		item, scanErr := scanClusterQuotaListItem(rows, currency)
 		if scanErr != nil {
 			hlog.Errorf("scanning cluster-quota recommendation: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read cluster-quota recommendations"})
@@ -234,11 +265,24 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch cluster-quota recommendations"})
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		nextCursor = clusterQuotaNextCursor(orderCol, last, clusterQuotaSortValue(last, orderCol))
+		data = data[:limit]
+	}
+
 	resp := ClusterQuotaRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.HasNext = hasNext
+	resp.Meta.NextCursor = nextCursor
+	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []ClusterQuotaRecommendationListItem{}
@@ -256,10 +300,13 @@ func getClusterQuotaRecommendationsGrouped(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	hlog *logrus.Entry,
+	orgID string,
 	filterSQL string,
 	args []any,
 	argIdx, limit, offset int,
 	responseFormat string,
+	cursor ClusterQuotaCursor,
+	hasCursor bool,
 ) error {
 	countQuery := `SELECT COUNT(DISTINCT cluster_uuid::text) FROM cluster_quota_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
@@ -268,20 +315,41 @@ func getClusterQuotaRecommendationsGrouped(
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to count cluster-quota recommendation groups"})
 	}
 
-	query := `
+	innerQuery := `
 		SELECT cluster_uuid::text AS group_key,
 			COUNT(*) AS row_count,
-			COALESCE(SUM(savings_cpu_cores_freed), 0),
-			COALESCE(SUM(savings_memory_bytes_freed), 0),
-			COALESCE(SUM(savings_storage_bytes_freed), 0),
-			COALESCE(SUM(savings_pods_freed), 0),
-			COALESCE(SUM(savings_dollars_monthly), 0)
+			COALESCE(SUM(savings_cpu_cores_freed), 0) AS cpu_cores_freed,
+			COALESCE(SUM(savings_memory_bytes_freed), 0) AS mem_freed,
+			COALESCE(SUM(savings_storage_bytes_freed), 0) AS storage_freed,
+			COALESCE(SUM(savings_pods_freed), 0) AS pods_freed,
+			COALESCE(SUM(estimated_savings_cents), 0) AS savings_cents
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1` + filterSQL + `
-		GROUP BY cluster_uuid::text
-		ORDER BY cluster_uuid::text
-		LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(args, limit, offset)
+		GROUP BY cluster_uuid::text`
+
+	query := `SELECT group_key, row_count, cpu_cores_freed, mem_freed, storage_freed, pods_freed, savings_cents
+		FROM (` + innerQuery + `) crq_groups`
+
+	if hasCursor && cursor.GroupKey != "" {
+		query += ` WHERE group_key > $` + strconv.Itoa(argIdx)
+		args = append(args, cursor.GroupKey)
+		argIdx++
+	}
+
+	query += ` ORDER BY group_key ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += ` LIMIT $` + strconv.Itoa(argIdx)
+	pageArgs := append(args, pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		query += ` OFFSET $` + strconv.Itoa(argIdx)
+		pageArgs = append(pageArgs, offset)
+	}
 
 	rows, err := pool.Query(ctx, query, pageArgs...)
 	if err != nil {
@@ -294,8 +362,8 @@ func getClusterQuotaRecommendationsGrouped(
 	for rows.Next() {
 		var groupKey string
 		var count int
-		var cpuCoresFreed, memFreed, storageFreed, podsFreed, savingsDollars int64
-		if err := rows.Scan(&groupKey, &count, &cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savingsDollars); err != nil {
+		var cpuCoresFreed, memFreed, storageFreed, podsFreed, savingsCents int64
+		if err := rows.Scan(&groupKey, &count, &cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savingsCents); err != nil {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read cluster-quota recommendation groups"})
 		}
 		item := ClusterQuotaRecommendationListItem{
@@ -310,20 +378,31 @@ func getClusterQuotaRecommendationsGrouped(
 				PodsFreed:           podsFreed,
 			}
 		}
-		if savingsDollars > 0 {
-			item.EstimatedSavings = &ClusterQuotaSavingsMonthly{
-				Value: int(savingsDollars),
-				Units: "USD",
-			}
+		if savingsCents > 0 {
+			currency := resolveListCurrencyFromRequest(c, orgID)
+			item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
+	}
+
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		nextCursor = clusterQuotaGroupNextCursor(last.ClusterUUID)
+		data = data[:limit]
 	}
 
 	resp := ClusterQuotaRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.HasNext = hasNext
+	resp.Meta.NextCursor = nextCursor
+	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []ClusterQuotaRecommendationListItem{}
@@ -340,7 +419,7 @@ type clusterQuotaRowScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommendationListItem, error) {
+func scanClusterQuotaListItem(rows clusterQuotaRowScanner, currency string) (ClusterQuotaRecommendationListItem, error) {
 	var item ClusterQuotaRecommendationListItem
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
 	var cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed sql.NullInt64
@@ -380,10 +459,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner) (ClusterQuotaRecommen
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
-		item.EstimatedSavings = &ClusterQuotaSavingsMonthly{
-			Value: int(savings.Int64),
-			Units: "USD",
-		}
+		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
@@ -423,22 +499,18 @@ func clusterQuotaUtilFromNull(cpuReq, memReq, storage, pods sql.NullInt64) *Clus
 	if !cpuReq.Valid && !memReq.Valid && !storage.Valid && !pods.Valid {
 		return nil
 	}
-	out := &ClusterQuotaUtilizationPercents{}
-	if cpuReq.Valid {
-		v := int(cpuReq.Int64)
-		out.CPURequestPercent = &v
+	return &ClusterQuotaUtilizationPercents{
+		CPURequestPercent:     intPercentToFloat64Ptr(cpuReq),
+		MemoryRequestPercent:  intPercentToFloat64Ptr(memReq),
+		StorageRequestPercent: intPercentToFloat64Ptr(storage),
+		PodsPercent:           intPercentToFloat64Ptr(pods),
 	}
-	if memReq.Valid {
-		v := int(memReq.Int64)
-		out.MemoryRequestPercent = &v
+}
+
+func intPercentToFloat64Ptr(v sql.NullInt64) *float64 {
+	if !v.Valid {
+		return nil
 	}
-	if storage.Valid {
-		v := int(storage.Int64)
-		out.StorageRequestPercent = &v
-	}
-	if pods.Valid {
-		v := int(pods.Int64)
-		out.PodsPercent = &v
-	}
-	return out
+	pct := float64(v.Int64)
+	return &pct
 }

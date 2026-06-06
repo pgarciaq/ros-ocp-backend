@@ -46,7 +46,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 	QuotaRecommended     *ClusterQuotaResourceValues                 `json:"quota_recommended,omitempty"`
 	Utilization          *ClusterQuotaUtilizationPercents            `json:"utilization,omitempty"`
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse          `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *ClusterQuotaSavingsMonthly                 `json:"estimated_savings,omitempty"`
+	EstimatedSavings     *money.SavingsObject                       `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	Namespaces           []string                                      `json:"namespaces,omitempty"`
 	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
@@ -244,12 +244,13 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes, namespaces
+			estimated_savings_cents, notification_codes, namespaces
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND cluster_quota_name = $3`
 
+	currency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
 	row := pool.QueryRow(ctx, query, orgID, id.clusterUUID, id.clusterQuotaName)
-	item, codes, err := scanClusterQuotaDetailRow(row)
+	item, codes, err := scanClusterQuotaDetailRow(row, currency)
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
@@ -344,7 +345,7 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	return item, codes, headroomBP, nil
 }
 
-func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecommendationListItem, []int16, error) {
+func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (ClusterQuotaRecommendationListItem, []int16, error) {
 	var item ClusterQuotaRecommendationListItem
 	var codes []int16
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
@@ -384,10 +385,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner) (ClusterQuotaRecomme
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
-		item.EstimatedSavings = &ClusterQuotaSavingsMonthly{
-			Value: int(savings.Int64),
-			Units: "USD",
-		}
+		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
 	}
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
 	return item, codes, nil

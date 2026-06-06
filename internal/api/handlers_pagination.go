@@ -82,7 +82,7 @@ func namespaceNextCursor(page model.NativeNamespaceListPage) string {
 	})
 }
 
-func buildContainerListMeta(c echo.Context, page model.NativeListPage, opts listoptions.ListOptions) *Collection {
+func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListPage, opts listoptions.ListOptions) *Collection {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -93,10 +93,12 @@ func buildContainerListMeta(c echo.Context, page model.NativeListPage, opts list
 		nextCursor = containerNextCursor(page)
 	}
 
-	return PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp := PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+	return resp
 }
 
-func buildNamespaceListMeta(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection {
+func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -107,7 +109,9 @@ func buildNamespaceListMeta(c echo.Context, page model.NativeNamespaceListPage, 
 		nextCursor = namespaceNextCursor(page)
 	}
 
-	return PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp := PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+	return resp
 }
 
 func applyPVCCursor(c echo.Context) (PVCCursor, bool, error) {
@@ -194,4 +198,52 @@ func gpuMIGNextCursor(last model.GPUMIGRecommendationEntry, sortValue interface{
 		Term:        last.Term,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
 	})
+}
+
+func applyQuotaCursor(c echo.Context) (QuotaCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return QuotaCursor{}, false, nil
+	}
+	cursor, err := DecodeQuotaCursor(after)
+	if err != nil {
+		return QuotaCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyClusterQuotaCursor(c echo.Context) (ClusterQuotaCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return ClusterQuotaCursor{}, false, nil
+	}
+	cursor, err := DecodeClusterQuotaCursor(after)
+	if err != nil {
+		return ClusterQuotaCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyVMCursor(c echo.Context) (VMCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return VMCursor{}, false, nil
+	}
+	cursor, err := DecodeVMCursor(after)
+	if err != nil {
+		return VMCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}
+
+func applyMachineSetCursor(c echo.Context) (MachineSetCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return MachineSetCursor{}, false, nil
+	}
+	cursor, err := DecodeMachineSetCursor(after)
+	if err != nil {
+		return MachineSetCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
 }

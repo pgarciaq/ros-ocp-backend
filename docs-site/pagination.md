@@ -13,12 +13,11 @@ in the future.
 
 | Strategy | When to use | Endpoints |
 |----------|-------------|-----------|
-| **Keyset (`after`)** | Large or growing org-wide lists | Container, namespace, PVC, GPU (MIG/time-slicing), node utilization |
-| **Offset (`offset` / `limit`)** | Small or bounded result sets (backward compatible) | History, quota, VM, quality, snapshots, fleet summaries |
+| **Keyset (`after`)** | Default for all list endpoints; stable latency at depth | Container, namespace, PVC, GPU, nodes, quota, cluster-quota, VM, machinesets |
+| **Offset (`offset` / `limit`)** | Legacy page-number UX; small bounded sets | History, quality, snapshots (and keyset-capable lists for backward compat) |
 
-**Container** and **namespace** lists were the first keyset endpoints (thousands+ rows).
-**PVC**, **GPU MIG**, **GPU time-slicing**, and **node utilization** now also support
-`after` cursors with offset fallback for existing clients.
+All primary recommendation list endpoints support **`after`** cursors with **`offset`**
+fallback. Prefer keyset for infinite scroll and deep pages.
 
 ---
 
@@ -36,8 +35,12 @@ in the future.
 | `GET` | `/recommendations/openshift/nodes` | Node CPU/memory utilization (tie-break: cluster + node) |
 | `GET` | `/recommendations/openshift/gpu/timeslicing` | GPU time-slicing (tie-break: cluster + node + GPU model) |
 | `GET` | `/recommendations/openshift/gpu/mig` | GPU MIG profiles (tie-break: cluster + namespace + container + GPU model) |
+| `GET` | `/recommendations/openshift/quota` | Namespace ResourceQuota (tie-break: cluster + namespace + quota name) |
+| `GET` | `/recommendations/openshift/cluster-quota` | ClusterResourceQuota (tie-break: cluster + CRQ name) |
+| `GET` | `/recommendations/openshift/vm` | VM sizing (tie-break: cluster + vm + namespace + term + engine) |
+| `GET` | `/recommendations/openshift/machinesets` | MachineSet aggregation (tie-break: machineset name + cluster) |
 
-List responses paginate by **distinct container or namespace**, not by raw database rows.
+Container and namespace list responses paginate by **distinct container or namespace**, not by raw database rows.
 Each list item can still expose multiple **term × engine** nested objects.
 
 ### API contract
@@ -91,6 +94,10 @@ Cursors encode the last row’s sort position so the database can seek with
 | Nodes | `estimated_monthly_savings` DESC (configurable) | `cluster_uuid`, `node` |
 | GPU time-slicing | `node_name` (configurable) | `cluster_uuid`, `node_name`, `gpu_model` |
 | GPU MIG | `cluster_uuid` (configurable) | `cluster_uuid`, `namespace`, `container`, `gpu_model` |
+| Quota | `namespace` ASC (configurable) | `cluster_uuid`, `namespace`, `quota_name` |
+| Cluster-quota | `cluster_quota_name` (configurable) | `cluster_uuid`, `cluster_quota_name` |
+| VM | `vm_name` ASC (configurable) | `cluster_uuid`, `vm_name`, `namespace`, `term`, `engine` |
+| Machinesets | `total_savings_cents` DESC | `machineset_name`, `cluster_uuid` |
 
 The `ORDER BY` used for a request must stay **stable** across pages (same filters and
 sort). Changing filters or sort between pages can skip or duplicate rows.
@@ -135,7 +142,7 @@ UI migrates to cursor mode. Deep offset pages on very large orgs will be slower 
 | Cursor encode/decode | [`internal/api/cursor.go`](../internal/api/cursor.go) |
 | Handler wiring | [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go) |
 | SQL keyset filters | [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go), [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go) |
-| Indexes | Migration `000078_keyset_pagination_indexes` |
+| Indexes | Migrations `000078`, `000134_keyset_quota_vm_machineset_indexes` |
 | Large-org key table | `org_container_keys` — migration `000081`; see [query-performance.md](query-performance.md) |
 
 ---
@@ -158,9 +165,10 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 | `GET /recommendations/openshift/gpu/mig` | **Keyset + offset** | Tens–low hundreds org-wide | SQL keyset on digest keys, then MIG engine per page |
 | `GET /recommendations/openshift/gpu/timeslicing` | **Keyset + offset** | Same as MIG | SQL triple pagination + per-triple engine |
 | `GET /recommendations/openshift/nodes` | **Keyset + offset** | Nodes per cluster (tens–low hundreds) | SQL keyset on grouped node keys |
-| `GET /recommendations/openshift/quota` | Offset only | ResourceQuotas per namespace | Small cardinality |
-| `GET /recommendations/openshift/cluster-quota` | Offset only | ClusterResourceQuotas per cluster | Small cardinality |
-| `GET /recommendations/openshift/vm` | Offset only | Moderate (VMs per org) | Not yet at scale requiring keyset |
+| `GET /recommendations/openshift/quota` | **Keyset + offset** | ResourceQuotas per namespace | SQL keyset on `quota_recommendation_sets` |
+| `GET /recommendations/openshift/cluster-quota` | **Keyset + offset** | ClusterResourceQuotas per cluster | SQL keyset on `cluster_quota_recommendation_sets` |
+| `GET /recommendations/openshift/vm` | **Keyset + offset** | VMs per org | SQL keyset on `vm_recommendations` |
+| `GET /recommendations/openshift/machinesets` | **Keyset + offset** | MachineSet groups | SQL keyset on aggregated node rows |
 | `GET /recommendations/openshift/snapshots` | Offset only | Bounded by retention/settings | Staleness lists are cluster-scoped and limited |
 | `GET /recommendations/openshift/quality` | Offset only | One row per active container cycle | Similar bounds to history/quality pipelines |
 | `GET /recommendations/openshift/savings-summary` | N/A (aggregate) | Single rollup | Not a row list |
@@ -200,18 +208,8 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 - **Why:** Cardinality is bounded by **nodes per cluster** (often tens on SNO, low hundreds
   on large clusters). Node sizing rows are computed at read time from digests.
 
-#### ResourceQuota and ClusterResourceQuota
-
-- **Paths:** `GET /recommendations/openshift/quota`, `GET /recommendations/openshift/cluster-quota`
-- **Why:** One (or few) quota objects per namespace or tenant pool — inherently small lists.
-
-#### VM recommendations
-
-- **Path:** `GET /recommendations/openshift/vm`
-- **Why:** Moderate cardinality today (VM count per org). Keyset can be added if VM fleets
-  routinely exceed **thousands** of guests per org without heavy filtering.
-
 ---
+
 
 ## When offset-only endpoints would need keyset
 
@@ -257,5 +255,5 @@ change in product scope (e.g. retaining years of per-snapshot history in one que
 | Client must follow `next_cursor` | `links.*` URLs work out of the box |
 | Cannot jump to arbitrary page number | Fine for small or bounded sets |
 
-Both modes coexist on container and namespace lists: new clients should prefer **`after`**;
+Both modes coexist on all keyset-capable lists: new clients should prefer **`after`**;
 legacy clients can keep **`offset`** until migrated.

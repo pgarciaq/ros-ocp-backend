@@ -44,7 +44,7 @@ func TestFleetSavingsSummary_GroupByTag_BracketSyntax(t *testing.T) {
 	for _, row := range body.Data {
 		if row.TagValue != nil && *row.TagValue == "production" {
 			prodFound = true
-			assert.Equal(t, "100.000000", row.EstimatedMonthlySavings.Value)
+			assert.Equal(t, "100.00", row.EstimatedMonthlySavings.Value)
 		}
 	}
 	assert.True(t, prodFound, "expected production tag group with container savings")
@@ -122,7 +122,7 @@ func TestFleetSavingsSummary_GroupByTag_ClusterAndNamespaceFilters(t *testing.T)
 	require.Len(t, body.Data, 1)
 	require.NotNil(t, body.Data[0].TagValue)
 	assert.Equal(t, "production", *body.Data[0].TagValue)
-	assert.Equal(t, "100.000000", body.Data[0].EstimatedMonthlySavings.Value)
+	assert.Equal(t, "100.00", body.Data[0].EstimatedMonthlySavings.Value)
 }
 
 func TestFleetSavingsSummary_GroupByTag_FlatSyntax(t *testing.T) {

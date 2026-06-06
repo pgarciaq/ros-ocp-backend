@@ -222,7 +222,7 @@ func TestSavingsSummary_CurrencyMismatch_MultiCluster(t *testing.T) {
 	expectedCurrency := currencyByCluster[firstCluster]
 	assert.Equal(t, expectedCurrency, summary.Currency,
 		"multi-cluster fleet summary should pick the first cluster's currency when clusters disagree (no crash)")
-	assert.Equal(t, "300.000000", summary.EstimatedMonthlySavings.Value,
+	assert.Equal(t, "300.00", summary.EstimatedMonthlySavings.Value,
 		"savings amounts should still aggregate numerically across mixed-currency clusters")
 }
 

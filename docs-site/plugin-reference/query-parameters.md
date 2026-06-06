@@ -217,7 +217,7 @@ cost model (typically `USD`).
 ```json
 {
   "estimated_monthly_savings": {
-    "value": "12.340000",
+    "value": "12.34",
     "units": "USD"
   }
 }

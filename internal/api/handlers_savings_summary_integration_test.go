@@ -138,7 +138,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	dev, ok := byUUID[savingsSummaryCluster2]
 	require.True(t, ok)
 	assert.Equal(t, "dev-1", dev.ClusterAlias)
-	assert.Equal(t, "0.000000", dev.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "0.00", dev.EstimatedMonthlySavings.Value)
 	assert.False(t, dev.HasCostData)
 }
 
@@ -337,7 +337,7 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &summary)
 	require.NoError(t, err)
 	assert.InDelta(t, 200.00, summary.ByPlugin.Node, 0.01)
-	assert.Equal(t, "200.000000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "200.00", summary.EstimatedMonthlySavings.Value)
 }
 
 func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
@@ -392,11 +392,11 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 	}
 
 	shortSummary := callSummary("short")
-	assert.Equal(t, "100.000000", shortSummary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "100.00", shortSummary.EstimatedMonthlySavings.Value)
 	assert.InDelta(t, 100.00, shortSummary.ByPlugin.Node, 0.01)
 
 	mediumSummary := callSummary("medium")
-	assert.Equal(t, "500.000000", mediumSummary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "500.00", mediumSummary.EstimatedMonthlySavings.Value)
 	assert.InDelta(t, 500.00, mediumSummary.ByPlugin.Node, 0.01)
 
 	defaultSummary := callSummary("")
@@ -404,7 +404,7 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 	assert.InDelta(t, mediumSummary.ByPlugin.Node, defaultSummary.ByPlugin.Node, 0.01)
 
 	longSummary := callSummary("long")
-	assert.Equal(t, "900.000000", longSummary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "900.00", longSummary.EstimatedMonthlySavings.Value)
 	assert.NotEqual(t, shortSummary.EstimatedMonthlySavings.Value, longSummary.EstimatedMonthlySavings.Value)
 }
 
@@ -458,9 +458,9 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 	costSummary := callSummary("cost")
 	perfSummary := callSummary("performance")
 
-	assert.Equal(t, "500.000000", costSummary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "500.00", costSummary.EstimatedMonthlySavings.Value)
 	assert.InDelta(t, 500.00, costSummary.ByPlugin.Node, 0.01)
-	assert.Equal(t, "900.000000", perfSummary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "900.00", perfSummary.EstimatedMonthlySavings.Value)
 	assert.InDelta(t, 900.00, perfSummary.ByPlugin.Node, 0.01)
 	assert.NotEqual(t, costSummary.EstimatedMonthlySavings.Value, perfSummary.EstimatedMonthlySavings.Value)
 }

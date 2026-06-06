@@ -16,7 +16,7 @@ node × GPU model × term when the engine emits a recommendation.
 | Table | `node_recommendations` (type `gpu_time_slicing`) |
 
 Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]=cost|performance`.
-Savings: list (`total_node_savings_usd`, `savings_per_gpu_usd`) and container detail
+Savings: list (`total_node_savings`, `savings_per_gpu` as `SavingsObject`; currency in `meta.currency`) and container detail
 (`estimated_monthly_timeslicing_savings` on `gpu.{term}`).
 
 ## Flow
@@ -38,7 +38,7 @@ Savings: list (`total_node_savings_usd`, `savings_per_gpu_usd`) and container de
 | `term` | — | Term window filter |
 
 `order_by`: `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`,
-`total_node_savings` (maps to `total_node_savings_usd`). `order_how`: `asc` / `desc`.
+`total_node_savings` (alias: `total_node_savings_usd`). `order_how`: `asc` / `desc`.
 `limit` / `offset` (default 100, max 1000). `format=csv` or `Accept: text/csv`.
 
 No `filter[project]` — node-level scope only.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // ClusterQuotaSnapshot is the latest hard/used per ClusterResourceQuota from digests.
@@ -55,7 +56,7 @@ type ClusterQuotaRec struct {
 	UtilizationStorageRequestPercent *int
 	UtilizationPodsPercent           *int
 	CapacityFreed                    QuotaCapacityFreed
-	SavingsDollarsMonthly            int
+	EstimatedSavingsCents            int64
 	RecommendationType               string
 	RiskLevel                        string
 	NotificationCodes                []int16
@@ -248,7 +249,7 @@ func classifyClusterQuotaRecommendation(
 	return QuotaRecTypeNone, freed
 }
 
-// ApplyClusterQuotaSavings computes estimated monthly savings in whole dollars.
+// ApplyClusterQuotaSavings computes estimated monthly savings in cents.
 // CPU and memory use hourly rates; storage uses storage_gb_request_per_month (or usage fallback).
 // Pods have no cost-model metric — capacity_freed.pods is reported but not monetized.
 func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.ClusterCostData) {
@@ -270,7 +271,7 @@ func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.Cluster
 		if savings < 0 {
 			savings = 0
 		}
-		recs[i].SavingsDollarsMonthly = int(math.Round(savings))
+		recs[i].EstimatedSavingsCents = money.USDToCents(math.Round(savings*100) / 100)
 	}
 }
 
@@ -407,7 +408,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				utilization_storage_request_percent, utilization_pods_percent,
 				savings_cpu_cores_freed, savings_memory_bytes_freed,
 				savings_storage_bytes_freed, savings_pods_freed,
-				savings_dollars_monthly,
+				estimated_savings_cents,
 				notification_codes, updated_at
 			) VALUES (
 				$1, $2::uuid, $3, $4,
@@ -454,7 +455,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				savings_memory_bytes_freed = EXCLUDED.savings_memory_bytes_freed,
 				savings_storage_bytes_freed = EXCLUDED.savings_storage_bytes_freed,
 				savings_pods_freed = EXCLUDED.savings_pods_freed,
-				savings_dollars_monthly = EXCLUDED.savings_dollars_monthly,
+				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				notification_codes = EXCLUDED.notification_codes,
 				updated_at = NOW()`,
 			r.OrgID, r.ClusterUUID, r.ClusterQuotaName, nullableString(r.Namespaces),
@@ -469,7 +470,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 			r.UtilizationStorageRequestPercent, r.UtilizationPodsPercent,
 			nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes),
 			nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
-			nullableInt64(int64(r.SavingsDollarsMonthly)),
+			nullableInt64(r.EstimatedSavingsCents),
 			r.NotificationCodes,
 		)
 		if err != nil {

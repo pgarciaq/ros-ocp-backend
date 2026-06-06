@@ -16,7 +16,7 @@ var quotaAllowedOrderBy = map[string]string{
 var clusterQuotaAllowedOrderBy = map[string]string{
 	"cluster_quota_name":        "cluster_quota_name",
 	"utilization":               `GREATEST(COALESCE(utilization_cpu_request_percent,0), COALESCE(utilization_memory_request_percent,0), COALESCE(utilization_storage_request_percent,0), COALESCE(utilization_pods_percent,0))`,
-	"estimated_monthly_savings": "savings_dollars_monthly",
+	"estimated_monthly_savings": "estimated_savings_cents",
 	"risk_level":                `CASE risk_level WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END`,
 }
 

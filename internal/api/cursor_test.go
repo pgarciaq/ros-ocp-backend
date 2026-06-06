@@ -47,6 +47,38 @@ func TestEncodeDecodeNamespaceCursor(t *testing.T) {
 	assert.Equal(t, original, decoded)
 }
 
+func TestEncodeDecodeQuotaCursor(t *testing.T) {
+	original := QuotaCursor{
+		ClusterUUID: "550e8400-e29b-41d4-a716-446655440000",
+		Namespace:   "openshift-config",
+		QuotaName:   "compute-quota",
+		SortValue:   []byte(`"production"`),
+	}
+	encoded := EncodeQuotaCursor(original)
+	require.NotEmpty(t, encoded)
+
+	decoded, err := DecodeQuotaCursor(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, original, decoded)
+}
+
+func TestEncodeDecodeVMCursor(t *testing.T) {
+	original := VMCursor{
+		ClusterUUID: "550e8400-e29b-41d4-a716-446655440000",
+		VMName:      "rhel9-vm",
+		Namespace:   "vms",
+		Term:        "medium_term",
+		Engine:      "cost",
+		SortValue:   []byte(`100`),
+	}
+	encoded := EncodeVMCursor(original)
+	require.NotEmpty(t, encoded)
+
+	decoded, err := DecodeVMCursor(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, original, decoded)
+}
+
 func TestContainerNextCursor(t *testing.T) {
 	anchor := &model.ContainerPaginationAnchor{
 		Namespace: "b", Workload: "w2", ContainerName: "c2",

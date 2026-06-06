@@ -126,7 +126,7 @@ func TestApplyClusterQuotaSavings_Storage(t *testing.T) {
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd)
-	assert.Equal(t, 50, recs[0].SavingsDollarsMonthly)
+	assert.Equal(t, int64(5000), recs[0].EstimatedSavingsCents)
 }
 
 func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
@@ -140,7 +140,7 @@ func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd)
-	assert.Equal(t, 0, recs[0].SavingsDollarsMonthly)
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 	assert.Equal(t, int64(20), recs[0].CapacityFreed.PodsFreed)
 }
 

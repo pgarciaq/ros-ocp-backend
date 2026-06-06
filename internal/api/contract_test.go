@@ -163,7 +163,7 @@ func assertSavingsObjectShape(t *testing.T, raw interface{}) {
 	assert.Equal(t, "USD", obj["units"])
 	value, ok := obj["value"].(string)
 	require.True(t, ok)
-	assert.Regexp(t, `^\d+\.\d{6}$`, value)
+	assert.Regexp(t, `^\d+\.\d{2}$`, value)
 }
 
 func assertIdleRecommendationShape(t *testing.T, raw interface{}) {
@@ -190,6 +190,7 @@ func TestContractResponseShape_ContainerList(t *testing.T) {
 
 	meta, ok := body["meta"].(map[string]interface{})
 	require.True(t, ok)
+	assert.Equal(t, "USD", meta["currency"])
 	assert.Equal(t, float64(5), meta["limit"])
 	if offset, ok := meta["offset"]; ok {
 		assert.Equal(t, float64(0), offset)
@@ -262,7 +263,7 @@ func TestContractResponseShape_Savings(t *testing.T) {
 	assert.Equal(t, "USD", savings["units"])
 	value, ok := savings["value"].(string)
 	require.True(t, ok)
-	assert.Regexp(t, `^-?\d+\.\d{6}$`, value)
+	assert.Regexp(t, `^-?\d+\.\d{2}$`, value)
 }
 
 func TestContractResponseShape_History(t *testing.T) {
@@ -290,7 +291,7 @@ func TestContractResponseShape_History(t *testing.T) {
 		assert.Equal(t, "USD", savings["units"])
 		value, ok := savings["value"].(string)
 		require.True(t, ok)
-		assert.Regexp(t, `^-?\d+\.\d{6}$`, value)
+		assert.Regexp(t, `^-?\d+\.\d{2}$`, value)
 	}
 }
 

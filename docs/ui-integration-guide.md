@@ -174,8 +174,7 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
       "gpu_classification": "underutilized",
       "recommended_gpu_profile": "1g.5gb",
       "gpu_confidence": 0.8,
-      "estimated_monthly_gpu_savings": { "value": "45.000000", "units": "USD" },
-      "currency": "USD"
+      "estimated_monthly_gpu_savings": { "value": "45.00", "units": "USD" }
     }
   }
 }
@@ -419,7 +418,7 @@ One object per node with nested terms and engines:
               "recommended_cpu_cores": 8.0,
               "recommended_memory_gib": 64.0,
               "node_count_reduction": 1,
-              "estimated_monthly_savings": { "value": "500.000000", "units": "USD" },
+              "estimated_monthly_savings": { "value": "500.00", "units": "USD" },
               "notifications": { },
               "updated_at": "2026-05-20T10:00:00Z"
             },
@@ -478,12 +477,12 @@ GET /recommendations/openshift/gpu/timeslicing
 | `node_name` | Filter by node |
 | `gpu_model` | Filter by GPU model |
 | `term` | Term filter |
-| `order_by` | `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`, `total_node_savings_usd` |
+| `order_by` | `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`, `total_node_savings` |
 | `offset`, `limit` | Pagination |
 
 ```json
 {
-  "meta": { "count": 2, "limit": 20, "offset": 0, "total_savings_usd": 1200.0, "currency": "USD" },
+  "meta": { "count": 2, "limit": 20, "offset": 0, "currency": "USD", "total_savings": { "value": "1200.00", "units": "USD" } },
   "data": [
     {
       "node_name": "gpu-node-1",
@@ -492,8 +491,8 @@ GET /recommendations/openshift/gpu/timeslicing
       "recommendation_type": "gpu_timeslicing",
       "gpu_model": "NVIDIA-A100",
       "recommended_replicas": 4,
-      "savings_per_gpu_usd": 150.0,
-      "total_node_savings_usd": 450.0,
+      "savings_per_gpu": { "value": "150.00", "units": "USD" },
+      "total_node_savings": { "value": "450.00", "units": "USD" },
       "confidence": 0.65,
       "candidate_containers": [ { "namespace": "ml", "workload": "train", "container": "worker", "classification": "underutilized" } ],
       "impacted_containers": [ ],
@@ -527,11 +526,11 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Show a node-level view with GPU utilization **ProgressBar** per GPU model.
 - Display `recommended_replicas` prominently as the primary action metric.
 - Compare current vs recommended time-slicing configuration in a side-by-side layout.
-- Show `total_node_savings_usd` and `savings_per_gpu_usd` with currency from `meta.currency`.
+- Show `total_node_savings` and `savings_per_gpu` (`SavingsObject`); currency is in `meta.currency`.
 - Expand `candidate_containers` and `impacted_containers` in a nested **Table** with classification badges.
 - Link from container GPU fields (`time_slicing_node`, `time_slicing_replicas`) to the filtered time-slicing list.
 - Show confidence as a badge; surface notification code 36 with link to this view from container rows.
-- Sort by `total_node_savings_usd` descending by default to prioritize highest-impact nodes.
+- Sort by `total_node_savings` descending by default to prioritize highest-impact nodes.
 
 ---
 

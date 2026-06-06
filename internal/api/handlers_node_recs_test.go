@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func TestFilterNodeRecs_NoFilters(t *testing.T) {
@@ -182,14 +183,14 @@ func TestSortNodeRecs_ByConfidenceDesc(t *testing.T) {
 }
 
 func TestSortNodeRecs_ByTotalSavingsNilSafe(t *testing.T) {
-	s1 := float32(100)
-	s2 := float32(300)
+	s1 := money.FormatUSDToSavings(100, "USD")
+	s2 := money.FormatUSDToSavings(300, "USD")
 	recs := []model.NodeGPURecommendation{
-		{NodeName: "a", TotalNodeSavingsUSD: &s1},
-		{NodeName: "b", TotalNodeSavingsUSD: nil},
-		{NodeName: "c", TotalNodeSavingsUSD: &s2},
+		{NodeName: "a", TotalNodeSavings: &s1},
+		{NodeName: "b", TotalNodeSavings: nil},
+		{NodeName: "c", TotalNodeSavings: &s2},
 	}
-	sortNodeRecs(recs, "total_node_savings_usd", listoptions.OrderDesc)
+	sortNodeRecs(recs, "total_node_savings", listoptions.OrderDesc)
 	assert.Equal(t, "c", recs[0].NodeName)
 	assert.Equal(t, "a", recs[1].NodeName)
 	assert.Equal(t, "b", recs[2].NodeName)

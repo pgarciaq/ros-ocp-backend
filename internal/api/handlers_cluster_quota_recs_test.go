@@ -80,7 +80,7 @@ func insertClusterQuotaRecommendationWithOpts(
 			utilization_cpu_request_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes
+			estimated_savings_cents, notification_codes
 		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, $4, $5, $6, $7,
 			2, 1073741824, 5368709120, 5, $8, $9)
 		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name) DO UPDATE SET
@@ -88,7 +88,7 @@ func insertClusterQuotaRecommendationWithOpts(
 			risk_level = EXCLUDED.risk_level,
 			namespaces = EXCLUDED.namespaces,
 			utilization_cpu_request_percent = EXCLUDED.utilization_cpu_request_percent,
-			savings_dollars_monthly = EXCLUDED.savings_dollars_monthly,
+			estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 			notification_codes = EXCLUDED.notification_codes`,
 		orgID, clusterUUID, crqName,
 		opts.recommendationType, opts.riskLevel, opts.namespaces, opts.cpuUtilPercent,
@@ -121,12 +121,12 @@ func insertClusterQuotaRecommendation(t *testing.T, orgID, clusterUUID, crqName 
 			recommendation_type, risk_level,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly
+			estimated_savings_cents
 		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, 'tighten', 'low',
 			2, 1073741824, 5368709120, 5, $4)
 		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name) DO UPDATE SET
 			recommendation_type = EXCLUDED.recommendation_type,
-			savings_dollars_monthly = EXCLUDED.savings_dollars_monthly`,
+			estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
 		orgID, clusterUUID, crqName, savingsDollars,
 	)
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestGetClusterQuotaRecommendations_WithData_Returns200(t *testing.T) {
 	orgID := "org-crq-data-" + uuid.New().String()[:8]
 	clusterUUID := "550e8400-e29b-41d4-a716-446655440001"
 	e := setupClusterQuotaRecommendationsHandler(t, orgID)
-	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "team-quota", 42)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "team-quota", 4200)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/cluster-quota", nil)
 	rec := httptest.NewRecorder()
@@ -193,7 +193,9 @@ func TestGetClusterQuotaRecommendations_WithData_Returns200(t *testing.T) {
 	assert.Equal(t, "team-quota", resp.Data[0].ClusterQuotaName)
 	assert.Equal(t, "tighten", resp.Data[0].RecommendationType)
 	require.NotNil(t, resp.Data[0].EstimatedSavings)
-	assert.Equal(t, 42, resp.Data[0].EstimatedSavings.Value)
+	assert.Equal(t, "42.00", resp.Data[0].EstimatedSavings.Value)
+	assert.Equal(t, "USD", resp.Data[0].EstimatedSavings.Units)
+	assert.Equal(t, "USD", resp.Meta.Currency)
 }
 
 func TestGetClusterQuotaRecommendations_GroupByCluster(t *testing.T) {
@@ -201,9 +203,9 @@ func TestGetClusterQuotaRecommendations_GroupByCluster(t *testing.T) {
 	clusterA := "550e8400-e29b-41d4-a716-446655440010"
 	clusterB := "550e8400-e29b-41d4-a716-446655440011"
 	e := setupClusterQuotaRecommendationsHandler(t, orgID)
-	insertClusterQuotaRecommendation(t, orgID, clusterA, "crq-a1", 10)
-	insertClusterQuotaRecommendation(t, orgID, clusterA, "crq-a2", 20)
-	insertClusterQuotaRecommendation(t, orgID, clusterB, "crq-b1", 5)
+	insertClusterQuotaRecommendation(t, orgID, clusterA, "crq-a1", 1000)
+	insertClusterQuotaRecommendation(t, orgID, clusterA, "crq-a2", 2000)
+	insertClusterQuotaRecommendation(t, orgID, clusterB, "crq-b1", 500)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/cluster-quota?group_by[cluster]=true", nil)
@@ -225,14 +227,14 @@ func TestGetClusterQuotaRecommendations_GroupByCluster(t *testing.T) {
 	require.Contains(t, byCluster, clusterA)
 	assert.Equal(t, 2, byCluster[clusterA].Count)
 	require.NotNil(t, byCluster[clusterA].EstimatedSavings)
-	assert.Equal(t, 30, byCluster[clusterA].EstimatedSavings.Value)
+	assert.Equal(t, "30.00", byCluster[clusterA].EstimatedSavings.Value)
 	require.NotNil(t, byCluster[clusterA].CapacityFreed)
 	assert.Equal(t, int64(4), byCluster[clusterA].CapacityFreed.CPUCoresFreed)
 
 	require.Contains(t, byCluster, clusterB)
 	assert.Equal(t, 1, byCluster[clusterB].Count)
 	require.NotNil(t, byCluster[clusterB].EstimatedSavings)
-	assert.Equal(t, 5, byCluster[clusterB].EstimatedSavings.Value)
+	assert.Equal(t, "5.00", byCluster[clusterB].EstimatedSavings.Value)
 }
 
 func TestGetClusterQuotaRecommendations_FilterByClusterQuotaName(t *testing.T) {
@@ -537,8 +539,8 @@ func TestGetClusterQuotaRecommendations_OrderByEstimatedMonthlySavingsDesc(t *te
 	orgID := "org-crq-order-savings-" + uuid.New().String()[:8]
 	clusterUUID := "550e8400-e29b-41d4-a716-446655440070"
 	e := setupClusterQuotaRecommendationsHandler(t, orgID)
-	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "small-savings", 10)
-	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "large-savings", 100)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "small-savings", 1000)
+	insertClusterQuotaRecommendation(t, orgID, clusterUUID, "large-savings", 10000)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/cluster-quota?order_by=estimated_monthly_savings&order_how=desc", nil)
@@ -550,7 +552,7 @@ func TestGetClusterQuotaRecommendations_OrderByEstimatedMonthlySavingsDesc(t *te
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 2)
 	assert.Equal(t, "large-savings", resp.Data[0].ClusterQuotaName)
-	assert.Equal(t, 100, resp.Data[0].EstimatedSavings.Value)
+	assert.Equal(t, "100.00", resp.Data[0].EstimatedSavings.Value)
 }
 
 func TestGetClusterQuotaRecommendationDetail_ReturnsHistory(t *testing.T) {

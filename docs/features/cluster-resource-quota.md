@@ -135,7 +135,7 @@ and pagination as the JSON list.
 | `cluster_quota_name` | CRQ object name (default) |
 | `utilization` | Max of CPU/memory/storage/pods utilization percents (object-count excluded) |
 | `risk_level` | `high` → `medium` → `low` → `none` |
-| `estimated_monthly_savings` | `savings_dollars_monthly` (tighten rows only) |
+| `estimated_monthly_savings` | `estimated_savings_cents` (tighten rows only) |
 
 ### Notification codes
 
@@ -184,7 +184,7 @@ POST /api/cost-management/v1/internal/recalculate-savings
 ```
 
 Include `"cluster-quota"` in `recommendation_types` (along with `container`, `node`,
-`pvc`, and/or `quota` as needed). ROS recomputes `savings_dollars_monthly` on existing
+`pvc`, and/or `quota` as needed). ROS recomputes `estimated_savings_cents` on existing
 `tighten` rows without re-ingesting CSV data. Requires `ROS_SAVINGS_RECALCULATION_ENABLED=true`
 (default) and Koku→ROS connectivity (`KOKU_MASU_URL` / `ROS_API_HOST`).
 

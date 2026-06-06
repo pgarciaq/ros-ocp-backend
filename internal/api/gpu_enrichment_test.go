@@ -55,7 +55,7 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 	assert.InDelta(t, float64(0.34), float64(got.SMActiveAvg), 1e-6)
 	assert.InDelta(t, float64(8192), float64(got.FBUsageMaxMiB), 1e-6)
 	require.NotNil(t, got.EstimatedMonthlyGPUSavings)
-	assert.InDelta(t, float64(savings), mustSavingsFloat(t, got.EstimatedMonthlyGPUSavings), 1e-6)
+	assert.Equal(t, "123.45", got.EstimatedMonthlyGPUSavings.Value)
 	assert.Equal(t, []int16{10, 20}, got.Notifications)
 }
 

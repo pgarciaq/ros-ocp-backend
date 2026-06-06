@@ -97,7 +97,8 @@ var NodeRecsAllowedOrderBy = OrderByMap{
 	"gpu_model":            "gpu_model",
 	"recommended_replicas": "recommended_replicas",
 	"confidence":           "confidence",
-	"total_node_savings_usd": "total_node_savings_usd",
+	"total_node_savings":     "total_node_savings",
+	"total_node_savings_usd": "total_node_savings",
 }
 
 // GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (applied in memory after query).

@@ -1057,9 +1057,9 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 	require.NotNil(t, medium.RecommendationEngines.Cost)
 	require.NotNil(t, medium.RecommendationEngines.Performance)
 	require.NotNil(t, medium.RecommendationEngines.Cost.EstimatedMonthlySavings)
-	assert.Equal(t, "450.000000", medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "450.00", medium.RecommendationEngines.Cost.EstimatedMonthlySavings.Value)
 	require.NotNil(t, medium.RecommendationEngines.Performance.EstimatedMonthlySavings)
-	assert.Equal(t, "120.000000", medium.RecommendationEngines.Performance.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "120.00", medium.RecommendationEngines.Performance.EstimatedMonthlySavings.Value)
 	assert.GreaterOrEqual(t, medium.RecommendationEngines.Cost.NodeCountReduction, 0)
 	assert.Equal(t, 1, medium.RecommendationEngines.Cost.NodeCountReduction)
 }

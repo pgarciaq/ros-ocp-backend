@@ -140,6 +140,7 @@ func GetRecommendationQuality(c echo.Context) error {
 			interfaceSlice[i] = rows[i]
 		}
 		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		response.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 		return c.JSON(http.StatusOK, response)
 	}
 }

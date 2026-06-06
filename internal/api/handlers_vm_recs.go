@@ -199,6 +199,14 @@ func GetVMRecommendations(c echo.Context) error {
 		offset = v
 	}
 
+	vmCursor, hasVMCursor, vmCursorErr := applyVMCursor(c)
+	if vmCursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": vmCursorErr.Error()})
+	}
+	if hasVMCursor {
+		offset = 0
+	}
+
 	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
 	if formatErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
@@ -261,7 +269,7 @@ func GetVMRecommendations(c echo.Context) error {
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, VMRecommendationListResponse{
-			Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
+			Meta: Metadata{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 			Data: []VMRecommendationItem{},
 		})
 	}
@@ -278,7 +286,7 @@ func GetVMRecommendations(c echo.Context) error {
 		if !allowed {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, VMRecommendationListResponse{
-				Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
+				Meta: Metadata{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 				Data: []VMRecommendationItem{},
 			})
 		}
@@ -304,6 +312,16 @@ func GetVMRecommendations(c echo.Context) error {
 		OrderDesc:          orderHow == listoptions.OrderDesc,
 		Limit:              limit,
 		Offset:             offset,
+		UseKeyset:          hasVMCursor,
+		KeysetCursor: engine.VMListCursor{
+			ClusterUUID: vmCursor.ClusterUUID,
+			VMName:      vmCursor.VMName,
+			Namespace:   vmCursor.Namespace,
+			Term:        vmCursor.Term,
+			Engine:      vmCursor.Engine,
+			SortValue:   vmCursor.SortValue,
+			HasSort:     len(vmCursor.SortValue) > 0,
+		},
 	}
 	if config.TagsFeatureEnabled() {
 		tagFilters, tagErr := parseTagFiltersFromRequest(c)
@@ -322,6 +340,17 @@ func GetVMRecommendations(c echo.Context) error {
 		})
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(recs) > limit {
+		hasNext = true
+		last := recs[limit-1]
+		nextCursor = vmNextCursor(orderByKey, last)
+		recs = recs[:limit]
+	} else if !hasVMCursor && limit > 0 {
+		hasNext = offset+limit < int(total)
+	}
+
 	data := make([]VMRecommendationItem, 0, len(recs))
 	for _, r := range recs {
 		data = append(data, vmRecToAPIItem(r))
@@ -334,9 +363,16 @@ func GetVMRecommendations(c echo.Context) error {
 		})
 	}
 
+	links := buildLinks(c.Request(), int(total), limit, offset)
+	applyKeysetNextLink(&links, c.Request(), limit, hasNext, nextCursor)
+
 	resp := VMRecommendationListResponse{
-		Meta:  Metadata{Count: int(total), Limit: limit, Offset: offset},
-		Links: buildLinks(c.Request(), int(total), limit, offset),
+		Meta: Metadata{
+			Count: int(total), Limit: limit, Offset: offset,
+			HasNext: hasNext, NextCursor: nextCursor,
+			Currency: resolveListCurrencyFromRequest(c, orgID),
+		},
+		Links: links,
 		Data:  data,
 	}
 	if resp.Data == nil {

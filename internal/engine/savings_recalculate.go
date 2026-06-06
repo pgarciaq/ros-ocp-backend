@@ -545,11 +545,11 @@ func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []C
 	for _, r := range recs {
 		_, err := pool.Exec(ctx, `
 			UPDATE cluster_quota_recommendation_sets
-			SET savings_dollars_monthly = $1,
+			SET estimated_savings_cents = $1,
 			    updated_at = now()
 			WHERE org_id = $2 AND cluster_uuid = $3::uuid
 			  AND cluster_quota_name = $4`,
-			r.SavingsDollarsMonthly,
+			r.EstimatedSavingsCents,
 			r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
 		)
 		if err != nil {

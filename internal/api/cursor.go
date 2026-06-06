@@ -136,3 +136,65 @@ func EncodeGPUMIGCursor(c GPUMIGCursor) string { return encodeCursor(c) }
 
 // DecodeGPUMIGCursor decodes an opaque GPU MIG list cursor.
 func DecodeGPUMIGCursor(s string) (GPUMIGCursor, error) { return decodeCursor[GPUMIGCursor](s) }
+
+// QuotaCursor is the decoded keyset position for quota list pagination.
+type QuotaCursor struct {
+	ClusterUUID string          `json:"cu"`
+	Namespace   string          `json:"ns"`
+	QuotaName   string          `json:"qn"`
+	GroupKey    string          `json:"gk,omitempty"`
+	SortValue   json.RawMessage `json:"sv,omitempty"`
+}
+
+// ClusterQuotaCursor is the decoded keyset position for cluster-quota list pagination.
+type ClusterQuotaCursor struct {
+	ClusterUUID      string          `json:"cu"`
+	ClusterQuotaName string          `json:"cqn"`
+	GroupKey         string          `json:"gk,omitempty"`
+	SortValue        json.RawMessage `json:"sv,omitempty"`
+}
+
+// VMCursor is the decoded keyset position for VM list pagination.
+type VMCursor struct {
+	ClusterUUID string          `json:"cu"`
+	VMName      string          `json:"vm"`
+	Namespace   string          `json:"ns"`
+	Term        string          `json:"term,omitempty"`
+	Engine      string          `json:"eng,omitempty"`
+	SortValue   json.RawMessage `json:"sv,omitempty"`
+}
+
+// MachineSetCursor is the decoded keyset position for MachineSet list pagination.
+type MachineSetCursor struct {
+	MachineSetName string          `json:"ms"`
+	ClusterUUID    string          `json:"cu"`
+	SortValue      json.RawMessage `json:"sv,omitempty"`
+}
+
+// EncodeQuotaCursor returns an opaque base64url cursor for the next quota page.
+func EncodeQuotaCursor(c QuotaCursor) string { return encodeCursor(c) }
+
+// DecodeQuotaCursor decodes an opaque quota list cursor.
+func DecodeQuotaCursor(s string) (QuotaCursor, error) { return decodeCursor[QuotaCursor](s) }
+
+// EncodeClusterQuotaCursor returns an opaque base64url cursor for the next cluster-quota page.
+func EncodeClusterQuotaCursor(c ClusterQuotaCursor) string { return encodeCursor(c) }
+
+// DecodeClusterQuotaCursor decodes an opaque cluster-quota list cursor.
+func DecodeClusterQuotaCursor(s string) (ClusterQuotaCursor, error) {
+	return decodeCursor[ClusterQuotaCursor](s)
+}
+
+// EncodeVMCursor returns an opaque base64url cursor for the next VM page.
+func EncodeVMCursor(c VMCursor) string { return encodeCursor(c) }
+
+// DecodeVMCursor decodes an opaque VM list cursor.
+func DecodeVMCursor(s string) (VMCursor, error) { return decodeCursor[VMCursor](s) }
+
+// EncodeMachineSetCursor returns an opaque base64url cursor for the next MachineSet page.
+func EncodeMachineSetCursor(c MachineSetCursor) string { return encodeCursor(c) }
+
+// DecodeMachineSetCursor decodes an opaque MachineSet list cursor.
+func DecodeMachineSetCursor(s string) (MachineSetCursor, error) {
+	return decodeCursor[MachineSetCursor](s)
+}

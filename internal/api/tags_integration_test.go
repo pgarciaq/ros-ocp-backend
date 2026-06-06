@@ -609,11 +609,11 @@ func TestTagFilters_ClusterQuotaList(t *testing.T) {
 			utilization_cpu_request_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			savings_dollars_monthly, notification_codes
+			estimated_savings_cents, notification_codes
 		) VALUES ($1, $2, 'crq-prod', 100000, 25000, 36000, 'tighten', 'low', $3, 25,
-			2, 1073741824, 5368709120, 5, 42, '{}'),
+			2, 1073741824, 5368709120, 5, 4200, '{}'),
 		       ($1, $2, 'crq-other', 100000, 25000, 36000, 'tighten', 'low', 'other-ns', 25,
-			2, 1073741824, 5368709120, 5, 20, '{}')
+			2, 1073741824, 5368709120, 5, 2000, '{}')
 		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name) DO UPDATE SET
 			namespaces = EXCLUDED.namespaces`,
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)

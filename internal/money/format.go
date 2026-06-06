@@ -8,14 +8,14 @@ type SavingsObject struct {
 	Units string `json:"units"`
 }
 
-// FormatCentsToSavings converts integer cents to a SavingsObject with six decimal places.
+// FormatCentsToSavings converts integer cents to a SavingsObject with two decimal places.
 func FormatCentsToSavings(cents int64, currency string) SavingsObject {
 	if currency == "" {
 		currency = DefaultCurrency
 	}
 	usd := float64(cents) / 100.0
 	return SavingsObject{
-		Value: fmt.Sprintf("%.6f", usd),
+		Value: fmt.Sprintf("%.2f", usd),
 		Units: currency,
 	}
 }
@@ -35,7 +35,7 @@ func FormatUSDToSavings(usd float64, currency string) SavingsObject {
 		currency = DefaultCurrency
 	}
 	return SavingsObject{
-		Value: fmt.Sprintf("%.6f", usd),
+		Value: fmt.Sprintf("%.2f", usd),
 		Units: currency,
 	}
 }

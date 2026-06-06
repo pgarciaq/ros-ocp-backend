@@ -161,7 +161,7 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
   "last_reported": "2026-05-20T12:00:00Z",
   "replicas": { "min": 2, "max": 3, "avg": 2, "desired": 3, "available": 3, "source": "kube_state_metrics" },
   "recommendations": {
-    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
+    "estimated_monthly_savings": { "value": "12.34", "units": "USD" },
     "short_term": {
       "cost": { /* EngineRecommendation */ },
       "performance": { /* EngineRecommendation */ }
@@ -174,7 +174,7 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
       "gpu_classification": "underutilized",
       "recommended_gpu_profile": "1g.5gb",
       "gpu_confidence": 0.8,
-      "estimated_monthly_gpu_savings": { "value": "45.000000", "units": "USD" },
+      "estimated_monthly_gpu_savings": { "value": "45.00", "units": "USD" },
       "currency": "USD"
     }
   }
@@ -195,7 +195,7 @@ Detail endpoints transform flat native fields into the nested structure the exis
       "limits": { }
     },
     "monitoring_end_time": "2026-05-20T12:00:00Z",
-    "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
+    "estimated_monthly_savings": { "value": "12.34", "units": "USD" },
     "recommendation_terms": {
       "medium_term": {
         "duration_in_hours": 168,
@@ -257,7 +257,7 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
+| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.34", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
 | `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
 | GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
@@ -419,7 +419,7 @@ One object per node with nested terms and engines:
               "recommended_cpu_cores": 8.0,
               "recommended_memory_gib": 64.0,
               "node_count_reduction": 1,
-              "estimated_monthly_savings": { "value": "500.000000", "units": "USD" },
+              "estimated_monthly_savings": { "value": "500.00", "units": "USD" },
               "notifications": { },
               "updated_at": "2026-05-20T10:00:00Z"
             },
@@ -479,7 +479,7 @@ GET /recommendations/openshift/gpu/timeslicing
 | `node_name` | Filter by node |
 | `gpu_model` | Filter by GPU model |
 | `term` | Term filter |
-| `order_by` | `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`, `total_node_savings_usd` |
+| `order_by` | `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`, `total_node_savings` |
 | `offset`, `limit` | Pagination |
 
 ```json
@@ -494,7 +494,8 @@ GET /recommendations/openshift/gpu/timeslicing
       "gpu_model": "NVIDIA-A100",
       "recommended_replicas": 4,
       "savings_per_gpu_usd": 150.0,
-      "total_node_savings_usd": 450.0,
+      "total_node_savings": { "value": "450.00", "units": "USD" },
+      "savings_per_gpu": { "value": "150.00", "units": "USD" },
       "confidence": 0.65,
       "candidate_containers": [ { "namespace": "ml", "workload": "train", "container": "worker", "classification": "underutilized" } ],
       "impacted_containers": [ ],
@@ -528,11 +529,11 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Show a node-level view with GPU utilization **ProgressBar** per GPU model.
 - Display `recommended_replicas` prominently as the primary action metric.
 - Compare current vs recommended time-slicing configuration in a side-by-side layout.
-- Show `total_node_savings_usd` and `savings_per_gpu_usd` with currency from `meta.currency`.
+- Show `total_node_savings` and `savings_per_gpu` (`SavingsObject`); currency is in `meta.currency`.
 - Expand `candidate_containers` and `impacted_containers` in a nested **Table** with classification badges.
 - Link from container GPU fields (`time_slicing_node`, `time_slicing_replicas`) to the filtered time-slicing list.
 - Show confidence as a badge; surface notification code 36 with link to this view from container rows.
-- Sort by `total_node_savings_usd` descending by default to prioritize highest-impact nodes.
+- Sort by `total_node_savings` descending by default to prioritize highest-impact nodes.
 
 ---
 
