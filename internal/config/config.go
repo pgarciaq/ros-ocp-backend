@@ -653,7 +653,7 @@ func initConfig() {
 	viper.SetDefault("ROS_GPU_NODE_FRESHNESS_DAYS", 7)
 	viper.SetDefault("ROS_PVC_OVERSIZED_THRESHOLD", 0.20)
 	viper.SetDefault("ROS_PVC_NEAR_FULL_THRESHOLD", 0.85)
-	viper.SetDefault("ROS_PVC_MIN_TREND_DAYS", 7)
+	viper.SetDefault("ROS_PVC_MIN_TREND_DAYS", 2)
 	viper.SetDefault("ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER", 2)
 	viper.SetDefault("ROS_PVC_MIN_RECOMMENDED_GIB", 1)
 	viper.SetDefault("ROS_PVC_DAYS_TO_FULL_ALERT", 30)

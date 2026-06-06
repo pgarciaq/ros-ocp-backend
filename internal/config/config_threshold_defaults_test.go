@@ -72,7 +72,7 @@ func TestThresholdEnvDefaults(t *testing.T) {
 
 	assert.InDelta(t, 0.20, cfg.PVCOversizedThreshold, 1e-9)
 	assert.InDelta(t, 0.85, cfg.PVCNearFullThreshold, 1e-9)
-	assert.Equal(t, 7, cfg.PVCMinTrendDays)
+	assert.Equal(t, 2, cfg.PVCMinTrendDays)
 	assert.Equal(t, 2, cfg.PVCRecommendedSizeMultiplier)
 	assert.Equal(t, 1, cfg.PVCMinRecommendedGiB)
 	assert.Equal(t, 30, cfg.PVCDaysToFullAlert)

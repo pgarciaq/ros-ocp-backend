@@ -1793,7 +1793,7 @@ Partial PUT is supported per settings type. After PUT, re-query recommendations 
 
 1. Set e.g. `ROS_VM_IDLE_CPU_MC=50` on **API and processor**, restart both.
 2. GET settings — expect `locked_fields` containing the mapped field name.
-3. PUT the same field — expect **422** Unprocessable Entity.
+3. PUT the same field — expect **403** Forbidden with `locked_fields`.
 
 Global freeze:
 
@@ -2205,7 +2205,7 @@ Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, 
 | Combined `openshift_report` CSV | `--insights-upload` mixed report | Use `--write-monthly` + typed files |
 | Tarball `./` prefix | `tar czf .` without transform | `tar czf ... --transform='s|^\./||' .` |
 | Settings PUT **403** | `ROS_SETTINGS_LOCKED=true` | Disable lock or use per-feature opt-out |
-| Settings PUT **422** | Field locked by `ROS_*` env | Unset env on API + processor |
+| Settings PUT **403** (`locked_fields`) | Threshold/VM/quota field locked by `ROS_*` env | Unset env on API + processor |
 | `kruize` + native both enabled | Invalid config | Native only: `ROS_DISABLED_PLUGINS=kruize` |
 | Wrong tenant / empty RBAC | Bad identity | Use `org_id: "1234567"`, admin user; or `RBAC_ENABLE=false` locally |
 | Stale API responses | Koku/Valkey cache | `docker exec koku_valkey redis-cli FLUSHALL`; restart `koku-server` |
