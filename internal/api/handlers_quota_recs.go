@@ -75,7 +75,7 @@ type QuotaRecommendationListItem struct {
 	QuotaRecommended   *QuotaResourceValues        `json:"quota_recommended,omitempty"`
 	Utilization        *QuotaUtilizationPercents   `json:"utilization,omitempty"`
 	CapacityFreed      *QuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings   *money.SavingsObject        `json:"estimated_savings,omitempty"`
+	EstimatedSavings   *money.MoneyAmount        `json:"estimated_savings,omitempty"`
 	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
 	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	Count              int                                         `json:"count,omitempty"`
@@ -394,7 +394,7 @@ func getQuotaRecommendationsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents > 0 {
-			item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savingsCents, currency)
+			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -474,7 +474,7 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
 	item.CapacityFreed = quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed)
 	if savings.Valid {
-		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
 	}
 	if lastObserved.Valid {
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)

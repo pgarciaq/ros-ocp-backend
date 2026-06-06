@@ -439,7 +439,7 @@ and nested `recommendation_terms.<term>.recommendation_engines.{cost,performance
 Optional `?engine=cost|performance` filters which engine blocks are returned.
 Pagination counts distinct nodes; default sort is medium-term
 `estimated_monthly_savings` (structured object; cost engine unless filtered).
-`order_by=estimated_monthly_savings_usd` remains a deprecated alias. `meta.currency`
+`order_by=estimated_savings_cents` remains a deprecated alias. `meta.currency`
 reflects the Koku cost model unit. Deprecated alias:
 `GET .../nodes/utilization`.
 

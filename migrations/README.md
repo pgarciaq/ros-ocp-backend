@@ -57,7 +57,7 @@ Indexes target savings aggregation, history time-ordered lists, and namespace li
 ```sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rs_savings_agg
     ON recommendation_sets (org_id, cluster_uuid)
-    INCLUDE (estimated_monthly_savings_usd)
+    INCLUDE (estimated_savings_cents)
     WHERE stale = false AND term = 'medium' AND engine = 'cost';
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rh_org_recorded

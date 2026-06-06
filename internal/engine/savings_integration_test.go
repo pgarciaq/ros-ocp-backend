@@ -119,7 +119,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// Read back and verify savings persisted
 		var savedSavings int64
 		err = pool.QueryRow(ctx,
-			`SELECT estimated_monthly_savings_usd FROM recommendation_sets
+			`SELECT estimated_savings_cents FROM recommendation_sets
 			 WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND container_name = $4
 			 LIMIT 1`,
 			testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestContainer,

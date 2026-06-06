@@ -86,7 +86,7 @@ func seedContractIdleStates(t *testing.T, ctx context.Context) {
 	tag, err := pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (
 			org_id, cluster_uuid, namespace, workload, workload_type, container_name,
-			term, engine, stale, notification_codes, estimated_monthly_savings_usd,
+			term, engine, stale, notification_codes, estimated_savings_cents,
 			idle_state, idle_since, idle_duration_days, estimated_waste_cents, updated_at,
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
@@ -94,7 +94,7 @@ func seedContractIdleStates(t *testing.T, ctx context.Context) {
 			current_memory_request_kib, current_memory_limit_kib
 		)
 		SELECT org_id, cluster_uuid, namespace, workload, workload_type, 'idle-sidecar',
-			term, engine, stale, notification_codes, estimated_monthly_savings_usd,
+			term, engine, stale, notification_codes, estimated_savings_cents,
 			'idle', now() - interval '10 days', 10, 250000, now(),
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
@@ -156,7 +156,7 @@ func contractGETWithQuery(t *testing.T, app *echo.Echo, identityHeader, path str
 	return rec.Code, body
 }
 
-func assertSavingsObjectShape(t *testing.T, raw interface{}) {
+func assertMoneyAmountShape(t *testing.T, raw interface{}) {
 	t.Helper()
 	obj, ok := raw.(map[string]interface{})
 	require.True(t, ok, "expected savings object map")
@@ -243,7 +243,7 @@ func TestContractResponseShape_Savings(t *testing.T) {
 	app, identityHeader, ctx := setupContractTestApp(t)
 
 	_, err := database.Pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 123456, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestContractIdleDetection_NonActiveIncludesIdleFields(t *testing.T) {
 	assert.NotEmpty(t, item["idle_since"])
 	assert.NotNil(t, item["idle_duration_days"])
 	assertIdleRecommendationShape(t, item["idle_recommendation"])
-	assertSavingsObjectShape(t, item["estimated_monthly_waste"])
+	assertMoneyAmountShape(t, item["estimated_monthly_waste"])
 }
 
 func TestContractIdleDetection_ActiveOmitsWasteAndRecommendation(t *testing.T) {
@@ -469,7 +469,7 @@ func TestContractIdleDetection_SavingsSummaryGroupByIdleState(t *testing.T) {
 	row := data[0].(map[string]interface{})
 	assert.NotEmpty(t, row["idle_state"])
 	assert.NotNil(t, row["container_count"])
-	assertSavingsObjectShape(t, row["estimated_monthly_waste"])
+	assertMoneyAmountShape(t, row["estimated_monthly_waste"])
 
 	meta, ok := body["meta"].(map[string]interface{})
 	require.True(t, ok)

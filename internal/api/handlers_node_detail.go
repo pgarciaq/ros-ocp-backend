@@ -100,7 +100,7 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 			nr.stranded_resource, COALESCE(nr.pod_count, 0), nr.pod_capacity,
 			COALESCE(nr.trend_slope, 0), COALESCE(nr.notification_codes, '{}'),
 			nr.recommended_cpu_cores, nr.recommended_memory_gib, COALESCE(nr.node_count_reduction, 0),
-			nr.estimated_monthly_savings_usd,
+			nr.estimated_savings_cents,
 			nr.machineset_name, nr.suggested_instance_type, nr.instance_type_reason,
 			nr.confidence_level, nr.data_days,
 			COALESCE(nr.updated_at, 'epoch'::timestamptz)` + baseFrom + `

@@ -85,7 +85,7 @@ INSERT INTO recommendation_sets (
     variation_cpu_request_pct, variation_cpu_limit_pct,
     variation_memory_request_pct, variation_memory_limit_pct,
     confidence_level, notification_codes,
-    estimated_monthly_savings_usd,
+    estimated_savings_cents,
     monitoring_start_time, monitoring_end_time,
     recommendations, updated_at, container_id
 )
@@ -165,7 +165,7 @@ INSERT INTO node_recommendations (
     cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
     cpu_overcommit_ratio, is_underutilized, is_overcommitted,
     pod_count, trend_slope, notification_codes,
-    estimated_monthly_savings_usd, updated_at
+    estimated_savings_cents, updated_at
 )
 SELECT
     ra.org_id,
@@ -197,7 +197,7 @@ INSERT INTO pvc_recommendation_sets (
     org_id, cluster_uuid, namespace, persistentvolumeclaim, persistentvolume, storageclass,
     capacity_bytes, usage_bytes_max, usage_ratio, recommendation_type,
     recommended_bytes, days_to_full, growth_bytes_per_day,
-    notification_codes, data_days, term, estimated_monthly_savings_usd, updated_at
+    notification_codes, data_days, term, estimated_savings_cents, updated_at
 )
 SELECT
     os.org_id,
@@ -293,7 +293,7 @@ INSERT INTO recommendation_history (
     container_name, term, engine,
     rec_cpu_request_millicores, rec_cpu_limit_millicores,
     rec_memory_request_kib, rec_memory_limit_kib,
-    notification_codes, confidence_level, estimated_monthly_savings_usd, source_binary
+    notification_codes, confidence_level, estimated_savings_cents, source_binary
 )
 SELECT
     (d.dt + TIME '12:00') AT TIME ZONE 'UTC',
@@ -311,7 +311,7 @@ SELECT
     rs.rec_memory_limit_kib,
     rs.notification_codes,
     rs.confidence_level,
-    rs.estimated_monthly_savings_usd,
+    rs.estimated_savings_cents,
     'native'
 FROM recommendation_sets rs
 CROSS JOIN generate_series(DATE '2026-04-25', DATE '2026-05-24', '1 day') d(dt)

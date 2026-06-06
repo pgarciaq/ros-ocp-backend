@@ -18,7 +18,7 @@ type FleetSummaryResponse struct {
 	ActiveContainers       int     `json:"active_containers"`
 	IdleContainers         int     `json:"idle_containers"`
 	AbandonedContainers    int     `json:"abandoned_containers"`
-	TotalMonthlySavings money.SavingsObject `json:"total_monthly_savings"`
+	TotalMonthlySavings money.MoneyAmount `json:"total_monthly_savings"`
 	ClusterCount           int     `json:"cluster_count"`
 	Currency               string  `json:"currency"`
 }
@@ -74,7 +74,7 @@ func GetFleetSummary(c echo.Context) error {
 		allowed := filterClustersByRBAC(clusterUUIDs, userPerms)
 		if len(allowed) == 0 {
 			summary.Currency = costdata.DefaultCurrency
-			summary.TotalMonthlySavings = money.FormatUSDToSavings(0, summary.Currency)
+			summary.TotalMonthlySavings = money.FormatUSDToAmount(0, summary.Currency)
 			return c.JSON(http.StatusOK, summary)
 		}
 		err = pool.QueryRow(ctx, `
@@ -83,7 +83,7 @@ func GetFleetSummary(c echo.Context) error {
 				COUNT(*) FILTER (WHERE stale = false) AS active_containers,
 				COUNT(*) FILTER (WHERE notification_codes @> ARRAY[5::smallint]) AS idle_containers,
 				COUNT(*) FILTER (WHERE notification_codes @> ARRAY[8::smallint]) AS abandoned_containers,
-				COALESCE(SUM(estimated_monthly_savings_usd) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
+				COALESCE(SUM(estimated_savings_cents) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
 				COUNT(DISTINCT cluster_uuid) AS cluster_count
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'
@@ -104,7 +104,7 @@ func GetFleetSummary(c echo.Context) error {
 				COUNT(*) FILTER (WHERE stale = false) AS active_containers,
 				COUNT(*) FILTER (WHERE notification_codes @> ARRAY[5::smallint]) AS idle_containers,
 				COUNT(*) FILTER (WHERE notification_codes @> ARRAY[8::smallint]) AS abandoned_containers,
-				COALESCE(SUM(estimated_monthly_savings_usd) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
+				COALESCE(SUM(estimated_savings_cents) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
 				COUNT(DISTINCT cluster_uuid) AS cluster_count
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'`,
@@ -130,7 +130,7 @@ func GetFleetSummary(c echo.Context) error {
 	if clusterUUIDs, qerr := getClustersForOrg(ctx, orgID); qerr == nil && len(clusterUUIDs) > 0 {
 		summary.Currency = fetchClusterCurrency(ctx, orgID, clusterUUIDs[0])
 	}
-	summary.TotalMonthlySavings = money.FormatUSDToSavings(totalSavingsUSD, summary.Currency)
+	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, summary.Currency)
 
 	return c.JSON(http.StatusOK, summary)
 }

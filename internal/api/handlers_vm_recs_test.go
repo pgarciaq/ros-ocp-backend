@@ -105,7 +105,7 @@ func TestGetVMList_FilterTag(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'vm-prod', $3, 'linux',
 			4, 16, 2, 8,
@@ -163,12 +163,12 @@ func TestVMRecommendations_ListInvalidLimit_Returns400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestVMRecSavingsObject(t *testing.T) {
-	assert.Nil(t, vmRecSavingsObject(nil, nil))
+func TestVMRecMoneyAmount(t *testing.T) {
+	assert.Nil(t, vmRecMoneyAmount(nil, nil))
 
-	amt := 123.45
+	cents := int64(12345)
 	cur := "EUR"
-	got := vmRecSavingsObject(&amt, &cur)
+	got := vmRecMoneyAmount(&cents, &cur)
 	require.NotNil(t, got)
 	assert.Equal(t, "EUR", got.Units)
 	assert.Equal(t, "123.45", got.Value)
@@ -354,7 +354,7 @@ func TestVMRecommendations_ListOrderBySavings(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES
 			($1, $2, 'vm-low', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 5.00, 'USD', now()),
 			($1, $2, 'vm-high', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 50.00, 'USD', now())`,
@@ -393,7 +393,7 @@ func TestVMRecommendations_ListCSVExport(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES ($1, $2, 'csv-vm', 'csv-ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, true, 12.50, 'USD', now())`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
@@ -413,7 +413,11 @@ func TestVMRecommendations_ListCSVExport(t *testing.T) {
 func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	for apiKey, dbCol := range vmRecAllowedOrderBy {
 		if apiKey == "savings" {
-			assert.Equal(t, "savings_amount", dbCol)
+			assert.Equal(t, "estimated_savings_cents", dbCol)
+			continue
+		}
+		if apiKey == "savings_amount" {
+			assert.Equal(t, "estimated_savings_cents", dbCol)
 			continue
 		}
 		assert.Equal(t, apiKey, dbCol, "API key should match DB column for %q", apiKey)

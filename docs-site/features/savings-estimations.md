@@ -80,7 +80,7 @@ Recoverable monthly cost uses `restore_size_bytes × cost_per_gib_month_usd`. Un
 
 Set `ROS_SAVINGS_ESTIMATES_ENABLED=false` on **ros-processor** and **ros-api** to disable Masu fetches. Recommendations still run; dollar fields are `$0` or omitted, and notification code **25** (`NotifNoCostData`) applies to container, node, and PVC where relevant.
 
-**VM exception:** When the kill-switch is active or Masu rates are unavailable at ingestion, VM list/detail return `savings: null` (not `$0` and not code **25**). Fleet `savings-summary` omits VM dollars when rows have no persisted `savings_amount`.
+**VM exception:** When the kill-switch is active or Masu rates are unavailable at ingestion, VM list/detail return `savings: null` (not `$0` and not code **25**). Fleet `savings-summary` omits VM dollars when rows have no persisted `estimated_savings_cents`.
 
 Requires `KOKU_MASU_URL` pointing at the Masu service when enabled.
 
@@ -91,7 +91,7 @@ Operators debugging unexpected savings changes should distinguish two update pat
 | Trigger | API / action | What changes | Sizing |
 |---------|--------------|--------------|--------|
 | **Threshold PUT** | `PUT .../settings/{container,node,pvc,...}` (or terms) | Full recommendation recalculation on next ingest (or reship) | CPU/memory/storage targets may change; savings update as a side effect |
-| **Cost model update** | Koku → `POST /api/cost-management/v1/internal/recalculate-savings` | Dollar fields only (`estimated_monthly_savings_usd`, etc.) | Unchanged — same recommended requests/limits |
+| **Cost model update** | Koku → `POST /api/cost-management/v1/internal/recalculate-savings` | Dollar fields only (`estimated_savings_cents`, etc.) | Unchanged — same recommended requests/limits |
 
 Threshold tuning can change *whether* a workload is rightsized and therefore the savings delta. Cost model recalculation only reapplies rates to existing recommendations.
 

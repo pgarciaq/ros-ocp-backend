@@ -458,7 +458,7 @@ GET /api/cost-management/v1/recommendations/openshift/vm
 | Parameter | Description |
 |-----------|-------------|
 | `limit` / `offset` | Pagination (limit 1–100, default 10) |
-| `order_by` / `order_how` | Sort by `vm_name`, `namespace`, `confidence`, `is_idle`, `is_abandoned`, sizing fields, `savings` (maps to `savings_amount`), etc. |
+| `order_by` / `order_how` | Sort by `vm_name`, `namespace`, `confidence`, `is_idle`, `is_abandoned`, sizing fields, `savings` (maps to `estimated_savings_cents`), etc. |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
 | `filter[namespace]` / `filter[project]` | Namespace (project is a Koku-aligned alias) |
 | `filter[vm_name]` | VM name |

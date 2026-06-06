@@ -156,7 +156,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 |---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
 | F30 | **Replica count collection** | Collect `desired_replicas` / `available_replicas` from deployment/statefulset/daemonset metrics. | 7 | REQ-7.1, REQ-7.2, REQ-7.4 | Yes (2-4 queries) | Active | **YES** | Operator queries `kube_deployment_spec_replicas`, `kube_statefulset_replicas`, `kube_daemonset_status_desired_number_scheduled` (and available equivalents). Backend stores per-digest. API exposes `desired`, `available`, `source` in `ReplicaInfo`. Fallback to pod count when operator columns absent. | Fallback: derive from distinct pod count if operator too old. |
 | F31 | **Total impact (resource savings × replicas)** | `per_container_savings × desired_replicas` = total savings in millicores/KiB. | 7 | REQ-7.3 | No | Active | **YES** | **Net-new** — Legacy shows `variation` as percentage change vs current (per-container only). No total-impact-across-replicas calculation exists. | — |
-| F32 | **Dollar savings via Koku cost models** | Query Koku `/cost-models/` API for CPU/memory rates + markup. Cache hourly. `estimated_monthly_savings_usd` per recommendation. | 7 | REQ-7.5 | No | Active | **YES** | **Net-new** — No dollar cost integration in legacy pipeline. | Graceful degradation: `null` if Koku unreachable or `ROS_ENABLE_COST_INTEGRATION=false`. Distributed costs not captured (secondary benefit). |
+| F32 | **Dollar savings via Koku cost models** | Query Koku `/cost-models/` API for CPU/memory rates + markup. Cache hourly. `estimated_savings_cents` per recommendation. | 7 | REQ-7.5 | No | Active | **YES** | **Net-new** — No dollar cost integration in legacy pipeline. | Graceful degradation: `null` if Koku unreachable or `ROS_ENABLE_COST_INTEGRATION=false`. Distributed costs not captured (secondary benefit). |
 | F33 | **Fleet-level summary** | Cross-cluster aggregated savings, adoption rates, top opportunities by org_id. | 7 | REQ-7.6 | No | Active | **YES** | **Net-new** — No fleet-level aggregation in legacy pipeline. | Gated behind `ROS_ENABLE_FLEET_SUMMARY`. |
 
 ### New Recommendation Types — Tier 2
@@ -869,7 +869,7 @@ ALTER TABLE recommendation_sets
     ADD COLUMN variation_memory_request_pct REAL,
     ADD COLUMN notification_codes SMALLINT[],
     ADD COLUMN confidence_level REAL,
-    ADD COLUMN estimated_monthly_savings_usd REAL,
+    ADD COLUMN estimated_savings_cents REAL,
     ADD COLUMN recommendation_applied_at TIMESTAMPTZ,  -- REQ-10.7: adoption detection
     ADD COLUMN stale BOOLEAN DEFAULT false;            -- REQ-10.8: staleness flag
 ```
@@ -1425,9 +1425,9 @@ mem_dollar_savings = mem_savings_kib × mem_rate_per_kib_hour × markup_factor �
 total_monthly_savings_usd = cpu_dollar_savings + mem_dollar_savings
 ```
 
-**Storage:** `estimated_monthly_savings_usd` is stored as a REAL column in `recommendation_sets` (see REQ-2.5). It is recomputed on each recommendation cycle and also refreshed when the cost rate cache is updated. This means savings values stay current even if the customer changes their cost model rates.
+**Storage:** `estimated_savings_cents` is stored as a REAL column in `recommendation_sets` (see REQ-2.5). It is recomputed on each recommendation cycle and also refreshed when the cost rate cache is updated. This means savings values stay current even if the customer changes their cost model rates.
 
-**API change:** Add `estimated_monthly_savings_usd` to recommendation response (per container and in summary endpoint). The `/summary` endpoint aggregates total savings across all workloads in a cluster.
+**API change:** Add `estimated_savings_cents` to recommendation response (per container and in summary endpoint). The `/summary` endpoint aggregates total savings across all workloads in a cluster.
 
 **Graceful degradation:** If Koku API is unreachable or `ROS_ENABLE_COST_INTEGRATION=false`, dollar savings fields are `null` — resource-based savings (millicores, KiB) are always present.
 
@@ -1983,7 +1983,7 @@ CREATE TABLE machineset_recommendations (
     is_flapping             BOOLEAN,
     savings_vcpus           BIGINT,     -- total vCPU reduction
     savings_memory_gib      BIGINT,     -- total memory GiB reduction
-    estimated_monthly_savings_usd REAL, -- from Koku cost data
+    estimated_savings_cents REAL, -- from Koku cost data
     notification_codes      SMALLINT[],
     updated_at              TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (org_id, cluster_uuid, machineset_name)
@@ -2064,7 +2064,7 @@ CREATE TABLE machineset_recommendations (
     "savings": {
       "vcpu_savings": 56,
       "memory_savings_gib": 224,
-      "estimated_monthly_savings_usd": 1247.50
+      "estimated_savings_cents": 1247.50
     },
     "notifications": {
       "AUTOSCALER_IDLE": { "type": "notice", "message": "MachineAutoscaler never scales up — consider reducing minReplicas" }
@@ -2818,7 +2818,7 @@ CREATE TABLE machineset_recommendations (
     is_flapping                 BOOLEAN,
     savings_vcpus               BIGINT,
     savings_memory_gib          BIGINT,
-    estimated_monthly_savings_usd REAL,
+    estimated_savings_cents REAL,
     notification_codes          SMALLINT[],
     updated_at                  TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (org_id, cluster_uuid, machineset_name)
@@ -2849,7 +2849,7 @@ ALTER TABLE recommendation_sets
     ADD COLUMN variation_memory_request_pct REAL,
     ADD COLUMN notification_codes SMALLINT[],
     ADD COLUMN confidence_level REAL,
-    ADD COLUMN estimated_monthly_savings_usd REAL,
+    ADD COLUMN estimated_savings_cents REAL,
     ADD COLUMN recommendation_applied_at TIMESTAMPTZ,  -- REQ-10.7: adoption detection timestamp
     ADD COLUMN stale BOOLEAN DEFAULT false;            -- REQ-10.8: staleness flag
 
@@ -2919,7 +2919,7 @@ All outbound HTTP calls to external services must use a circuit breaker pattern 
 | External Service | Timeout | Circuit Breaker Settings | Fallback |
 |---|---|---|---|
 | **RBAC** | `ROS_RBAC_TIMEOUT` (5s) | Open after 5 consecutive failures, half-open after 30s | Return 424 (see OQ#1) |
-| **Koku cost API** | 10s | Open after 3 consecutive failures, half-open after 60s | Serve recommendations without cost data (`estimated_monthly_savings_usd = NULL`) |
+| **Koku cost API** | 10s | Open after 3 consecutive failures, half-open after 60s | Serve recommendations without cost data (`estimated_savings_cents = NULL`) |
 | **AWS Bulk Pricing API** | 30s (large download) | Open after 2 failures, half-open after 300s | Use cached catalog; log warning |
 | **Azure/GCP catalog APIs** | 10s | Open after 3 failures, half-open after 60s | Use cached catalog; log warning |
 
@@ -3234,7 +3234,7 @@ This is where ~90% of the implementation work happens. The superpowers engine is
 
 No changes needed for Phases 0–3. First involvement is **Phase 7** (dollar savings):
 
-- **Phase 7:** Expose an internal API endpoint (or extend existing `/reports/openshift/costs/`) that ros-ocp-backend can query to retrieve per-container cost rates (CPU $/core-hour, memory $/GiB-hour) and markup. The superpowers engine uses this to compute `estimated_monthly_savings_usd`. Circuit breaker pattern: if Koku is unreachable, savings field degrades to `null`.
+- **Phase 7:** Expose an internal API endpoint (or extend existing `/reports/openshift/costs/`) that ros-ocp-backend can query to retrieve per-container cost rates (CPU $/core-hour, memory $/GiB-hour) and markup. The superpowers engine uses this to compute `estimated_savings_cents`. Circuit breaker pattern: if Koku is unreachable, savings field degrades to `null`.
 - **Awareness:** The ROS API (`/recommendations/openshift`) will return richer data (new fields like `daily_digest_metadata`, `engine_version`, custom timeframe parameters). These are additive — no breaking changes to shared API paths.
 
 #### `koku-ui` — Frontend Team
@@ -3242,7 +3242,7 @@ No changes needed for Phases 0–3. First involvement is **Phase 7** (dollar sav
 Can begin work in **Phase 3** once the API contract is defined, in parallel with backend implementation:
 
 - **Phase 3:** Add custom timeframe controls to the Optimizations page. The API will accept `start_date` and `end_date` query parameters on `/recommendations/openshift`. The frontend needs date picker / duration selector UI components that pass these parameters. The default behavior (no date params = standard 1d/7d/15d terms) is unchanged.
-- **Phase 7+:** Display `estimated_monthly_savings_usd` when available (field is `null` when cost model is not configured or Koku is unreachable).
+- **Phase 7+:** Display `estimated_savings_cents` when available (field is `null` when cost model is not configured or Koku is unreachable).
 - **Phase 8b+:** New recommendation types (VM, node, MachineSet) will need new UI views or tabs.
 
 #### `koku-metrics-operator` — Operator Team
@@ -3376,7 +3376,7 @@ Risks identified during the 2026-03-26 review, with their resolutions.
 | R5 | Dropping historical tables with no replacement | Added `recommendation_history` partitioned table (time-series of all past recs), retained 90d (old partitions dropped). | §18, REQ-10.3 |
 | R6 | No RBAC for new endpoints | Same `cost-management:ros:*:read` permission as existing endpoints. No new RBAC resources needed. | §17 |
 | R7 | No pagination for new endpoints | All list endpoints: `limit`/`offset`/`sort_by`/`order_by`, matching existing patterns. | §17 |
-| R8 | No dollar savings integration (except GPU) | New Go module `internal/costdata/` queries Koku REST API, caches hourly. `estimated_monthly_savings_usd` in response. | REQ-7.5 (new) |
+| R8 | No dollar savings integration (except GPU) | New Go module `internal/costdata/` queries Koku REST API, caches hourly. `estimated_savings_cents` in response. | REQ-7.5 (new) |
 | R9 | COPY FROM partial failure on invalid rows | Go-side validation before COPY FROM: parse, validate types, skip invalid rows with structured logging. COPY never sees bad data. | REQ-2.1 |
 | R10 | Concurrent recommendation writes (race conditions) | Both SaaS and on-prem: Kafka consumer group partitioning by `cluster_uuid` hash ensures one consumer per cluster. `INSERT ... ON CONFLICT DO UPDATE` as defense-in-depth during rebalances. | NFR-1 |
 | R11 | ~~Continuous aggregate limitations~~ | **Resolved (v2.0):** No continuous aggregates — daily digest tables are standard PostgreSQL partitioned tables, fully alterable with `ALTER TABLE`. No schema migration complexity. | — |

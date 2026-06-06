@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // NotifVMPowerOffSchedule recommends scheduling power-off during historically idle periods.
@@ -108,8 +109,9 @@ func AppendVMPowerOffNotifications(recs []model.VMRecommendation) {
 			pct = PowerOffIdlePercentFromBasisPoints(*recs[i].PowerOffIdleRatio)
 		}
 		var savings *float64
-		if recs[i].SavingsAmount != nil {
-			savings = recs[i].SavingsAmount
+		if recs[i].EstimatedSavingsCents != nil {
+			usd := money.CentsToUSD(*recs[i].EstimatedSavingsCents)
+			savings = &usd
 		}
 		recs[i].Notifications = appendVMPowerOffNotificationJSON(recs[i].Notifications, pct, savings)
 	}

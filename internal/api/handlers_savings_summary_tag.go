@@ -13,7 +13,7 @@ import (
 // FleetTagSavingsRow is one tag value group in savings-summary group_by[tag:key] responses.
 type FleetTagSavingsRow struct {
 	TagValue                *string             `json:"tag_value"`
-	EstimatedMonthlySavings money.SavingsObject `json:"estimated_monthly_savings"`
+	EstimatedMonthlySavings money.MoneyAmount `json:"estimated_monthly_savings"`
 }
 
 // FleetSavingsByTagMeta is metadata for tag-grouped savings summary.
@@ -61,7 +61,7 @@ func queryFleetSavingsByTag(
 
 	rows, err := pool.Query(ctx, `
 		SELECT ock.resolved_tags->>$`+fmt.Sprintf("%d", tagKeyParam)+` AS tag_value,
-		       COALESCE(SUM(rs.estimated_monthly_savings_usd), 0)::float / 100.0 AS savings_usd
+		       COALESCE(SUM(rs.estimated_savings_cents), 0)::float / 100.0 AS savings_usd
 		FROM org_container_keys ock
 		INNER JOIN recommendation_sets rs
 			ON rs.org_id = ock.org_id
@@ -90,7 +90,7 @@ func queryFleetSavingsByTag(
 			return resp, err
 		}
 		row := FleetTagSavingsRow{
-			EstimatedMonthlySavings: money.FormatUSDToSavings(roundUSD(savingsUSD), currency),
+			EstimatedMonthlySavings: money.FormatUSDToAmount(roundUSD(savingsUSD), currency),
 		}
 		if tagValue.Valid {
 			v := tagValue.String

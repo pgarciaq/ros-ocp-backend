@@ -51,7 +51,7 @@ paths:
       summary: Reset idle detection settings to defaults
 components:
   schemas:
-    SavingsObject:
+    MoneyAmount:
       type: object
       properties:
         value:
@@ -133,7 +133,7 @@ components:
           type: string
           enum: [idle, zombie]
         estimated_monthly_waste:
-          $ref: '#/components/schemas/SavingsObject'
+          $ref: '#/components/schemas/MoneyAmount'
         container_count:
           type: integer
     FleetSavingsByIdleStateResponse:

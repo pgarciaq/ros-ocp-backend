@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mustSavingsFloat(t *testing.T, s *money.SavingsObject) float64 {
+func mustSavingsFloat(t *testing.T, s *money.MoneyAmount) float64 {
 	t.Helper()
 	require.NotNil(t, s)
 	v, err := strconv.ParseFloat(s.Value, 64)
@@ -24,7 +24,7 @@ func mustSavingsFloat(t *testing.T, s *money.SavingsObject) float64 {
 }
 
 func TestToGPURecommendation_FullData(t *testing.T) {
-	savings := float32(123.45)
+	savings := int64(12345)
 	rec := &engine.GPURec{
 		GPUModelName:           "H100",
 		CurrentGPUProfile:      "mig-3g.40gb",
@@ -36,7 +36,7 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 		DRAMActiveAvg:          0.67,
 		SMActiveAvg:            0.34,
 		FBUsageMaxMiB:          8192,
-		EstimatedGPUSavingsUSD: &savings,
+		EstimatedGPUSavingsCents: &savings,
 		NotificationCodes:      []int16{10, 20},
 	}
 
@@ -71,7 +71,7 @@ func TestToGPURecommendation_NoProfiles(t *testing.T) {
 		DRAMActiveAvg:          0,
 		SMActiveAvg:            0,
 		FBUsageMaxMiB:          0,
-		EstimatedGPUSavingsUSD: nil,
+		EstimatedGPUSavingsCents: nil,
 		NotificationCodes:      nil,
 	}
 
@@ -87,7 +87,7 @@ func TestToGPURecommendation_NoSavings(t *testing.T) {
 		CurrentGPUProfile:      "full",
 		Classification:         engine.GPUClassWellUtilized,
 		RecommendedGPUProfile:  "full",
-		EstimatedGPUSavingsUSD: nil,
+		EstimatedGPUSavingsCents: nil,
 		NotificationCodes:      nil,
 	}
 
@@ -101,7 +101,7 @@ func TestToGPURecommendation_WithNotifications(t *testing.T) {
 		GPUModelName:           "T4",
 		Classification:         engine.GPUClassUnderutilized,
 		NotificationCodes:      []int16{301, 302, 303},
-		EstimatedGPUSavingsUSD: nil,
+		EstimatedGPUSavingsCents: nil,
 	}
 
 	got := toGPURecommendation(rec)
@@ -127,8 +127,9 @@ func TestToGPURecommendation_IdleFields(t *testing.T) {
 	assert.Equal(t, "2026-04-01", *got.GPUIdleSince)
 	require.NotNil(t, got.GPUIdleDurationDays)
 	assert.Equal(t, 12, *got.GPUIdleDurationDays)
-	require.NotNil(t, got.GPUEstimatedWasteCents)
-	assert.Equal(t, int64(50000), *got.GPUEstimatedWasteCents)
+	require.NotNil(t, got.EstimatedMonthlyGPUWaste)
+	assert.Equal(t, "500.00", got.EstimatedMonthlyGPUWaste.Value)
+	assert.Equal(t, money.DefaultCurrency, got.EstimatedMonthlyGPUWaste.Units)
 }
 
 // --- E-T17: Container cross-reference in toGPURecommendation ---

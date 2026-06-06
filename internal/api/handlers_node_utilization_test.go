@@ -145,7 +145,7 @@ func TestFlattenNodeUtilizationForCSV(t *testing.T) {
 					Cost: &model.NodeUtilizationEngineRec{
 						RecommendedCPUCores:     4,
 						RecommendedMemoryGiB:    16,
-						EstimatedMonthlySavings: &money.SavingsObject{Value: savings},
+						EstimatedMonthlySavings: &money.MoneyAmount{Value: savings},
 					},
 				},
 			},

@@ -272,6 +272,7 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			if rec.GPUIdleState != IdleStateActive && gpuMonthlyRate > 0 {
 				wasteCents = money.USDToCents(gpuMonthlyRate)
 			}
+			gpuSavingsCents := ComputeGPUSavingsCents(rec, costData)
 			idleState := idleStateForWrite(rec.GPUIdleState)
 			_, err := tx.Exec(ctx, `
 				UPDATE recommendation_sets
@@ -279,7 +280,8 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 				    gpu_idle_state = $8,
 				    gpu_idle_since = $9,
 				    gpu_idle_duration_days = $10,
-				    gpu_estimated_waste_cents = $11
+				    gpu_estimated_waste_cents = $11,
+				    estimated_gpu_savings_cents = $12
 				WHERE org_id = $1
 				  AND cluster_uuid = $2
 				  AND namespace = $3
@@ -287,7 +289,7 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 				  AND container_name = $5
 				  AND term = $7`,
 				orgID, clusterUUID, ns, wl, cn, classification, rec.Term,
-				idleState, rec.GPUIdleSince, rec.GPUIdleDurationDays, wasteCents)
+				idleState, rec.GPUIdleSince, rec.GPUIdleDurationDays, wasteCents, gpuSavingsCents)
 			if err != nil {
 				return fmt.Errorf("store GPU classification for %s term=%s: %w", key, rec.Term, err)
 			}
@@ -295,4 +297,33 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 
 	return tx.Commit(ctx)
+}
+
+// GPUSavingsLookupKey builds the map key for persisted GPU savings (namespace/workload/container/term).
+func GPUSavingsLookupKey(namespace, workload, container, term string) string {
+	return namespace + "/" + workload + "/" + container + "/" + term
+}
+
+// LoadPersistedGPUSavings reads estimated_gpu_savings_cents from recommendation_sets for GPU containers.
+func LoadPersistedGPUSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (map[string]*int64, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT namespace, workload, container_name, term, estimated_gpu_savings_cents
+		FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND has_gpu = true`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]*int64)
+	for rows.Next() {
+		var ns, wl, cn, term string
+		var cents *int64
+		if err := rows.Scan(&ns, &wl, &cn, &term, &cents); err != nil {
+			return nil, err
+		}
+		out[GPUSavingsLookupKey(ns, wl, cn, term)] = cents
+	}
+	return out, rows.Err()
 }

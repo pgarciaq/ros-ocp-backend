@@ -140,7 +140,7 @@ func TestApplyVMSavings_Disabled(t *testing.T) {
 	cd := vmCostData(1.0, 2.0, 0)
 
 	ApplyVMSavings(recs, cd, false)
-	assert.Nil(t, recs[0].SavingsAmount)
+	assert.Nil(t, recs[0].EstimatedSavingsCents)
 	assert.Nil(t, recs[0].SavingsCurrency)
 }
 
@@ -149,7 +149,7 @@ func TestApplyVMSavings_NilProviderData(t *testing.T) {
 	recs := []model.VMRecommendation{*rec}
 
 	ApplyVMSavings(recs, nil, true)
-	assert.Nil(t, recs[0].SavingsAmount)
+	assert.Nil(t, recs[0].EstimatedSavingsCents)
 }
 
 func TestApplyVMSavings_CurrencyFromCostData(t *testing.T) {
@@ -158,7 +158,7 @@ func TestApplyVMSavings_CurrencyFromCostData(t *testing.T) {
 	cd := vmCostData(1.0, 2.0, 0)
 
 	ApplyVMSavings(recs, cd, true)
-	require.NotNil(t, recs[0].SavingsAmount)
+	require.NotNil(t, recs[0].EstimatedSavingsCents)
 	require.NotNil(t, recs[0].SavingsCurrency)
 	assert.Equal(t, "EUR", *recs[0].SavingsCurrency)
 }
@@ -175,5 +175,5 @@ func TestApplyVMSavings_NilCostDataProvider_EmptyRates(t *testing.T) {
 	rec := vmRecForSavings()
 	recs := []model.VMRecommendation{*rec}
 	ApplyVMSavings(recs, &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}, true)
-	assert.Nil(t, recs[0].SavingsAmount)
+	assert.Nil(t, recs[0].EstimatedSavingsCents)
 }

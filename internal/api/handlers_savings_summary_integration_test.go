@@ -50,19 +50,19 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 
 	// prod-1: container + node + pvc + snapshot savings (stored as integer cents)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 80000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'node-a', 'medium', 'cost', '{}', 15000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'data-vol', 'medium', '{}', 8456, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'idle-vm', 'vm-ns', 'linux',
 			4, 16, 2, 8,
@@ -89,7 +89,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 
 	// dev-1: recommendations exist but all lack cost data (NotifNoCostData)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, $3, 0.00, now())`,
 		testutil.TestOrgID, savingsSummaryCluster2, []int16{engine.NotifNoCostData})
 	require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestSavingsSummary_PVCRollup(t *testing.T) {
 	_, err = pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (
 			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
-			recommendation_type, estimated_monthly_savings_usd, notification_codes, updated_at
+			recommendation_type, estimated_savings_cents, notification_codes, updated_at
 		) VALUES ($1, $2, 'storage', 'rollup-vol', 'medium', 'oversized', 12345, '{}', now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -255,13 +255,13 @@ func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testi
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 50000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 90000, now())`,
 		testutil.TestOrgID, savingsSummaryCluster2)
 	require.NoError(t, err)
@@ -316,7 +316,7 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'node-perf', 'medium', 'performance', '{}', 20000, now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -363,7 +363,7 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES
 			($1, $2, 'node-short', 'short', 'cost', '{}', 10000, now()),
 			($1, $2, 'node-medium', 'medium', 'cost', '{}', 50000, now()),
@@ -431,7 +431,7 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES
 			($1, $2, 'node-cost-only', 'medium', 'cost', '{}', 50000, now()),
 			($1, $2, 'node-perf-only', 'medium', 'performance', '{}', 90000, now())`,

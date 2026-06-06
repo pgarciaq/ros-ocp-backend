@@ -11,7 +11,7 @@ type MachineSetRecommendation struct {
 	CurrentNodeCount     int                  `json:"current_node_count"`
 	RecommendedNodeCount int                  `json:"recommended_node_count"`
 	ExcessNodes          int                  `json:"excess_nodes"`
-	TotalMonthlySavings  *money.SavingsObject `json:"total_monthly_savings,omitempty"`
+	TotalMonthlySavings  *money.MoneyAmount `json:"total_monthly_savings,omitempty"`
 	AvgCPUUtilization      float64  `json:"avg_cpu_utilization"`
 	AvgMemoryUtilization   float64  `json:"avg_memory_utilization"`
 	Nodes                  []string `json:"nodes"`

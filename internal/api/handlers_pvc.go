@@ -31,7 +31,7 @@ type PVCRecommendationResponse struct {
 	RecommendedBytes           *int64                                     `json:"recommended_bytes,omitempty"`
 	DaysToFull                 *int                                       `json:"days_to_full,omitempty"`
 	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`
-	EstimatedMonthlySavings    *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlySavings    *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
 	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	ConfidenceLevel            float32                                    `json:"confidence_level"`
 	DataDays                   int                                        `json:"data_days"`
@@ -48,8 +48,8 @@ const (
 
 var pvcAllowedOrderBy = map[string]string{
 	"usage_ratio":                   "usage_ratio",
-	"estimated_monthly_savings":     "estimated_monthly_savings_usd",
-	"estimated_monthly_savings_usd": "estimated_monthly_savings_usd",
+	"estimated_monthly_savings":     "estimated_savings_cents",
+	"estimated_monthly_savings_usd": "estimated_savings_cents", // deprecated alias
 	"pvc_name":                      "persistentvolumeclaim",
 	"persistentvolumeclaim":         "persistentvolumeclaim",
 	"capacity_bytes":                "capacity_bytes",

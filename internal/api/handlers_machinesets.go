@@ -191,7 +191,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 			COALESCE(MAX(NULLIF(BTRIM(nr.instance_type), '')), '') AS instance_type,
 			COUNT(DISTINCT nr.node)::int AS current_node_count,
 			COALESCE(SUM(nr.node_count_reduction), 0)::int AS excess_nodes,
-			COALESCE(SUM(nr.estimated_monthly_savings_usd), 0)::bigint AS total_savings_cents,
+			COALESCE(SUM(nr.estimated_savings_cents), 0)::bigint AS total_savings_cents,
 			COALESCE(AVG(nr.cpu_util_p95), 0)::float AS avg_cpu,
 			COALESCE(AVG(nr.mem_util_p95), 0)::float AS avg_memory,
 			array_agg(DISTINCT nr.node ORDER BY nr.node) AS nodes` + baseFrom + `
@@ -268,7 +268,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		}
 		if totalCents > 0 {
 			currency := resolveListCurrencyFromRequest(c, orgID)
-			rec.TotalMonthlySavings = money.FormatCentsToSavingsPtr(&totalCents, currency)
+			rec.TotalMonthlySavings = money.FormatCentsToAmountPtr(&totalCents, currency)
 		}
 		rec.RecommendedNodeCount = rec.CurrentNodeCount - rec.ExcessNodes
 		if rec.RecommendedNodeCount < 0 {

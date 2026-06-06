@@ -19,12 +19,12 @@ type GPURecommendation struct {
 	DRAMActiveAvg                         float32  `json:"dram_active_avg"`
 	SMActiveAvg                           float32  `json:"sm_active_avg"`
 	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
-	EstimatedMonthlyGPUSavings         *money.SavingsObject `json:"estimated_monthly_gpu_savings,omitempty"`
-	EstimatedMonthlyTimeslicingSavings *money.SavingsObject `json:"estimated_monthly_timeslicing_savings,omitempty"`
+	EstimatedMonthlyGPUSavings         *money.MoneyAmount `json:"estimated_monthly_gpu_savings,omitempty"`
+	EstimatedMonthlyTimeslicingSavings *money.MoneyAmount `json:"estimated_monthly_timeslicing_savings,omitempty"`
 	GPUIdleState                          string   `json:"gpu_idle_state,omitempty"`
 	GPUIdleSince                          *string  `json:"gpu_idle_since,omitempty"`
 	GPUIdleDurationDays                   *int     `json:"gpu_idle_duration_days,omitempty"`
-	GPUEstimatedWasteCents                *int64   `json:"gpu_estimated_waste_cents,omitempty"`
+	EstimatedMonthlyGPUWaste              *money.MoneyAmount `json:"estimated_monthly_gpu_waste,omitempty"`
 	Currency                              string   `json:"currency,omitempty"`
 	Notifications                         []int16  `json:"notifications,omitempty"`
 	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`
@@ -54,7 +54,7 @@ type DetailResponse struct {
 	IdleDurationDays        *int                          `json:"idle_duration_days,omitempty"`
 	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
 	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
-	EstimatedMonthlyWaste   *money.SavingsObject          `json:"estimated_monthly_waste,omitempty"`
+	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
 	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
 	Recommendations         DetailRecommendations         `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
@@ -75,7 +75,7 @@ type ReplicaInfo struct {
 type DetailRecommendations struct {
 	Current                 *DetailResourceConfig                      `json:"current,omitempty"`
 	Replicas                *ReplicaInfo                               `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
 	MonitoringEndTime       string                                     `json:"monitoring_end_time"`
 	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	RecommendationTerms     map[string]DetailTerm                      `json:"recommendation_terms"`

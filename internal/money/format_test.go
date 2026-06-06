@@ -7,29 +7,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFormatCentsToSavings(t *testing.T) {
-	obj := FormatCentsToSavings(123456, "USD")
+func TestFormatCentsToAmount(t *testing.T) {
+	obj := FormatCentsToAmount(123456, "USD")
 	assert.Equal(t, "1234.56", obj.Value)
 	assert.Equal(t, "USD", obj.Units)
 }
 
-func TestFormatUSDPtrToSavingsPtr(t *testing.T) {
+func TestFormatUSDPtrToAmountPtr(t *testing.T) {
 	v := float32(12.5)
-	obj := FormatUSDPtrToSavingsPtr(&v, "USD")
+	obj := FormatUSDPtrToAmountPtr(&v, "USD")
 	require.NotNil(t, obj)
 	assert.Equal(t, "12.50", obj.Value)
 	assert.Equal(t, "USD", obj.Units)
-	assert.Nil(t, FormatUSDPtrToSavingsPtr(nil, "USD"))
+	assert.Nil(t, FormatUSDPtrToAmountPtr(nil, "USD"))
 }
 
-func TestFormatCentsToSavings_zeroCents(t *testing.T) {
-	obj := FormatCentsToSavings(0, "")
+func TestFormatCentsToAmount_zeroCents(t *testing.T) {
+	obj := FormatCentsToAmount(0, "")
 	assert.Equal(t, "0.00", obj.Value)
 	assert.Equal(t, DefaultCurrency, obj.Units)
 }
 
-func TestFormatUSDToSavings(t *testing.T) {
-	obj := FormatUSDToSavings(12.34, "EUR")
+func TestFormatUSDToAmount(t *testing.T) {
+	obj := FormatUSDToAmount(12.34, "EUR")
 	assert.Equal(t, "12.34", obj.Value)
 	assert.Equal(t, "EUR", obj.Units)
 }

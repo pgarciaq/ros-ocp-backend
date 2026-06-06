@@ -37,14 +37,14 @@ type FleetSavingsByPlugin struct {
 type FleetClusterSavings struct {
 	ClusterUUID             string             `json:"cluster_uuid"`
 	ClusterAlias            string             `json:"cluster_alias"`
-	EstimatedMonthlySavings money.SavingsObject `json:"estimated_monthly_savings"`
+	EstimatedMonthlySavings money.MoneyAmount `json:"estimated_monthly_savings"`
 	HasCostData             bool               `json:"has_cost_data"`
 }
 
 // FleetIdleStateSavingsRow is one idle_state group in savings-summary group_by[idle_state] responses.
 type FleetIdleStateSavingsRow struct {
 	IdleState             string             `json:"idle_state"`
-	EstimatedMonthlyWaste money.SavingsObject `json:"estimated_monthly_waste"`
+	EstimatedMonthlyWaste money.MoneyAmount `json:"estimated_monthly_waste"`
 	ContainerCount        int                `json:"container_count"`
 }
 
@@ -62,7 +62,7 @@ type FleetSavingsByIdleStateResponse struct {
 // FleetSavingsSummaryResponse is the JSON payload for GET /recommendations/openshift/savings-summary.
 type FleetSavingsSummaryResponse struct {
 	Currency                string                `json:"currency"`
-	EstimatedMonthlySavings money.SavingsObject   `json:"estimated_monthly_savings"`
+	EstimatedMonthlySavings money.MoneyAmount   `json:"estimated_monthly_savings"`
 	ByCluster               []FleetClusterSavings `json:"by_cluster"`
 	ByPlugin                FleetSavingsByPlugin  `json:"by_plugin"`
 	GPUSavingsNote          string                `json:"gpu_savings_note,omitempty"`
@@ -135,7 +135,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		if len(clusterUUIDs) == 0 {
 			return c.JSON(http.StatusOK, FleetSavingsSummaryResponse{
 				Currency:                costdata.DefaultCurrency,
-				EstimatedMonthlySavings: money.FormatUSDToSavings(0, costdata.DefaultCurrency),
+				EstimatedMonthlySavings: money.FormatUSDToAmount(0, costdata.DefaultCurrency),
 				ByCluster:               []FleetClusterSavings{},
 				ByPlugin:                FleetSavingsByPlugin{},
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
@@ -255,7 +255,7 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	totalUSD := roundUSD(
 		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot + byPlugin.VM,
 	)
-	resp.EstimatedMonthlySavings = money.FormatUSDToSavings(totalUSD, currency)
+	resp.EstimatedMonthlySavings = money.FormatUSDToAmount(totalUSD, currency)
 
 	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
@@ -275,17 +275,17 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	err := pool.QueryRow(ctx, `
 		SELECT
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
+				SELECT SUM(estimated_savings_cents)::float / 100.0
 				FROM recommendation_sets
 				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
+				SELECT SUM(estimated_savings_cents)::float / 100.0
 				FROM node_recommendations
 				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_monthly_savings_usd)::float / 100.0
+				SELECT SUM(estimated_savings_cents)::float / 100.0
 				FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			), 0),
@@ -295,7 +295,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 				WHERE org_id = $1`+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(savings_amount)
+				SELECT SUM(estimated_savings_cents)::float / 100.0
 				FROM vm_recommendations
 				WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 			), 0)`,
@@ -347,21 +347,21 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		),
 		container_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		node_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
 			FROM node_recommendations
 			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		pvc_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_savings_usd), 0)::float / 100.0 AS savings
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
 			FROM pvc_recommendation_sets
 			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			GROUP BY cluster_uuid
@@ -375,7 +375,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		),
 		vm_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(savings_amount), 0) AS savings
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
 			FROM vm_recommendations
 			WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
@@ -428,7 +428,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		if err := rows.Scan(&row.ClusterUUID, &row.ClusterAlias, &savingsUSD, &row.HasCostData); err != nil {
 			return nil, err
 		}
-		row.EstimatedMonthlySavings = money.FormatUSDToSavings(roundUSD(savingsUSD), currency)
+		row.EstimatedMonthlySavings = money.FormatUSDToAmount(roundUSD(savingsUSD), currency)
 		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -522,7 +522,7 @@ func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID
 		if err := rows.Scan(&row.IdleState, &row.ContainerCount, &wasteUSD); err != nil {
 			return resp, err
 		}
-		row.EstimatedMonthlyWaste = money.FormatUSDToSavings(roundUSD(wasteUSD), currency)
+		row.EstimatedMonthlyWaste = money.FormatUSDToAmount(roundUSD(wasteUSD), currency)
 		resp.Data = append(resp.Data, row)
 	}
 	if err := rows.Err(); err != nil {

@@ -215,7 +215,7 @@ type NativeRecommendationRow struct {
 	DesiredReplicas   *int `gorm:"column:desired_replicas"`
 	AvailableReplicas *int `gorm:"column:available_replicas"`
 
-	EstimatedSavingsCents *int64 `gorm:"column:estimated_monthly_savings_usd"`
+	EstimatedSavingsCents *int64 `gorm:"column:estimated_savings_cents"`
 
 	IdleState           string     `gorm:"column:idle_state"`
 	IdleSince           *time.Time `gorm:"column:idle_since"`
@@ -253,8 +253,8 @@ type NativeContainerResult struct {
 	SourceID                string                        `json:"source_id"`
 	LastReported            string                        `json:"last_reported"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.SavingsObject          `json:"estimated_monthly_savings,omitempty"`
-	EstimatedMonthlyWaste   *money.SavingsObject          `json:"estimated_monthly_waste,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
 	IdleState               string                        `json:"idle_state"`
 	IdleSince               *string                       `json:"idle_since,omitempty"`
@@ -602,7 +602,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
-	rs.estimated_monthly_savings_usd,
+	rs.estimated_savings_cents,
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
 	rs.monitoring_end_time,
@@ -787,7 +787,7 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 			savingsEnabled,
 		)
 		if result.IdleState == "active" {
-			result.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
+			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
 		}
 
 		for _, r := range rowGroup {

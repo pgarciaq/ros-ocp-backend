@@ -114,7 +114,7 @@ Equivalent flat parameters:
 
 **PVC list ordering** (flat `order_by` + `order_how`; default `usage_ratio` desc):
 
-- `usage_ratio`, `estimated_monthly_savings` (alias `estimated_monthly_savings_usd`)
+- `usage_ratio`, `estimated_monthly_savings` (alias `estimated_savings_cents`)
 - `pvc_name`, `persistentvolumeclaim`, `capacity_bytes`
 
 **PVC detail** (`GET .../recommendations/openshift/pvcs/detail`):

@@ -29,7 +29,7 @@ type QuotaRecommendationDetailResponse struct {
 	QuotaRecommended   *QuotaResourceValues                        `json:"quota_recommended,omitempty"`
 	Utilization        *QuotaUtilizationPercents                   `json:"utilization,omitempty"`
 	CapacityFreed      *QuotaCapacityFreedResponse                 `json:"capacity_freed,omitempty"`
-	EstimatedSavings   *money.SavingsObject                        `json:"estimated_savings,omitempty"`
+	EstimatedSavings   *money.MoneyAmount                        `json:"estimated_savings,omitempty"`
 	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
 	History            []engine.QuotaRecommendationHistoryRow      `json:"history,omitempty"`
@@ -46,7 +46,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 	QuotaRecommended     *ClusterQuotaResourceValues                 `json:"quota_recommended,omitempty"`
 	Utilization          *ClusterQuotaUtilizationPercents            `json:"utilization,omitempty"`
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse          `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *money.SavingsObject                       `json:"estimated_savings,omitempty"`
+	EstimatedSavings     *money.MoneyAmount                       `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	Namespaces           []string                                      `json:"namespaces,omitempty"`
 	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
@@ -337,7 +337,7 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
 	item.CapacityFreed = quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed)
 	if savings.Valid {
-		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
 	}
 	if lastObserved.Valid {
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
@@ -385,7 +385,7 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (Cl
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
-		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
 	}
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
 	return item, codes, nil

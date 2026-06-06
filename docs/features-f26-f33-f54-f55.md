@@ -217,7 +217,7 @@ fleet-wide counts and totals.
 | `active_containers` | Count where `stale = false` |
 | `idle_containers` | Count where `notification_codes` contains code 5 (`NotifIdleWorkload`) |
 | `abandoned_containers` | Count where `notification_codes` contains code 8 (`NotifAbandonedWorkload`) |
-| `total_monthly_savings_usd` | Sum of `estimated_monthly_savings_usd` for active recs |
+| `total_monthly_savings_usd` | Sum of `estimated_savings_cents` for active recs |
 | `cluster_count` | Distinct `cluster_uuid` count |
 | `currency` | ISO 4217 code from Koku cost model (default `USD`) |
 
@@ -255,7 +255,7 @@ snapshot). Complements fleet-summary (container health counts only).
 ```json
 {
   "currency": "USD",
-  "total_estimated_monthly_savings_usd": 12450.00,
+  "total_estimated_savings_cents": 12450.00,
   "by_plugin": {
     "container": 8200.00,
     "node": 3100.00,

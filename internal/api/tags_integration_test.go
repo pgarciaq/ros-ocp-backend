@@ -60,12 +60,12 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, $3, 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 10000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'other-ns', 'w2', 'Deployment', 'c2', 'medium', 'cost', false, '{}', 20000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -205,7 +205,7 @@ func seedTagFilterMultiKeyWorkloads(t *testing.T, ctx context.Context) {
 			wl, cn = "w2", "c2"
 		}
 		_, err = database.Pool.Exec(ctx, `
-			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 			VALUES ($1, $2, $3, $4, 'Deployment', $5, 'medium', 'cost', false, '{}', 10000, now())
 			ON CONFLICT DO NOTHING`,
 			testutil.TestOrgID, testutil.TestClusterUUID, ns, wl, cn)
@@ -290,7 +290,7 @@ func TestTagFilters_WithRBACScope_Intersection(t *testing.T) {
 			testutil.TestOrgID, cl.uuid, cl.ns)
 		require.NoError(t, err)
 		_, err = pool.Exec(ctx, `
-			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 			VALUES ($1, $2, $3, 'rbac-w', 'Deployment', 'rbac-c', 'medium', 'cost', false, '{}', 10000, now())
 			ON CONFLICT DO NOTHING`, testutil.TestOrgID, cl.uuid, cl.ns)
 		require.NoError(t, err)
@@ -394,7 +394,7 @@ func TestTagFilters_PVCList(t *testing.T) {
 
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, recommendation_type,
-			capacity_bytes, usage_bytes_max, usage_ratio, notification_codes, data_days, estimated_monthly_savings_usd, updated_at)
+			capacity_bytes, usage_bytes_max, usage_ratio, notification_codes, data_days, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, $3, 'pvc-prod', 'medium', 'oversized', 1000, 100, 0.1, '{}', 7, 5000, now()),
 		       ($1, $2, 'other-ns', 'pvc-stg', 'medium', 'oversized', 1000, 100, 0.1, '{}', 7, 6000, now())
 		ON CONFLICT DO NOTHING`,
@@ -424,7 +424,7 @@ func TestTagFilters_NodeUtilizationList(t *testing.T) {
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
-			notification_codes, estimated_monthly_savings_usd, updated_at)
+			notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -451,7 +451,7 @@ func TestTagFilters_NodeUtilizationList_DBSource(t *testing.T) {
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
-			notification_codes, estimated_monthly_savings_usd, updated_at)
+			notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -523,7 +523,7 @@ func TestTagFilters_VMList(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, savings_amount, savings_currency, last_recommended_at
+			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'vm-prod', $3, 'linux',
 			4, 16, 2, 8,
@@ -650,7 +650,7 @@ func TestTagFilters_HistoryList(t *testing.T) {
 			recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 			term, engine, rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib, notification_codes, confidence_level,
-			estimated_monthly_savings_usd, source_binary
+			estimated_savings_cents, source_binary
 		) VALUES
 			($1, $2, $3, $4, 'w1', 'Deployment', 'c1', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 10000, 'test'),
 			($1, $2, $3, 'other-ns', 'w2', 'Deployment', 'c2', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 20000, 'test')

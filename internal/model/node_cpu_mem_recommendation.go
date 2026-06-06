@@ -29,7 +29,7 @@ type NodeUtilizationEngineRec struct {
 	RecommendedCPUCores     float32                                    `json:"recommended_cpu_cores,omitempty"`
 	RecommendedMemoryGiB    float32                                    `json:"recommended_memory_gib,omitempty"`
 	NodeCountReduction      int                                        `json:"node_count_reduction"`
-	EstimatedMonthlySavings *money.SavingsObject                       `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
 	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	UpdatedAt               string                                     `json:"updated_at,omitempty"`
 }

@@ -373,7 +373,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		node_keys AS (
 			SELECT f.cluster_uuid, f.node,
 				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
-					THEN f.estimated_monthly_savings_usd END) AS sort_savings
+					THEN f.estimated_savings_cents END) AS sort_savings
 			FROM filtered f
 			GROUP BY f.cluster_uuid, f.node
 		),
@@ -390,7 +390,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			f.stranded_resource, COALESCE(f.pod_count, 0), f.pod_capacity,
 			COALESCE(f.trend_slope, 0), COALESCE(f.notification_codes, '{}'),
 			f.recommended_cpu_cores, f.recommended_memory_gib, COALESCE(f.node_count_reduction, 0),
-			f.estimated_monthly_savings_usd,
+			f.estimated_savings_cents,
 			f.suggested_instance_type, f.instance_type_reason,
 			f.confidence_level, f.data_days,
 			COALESCE(f.updated_at, 'epoch'::timestamptz)
@@ -833,7 +833,7 @@ func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
 		rec.RecommendedMemoryGiB = float32(row.RecommendedMemoryGiB.Float64)
 	}
 	if row.EstimatedMonthlySavings.Valid {
-		rec.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&row.EstimatedMonthlySavings.Int64, money.DefaultCurrency)
+		rec.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&row.EstimatedMonthlySavings.Int64, money.DefaultCurrency)
 	}
 	return rec
 }

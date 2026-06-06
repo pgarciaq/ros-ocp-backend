@@ -248,7 +248,7 @@ func TestGetPVCRecommendations_OrderByEstimatedSavingsAsc(t *testing.T) {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO pvc_recommendation_sets (
 			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
-			recommendation_type, usage_ratio, estimated_monthly_savings_usd, updated_at
+			recommendation_type, usage_ratio, estimated_savings_cents, updated_at
 		) VALUES
 			($1, $2, 'ns', 'pvc-low', 'medium', 'oversized', 0.1, 100, NOW()),
 			($1, $2, 'ns', 'pvc-high', 'medium', 'oversized', 0.2, 50000, NOW())

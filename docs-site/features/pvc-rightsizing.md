@@ -202,7 +202,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 | `format` | string | `csv` for CSV export (`Accept: text/csv` also supported) |
 
 **Allowed `order_by` values:** `usage_ratio`, `estimated_monthly_savings` (alias
-`estimated_monthly_savings_usd`), `pvc_name` / `persistentvolumeclaim`,
+`estimated_savings_cents`), `pvc_name` / `persistentvolumeclaim`,
 `capacity_bytes`.
 
 ### List response
@@ -340,7 +340,7 @@ Overwritten on each ingestion cycle (one row per term).
 | `internal/api/handlers_pvc.go` | API handler |
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
 | `migrations/000048_add_pvc_notification_codes.up.sql` | Notification seed |
-| `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_monthly_savings_usd` column |
+| `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_savings_cents` column |
 | `migrations/000113_fix_pvc_recommendation_term_unique.up.sql` | Per-term unique key on `pvc_recommendation_sets` |
 | `migrations/000114_add_pvc_last_seen_pod.up.sql` | `last_seen_pod` on digests and recommendations (`mounted_by` in API) |
 | `internal/api/handlers_pvc_detail.go` | Detail handler (multi-term + historical usage) |

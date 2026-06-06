@@ -146,7 +146,7 @@ func seedSavingsSummaryCluster(t *testing.T, ctx context.Context, pool *pgxpool.
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', $3, now())`,
 		testutil.TestOrgID, clusterUUID, money.USDToCents(containerSavingsUSD))
 	require.NoError(t, err)

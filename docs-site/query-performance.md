@@ -62,7 +62,7 @@ Run `EXPLAIN ANALYZE` and look for:
    these filters are dramatically smaller and faster than full-table indexes.
 
 2. **`INCLUDE` columns for covering indexes** — Savings aggregation benefits
-   from `INCLUDE (estimated_monthly_savings_usd)` so PostgreSQL can satisfy the
+   from `INCLUDE (estimated_savings_cents)` so PostgreSQL can satisfy the
    query from the index without heap fetches.
 
 3. **Leading column = `org_id`** — Virtually every API query starts with org

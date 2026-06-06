@@ -219,7 +219,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		),
 		node_page AS (
 			SELECT f.cluster_uuid, f.node,
-				MAX(CASE WHEN f.term = 'medium' AND f.engine = 'cost' THEN f.estimated_monthly_savings_usd END) AS sort_savings
+				MAX(CASE WHEN f.term = 'medium' AND f.engine = 'cost' THEN f.estimated_savings_cents END) AS sort_savings
 			FROM filtered f GROUP BY f.cluster_uuid, f.node
 			ORDER BY sort_savings DESC NULLS LAST, f.node ASC LIMIT 10 OFFSET 0
 		)
@@ -234,7 +234,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 
 	// --- PVC ---
 	cases = append(cases, queryCase{"pvc", "list_org", orgLarge, `
-		SELECT cluster_uuid, namespace, persistentvolumeclaim, usage_ratio, estimated_monthly_savings_usd
+		SELECT cluster_uuid, namespace, persistentvolumeclaim, usage_ratio, estimated_savings_cents
 		FROM pvc_recommendation_sets WHERE org_id = $1 AND term = 'medium'
 		ORDER BY usage_ratio DESC LIMIT 20 OFFSET 0`, []any{orgLarge}})
 	cases = append(cases, queryCase{"pvc", "count_org", orgLarge, `
@@ -243,11 +243,11 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 	// --- Savings summary ---
 	cases = append(cases, queryCase{"savings", "by_plugin", orgLarge, `
 		SELECT
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM recommendation_sets
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM recommendation_sets
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost' AND stale = false), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM node_recommendations
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM node_recommendations
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM pvc_recommendation_sets
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = 'medium'), 0)`, []any{orgLarge}})
 	cases = append(cases, queryCase{"savings", "by_cluster", orgLarge, fleetByClusterSQL(), []any{orgLarge, "cost"}})
 
@@ -508,12 +508,12 @@ func fleetByClusterSQL() string {
 			WHERE org_id = $1 AND term = 'medium'
 		),
 		container_savings AS (
-			SELECT cluster_uuid::text, COALESCE(SUM(estimated_monthly_savings_usd),0)::float/100 AS savings
+			SELECT cluster_uuid::text, COALESCE(SUM(estimated_savings_cents),0)::float/100 AS savings
 			FROM recommendation_sets WHERE org_id = $1 AND term = 'medium' AND engine = $2 AND stale = false
 			GROUP BY cluster_uuid
 		),
 		node_savings AS (
-			SELECT cluster_uuid::text, COALESCE(SUM(estimated_monthly_savings_usd),0)::float/100 AS savings
+			SELECT cluster_uuid::text, COALESCE(SUM(estimated_savings_cents),0)::float/100 AS savings
 			FROM node_recommendations WHERE org_id = $1 AND term = 'medium' AND engine = $2
 			GROUP BY cluster_uuid
 		)
@@ -575,7 +575,7 @@ func nodeUtilListSQL() string {
 		node_page AS (
 			SELECT f.cluster_uuid, f.node,
 				MAX(CASE WHEN f.term = $3 AND f.engine = $4
-					THEN f.estimated_monthly_savings_usd END) AS sort_savings
+					THEN f.estimated_savings_cents END) AS sort_savings
 			FROM filtered f
 			GROUP BY f.cluster_uuid, f.node
 			ORDER BY sort_savings DESC NULLS LAST, f.node ASC

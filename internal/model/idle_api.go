@@ -47,7 +47,7 @@ func PopulateContainerIdleFields(
 	}
 	if idleState != "active" {
 		if savingsEnabled && wasteCents != nil && *wasteCents > 0 {
-			result.EstimatedMonthlyWaste = money.FormatCentsToSavingsPtr(wasteCents, money.DefaultCurrency)
+			result.EstimatedMonthlyWaste = money.FormatCentsToAmountPtr(wasteCents, money.DefaultCurrency)
 		}
 		result.IdleRecommendation = BuildIdleRecommendation(idleState, idleDurationDays)
 		// Rightsizing savings are misleading for idle workloads; waste is the actionable figure.

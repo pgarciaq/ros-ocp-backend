@@ -11,7 +11,7 @@ import (
 )
 
 func TestNodeGPURecommendation_JSONRoundtrip(t *testing.T) {
-	savings := money.FormatUSDToSavings(225.0, "USD")
+	savings := money.FormatUSDToAmount(225.0, "USD")
 	rec := NodeGPURecommendation{
 		NodeName:            "gpu-worker-1",
 		ClusterUUID:         "abc-123",
@@ -55,7 +55,7 @@ func TestNodeRecommendationListResponse_EmptyData(t *testing.T) {
 }
 
 func TestNodeRecommendationMeta_WithPagination(t *testing.T) {
-	totalSavings := money.FormatUSDToSavings(500.0, "USD")
+	totalSavings := money.FormatUSDToAmount(500.0, "USD")
 	meta := NodeRecommendationMeta{
 		Count:        42,
 		Limit:        10,

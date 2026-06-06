@@ -29,7 +29,7 @@ func scanPVCRecommendationRow(row pgx.Row) (PVCRecommendationResponse, error) {
 		r.GrowthBytesPerDay = &v
 	}
 	if savings.Valid {
-		r.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(&savings.Int64, money.DefaultCurrency)
+		r.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savings.Int64, money.DefaultCurrency)
 	}
 	if idleSince.Valid {
 		s := idleSince.Time.UTC().Format("2006-01-02")
@@ -54,4 +54,4 @@ const pvcRecommendationSelectSQL = `
 		storageclass, capacity_bytes, usage_bytes_max, usage_ratio,
 		recommendation_type, recommended_bytes, days_to_full,
 		growth_bytes_per_day, notification_codes, data_days, term,
-		estimated_monthly_savings_usd, idle_since, idle_duration_days`
+		estimated_savings_cents, idle_since, idle_duration_days`

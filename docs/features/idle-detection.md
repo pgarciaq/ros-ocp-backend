@@ -162,7 +162,7 @@ Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
 runs inside [`RecommendGPUWithSettings()`](../../internal/engine/gpu_recommender.go) when
 GPU recommendations are computed from `gpu_container_digests`. Results persist on
 `recommendation_sets` (`gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`,
-`gpu_estimated_waste_cents`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go)
+`estimated_monthly_gpu_waste`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go)
 after container recommendations are written (GPU plugin `HookAfterCSVTypes` + report processor).
 
 ### PVCs

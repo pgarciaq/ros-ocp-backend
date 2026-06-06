@@ -71,7 +71,7 @@ type ClusterQuotaRecommendationListItem struct {
 	QuotaRecommended     *ClusterQuotaResourceValues      `json:"quota_recommended,omitempty"`
 	Utilization          *ClusterQuotaUtilizationPercents `json:"utilization,omitempty"`
 	CapacityFreed        *ClusterQuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *money.SavingsObject                         `json:"estimated_savings,omitempty"`
+	EstimatedSavings     *money.MoneyAmount                         `json:"estimated_savings,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	Namespaces           []string                                     `json:"namespaces,omitempty"`
 	Count                int                                          `json:"count,omitempty"`
@@ -380,7 +380,7 @@ func getClusterQuotaRecommendationsGrouped(
 		}
 		if savingsCents > 0 {
 			currency := resolveListCurrencyFromRequest(c, orgID)
-			item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savingsCents, currency)
+			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -459,7 +459,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner, currency string) (Clu
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
-		item.EstimatedSavings = money.FormatCentsToSavingsPtr(&savings.Int64, currency)
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)

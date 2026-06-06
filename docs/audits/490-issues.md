@@ -259,7 +259,7 @@ Additional fixes from the P0/P1 pass:
 **#63 — Cost savings stale when Koku rates change**
 - **Status:** ✅ Fixed (commit `365463f`)
 - Repo: ros-ocp-backend, koku
-- No mechanism to trigger re-computation of `estimated_monthly_savings_usd` when upstream cost models are updated.
+- No mechanism to trigger re-computation of `estimated_savings_cents` when upstream cost models are updated.
 - Effort: Medium
 
 ### Promoted from P2 — native API / ingestion correctness *(2026-05-16)*
@@ -1829,7 +1829,7 @@ Additional fixes from the P0/P1 pass:
 
 **#353 — No mechanism to re-trigger recommendations when only cost model changes**
 - Repo: ros-ocp-backend, koku
-- No Kafka/event hook when Koku cost models change—`estimated_monthly_savings_usd` stays stale until manual re-ingestion.
+- No Kafka/event hook when Koku cost models change—`estimated_savings_cents` stays stale until manual re-ingestion.
 
 **#354 — Partial digest update means percentiles from different CSV versions mix**
 - Repo: ros-ocp-backend

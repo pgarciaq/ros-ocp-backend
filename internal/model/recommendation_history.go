@@ -25,7 +25,7 @@ type HistoryRow struct {
 	RecMemLimitKiB        *int64        `gorm:"column:rec_memory_limit_kib" json:"rec_memory_limit_kib"`
 	NotificationCodes     SmallintArray `gorm:"column:notification_codes;type:smallint[]" json:"notification_codes"`
 	ConfidenceLevel       *float32      `gorm:"column:confidence_level" json:"confidence_level"`
-	EstimatedSavingsCents *int64        `gorm:"column:estimated_monthly_savings_usd" json:"-"`
+	EstimatedSavingsCents *int64        `gorm:"column:estimated_savings_cents" json:"-"`
 }
 
 // MarshalJSON exposes savings as a structured object in API responses while storing cents internally.
@@ -33,12 +33,12 @@ func (h HistoryRow) MarshalJSON() ([]byte, error) {
 	type historyRowAlias HistoryRow
 	aux := struct {
 		historyRowAlias
-		EstimatedMonthlySavings *money.SavingsObject `json:"estimated_monthly_savings,omitempty"`
+		EstimatedMonthlySavings *money.MoneyAmount `json:"estimated_monthly_savings,omitempty"`
 	}{
 		historyRowAlias: historyRowAlias(h),
 	}
 	if h.EstimatedSavingsCents != nil {
-		aux.EstimatedMonthlySavings = money.FormatCentsToSavingsPtr(h.EstimatedSavingsCents, money.DefaultCurrency)
+		aux.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(h.EstimatedSavingsCents, money.DefaultCurrency)
 	}
 	return json.Marshal(aux)
 }
@@ -60,7 +60,7 @@ func GetRecommendationHistory(
 			h.rec_cpu_request_millicores, h.rec_cpu_limit_millicores,
 			h.rec_memory_request_kib, h.rec_memory_limit_kib,
 			h.notification_codes, h.confidence_level,
-			h.estimated_monthly_savings_usd`).
+			h.estimated_savings_cents`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid`).
 		Where("h.org_id = ?", orgID)
 

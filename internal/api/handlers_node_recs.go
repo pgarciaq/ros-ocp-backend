@@ -322,7 +322,7 @@ func respondNodeGPURecommendations(
 	opts listoptions.ListOptions,
 	totalCount int,
 	data []model.NodeGPURecommendation,
-	totalSavings *money.SavingsObject,
+	totalSavings *money.MoneyAmount,
 	warnings []string,
 	nodeCurrency string,
 	hasNext bool,
@@ -512,8 +512,8 @@ func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) mode
 		RecommendationType:  "gpu_time_slicing",
 		GPUModel:            tsRec.GPUModel,
 		RecommendedReplicas: tsRec.RecommendedReplicas,
-		SavingsPerGPU:       money.FormatUSDPtrToSavingsPtr(tsRec.SavingsPerGPU, currency),
-		TotalNodeSavings:    money.FormatUSDPtrToSavingsPtr(tsRec.TotalNodeSavings, currency),
+		SavingsPerGPU:       money.FormatUSDPtrToAmountPtr(tsRec.SavingsPerGPU, currency),
+		TotalNodeSavings:    money.FormatUSDPtrToAmountPtr(tsRec.TotalNodeSavings, currency),
 		Confidence:          tsRec.Confidence,
 		ConfidenceLevel:     tsRec.Confidence,
 		NotificationCodes:   tsRec.NotificationCodes,
@@ -647,7 +647,7 @@ func cmpFloat64(a, b float64) int {
 	return 0
 }
 
-func savingsObjectUSDValue(s *money.SavingsObject) float64 {
+func savingsObjectUSDValue(s *money.MoneyAmount) float64 {
 	if s == nil || s.Value == "" {
 		return 0
 	}
@@ -658,7 +658,7 @@ func savingsObjectUSDValue(s *money.SavingsObject) float64 {
 	return v
 }
 
-func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *money.SavingsObject {
+func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *money.MoneyAmount {
 	var sum float64
 	hasSavings := false
 	for _, r := range recs {
@@ -672,7 +672,7 @@ func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *mon
 		return nil
 	}
 	cents := money.USDToCents(sum)
-	return money.FormatCentsToSavingsPtr(&cents, currency)
+	return money.FormatCentsToAmountPtr(&cents, currency)
 }
 
 // applyNodeGPURecTagFilters keeps node GPU recs with at least one candidate container matching tag filters.

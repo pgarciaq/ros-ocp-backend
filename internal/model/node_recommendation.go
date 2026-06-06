@@ -10,8 +10,8 @@ type NodeGPURecommendation struct {
 	RecommendationType  string               `json:"recommendation_type"`
 	GPUModel            string               `json:"gpu_model"`
 	RecommendedReplicas int                  `json:"recommended_replicas"`
-	SavingsPerGPU       *money.SavingsObject `json:"savings_per_gpu,omitempty"`
-	TotalNodeSavings    *money.SavingsObject `json:"total_node_savings,omitempty"`
+	SavingsPerGPU       *money.MoneyAmount `json:"savings_per_gpu,omitempty"`
+	TotalNodeSavings    *money.MoneyAmount `json:"total_node_savings,omitempty"`
 	Confidence          float32              `json:"confidence"`
 	ConfidenceLevel     float32            `json:"confidence_level"`
 	CandidateContainers []NodeContainerRef `json:"candidate_containers"`
@@ -44,7 +44,7 @@ type NodeRecommendationMeta struct {
 	HasNext       bool                 `json:"has_next"`
 	NextCursor    string               `json:"next_cursor,omitempty"`
 	Currency      string               `json:"currency"`
-	TotalSavings  *money.SavingsObject `json:"total_savings,omitempty"`
+	TotalSavings  *money.MoneyAmount `json:"total_savings,omitempty"`
 }
 
 // NodeRecommendationLinks is an alias for backward compatibility.

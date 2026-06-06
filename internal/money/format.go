@@ -2,49 +2,49 @@ package money
 
 import "fmt"
 
-// SavingsObject is the structured savings value returned by ROS API responses.
-type SavingsObject struct {
+// MoneyAmount is the structured monetary value returned by ROS API responses.
+type MoneyAmount struct {
 	Value string `json:"value"`
 	Units string `json:"units"`
 }
 
-// FormatCentsToSavings converts integer cents to a SavingsObject with two decimal places.
-func FormatCentsToSavings(cents int64, currency string) SavingsObject {
+// FormatCentsToAmount converts integer cents to a MoneyAmount with two decimal places.
+func FormatCentsToAmount(cents int64, currency string) MoneyAmount {
 	if currency == "" {
 		currency = DefaultCurrency
 	}
 	usd := float64(cents) / 100.0
-	return SavingsObject{
+	return MoneyAmount{
 		Value: fmt.Sprintf("%.2f", usd),
 		Units: currency,
 	}
 }
 
-// FormatCentsToSavingsPtr converts nullable cents to a SavingsObject pointer.
-func FormatCentsToSavingsPtr(cents *int64, currency string) *SavingsObject {
+// FormatCentsToAmountPtr converts nullable cents to a MoneyAmount pointer.
+func FormatCentsToAmountPtr(cents *int64, currency string) *MoneyAmount {
 	if cents == nil {
 		return nil
 	}
-	s := FormatCentsToSavings(*cents, currency)
+	s := FormatCentsToAmount(*cents, currency)
 	return &s
 }
 
-// FormatUSDToSavings converts a USD float (already in dollars) to a SavingsObject.
-func FormatUSDToSavings(usd float64, currency string) SavingsObject {
+// FormatUSDToAmount converts a USD float (already in dollars) to a MoneyAmount.
+func FormatUSDToAmount(usd float64, currency string) MoneyAmount {
 	if currency == "" {
 		currency = DefaultCurrency
 	}
-	return SavingsObject{
+	return MoneyAmount{
 		Value: fmt.Sprintf("%.2f", usd),
 		Units: currency,
 	}
 }
 
-// FormatUSDPtrToSavingsPtr converts nullable float32 USD to a SavingsObject pointer.
-func FormatUSDPtrToSavingsPtr(usd *float32, currency string) *SavingsObject {
+// FormatUSDPtrToAmountPtr converts nullable float32 USD to a MoneyAmount pointer.
+func FormatUSDPtrToAmountPtr(usd *float32, currency string) *MoneyAmount {
 	if usd == nil {
 		return nil
 	}
-	s := FormatUSDToSavings(float64(*usd), currency)
+	s := FormatUSDToAmount(float64(*usd), currency)
 	return &s
 }

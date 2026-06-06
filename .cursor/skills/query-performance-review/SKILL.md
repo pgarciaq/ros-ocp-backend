@@ -63,7 +63,7 @@ Verify indexes exist for filter + sort columns with matching partial predicates:
 | Container list (legacy DISTINCT path) | `(org_id, namespace, workload, container_name) WHERE stale = false` on `recommendation_sets` → `idx_rs_keyset_page` |
 | Tag filter (future) | GIN on `org_container_keys.resolved_tags` → `idx_ock_tags` |
 | Cluster filter on key table | `(org_id, cluster_uuid)` → `idx_ock_org_cluster` |
-| Savings aggregation | `(org_id, cluster_uuid) INCLUDE (estimated_monthly_savings_usd) WHERE stale = false AND term = 'medium' AND engine = 'cost'` → `idx_rs_savings_agg` |
+| Savings aggregation | `(org_id, cluster_uuid) INCLUDE (estimated_savings_cents) WHERE stale = false AND term = 'medium' AND engine = 'cost'` → `idx_rs_savings_agg` |
 | History by org | `(org_id, recorded_at DESC)` → `idx_rh_org_recorded` |
 | Namespace list | `(org_id, updated_at DESC) WHERE term IS NOT NULL AND stale = false` → `idx_ns_org_updated` |
 | Digest lookback | `(org_id, cluster_uuid, schedule_type, bucket_date)` → `idx_daily_container_digests_lookback` |

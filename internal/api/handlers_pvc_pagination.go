@@ -10,7 +10,7 @@ import (
 
 func pvcSortValue(r PVCRecommendationResponse, orderCol string) interface{} {
 	switch orderCol {
-	case "estimated_monthly_savings_usd":
+	case "estimated_monthly_savings_usd": // deprecated alias
 		if r.EstimatedMonthlySavings != nil {
 			return r.EstimatedMonthlySavings.Value
 		}

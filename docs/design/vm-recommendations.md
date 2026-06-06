@@ -548,7 +548,7 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 |-----------|-------------|
 | `limit` | 1–100 (default 10) |
 | `offset` | Pagination offset |
-| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `savings` / `savings_amount` |
+| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `savings` / `estimated_savings_cents` |
 | `order_how` | `asc` or `desc` |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
 | `filter[project]` | Namespace (OpenShift namespace; `filter[namespace]` accepted as alias) |
@@ -896,7 +896,7 @@ Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, te
 
 ## Savings estimates
 
-When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches Koku [`effective_rates`](../../internal/costdata/provider.go) and [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) persists `savings_amount` / `savings_currency` on each row.
+When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches Koku [`effective_rates`](../../internal/costdata/provider.go) and [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) persists `estimated_savings_cents` / `savings_currency` on each row.
 
 **Rate selection:** CPU and memory use the **effective** configured rate — `max(cpu_core_request_per_hour, cpu_core_usage_per_hour)` and the memory GB equivalents (infrastructure + supplementary per metric). GPU uses `gpu_cost_per_month` (monthly, not hourly).
 
@@ -906,13 +906,13 @@ When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, 
 | **Idle / abandoned** | `current_vCPU × cpu_rate × 730 + current_mem_GiB × mem_rate × 730 + vm_cost_per_month (when configured) + gpu_count × gpu_monthly_rate` |
 | **GPU remove / MIG** | Same patterns as container GPU: full card on `remove_gpu`; `(1 − rec_slices/total_slices) × gpu_monthly_rate × gpu_count` for MIG profiles |
 
-**API:** `savings` is a [`SavingsObject`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
+**API:** `savings` is a [`MoneyAmount`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
 
 **Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` — no masu fetch; `savings` is always `null`.
 
-**Stale values:** Savings are computed at recommendation generation time using cost model rates available at that moment. If Koku is temporarily unavailable, `savings` is `null` until the next recommendation cycle. If cost model rates change, previously stored recommendations retain their original `savings_amount` / `savings_currency` until recomputed. Currency changes in the cost model are not retroactively applied to existing rows.
+**Stale values:** Savings are computed at recommendation generation time using cost model rates available at that moment. If Koku is temporarily unavailable, `savings` is `null` until the next recommendation cycle. If cost model rates change, previously stored recommendations retain their original `estimated_savings_cents` / `savings_currency` until recomputed. Currency changes in the cost model are not retroactively applied to existing rows.
 
-**Fleet rollup:** `GET /recommendations/openshift/savings-summary` includes `by_plugin.vm` (sum of `savings_amount` for `medium_term` rows matching the `engine` filter).
+**Fleet rollup:** `GET /recommendations/openshift/savings-summary` includes `by_plugin.vm` (sum of `estimated_savings_cents` for `medium_term` rows matching the `engine` filter).
 
 ---
 
@@ -922,7 +922,7 @@ Migrations: [`000089_vm_recommendations.up.sql`](../../migrations/000089_vm_reco
 
 - `daily_vm_digests` — daily percentile and I/O columns; aggregate GPU fields; `has_gpu`
 - `vm_gpu_device_digests` — per-GPU rows keyed by `vm_digest_id` + `gpu_uuid`
-- `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB, nullable `savings_amount` / `savings_currency`
+- `vm_recommendations` — current/recommended sizing, flags, instance type, disk projection, notifications JSONB, nullable `estimated_savings_cents` / `savings_currency`
 - `vm_recommendation_history` — append-only history; retention via `ROS_VM_REC_HISTORY_RETENTION_DAYS`
 
 ---

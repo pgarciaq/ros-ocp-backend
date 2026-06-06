@@ -80,7 +80,7 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 	}()
 }
 
-// RecalculateSavingsForOrg recomputes estimated_monthly_savings_usd for persisted recommendations
+// RecalculateSavingsForOrg recomputes estimated_savings_cents for persisted recommendations
 // using current Koku effective rates. Classification and sizing are not re-run.
 func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
 	log := logging.ForOrgOnly(orgID)
@@ -185,6 +185,9 @@ func defaultRecalculateClusterSavings(ctx context.Context, pool *pgxpool.Pool, o
 		if err := recalculateContainerSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
 			errs = append(errs, err)
 		}
+		if err := recalculateGPUSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if containsSavingsRecType(recTypes, savingsRecTypeNode) {
 		if err := recalculateNodeSavings(ctx, pool, orgID, clusterUUID, costData); err != nil {
@@ -207,6 +210,14 @@ func defaultRecalculateClusterSavings(ctx context.Context, pool *pgxpool.Pool, o
 		}
 	}
 	return errorsJoin(errs)
+}
+
+func recalculateGPUSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
+	terms, err := LoadTermConfigCached(ctx, pool, orgID, "gpu")
+	if err != nil {
+		terms = DefaultTermsForPlugin("gpu")
+	}
+	return StoreGPUClassifications(ctx, pool, orgID, clusterUUID, terms, costData)
 }
 
 func recalculateContainerSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, costData *costdata.ClusterCostData) error {
@@ -459,7 +470,7 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 	for _, r := range recs {
 		_, err := tx.Exec(ctx, `
 			UPDATE recommendation_sets
-			SET estimated_monthly_savings_usd = $1,
+			SET estimated_savings_cents = $1,
 			    notification_codes = $2,
 			    updated_at = now()
 			WHERE org_id = $3 AND cluster_uuid = $4::uuid
@@ -489,7 +500,7 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 	for _, r := range recs {
 		_, err := tx.Exec(ctx, `
 			UPDATE node_recommendations
-			SET estimated_monthly_savings_usd = $1,
+			SET estimated_savings_cents = $1,
 			    notification_codes = $2,
 			    updated_at = now()
 			WHERE org_id = $3 AND cluster_uuid = $4::uuid
@@ -508,7 +519,7 @@ func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) er
 	for _, r := range recs {
 		_, err := pool.Exec(ctx, `
 			UPDATE pvc_recommendation_sets
-			SET estimated_monthly_savings_usd = $1,
+			SET estimated_savings_cents = $1,
 			    notification_codes = $2,
 			    updated_at = now()
 			WHERE org_id = $3 AND cluster_uuid = $4::uuid

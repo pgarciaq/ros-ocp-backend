@@ -149,13 +149,13 @@ CREATE INDEX idx_rs_keyset_page
 -- Savings aggregation (migration 000079)
 CREATE INDEX idx_rs_savings_agg
     ON recommendation_sets (org_id, cluster_uuid)
-    INCLUDE (estimated_monthly_savings_usd)
+    INCLUDE (estimated_savings_cents)
     WHERE stale = false AND term = 'medium' AND engine = 'cost';
 ```
 
 ### 2. `INCLUDE` columns for covering indexes
 
-Savings aggregation sums `estimated_monthly_savings_usd` grouped by org/cluster.
+Savings aggregation sums `estimated_savings_cents` grouped by org/cluster.
 An index-only scan avoids heap fetches when the aggregate column is in `INCLUDE`.
 
 ### 3. Leading column = `org_id`
@@ -239,7 +239,7 @@ See [org_container_keys](#org_container_keys-table) below for schema and future 
 
 The fleet savings summary runs **4 correlated subqueries** (containers, nodes,
 PVCs, namespaces), each scanning the full org partition. Without covering indexes,
-each subquery performs heap fetches for `estimated_monthly_savings_usd`.
+each subquery performs heap fetches for `estimated_savings_cents`.
 
 ### Fix
 

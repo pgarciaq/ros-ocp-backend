@@ -39,7 +39,7 @@ GPU classification uses DCGM basis points (0–10000 = 0–100%):
 - **Zombie** — P95 SM active and P95 DRAM active both below zombie basis points (admin default 100 = 1%).
 - **Idle** — P95 SM and P95 DRAM below `gpu_sm_active_basis_points` and `gpu_dram_active_basis_points` (default 500 = 5%).
 
-Persisted on `recommendation_sets` as `gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`, `gpu_estimated_waste_cents`. Exposed on the container `gpu` map in list/detail responses.
+Persisted on `recommendation_sets` as `gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`, `estimated_monthly_gpu_waste`. Exposed on the container `gpu` map in list/detail responses.
 
 Filters:
 
@@ -79,7 +79,7 @@ Orphaned PVCs (`recommendation_type=orphaned`) include `idle_since` and `idle_du
 
 ## Waste calculation
 
-For containers and GPUs in **idle** or **zombie**, `estimated_monthly_waste` / `gpu_estimated_waste_cents` reflect **full monthly cost** of the workload (not rightsizing delta). Rightsizing `estimated_monthly_savings` is cleared on idle container rows.
+For containers and GPUs in **idle** or **zombie**, `estimated_monthly_waste` / `estimated_monthly_gpu_waste` reflect **full monthly cost** of the workload (not rightsizing delta). Rightsizing `estimated_monthly_savings` is cleared on idle container rows.
 
 ## Settings API
 

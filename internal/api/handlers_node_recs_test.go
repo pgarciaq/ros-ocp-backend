@@ -183,8 +183,8 @@ func TestSortNodeRecs_ByConfidenceDesc(t *testing.T) {
 }
 
 func TestSortNodeRecs_ByTotalSavingsNilSafe(t *testing.T) {
-	s1 := money.FormatUSDToSavings(100, "USD")
-	s2 := money.FormatUSDToSavings(300, "USD")
+	s1 := money.FormatUSDToAmount(100, "USD")
+	s2 := money.FormatUSDToAmount(300, "USD")
 	recs := []model.NodeGPURecommendation{
 		{NodeName: "a", TotalNodeSavings: &s1},
 		{NodeName: "b", TotalNodeSavings: nil},

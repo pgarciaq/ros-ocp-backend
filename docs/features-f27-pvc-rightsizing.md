@@ -272,7 +272,7 @@ Overwritten on each ingestion cycle.
 | `internal/api/handlers_pvc_detail.go` | Detail handler (multi-term + historical usage) |
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
 | `migrations/000048_add_pvc_notification_codes.up.sql` | Notification seed |
-| `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_monthly_savings_usd` column |
+| `migrations/000070_add_node_pvc_savings_columns.up.sql` | `estimated_savings_cents` column |
 | `migrations/000113_fix_pvc_recommendation_term_unique.up.sql` | Per-term unique key |
 | `migrations/000114_add_pvc_last_seen_pod.up.sql` | `last_seen_pod` / `mounted_by` |
 

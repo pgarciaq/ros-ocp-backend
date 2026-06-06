@@ -16,7 +16,7 @@ node × GPU model × term when the engine emits a recommendation.
 | Table | `node_recommendations` (type `gpu_time_slicing`) |
 
 Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]=cost|performance`.
-Savings: list (`total_node_savings`, `savings_per_gpu` as `SavingsObject`; currency in `meta.currency`) and container detail
+Savings: list (`total_node_savings`, `savings_per_gpu` as `MoneyAmount`; currency in `meta.currency`) and container detail
 (`estimated_monthly_timeslicing_savings` on `gpu.{term}`).
 
 ## Flow

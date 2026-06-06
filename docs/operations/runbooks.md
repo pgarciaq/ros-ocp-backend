@@ -198,7 +198,7 @@ GROUP BY state;
   ```sql
   SELECT column_name FROM information_schema.columns
   WHERE table_name IN ('node_recommendations', 'pvc_recommendation_sets')
-    AND column_name = 'estimated_monthly_savings_usd';
+    AND column_name = 'estimated_savings_cents';
 
   SELECT column_name FROM information_schema.columns
   WHERE table_name = 'node_recommendations'

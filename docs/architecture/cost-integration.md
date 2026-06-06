@@ -129,9 +129,9 @@ to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
 
 1. Fetch effective rates once per ingestion cycle per cluster ([`report_processor.go`](../../internal/services/report_processor.go))
 2. Look up per-namespace aggregates in `namespace_aggregates` (includes `infrastructure_cost` from OCP-on-cloud correlation when available)
-3. Compute savings in [`ApplySavingsEstimates()`](../../internal/engine/savings.go) and persist `estimated_monthly_savings_usd` on ingest (exposed as `estimated_monthly_savings_usd` in API JSON)
+3. Compute savings in [`ApplySavingsEstimates()`](../../internal/engine/savings.go) and persist `estimated_savings_cents` on ingest (exposed as `estimated_savings_cents` in API JSON)
 
-Savings always use the **`all_hours`** recommendation row. The optional `business_hours` perspective on container and namespace detail responses affects sizing only, not `estimated_monthly_savings_usd` or fleet savings totals.
+Savings always use the **`all_hours`** recommendation row. The optional `business_hours` perspective on container and namespace detail responses affects sizing only, not `estimated_savings_cents` or fleet savings totals.
 
 **Formula** (`hours_per_month = 730`, replica count from `desired_replicas` or `pod_count_avg`):
 
@@ -173,7 +173,7 @@ Shared classification (underutilized, overcommitted, stranded) uses the same thr
 4. Rates from `configured_rates`: `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, `node_cost_per_month`
 5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty. **`machineset_name`** on digests is surfaced in list JSON for fleet/UI grouping; consolidation math still keys off `instance_type` or capacity keys until Tier 2 MachineSet plugins ship.
 6. **Instance type suggestions** (migration **000122**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../internal/engine/recommend_nodes.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
-7. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_monthly_savings_usd`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
+7. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_savings_cents`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
 
 **Node allocatable capacity:** Ingestion prefers **`node_allocatable_cpu_cores`** and
 **`node_allocatable_memory_bytes`** from koku-metrics-operator ROS container CSV rows
@@ -182,7 +182,7 @@ utilization ratios. If absent, the pipeline falls back to
 `ROS_NODE_ALLOCATABLE_FACTOR` × observed request totals (default **0.93**), preserving
 backward compatibility with older operator builds.
 
-**List API:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Shared classification and metrics come from the medium-term cost row when present. Pagination and default sort (`order_by=estimated_monthly_savings_usd`) operate on distinct nodes.
+**List API:** `GET /recommendations/openshift/nodes` returns one object per node with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Shared classification and metrics come from the medium-term cost row when present. Pagination and default sort (`order_by=estimated_savings_cents`) operate on distinct nodes.
 
 Fleet savings summary aggregates container, node, and VM savings for the selected **`engine`** and **`term`** query parameters on `GET /recommendations/openshift/savings-summary` (defaults: **`cost`**, **`medium`**), consistent with container list behavior. PVC totals honor **`term`** only (engine-agnostic). Snapshot totals are **term-independent** (all snapshot rows are summed).
 
@@ -203,7 +203,7 @@ Computed at **ingestion** during storage CSV processing:
 1. [`processStorageCSVNative()`](../../internal/services/report_processor.go) fetches `effective_rates` when savings are enabled
 2. [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go) uses `(request_gib - recommended_gib) × storage_rate_per_month`
 3. Prefers `storage_gb_request_per_month`; falls back to `storage_gb_usage_per_month`
-4. Persisted on `pvc_recommendation_sets.estimated_monthly_savings_usd` (migration **000070**; API field `estimated_monthly_savings_usd`)
+4. Persisted on `pvc_recommendation_sets.estimated_savings_cents` (migration **000070**; API field `estimated_savings_cents`)
 
 **Formula** (`storage_rate` = `storage_gb_request_per_month`, falling back to `storage_gb_usage_per_month` when request rate is zero):
 
@@ -227,7 +227,7 @@ Computed at **ingestion** during VM CSV processing:
 1. [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches `effective_rates` when savings are enabled
 2. [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) compares current vs recommended vCPU and memory using **effective** hourly rates (`max(request, usage)` per metric from `configured_rates`)
 3. Optional `vm_cost_per_month` and `gpu_cost_per_month` contribute for idle/abandoned, power-off, and GPU reduction scenarios
-4. Persisted on `vm_recommendations` as `savings_amount` / `savings_currency` (API field `savings`)
+4. Persisted on `vm_recommendations` as `estimated_savings_cents` / `savings_currency` (API field `savings`)
 
 **Formula** (rates = infrastructure + supplementary from `configured_rates`; `hours_per_month = 730`):
 
@@ -250,7 +250,7 @@ Computed at **API read time** (not stored on ingest):
 2. Use `gpu_cost_per_month` (infrastructure + supplementary) from `configured_rates`
 3. For idle GPUs: savings = full `gpu_cost_per_month`
 4. For MIG candidates: savings = `(1 - recommended_slices / total_slices) × gpu_cost_per_month`
-5. Node GPU time-slicing: [`internal/api/handlers_node_recs.go`](../../internal/api/handlers_node_recs.go) calls [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) with the same rates → `total_node_savings` / `savings_per_gpu` (`SavingsObject`) and per-container `estimated_monthly_timeslicing_savings`
+5. Node GPU time-slicing: [`internal/api/handlers_node_recs.go`](../../internal/api/handlers_node_recs.go) calls [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) with the same rates → `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) and per-container `estimated_monthly_timeslicing_savings`
 
 GPU API enrichment does **not** append `NotifNoCostData`; savings fields are omitted or `$0` when Masu is unavailable.
 
@@ -311,16 +311,16 @@ breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 
 | Plugin | Dollar estimates | When computed | Data source |
 |--------|------------------|---------------|-------------|
-| **Container** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_monthly_savings_usd` (API: `estimated_monthly_savings_usd`) |
+| **Container** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_savings_cents` (API: `estimated_savings_cents`) |
 | **GPU** (container detail) | Yes | API read | Masu `effective_rates` → `estimated_monthly_gpu_savings_usd` |
-| **Node GPU time-slicing** | Yes | API read | Masu `effective_rates` → `total_node_savings` / `savings_per_gpu` (`SavingsObject`) |
-| **Node** (CPU/memory utilization) | Yes | Ingestion | Masu `effective_rates` → DB per engine (`cost` 80%, `performance` 55%) → nested API `estimated_monthly_savings_usd` |
+| **Node GPU time-slicing** | Yes | API read | Masu `effective_rates` → `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) |
+| **Node** (CPU/memory utilization) | Yes | Ingestion | Masu `effective_rates` → DB per engine (`cost` 80%, `performance` 55%) → nested API `estimated_savings_cents` |
 | **Namespace** | No | — | CPU/memory recommendations only; no USD field |
-| **PVC** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_monthly_savings_usd` (API: `estimated_monthly_savings_usd`) |
-| **VM** | Yes | Ingestion | Masu `effective_rates` → DB `savings_amount` (API: `savings`) — delta between current and recommended VM spec cost |
+| **PVC** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_savings_cents` (API: `estimated_savings_cents`) |
+| **VM** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_savings_cents` (API: `savings`) — delta between current and recommended VM spec cost |
 | **Snapshot** | Yes (recoverable cost) | Ingestion | Settings API / env / effective-rates `storage_gb_usage_per_month` / default |
 
-Migration **000070** adds `estimated_monthly_savings_usd` to `node_recommendations` and
+Migration **000070** adds `estimated_savings_cents` to `node_recommendations` and
 `pvc_recommendation_sets`. Container savings use the existing column on `recommendation_sets`
 (since migration 000026).
 
@@ -403,9 +403,9 @@ The `effective_rates` endpoint is an **internal masu API** endpoint — it does 
 
 | Savings type | Refresh cadence |
 |--------------|-----------------|
-| Container (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
-| Node CPU/memory (`estimated_monthly_savings_usd`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
-| PVC (`estimated_monthly_savings_usd`) | Storage ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| Container (`estimated_savings_cents`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| Node CPU/memory (`estimated_savings_cents`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
+| PVC (`estimated_savings_cents`) | Storage ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | Quota / cluster-quota (`estimated_savings` / `estimated_savings_cents`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled (tighten rows only) |
 | GPU / node time-slicing | On each API request that enriches GPU data |
 | Snapshot recoverable cost | On each snapshot ingestion cycle (resolved rate from settings / env / effective-rates / default) |
@@ -416,7 +416,7 @@ container, node, PVC, quota, and cluster-quota when configured (see [Savings rec
 
 ## Negative savings
 
-Savings values (`estimated_monthly_savings_usd`, fleet summary totals, and
+Savings values (`estimated_savings_cents`, fleet summary totals, and
 per-plugin aggregates) may be **negative**. This is intentional, not a bug.
 
 When a recommendation suggests **more** CPU, memory, storage, or node capacity
@@ -446,11 +446,11 @@ Query parameters **`term`** (`short`, `medium`, `long`; default `medium`) and **
 
 | Field | Source |
 |-------|--------|
-| `by_plugin.container` | `SUM(estimated_monthly_savings_usd)` on active `recommendation_sets` for the requested `term` and `engine` |
-| `by_plugin.node` | `SUM(estimated_monthly_savings_usd)` on `node_recommendations` for the requested `term` and `engine` |
-| `by_plugin.pvc` | `SUM(estimated_monthly_savings_usd)` on `pvc_recommendation_sets` for the requested `term` (engine-agnostic) |
+| `by_plugin.container` | `SUM(estimated_savings_cents)` on active `recommendation_sets` for the requested `term` and `engine` |
+| `by_plugin.node` | `SUM(estimated_savings_cents)` on `node_recommendations` for the requested `term` and `engine` |
+| `by_plugin.pvc` | `SUM(estimated_savings_cents)` on `pvc_recommendation_sets` for the requested `term` (engine-agnostic) |
 | `by_plugin.snapshot` | `SUM(estimated_monthly_cost_usd)` on `snapshot_recommendation_sets` (recoverable holding cost; **term-independent**) |
-| `by_plugin.vm` | `SUM(savings_amount)` on `vm_recommendations` for the requested `term` and `engine` |
+| `by_plugin.vm` | `SUM(estimated_savings_cents)` on `vm_recommendations` for the requested `term` and `engine` |
 | `by_plugin.gpu` | Always `$0` — see GPU limitation below |
 | `by_cluster.has_cost_data` | `false` when **every** container, node, and PVC recommendation in that cluster has notification code **25** (`NotifNoCostData`) |
 
@@ -507,7 +507,7 @@ goroutine ([`TriggerSavingsRecalculationAsync()`](../../internal/engine/savings_
 ### What recalculation does
 
 1. Re-fetches Masu `effective_rates` for each affected cluster (same provider as ingestion).
-2. Recomputes savings on existing recommendation rows for the requested types (container/node/PVC `estimated_monthly_savings_usd`; quota `estimated_savings_cents`; cluster-quota `estimated_savings_cents`).
+2. Recomputes savings on existing recommendation rows for the requested types (container/node/PVC `estimated_savings_cents`; quota `estimated_savings_cents`; cluster-quota `estimated_savings_cents`).
 3. Does **not** re-run classification, percentile sizing, or CSV ingestion.
 
 GPU and snapshot dollar fields are out of scope for this path (GPU remains API read-time;
@@ -630,6 +630,6 @@ them in `by_plugin.gpu` once a cost-model change trigger exists.
 
 ### Savings trends API
 
-`recommendation_history` stores `estimated_monthly_savings_usd` per snapshot. A future
+`recommendation_history` stores `estimated_savings_cents` per snapshot. A future
 time-series aggregation endpoint could expose savings progression over time (for example,
 weekly or monthly deltas). Not yet implemented.

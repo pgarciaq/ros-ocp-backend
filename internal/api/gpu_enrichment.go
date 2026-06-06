@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,9 +79,23 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			}
 		}
 
-		for _, recs := range gpuRecs {
+		persistedSavings, loadErr := engine.LoadPersistedGPUSavings(ctx, pool, orgID, clusterUUID)
+		if loadErr != nil {
+			log.Warnf("enrichWithGPU: load persisted GPU savings failed for cluster %s: %v", clusterUUID, loadErr)
+		}
+		for key, recs := range gpuRecs {
+			parts := strings.SplitN(key, "/", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			ns, wl, cn := parts[0], parts[1], parts[2]
 			for _, gpuRec := range recs {
-				engine.ApplyGPUSavings(gpuRec, costData)
+				lookup := engine.GPUSavingsLookupKey(ns, wl, cn, gpuRec.Term)
+				if cents, ok := persistedSavings[lookup]; ok && cents != nil {
+					gpuRec.EstimatedGPUSavingsCents = cents
+				} else {
+					engine.ApplyGPUSavings(gpuRec, costData)
+				}
 			}
 		}
 
@@ -174,8 +189,8 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		DRAMActiveAvg:                         rec.DRAMActiveAvg,
 		SMActiveAvg:                           rec.SMActiveAvg,
 		FBUsageMaxMiB:                         rec.FBUsageMaxMiB,
-		EstimatedMonthlyGPUSavings:         money.FormatUSDPtrToSavingsPtr(rec.EstimatedGPUSavingsUSD, money.DefaultCurrency),
-		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToSavingsPtr(rec.EstimatedTimeslicingSavingsUSD, money.DefaultCurrency),
+		EstimatedMonthlyGPUSavings:         money.FormatCentsToAmountPtr(rec.EstimatedGPUSavingsCents, money.DefaultCurrency),
+		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToAmountPtr(rec.EstimatedTimeslicingSavingsUSD, money.DefaultCurrency),
 		Notifications:                         rec.NotificationCodes,
 	}
 	if rec.TimeSlicingNode != "" {
@@ -201,7 +216,7 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 	}
 	if rec.GPUEstimatedWasteCents > 0 {
 		cents := rec.GPUEstimatedWasteCents
-		result.GPUEstimatedWasteCents = &cents
+		result.EstimatedMonthlyGPUWaste = money.FormatCentsToAmountPtr(&cents, money.DefaultCurrency)
 	}
 	return result
 }

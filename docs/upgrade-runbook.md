@@ -347,7 +347,7 @@ Koku's `GET /api/cost-management/v1/effective_rates/` includes the same `currenc
 
 ### What it adds
 
-Migration **000070** adds `estimated_monthly_savings_usd REAL` to:
+Migration **000070** adds `estimated_savings_cents REAL` to:
 
 - `node_recommendations`
 - `pvc_recommendation_sets`
@@ -397,7 +397,7 @@ Migration **000072** adds to `node_recommendations`:
 - `recommended_memory_gib REAL`
 - `node_count_reduction INTEGER NOT NULL DEFAULT 0`
 
-These values are persisted at ingestion alongside `estimated_monthly_savings_usd` and exposed under each engine in the nested nodes API response.
+These values are persisted at ingestion alongside `estimated_savings_cents` and exposed under each engine in the nested nodes API response.
 
 ### Deploy notes
 

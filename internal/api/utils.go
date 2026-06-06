@@ -1050,7 +1050,7 @@ func optionalFloat32Str(v *float32) string {
 	return strconv.FormatFloat(float64(*v), 'f', 3, 32)
 }
 
-func optionalSavingsStr(v *money.SavingsObject) string {
+func optionalSavingsStr(v *money.MoneyAmount) string {
 	if v == nil {
 		return ""
 	}
@@ -1071,7 +1071,7 @@ func optionalIntPtrStr(v *int) string {
 	return strconv.Itoa(*v)
 }
 
-func optionalSavingsCurrencyStr(v *money.SavingsObject, rowCurrency string) string {
+func optionalSavingsCurrencyStr(v *money.MoneyAmount, rowCurrency string) string {
 	if v == nil {
 		return ""
 	}

@@ -1032,7 +1032,7 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd
+			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-2', 'medium', 'cost',
 			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 45000),
@@ -1082,7 +1082,7 @@ func TestGetNodeList_SortBySavings(t *testing.T) {
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd
+			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
 			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
@@ -1140,7 +1140,7 @@ func TestGetNodeUtilization_FilterEngine(t *testing.T) {
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd
+			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-filter', 'medium', 'cost',
 			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 45000),
@@ -1294,7 +1294,7 @@ func TestGetNodeUtilization_PaginationAndSort(t *testing.T) {
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd
+			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
 			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
@@ -1338,7 +1338,7 @@ func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd, instance_type
+			estimated_savings_cents, instance_type
 		) VALUES
 			($1, $2::uuid, 'worker-m5', 'medium', 'cost',
 			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 45000, 'm5.xlarge')`,
@@ -1489,7 +1489,7 @@ func TestGetNodeUtilization_CSVExport(t *testing.T) {
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
-			recommended_cpu_cores, recommended_memory_gib, estimated_monthly_savings_usd,
+			recommended_cpu_cores, recommended_memory_gib, estimated_savings_cents,
 			instance_type, machineset_name
 		) VALUES
 			($1, $2::uuid, 'csv-worker', 'medium', 'cost',
@@ -1842,7 +1842,7 @@ func TestGetNodeList_FilterTag(t *testing.T) {
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
-			notification_codes, estimated_monthly_savings_usd, updated_at)
+			notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now()),
 		       ($1, $2, 'node-other', 'medium', 'cost', false, false, 50, 60, 50, 60, 1, 5, 0, '{}', 10000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)

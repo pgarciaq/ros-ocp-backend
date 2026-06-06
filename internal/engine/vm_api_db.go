@@ -52,8 +52,8 @@ var vmRecOrderColumns = map[string]string{
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
-	"savings":                "savings_amount",
-	"savings_amount":         "savings_amount",
+	"savings":                "estimated_savings_cents",
+	"savings_amount":         "estimated_savings_cents", // deprecated alias
 }
 
 // ListVMRecommendations returns a page of VM recommendations and total count.
@@ -115,7 +115,7 @@ func ListVMRecommendations(
 			recommended_gpu_profile, recommended_time_slice_count,
 			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 			gpu_utilization_avg_bp,
-			savings_amount, savings_currency,
+			estimated_savings_cents, savings_currency,
 			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations` + where
 
@@ -196,7 +196,7 @@ func GetVMRecommendationDetail(
 			recommended_gpu_profile, recommended_time_slice_count,
 			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 			gpu_utilization_avg_bp,
-			savings_amount, savings_currency,
+			estimated_savings_cents, savings_currency,
 			last_recommended_at, created_at, updated_at
 		FROM vm_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
@@ -431,7 +431,7 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.RecommendedGPUProfile, &r.RecommendedTimeSliceCount,
 		&r.GPUTimeSliceConfidence, &r.GPUTimeSliceRationale, &r.RecommendedVGPUProfile,
 		&r.GPUUtilizationAvgBP,
-		&r.SavingsAmount, &r.SavingsCurrency,
+		&r.EstimatedSavingsCents, &r.SavingsCurrency,
 		&r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {

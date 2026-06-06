@@ -37,7 +37,7 @@ func TestSavingsSummary_DisplaysNegativeCorrectly(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'worker-scale-up', 'medium', 'cost', '{}', -12345, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)

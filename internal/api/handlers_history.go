@@ -157,7 +157,7 @@ var historyCSVHeader = []string{
 	"term", "engine",
 	"rec_cpu_request_millicores", "rec_cpu_limit_millicores",
 	"rec_memory_request_kib", "rec_memory_limit_kib",
-	"confidence_level", "estimated_monthly_savings_usd",
+	"confidence_level", "estimated_savings_cents",
 	"notification_codes",
 }
 

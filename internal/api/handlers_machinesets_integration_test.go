@@ -72,7 +72,7 @@ func TestGetMachineSetRecommendations_AggregatesByMachineSet(t *testing.T) {
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
-			machineset_name, instance_type, node_count_reduction, estimated_monthly_savings_usd
+			machineset_name, instance_type, node_count_reduction, estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-0', 'medium', 'cost',
 			 0.1, 0.40, 0.15, 0.60, 1.0, true, false, 'active', NULL, 5, 0, '{}',
@@ -130,7 +130,7 @@ func TestGetMachineSetRecommendations_Pagination(t *testing.T) {
 		_, err = pool.Exec(ctx, `
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
-				cpu_util_p95, mem_util_p95, machineset_name, estimated_monthly_savings_usd
+				cpu_util_p95, mem_util_p95, machineset_name, estimated_savings_cents
 			) VALUES ($1, $2::uuid, $3, 'medium', 'cost', 0.1, 0.1, $4, $5)`,
 			testutil.TestOrgID, testutil.TestClusterUUID, "node-"+name, name, int64((3-i)*10000))
 		require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestGetMachineSetRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 		_, err = pool.Exec(ctx, `
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine, cpu_util_p95, mem_util_p95,
-				machineset_name, estimated_monthly_savings_usd
+				machineset_name, estimated_savings_cents
 			) VALUES ($1, $2::uuid, $3, 'medium', 'cost', 0.1, 0.1, 'shared-ms', 10000)`,
 			testutil.TestOrgID, cl.uuid, cl.node)
 		require.NoError(t, err)

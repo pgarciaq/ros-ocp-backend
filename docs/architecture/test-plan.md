@@ -824,8 +824,8 @@ Go recommendation function tests use a **golden-file approach**: expected output
 
 | Step | Detail |
 |---|---|
-| **RED** | `TestKokuCostIntegration_DollarSavings_Computed`: Mock Koku API returns rate $0.05/core-hour. CPU savings = 200mc × 730h/month = $7.30/month. Assert `estimated_monthly_savings_usd ≈ 7.30`. |
-| **RED** | `TestKokuCostIntegration_KokuUnavailable_NilSavings`: Mock Koku returns 503. Assert `estimated_monthly_savings_usd = nil` (not error). |
+| **RED** | `TestKokuCostIntegration_DollarSavings_Computed`: Mock Koku API returns rate $0.05/core-hour. CPU savings = 200mc × 730h/month = $7.30/month. Assert `estimated_savings_cents ≈ 7.30`. |
+| **RED** | `TestKokuCostIntegration_KokuUnavailable_NilSavings`: Mock Koku returns 503. Assert `estimated_savings_cents = nil` (not error). |
 | **GREEN** | HTTP call to Koku cost API with circuit breaker. |
 | **REFACTOR** | Extract into `KokuCostClient` interface for testability. |
 
@@ -1293,9 +1293,9 @@ fixture with `n_days=16` (produces ~96 samples/day/namespace — sufficient for 
 
 | Test | Validates |
 |---|---|
-| `test_dollar_savings_present_when_cost_model_configured` | With Koku cost model configured, `estimated_monthly_savings_usd` field is non-null in API response. Value is positive (current cost > recommended cost). |
+| `test_dollar_savings_present_when_cost_model_configured` | With Koku cost model configured, `estimated_savings_cents` field is non-null in API response. Value is positive (current cost > recommended cost). |
 | `test_dollar_savings_null_when_no_cost_model` | Without cost model or with `ROS_ENABLE_COST_INTEGRATION=false`, field is `null` (not 0, not missing). |
-| `test_dollar_savings_null_when_koku_unreachable` | Circuit breaker: when Koku API is down, `estimated_monthly_savings_usd` degrades to `null` gracefully. No 500 error. |
+| `test_dollar_savings_null_when_koku_unreachable` | Circuit breaker: when Koku API is down, `estimated_savings_cents` degrades to `null` gracefully. No 500 error. |
 | `test_replica_count_in_response` | Recommendation includes `current_replicas`, `min_replicas`, `max_replicas`, `avg_replicas` fields for workloads with replica data. |
 
 **Requires:** Koku with cost model configured for the test OCP source.

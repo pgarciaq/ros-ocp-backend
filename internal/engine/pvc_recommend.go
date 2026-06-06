@@ -378,7 +378,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				usage_bytes_max, usage_ratio, recommendation_type,
 				recommended_bytes, days_to_full, growth_bytes_per_day,
 				notification_codes, data_days, term,
-				estimated_monthly_savings_usd,
+				estimated_savings_cents,
 				idle_since, idle_duration_days,
 				updated_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
@@ -403,7 +403,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 				growth_bytes_per_day = EXCLUDED.growth_bytes_per_day,
 				notification_codes = EXCLUDED.notification_codes,
 				data_days = EXCLUDED.data_days,
-				estimated_monthly_savings_usd = EXCLUDED.estimated_monthly_savings_usd,
+				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				idle_since = EXCLUDED.idle_since,
 				idle_duration_days = EXCLUDED.idle_duration_days,
 				updated_at = NOW()`,

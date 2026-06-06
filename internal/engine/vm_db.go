@@ -110,7 +110,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				recommended_gpu_profile, recommended_time_slice_count,
 				gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 				gpu_utilization_avg_bp,
-				savings_amount, savings_currency,
+				estimated_savings_cents, savings_currency,
 				last_recommended_at, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5,
@@ -167,7 +167,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				gpu_timeslice_rationale = EXCLUDED.gpu_timeslice_rationale,
 				recommended_vgpu_profile = EXCLUDED.recommended_vgpu_profile,
 				gpu_utilization_avg_bp = EXCLUDED.gpu_utilization_avg_bp,
-				savings_amount = EXCLUDED.savings_amount,
+				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				savings_currency = EXCLUDED.savings_currency,
 				last_recommended_at = EXCLUDED.last_recommended_at,
 				updated_at = now()`,
@@ -186,7 +186,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 			r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
 			r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
 			r.GPUUtilizationAvgBP,
-			r.SavingsAmount, r.SavingsCurrency,
+			r.EstimatedSavingsCents, r.SavingsCurrency,
 			r.LastRecommendedAt,
 		)
 		if err != nil {

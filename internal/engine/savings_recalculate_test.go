@@ -76,7 +76,7 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-			estimated_monthly_savings_usd, notification_codes
+			estimated_savings_cents, notification_codes
 		) VALUES ($1, $2::uuid, 'worker-1', 'medium', 'cost',
 			0.10, 0.25, 0.15, 0.30,
 			4.0, 16.0, 1, 0, '{}')`,
@@ -85,7 +85,7 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 
 	var savingsBefore int64
 	err = pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM node_recommendations
+		SELECT estimated_savings_cents FROM node_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node = 'worker-1'`,
 		orgID, clusterUUID).Scan(&savingsBefore)
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 
 	var savingsAfter int64
 	err = pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM node_recommendations
+		SELECT estimated_savings_cents FROM node_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node = 'worker-1'`,
 		orgID, clusterUUID).Scan(&savingsAfter)
 	require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestRecalculateSavingsForOrg_OnlyAffectedOrg(t *testing.T) {
 	const targetCents int64 = 4242
 	const otherCents int64 = 9999
 	_, err := pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, estimated_monthly_savings_usd, notification_codes)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, estimated_savings_cents, notification_codes)
 		VALUES ($1, $2::uuid, 'n1', 'medium', 'cost', $3, '{}'),
 		       ($4, $5::uuid, 'n2', 'medium', 'cost', $6, '{}')`,
 		targetOrg, clusterA, targetCents, otherOrg, clusterB, otherCents)
@@ -158,10 +158,10 @@ func TestRecalculateSavingsForOrg_OnlyAffectedOrg(t *testing.T) {
 
 	var gotTarget, gotOther int64
 	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM node_recommendations
+		SELECT estimated_savings_cents FROM node_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid`, targetOrg, clusterA).Scan(&gotTarget))
 	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM node_recommendations
+		SELECT estimated_savings_cents FROM node_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid`, otherOrg, clusterB).Scan(&gotOther))
 	assert.Equal(t, int64(1111), gotTarget)
 	assert.Equal(t, otherCents, gotOther)

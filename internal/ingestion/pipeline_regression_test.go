@@ -274,7 +274,7 @@ func mediumCostCPURequest(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 }
 
 // TestPipeline_SavingsColumnsPopulated verifies node and PVC recommendations persist
-// estimated_monthly_savings_usd when cost data is available after ingestion.
+// estimated_savings_cents when cost data is available after ingestion.
 func TestPipeline_SavingsColumnsPopulated(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
@@ -301,7 +301,7 @@ func TestPipeline_SavingsColumnsPopulated(t *testing.T) {
 
 	var nodeSavings *float32
 	err := pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM node_recommendations
+		SELECT estimated_savings_cents FROM node_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2 AND engine = 'cost' AND term = 'medium'
 		LIMIT 1`, orgID, clusterUUID).Scan(&nodeSavings)
 	require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestPipeline_SavingsColumnsPopulated(t *testing.T) {
 
 	var pvcSavings *float32
 	err = pool.QueryRow(ctx, `
-		SELECT estimated_monthly_savings_usd FROM pvc_recommendation_sets
+		SELECT estimated_savings_cents FROM pvc_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND term = 'medium'
 		LIMIT 1`, orgID, clusterUUID).Scan(&pvcSavings)
 	require.NoError(t, err)

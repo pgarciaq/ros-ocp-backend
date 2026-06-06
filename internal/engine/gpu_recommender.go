@@ -8,6 +8,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // GPUClassification represents the utilization classification of a GPU workload.
@@ -56,7 +57,7 @@ type GPURec struct {
 	DRAMActiveAvg                  float32
 	SMActiveAvg                    float32
 	FBUsageMaxMiB                  float32
-	EstimatedGPUSavingsUSD         *float32 // nil if no cost data (idle/MIG savings)
+	EstimatedGPUSavingsCents       *int64 // nil if no cost data (idle/MIG savings)
 	EstimatedTimeslicingSavingsUSD *float32 // nil if no cost data (per-candidate share of node time-slicing savings)
 	NotificationCodes              []int16
 	HasProfilingData               bool
@@ -416,8 +417,19 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		}
 	}
 
-	s := float32(math.Round(savings*100) / 100)
-	rec.EstimatedGPUSavingsUSD = &s
+	cents := money.USDToCents(math.Round(savings*100) / 100)
+	rec.EstimatedGPUSavingsCents = &cents
+}
+
+// ComputeGPUSavingsCents returns monthly GPU savings in cents, or nil when cost data is unavailable.
+func ComputeGPUSavingsCents(rec *GPURec, costData *costdata.ClusterCostData) *int64 {
+	if rec == nil {
+		return nil
+	}
+	clone := *rec
+	clone.EstimatedGPUSavingsCents = nil
+	ApplyGPUSavings(&clone, costData)
+	return clone.EstimatedGPUSavingsCents
 }
 
 // GPUMonthlyRate extracts the GPU monthly cost rate (infrastructure +

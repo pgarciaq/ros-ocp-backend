@@ -5,6 +5,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // ComputeVMSavings estimates monthly savings (USD) for a VM recommendation using
@@ -38,7 +39,7 @@ func ComputeVMSavings(rec *model.VMRecommendation, costData *costdata.ClusterCos
 	return &total
 }
 
-// ApplyVMSavings sets savings_amount and savings_currency on each recommendation when
+// ApplyVMSavings sets estimated_savings_cents and savings_currency on each recommendation when
 // savings estimates are enabled and Koku rates are available.
 func ApplyVMSavings(recs []model.VMRecommendation, costData *costdata.ClusterCostData, savingsEnabled bool) {
 	if !savingsEnabled {
@@ -48,12 +49,12 @@ func ApplyVMSavings(recs []model.VMRecommendation, costData *costdata.ClusterCos
 	for i := range recs {
 		usd := ComputeVMSavings(&recs[i], costData)
 		if usd == nil {
-			recs[i].SavingsAmount = nil
+			recs[i].EstimatedSavingsCents = nil
 			recs[i].SavingsCurrency = nil
 			continue
 		}
-		amt := *usd
-		recs[i].SavingsAmount = &amt
+		cents := money.USDToCents(*usd)
+		recs[i].EstimatedSavingsCents = &cents
 		recs[i].SavingsCurrency = &currency
 	}
 }

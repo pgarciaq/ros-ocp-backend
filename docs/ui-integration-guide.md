@@ -380,7 +380,7 @@ Deprecated alias: `GET /recommendations/openshift/nodes/utilization` (returns `D
 | `is_underutilized` | `true` / `false` |
 | `is_overcommitted` | `true` / `false` |
 | `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`) |
-| `order_by` | `node` or `estimated_monthly_savings` (default; alias `estimated_monthly_savings_usd`) |
+| `order_by` | `node` or `estimated_monthly_savings` (default; alias `estimated_savings_cents`) |
 | `order_how` | `asc` or `desc` (default `desc`) |
 | `offset`, `limit` | Pagination (default limit 10, max 1000) |
 
@@ -526,7 +526,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Show a node-level view with GPU utilization **ProgressBar** per GPU model.
 - Display `recommended_replicas` prominently as the primary action metric.
 - Compare current vs recommended time-slicing configuration in a side-by-side layout.
-- Show `total_node_savings` and `savings_per_gpu` (`SavingsObject`); currency is in `meta.currency`.
+- Show `total_node_savings` and `savings_per_gpu` (`MoneyAmount`); currency is in `meta.currency`.
 - Expand `candidate_containers` and `impacted_containers` in a nested **Table** with classification badges.
 - Link from container GPU fields (`time_slicing_node`, `time_slicing_replicas`) to the filtered time-slicing list.
 - Show confidence as a badge; surface notification code 36 with link to this view from container rows.

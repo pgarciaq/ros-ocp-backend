@@ -4,14 +4,21 @@ import (
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+func gpuSavingsUSD(t *testing.T, cents *int64) float64 {
+	t.Helper()
+	require.NotNil(t, cents)
+	return money.CentsToUSD(*cents)
+}
+
 func TestApplyGPUSavings_NilCostData(t *testing.T) {
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	ApplyGPUSavings(rec, nil)
-	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
+	assert.Nil(t, rec.EstimatedGPUSavingsCents)
 }
 
 func TestApplyGPUSavings_NoGPURate(t *testing.T) {
@@ -22,7 +29,7 @@ func TestApplyGPUSavings_NoGPURate(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	assert.Nil(t, rec.EstimatedGPUSavingsUSD)
+	assert.Nil(t, rec.EstimatedGPUSavingsCents)
 }
 
 func TestApplyGPUSavings_IdleGPU(t *testing.T) {
@@ -33,8 +40,7 @@ func TestApplyGPUSavings_IdleGPU(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
-	assert.InDelta(t, 600.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
+	assert.InDelta(t, 600.0, gpuSavingsUSD(t, rec.EstimatedGPUSavingsCents), 0.01)
 }
 
 func TestApplyGPUSavings_MIGRightSizing_A100_80GB(t *testing.T) {
@@ -49,11 +55,10 @@ func TestApplyGPUSavings_MIGRightSizing_A100_80GB(t *testing.T) {
 		},
 	}
 	ApplyGPUSavings(rec, cd)
-	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
 
 	// A100-80GB: "1g.10gb" = 1 slice, "7g.80gb" = 7 slices (largest profile)
 	// savings = (1 - 1/7) * 700 = 600
-	assert.InDelta(t, 600.0, float64(*rec.EstimatedGPUSavingsUSD), 1.0)
+	assert.InDelta(t, 600.0, gpuSavingsUSD(t, rec.EstimatedGPUSavingsCents), 1.0)
 }
 
 func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
@@ -69,8 +74,7 @@ func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
 	}
 	ApplyGPUSavings(rec, cd)
 	// full_gpu means no MIG savings, but cost data is available so we report $0
-	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
-	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
+	assert.InDelta(t, 0.0, gpuSavingsUSD(t, rec.EstimatedGPUSavingsCents), 0.01)
 }
 
 func TestApplyGPUSavings_WellUtilized(t *testing.T) {
@@ -85,8 +89,7 @@ func TestApplyGPUSavings_WellUtilized(t *testing.T) {
 	}
 	ApplyGPUSavings(rec, cd)
 	// Well-utilized: cost data available, savings = $0 (not nil)
-	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
-	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
+	assert.InDelta(t, 0.0, gpuSavingsUSD(t, rec.EstimatedGPUSavingsCents), 0.01)
 }
 
 func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
@@ -102,8 +105,7 @@ func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
 	}
 	ApplyGPUSavings(rec, cd)
 	// No MIG profile recommended, cost data available, so savings = $0
-	require.NotNil(t, rec.EstimatedGPUSavingsUSD)
-	assert.InDelta(t, 0.0, float64(*rec.EstimatedGPUSavingsUSD), 0.01)
+	assert.InDelta(t, 0.0, gpuSavingsUSD(t, rec.EstimatedGPUSavingsCents), 0.01)
 }
 
 func TestApplyGPUSavings_NilRec(t *testing.T) {

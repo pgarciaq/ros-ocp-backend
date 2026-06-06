@@ -97,7 +97,7 @@ type VMRecommendationItem struct {
 	DiskProjection    vmDiskProjection    `json:"disk_projection"`
 	Notifications     []any               `json:"notifications"`
 	GPU               *vmGPURecommendation `json:"gpu,omitempty"`
-	Savings           *money.SavingsObject `json:"savings"`
+	Savings           *money.MoneyAmount `json:"savings"`
 	LastRecommendedAt string              `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
 }
@@ -136,8 +136,8 @@ var vmRecAllowedOrderBy = map[string]string{
 	"is_oversized":           "is_oversized",
 	"confidence":             "confidence",
 	"last_recommended_at":    "last_recommended_at",
-	"savings":                "savings_amount",
-	"savings_amount":         "savings_amount",
+	"savings":                "estimated_savings_cents",
+	"savings_amount":         "estimated_savings_cents", // deprecated alias
 }
 
 const vmRecDefaultOrderBy = "vm_name"
@@ -544,7 +544,7 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			RecommendedExpandGiB: r.DiskRecommendedExpandGiB,
 		},
 		Notifications:     parseVMNotifications(r.Notifications),
-		Savings:           vmRecSavingsObject(r.SavingsAmount, r.SavingsCurrency),
+		Savings:           vmRecMoneyAmount(r.EstimatedSavingsCents, r.SavingsCurrency),
 		LastRecommendedAt: r.LastRecommendedAt.UTC().Format(time.RFC3339),
 	}
 	if r.GPUCount > 0 || r.GPUClassification != "" {
@@ -572,16 +572,15 @@ func vmPowerOffIdlePctForAPI(bp *int32) *int32 {
 	return &pct
 }
 
-func vmRecSavingsObject(amount *float64, currency *string) *money.SavingsObject {
-	if amount == nil {
+func vmRecMoneyAmount(cents *int64, currency *string) *money.MoneyAmount {
+	if cents == nil {
 		return nil
 	}
 	cur := money.DefaultCurrency
 	if currency != nil && *currency != "" {
 		cur = *currency
 	}
-	s := money.FormatUSDToSavings(*amount, cur)
-	return &s
+	return money.FormatCentsToAmountPtr(cents, cur)
 }
 
 func parseVMNotifications(raw []byte) []any {

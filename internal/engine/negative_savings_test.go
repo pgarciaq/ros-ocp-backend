@@ -99,11 +99,11 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 func queryPluginSavingsTotals(ctx context.Context, pool *pgxpool.Pool, orgID string) (container, node, pvc, total float64, err error) {
 	err = pool.QueryRow(ctx, `
 		SELECT
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM recommendation_sets
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM recommendation_sets
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost' AND stale = false), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM node_recommendations
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM node_recommendations
 				WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'), 0),
-			COALESCE((SELECT SUM(estimated_monthly_savings_usd)::float / 100.0 FROM pvc_recommendation_sets
+			COALESCE((SELECT SUM(estimated_savings_cents)::float / 100.0 FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = 'medium'), 0)`,
 		orgID,
 	).Scan(&container, &node, &pvc)
@@ -129,13 +129,13 @@ func TestSavingsSummary_AllowsNegativeTotal(t *testing.T) {
 
 	// Small container savings cannot offset a large node scale-up cost.
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 5000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -50000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -163,19 +163,19 @@ func TestSavingsSummary_ByPlugin_CanBeNegative(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 50000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'worker-overloaded', 'medium', 'cost', '{}', -20000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_monthly_savings_usd, updated_at)
+		INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid, namespace, persistentvolumeclaim, term, notification_codes, estimated_savings_cents, updated_at)
 		VALUES ($1, $2, 'ns1', 'grow-vol', 'medium', '{}', -5000, now())`,
 		orgID, testutil.TestClusterUUID)
 	require.NoError(t, err)

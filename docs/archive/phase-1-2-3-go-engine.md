@@ -33,7 +33,7 @@ New `golang-migrate` migration files in `migrations/`:
 - **000023**: Create `daily_namespace_digests` table (same pattern).
 - **000024**: Create `org_recommendation_terms` table and `recommendation_profiles` table with seed data (cost: p60/p95, performance: p98/p100).
 - **000025**: Create `notification_code_definitions` table with seed data (24 notification codes).
-- **000026**: ALTER `recommendation_sets` -- add relational columns (`term`, `engine`, `rec_cpu_request_millicores`, `rec_cpu_limit_millicores`, `rec_memory_request_kib`, `rec_memory_limit_kib`, `current_*`, `variation_*_pct`, `notification_codes`, `confidence_level`, `estimated_monthly_savings_usd`, `recommendation_applied_at`, `stale`). Drop old unique constraint, add new PK on `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`.
+- **000026**: ALTER `recommendation_sets` -- add relational columns (`term`, `engine`, `rec_cpu_request_millicores`, `rec_cpu_limit_millicores`, `rec_memory_request_kib`, `rec_memory_limit_kib`, `current_*`, `variation_*_pct`, `notification_codes`, `confidence_level`, `estimated_savings_cents`, `recommendation_applied_at`, `stale`). Drop old unique constraint, add new PK on `(org_id, cluster_uuid, namespace, workload, container_name, term, engine)`.
 - **000027**: Create `recommendation_quality` table (partitioned). Create `recommendation_history` table (partitioned, for REQ-1.12 shadow mode).
 
 Key files:
