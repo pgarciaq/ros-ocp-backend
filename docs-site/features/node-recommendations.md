@@ -357,12 +357,18 @@ Tier 1 (this document) is **implemented**. Planned work is grouped by tier below
 
 ### Tier 2 (planned)
 
-- MachineSet engine plugin with dedicated `machineset_recommendations` table
-- Cloud instance catalog integration (AWS EC2, Azure VM, GCP Compute pricing)
-- `GET /machinesets/{name}` detail endpoint
-- PDB/scheduling-aware consolidation (safe for auto-execution)
-- Node recommendation history API (trend visualization)
-- GPU-aware node consolidation
+Phased as **Tier 2a** (no cloud catalog) then **Tier 2b** (catalog). See
+[MachineSet recommendations (planned)](machineset-recommendations.md).
+
+**Tier 2a:** `machineset` engine plugin, `machineset_recommendations` table, replica
+count recommendations, `GET /machinesets/{name}` detail, history/trends, MachineSet
+confidence, heterogeneous fleet detection, fleet-health notifications, PDB caveat (code **4**).
+
+**Tier 2b:** Cloud instance catalog (AWS/Azure/GCP), instance family/size recommendations,
+cost comparison, deprecated-instance handling (codes **23**, **24**).
+
+**Also planned (later Tier 2 scope):** PDB/scheduling-aware consolidation (safe for
+auto-execution), node recommendation history API, GPU-aware node consolidation.
 
 ### Tier 3 (future)
 
@@ -379,6 +385,7 @@ notifications instead.
 
 ## Related
 
+- [MachineSet recommendations (planned)](machineset-recommendations.md) — Tier 2 product direction and Tier 2a/2b phasing
 - [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — MachineSet and MachineAutoscaler planned work
 - [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
 - [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals

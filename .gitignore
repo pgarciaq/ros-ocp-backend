@@ -46,6 +46,7 @@ docs-site/architecture/*
 !docs-site/architecture/recommendation-engines.md
 !docs-site/architecture/plugin-architecture.md
 !docs-site/architecture/gpu-classification.md
+!docs-site/architecture/node-recommendations-roadmap.md
 docs-site/operations/
 docs-site/features/
 !docs-site/features/seasonality.md
@@ -53,6 +54,7 @@ docs-site/features/
 !docs-site/features/java-jvm.md
 !docs-site/features/hpa-recommendations.md
 !docs-site/features/vpa-recommendations.md
+!docs-site/features/machineset-recommendations.md
 !docs-site/features/network.md
 !docs-site/features/node-recommendations.md
 !docs-site/features/pvc-rightsizing.md

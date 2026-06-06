@@ -12,6 +12,7 @@ dollar impact using Koku cost model rates.
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
 | Namespace Quota Optimization | namespace | cost, performance | Planned | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
+| MachineSet Recommendations | machineset (planned) | cost, performance | Planned | Planned |
 | GPU MIG Profiling | gpu | single | No | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
@@ -38,6 +39,7 @@ dollar impact using Koku cost model rates.
 | [quota-recommendations.md](quota-recommendations.md) | ResourceQuota right-sizing |
 | [cluster-resource-quota.md](cluster-resource-quota.md) | ClusterResourceQuota right-sizing |
 | [node-recommendations.md](node-recommendations.md) | Node consolidation |
+| [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica & instance-type right-sizing (**planned**) |
 | [gpu-mig.md](gpu-mig.md) | GPU MIG profiling |
 | [gpu-time-slicing.md](gpu-time-slicing.md) | GPU time-slicing |
 | [pvc-rightsizing.md](pvc-rightsizing.md) | PVC storage right-sizing |
@@ -70,6 +72,10 @@ buffers and memory trend alerts.
 **[Node Consolidation](node-recommendations.md)** — Identifies underutilized,
 overcommitted, and stranded-resource nodes; recommends consolidation and target
 node sizing with dual cost/performance engines.
+
+**[MachineSet Recommendations](machineset-recommendations.md)** (**planned**) —
+MachineSet-level replica and instance-type right-sizing for IPI clusters (Tier 2a/2b).
+Tier 1 `GET .../machinesets` aggregation is shipped today.
 
 **[GPU MIG Profiling](gpu-mig.md)** — Maps GPU utilization patterns to NVIDIA
 MIG profiles (1g.5gb through 7g.40gb) for hardware-isolated sharing.

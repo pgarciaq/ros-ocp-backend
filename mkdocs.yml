@@ -74,6 +74,7 @@ nav:
       - Container Right-Sizing: features/container-recommendations.md
       - Namespace Quota Optimization: features/namespace-recommendations.md
       - Node Consolidation: features/node-recommendations.md
+      - MachineSet Recommendations (Planned): features/machineset-recommendations.md
       - GPU MIG Profiling: features/gpu-mig.md
       - GPU Workload Classification: features/gpu-classification.md
       - GPU Time-Slicing: features/gpu-time-slicing.md

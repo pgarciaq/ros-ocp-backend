@@ -93,10 +93,11 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 
 | Tier | Feature | REQs | Est. effort | Status |
 |------|---------|------|-------------|--------|
-| **2** | MachineSet right-sizing (replica count + instance family via cloud catalog) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | ~2–3 weeks | Planned |
+| **2a** | MachineSet engine (replica count, persistence, detail API — **no catalog**) | REQ-8c.5 (partial), REQ-8c.11 | ~1–1.5 weeks | Planned |
+| **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | ~1–1.5 weeks after 2a | Planned |
 | **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
 
-**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` → `machineset` engine plugin (catalog-driven recs) → optional `machineset_recommendations` table + cloud instance catalog. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations; does not require the catalog engine).
+**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [MachineSet recommendations (planned)](features/machineset-recommendations.md).
 
 **Tier 3 prerequisites:** Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.
 

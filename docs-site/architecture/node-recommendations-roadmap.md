@@ -16,7 +16,6 @@ Tier 1 is **shipped**, including:
 | `POST .../internal/recalculate-savings` after cost model changes | Done |
 | Savings summary `?term=` alignment | Done |
 | Dedicated `GET .../nodes/{node}` path | Done |
-| `filter[engine]=cost\|performance` on node list | Done — limits nested `recommendation_engines`; cost vs performance target utilization differs (80% vs 55%) |
 | Node recommendation history time series | **Future** (Tier 2) |
 | Cloud instance catalog (AWS/Azure/GCP specs + pricing) | **Future** (Tier 2) |
 | `GET .../machinesets/{name}` detail | **Future** (Tier 2) |
@@ -28,11 +27,6 @@ Tier 1 is **shipped**, including:
 | Operator MachineSet replica time-series + autoscaler CR metrics | **Future** (Tier 3) |
 
 This document describes Tier 2 (MachineSet) and Tier 3 (MachineAutoscaler).
-
-**Business hours:** Not applicable to node recommendations. Business-hours schedules
-apply to container and namespace recommendations only. Node idle classification uses
-`idle_state` (`active` / `idle` / `zombie`) and tenant-configurable idle/zombie thresholds
-via `/settings/node`.
 
 ---
 
@@ -200,39 +194,37 @@ Individual node recommendations (Tier 1) remain informational; MachineSet recomm
 
 ### Phased delivery: Tier 2a vs Tier 2b
 
-Tier 2 is intentionally split so replica guidance, persistence, and API depth can ship
-**before** the cloud instance catalog (REQ-8c.6). Full analysis:
-[MachineSet recommendations (internal)](../features/machineset-recommendations.md) and
-[MachineSet recommendations (public)](../../docs-site/features/machineset-recommendations.md).
+Tier 2 is split so replica guidance, persistence, and API depth can ship **before** the
+cloud instance catalog. See [MachineSet recommendations (planned)](../features/machineset-recommendations.md)
+for the full capability list and per-item analysis.
 
 #### Tier 2a — No catalog required (~1–1.5 weeks)
 
 | Item | Build now? | Depends on | Standalone value |
 |------|------------|------------|------------------|
-| Replica count recommendations | **Yes** | `daily_node_digests`, Tier 1 fleet/`node_count_reduction` math | Explicit `rec_replicas` for IPI MachineSets |
-| `machineset_recommendations` table | **Yes** | Migration + engine upsert | Stable rows; list/detail off table not runtime GROUP BY |
-| `GET .../machinesets/{name}` | **Yes** | Table + member `node_recommendations` | Drill-down + audit |
-| History / trends | **Yes** (partial) | Per-recalc snapshots or history hypertable extension | Shows replica guidance stability |
-| MachineSet-level confidence | **Yes** | Min member `data_days` in term | Suppresses noisy advice on new pools |
-| Heterogeneous fleet detection | **Yes** | Distinct allocatable capacities per MachineSet | Misconfiguration warning |
-| Fleet health / scaling notifications | **Yes** (partial) | Tier 1 classifications + headroom aggregated | HA floor, consolidation warnings |
-| PDB notification (code **4**) | **Yes** (notification only) | Operator PDB metrics (REQ-8c.4) | Manual-review alert; does not change replica math |
+| Replica count recommendations | **Yes** | Node digests + Tier 1 fleet consolidation math | Explicit `rec_replicas` for IPI MachineSets |
+| `machineset_recommendations` table | **Yes** | Migration + engine | Stable MachineSet rows |
+| `GET .../machinesets/{name}` | **Yes** | Persistence + member nodes | Drill-down UI |
+| History / trends | **Yes** (partial) | Per-recalc snapshots | Recommendation stability over time |
+| MachineSet-level confidence | **Yes** | Member node `data_days` | Fewer false positives on new pools |
+| Heterogeneous fleet detection | **Yes** | Allocatable capacity per node | Warn on mixed shapes in one MachineSet |
+| Fleet health notifications | **Yes** (partial) | Aggregated Tier 1 signals | HA floor, headroom, consolidation |
+| PDB notification (code **4**) | **Yes** (notification only) | Operator PDB metrics | Review-before-scale alert |
 
 #### Tier 2b — Catalog required (~1–1.5 weeks after catalog)
 
 | Item | Build now? | Depends on | Standalone value |
 |------|------------|------------|------------------|
-| Instance family/size recommendations | **No** | `cloud_instance_catalog`, `instance-type` plugin | Smallest-fit and family switches not in fleet |
-| Cost comparison (current vs recommended) | **No** | Catalog pricing + Koku `effective_rates` | Dollar savings for type migration |
-| Stranded family switch (`m5`→`c5`/`r5`) | **No** (full) | Catalog families + pricing | Beyond Tier 1 in-cluster `suggested_instance_type` |
-| Deprecated / unlisted instance handling | **No** | Catalog lookup; codes **23**, **24** | Safe guidance for legacy types |
+| Instance family/size recommendations | **No** | `cloud_instance_catalog` | Types not already in cluster |
+| Cost comparison | **No** | Catalog pricing + Koku rates | Dollar delta for type change |
+| Stranded family switch | **No** (full) | Catalog families | Beyond in-cluster ratio hints |
+| Deprecated instance handling | **No** | Catalog + codes **23**, **24** | Legacy type safety |
 
-**On-prem:** Tier 2a still applies when catalog is empty; Tier 2b instance-type fields stay null.
+**On-prem:** Tier 2a applies without catalog; instance-type fields omitted when catalog is empty.
 
 ### Estimated effort
 
 **~2–3 weeks** total (Tier 2a + Tier 2b), assuming Tier 1 and cost integration remain stable.
-Operator `machineset_name` ingest is **done**; optional REQ-8c.4 replica metrics improve validation before Tier 3.
 
 ---
 
@@ -291,9 +283,7 @@ Tier 1 already groups fleet consolidation by **`instance_type`** when the operat
 
 ## References
 
-- [requirements.md — Phase 8c](requirements.md) (REQ-8c.4–8c.7, schemas, algorithms)  
-- [machineset-recommendations.md](../features/machineset-recommendations.md) — Tier 2a/2b phasing (internal)  
-- [docs-site/features/machineset-recommendations.md](../../docs-site/features/machineset-recommendations.md) — planned product doc (public)  
+- [MachineSet recommendations (planned)](../features/machineset-recommendations.md) — Tier 2 product doc + Tier 2a/2b phasing  
 - [notification-codes.md](notification-codes.md) — codes 14, 16–17 reserved for autoscaler Tier 3  
 - [cost-integration.md](cost-integration.md) — node savings; MachineSet savings will extend the same `effective_rates` patterns  
 - [configurability.md](configurability.md) — future `ROS_MIN_MACHINESET_REPLICAS`, catalog refresh interval
