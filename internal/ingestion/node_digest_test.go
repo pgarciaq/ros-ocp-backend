@@ -60,10 +60,10 @@ func TestAggregateNodeDigests_DistinctPodsPerHour(t *testing.T) {
 func TestAggregateNodeDigests_AccumulatesPerInterval(t *testing.T) {
 	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
 
-	// Two containers on the same node at the same interval
+	// Two containers on the same pod at the same interval
 	rows := []MetricRow{
-		{IntervalStart: interval, Node: "node-a", CPUUsageMC: 100, MemUsageKiB: 500, CPURequestMC: 200, MemRequestKiB: 1000},
-		{IntervalStart: interval, Node: "node-a", CPUUsageMC: 150, MemUsageKiB: 600, CPURequestMC: 300, MemRequestKiB: 2000},
+		{IntervalStart: interval, Node: "node-a", Pod: "pod-a", CPUUsageMC: 100, MemUsageKiB: 500, CPURequestMC: 200, MemRequestKiB: 1000},
+		{IntervalStart: interval, Node: "node-a", Pod: "pod-a", CPUUsageMC: 150, MemUsageKiB: 600, CPURequestMC: 300, MemRequestKiB: 2000},
 	}
 
 	result := AggregateNodeDigests(rows)

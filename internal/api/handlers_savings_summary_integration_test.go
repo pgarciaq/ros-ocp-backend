@@ -111,7 +111,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "USD", summary.Currency)
-	assert.Equal(t, "1285.060000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "1285.06", summary.EstimatedMonthlySavings.Value)
 	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.NotEmpty(t, summary.GPUSavingsNote)
 
@@ -132,7 +132,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	prod, ok := byUUID[testutil.TestClusterUUID]
 	require.True(t, ok)
 	assert.Equal(t, "prod-1", prod.ClusterAlias)
-	assert.Equal(t, "1285.060000", prod.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "1285.06", prod.EstimatedMonthlySavings.Value)
 	assert.True(t, prod.HasCostData)
 
 	dev, ok := byUUID[savingsSummaryCluster2]
@@ -512,8 +512,8 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 
 	assert.InDelta(t, snapshotMonthlyCostUSD, summary.ByPlugin.Snapshot, 0.01,
 		"by_plugin.snapshot should include persisted estimated_monthly_cost_usd from snapshot_recommendation_sets")
-	assert.Equal(t, "42.500000", summary.EstimatedMonthlySavings.Value)
+	assert.Equal(t, "42.50", summary.EstimatedMonthlySavings.Value)
 	require.Len(t, summary.ByCluster, 1)
-	assert.Equal(t, "42.500000", summary.ByCluster[0].EstimatedMonthlySavings.Value)
+	assert.Equal(t, "42.50", summary.ByCluster[0].EstimatedMonthlySavings.Value)
 	assert.Equal(t, testutil.TestClusterUUID, summary.ByCluster[0].ClusterUUID)
 }

@@ -130,7 +130,7 @@ func TestGroupNodeUtilizationRows_OmitsPodCapacityWhenMissing(t *testing.T) {
 }
 
 func TestFlattenNodeUtilizationForCSV(t *testing.T) {
-	savings := "12.500000"
+	savings := "12.50"
 	rows := flattenNodeUtilizationForCSV([]model.NodeUtilizationRec{{
 		Node:        "n1",
 		ClusterUUID: "cluster-1",

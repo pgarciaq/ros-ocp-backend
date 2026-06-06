@@ -60,7 +60,7 @@ func TestSavingsSummary_DisplaysNegativeCorrectly(t *testing.T) {
 	require.True(t, ok, "estimated_monthly_savings should be present")
 	value, ok := savings["value"].(string)
 	require.True(t, ok)
-	assert.Equal(t, "-123.450000", value, "total should not be clamped to zero")
+	assert.Equal(t, "-123.45", value, "total should not be clamped to zero")
 	assert.Equal(t, "USD", savings["units"])
 
 	byPlugin, ok := raw["by_plugin"].(map[string]interface{})

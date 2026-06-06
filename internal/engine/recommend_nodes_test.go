@@ -229,11 +229,10 @@ func TestRecommendNodes_NormalNode(t *testing.T) {
 	allocCPU := ptr64(16000)
 	allocMem := ptr64(65536)
 
-	// Moderate utilization — no flags
-	digests := []NodeDigestRow{
-		makeDigestRow("node-ok", 1, 8000, 10000, 30000, 40000, 12000, 48000, allocCPU, allocMem),
-		makeDigestRow("node-ok", 2, 8500, 10500, 32000, 42000, 12000, 48000, allocCPU, allocMem),
-		makeDigestRow("node-ok", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
+	// Moderate utilization — no flags; use full window so low-confidence notification is not emitted
+	var digests []NodeDigestRow
+	for day := 1; day <= 30; day++ {
+		digests = append(digests, makeDigestRow("node-ok", day, 8000, 10000, 30000, 40000, 12000, 48000, allocCPU, allocMem))
 	}
 
 	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, singleMediumTerm())

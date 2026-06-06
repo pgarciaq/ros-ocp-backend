@@ -177,7 +177,7 @@ func TestSavings_NonUSD_Currency_Propagates(t *testing.T) {
 
 	assert.Equal(t, "EUR", summary.Currency,
 		"fleet savings summary currency should propagate from Koku effective_rates, not default USD")
-	assert.Equal(t, "250.500000", summary.EstimatedMonthlySavings.Value,
+	assert.Equal(t, "250.50", summary.EstimatedMonthlySavings.Value,
 		"estimated_monthly_savings.value holds savings regardless of currency label")
 	assert.Equal(t, "EUR", summary.EstimatedMonthlySavings.Units)
 	assert.InDelta(t, 250.50, summary.ByPlugin.Container, 0.01,

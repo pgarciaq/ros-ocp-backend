@@ -76,6 +76,6 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	assert.Equal(t, 1, summary.IdleContainers)
 	assert.Equal(t, 1, summary.AbandonedContainers)
 	assert.Equal(t, 1, summary.ClusterCount)
-	assert.Equal(t, "80.500000", summary.TotalMonthlySavings.Value)
+	assert.Equal(t, "80.50", summary.TotalMonthlySavings.Value)
 	assert.Equal(t, "USD", summary.TotalMonthlySavings.Units)
 }
