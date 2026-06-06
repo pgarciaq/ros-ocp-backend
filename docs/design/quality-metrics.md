@@ -30,7 +30,16 @@ This is still useful: repeated non-zero values across consecutive ingestion batc
 | Live recommendations | `recommendation_sets.confidence_level` |
 | Historical snapshots | `recommendation_history.confidence_level` |
 
-Confidence is computed during ingestion (`ComputeConfidence` in the recommendation engine) from digest coverage vs `min_data_days` and stability signals. When `confidence_level` is below `low_confidence_threshold` (container settings; default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence` / `LOW_CONFIDENCE`) is emitted.
+Confidence is computed during ingestion from digest coverage vs the term window:
+
+| Plugin | Storage | Formula |
+|--------|---------|---------|
+| Container / namespace | `recommendation_sets.confidence_level` | `min(data_days / window_days, 1.0)` via `computeConfidence` |
+| PVC | `pvc_recommendation_sets` (no separate column; computed at ingest) | `min(data_days / MinDataDays, 1.0)` |
+| Node | `node_recommendations.confidence_level` | `min(data_days / window_days, 1.0)` — same as container |
+| GPU MIG / time-slicing | Not persisted; computed at API read | Tiered observation days + burst penalty (MIG); candidate-confidence blend (time-slicing). Exposed as `confidence` and `confidence_level`. |
+
+When `confidence_level` is below `low_confidence_threshold` (container/node settings; default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence` / `LOW_CONFIDENCE`) is emitted.
 
 The `/quality` endpoint aggregates post-hoc signals per container cycle: `stability_pct`, `adoption_detected`, `oom_events_after_rec`, `recommendation_age_hours`. It does **not** expose a confidence field.
 

@@ -42,6 +42,8 @@ type NodeUtilizationEngines struct {
 
 // NodeUtilizationTermRec holds recommendation engines for a single term window.
 type NodeUtilizationTermRec struct {
+	ConfidenceLevel       float32                 `json:"confidence_level,omitempty"`
+	DataDays              int                     `json:"data_days,omitempty"`
 	RecommendationEngines *NodeUtilizationEngines `json:"recommendation_engines,omitempty"`
 }
 

@@ -69,6 +69,34 @@ func recsForNode(recs []NodeRec, node string) []NodeRec {
 	return out
 }
 
+func TestRecommendNodes_ConfidenceLevel(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+	terms := []TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
+
+	var partial []NodeDigestRow
+	for day := 1; day <= 4; day++ {
+		partial = append(partial, makeDigestRow("node-partial", day, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem))
+	}
+	partialResults := RecommendNodes(partial, cfg, defaultNodeThresholdSettings, terms)
+	require.Len(t, partialResults, 2)
+	wantPartial := computeConfidence(4, 3, 30)
+	assert.InDelta(t, wantPartial, partialResults[0].ConfidenceLevel, 0.001)
+	assert.Equal(t, 4, partialResults[0].DataDays)
+	assert.Contains(t, partialResults[0].NotificationCodes, NotifLowConfidence)
+
+	var full []NodeDigestRow
+	for day := 1; day <= 30; day++ {
+		full = append(full, makeDigestRow("node-full", day, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem))
+	}
+	fullResults := RecommendNodes(full, cfg, defaultNodeThresholdSettings, terms)
+	require.Len(t, fullResults, 2)
+	assert.InDelta(t, float32(1.0), fullResults[0].ConfidenceLevel, 0.001)
+	assert.Equal(t, 30, fullResults[0].DataDays)
+	assert.NotContains(t, fullResults[0].NotificationCodes, NotifLowConfidence)
+}
+
 func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 	cfg := defaultNodeRecConfig()
 	digests := []NodeDigestRow{

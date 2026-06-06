@@ -25,6 +25,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -85,13 +86,13 @@ func GetNodeRecommendations(c echo.Context) error {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 			Meta: model.NodeRecommendationMeta{
-				Count:  0,
-				Limit:  opts.Limit,
-				Offset: opts.Offset,
+				Count:    0,
+				Limit:    opts.Limit,
+				Offset:   opts.Offset,
+				Currency: costdata.DefaultCurrency,
 			},
-			Data:     []model.NodeGPURecommendation{},
-			Links:    buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
-			Currency: costdata.DefaultCurrency,
+			Data:  []model.NodeGPURecommendation{},
+			Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
 		})
 	}
 
@@ -172,19 +173,6 @@ func GetNodeRecommendations(c echo.Context) error {
 		allRecs = []model.NodeGPURecommendation{}
 	}
 
-	var totalSavings *float32
-	var sum float32
-	hasSavings := false
-	for _, r := range allRecs {
-		if r.TotalNodeSavingsUSD != nil {
-			sum += *r.TotalNodeSavingsUSD
-			hasSavings = true
-		}
-	}
-	if hasSavings {
-		totalSavings = &sum
-	}
-
 	totalCount := len(allRecs)
 	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
 	paged := applyNodePagination(allRecs, opts.Offset, opts.Limit)
@@ -195,6 +183,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	} else if len(clusterUUIDs) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterUUIDs[0])
 	}
+	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 	hasNext := opts.Limit > 0 && len(paged) > 0 && opts.Offset+opts.Limit < totalCount
 	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, "")
 }
@@ -283,7 +272,8 @@ func respondNodeGPURecommendationsTripleSQL(
 			if tsRec == nil {
 				continue
 			}
-			allRecs = append(allRecs, toNodeGPURecommendation(tsRec))
+			currency := fetchClusterCurrency(ctx, orgIDStr, tr.ClusterUUID)
+			allRecs = append(allRecs, toNodeGPURecommendation(tsRec, currency))
 		}
 	}
 
@@ -310,19 +300,6 @@ func respondNodeGPURecommendationsTripleSQL(
 		allRecs = []model.NodeGPURecommendation{}
 	}
 
-	var totalSavings *float32
-	var sum float32
-	hasSavings := false
-	for _, r := range allRecs {
-		if r.TotalNodeSavingsUSD != nil {
-			sum += *r.TotalNodeSavingsUSD
-			hasSavings = true
-		}
-	}
-	if hasSavings {
-		totalSavings = &sum
-	}
-
 	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
 	totalCount := len(allRecs)
 	paged, hasNext, nextCursor, pageErr := paginateNodeGPURecs(allRecs, opts, cursor, hasCursor)
@@ -336,6 +313,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	} else if len(triples) > 0 {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
 	}
+	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
 }
 
@@ -344,7 +322,7 @@ func respondNodeGPURecommendations(
 	opts listoptions.ListOptions,
 	totalCount int,
 	data []model.NodeGPURecommendation,
-	totalSavings *float32,
+	totalSavings *money.SavingsObject,
 	warnings []string,
 	nodeCurrency string,
 	hasNext bool,
@@ -362,17 +340,17 @@ func respondNodeGPURecommendations(
 	links := buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset)
 	resp := model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
-			Count:           totalCount,
-			Limit:           opts.Limit,
-			Offset:          opts.Offset,
-			HasNext:         hasNext,
-			NextCursor:      nextCursor,
-			TotalSavingsUSD: totalSavings,
+			Count:        totalCount,
+			Limit:        opts.Limit,
+			Offset:       opts.Offset,
+			HasNext:      hasNext,
+			NextCursor:   nextCursor,
+			Currency:     nodeCurrency,
+			TotalSavings: totalSavings,
 		},
 		Data:     data,
 		Links:    links,
 		Warnings: warnings,
-		Currency: nodeCurrency,
 	}
 	if hasNext && nextCursor != "" {
 		q := c.Request().URL.Query()
@@ -395,11 +373,8 @@ func nodeGPUSortValue(r model.NodeGPURecommendation, orderBy string) interface{}
 		return r.RecommendedReplicas
 	case "confidence":
 		return r.Confidence
-	case "total_node_savings_usd":
-		if r.TotalNodeSavingsUSD != nil {
-			return *r.TotalNodeSavingsUSD
-		}
-		return nil
+	case "total_node_savings", "total_node_savings_usd":
+		return savingsObjectUSDValue(r.TotalNodeSavings)
 	default:
 		return r.NodeName
 	}
@@ -451,7 +426,8 @@ func collectNodeGPURecsForCluster(
 		if tsRec == nil {
 			continue
 		}
-		recs = append(recs, toNodeGPURecommendation(tsRec))
+		currency := fetchClusterCurrency(ctx, orgIDStr, clusterUUID)
+		recs = append(recs, toNodeGPURecommendation(tsRec, currency))
 	}
 	return recs, nil
 }
@@ -528,7 +504,7 @@ func groupByNodeAndModel(gpuRecs map[string][]*engine.GPURec, nodeMap map[string
 	return result
 }
 
-func toNodeGPURecommendation(tsRec *engine.TimeslicingRec) model.NodeGPURecommendation {
+func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{
 		NodeName:            tsRec.NodeName,
 		ClusterUUID:         tsRec.ClusterUUID,
@@ -536,9 +512,10 @@ func toNodeGPURecommendation(tsRec *engine.TimeslicingRec) model.NodeGPURecommen
 		RecommendationType:  "gpu_time_slicing",
 		GPUModel:            tsRec.GPUModel,
 		RecommendedReplicas: tsRec.RecommendedReplicas,
-		SavingsPerGPUUSD:    tsRec.SavingsPerGPU,
-		TotalNodeSavingsUSD: tsRec.TotalNodeSavings,
+		SavingsPerGPU:       money.FormatUSDPtrToSavingsPtr(tsRec.SavingsPerGPU, currency),
+		TotalNodeSavings:    money.FormatUSDPtrToSavingsPtr(tsRec.TotalNodeSavings, currency),
 		Confidence:          tsRec.Confidence,
+		ConfidenceLevel:     tsRec.Confidence,
 		NotificationCodes:   tsRec.NotificationCodes,
 	}
 	for _, c := range tsRec.CandidateContainers {
@@ -613,8 +590,8 @@ func compareNodeRecs(a, b model.NodeGPURecommendation, orderBy string) int {
 		primary = cmpInt(a.RecommendedReplicas, b.RecommendedReplicas)
 	case "confidence":
 		primary = cmpFloat32(a.Confidence, b.Confidence)
-	case "total_node_savings_usd":
-		primary = cmpFloat32(derefFloat32(a.TotalNodeSavingsUSD), derefFloat32(b.TotalNodeSavingsUSD))
+	case "total_node_savings", "total_node_savings_usd":
+		primary = cmpFloat64(savingsObjectUSDValue(a.TotalNodeSavings), savingsObjectUSDValue(b.TotalNodeSavings))
 	default: // node_name
 		primary = strings.Compare(a.NodeName, b.NodeName)
 	}
@@ -658,6 +635,44 @@ func derefFloat32(p *float32) float32 {
 		return 0
 	}
 	return *p
+}
+
+func cmpFloat64(a, b float64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func savingsObjectUSDValue(s *money.SavingsObject) float64 {
+	if s == nil || s.Value == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s.Value, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *money.SavingsObject {
+	var sum float64
+	hasSavings := false
+	for _, r := range recs {
+		v := savingsObjectUSDValue(r.TotalNodeSavings)
+		if v > 0 || r.TotalNodeSavings != nil {
+			sum += v
+			hasSavings = true
+		}
+	}
+	if !hasSavings {
+		return nil
+	}
+	cents := money.USDToCents(sum)
+	return money.FormatCentsToSavingsPtr(&cents, currency)
 }
 
 // applyNodeGPURecTagFilters keeps node GPU recs with at least one candidate container matching tag filters.

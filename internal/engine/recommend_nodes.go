@@ -80,6 +80,8 @@ type NodeRec struct {
 	InstanceType                 string
 	SuggestedInstanceType        string
 	InstanceTypeReason           string
+	DataDays                     int
+	ConfidenceLevel              float32
 	NotificationCodes            []int16
 }
 
@@ -139,6 +141,8 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 			}
 			classesByNodeTerm[tc.Name][node] = class
 
+			dataDays := len(windowDays)
+			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
 			for _, eng := range nodeEngines {
 				rec := nodeRecFromClassification(class)
 				rec.Term = tc.Name
@@ -146,6 +150,9 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				rec.InstanceType = instanceTypes[node]
 				rec.PodCapacity = class.PodCapacity
 				rec.MachineSetName = class.MachineSetName
+				rec.DataDays = dataDays
+				rec.ConfidenceLevel = confidence
+				rec.NotificationCodes = evaluateNodeNotifications(rec.NotificationCodes, confidence, dataDays)
 				rec.RecommendedCPUMC, rec.RecommendedMemKiB, rec.NodeCountReduction =
 					sizeNodeForEngine(class, eng, nodeSettings)
 				results = append(results, rec)
@@ -156,6 +163,14 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 	applyInstanceTypeConsolidation(results, classesByNodeTerm, instanceTypes, nodeEngines, nodeSettings)
 	applyFleetInstanceTypeSuggestions(results, digests, classesByNodeTerm, cfg.AllocatableFactor)
 	return results
+}
+
+// evaluateNodeNotifications appends data-coverage notification codes for node recommendations.
+func evaluateNodeNotifications(codes []int16, confidence float32, dataDays int) []int16 {
+	if confidence < defaultLowConfidenceThreshold && dataDays > 0 {
+		codes = appendNotificationCode(codes, NotifLowConfidence)
+	}
+	return codes
 }
 
 func nodeRecFromClassification(class nodeClassification) NodeRec {
@@ -1033,8 +1048,9 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 				estimated_monthly_savings_usd, instance_type,
 				suggested_instance_type, instance_type_reason,
+				confidence_level, data_days,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
@@ -1057,6 +1073,8 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				instance_type = EXCLUDED.instance_type,
 				suggested_instance_type = EXCLUDED.suggested_instance_type,
 				instance_type_reason = EXCLUDED.instance_type_reason,
+				confidence_level = EXCLUDED.confidence_level,
+				data_days = EXCLUDED.data_days,
 				updated_at = now()`,
 			orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
@@ -1065,6 +1083,7 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 			recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
 			r.EstimatedMonthlySavingsCents, r.InstanceType,
 			nullStringOptional(r.SuggestedInstanceType), nullStringOptional(r.InstanceTypeReason),
+			r.ConfidenceLevel, r.DataDays,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)

@@ -73,6 +73,17 @@ Handlers: [`internal/plugins/node/plugin.go`](../../internal/plugins/node/plugin
 
 Filter list/detail with `filter[term]=short_term|medium_term|long_term` (legacy `short|medium|long` accepted) and `filter[engine]=cost|performance`.
 
+### Confidence
+
+Each `recommendation_terms.{short|medium|long}_term` block includes:
+
+| Field | Meaning |
+|-------|---------|
+| `data_days` | Daily node digests in the term window |
+| `confidence_level` | `min(data_days / window_days, 1.0)` — same formula as container recommendations |
+
+When `confidence_level` is below the low-confidence threshold (default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence`) is included on the engine notifications.
+
 ### Tag filtering
 
 | Parameter | Description |

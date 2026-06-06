@@ -70,9 +70,10 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		setRecommendationNoStore(c)
 		gpuResp := model.GPUMIGListResponse{
 			Meta: model.GPUMIGListMeta{
-				Count:  0,
-				Limit:  opts.Limit,
-				Offset: opts.Offset,
+				Count:    0,
+				Limit:    opts.Limit,
+				Offset:   opts.Offset,
+				Currency: resolveListCurrencyFromRequest(c, orgIDStr),
 			},
 			Data: []model.GPUMIGRecommendationEntry{},
 		}
@@ -135,6 +136,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 					CurrentGPUProfile:     rec.CurrentGPUProfile,
 					Classification:        string(rec.Classification),
 					Confidence:            rec.Confidence,
+					ConfidenceLevel:       rec.Confidence,
 					GPUIdleState:          gpuIdle,
 				})
 			}
@@ -219,6 +221,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 			Offset:     opts.Offset,
 			HasNext:    hasNext,
 			NextCursor: nextCursor,
+			Currency:   resolveListCurrencyFromRequest(c, orgIDStr),
 			Warnings:   warnings,
 		},
 		Data: paged,

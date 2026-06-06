@@ -78,6 +78,21 @@ MIG and time-slicing list endpoints support `filter[tag:<key>]=<value>` when `RO
 
 See [Idle / zombie detection](idle-detection.md#gpu-idle).
 
+## Confidence
+
+GPU recommendations use a **different** confidence model than container/PVC/node plugins because DCGM profiling quality matters as much as day count.
+
+| Endpoint | Field | Formula |
+|----------|-------|---------|
+| `GET .../gpu/mig` | `confidence` / `confidence_level` | Tiered by observation days (defaults: &lt;3 → 0.3, &lt;7 → 0.6, &lt;14 → 0.8, else 1.0), multiplied by burst penalty when `max(SM) / avg(SM)` exceeds threshold; reduced when no profiling data |
+| `GET .../gpu/timeslicing` | `confidence` / `confidence_level` | Derived from average candidate-container confidence, penalized by impacted-workload ratio |
+
+Both fields carry the same numeric value; `confidence_level` matches the standard name used by container, PVC, and node plugins.
+
+Container list/detail `gpu.gpu_confidence` uses the same MIG engine score.
+
+Configure tier thresholds via `GET/PUT .../settings/gpu` (`confidence_days_tier1/2/3`).
+
 ## MIG support
 
 For MIG-capable GPUs, the engine maps P98 framebuffer usage (with headroom) to standard profiles (`1g.5gb` through `7g.40gb`, or `full_gpu`). Workloads that are not MIG candidates remain on full-GPU recommendations.

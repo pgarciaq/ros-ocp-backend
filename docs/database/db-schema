@@ -438,6 +438,8 @@ Table node_recommendations {
   machineset_name text
   trend_slope real
   notification_codes smallint[]
+  confidence_level real [note: 'min(data_days / window_days, 1.0) for the term']
+  data_days integer [note: 'Daily digests in the term window']
   updated_at timestamptz [default: `now()`]
 
   Indexes {

@@ -13,6 +13,7 @@ type GPUMIGRecommendationEntry struct {
 	CurrentGPUProfile     string  `json:"current_gpu_profile,omitempty"`
 	Classification        string  `json:"gpu_classification"`
 	Confidence            float32 `json:"confidence"`
+	ConfidenceLevel       float32 `json:"confidence_level"`
 	GPUIdleState          string  `json:"gpu_idle_state,omitempty"`
 }
 
@@ -23,6 +24,7 @@ type GPUMIGListMeta struct {
 	Offset     int      `json:"offset"`
 	HasNext    bool     `json:"has_next"`
 	NextCursor string   `json:"next_cursor,omitempty"`
+	Currency   string   `json:"currency"`
 	Warnings   []string `json:"warnings,omitempty"`
 }
 

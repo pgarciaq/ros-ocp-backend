@@ -1,16 +1,19 @@
 package model
 
+import "github.com/redhatinsights/ros-ocp-backend/internal/money"
+
 // NodeGPURecommendation represents a GPU time-slicing recommendation for a node.
 type NodeGPURecommendation struct {
-	NodeName            string             `json:"node_name"`
-	ClusterUUID         string             `json:"cluster_uuid"`
-	Term                string             `json:"term"`
-	RecommendationType  string             `json:"recommendation_type"`
-	GPUModel            string             `json:"gpu_model"`
-	RecommendedReplicas int                `json:"recommended_replicas"`
-	SavingsPerGPUUSD    *float32           `json:"savings_per_gpu_usd,omitempty"`
-	TotalNodeSavingsUSD *float32           `json:"total_node_savings_usd,omitempty"`
-	Confidence          float32            `json:"confidence"`
+	NodeName            string               `json:"node_name"`
+	ClusterUUID         string               `json:"cluster_uuid"`
+	Term                string               `json:"term"`
+	RecommendationType  string               `json:"recommendation_type"`
+	GPUModel            string               `json:"gpu_model"`
+	RecommendedReplicas int                  `json:"recommended_replicas"`
+	SavingsPerGPU       *money.SavingsObject `json:"savings_per_gpu,omitempty"`
+	TotalNodeSavings    *money.SavingsObject `json:"total_node_savings,omitempty"`
+	Confidence          float32              `json:"confidence"`
+	ConfidenceLevel     float32            `json:"confidence_level"`
 	CandidateContainers []NodeContainerRef `json:"candidate_containers"`
 	ImpactedContainers  []NodeContainerRef `json:"impacted_containers"`
 	NotificationCodes   []int16            `json:"notification_codes"`
@@ -25,25 +28,23 @@ type NodeContainerRef struct {
 	Classification string  `json:"classification"`
 }
 
-// NodeRecommendationListResponse is the envelope for the node recommendations endpoint.
-// It mirrors the standard Collection shape (meta, data, links) with an extra
-// total_savings_usd in the metadata.
+// NodeRecommendationListResponse is the envelope for the GPU time-slicing recommendations endpoint.
 type NodeRecommendationListResponse struct {
 	Meta     NodeRecommendationMeta  `json:"meta"`
 	Data     []NodeGPURecommendation `json:"data"`
 	Links    PaginationLinks         `json:"links"`
 	Warnings []string                `json:"warnings,omitempty"`
-	Currency string                  `json:"currency"`
 }
 
 // NodeRecommendationMeta holds metadata for the node recommendations response.
 type NodeRecommendationMeta struct {
-	Count           int      `json:"count"`
-	Limit           int      `json:"limit"`
-	Offset          int      `json:"offset"`
-	HasNext         bool     `json:"has_next"`
-	NextCursor      string   `json:"next_cursor,omitempty"`
-	TotalSavingsUSD *float32 `json:"total_savings_usd,omitempty"`
+	Count         int                  `json:"count"`
+	Limit         int                  `json:"limit"`
+	Offset        int                  `json:"offset"`
+	HasNext       bool                 `json:"has_next"`
+	NextCursor    string               `json:"next_cursor,omitempty"`
+	Currency      string               `json:"currency"`
+	TotalSavings  *money.SavingsObject `json:"total_savings,omitempty"`
 }
 
 // NodeRecommendationLinks is an alias for backward compatibility.
