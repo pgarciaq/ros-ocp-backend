@@ -190,35 +190,35 @@ Individual node recommendations (Tier 1) remain informational; MachineSet recomm
 
 - **Machine API / MachineSets only:** Helps IPI-provisioned clusters using MachineSets. Does **not** help bare metal, single-node OpenShift (SNO), or UPI/manual nodes without `machineset_name` (those nodes stay Tier 1 only; `machineset_name` is `NULL` → skip Tier 2/3 for that node).  
 - **PDB / drain safety:** Tier 2 recommends counts; PDB-aware automation is notification-only (see REQ-8c.5 in requirements).  
-- **HA floor:** Configurable minimum replicas (e.g. `ROS_MIN_MACHINESET_REPLICAS`, default 2).
+- **HA floor:** Configurable minimum replicas (`ROS_MIN_MACHINESET_REPLICAS`, default 1 — never recommend 0).
 
 ### Phased delivery: Tier 2a vs Tier 2b
 
 Tier 2 is split so replica guidance, persistence, and API depth can ship **before** the
-cloud instance catalog. See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md)
-for the full capability list and per-item analysis.
+cloud instance catalog.
 
-#### Tier 2a — No catalog required (~1–1.5 weeks)
+**Full spec:** [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md)
 
-| Item | Build now? | Depends on | Standalone value |
-|------|------------|------------|------------------|
-| Replica count recommendations | **Yes** | Node digests + Tier 1 fleet consolidation math | Explicit `rec_replicas` for IPI MachineSets |
-| `machineset_recommendations` table | **Yes** | Migration + engine | Stable MachineSet rows |
-| `GET .../machinesets/{name}` | **Yes** | Persistence + member nodes | Drill-down UI |
-| History / trends | **Yes** (partial) | Per-recalc snapshots | Recommendation stability over time |
-| MachineSet-level confidence | **Yes** | Member node `data_days` | Fewer false positives on new pools |
-| Heterogeneous fleet detection | **Yes** | Allocatable capacity per node | Warn on mixed shapes in one MachineSet |
-| Fleet health notifications | **Yes** (partial) | Aggregated Tier 1 signals | HA floor, headroom, consolidation |
-| PDB notification (code **4**) | **Yes** (notification only) | Operator PDB metrics | Review-before-scale alert |
+#### Tier 2a — No catalog required (~1–1.5 weeks) — READY TO IMPLEMENT
+
+| Capability | Design |
+|------------|--------|
+| Replica count | `recommended = current - sum(node_count_reduction)`; floor ≥ 1 |
+| Persistence | `machineset_recommendations` table |
+| Detail API | `GET .../machinesets/{name}` + `cluster_uuid` + history |
+| Confidence | Minimum across member nodes |
+| Heterogeneous fleet | Capacity variance > 10% → notification **77** |
+| Notifications | **78** scale-down, **79** optimal; **76** on nodes only |
+| List API | Shipped aggregation → table-backed; new filters + `order_by` |
 
 #### Tier 2b — Catalog required (~1–1.5 weeks after catalog)
 
-| Item | Build now? | Depends on | Standalone value |
-|------|------------|------------|------------------|
-| Instance family/size recommendations | **No** | `cloud_instance_catalog` | Types not already in cluster |
-| Cost comparison | **No** | Catalog pricing + Koku rates | Dollar delta for type change |
-| Stranded family switch | **No** (full) | Catalog families | Beyond in-cluster ratio hints |
-| Deprecated instance handling | **No** | Catalog + codes **23**, **24** | Legacy type safety |
+| Capability | Design |
+|------------|--------|
+| Instance type | Smallest-fit from cloud catalog vs peak usage |
+| Family migration | `m`/`c`/`r`/`p` families from workload profile |
+| Cost comparison | `replicas × hourly_rate × 730`; 20% savings hysteresis |
+| Fallback | Tier 2a replica recs when catalog unavailable |
 
 **On-prem:** Tier 2a applies without catalog; instance-type fields omitted when catalog is empty.
 
@@ -265,13 +265,15 @@ Tier 3 is **more research-oriented** than Tiers 1–2: recommendations depend on
 
 ## Schema and API sketch (planned)
 
-Already partially reserved in migrations and requirements:
-
-- `daily_node_digests.machineset_name` — **exists**; needs operator population.  
+- `daily_node_digests.machineset_name` — **exists** (operator population done).  
 - `node_recommendations.machineset_name` — **exists** for correlation.  
-- `machineset_recommendations` — **not created**; PK `(org_id, cluster_uuid, machineset_name)`.
+- `machineset_recommendations` + `machineset_recommendation_history` — **not created** (see [MachineSet spec](../planned-features/machineset-recommendations.md)).
 
-Planned list endpoint filters (REQ-8c): `cluster_uuid`, `machineset_name`, `current_instance_type`, `is_saturated`, `is_idle`, `is_flapping`.
+**Shipped:** `GET .../machinesets` with `filter[cluster]`, `filter[machineset_name]`, keyset pagination, CSV.
+
+**Tier 2a additions:** detail endpoint, `filter[recommendation_type]`, `order_by`.
+
+**Tier 3 additions (future):** `is_saturated`, `is_idle`, `is_flapping`.
 
 ---
 
