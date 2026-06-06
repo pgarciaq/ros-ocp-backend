@@ -2,10 +2,13 @@ package api_test
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -391,6 +394,153 @@ func TestSnapshotRecommendations_NotificationCodes(t *testing.T) {
 	}
 	activeRow := byName["snap-active-nc"]
 	assert.Empty(t, activeRow.Notifications)
+}
+
+func insertSnapshotRecommendationWithCost(
+	t *testing.T,
+	orgID, clusterUUID, namespace, snapshotName, recType string,
+	ageDays int,
+	costCents int64,
+) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO snapshot_recommendation_sets (
+			org_id, cluster_uuid, namespace, snapshot_name,
+			recommendation_type, age_days, estimated_cost_cents, creation_timestamp, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() - ($6::int * INTERVAL '1 day'), NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
+		DO UPDATE SET recommendation_type = EXCLUDED.recommendation_type,
+			age_days = EXCLUDED.age_days,
+			estimated_cost_cents = EXCLUDED.estimated_cost_cents,
+			updated_at = NOW()`,
+		orgID, clusterUUID, namespace, snapshotName, recType, ageDays, costCents,
+	)
+	require.NoError(t, err)
+}
+
+func TestGetSnapshotRecommendations_CursorPagination(t *testing.T) {
+	orgID := "org-snap-cursor-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithCost(t, orgID, testutil.TestClusterUUID, "apps", "snap-age-120", "stale", 120, 500)
+	insertSnapshotRecommendationWithCost(t, orgID, testutil.TestClusterUUID, "apps", "snap-age-60", "orphaned", 60, 250)
+	insertSnapshotRecommendationWithCost(t, orgID, testutil.TestClusterUUID, "apps", "snap-age-30", "active", 30, 100)
+
+	app := setupSnapshotRecsEcho(pool)
+	identityHeader := makeIdentityHeader(orgID)
+
+	firstReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?limit=1&order_by=age_days&order_how=desc",
+		nil,
+	)
+	firstReq.Header.Set("X-Rh-Identity", identityHeader)
+	firstRec := httptest.NewRecorder()
+	app.ServeHTTP(firstRec, firstReq)
+	require.Equal(t, http.StatusOK, firstRec.Code, firstRec.Body.String())
+
+	var firstPage api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(firstRec.Body.Bytes(), &firstPage))
+	require.Len(t, firstPage.Data, 1)
+	assert.Equal(t, "snap-age-120", firstPage.Data[0].SnapshotName)
+	assert.True(t, firstPage.Meta.HasNext)
+	require.NotEmpty(t, firstPage.Meta.NextCursor)
+
+	secondReq := httptest.NewRequest(http.MethodGet,
+		fmt.Sprintf("/api/cost-management/v1/recommendations/openshift/snapshots?limit=1&after=%s", firstPage.Meta.NextCursor),
+		nil)
+	secondReq.Header.Set("X-Rh-Identity", identityHeader)
+	secondRec := httptest.NewRecorder()
+	app.ServeHTTP(secondRec, secondReq)
+	require.Equal(t, http.StatusOK, secondRec.Code, secondRec.Body.String())
+
+	var secondPage api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(secondRec.Body.Bytes(), &secondPage))
+	require.Len(t, secondPage.Data, 1)
+	assert.NotEqual(t, firstPage.Data[0].SnapshotName, secondPage.Data[0].SnapshotName)
+}
+
+func TestGetSnapshotRecommendations_MoneyAmountCost(t *testing.T) {
+	orgID := "org-snap-cost-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithCost(t, orgID, testutil.TestClusterUUID, "apps", "snap-cost", "stale", 45, 1250)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?filter[project]=apps",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 1)
+	require.NotNil(t, resp.Data[0].EstimatedMonthlyCost)
+	assert.Equal(t, "12.50", resp.Data[0].EstimatedMonthlyCost.Value)
+	assert.Equal(t, "USD", resp.Data[0].EstimatedMonthlyCost.Units)
+}
+
+func TestGetSnapshotRecommendations_CSVExport(t *testing.T) {
+	orgID := "org-snap-csv-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithCost(t, orgID, testutil.TestClusterUUID, "apps", "snap-csv", "orphaned", 14, 250)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?format=csv&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+
+	reader := csv.NewReader(strings.NewReader(rec.Body.String()))
+	rows, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rows), 2)
+	assert.Equal(t, snapshotRecCSVHeaderForTest(), rows[0])
+
+	headerIndex := make(map[string]int, len(rows[0]))
+	for i, col := range rows[0] {
+		headerIndex[col] = i
+	}
+	dataRow := rows[1]
+	assert.Equal(t, testutil.TestClusterUUID, dataRow[headerIndex["cluster_uuid"]])
+	assert.Equal(t, "apps", dataRow[headerIndex["namespace"]])
+	assert.Equal(t, "snap-csv", dataRow[headerIndex["snapshot_name"]])
+	assert.Equal(t, "orphaned", dataRow[headerIndex["classification"]])
+	assert.Equal(t, "2.50", dataRow[headerIndex["estimated_monthly_cost_value"]])
+	assert.Equal(t, "USD", dataRow[headerIndex["estimated_monthly_cost_units"]])
+}
+
+func snapshotRecCSVHeaderForTest() []string {
+	return []string{
+		"cluster_uuid", "namespace", "snapshot_name", "source_pvc_name",
+		"classification", "age_days", "restore_size_bytes",
+		"estimated_monthly_cost_value", "estimated_monthly_cost_units",
+		"source_pvc_exists", "last_restored_at",
+		"notification_codes", "created_at", "last_reported",
+	}
 }
 
 func TestGetSnapshotRecommendations_Unauthorized(t *testing.T) {

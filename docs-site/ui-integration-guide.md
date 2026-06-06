@@ -698,7 +698,7 @@ GET /recommendations/openshift/snapshots
       "restored_pvc_count": 0,
       "managed_by": "velero",
       "recommendation_type": "orphaned",
-      "estimated_monthly_cost_usd": 0.52,
+      "estimated_monthly_cost": {"value": "0.52", "units": "USD"},
       "notifications": { "31": { "type": "WARNING", "message": "...", "code": 31 } }
     }
   ]
@@ -718,7 +718,7 @@ GET /recommendations/openshift/snapshots
 
 ### Cost estimation fields
 
-`estimated_monthly_cost_usd` = `restore_size_bytes` × storage rate (from Koku effective rates,
+`estimated_monthly_cost` (`MoneyAmount`) = `restore_size_bytes` × storage rate (from Koku effective rates,
 tenant override, or default $0.05/GiB/month). This is **ongoing cost**, not savings — sum for
 waste dashboards.
 
@@ -726,7 +726,7 @@ waste dashboards.
 
 - Show snapshots in a sortable **Table**: snapshot name, namespace, cluster, age (`age_days`), classification, source PVC exists, estimated cost.
 - Use **Badge** for classification with text labels: orphaned (red), stale (orange), never_restored (yellow), redundant (gray), managed (green), active (green/info).
-- Display `estimated_monthly_cost_usd` as ongoing waste cost (not savings); sum for waste dashboard totals.
+- Display `estimated_monthly_cost.value` with `estimated_monthly_cost.units` as ongoing waste cost (not savings); sum for waste dashboard totals.
 - Show `source_pvc_exists: false` with a warning icon and code 31 notification text.
 - Provide action buttons: "Delete" for orphaned/stale (with confirmation modal), "Verify" for never_restored (link to restore history).
 - For `managed` snapshots (Velero/OADP), show caution **Alert** — review retention policy before deletion.

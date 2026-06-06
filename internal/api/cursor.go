@@ -171,6 +171,14 @@ type MachineSetCursor struct {
 	SortValue      json.RawMessage `json:"sv,omitempty"`
 }
 
+// SnapshotCursor is the decoded keyset position for snapshot list pagination.
+type SnapshotCursor struct {
+	ClusterUUID  string          `json:"cu"`
+	Namespace    string          `json:"ns"`
+	SnapshotName string          `json:"sn"`
+	SortValue    json.RawMessage `json:"sv,omitempty"`
+}
+
 // EncodeQuotaCursor returns an opaque base64url cursor for the next quota page.
 func EncodeQuotaCursor(c QuotaCursor) string { return encodeCursor(c) }
 
@@ -198,3 +206,9 @@ func EncodeMachineSetCursor(c MachineSetCursor) string { return encodeCursor(c) 
 func DecodeMachineSetCursor(s string) (MachineSetCursor, error) {
 	return decodeCursor[MachineSetCursor](s)
 }
+
+// EncodeSnapshotCursor returns an opaque base64url cursor for the next snapshot page.
+func EncodeSnapshotCursor(c SnapshotCursor) string { return encodeCursor(c) }
+
+// DecodeSnapshotCursor decodes an opaque snapshot list cursor.
+func DecodeSnapshotCursor(s string) (SnapshotCursor, error) { return decodeCursor[SnapshotCursor](s) }

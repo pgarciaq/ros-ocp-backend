@@ -247,3 +247,15 @@ func applyMachineSetCursor(c echo.Context) (MachineSetCursor, bool, error) {
 	}
 	return cursor, true, nil
 }
+
+func applySnapshotCursor(c echo.Context) (SnapshotCursor, bool, error) {
+	after := c.QueryParam("after")
+	if after == "" {
+		return SnapshotCursor{}, false, nil
+	}
+	cursor, err := DecodeSnapshotCursor(after)
+	if err != nil {
+		return SnapshotCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	return cursor, true, nil
+}

@@ -59,6 +59,12 @@ Use container, namespace, or PVC routes for label-based filtering.
 Handlers: [`GetSnapshotRecommendations`](../../internal/api/handlers_snapshot.go),
 [`GetSnapshotSummary`](../../internal/api/handlers_snapshot_summary.go).
 
+### List pagination and export
+
+- **Keyset pagination:** `?after=<meta.next_cursor>` with `meta.has_next` (default sort `age_days` DESC). `offset` remains supported for backward compatibility. See [API pagination](../pagination.md).
+- **CSV export:** `?format=csv` or `Accept: text/csv` — columns include `classification`, `estimated_monthly_cost_value` / `estimated_monthly_cost_units`, `created_at`, `last_reported`, and notification codes.
+- **Sort:** `order_by` (`age_days`, `restore_size_bytes`, `estimated_monthly_cost`, `snapshot_name`, `namespace`, `recommendation_type`) and `order_how` (`asc` / `desc`).
+
 ## Notification codes
 
 Filter the catalog: `GET /recommendations/openshift/notification-codes?filter[plugin]=snapshot`.
@@ -79,7 +85,7 @@ See [Notification codes — Snapshots](../architecture/notification-codes.md#sna
 
 Snapshot savings use a flat **$0.05/GiB/month** approximation (`cost_per_gib_month_usd`, default aligned with `ROS_SNAPSHOT_COST_PER_GIB_MONTH`). Reclaimable totals appear on list rows and the namespace/cluster **summary** endpoint. Enhanced billing-derived costs are planned in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
-`estimated_monthly_cost_usd` uses the resolved `cost_per_gib_month_usd` rate (Settings API, env, or compiled default). When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, Masu effective-rates lookup is skipped during ingestion; dollar fields still use the static or per-org configured rate.
+`estimated_monthly_cost` is a [`MoneyAmount`](../../internal/money/format.go) (`{"value": "12.50", "units": "USD"}`), persisted as `estimated_cost_cents` (BIGINT) in `snapshot_recommendation_sets`. The rate comes from resolved `cost_per_gib_month_usd` (Settings API, env, or compiled default). When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, Masu effective-rates lookup is skipped during ingestion; dollar fields still use the static or per-org configured rate.
 
 Snapshot totals are included in fleet `GET /recommendations/openshift/savings-summary` when the plugin is enabled and cost data exists. Snapshot's fleet contribution is **term-independent** — all snapshot recommendations are summed regardless of the `term` query parameter.
 

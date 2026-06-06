@@ -68,8 +68,8 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_monthly_cost_usd, notification_codes, updated_at)
-		VALUES ($1, $2, 'ns1', 'snap-old', now(), 0.00, '{}', now())`,
+		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_cost_cents, notification_codes, updated_at)
+		VALUES ($1, $2, 'ns1', 'snap-old', now(), 0, '{}', now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -488,10 +488,11 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	const snapshotMonthlyCostUSD = 42.50
+	const snapshotCostCents = int64(4250)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_monthly_cost_usd, notification_codes, updated_at)
+		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_cost_cents, notification_codes, updated_at)
 		VALUES ($1, $2, 'ns1', 'snap-stale', now(), $3, '{}', now())`,
-		testutil.TestOrgID, testutil.TestClusterUUID, snapshotMonthlyCostUSD)
+		testutil.TestOrgID, testutil.TestClusterUUID, snapshotCostCents)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -511,7 +512,7 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.InDelta(t, snapshotMonthlyCostUSD, summary.ByPlugin.Snapshot, 0.01,
-		"by_plugin.snapshot should include persisted estimated_monthly_cost_usd from snapshot_recommendation_sets")
+		"by_plugin.snapshot should include persisted estimated_cost_cents from snapshot_recommendation_sets")
 	assert.Equal(t, "42.50", summary.EstimatedMonthlySavings.Value)
 	require.Len(t, summary.ByCluster, 1)
 	assert.Equal(t, "42.50", summary.ByCluster[0].EstimatedMonthlySavings.Value)

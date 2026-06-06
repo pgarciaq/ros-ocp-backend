@@ -13,8 +13,8 @@ in the future.
 
 | Strategy | When to use | Endpoints |
 |----------|-------------|-----------|
-| **Keyset (`after`)** | Default for all list endpoints; stable latency at depth | Container, namespace, PVC, GPU, nodes, quota, cluster-quota, VM, machinesets |
-| **Offset (`offset` / `limit`)** | Legacy page-number UX; small bounded sets | History, quality, snapshots (and keyset-capable lists for backward compat) |
+| **Keyset (`after`)** | Default for all list endpoints; stable latency at depth | Container, namespace, PVC, GPU, nodes, quota, cluster-quota, VM, machinesets, snapshots |
+| **Offset (`offset` / `limit`)** | Legacy page-number UX; small bounded sets | History, quality (and keyset-capable lists for backward compat) |
 
 All primary recommendation list endpoints support **`after`** cursors with **`offset`**
 fallback. Prefer keyset for infinite scroll and deep pages.
@@ -39,6 +39,7 @@ fallback. Prefer keyset for infinite scroll and deep pages.
 | `GET` | `/recommendations/openshift/cluster-quota` | ClusterResourceQuota (tie-break: cluster + CRQ name) |
 | `GET` | `/recommendations/openshift/vm` | VM sizing (tie-break: cluster + vm + namespace + term + engine) |
 | `GET` | `/recommendations/openshift/machinesets` | MachineSet aggregation (tie-break: machineset name + cluster) |
+| `GET` | `/recommendations/openshift/snapshots` | VolumeSnapshot staleness (tie-break: cluster + namespace + snapshot name) |
 
 Container and namespace list responses paginate by **distinct container or namespace**, not by raw database rows.
 Each list item can still expose multiple **term × engine** nested objects.
@@ -98,6 +99,7 @@ Cursors encode the last row’s sort position so the database can seek with
 | Cluster-quota | `cluster_quota_name` (configurable) | `cluster_uuid`, `cluster_quota_name` |
 | VM | `vm_name` ASC (configurable) | `cluster_uuid`, `vm_name`, `namespace`, `term`, `engine` |
 | Machinesets | `total_savings_cents` DESC | `machineset_name`, `cluster_uuid` |
+| Snapshots | `age_days` DESC (configurable) | `cluster_uuid`, `namespace`, `snapshot_name` |
 
 The `ORDER BY` used for a request must stay **stable** across pages (same filters and
 sort). Changing filters or sort between pages can skip or duplicate rows.
@@ -142,7 +144,7 @@ UI migrates to cursor mode. Deep offset pages on very large orgs will be slower 
 | Cursor encode/decode | [`internal/api/cursor.go`](../internal/api/cursor.go) |
 | Handler wiring | [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go) |
 | SQL keyset filters | [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go), [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go) |
-| Indexes | Migrations `000078`, `000134_keyset_quota_vm_machineset_indexes` |
+| Indexes | Migrations `000078`, `000134_keyset_quota_vm_machineset_indexes`, `000139_snapshot_keyset_index` |
 | Large-org key table | `org_container_keys` — migration `000081`; see [query-performance.md](query-performance.md) |
 
 ---
@@ -169,7 +171,7 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 | `GET /recommendations/openshift/cluster-quota` | **Keyset + offset** | ClusterResourceQuotas per cluster | SQL keyset on `cluster_quota_recommendation_sets` |
 | `GET /recommendations/openshift/vm` | **Keyset + offset** | VMs per org | SQL keyset on `vm_recommendations` |
 | `GET /recommendations/openshift/machinesets` | **Keyset + offset** | MachineSet groups | SQL keyset on aggregated node rows |
-| `GET /recommendations/openshift/snapshots` | Offset only | Bounded by retention/settings | Staleness lists are cluster-scoped and limited |
+| `GET /recommendations/openshift/snapshots` | **Keyset + offset** | Bounded by retention/settings | SQL keyset on `snapshot_recommendation_sets` |
 | `GET /recommendations/openshift/quality` | Offset only | One row per active container cycle | Similar bounds to history/quality pipelines |
 | `GET /recommendations/openshift/savings-summary` | N/A (aggregate) | Single rollup | Not a row list |
 | `GET /recommendations/openshift/fleet-summary` | N/A (aggregate) | Single rollup | Not a row list |

@@ -25,7 +25,7 @@ func insertSnapshotRecommendationFull(
 	orgID, clusterUUID, namespace, snapshotName, recType string,
 	ageDays int,
 	restoreSize int64,
-	costUSD *float32,
+	costCents *int64,
 ) {
 	t.Helper()
 	ctx := context.Background()
@@ -34,15 +34,15 @@ func insertSnapshotRecommendationFull(
 		INSERT INTO snapshot_recommendation_sets (
 			org_id, cluster_uuid, namespace, snapshot_name,
 			recommendation_type, age_days, restore_size_bytes,
-			estimated_monthly_cost_usd, creation_timestamp, updated_at
+			estimated_cost_cents, creation_timestamp, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - ($6::int * INTERVAL '1 day'), NOW())
 		ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
 		DO UPDATE SET recommendation_type = EXCLUDED.recommendation_type,
 			age_days = EXCLUDED.age_days,
 			restore_size_bytes = EXCLUDED.restore_size_bytes,
-			estimated_monthly_cost_usd = EXCLUDED.estimated_monthly_cost_usd,
+			estimated_cost_cents = EXCLUDED.estimated_cost_cents,
 			updated_at = NOW()`,
-		orgID, clusterUUID, namespace, snapshotName, recType, ageDays, restoreSize, costUSD,
+		orgID, clusterUUID, namespace, snapshotName, recType, ageDays, restoreSize, costCents,
 	)
 	require.NoError(t, err)
 }
@@ -104,8 +104,8 @@ func TestGetSnapshotSummary_MultipleNamespaces(t *testing.T) {
 
 	seedSnapshotRecCluster(t, orgID)
 	gib := int64(1024 * 1024 * 1024)
-	cost10 := float32(10)
-	cost5 := float32(5)
+	cost10 := int64(1000)
+	cost5 := int64(500)
 	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "apps", "snap-apps-1", "orphaned", 30, gib, &cost10)
 	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "apps", "snap-apps-2", "stale", 60, gib, &cost10)
 	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "data", "snap-data-1", "never_restored", 90, 2*gib, &cost5)
@@ -273,7 +273,7 @@ func TestGetSnapshotSummary_Pagination(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	seedSnapshotRecCluster(t, orgID)
-	cost := float32(1)
+	cost := int64(100)
 	for i, ns := range []string{"aaa", "bbb", "ccc"} {
 		insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, ns, "snap-"+ns, "orphaned", 10+i, 1024, &cost)
 	}
@@ -302,8 +302,8 @@ func TestGetSnapshotSummary_OrderByReclaimableCost(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	seedSnapshotRecCluster(t, orgID)
-	low := float32(1)
-	high := float32(100)
+	low := int64(100)
+	high := int64(10000)
 	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "low-ns", "snap-low", "orphaned", 10, 1024, &low)
 	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "high-ns", "snap-high", "stale", 10, 1024, &high)
 

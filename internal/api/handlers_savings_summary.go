@@ -290,7 +290,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 				WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_monthly_cost_usd)
+				SELECT SUM(estimated_cost_cents)::float / 100.0
 				FROM snapshot_recommendation_sets
 				WHERE org_id = $1`+clusterFilter+`
 			), 0),
@@ -368,7 +368,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 		),
 		snapshot_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_monthly_cost_usd), 0) AS savings
+			       COALESCE(SUM(estimated_cost_cents), 0)::float / 100.0 AS savings
 			FROM snapshot_recommendation_sets
 			WHERE org_id = $1`+clusterFilter+`
 			GROUP BY cluster_uuid

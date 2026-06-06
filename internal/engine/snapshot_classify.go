@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // SnapshotSettings holds resolved snapshot classification thresholds.
@@ -36,7 +37,7 @@ type SnapshotRec struct {
 	RestoredPVCCount     int
 	ManagedBy            string
 	RecommendationType   string
-	EstimatedMonthlyCost *float32
+	EstimatedCostCents *int64
 	NotificationCodes    []int16
 }
 
@@ -149,10 +150,10 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 			RestoredPVCCount:    snap.RestoredPVCCount,
 		}
 
-		// Compute cost estimate
+		// Compute cost estimate (integer cents for DB persistence).
 		gib := float64(snap.RestoreSizeBytes) / (1024 * 1024 * 1024)
-		cost := float32(gib * settings.CostPerGiBMonth)
-		rec.EstimatedMonthlyCost = &cost
+		cents := money.USDToCents(gib * settings.CostPerGiBMonth)
+		rec.EstimatedCostCents = &cents
 
 		// Detect managed backup tool
 		managedBy := detectManagedTool(snap.Labels)
@@ -252,7 +253,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				source_pvc_name, volume_snapshot_class, storageclass,
 				creation_timestamp, restore_size_bytes, age_days,
 				source_pvc_exists, restored_pvc_count, managed_by,
-				recommendation_type, estimated_monthly_cost_usd,
+				recommendation_type, estimated_cost_cents,
 				notification_codes, updated_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
 			ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
@@ -267,14 +268,14 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				restored_pvc_count = EXCLUDED.restored_pvc_count,
 				managed_by = EXCLUDED.managed_by,
 				recommendation_type = EXCLUDED.recommendation_type,
-				estimated_monthly_cost_usd = EXCLUDED.estimated_monthly_cost_usd,
+				estimated_cost_cents = EXCLUDED.estimated_cost_cents,
 				notification_codes = EXCLUDED.notification_codes,
 				updated_at = NOW()`,
 			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.SnapshotName,
 			rec.SourcePVCName, rec.VolumeSnapshotClass, rec.StorageClass,
 			rec.CreationTimestamp, rec.RestoreSizeBytes, rec.AgeDays,
 			rec.SourcePVCExists, rec.RestoredPVCCount, rec.ManagedBy,
-			rec.RecommendationType, rec.EstimatedMonthlyCost,
+			rec.RecommendationType, rec.EstimatedCostCents,
 			rec.NotificationCodes,
 		)
 		if err != nil {

@@ -1,15 +1,18 @@
 package api
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
@@ -23,23 +26,26 @@ type SnapshotRecommendationResponse struct {
 	VolumeSnapshotClass  string                                     `json:"volume_snapshot_class,omitempty"`
 	StorageClass         string                                     `json:"storageclass,omitempty"`
 	CreationTimestamp    string                                     `json:"creation_timestamp"`
+	LastReported         string                                     `json:"last_reported,omitempty"`
 	RestoreSizeBytes     int64                                      `json:"restore_size_bytes"`
 	AgeDays              int                                        `json:"age_days"`
 	SourcePVCExists      bool                                       `json:"source_pvc_exists"`
 	RestoredPVCCount     int                                        `json:"restored_pvc_count"`
 	ManagedBy            string                                     `json:"managed_by,omitempty"`
 	RecommendationType   string                                     `json:"recommendation_type"`
-	EstimatedMonthlyCost *float32                                   `json:"estimated_monthly_cost_usd,omitempty"`
+	EstimatedMonthlyCost *money.MoneyAmount                         `json:"estimated_monthly_cost,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
 type SnapshotRecommendationListResponse struct {
 	Meta struct {
-		Count    int    `json:"count"`
-		Limit    int    `json:"limit"`
-		Offset   int    `json:"offset"`
-		Currency string `json:"currency"`
+		Count      int    `json:"count"`
+		Limit      int    `json:"limit"`
+		Offset     int    `json:"offset"`
+		HasNext    bool   `json:"has_next"`
+		NextCursor string `json:"next_cursor,omitempty"`
+		Currency   string `json:"currency"`
 	} `json:"meta"`
 	Links Links                            `json:"links"`
 	Data  []SnapshotRecommendationResponse `json:"data"`
@@ -62,7 +68,6 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		})
 	}
 
-	// Pagination
 	limit := 20
 	offset := 0
 	if l := c.QueryParam("limit"); l != "" {
@@ -74,6 +79,19 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
 			offset = v
 		}
+	}
+
+	cursor, hasCursor, cursorErr := applySnapshotCursor(c)
+	if cursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
+	}
+	if hasCursor {
+		offset = 0
+	}
+
+	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
+	if formatErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
 	}
 
 	// Optional filters: filter[cluster], filter[project], filter[recommendation_type]
@@ -90,12 +108,13 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	rbacSQL, rbacArgs, rbacIdx, rbacDeny := snapshotRBACClusterFilter(userPerms, argIdx)
 	if rbacDeny {
-		resp := SnapshotRecommendationListResponse{}
-		resp.Meta.Limit = limit
-		resp.Meta.Offset = offset
-		resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+		resp := emptySnapshotListResponse(limit, offset, fetchClusterCurrency(ctx, orgID, clusterFilter))
 		resp.Links = buildLinks(c.Request(), 0, limit, offset)
-		resp.Data = []SnapshotRecommendationResponse{}
+		if responseFormat == listoptions.ResponseFormatCSV {
+			return streamCSV(c, csvFilename("snapshot-recommendations"), func(ctx context.Context, w io.Writer) error {
+				return generateSnapshotRecCSV(ctx, w, resp.Data)
+			})
+		}
 		return c.JSON(http.StatusOK, resp)
 	}
 	filterSQL += rbacSQL
@@ -118,6 +137,11 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, snapshotAllowedOrderBy, snapshotDefaultOrderBy, snapshotDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
 	countQuery := `SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1` + filterSQL
 	var total int
 	if err := pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -128,19 +152,37 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		})
 	}
 
-	query := `
-		SELECT cluster_uuid, namespace, snapshot_name, source_pvc_name,
-			volume_snapshot_class, storageclass, creation_timestamp,
-			restore_size_bytes, age_days, source_pvc_exists, restored_pvc_count,
-			managed_by, recommendation_type, estimated_monthly_cost_usd,
-			notification_codes
+	query := snapshotRecommendationSelectSQL + `
 		FROM snapshot_recommendation_sets
 		WHERE org_id = $1` + filterSQL
 
-	query += ` ORDER BY age_days DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	pageArgs := append(args, limit, offset)
+	if hasCursor {
+		seekSQL, seekArgs, nextIdx, seekErr := snapshotSeekSQL(orderCol, orderDir, cursor, len(cursor.SortValue) > 0, argIdx)
+		if seekErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
+		}
+		query += ` AND ` + seekSQL
+		args = append(args, seekArgs...)
+		argIdx = nextIdx
+	}
 
-	rows, err := pool.Query(ctx, query, pageArgs...)
+	query += ` ORDER BY ` + snapshotOrderNulls(orderCol, orderDir) +
+		`, cluster_uuid ASC, namespace ASC, snapshot_name ASC`
+
+	pageLimit := limit
+	if pageLimit > 0 {
+		pageLimit++
+	}
+	query += ` LIMIT $` + strconv.Itoa(argIdx)
+	args = append(args, pageLimit)
+	argIdx++
+
+	if !hasCursor {
+		query += ` OFFSET $` + strconv.Itoa(argIdx)
+		args = append(args, offset)
+	}
+
+	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		hlog.Errorf("snapshot recommendation query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -152,26 +194,14 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	var data []SnapshotRecommendationResponse
 	for rows.Next() {
-		var r SnapshotRecommendationResponse
-		var codes []int16
-		var creationTS interface{}
-		if err := rows.Scan(
-			&r.ClusterUUID, &r.Namespace, &r.SnapshotName, &r.SourcePVCName,
-			&r.VolumeSnapshotClass, &r.StorageClass, &creationTS,
-			&r.RestoreSizeBytes, &r.AgeDays, &r.SourcePVCExists, &r.RestoredPVCCount,
-			&r.ManagedBy, &r.RecommendationType, &r.EstimatedMonthlyCost,
-			&codes,
-		); err != nil {
-			hlog.Errorf("scanning snapshot recommendation row: %v", err)
+		r, scanErr := scanSnapshotRecommendationRow(rows)
+		if scanErr != nil {
+			hlog.Errorf("scanning snapshot recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
 				"status":  "error",
 				"message": "unable to read snapshot recommendation rows",
 			})
 		}
-		if ts, ok := creationTS.(time.Time); ok {
-			r.CreationTimestamp = ts.UTC().Format(time.RFC3339)
-		}
-		r.Notifications = notifications.MapToKruizeFormat(codes)
 		data = append(data, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -182,18 +212,44 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		})
 	}
 
+	hasNext := false
+	var nextCursor string
+	if limit > 0 && len(data) > limit {
+		hasNext = true
+		last := data[limit-1]
+		nextCursor = snapshotNextCursor(orderCol, last, snapshotSortValue(last, orderCol))
+		data = data[:limit]
+	}
+
 	resp := SnapshotRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
+	resp.Meta.HasNext = hasNext
+	resp.Meta.NextCursor = nextCursor
 	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
+	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
 	if resp.Data == nil {
 		resp.Data = []SnapshotRecommendationResponse{}
 	}
 
+	if responseFormat == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("snapshot-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateSnapshotRecCSV(ctx, w, resp.Data)
+		})
+	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+func emptySnapshotListResponse(limit, offset int, currency string) SnapshotRecommendationListResponse {
+	resp := SnapshotRecommendationListResponse{}
+	resp.Meta.Limit = limit
+	resp.Meta.Offset = offset
+	resp.Meta.Currency = currency
+	resp.Data = []SnapshotRecommendationResponse{}
+	return resp
 }
 
 // snapshotRBACClusterFilter returns SQL AND args restricting snapshot rows to clusters

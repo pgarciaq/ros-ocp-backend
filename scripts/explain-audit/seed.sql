@@ -429,7 +429,7 @@ INSERT INTO snapshot_recommendation_sets (
     org_id, cluster_uuid, namespace, snapshot_name, source_pvc_name,
     volume_snapshot_class, storageclass, creation_timestamp,
     restore_size_bytes, age_days, source_pvc_exists, restored_pvc_count,
-    managed_by, recommendation_type, estimated_monthly_cost_usd, notification_codes, updated_at
+    managed_by, recommendation_type, estimated_cost_cents, notification_codes, updated_at
 )
 SELECT
     os.org_id,
@@ -446,7 +446,7 @@ SELECT
     (s.n % 7),
     CASE WHEN s.n % 10 = 0 THEN 'Velero' ELSE '' END,
     (ARRAY['active', 'stale', 'orphaned', 'redundant', 'never_restored'])[1 + (s.n % 5)],
-    0.05 * (10 + (s.n % 500)),
+    ROUND(0.05 * (10 + (s.n % 500)) * 100)::bigint,
     ARRAY[(31 + (s.n % 5))::smallint],
     TIMESTAMPTZ '2026-05-24 12:00:00+00'
 FROM org_scale os

@@ -498,3 +498,36 @@ func generateMachineSetRecCSV(_ context.Context, w io.Writer, term string, data 
 	writer.Flush()
 	return writer.Error()
 }
+
+var snapshotRecCSVHeader = []string{
+	"cluster_uuid", "namespace", "snapshot_name", "source_pvc_name",
+	"classification", "age_days", "restore_size_bytes",
+	"estimated_monthly_cost_value", "estimated_monthly_cost_units",
+	"source_pvc_exists", "last_restored_at",
+	"notification_codes", "created_at", "last_reported",
+}
+
+func generateSnapshotRecCSV(_ context.Context, w io.Writer, data []SnapshotRecommendationResponse) error {
+	writer := csv.NewWriter(w)
+	if err := writer.Write(snapshotRecCSVHeader); err != nil {
+		return err
+	}
+	for _, r := range data {
+		costVal, costUnits := "", ""
+		if r.EstimatedMonthlyCost != nil {
+			costVal = r.EstimatedMonthlyCost.Value
+			costUnits = r.EstimatedMonthlyCost.Units
+		}
+		if err := writer.Write([]string{
+			r.ClusterUUID, r.Namespace, r.SnapshotName, r.SourcePVCName,
+			r.RecommendationType, strconv.Itoa(r.AgeDays), strconv.FormatInt(r.RestoreSizeBytes, 10),
+			costVal, costUnits,
+			strconv.FormatBool(r.SourcePVCExists), "",
+			notificationMapCodesStr(r.Notifications), r.CreationTimestamp, r.LastReported,
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}

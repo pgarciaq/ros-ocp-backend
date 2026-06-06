@@ -174,8 +174,8 @@ func GetSnapshotSummary(c echo.Context) error {
 			COUNT(*) FILTER (WHERE recommendation_type = 'active')::int AS count_active,
 			COALESCE(SUM(restore_size_bytes), 0)::bigint AS total_restore_size_bytes,
 			COALESCE(SUM(restore_size_bytes) FILTER (WHERE recommendation_type IN ('orphaned','stale','never_restored','redundant')), 0)::bigint AS reclaimable_restore_size_bytes,
-			COALESCE(SUM(estimated_monthly_cost_usd), 0)::float AS total_monthly_holding_cost_usd,
-			COALESCE(SUM(estimated_monthly_cost_usd) FILTER (WHERE recommendation_type IN ('orphaned','stale','never_restored','redundant')), 0)::float AS reclaimable_monthly_holding_cost_usd,
+			COALESCE(SUM(estimated_cost_cents), 0)::float / 100.0 AS total_monthly_holding_cost_usd,
+			COALESCE(SUM(estimated_cost_cents) FILTER (WHERE recommendation_type IN ('orphaned','stale','never_restored','redundant')), 0)::float / 100.0 AS reclaimable_monthly_holding_cost_usd,
 			COALESCE(MIN(age_days), 0)::int AS min_age_days,
 			COALESCE(MAX(age_days), 0)::int AS max_age_days
 		FROM snapshot_recommendation_sets

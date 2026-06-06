@@ -79,6 +79,21 @@ func TestEncodeDecodeVMCursor(t *testing.T) {
 	assert.Equal(t, original, decoded)
 }
 
+func TestEncodeDecodeSnapshotCursor(t *testing.T) {
+	original := SnapshotCursor{
+		ClusterUUID:  "550e8400-e29b-41d4-a716-446655440000",
+		Namespace:    "openshift-storage",
+		SnapshotName: "snap-velero-001",
+		SortValue:    []byte(`120`),
+	}
+	encoded := EncodeSnapshotCursor(original)
+	require.NotEmpty(t, encoded)
+
+	decoded, err := DecodeSnapshotCursor(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, original, decoded)
+}
+
 func TestContainerNextCursor(t *testing.T) {
 	anchor := &model.ContainerPaginationAnchor{
 		Namespace: "b", Workload: "w2", ContainerName: "c2",

@@ -264,7 +264,7 @@ reclaimable holding cost and restore size; see
 | 3 | Koku `effective_rates` → `storage_gb_usage_per_month` (infra + supplementary) |
 | 4 | Compiled default **$0.05**/GiB/month |
 
-Formula: `estimated_monthly_cost_usd = restore_size_gib × cost_per_gib_month`.
+Formula: `estimated_cost_cents = USDToCents(restore_size_gib × cost_per_gib_month)`; API exposes `estimated_monthly_cost` as `MoneyAmount`.
 
 v1 rates are **placeholders** (Settings/env/default, optional PVC storage proxy).
 Provider-accurate costing is upstream **[COST-7523](https://redhat.atlassian.net/browse/COST-7523)**
