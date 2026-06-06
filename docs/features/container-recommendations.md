@@ -331,4 +331,4 @@ Public-facing guide: [docs-site/features/container-recommendations.md](../../doc
 - [Recommendation engines](../architecture/recommendation-engines.md)
 - [Tag filtering](tag-filtering.md)
 - [HPA/VPA deployment modes](../architecture/hpa-vpa-deployment-modes.md)
-- [VPA recommendations (planned)](../../docs-site/features/vpa-recommendations.md)
+- [VPA recommendations (planned)](../../docs-site/planned-features/vpa-recommendations.md)

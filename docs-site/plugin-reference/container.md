@@ -112,7 +112,7 @@ resources.
 Works in SaaS, on-prem, and hybrid deployments. No additional ROS configuration.
 
 See [Validating recommendations with VPA](../features/container-recommendations.md#validating-recommendations-with-vpa)
-and [VPA Recommendations (planned)](../features/vpa-recommendations.md).
+and [VPA Recommendations (planned)](../planned-features/vpa-recommendations.md).
 
 ### Business hours
 

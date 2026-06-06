@@ -123,7 +123,7 @@ non-empty `machineset_name`). There is no separate `machineset` engine or
 **Notifications:** MachineSet list rows do not include notification maps. Code **76**
 (fleet consolidation) on node list/detail may reference the MachineSet name in its message.
 
-See [MachineSet recommendations (planned)](../features/machineset-recommendations.md) and
+See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) and
 [node-recommendations roadmap](../architecture/node-recommendations-roadmap.md) for Tier 2/3 scope.
 
 ### Instance type hints

@@ -195,7 +195,7 @@ Individual node recommendations (Tier 1) remain informational; MachineSet recomm
 ### Phased delivery: Tier 2a vs Tier 2b
 
 Tier 2 is split so replica guidance, persistence, and API depth can ship **before** the
-cloud instance catalog. See [MachineSet recommendations (planned)](../features/machineset-recommendations.md)
+cloud instance catalog. See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md)
 for the full capability list and per-item analysis.
 
 #### Tier 2a — No catalog required (~1–1.5 weeks)
@@ -283,7 +283,7 @@ Tier 1 already groups fleet consolidation by **`instance_type`** when the operat
 
 ## References
 
-- [MachineSet recommendations (planned)](../features/machineset-recommendations.md) — Tier 2 product doc + Tier 2a/2b phasing  
+- [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) — Tier 2 product doc + Tier 2a/2b phasing  
 - [notification-codes.md](notification-codes.md) — codes 14, 16–17 reserved for autoscaler Tier 3  
 - [cost-integration.md](cost-integration.md) — node savings; MachineSet savings will extend the same `effective_rates` patterns  
 - [configurability.md](configurability.md) — future `ROS_MIN_MACHINESET_REPLICAS`, catalog refresh interval

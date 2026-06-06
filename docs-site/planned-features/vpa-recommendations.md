@@ -171,6 +171,6 @@ value with zero backend changes.
 ## Related
 
 - [HPA Recommendations](hpa-recommendations.md) — planned HPA tuning plugin (Phase 2 Enrich)
-- [Container Right-Sizing](container-recommendations.md) — shipped; includes VPA validation guide
+- [Container Right-Sizing](../features/container-recommendations.md) — shipped; includes VPA validation guide
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — Phase 1 vs Phase 2 architecture
-- [Dual Engine](dual-engine.md) — cost vs performance engines for container sizing
+- [Dual Engine](../features/dual-engine.md) — cost vs performance engines for container sizing

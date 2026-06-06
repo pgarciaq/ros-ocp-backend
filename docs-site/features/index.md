@@ -12,7 +12,6 @@ dollar impact using Koku cost model rates.
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
 | Namespace Quota Optimization | namespace | cost, performance | Planned | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
-| MachineSet Recommendations | machineset (planned) | cost, performance | Planned | Planned |
 | GPU MIG Profiling | gpu | single | No | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
@@ -23,12 +22,7 @@ dollar impact using Koku cost model rates.
 | Configurable Thresholds | all | all | N/A | Yes |
 | Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
 | Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
-| Seasonality & Proactive Recs | seasonality-* (planned) | cost, performance | Planned | Planned |
 | Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
-| Java / JVM Optimization | java (planned) | cost, performance | Planned | Planned |
-| HPA Recommendations | hpa (planned) | single | Planned | Planned |
-| VPA Recommendations | vpa (planned) | single | Planned | Planned |
-| Network Optimization | network (planned) | single | Planned (SaaS $) | Planned |
 
 ## All feature pages
 
@@ -39,7 +33,6 @@ dollar impact using Koku cost model rates.
 | [quota-recommendations.md](quota-recommendations.md) | ResourceQuota right-sizing |
 | [cluster-resource-quota.md](cluster-resource-quota.md) | ClusterResourceQuota right-sizing |
 | [node-recommendations.md](node-recommendations.md) | Node consolidation |
-| [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica & instance-type right-sizing (**planned**) |
 | [gpu-mig.md](gpu-mig.md) | GPU MIG profiling |
 | [gpu-time-slicing.md](gpu-time-slicing.md) | GPU time-slicing |
 | [pvc-rightsizing.md](pvc-rightsizing.md) | PVC storage right-sizing |
@@ -51,13 +44,7 @@ dollar impact using Koku cost model rates.
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
-| [seasonality.md](seasonality.md) | Seasonality & proactive recommendations (**planned**) |
 | [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**Preview Beta**) |
-| [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (**planned**) |
-| [hpa-recommendations.md](hpa-recommendations.md) | Horizontal Pod Autoscaler tuning (**planned**) |
-| [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance (**planned**) |
-| [network.md](network.md) | Network egress, DNS latency, and traffic health (**planned**) |
-| [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload (**planned**) |
 
 ## Capabilities
 
@@ -72,10 +59,6 @@ buffers and memory trend alerts.
 **[Node Consolidation](node-recommendations.md)** — Identifies underutilized,
 overcommitted, and stranded-resource nodes; recommends consolidation and target
 node sizing with dual cost/performance engines.
-
-**[MachineSet Recommendations](machineset-recommendations.md)** (**planned**) —
-MachineSet-level replica and instance-type right-sizing for IPI clusters (Tier 2a/2b).
-Tier 1 `GET .../machinesets` aggregation is shipped today.
 
 **[GPU MIG Profiling](gpu-mig.md)** — Maps GPU utilization patterns to NVIDIA
 MIG profiles (1g.5gb through 7g.40gb) for hardware-isolated sharing.
@@ -120,12 +103,6 @@ OpenShift labels synced from Koku (`filter[tag:key]=value`).
 no usage (zombie vs idle), estimate full monthly waste, and filter with
 `filter[idle_state]=zombie,idle` — distinct from rightsizing savings.
 
-**[Seasonality & Proactive Recommendations](seasonality.md)** — *Planned.* Detect
-recurring peaks in daily usage history, forecast upcoming demand with
-[Augurs](https://github.com/grafana/augurs), and warn operators days before
-predictable spikes (month-end batch, weekly surges, holiday traffic). See the
-internal design: [`docs/design/seasonality-plugin.md`](../../docs/design/seasonality-plugin.md).
-
 **[Virtual Machine Recommendations](virtual-machines.md)** — *Preview (Beta).* Right-size
 KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (u1, cx1,
 m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth projection,
@@ -133,41 +110,13 @@ I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduat
 confidence with guest-agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
 Technical design: [`docs/design/vm-recommendations.md`](../../docs/design/vm-recommendations.md).
 
-**[Java & JVM Optimization](java-jvm.md)** — *Planned.* JVM-specific tuning on top of container
-recommendations: MaxRAMPercentage, garbage collector selection, Quarkus/Spring thread pools,
-and container limits that account for non-heap memory (metaspace, thread stacks). Addresses
-OOMKills where the heap was not full. Gated behind `ROS_ENABLE_JVM_RECS`.
-Technical design: [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md).
+## Planned capabilities
 
-**[Network Optimization](network.md)** — *Planned.* Analyze OpenShift Network Observability flows to
-recommend reductions in expensive internet egress, fix DNS latency outliers, and surface unhealthy
-packet-drop paths; SaaS deployments add egress cost attribution by namespace. Cross-zone co-location
-hints are planned for v2 after classification quality gates. Gated behind `ROS_ENABLE_NETWORK_RECS`.
-Technical design: [`docs/design/network-recommendations.md`](../../docs/design/network-recommendations.md).
+Upcoming features (MachineSet Tier 2, seasonality, JVM, HPA/VPA, network, local mode)
+are documented separately and are **not yet available**:
 
-**[Local Mode](local-mode.md)** — *Planned.* Run the recommendation engine on-cluster
-within the koku-metrics-operator. Queries Prometheus/Thanos directly (no CSV upload),
-writes to PostgreSQL (in-cluster or external), and pushes lightweight recommendation
-JSON to central Cost Management for fleet-wide visibility and dollar savings
-enrichment. A lightweight local API (ros-ocp-api) serves recommendations on-cluster.
-Enables disconnected, low-latency, and single-cluster deployments.
-
-## Planned recommendation types
-
-Not yet implemented; phase and priority slots are reserved in
-[Plugin Execution Phases](../architecture/plugin-phases.md).
-
-| Type | Phase | Description |
-|------|-------|-------------|
-| Seasonality (detector / forecast / proactive) | 1–3 | Learned periodicity → proactive quota/node/container guidance |
-| ~~VM (OpenShift Virtualization)~~ | 1 | **Shipped (Preview Beta)** — see [virtual-machines.md](virtual-machines.md) |
-| Instance type | 1 | Cloud instance optimization for worker nodes |
-| Java / JVM | 2 | Heap, GC, thread pool tuning — see [java-jvm.md](java-jvm.md) |
-| Network | 1 | Egress, DNS, drops — see [network.md](network.md) |
-| Go runtime | 2 | GOMAXPROCS, GOMEMLIMIT |
-| Python / Node.js | 2 | Worker and heap advisories |
-| HPA / VPA | 2 | Autoscaler min/max/target and policy recommendations |
-| Binpacking / MachineSet | 3 | Fleet placement and node pool sizing |
+**[Features (planned)](../planned-features/index.md)** — product direction, API sketches,
+and integration notes for future releases.
 
 !!! tip "Getting Started"
     Integrate with the REST API and UI using the

@@ -157,6 +157,6 @@ Filters will align with existing conventions: `filter[cluster]`, `filter[namespa
 ## Related
 
 - [VPA Recommendations](vpa-recommendations.md) — planned VPA policy plugin (Phase 2 Enrich)
-- [Container Right-Sizing](container-recommendations.md) — shipped; foundation for HPA analysis
+- [Container Right-Sizing](../features/container-recommendations.md) — shipped; foundation for HPA analysis
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — Phase 1 vs Phase 2 architecture
 - [Notification codes — Containers](../architecture/notification-codes.md#containers) — codes 21, 22 reserved for HPA

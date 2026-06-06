@@ -1,0 +1,22 @@
+# Features (planned)
+
+These pages describe **upcoming ROS-OCP capabilities that are not yet available**
+in production. They capture intended product direction, API sketches, and
+integration notes for future releases.
+
+For capabilities you can use today, see the **[Features](../features/index.md)**
+section.
+
+## Planned feature pages
+
+| Page | Topic |
+|------|-------|
+| [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 2) |
+| [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |
+| [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning |
+| [hpa-recommendations.md](hpa-recommendations.md) | Horizontal Pod Autoscaler tuning |
+| [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance |
+| [network.md](network.md) | Network egress, DNS latency, and traffic health |
+| [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
+
+Each page is marked **Planned / Future Work** and may change before implementation.

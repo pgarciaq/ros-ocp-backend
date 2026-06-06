@@ -55,21 +55,21 @@ first production-ready native engine release.
 
 ## Coming soon
 
-- **[Seasonality & proactive recommendations](features/seasonality.md)** — Learn
+- **[Seasonality & proactive recommendations](planned-features/seasonality.md)** — Learn
   weekly, monthly, and annual usage patterns from historical daily digests;
   forecast upcoming peaks with [Augurs](https://github.com/grafana/augurs); emit
   forward-looking guidance (for example, "in 7 days, raise namespace CPU quota
   before the month-end batch spike"). **Status: planned / future work.** Technical
   design: [`docs/design/seasonality-plugin.md`](../docs/design/seasonality-plugin.md).
 
-- **[Java & JVM Optimization](features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
+- **[Java & JVM Optimization](planned-features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
   Quarkus, and plain Java: heap sizing (`MaxRAMPercentage`), garbage collector selection,
   thread pool configuration, and container memory limits that include metaspace and thread
   stacks — fixing OOMKills where the heap was not full. Enriches container recommendations
   in Phase 2. **Status: planned / future work.** Technical
   design: [`docs/design/java-recommendations.md`](../docs/design/java-recommendations.md).
 
-- **[Network Optimization](features/network.md)** — Identify high internet egress, DNS latency
+- **[Network Optimization](planned-features/network.md)** — Identify high internet egress, DNS latency
   outliers, and unhealthy packet-drop paths using the OpenShift Network Observability Operator;
   SaaS mode adds namespace-level egress cost attribution. Cross-zone co-location recommendations
   are planned for v2. **Status: planned / future work.** Technical

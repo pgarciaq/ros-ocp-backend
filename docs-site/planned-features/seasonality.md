@@ -464,5 +464,5 @@ Core functionality is estimated at **10–14 weeks** engineering plus QA. Option
 |----------|----------|
 | [Plugin execution phases](../architecture/plugin-phases.md) | How phased plugins run |
 | [Configurability](../architecture/configurability.md) | Settings precedence model |
-| [Features overview](index.md) | All ROS capabilities |
+| [Features overview](../features/index.md) | Shipped ROS capabilities |
 | Internal design | [`docs/design/seasonality-plugin.md`](../../docs/design/seasonality-plugin.md) |

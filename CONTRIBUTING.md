@@ -1121,9 +1121,10 @@ docs-site/contributing.md     # copied from CONTRIBUTING.md
 Exceptions (hand-maintained, committed via `git add -f`):
 ```gitignore
 !docs-site/features/virtual-machines.md
-!docs-site/features/seasonality.md
-!docs-site/features/java-jvm.md
-!docs-site/features/network.md
+!docs-site/planned-features/index.md
+!docs-site/planned-features/seasonality.md
+!docs-site/planned-features/java-jvm.md
+!docs-site/planned-features/network.md
 ```
 
 **Rule:** If a file in `docs-site/` has a source elsewhere (in `docs/`, `CONTRIBUTING.md`,

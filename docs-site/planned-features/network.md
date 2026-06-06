@@ -302,11 +302,11 @@ List responses follow pagination and identity conventions in the [UI Integration
 
 | Feature | Relationship |
 |---------|--------------|
-| [Container recommendations](container-recommendations.md) | CPU/memory — orthogonal; combine for full workload review |
-| [Node recommendations](node-recommendations.md) | Node placement — v2 network topology complements |
-| [Virtual machines](virtual-machines.md) | VM network metrics are separate (KubeVirt); host-level network plugin focuses on pods/services |
+| [Container recommendations](../features/container-recommendations.md) | CPU/memory — orthogonal; combine for full workload review |
+| [Node recommendations](../features/node-recommendations.md) | Node placement — v2 network topology complements |
+| [Virtual machines](../features/virtual-machines.md) | VM network metrics are separate (KubeVirt); host-level network plugin focuses on pods/services |
 | [Seasonality](seasonality.md) | Recurring egress spikes (month-end reporting) may get proactive warnings in future |
-| [Savings estimations](savings-estimations.md) | SaaS egress $ uses same rate infrastructure |
+| [Savings estimations](../features/savings-estimations.md) | SaaS egress $ uses same rate infrastructure |
 
 ---
 
@@ -327,6 +327,6 @@ See internal design: [`docs/design/network-recommendations.md`](../../docs/desig
 | Document | Audience |
 |----------|----------|
 | [Internal design: network recommendations](../../docs/design/network-recommendations.md) | Engineering — tiers, risks, phases |
-| [Features overview](index.md) | All ROS capabilities |
-| [Configurable thresholds](configurable-thresholds.md) | Settings API |
+| [Features overview](../features/index.md) | Shipped ROS capabilities |
+| [Configurable thresholds](../features/configurable-thresholds.md) | Settings API |
 | OpenShift docs | [Network Observability Operator](https://docs.openshift.com/container-platform/latest/networking/network_observability/installing-operators.html) |

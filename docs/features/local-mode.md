@@ -317,4 +317,4 @@ Database, etc.) — the Helm values point to a Secret with connection details.
 
 ## Public documentation
 
-See [docs-site/features/local-mode.md](../../docs-site/features/local-mode.md) for the customer-facing feature page.
+See [docs-site/planned-features/local-mode.md](../../docs-site/planned-features/local-mode.md) for the customer-facing feature page.

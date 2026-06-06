@@ -1,7 +1,7 @@
 # MachineSet Recommendations (Tier 2) — Internal
 
 **Status:** Tier 1 aggregation shipped; Tier 2 engine **planned**  
-**Public doc:** [docs-site/features/machineset-recommendations.md](../../docs-site/features/machineset-recommendations.md)  
+**Public doc:** [docs-site/planned-features/machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)  
 **Requirements:** [REQ-8c.4–8c.6](architecture/requirements.md)  
 **Roadmap:** [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md)
 

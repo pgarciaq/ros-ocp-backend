@@ -97,7 +97,7 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 | **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | ~1–1.5 weeks after 2a | Planned |
 | **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
 
-**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [machineset-recommendations.md](features/machineset-recommendations.md).
+**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [machineset-recommendations.md](../docs-site/planned-features/machineset-recommendations.md).
 
 **Tier 3 prerequisites:** Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.
 
@@ -129,7 +129,7 @@ the next predictable peak.
 **Design references (planned only):**
 
 - [Seasonality plugin design](design/seasonality-plugin.md)
-- [Product overview (docs-site)](../docs-site/features/seasonality.md)
+- [Product overview (docs-site)](../docs-site/planned-features/seasonality.md)
 
 ### Not Planned for Current MVP
 

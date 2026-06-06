@@ -358,7 +358,7 @@ Tier 1 (this document) is **implemented**. Planned work is grouped by tier below
 ### Tier 2 (planned)
 
 Phased as **Tier 2a** (no cloud catalog) then **Tier 2b** (catalog). See
-[MachineSet recommendations (planned)](machineset-recommendations.md).
+[MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md).
 
 **Tier 2a:** `machineset` engine plugin, `machineset_recommendations` table, replica
 count recommendations, `GET /machinesets/{name}` detail, history/trends, MachineSet
@@ -385,7 +385,7 @@ notifications instead.
 
 ## Related
 
-- [MachineSet recommendations (planned)](machineset-recommendations.md) — Tier 2 product direction and Tier 2a/2b phasing
+- [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) — Tier 2 product direction and Tier 2a/2b phasing
 - [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — MachineSet and MachineAutoscaler planned work
 - [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
 - [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals

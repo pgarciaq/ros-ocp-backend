@@ -361,7 +361,7 @@ histogram decay.
 
 | Result | Meaning | Suggested action |
 |--------|---------|------------------|
-| **Agreement** (targets within ~15% of ROS request) | Two independent algorithms align | High confidence to apply — manually or via [external automation](../features/hpa-recommendations.md#external-automation) |
+| **Agreement** (targets within ~15% of ROS request) | Two independent algorithms align | High confidence to apply — manually or via [external automation](../planned-features/hpa-recommendations.md#external-automation) |
 | **Divergence** | Different time windows, bursty traffic, idle classification, or VPA `minAllowed` bounds | Investigate before apply; check ROS term (`short` vs `medium` vs `long`) and VPA policy |
 | **VPA higher than ROS** | VPA may see recent spikes ROS smooths with percentiles | Consider performance engine or longer ROS term |
 | **ROS higher than VPA** | ROS may include OOM bump or performance headroom | Review OOM notifications (code **3**) and margin settings |
@@ -385,12 +385,12 @@ This pattern works in **all** ROS deployment modes:
 
 ### When the VPA plugin ships
 
-The planned [VPA Recommendations](vpa-recommendations.md) plugin will automate
+The planned [VPA Recommendations](../planned-features/vpa-recommendations.md) plugin will automate
 this comparison in the API and UI (divergence notifications, `updateMode` promotion
 suggestions). Until then, the manual dual-advisor workflow above delivers most of
 the validation value with zero backend changes.
 
-Use [safety gates](../features/vpa-recommendations.md#safety-gates) before promoting
+Use [safety gates](../planned-features/vpa-recommendations.md#safety-gates) before promoting
 from `Off` to `Initial` or `Auto`, or before applying ROS recommendations via automation.
 
 ## Related
@@ -399,7 +399,7 @@ from `Off` to `Initial` or `Auto`, or before applying ROS recommendations via au
 - [Savings Estimations](savings-estimations.md) — Dollar impact per container
 - [Business Hours](business-hours.md) — Schedule-aware percentiles
 - [History & Quality](history-and-quality.md) — Track recommendation changes over time
-- [VPA Recommendations](vpa-recommendations.md) — planned VPA policy plugin (Phase 2 Enrich)
+- [VPA Recommendations](../planned-features/vpa-recommendations.md) — planned VPA policy plugin (Phase 2 Enrich)
 
 ## Future work
 

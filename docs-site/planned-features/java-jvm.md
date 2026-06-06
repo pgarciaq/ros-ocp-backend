@@ -428,7 +428,7 @@ Same **three-tier** model as other ROS features:
 
 **Settings API:** `GET/PUT/DELETE .../settings/ros/thresholds/?recommendation_type=java`
 
-See [Configurable thresholds](configurable-thresholds.md).
+See [Configurable thresholds](../features/configurable-thresholds.md).
 
 ---
 
@@ -436,8 +436,8 @@ See [Configurable thresholds](configurable-thresholds.md).
 
 | Document | Scope |
 |----------|-------|
-| [Container Right-Sizing](container-recommendations.md) | Base CPU/memory recommendations JVM builds on |
-| [Dual Engine (Cost vs Performance)](dual-engine.md) | Cost vs performance profiles |
-| [Configurable Thresholds](configurable-thresholds.md) | Settings API and precedence |
+| [Container Right-Sizing](../features/container-recommendations.md) | Base CPU/memory recommendations JVM builds on |
+| [Dual Engine (Cost vs Performance)](../features/dual-engine.md) | Cost vs performance profiles |
+| [Configurable Thresholds](../features/configurable-thresholds.md) | Settings API and precedence |
 | [Plugin Execution Phases](../architecture/plugin-phases.md) | Enrich-phase placement |
 | Internal design | [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md) |

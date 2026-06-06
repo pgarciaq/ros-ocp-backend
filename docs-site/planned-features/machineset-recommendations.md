@@ -189,6 +189,6 @@ ROS does not patch MachineSets or scale nodes automatically. External automation
 
 ## Related
 
-- [Node consolidation (Tier 1)](node-recommendations.md) — per-node recommendations and aggregation API
+- [Node consolidation (Tier 1)](../features/node-recommendations.md) — per-node recommendations and aggregation API
 - [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — prerequisites, effort, schema
 - [node plugin reference](../plugin-reference/node.md) — current endpoints and filters

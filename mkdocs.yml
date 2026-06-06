@@ -74,7 +74,6 @@ nav:
       - Container Right-Sizing: features/container-recommendations.md
       - Namespace Quota Optimization: features/namespace-recommendations.md
       - Node Consolidation: features/node-recommendations.md
-      - MachineSet Recommendations (Planned): features/machineset-recommendations.md
       - GPU MIG Profiling: features/gpu-mig.md
       - GPU Workload Classification: features/gpu-classification.md
       - GPU Time-Slicing: features/gpu-time-slicing.md
@@ -89,13 +88,16 @@ nav:
       - History & Quality: features/history-and-quality.md
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
-      - Seasonality & Proactive Recs (Planned): features/seasonality.md
       - Virtual Machine Recommendations: features/virtual-machines.md
-      - Java & JVM Optimization (Planned): features/java-jvm.md
-      - HPA Recommendations (Planned): features/hpa-recommendations.md
-      - VPA Recommendations (Planned): features/vpa-recommendations.md
-      - Network Optimization (Planned): features/network.md
-      - Local Mode (Planned): features/local-mode.md
+  - Features (planned):
+      - planned-features/index.md
+      - MachineSet Recommendations: planned-features/machineset-recommendations.md
+      - Seasonality & Proactive Recs: planned-features/seasonality.md
+      - Java & JVM Optimization: planned-features/java-jvm.md
+      - HPA Recommendations: planned-features/hpa-recommendations.md
+      - VPA Recommendations: planned-features/vpa-recommendations.md
+      - Network Optimization: planned-features/network.md
+      - Local Mode: planned-features/local-mode.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md

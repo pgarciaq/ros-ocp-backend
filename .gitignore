@@ -49,14 +49,17 @@ docs-site/architecture/*
 !docs-site/architecture/node-recommendations-roadmap.md
 docs-site/operations/
 docs-site/features/
-!docs-site/features/seasonality.md
 !docs-site/features/virtual-machines.md
-!docs-site/features/java-jvm.md
-!docs-site/features/hpa-recommendations.md
-!docs-site/features/vpa-recommendations.md
-!docs-site/features/machineset-recommendations.md
-!docs-site/features/network.md
 !docs-site/features/node-recommendations.md
+docs-site/planned-features/
+!docs-site/planned-features/index.md
+!docs-site/planned-features/seasonality.md
+!docs-site/planned-features/java-jvm.md
+!docs-site/planned-features/hpa-recommendations.md
+!docs-site/planned-features/vpa-recommendations.md
+!docs-site/planned-features/machineset-recommendations.md
+!docs-site/planned-features/network.md
+!docs-site/planned-features/local-mode.md
 !docs-site/features/pvc-rightsizing.md
 !docs-site/features/quota-recommendations.md
 !docs-site/features/cluster-resource-quota.md
@@ -69,7 +72,6 @@ docs-site/features/
 !docs-site/features/gpu-mig.md
 !docs-site/features/gpu-classification.md
 !docs-site/features/gpu-time-slicing.md
-!docs-site/features/local-mode.md
 docs-site/contributing.md
 !docs-site/known-issues.md
 # mkdocs build output
