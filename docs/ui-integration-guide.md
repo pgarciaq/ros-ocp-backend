@@ -768,11 +768,11 @@ Fleet-wide aggregated savings for dashboard hero metrics.
     }
   ],
   "by_plugin": {
-    "container": 5000.0,
-    "gpu": 0.0,
-    "node": 3000.0,
-    "pvc": 1500.0,
-    "snapshot": 500.0
+    "container": { "value": "5000.00", "units": "USD" },
+    "gpu": { "value": "0.00", "units": "USD" },
+    "node": { "value": "3000.00", "units": "USD" },
+    "pvc": { "value": "1500.00", "units": "USD" },
+    "snapshot": { "value": "500.00", "units": "USD" }
   },
   "gpu_savings_note": "GPU savings are computed at API read time and are not included in this fleet summary..."
 }

@@ -65,7 +65,10 @@ func TestSavingsSummary_DisplaysNegativeCorrectly(t *testing.T) {
 
 	byPlugin, ok := raw["by_plugin"].(map[string]interface{})
 	require.True(t, ok)
-	nodeSavings, ok := byPlugin["node"].(float64)
+	nodeSavings, ok := byPlugin["node"].(map[string]interface{})
+	require.True(t, ok, "by_plugin.node should be a MoneyAmount object")
+	nodeValue, ok := nodeSavings["value"].(string)
 	require.True(t, ok)
-	assert.InDelta(t, -123.45, nodeSavings, 0.01, "by_plugin.node should preserve negative value for UI")
+	assert.Equal(t, "-123.45", nodeValue, "by_plugin.node should preserve negative value for UI")
+	assert.Equal(t, "USD", nodeSavings["units"])
 }

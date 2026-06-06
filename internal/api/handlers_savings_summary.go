@@ -25,12 +25,12 @@ const gpuSavingsFleetSummaryNote = "GPU savings are computed at API read time an
 
 // FleetSavingsByPlugin breaks down persisted savings by recommendation plugin.
 type FleetSavingsByPlugin struct {
-	Container float64 `json:"container"`
-	GPU       float64 `json:"gpu"`
-	Node      float64 `json:"node"`
-	PVC       float64 `json:"pvc"`
-	Snapshot  float64 `json:"snapshot"`
-	VM        float64 `json:"vm"`
+	Container money.MoneyAmount `json:"container"`
+	GPU       money.MoneyAmount `json:"gpu"`
+	Node      money.MoneyAmount `json:"node"`
+	PVC       money.MoneyAmount `json:"pvc"`
+	Snapshot  money.MoneyAmount `json:"snapshot"`
+	VM        money.MoneyAmount `json:"vm"`
 }
 
 // FleetClusterSavings aggregates savings for a single cluster.
@@ -133,11 +133,12 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		}
 		clusterUUIDs = filterClustersByRBAC(allClusters, userPerms)
 		if len(clusterUUIDs) == 0 {
+			zero := money.FormatCentsToAmount(0, costdata.DefaultCurrency)
 			return c.JSON(http.StatusOK, FleetSavingsSummaryResponse{
 				Currency:                costdata.DefaultCurrency,
-				EstimatedMonthlySavings: money.FormatUSDToAmount(0, costdata.DefaultCurrency),
+				EstimatedMonthlySavings: zero,
 				ByCluster:               []FleetClusterSavings{},
-				ByPlugin:                FleetSavingsByPlugin{},
+				ByPlugin:                fleetSavingsByPluginZeros(costdata.DefaultCurrency),
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
@@ -247,15 +248,12 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 		ByCluster: []FleetClusterSavings{},
 	}
 
-	byPlugin, err := queryFleetSavingsByPlugin(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile)
+	byPlugin, totalCents, err := queryFleetSavingsByPlugin(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
 		return resp, err
 	}
 	resp.ByPlugin = byPlugin
-	totalUSD := roundUSD(
-		byPlugin.Container + byPlugin.Node + byPlugin.PVC + byPlugin.Snapshot + byPlugin.VM,
-	)
-	resp.EstimatedMonthlySavings = money.FormatUSDToAmount(totalUSD, currency)
+	resp.EstimatedMonthlySavings = money.FormatCentsToAmount(totalCents, currency)
 
 	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
@@ -265,52 +263,73 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 	return resp, nil
 }
 
-func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByPlugin, error) {
+func fleetSavingsByPluginZeros(currency string) FleetSavingsByPlugin {
+	zero := money.FormatCentsToAmount(0, currency)
+	return FleetSavingsByPlugin{
+		Container: zero,
+		GPU:       zero,
+		Node:      zero,
+		PVC:       zero,
+		Snapshot:  zero,
+		VM:        zero,
+	}
+}
+
+func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsByPlugin, int64, error) {
 	var out FleetSavingsByPlugin
+	if currency == "" {
+		currency = costdata.DefaultCurrency
+	}
 	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 	vmTerm := savingsSummaryVMTerm(termProfile)
 
+	var containerCents, nodeCents, pvcCents, snapshotCents, vmCents int64
 	err := pool.QueryRow(ctx, `
 		SELECT
 			COALESCE((
-				SELECT SUM(estimated_savings_cents)::float / 100.0
+				SELECT SUM(estimated_savings_cents)
 				FROM recommendation_sets
 				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_savings_cents)::float / 100.0
+				SELECT SUM(estimated_savings_cents)
 				FROM node_recommendations
 				WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_savings_cents)::float / 100.0
+				SELECT SUM(estimated_savings_cents)
 				FROM pvc_recommendation_sets
 				WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_cost_cents)::float / 100.0
+				SELECT SUM(estimated_cost_cents)
 				FROM snapshot_recommendation_sets
 				WHERE org_id = $1`+clusterFilter+`
 			), 0),
 			COALESCE((
-				SELECT SUM(estimated_savings_cents)::float / 100.0
+				SELECT SUM(estimated_savings_cents)
 				FROM vm_recommendations
 				WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
 			), 0)`,
 		args...,
-	).Scan(&out.Container, &out.Node, &out.PVC, &out.Snapshot, &out.VM)
+	).Scan(&containerCents, &nodeCents, &pvcCents, &snapshotCents, &vmCents)
 	if err != nil {
-		return out, err
+		return out, 0, err
 	}
 
-	out.Container = roundUSD(out.Container)
-	out.Node = roundUSD(out.Node)
-	out.PVC = roundUSD(out.PVC)
-	out.Snapshot = roundUSD(out.Snapshot)
-	out.VM = roundUSD(out.VM)
-	return out, nil
+	zero := money.FormatCentsToAmount(0, currency)
+	out = FleetSavingsByPlugin{
+		Container: money.FormatCentsToAmount(containerCents, currency),
+		GPU:       zero,
+		Node:      money.FormatCentsToAmount(nodeCents, currency),
+		PVC:       money.FormatCentsToAmount(pvcCents, currency),
+		Snapshot:  money.FormatCentsToAmount(snapshotCents, currency),
+		VM:        money.FormatCentsToAmount(vmCents, currency),
+	}
+	totalCents := containerCents + nodeCents + pvcCents + snapshotCents + vmCents
+	return out, totalCents, nil
 }
 
 func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) ([]FleetClusterSavings, error) {

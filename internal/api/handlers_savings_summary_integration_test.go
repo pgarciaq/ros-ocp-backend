@@ -115,12 +115,13 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.NotEmpty(t, summary.GPUSavingsNote)
 
-	assert.InDelta(t, 800.00, summary.ByPlugin.Container, 0.01)
-	assert.Equal(t, 0.00, summary.ByPlugin.GPU)
-	assert.InDelta(t, 150.00, summary.ByPlugin.Node, 0.01)
-	assert.InDelta(t, 84.56, summary.ByPlugin.PVC, 0.01)
-	assert.Equal(t, 0.00, summary.ByPlugin.Snapshot)
-	assert.InDelta(t, 250.50, summary.ByPlugin.VM, 0.01)
+	assert.Equal(t, "800.00", summary.ByPlugin.Container.Value)
+	assert.Equal(t, "USD", summary.ByPlugin.Container.Units)
+	assert.Equal(t, "0.00", summary.ByPlugin.GPU.Value)
+	assert.Equal(t, "150.00", summary.ByPlugin.Node.Value)
+	assert.Equal(t, "84.56", summary.ByPlugin.PVC.Value)
+	assert.Equal(t, "0.00", summary.ByPlugin.Snapshot.Value)
+	assert.Equal(t, "250.50", summary.ByPlugin.VM.Value)
 
 	require.Len(t, summary.ByCluster, 2)
 
@@ -225,8 +226,8 @@ func TestSavingsSummary_PVCRollup(t *testing.T) {
 
 	var summary api.FleetSavingsSummaryResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &summary))
-	assert.InDelta(t, 123.45, summary.ByPlugin.PVC, 0.01)
-	assert.Greater(t, summary.ByPlugin.PVC, 0.0)
+	assert.Equal(t, "123.45", summary.ByPlugin.PVC.Value)
+	assert.Equal(t, "USD", summary.ByPlugin.PVC.Units)
 }
 
 func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testing.T) {
@@ -336,7 +337,7 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	var summary api.FleetSavingsSummaryResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &summary)
 	require.NoError(t, err)
-	assert.InDelta(t, 200.00, summary.ByPlugin.Node, 0.01)
+	assert.Equal(t, "200.00", summary.ByPlugin.Node.Value)
 	assert.Equal(t, "200.00", summary.EstimatedMonthlySavings.Value)
 }
 
@@ -393,15 +394,15 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 
 	shortSummary := callSummary("short")
 	assert.Equal(t, "100.00", shortSummary.EstimatedMonthlySavings.Value)
-	assert.InDelta(t, 100.00, shortSummary.ByPlugin.Node, 0.01)
+	assert.Equal(t, "100.00", shortSummary.ByPlugin.Node.Value)
 
 	mediumSummary := callSummary("medium")
 	assert.Equal(t, "500.00", mediumSummary.EstimatedMonthlySavings.Value)
-	assert.InDelta(t, 500.00, mediumSummary.ByPlugin.Node, 0.01)
+	assert.Equal(t, "500.00", mediumSummary.ByPlugin.Node.Value)
 
 	defaultSummary := callSummary("")
 	assert.Equal(t, mediumSummary.EstimatedMonthlySavings.Value, defaultSummary.EstimatedMonthlySavings.Value)
-	assert.InDelta(t, mediumSummary.ByPlugin.Node, defaultSummary.ByPlugin.Node, 0.01)
+	assert.Equal(t, mediumSummary.ByPlugin.Node.Value, defaultSummary.ByPlugin.Node.Value)
 
 	longSummary := callSummary("long")
 	assert.Equal(t, "900.00", longSummary.EstimatedMonthlySavings.Value)
@@ -459,9 +460,9 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 	perfSummary := callSummary("performance")
 
 	assert.Equal(t, "500.00", costSummary.EstimatedMonthlySavings.Value)
-	assert.InDelta(t, 500.00, costSummary.ByPlugin.Node, 0.01)
+	assert.Equal(t, "500.00", costSummary.ByPlugin.Node.Value)
 	assert.Equal(t, "900.00", perfSummary.EstimatedMonthlySavings.Value)
-	assert.InDelta(t, 900.00, perfSummary.ByPlugin.Node, 0.01)
+	assert.Equal(t, "900.00", perfSummary.ByPlugin.Node.Value)
 	assert.NotEqual(t, costSummary.EstimatedMonthlySavings.Value, perfSummary.EstimatedMonthlySavings.Value)
 }
 
@@ -487,7 +488,6 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 		VALUES (1, $1, 'snapshot-savings-cluster', 'src-snap', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	const snapshotMonthlyCostUSD = 42.50
 	const snapshotCostCents = int64(4250)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO snapshot_recommendation_sets (org_id, cluster_uuid, namespace, snapshot_name, creation_timestamp, estimated_cost_cents, notification_codes, updated_at)
@@ -511,7 +511,7 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &summary)
 	require.NoError(t, err)
 
-	assert.InDelta(t, snapshotMonthlyCostUSD, summary.ByPlugin.Snapshot, 0.01,
+	assert.Equal(t, "42.50", summary.ByPlugin.Snapshot.Value,
 		"by_plugin.snapshot should include persisted estimated_cost_cents from snapshot_recommendation_sets")
 	assert.Equal(t, "42.50", summary.EstimatedMonthlySavings.Value)
 	require.Len(t, summary.ByCluster, 1)

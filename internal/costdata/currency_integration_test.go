@@ -180,8 +180,9 @@ func TestSavings_NonUSD_Currency_Propagates(t *testing.T) {
 	assert.Equal(t, "250.50", summary.EstimatedMonthlySavings.Value,
 		"estimated_monthly_savings.value holds savings regardless of currency label")
 	assert.Equal(t, "EUR", summary.EstimatedMonthlySavings.Units)
-	assert.InDelta(t, 250.50, summary.ByPlugin.Container, 0.01,
+	assert.Equal(t, "250.50", summary.ByPlugin.Container.Value,
 		"by_plugin.container should reflect persisted savings in the cost model currency")
+	assert.Equal(t, "EUR", summary.ByPlugin.Container.Units)
 }
 
 func TestSavingsSummary_CurrencyMismatch_MultiCluster(t *testing.T) {

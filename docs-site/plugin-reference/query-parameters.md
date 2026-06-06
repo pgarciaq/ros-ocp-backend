@@ -230,8 +230,8 @@ cost model (typically `USD`).
 | History rows | `estimated_monthly_savings` |
 | Fleet savings summary (total and per cluster) | `estimated_monthly_savings` |
 
-Plugin breakdown totals inside `by_plugin` remain numeric floats for aggregation;
-the fleet-level total uses the structured object above.
+Plugin breakdown totals inside `by_plugin` use the same `MoneyAmount` shape
+(`value` + `units`) as the fleet-level total and per-cluster rows.
 
 ## CSV export (`format=csv`)
 

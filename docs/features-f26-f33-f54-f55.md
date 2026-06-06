@@ -257,11 +257,11 @@ snapshot). Complements fleet-summary (container health counts only).
   "currency": "USD",
   "total_estimated_savings_cents": 12450.00,
   "by_plugin": {
-    "container": 8200.00,
-    "node": 3100.00,
-    "pvc": 950.00,
-    "snapshot": 200.00,
-    "gpu": 0
+    "container": { "value": "8200.00", "units": "USD" },
+    "node": { "value": "3100.00", "units": "USD" },
+    "pvc": { "value": "950.00", "units": "USD" },
+    "snapshot": { "value": "200.00", "units": "USD" },
+    "gpu": { "value": "0.00", "units": "USD" }
   },
   "by_cluster": [
     { "cluster_uuid": "...", "cluster_alias": "prod", "savings": 6200.00, "has_cost_data": true }

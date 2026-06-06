@@ -146,11 +146,12 @@ func TestGetSavingsSummary_EmptyFleet_ReturnsZeros(t *testing.T) {
 	assert.Equal(t, "0.00", summary.EstimatedMonthlySavings.Value)
 	assert.Equal(t, "USD", summary.EstimatedMonthlySavings.Units)
 	assert.Empty(t, summary.ByCluster)
-	assert.Equal(t, 0.0, summary.ByPlugin.Container)
-	assert.Equal(t, 0.0, summary.ByPlugin.GPU)
-	assert.Equal(t, 0.0, summary.ByPlugin.Node)
-	assert.Equal(t, 0.0, summary.ByPlugin.PVC)
-	assert.Equal(t, 0.0, summary.ByPlugin.Snapshot)
+	assert.Equal(t, "0.00", summary.ByPlugin.Container.Value)
+	assert.Equal(t, "USD", summary.ByPlugin.Container.Units)
+	assert.Equal(t, "0.00", summary.ByPlugin.GPU.Value)
+	assert.Equal(t, "0.00", summary.ByPlugin.Node.Value)
+	assert.Equal(t, "0.00", summary.ByPlugin.PVC.Value)
+	assert.Equal(t, "0.00", summary.ByPlugin.Snapshot.Value)
 }
 
 func TestGetFleetSavingsSummary_NoPool_Returns503(t *testing.T) {
