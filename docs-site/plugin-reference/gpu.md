@@ -120,30 +120,35 @@ See [Notification codes — GPU](../architecture/notification-codes.md#gpu-conta
 
 ## Savings
 
-GPU savings are computed at **API read-time** per container detail and per
-`GET .../gpu/timeslicing` list request. They are **not persisted** to the database and
-are excluded from fleet `savings-summary` totals (`by_plugin.gpu` always returns 0).
+### MIG and idle (persisted)
 
-### Why time-slicing savings are read-time only
+MIG right-sizing and idle-GPU deallocation savings are persisted at ingestion in
+`estimated_gpu_savings_cents` on `recommendation_sets` (migration **000136**). They refresh
+when `container` is included in `POST /internal/recalculate-savings` after a Koku cost
+model update.
 
-Node-level time-slicing recommendations aggregate **live** GPU digest data and the
-current candidate container set on each node. Dollar estimates use Masu
-`effective_rates` at request time via [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go).
+API list/detail exposes them as `estimated_monthly_gpu_savings` (`MoneyAmount`) on the
+container `gpu` block. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads
+persisted cents when available; otherwise computes at read time.
 
-Persisting those amounts would go stale when:
+### Time-slicing (read-time)
 
-- Workloads are rescheduled, scaled, or classified differently (idle → active, MIG candidate, etc.)
-- The node fleet changes (nodes added/removed, GPU models mixed)
-- Koku cost model rates are updated without a full ROS re-ingestion
+Node-level time-slicing dollar estimates on `GET .../gpu/timeslicing` and per-container
+`estimated_monthly_timeslicing_savings` are computed at **API read time** via
+[`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go). Candidate
+selection is fleet-level and changes with scheduling — these amounts are not persisted.
 
-Read-time computation keeps savings aligned with the same candidate majority and replica
-math shown in the API response. At current fleet sizes this adds acceptable latency;
-materialization is deferred until GPU fleets grow substantially (see
-[known issues — GPU performance](../known-issues.md)).
+### Fleet rollup
 
-Container MIG and idle savings on list/detail follow the same read-time pattern on the
-`gpu` enrichment block. GPU does not emit `NotifNoCostData` (code 25) — when GPU cost
-data is unavailable, savings fields are omitted entirely.
+All GPU dollar estimates are **excluded** from `GET .../savings-summary` totals
+(`by_plugin.gpu` always returns `0`; see `gpu_savings_note`). Query container `gpu` blocks
+or the time-slicing endpoint for GPU dollar amounts.
+
+GPU does not emit `NotifNoCostData` (code 25) — when GPU cost data is unavailable,
+savings fields are omitted entirely.
+
+See [Savings estimations](../features/savings-estimations.md) and
+[Cost integration](../architecture/cost-integration.md).
 
 ## Architecture
 

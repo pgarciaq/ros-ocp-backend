@@ -122,7 +122,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 						rec.GPUEstimatedWasteCents = money.USDToCents(rate)
 					}
 				}
-				gpuRec := toGPURecommendation(rec)
+				gpuRec := toGPURecommendation(rec, blockCurrency)
 				gpuRec.Currency = blockCurrency
 				gpuMap[rec.Term] = gpuRec
 			}
@@ -166,7 +166,10 @@ func ResetGPUCostProviderForTest() {
 	gpuCostProviderBase = ""
 }
 
-func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
+func toGPURecommendation(rec *engine.GPURec, currency string) *model.GPURecommendation {
+	if currency == "" {
+		currency = money.DefaultCurrency
+	}
 	var profile *string
 	if rec.CurrentGPUProfile != "" {
 		p := rec.CurrentGPUProfile
@@ -189,8 +192,8 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 		DRAMActiveAvg:                         rec.DRAMActiveAvg,
 		SMActiveAvg:                           rec.SMActiveAvg,
 		FBUsageMaxMiB:                         rec.FBUsageMaxMiB,
-		EstimatedMonthlyGPUSavings:         money.FormatCentsToAmountPtr(rec.EstimatedGPUSavingsCents, money.DefaultCurrency),
-		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToAmountPtr(rec.EstimatedTimeslicingSavingsUSD, money.DefaultCurrency),
+		EstimatedMonthlyGPUSavings:         money.FormatCentsToAmountPtr(rec.EstimatedGPUSavingsCents, currency),
+		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToAmountPtr(rec.EstimatedTimeslicingSavingsUSD, currency),
 		Notifications:                         rec.NotificationCodes,
 	}
 	if rec.TimeSlicingNode != "" {
@@ -216,7 +219,7 @@ func toGPURecommendation(rec *engine.GPURec) *model.GPURecommendation {
 	}
 	if rec.GPUEstimatedWasteCents > 0 {
 		cents := rec.GPUEstimatedWasteCents
-		result.EstimatedMonthlyGPUWaste = money.FormatCentsToAmountPtr(&cents, money.DefaultCurrency)
+		result.EstimatedMonthlyGPUWaste = money.FormatCentsToAmountPtr(&cents, currency)
 	}
 	return result
 }

@@ -244,22 +244,20 @@ When Masu rates are unavailable or `ROS_SAVINGS_ESTIMATES_ENABLED=false`, API `s
 
 ### GPU Savings
 
-Computed at **API read time** (not stored on ingest):
+**MIG and idle GPU savings** are persisted at ingestion and on container savings recalculation:
 
-1. [`internal/api/gpu_enrichment.go`](../../internal/api/gpu_enrichment.go) fetches `effective_rates` per cluster when listing container recommendations with GPU data
-2. Use `gpu_cost_per_month` (infrastructure + supplementary) from `configured_rates`
-3. For idle GPUs: savings = full `gpu_cost_per_month`
-4. For MIG candidates: savings = `(1 - recommended_slices / total_slices) × gpu_cost_per_month`
-5. Node GPU time-slicing: [`internal/api/handlers_node_recs.go`](../../internal/api/handlers_node_recs.go) calls [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) with the same rates → `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) and per-container `estimated_monthly_timeslicing_savings`
+1. [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go) runs after container ingestion (and when `recommendation_types` includes `container` on recalculate-savings) and writes `estimated_gpu_savings_cents` on `recommendation_sets` (migration **000136**).
+2. Rates use `gpu_cost_per_month` (infrastructure + supplementary) from `configured_rates`.
+3. Idle GPUs: savings = full `gpu_cost_per_month`.
+4. MIG candidates: savings = `(1 - recommended_slices / total_slices) × gpu_cost_per_month`.
+5. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads persisted cents when present; otherwise computes at read time via [`ApplyGPUSavings()`](../../internal/engine/gpu_recommender.go).
 
-**Why time-slicing savings are read-time (not persisted):** Candidate selection is
-fleet-level — which containers share a physical GPU depends on live classification and
-scheduling on that node. Replica math and per-GPU dollar shares change when workloads
-move, when nodes join or leave the fleet, or when cost model GPU rates update. Persisting
-would require a recalculation pipeline and would still lag the actionable recommendation
-rows. Container MIG/idle GPU savings use the same read-time pattern on list enrichment.
-At current scale, API-side computation is fast enough; materialization is a future
-optimization if GPU node counts grow ~10× (see [known-issues](../known-issues.md)).
+**Node GPU time-slicing** remains **API read-time** (not persisted):
+
+1. [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) uses live candidate selection per node.
+2. Exposes `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) on `GET .../gpu/timeslicing` and per-container `estimated_monthly_timeslicing_savings` on container `gpu` blocks.
+
+Time-slicing savings are not aggregated into fleet `savings-summary` (`by_plugin.gpu` = 0). Persisted MIG/idle GPU savings are also excluded from fleet totals today (see [Future: GPU savings persistence (v2)](#future-gpu-savings-persistence-v2)).
 
 GPU API enrichment does **not** append `NotifNoCostData`; savings fields are omitted or `$0` when Masu is unavailable.
 
@@ -321,7 +319,7 @@ breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 | Plugin | Dollar estimates | When computed | Data source |
 |--------|------------------|---------------|-------------|
 | **Container** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_savings_cents` (API: `estimated_savings_cents`) |
-| **GPU** (container detail) | Yes | API read | Masu `effective_rates` → `estimated_monthly_gpu_savings_usd` |
+| **GPU** (MIG/idle on container) | Yes | Ingestion + container recalc | Masu `effective_rates` → DB `estimated_gpu_savings_cents` (API: `estimated_monthly_gpu_savings`) |
 | **Node GPU time-slicing** | Yes | API read | Masu `effective_rates` → `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) |
 | **Node** (CPU/memory utilization) | Yes | Ingestion | Masu `effective_rates` → DB per engine (`cost` 80%, `performance` 55%) → nested API `estimated_savings_cents` |
 | **Namespace** | No | — | CPU/memory recommendations only; no USD field |
@@ -416,7 +414,8 @@ The `effective_rates` endpoint is an **internal masu API** endpoint — it does 
 | Node CPU/memory (`estimated_savings_cents`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | PVC (`estimated_savings_cents`) | Storage ingestion per cluster; also on Koku cost model update when savings recalculation is enabled |
 | Quota / cluster-quota (`estimated_savings` / `estimated_savings_cents`) | Ingestion per cluster; also on Koku cost model update when savings recalculation is enabled (tighten rows only) |
-| GPU / node time-slicing | On each API request that enriches GPU data |
+| GPU MIG/idle (`estimated_gpu_savings_cents`) | Ingestion per cluster; also when `container` is included in savings recalculation |
+| GPU node time-slicing | On each API request that enriches GPU data |
 | Snapshot recoverable cost | On each snapshot ingestion cycle (resolved rate from settings / env / effective-rates / default) |
 
 The `effective_rates` date range covers the most recent 30 days (configurable via
@@ -458,7 +457,7 @@ Query parameters **`term`** (`short`, `medium`, `long`; default `medium`) and **
 | `by_plugin.container` | `SUM(estimated_savings_cents)` on active `recommendation_sets` for the requested `term` and `engine` |
 | `by_plugin.node` | `SUM(estimated_savings_cents)` on `node_recommendations` for the requested `term` and `engine` |
 | `by_plugin.pvc` | `SUM(estimated_savings_cents)` on `pvc_recommendation_sets` for the requested `term` (engine-agnostic) |
-| `by_plugin.snapshot` | `SUM(estimated_monthly_cost_usd)` on `snapshot_recommendation_sets` (recoverable holding cost; **term-independent**) |
+| `by_plugin.snapshot` | `SUM(estimated_cost_cents)` on `snapshot_recommendation_sets` (recoverable holding cost; **term-independent**) |
 | `by_plugin.vm` | `SUM(estimated_savings_cents)` on `vm_recommendations` for the requested `term` and `engine` |
 | `by_plugin.gpu` | Always `$0` — see GPU limitation below |
 | `by_cluster.has_cost_data` | `false` when **every** container, node, and PVC recommendation in that cluster has notification code **25** (`NotifNoCostData`) |
@@ -517,10 +516,10 @@ goroutine ([`TriggerSavingsRecalculationAsync()`](../../internal/engine/savings_
 
 1. Re-fetches Masu `effective_rates` for each affected cluster (same provider as ingestion).
 2. Recomputes savings on existing recommendation rows for the requested types (container/node/PVC `estimated_savings_cents`; quota `estimated_savings_cents`; cluster-quota `estimated_savings_cents`).
-3. Does **not** re-run classification, percentile sizing, or CSV ingestion.
+3. When `container` is requested, also refreshes persisted GPU MIG/idle savings (`estimated_gpu_savings_cents`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go).
+4. Does **not** re-run classification, percentile sizing, or CSV ingestion.
 
-GPU and snapshot dollar fields are out of scope for this path (GPU remains API read-time;
-snapshot uses its own cost chain).
+VM, snapshot, and GPU time-slicing dollar fields are out of scope for this path (VM requires ingestion; snapshot uses its own cost chain; time-slicing remains API read-time).
 
 ### When Koku calls it
 

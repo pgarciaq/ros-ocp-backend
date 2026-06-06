@@ -83,7 +83,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 			$1, $2, 'idle-vm', 'vm-ns', 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			true, false, false, 250.50, 'USD', now())`,
+			true, false, false, 25050, 'USD', now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

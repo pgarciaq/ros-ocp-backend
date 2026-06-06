@@ -49,7 +49,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 
 - [API Pagination](pagination.md) — Keyset vs offset strategy across all list endpoints
 - [UI Integration Guide](ui-integration-guide.md) — REST API reference for koku-ui frontend developers
-- [Features overview](features/index.md) — Feature matrix and deep-dive pages per domain
+- [Savings estimations](features/savings-estimations.md) — Dollar savings, fleet rollup, recalculation
 - [What's new](whats-new.md) — Native engine release highlights
 - [Cost Integration](architecture/cost-integration.md) — Savings formulas, kill-switch, currency, fleet savings summary
 - [Recommendation Engines](architecture/recommendation-engines.md) — Thresholds, percentiles, and term reference for all plugins

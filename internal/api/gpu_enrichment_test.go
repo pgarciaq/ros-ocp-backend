@@ -40,7 +40,7 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 		NotificationCodes:      []int16{10, 20},
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Equal(t, "H100", got.CurrentGPUModel)
 	assert.NotNil(t, got.CurrentGPUProfile)
@@ -75,7 +75,7 @@ func TestToGPURecommendation_NoProfiles(t *testing.T) {
 		NotificationCodes:      nil,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Nil(t, got.CurrentGPUProfile)
 	assert.Nil(t, got.RecommendedGPUProfile)
@@ -91,9 +91,26 @@ func TestToGPURecommendation_NoSavings(t *testing.T) {
 		NotificationCodes:      nil,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Nil(t, got.EstimatedMonthlyGPUSavings)
+}
+
+func TestToGPURecommendation_UsesClusterCurrency(t *testing.T) {
+	savings := int64(10000)
+	rec := &engine.GPURec{
+		GPUModelName:             "H100",
+		Classification:           engine.GPUClassIdle,
+		EstimatedGPUSavingsCents: &savings,
+		GPUEstimatedWasteCents:   5000,
+	}
+
+	got := toGPURecommendation(rec, "EUR")
+	require.NotNil(t, got.EstimatedMonthlyGPUSavings)
+	assert.Equal(t, "100.00", got.EstimatedMonthlyGPUSavings.Value)
+	assert.Equal(t, "EUR", got.EstimatedMonthlyGPUSavings.Units)
+	require.NotNil(t, got.EstimatedMonthlyGPUWaste)
+	assert.Equal(t, "EUR", got.EstimatedMonthlyGPUWaste.Units)
 }
 
 func TestToGPURecommendation_WithNotifications(t *testing.T) {
@@ -104,7 +121,7 @@ func TestToGPURecommendation_WithNotifications(t *testing.T) {
 		EstimatedGPUSavingsCents: nil,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Equal(t, []int16{301, 302, 303}, got.Notifications)
 }
@@ -120,7 +137,7 @@ func TestToGPURecommendation_IdleFields(t *testing.T) {
 		GPUEstimatedWasteCents: 50000,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	require.NotNil(t, got)
 	assert.Equal(t, "zombie", got.GPUIdleState)
 	require.NotNil(t, got.GPUIdleSince)
@@ -145,7 +162,7 @@ func TestToGPURecommendation_WithTimeslicingCrossRef(t *testing.T) {
 		TimeSlicingReplicas: 5,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.NotNil(t, got.TimeSlicingNode, "time_slicing_node should be set for candidates")
 	assert.Equal(t, "gpu-worker-7", *got.TimeSlicingNode)
@@ -167,10 +184,11 @@ func TestToGPURecommendation_WithTimeslicingSavings(t *testing.T) {
 		EstimatedTimeslicingSavingsUSD: &savings,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, "USD")
 	assert.NotNil(t, got)
 	require.NotNil(t, got.EstimatedMonthlyTimeslicingSavings)
 	assert.InDelta(t, 225.0, mustSavingsFloat(t, got.EstimatedMonthlyTimeslicingSavings), 0.01)
+	assert.Equal(t, "USD", got.EstimatedMonthlyTimeslicingSavings.Units)
 }
 
 func TestToGPURecommendation_NoTimeslicingSavings(t *testing.T) {
@@ -182,7 +200,7 @@ func TestToGPURecommendation_NoTimeslicingSavings(t *testing.T) {
 		EstimatedTimeslicingSavingsUSD: nil,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Nil(t, got.EstimatedMonthlyTimeslicingSavings)
 }
@@ -197,7 +215,7 @@ func TestToGPURecommendation_NoTimeslicingCrossRef(t *testing.T) {
 		TimeSlicingReplicas: 0,
 	}
 
-	got := toGPURecommendation(rec)
+	got := toGPURecommendation(rec, money.DefaultCurrency)
 	assert.NotNil(t, got)
 	assert.Nil(t, got.TimeSlicingNode, "non-candidates should have nil time_slicing_node")
 	assert.Nil(t, got.TimeSlicingReplicas, "non-candidates should have nil time_slicing_replicas")

@@ -1,114 +1,67 @@
-# Savings Estimations
+# Savings estimations
 
-ROS estimates **monthly savings** (or additional monthly cost for upsize recommendations)
-by comparing current resource allocation to recommended targets and applying rates from
-the cluster's Koku cost model.
+ROS converts right-sizing recommendations into **estimated monthly dollar impact** using cost model rates from Koku Masu `effective_rates`. Amounts are exposed as structured [`MoneyAmount`](../../internal/money/format.go) objects (`{"value": "12.34", "units": "USD"}`) with two decimal places.
 
-## Overview
+## Where savings appear
 
-- **Rightsizing savings:** Delta between current and recommended CPU, memory, storage, or node capacity × configured rates, normalized to **730 hours/month**.
-- **Idle waste:** For idle or abandoned workloads, **100%** of current allocation cost is treated as recoverable if the workload is terminated.
-- **Negative savings:** When recommendations increase requests, the savings field is negative — an **additional monthly cost** for reliability or performance.
+| Plugin | List/detail field | Fleet rollup |
+|--------|-------------------|--------------|
+| Container | `estimated_monthly_savings` | `GET .../savings-summary` → `by_plugin.container` |
+| Node | `estimated_monthly_savings` (per engine) | `by_plugin.node` |
+| PVC | `estimated_monthly_savings` | `by_plugin.pvc` |
+| VM | `savings` | `by_plugin.vm` |
+| Snapshot | `estimated_monthly_cost` (holding cost) | `by_plugin.snapshot` |
+| GPU MIG/idle | `estimated_monthly_gpu_savings` on container `gpu` block | Excluded — see below |
+| GPU time-slicing | `estimated_monthly_timeslicing_savings` | Excluded |
+| Quota / cluster-quota | `estimated_savings` | Excluded (avoid double-count with container savings) |
 
-Rates are fetched from Koku Masu `GET /api/cost-management/v1/effective_rates/` during ingestion (container, node, PVC, snapshot, quota) or at API read time (GPU). See [Cost Integration](../architecture/cost-integration.md) for formulas.
+Fleet endpoints:
 
-**Cost rate source:** ROS does not expose a standalone cost-rate API. Update the OCP cost model in Koku; rates refresh on the next ingestion cycle or via internal savings recalculation when enabled.
+```
+GET /api/cost-management/v1/recommendations/openshift/savings-summary
+GET /api/cost-management/v1/recommendations/openshift/fleet-summary
+```
 
-## Per-plugin summary
+`savings-summary` honors `?term=` (`short` / `medium` / `long`) and `?engine=` (`cost` / `performance`). PVC uses `term` only; snapshot totals are term-independent.
 
-| Plugin | API field | When computed | Notes |
-|--------|-----------|---------------|-------|
-| **Container** | `estimated_monthly_savings` | Ingestion | Cost engine, medium term in list views; model + infra/distributed overhead; code **25** when no cost data |
-| **Namespace** | — | — | CPU/memory sizing targets only; **no dollar savings** |
-| **Node** | `estimated_monthly_savings` (per engine) | Ingestion | `cost` (80% target) and `performance` (55%); consolidation + right-sizing |
-| **GPU** | `estimated_monthly_gpu_savings`, `estimated_monthly_timeslicing_savings` | API read | MIG, idle GPU, node time-slicing; not in fleet rollup |
-| **PVC** | `estimated_monthly_savings` | Ingestion | Oversized: `(current − recommended) × storage rate`; **orphaned:** full `current × storage rate` (deletion) |
-| **VM** | `savings` | Ingestion | Rightsizing vs current VM allocation; JSON **`null`** when rates are unavailable or savings kill-switch is active (**no** notification code **25**) |
-| **Quota** | `estimated_savings` | Ingestion | Tighten rows only; **excluded** from fleet `savings-summary` |
-| **Cluster-quota (CRQ)** | `estimated_savings` / `savings_dollars_monthly` | Ingestion | Tighten rows only; **excluded** from fleet rollup |
-| **Snapshot** | `estimated_monthly_cost_usd` (recoverable) | Ingestion | `restore_size × cost_per_gib_month`; flat rate default **$0.05/GiB** until [COST-7523](https://redhat.atlassian.net/browse/COST-7523) |
+## Cost data source
 
-## Fleet `savings-summary`
+Rates come from Koku only — there is no standalone ROS cost-rate API. Update the OCP cost model in Koku; rates refresh on the next ingestion cycle or via [savings recalculation](../../docs/architecture/cost-integration.md#savings-recalculation-after-cost-model-changes) when configured.
 
-`GET /api/cost-management/v1/recommendations/openshift/savings-summary`
+Requires `KOKU_MASU_URL` on ros-processor and ros-api, and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default).
 
-Aggregates **persisted** savings for the organization:
+## GPU savings
 
-| Query param | Default | Effect |
-|-------------|---------|--------|
-| `engine` | `cost` | Container, node, and VM totals use `cost` or `performance` engine rows |
-| `term` | `medium` | Aligns with list APIs (`short`, `medium`, `long`) |
+**MIG and idle GPU savings** are persisted at ingestion in `estimated_gpu_savings_cents` and refreshed when `container` savings are recalculated after a cost model change. API list/detail reads persisted values when present.
 
-- **PVC** — rollup is **engine-agnostic**; only `term` selects which PVC rows contribute.
-- **Snapshot** — rollup is **term-independent**; snapshot totals are always included regardless of `term`.
+**Node GPU time-slicing savings** are computed at API read time on `GET .../gpu/timeslicing` because candidate selection is fleet-level and changes with scheduling.
 
-**Included plugins:** container, node, PVC, snapshot, VM.
+GPU dollar amounts are **excluded** from `GET .../savings-summary` totals (`by_plugin.gpu` is always `0`). The response includes `gpu_savings_note` explaining why. Query container `gpu` blocks or the time-slicing endpoint for GPU dollar estimates.
 
-**Exclusions:**
+## Negative savings
 
-- **Quota / cluster-quota** — per-recommendation only; omitted to avoid double-counting namespace capacity against container savings.
-- **GPU** — `by_plugin.gpu` is always `0`. GPU savings are computed at read time on container/node detail and are not stored; fleet aggregation would require a full-table scan. Use detail endpoints for GPU dollar estimates. See `gpu_savings_note` in the response.
-- **Namespace** — no USD field.
-
-Optional `group_by[idle_state]=*` and `group_by[tag:<key>]=*` for container-focused rollups (see API cheatsheet).
-
-Scoped filters (only when a `group_by` parameter is present):
-
-| Filter | Applies with | Effect |
-|--------|--------------|--------|
-| `filter[cluster]` | `group_by[tag:*]`, `group_by[idle_state]` | Limit grouped rollups to one cluster UUID |
-| `filter[project]` | `group_by[tag:*]` only | Limit container savings in tag groups to one namespace |
-
-> **Note:** `filter[cluster]` and `filter[project]` have no effect on the default (ungrouped) fleet summary. Without `group_by`, results aggregate across all RBAC-visible clusters and namespaces.
-
-## Idle waste vs rightsizing
-
-| Concept | Field | Meaning |
-|---------|-------|---------|
-| **Rightsizing** | `estimated_monthly_savings` | Partial cost reduction by lowering requests/limits while keeping the workload |
-| **Idle / zombie terminate** | `estimated_monthly_waste` | Full monthly cost if the workload is **removed** (`idle_state` = `idle` or `zombie`) |
-
-Do not sum `estimated_monthly_savings` and `estimated_monthly_waste` on the same row.
-
-## Snapshot holding cost
-
-> **Snapshot savings** use a flat approximation of **$0.05/GiB/month**. Billing-derived snapshot costs are planned in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
-
-Recoverable monthly cost uses `restore_size_bytes × cost_per_gib_month_usd`. Until billing-accurate snapshot rates ship ([COST-7523](https://redhat.atlassian.net/browse/COST-7523)), savings rely on a flat **`cost_per_gib_month_usd`** approximation (compiled default **$0.05/GiB**), with optional org settings, env override, or PVC `storage_gb_usage_per_month` from `effective_rates` as a proxy.
+When a recommendation suggests **more** resources than currently requested, savings can be **negative**. That indicates an additional monthly cost to adopt the recommendation (reliability/performance upsizing), not a bug. UIs should label negative values as additional cost, not "Savings: -$X/month".
 
 ## Kill-switch
 
-Set `ROS_SAVINGS_ESTIMATES_ENABLED=false` on **ros-processor** and **ros-api** to disable Masu fetches. Recommendations still run; dollar fields are `$0` or omitted, and notification code **25** (`NotifNoCostData`) applies to container, node, and PVC where relevant.
+Set `ROS_SAVINGS_ESTIMATES_ENABLED=false` to skip Masu fetches. Container, node, and PVC savings become `$0`; VM `savings` is `null`; GPU dollar fields are omitted. Notification code **25** (`NotifNoCostData`) is appended on container, node, and PVC when cost data is unavailable.
 
-**VM exception:** When the kill-switch is active or Masu rates are unavailable at ingestion, VM list/detail return `savings: null` (not `$0` and not code **25**). Fleet `savings-summary` omits VM dollars when rows have no persisted `estimated_savings_cents`.
+## Currency
 
-Requires `KOKU_MASU_URL` pointing at the Masu service when enabled.
+`currency` (ISO 4217) is returned on fleet summaries and `meta.currency` on list endpoints that expose monetary fields. Defaults to `USD` when Masu is unreachable.
 
-## Threshold changes vs savings recalculation
+## Internal recalculation
 
-Operators debugging unexpected savings changes should distinguish two update paths:
+After Koku applies cost model rates, masu calls:
 
-| Trigger | API / action | What changes | Sizing |
-|---------|--------------|--------------|--------|
-| **Threshold PUT** | `PUT .../settings/{container,node,pvc,...}` (or terms) | Full recommendation recalculation on next ingest (or reship) | CPU/memory/storage targets may change; savings update as a side effect |
-| **Cost model update** | Koku → `POST /api/cost-management/v1/internal/recalculate-savings` | Dollar fields only (`estimated_savings_cents`, etc.) | Unchanged — same recommended requests/limits |
+```
+POST /api/cost-management/v1/internal/recalculate-savings
+```
 
-Threshold tuning can change *whether* a workload is rightsized and therefore the savings delta. Cost model recalculation only reapplies rates to existing recommendations.
-
-## Accuracy and limitations
-
-Savings estimates are **approximate projections** based on current resource pricing and observed usage patterns. Actual savings may vary due to rate changes, workload fluctuations, and shared infrastructure overhead.
-
-- Estimates use **configured cost model rates** from Koku (may differ from actual cloud billing or amortized CUR lines).
-- Monthly normalization assumes **730 hours/month**.
-- Shared infrastructure (platform, worker, storage, network overhead) is apportioned by `distribution_type` (**cpu** or **memory**) from the cost model.
-- **Negative savings** indicate an upsize recommendation (additional monthly cost for headroom or reliability).
-- **`NotifNoCostData` (code 25)** means no cost rates were available for that row; savings show **$0** — display "—" in the UI rather than implying zero opportunity.
-
-GPU enrichment does not emit code 25; savings fields are simply omitted or zero.
+Supported `recommendation_types`: `container` (includes GPU MIG/idle persistence), `node`, `pvc`, `quota`, `cluster-quota`. VM and snapshot require a new ingestion cycle. Service-account bearer token required.
 
 ## Further reading
 
-- [Cost Integration](../architecture/cost-integration.md) — formulas, recalculation, OCP-on-cloud
-- [UI Integration Guide](../ui-integration-guide.md) — field names and display guidance
-- [Idle / Zombie Detection](idle-detection.md) — waste vs savings fields
+- [Cost integration](../architecture/cost-integration.md) — formulas, freshness, error handling
+- [UI integration guide](../ui-integration-guide.md) — response shapes and dashboard guidance
+- [Plugin reference](../plugin-reference/index.md) — per-plugin savings fields
