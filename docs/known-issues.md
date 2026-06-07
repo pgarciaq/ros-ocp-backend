@@ -89,7 +89,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 
 ### Planned Future Work (Node Tier 2 & Tier 3)
 
-These are **planned releases**, not open defects. Tier 1 node recommendations are shipping; MachineSet and MachineAutoscaler tiers are documented in [architecture/node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md).
+These are **planned releases**, not open defects. Tier 1 node recommendations are shipping; MachineSet and MachineAutoscaler tiers are documented in [planned-features/machineset-recommendations.md](../docs-site/planned-features/machineset-recommendations.md) and [planned-features/autoscaler-optimization.md](../docs-site/planned-features/autoscaler-optimization.md).
 
 | Tier | Feature | REQs | Est. effort | Status |
 |------|---------|------|-------------|--------|
@@ -457,7 +457,7 @@ the decommissioning case without schedule complexity. Container and namespace
 recommendations retain business-hours support where usage patterns are
 time-of-day dependent.
 
-**Planned future work (Tier 2+):** See [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md) for full Tier 2 (MachineSet right-sizing, ~2–3 weeks) and Tier 3 (MachineAutoscaler optimization, ~4–6 weeks) design, prerequisites, and limitations. Summary:
+**Planned future work (Tier 2+):** See [machineset-recommendations.md](../docs-site/planned-features/machineset-recommendations.md) for full Tier 2 (MachineSet right-sizing, ~2–3 weeks) and [autoscaler-optimization.md](../docs-site/planned-features/autoscaler-optimization.md) for Tier 3 (MachineAutoscaler optimization, ~4–6 weeks) design, prerequisites, and limitations. Summary:
 
 | Tier | Scope | Status |
 |------|--------|--------|
@@ -765,7 +765,7 @@ matching), and dedicated API endpoints. Gated by `ROS_ENABLE_VM_RECS` (default
 
 ### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
 
-Node Tier 1 is implemented. **`GET .../machinesets` fleet aggregation is shipped.** Remaining Tier 2 work: catalog-driven replica count and instance-family recommendations (`machineset` engine plugin, `machineset_recommendations` table, cloud pricing catalog). Tier 3 (MachineAutoscaler) is **planned future work** — see [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md). Not tracked as product defects.
+Node Tier 1 is implemented. **`GET .../machinesets` fleet aggregation is shipped.** Remaining Tier 2 work: catalog-driven replica count and instance-family recommendations (`machineset` engine plugin, `machineset_recommendations` table, cloud pricing catalog). Tier 3 (MachineAutoscaler) is **planned future work** — see [autoscaler-optimization.md](../docs-site/planned-features/autoscaler-optimization.md). Not tracked as product defects.
 
 ### Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED
 

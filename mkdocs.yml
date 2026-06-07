@@ -93,6 +93,7 @@ nav:
   - Features (planned):
       - planned-features/index.md
       - MachineSet Recommendations: planned-features/machineset-recommendations.md
+      - Autoscaler Optimization: planned-features/autoscaler-optimization.md
       - Seasonality & Proactive Recs: planned-features/seasonality.md
       - Java & JVM Optimization: planned-features/java-jvm.md
       - HPA Recommendations: planned-features/hpa-recommendations.md
@@ -109,7 +110,6 @@ nav:
       - GPU Catalogs: architecture/gpu-catalogs.md
       - Kafka Schema: architecture/kafka-schema.md
       - Cost Integration: architecture/cost-integration.md
-      - Node Recs Roadmap (Tier 2/3): architecture/node-recommendations-roadmap.md
       - API Versioning: architecture/api-versioning.md
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md

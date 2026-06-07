@@ -46,7 +46,6 @@ docs-site/architecture/*
 !docs-site/architecture/recommendation-engines.md
 !docs-site/architecture/plugin-architecture.md
 !docs-site/architecture/gpu-classification.md
-!docs-site/architecture/node-recommendations-roadmap.md
 docs-site/operations/
 docs-site/features/
 !docs-site/features/virtual-machines.md
@@ -58,6 +57,7 @@ docs-site/planned-features/
 !docs-site/planned-features/hpa-recommendations.md
 !docs-site/planned-features/vpa-recommendations.md
 !docs-site/planned-features/machineset-recommendations.md
+!docs-site/planned-features/autoscaler-optimization.md
 !docs-site/planned-features/network.md
 !docs-site/planned-features/local-mode.md
 !docs-site/features/pvc-rightsizing.md

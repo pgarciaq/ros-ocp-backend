@@ -203,7 +203,7 @@ radius of a bad apply is high (OOM kills, HPA flapping, eviction storms).
 ROS design choices that reinforce advisory-first:
 
 - Node consolidation Tier 1 is explicitly
-  [advisory only](node-recommendations-roadmap.md#tier-1--advisory-consolidation-with-safety-gates-shipped).
+  [advisory only](../../docs-site/planned-features/machineset-recommendations.md#tier-1--advisory-consolidation-with-safety-gates-shipped).
 - Ephemeral storage recs: "never auto-apply" (unreliable cadvisor metrics).
 - Seasonality plugin: "auto-apply advisory only in v1."
 - REQ-8.1 HPA: code **22** `HPA_ACTIVE` **suppresses** replica-count advice when
@@ -430,6 +430,7 @@ and ROS API access.
 
 - [requirements.md — REQ-8.1, Deferred HPA/VPA](requirements.md#deferred-hpa-and-vpa-autoscaling)
 - [plugin-phases.md — hpa, vpa plugins](plugin-phases.md)
-- [node-recommendations-roadmap.md — Tier 1–3 actuation tiers](node-recommendations-roadmap.md)
+- [machineset-recommendations.md — Tier 1–3 actuation tiers](../../docs-site/planned-features/machineset-recommendations.md#tier-overview)
+- [autoscaler-optimization.md — Tier 3 MachineAutoscaler](../../docs-site/planned-features/autoscaler-optimization.md)
 - [local-mode.md](../features/local-mode.md) — planned on-cluster compute
 - [koku-metrics-operator architecture](https://github.com/project-koku/koku-metrics-operator/blob/main/docs/architecture.md)

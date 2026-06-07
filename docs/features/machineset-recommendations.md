@@ -3,7 +3,7 @@
 **Status:** Tier 1 aggregation **shipped**; Tier 2a engine **ready to implement**; Tier 2b **blocked on catalog**  
 **Public doc:** [docs-site/planned-features/machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)  
 **Requirements:** [REQ-8c.4–8c.6](architecture/requirements.md)  
-**Roadmap:** [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md)
+**Roadmap:** [machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md), [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
 
 ---
 
@@ -760,7 +760,8 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 
 ## References
 
-- [node-recommendations-roadmap.md](architecture/node-recommendations-roadmap.md)
+- [machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)
+- [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
 - [plugin-phases.md](architecture/plugin-phases.md) — `machineset` in Phase 3
 - [handlers_machinesets.go](../../internal/api/handlers_machinesets.go) — Tier 1 list
 - [recommend_nodes.go](../../internal/engine/recommend_nodes.go) — `applyInstanceTypeConsolidation`

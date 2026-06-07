@@ -16,6 +16,32 @@ guidance — recommending fewer nodes when workloads fit at a target utilization
 This is distinct from [GPU Time-Slicing](gpu-time-slicing.md), which covers
 software GPU sharing at `GET .../gpu/timeslicing`.
 
+## Tier 1 capabilities
+
+Tier 1 is **shipped**. The table below lists node-recommendation capabilities
+and their status across all tiers.
+
+| Capability | Status |
+|------------|--------|
+| `GET .../recommendations/openshift/nodes` (list, filters, CSV) | Done |
+| Dual engines, term windows, fleet consolidation | Done |
+| Idle / zombie detection + settings | Done |
+| `pod_capacity`, `pod_scheduling_headroom`, notification **74** | Done |
+| `filter[stranded_resource]`, `filter[instance_type]`, `filter[machineset_name]` | Done |
+| `suggested_instance_type` / `instance_type_reason` (in-cluster ratio hints) | Done |
+| `POST .../internal/recalculate-savings` after cost model changes | Done |
+| Savings summary `?term=` alignment | Done |
+| Dedicated `GET .../nodes/{node}` path | Done |
+| Node recommendation history time series | **Future** (Tier 2) |
+| Cloud instance catalog (AWS/Azure/GCP specs + pricing) | **Future** (Tier 2) |
+| `GET .../machinesets/{name}` detail | **Future** (Tier 2) |
+| PDB/scheduling-aware consolidation (safe to auto-execute) | **Future** (Tier 2) |
+| GPU-aware node consolidation | **Future** (Tier 2) |
+| MachineSet engine + `machineset_recommendations` table | **Future** (Tier 2) |
+| MachineAutoscaler optimization (codes **14**, **16**, **17**) | **Future** (Tier 3) |
+| Autonomous scaling recommendations | **Future** (Tier 3) |
+| Operator MachineSet replica time-series + autoscaler CR metrics | **Future** (Tier 3) |
+
 ## How it works
 
 ```mermaid
@@ -42,7 +68,7 @@ flowchart TD
    only legacy per-node 0/1 binary reduction). When `machineset_name` is present on
    digests, list responses include it for UI grouping; `GET .../machinesets` aggregates
    fleet savings by MachineSet (catalog-driven replica/instance-family recs remain
-   planned — see roadmap).
+   planned — see [MachineSet recommendations](../planned-features/machineset-recommendations.md)).
 5. **Instance type hints** — For stranded CPU/memory nodes, the engine may set
    `suggested_instance_type` and `instance_type_reason` by comparing capacity ratios
    across instance types already observed in the cluster (simplified catalog-free
@@ -171,7 +197,7 @@ Treat savings figures as **estimates** for prioritization, not guaranteed post-c
 
 ### Future: safe for automation (Tier 2+)
 
-**Tier 2 (planned)** adds PDB snapshots, tolerations/affinity, and placement simulation so consolidation recommendations can be marked **safe to auto-execute** (with strong guardrails). **Tier 3 (planned)** ties recommendations to **MachineAutoscaler** bounds and historical replica behavior for autonomous scaling policies. See [Node recommendations roadmap](../architecture/node-recommendations-roadmap.md#tier-overview).
+**Tier 2 (planned)** adds PDB snapshots, tolerations/affinity, and placement simulation so consolidation recommendations can be marked **safe to auto-execute** (with strong guardrails). **Tier 3 (planned)** ties recommendations to **MachineAutoscaler** bounds and historical replica behavior for autonomous scaling policies. See [MachineSet recommendations](../planned-features/machineset-recommendations.md#tier-overview) and [Autoscaler optimization](../planned-features/autoscaler-optimization.md).
 
 ## Fleet instance type suggestions (Tier 1)
 
@@ -191,7 +217,7 @@ Tier 1 instance type hints compare **types already observed in your cluster** on
 - Recommend instance types **not yet present** in the cluster
 - Factor in on-demand and reserved pricing for cost-optimized family/size changes
 
-No delivery timeline — tracked in [node recommendations roadmap](../architecture/node-recommendations-roadmap.md#future-work--full-cloud-catalog-tier-2).
+No delivery timeline — tracked in [MachineSet recommendations](../planned-features/machineset-recommendations.md#fleet-instance-type-suggestions-tier-1-vs-cloud-catalog).
 
 ## API
 
@@ -342,12 +368,29 @@ GET /api/cost-management/v1/recommendations/openshift/machinesets
 
 Filters: `filter[cluster]`, `filter[machineset_name]` (exact or `*` wildcard), `filter[term]` (default `medium`). RBAC matches the node list API (`openshift.cluster`, `openshift.node`).
 
-Replica count and cross-cloud instance-family changes still require the planned catalog + `machineset` engine work — see [roadmap](../architecture/node-recommendations-roadmap.md).
+Replica count and cross-cloud instance-family changes still require the planned catalog + `machineset` engine work — see [MachineSet recommendations](../planned-features/machineset-recommendations.md).
 
 ## Future enhancements
 
-Tier 1 (this document) is **implemented**. Planned work is grouped by tier below. Full design, prerequisites, effort estimates, and schema notes:
-**[Node recommendations roadmap — Tier 2 & Tier 3](../architecture/node-recommendations-roadmap.md)**.
+Tier 1 (this document) is **implemented**. Planned work is grouped by tier below.
+
+### Roadmap
+
+Three tiers differ by **how much automation is safe**, not by whether recommendations exist.
+
+| Tier | Status | Purpose | Automation posture | Primary API |
+|------|--------|---------|-------------------|-------------|
+| **1** | **Shipped** | Per-node classification, sizing, **advisory** fleet consolidation | **Human review required** — no PDB/scheduling simulation | `GET .../recommendations/openshift/nodes` |
+| **2** | Planned (partial: machinesets list) | MachineSet replica + instance-family right-sizing; **PDB/scheduling-aware** consolidation | **Safe to auto-execute** (with guardrails) once simulation ships | `GET .../recommendations/openshift/machinesets` (+ catalog-driven engine) |
+| **3** | Planned | MachineAutoscaler min/max and scaling behavior | **Autonomous scaling** — tune autoscaler bounds/policies | Extension of machinesets API or dedicated endpoint |
+
+| Tier | Actionable unit | Est. remaining effort |
+|------|-----------------|----------------------|
+| **1** | Individual node (+ fleet grouping for advisory `node_count_reduction`) | — |
+| **2** | MachineSet | **~2–3 weeks** for catalog + replica engine (aggregation API **done**) |
+| **3** | MachineSet + MachineAutoscaler | **~4–6 weeks** after Tier 2 |
+
+Full Tier 2 design: [MachineSet recommendations](../planned-features/machineset-recommendations.md). Tier 3: [Autoscaler optimization](../planned-features/autoscaler-optimization.md).
 
 ### Intentionally out of scope (Tier 1)
 
@@ -372,9 +415,7 @@ auto-execution), node recommendation history API, GPU-aware node consolidation.
 
 ### Tier 3 (future)
 
-- MachineAutoscaler optimization (notification codes **14**, **16**, **17**; code **75** reserved for future `minReplicas` signal — code **15** is **`NODE_IDLE`** for nodes)
-- Autonomous scaling recommendations
-- Operator: MachineSet replica time-series, autoscaler CR metrics
+See [Autoscaler optimization (planned)](../planned-features/autoscaler-optimization.md) for MachineAutoscaler bounds, saturation/idle detection (notification codes **14**, **16**, **17**; code **75** reserved for future `minReplicas` signal — code **15** is **`NODE_IDLE`** for nodes), and operator metrics prerequisites.
 
 ## History and quality
 
@@ -386,7 +427,7 @@ notifications instead.
 ## Related
 
 - [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) — Tier 2 product direction and Tier 2a/2b phasing
-- [Node recommendations roadmap (Tier 2 & 3)](../architecture/node-recommendations-roadmap.md) — MachineSet and MachineAutoscaler planned work
+- [Autoscaler optimization (planned)](../planned-features/autoscaler-optimization.md) — Tier 3 MachineAutoscaler bounds and scaling behavior
 - [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
 - [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals
 - [GPU Time-Slicing](gpu-time-slicing.md) — Separate node-level GPU feature

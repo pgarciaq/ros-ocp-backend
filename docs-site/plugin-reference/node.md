@@ -124,7 +124,7 @@ non-empty `machineset_name`). There is no separate `machineset` engine or
 (fleet consolidation) on node list/detail may reference the MachineSet name in its message.
 
 See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) and
-[node-recommendations roadmap](../architecture/node-recommendations-roadmap.md) for Tier 2/3 scope.
+[MachineSet recommendations](../planned-features/machineset-recommendations.md) and [Autoscaler optimization](../planned-features/autoscaler-optimization.md) for Tier 2/3 scope.
 
 ### Instance type hints
 

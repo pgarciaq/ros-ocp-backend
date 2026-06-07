@@ -13,6 +13,58 @@
     **Tier 2b (later):** Instance family/size from cloud catalog (REQ-8c.6)  
     **Internal spec:** [machineset-recommendations.md](../../docs/features/machineset-recommendations.md)
 
+**Related:** [Node consolidation (Tier 1)](../features/node-recommendations.md), [REQ-8c in requirements.md](../architecture/requirements.md), [notification codes](../architecture/notification-codes.md) (codes 14, 16–17 reserved for Tier 3)
+
+---
+
+## Tier overview
+
+Three tiers differ by **how much automation is safe**, not by whether recommendations exist.
+
+| Tier | Status | Purpose | Automation posture | Primary API |
+|------|--------|---------|-------------------|-------------|
+| **1** | **Shipped** | Per-node classification, sizing, **advisory** fleet consolidation | **Human review required** — no PDB/scheduling simulation | `GET .../recommendations/openshift/nodes` |
+| **2** | Planned (partial: machinesets list) | MachineSet replica + instance-family right-sizing; **PDB/scheduling-aware** consolidation | **Safe to auto-execute** (with guardrails) once simulation ships | `GET .../recommendations/openshift/machinesets` (+ catalog-driven engine) |
+| **3** | Planned | MachineAutoscaler min/max and scaling behavior | **Autonomous scaling** — tune autoscaler bounds/policies | Extension of machinesets API or dedicated endpoint |
+
+| Tier | Actionable unit | Est. remaining effort |
+|------|-----------------|----------------------|
+| **1** | Individual node (+ fleet grouping for advisory `node_count_reduction`) | — |
+| **2** | MachineSet | **~2–3 weeks** for catalog + replica engine (aggregation API **done**) |
+| **3** | MachineSet + MachineAutoscaler | **~4–6 weeks** after Tier 2 |
+
+### Tier 1 — Advisory consolidation with safety gates (shipped)
+
+- **Advisory only:** `node_count_reduction` and fleet sums are FinOps signals for platform review, not drain/scale commands.
+- **Safety gates today:** `pod_scheduling_headroom` vs `pod_headroom_consolidation_gate` suppresses consolidation on nodes with little spare pod capacity; idle/zombie and performance-engine headroom multipliers add further guards.
+- **Does not include:** PDB checks, scheduling simulation, or MachineSet replica metrics from the operator.
+- **Industry alignment:** Same advisory model as AWS Compute Optimizer, Kubecost, and CAST AI (recommendations without automated apply).
+
+See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1) for full Tier 1 behavior.
+
+### Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)
+
+- **Goal:** Recommendations that account for whether workloads **can** reschedule after node removal while respecting PDBs, taints, and affinity.
+- **Adds:** Operator collection of PDB/toleration/affinity snapshots; engine placement simulation (~O(pods × nodes) per candidate); MachineSet **replica count** and catalog-driven instance family/size changes.
+- **Outcome:** Consolidation and replica reductions can be exposed with a **safe-to-apply** (or equivalent) confidence tier for automation integrations — still subject to org change control.
+
+### Tier 3 — Autoscaler integration (“autonomous scaling”)
+
+- **Goal:** Tune **MachineAutoscaler** `minReplicas` / `maxReplicas` (and optionally policy hints) from historical replica vs utilization time series.
+- **Depends on:** Tier 2 MachineSet identity and operator metrics (`machineset_replicas`, desired/available, HPA/autoscaler state).
+- **Outcome:** Bound recommendations and saturation/idle/flapping notifications suitable for policy-driven or semi-autonomous scaling — highest risk; conservative heuristics and manual-review messaging expected first.
+
+See [Autoscaler optimization](autoscaler-optimization.md) for Tier 3 design.
+
+```mermaid
+flowchart LR
+  T1[Tier 1: Advisory recs + headroom gate] --> T2[Tier 2: PDB/scheduling simulation + MachineSet recs]
+  T2 --> T3[Tier 3: Autoscaler bounds and behavior]
+  Op[koku-metrics-operator] --> T1
+  Op --> T2
+  Op --> T3
+```
+
 ---
 
 ## What Tier 2 will do
@@ -33,6 +85,44 @@ IPI-provisioned OpenShift (replica count, instance type).
 
 Individual node recommendations (Tier 1) remain informational. Nodes without
 `machineset_name` (bare metal, SNO, manual) stay Tier 1 only.
+
+### Goal
+
+Group nodes by **MachineSet** (not only by `instance_type`) and recommend **replica count** and **instance family/size** changes at the MachineSet level — the unit cluster admins actually change in IPI clusters.
+
+### Prerequisites and implementation steps
+
+1. **Operator (koku-metrics-operator)**
+   - Collect `machine.openshift.io/machine-set` (or equivalent) from node labels via Prometheus.
+   - Emit `machineset_name` on ROS container CSV (production path). **Nise** also generates `machineset_name` and `node_capacity_pods` for test data.
+   - Optional for Tier 2 core: MachineSet replica counts (`machineset_replicas`, `desired`/`available`) — required before Tier 3.
+
+2. **Ingestion (ros-ocp-backend)** — **done for Tier 1**
+   - Parse `machineset_name` / `node_capacity_pods` from ROS CSV into `daily_node_digests`.
+   - Digest aggregation retains `machineset_name`, `instance_type`, and `pod_capacity`.
+
+3. **Engine**
+   - New **`machineset` plugin** (or extension of node plugin phase):
+     - Group digests by `(org_id, cluster_uuid, machineset_name)`.
+     - Compute fleet-level CPU/memory P95, replica recommendation, instance type from catalog.
+   - Reuse Tier 1 stranded-resource signals for family recommendations.
+   - Integrate **cloud instance catalog** (REQ-8c.6): `cloud_instance_catalog` table, public pricing/spec APIs (AWS bulk JSON, Azure Retail Prices, GCP `machineTypes.list`), optional EC2 API when IAM allows.
+
+4. **API**
+   - List/detail handlers mirroring node patterns: `cluster_uuid`, `machineset_name`, `current_instance_type`, `is_underutilized`, pagination, `estimated_monthly_savings`.
+
+5. **Cloud catalog**
+   - Lookup vCPU/RAM by `instance_type` for “smallest fit” and cost comparison; on-prem may skip instance-type *changes* when catalog is empty (capacity-based logic still applies).
+
+### Limitations
+
+- **Machine API / MachineSets only:** Helps IPI-provisioned clusters using MachineSets. Does **not** help bare metal, single-node OpenShift (SNO), or UPI/manual nodes without `machineset_name` (those nodes stay Tier 1 only; `machineset_name` is `NULL` → skip Tier 2/3 for that node).
+- **PDB / drain safety:** Tier 2 recommends counts; PDB-aware automation is notification-only (see REQ-8c.5 in [requirements.md](../architecture/requirements.md)).
+- **HA floor:** Configurable minimum replicas (`ROS_MIN_MACHINESET_REPLICAS`, default 1 — never recommend 0).
+
+### Relationship to Tier 1 today
+
+Tier 1 already groups fleet consolidation by **`instance_type`** when the operator provides it. Tier 2 replaces that grouping key with **MachineSet** for clusters where labels exist, and adds replica + catalog-driven instance changes. Nodes without `machineset_name` continue to use Tier 1 behavior only.
 
 ---
 
@@ -55,6 +145,74 @@ Also supported today: **keyset pagination** (`after` cursor), **CSV export**
 
 This is **not** the Tier 2 engine — no persistence, no MachineSet-specific
 notifications, no detail endpoint, no instance-type catalog recommendations.
+
+---
+
+## Consolidation model — current scope and limitations
+
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](../../internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1--advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1).
+
+### Current scope (Tier 1)
+
+- Advisory signal: “you likely have N excess nodes in this fleet”
+- Based on aggregate P95 utilization across the fleet group
+- Groups nodes by MachineSet (when labeled) → `instance_type` → capacity bucket
+- **Pod scheduling headroom gate** (`podSchedulingBlocksConsolidation`) blocks consolidation when `(pod_capacity − pod_count) / pod_capacity` is below `pod_headroom_consolidation_gate` (default 0.15)
+- Does **not** account for: PodDisruptionBudgets, scheduling constraints (taints/tolerations/affinity), DaemonSet overhead, or actual pod placement feasibility
+- **Action path:** platform team reviews recommendation → checks PDBs/constraints manually → scales down MachineSet or removes nodes
+- Aligns with FinOps advisory tools (AWS Compute Optimizer, Kubecost, CAST AI recommendations) — none perform PDB/scheduling simulation in Tier-1-style products
+
+### PDB/scheduling-aware consolidation (Tier 2 — safe to auto-execute)
+
+Additional data required:
+
+| Data | Source | Storage estimate |
+|------|--------|------------------|
+| PodDisruptionBudgets | `policy/v1` PDB resources | ~1 KB per PDB × namespaces |
+| Node taints | `node.spec.taints` | Already in node labels CSV |
+| Pod tolerations | `pod.spec.tolerations` | ~100 B per pod × pods |
+| Node/pod affinity rules | `pod.spec.affinity` | ~200 B per pod with affinity |
+| DaemonSet pod list | `apps/v1` DaemonSet resources | ~50 B per DS × nodes |
+
+Processing estimate:
+
+- For each candidate node removal, simulate whether non-DaemonSet pods can reschedule to remaining nodes while respecting PDBs, taints, and affinity
+- Essentially a **scheduling simulation** (mini kube-scheduler) — ~O(pods × nodes) per candidate
+- Example: 100-node cluster, 5000 pods → ~500K placement checks per consolidation evaluation
+- Latency: seconds per evaluation (acceptable at recommendation time, not real-time)
+
+**Storage:** ~50 MB additional per large cluster (PDB/affinity/toleration snapshots)
+**Processing:** ~5–10 s additional per cluster recommendation cycle
+
+**Verdict:** Feasible for Tier 2 but requires operator enhancements (collect PDB + affinity data) and significant engine work. This is the tier that unlocks **safe-to-auto-execute** consolidation; Tier 1 intentionally stops at advisory signals plus the pod headroom gate.
+
+---
+
+## Fleet instance type suggestions (Tier 1 vs cloud catalog)
+
+### Implemented (Tier 1 — in-cluster fleet)
+
+When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](../../internal/engine/recommend_nodes.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
+
+- **CPU-stranded:** suggest a type with a **lower** CPU:memory allocatable ratio (compute-leaning shape already in the fleet)
+- **Memory-stranded:** suggest a type with a **higher** CPU:memory allocatable ratio
+- Persisted on `node_recommendations.suggested_instance_type` / `instance_type_reason` (migration **000123**)
+- Exposed on list and `GET .../nodes/{node}` detail APIs
+
+If no strictly better in-cluster type exists, fields remain empty; stranded directional notifications still apply.
+
+### Future work — full cloud catalog (Tier 2+)
+
+**Status:** Planned enhancement — **no delivery timeline** (tracked here and in [node recommendations feature](../features/node-recommendations.md#future-external-cloud-instance-catalog)).
+
+Not implemented in Tier 1. A full catalog path would:
+
+- Query an external instance catalog (AWS EC2, Azure VM, GCP Compute pricing APIs, or a bundled catalog table — see REQ-8c.6 in [requirements.md](../architecture/requirements.md))
+- Recommend instance types **not yet present** in the cluster
+- Factor in on-demand and reserved **pricing** for cost-optimized family/size changes
+- Require **provider-specific** catalog loaders and refresh jobs
+
+Tier 2 MachineSet recommendations will reuse catalog data for replica and instance family changes; Tier 1 fleet-only suggestions avoid catalog dependency and stay accurate for homogeneous on-prem / single-family clusters.
 
 ---
 
@@ -191,6 +349,26 @@ instance-type fields remain empty.
 
 Catalog refreshes daily. Cached data used for up to 48 hours on API failure.
 
+**On-prem:** Tier 2a applies without catalog; instance-type fields omitted when catalog is empty.
+
+### Estimated effort
+
+**~2–3 weeks** total (Tier 2a + Tier 2b), assuming Tier 1 and cost integration remain stable.
+
+---
+
+## Schema and API sketch (planned)
+
+- `daily_node_digests.machineset_name` — **exists** (operator population done).
+- `node_recommendations.machineset_name` — **exists** for correlation.
+- `machineset_recommendations` + `machineset_recommendation_history` — **not created** (see [REQ-8c.5 in requirements.md](../architecture/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)).
+
+**Shipped:** `GET .../machinesets` with `filter[cluster]`, `filter[machineset_name]`, keyset pagination, CSV.
+
+**Tier 2a additions:** detail endpoint, `filter[recommendation_type]`, `order_by`.
+
+**Tier 3 additions (future):** `is_saturated`, `is_idle`, `is_flapping` — see [Autoscaler optimization](autoscaler-optimization.md).
+
 ---
 
 ## Plugin architecture
@@ -251,6 +429,8 @@ Full criteria: [internal implementation spec](../../docs/features/machineset-rec
 ## Related
 
 - [Node consolidation (Tier 1)](../features/node-recommendations.md)
-- [Node recommendations roadmap](../architecture/node-recommendations-roadmap.md)
+- [Autoscaler optimization (Tier 3)](autoscaler-optimization.md)
 - [node plugin reference](../plugin-reference/node.md)
 - [Notification codes](../architecture/notification-codes.md)
+- [Cost integration](../architecture/cost-integration.md) — node savings; MachineSet savings will extend the same `effective_rates` patterns
+- [Configurability](../architecture/configurability.md) — future `ROS_MIN_MACHINESET_REPLICAS`, catalog refresh interval
