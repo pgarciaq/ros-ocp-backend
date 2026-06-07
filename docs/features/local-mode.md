@@ -1,59 +1,137 @@
-# Resource Optimization Local Mode
+# Resource Optimization On-Cluster Modes (robne-operator)
 
-Internal reference for the planned on-cluster recommendation computation mode.
+Internal reference for the planned on-cluster recommendation computation delivered
+by the **Red Hat Lightspeed Resource Optimization Operator** (`robne-operator`).
 
 **Status:** Future work (not yet implemented).
 
+**Repository:** Separate from koku-metrics-operator (modeled after it).
+
+**CRD:** `ResourceOptimizationConfig` (`resource-optimization.openshift.io/v1beta1`)
+
 ## Overview
 
-Local Mode moves the recommendation engine from the central ros-ocp-backend
-instance into the koku-metrics-operator running on each OpenShift cluster.
-The operator queries Prometheus/Thanos directly via PromQL, computes
-recommendations using the same Go engine, and writes results to PostgreSQL
-(in-cluster or external managed). A lightweight API deployment (ros-ocp-api)
-serves recommendations locally. Pre-computed recommendations are also pushed
-to central Cost Management for fleet-wide visibility and dollar savings
-enrichment.
+`robne-operator` is a standalone operator — not an extension of
+koku-metrics-operator — that delivers Resource Optimization through three
+operating modes:
+
+| Mode | Engine | Local API | Push to Central | Use case |
+|------|--------|-----------|-----------------|----------|
+| **Local** | On-cluster | Yes | No | Disconnected, single-cluster, latency-sensitive |
+| **Remote** | Central (ros-ocp-backend) | No | CSV metrics | Drop-in koku-metrics-operator ROS replacement |
+| **Hybrid** | On-cluster | Yes | Recs + digests (JSON) | Fleet view + local freshness |
+
+In Local and Hybrid modes, the operator queries Prometheus/Thanos directly via
+PromQL, computes recommendations using the shared `ros-ocp-engine` Go module, and
+writes results to PostgreSQL (managed or external). An embedded REST API and
+OpenShift Console plugin serve recommendations locally. Hybrid mode additionally
+pushes pre-computed recommendations and daily digests to central Cost Management.
+
+In Remote mode, the operator is a lightweight collector/uploader only — no engine,
+database, API, console plugin, or summary metrics.
+
+Clusters needing both Cost Management and Resource Optimization install both
+operators during the migration overlap period.
 
 ## Architecture
 
+### Local / Hybrid
+
 ```mermaid
 flowchart TD
-    prom["Prometheus / Thanos"] -- "PromQL" --> operator["koku-metrics-operator\n(engine embedded)"]
+    prom["Prometheus / Thanos"] -- "PromQL" --> operator["robne-operator\n(engine + API)"]
     k8s["Kubernetes API"] -- "labels" --> operator
-    operator -- "writes" --> pg[("PostgreSQL\n(in-cluster or external)")]
-    pg -- "reads" --> api["ros-ocp-api\n(lightweight, read-only)"]
-    api --> route["Route + Auth\n(JWT / OAuth proxy)"]
+    operator -- "writes" --> pg[("PostgreSQL\n(managed or external)")]
+    pg -- "reads" --> api["internal/api/\n(embedded REST)"]
+    api --> route["Route + Auth\n(OAuth proxy / JWT)"]
+    operator --> plugin["Console Plugin"]
+    operator --> metrics["Summary gauges\n(internal/metrics/)"]
     route --> ui["UI / CLI / automation"]
-    operator -- "push JSON" --> central["Central Cost Management\n(fleet view + $ enrichment + cloud tags)"]
+    operator -- "push JSON\n(Hybrid only)" --> central["Central ros-ocp-backend\n(fleet view + $ enrichment + cloud tags)"]
 ```
+
+### Remote
+
+```mermaid
+flowchart LR
+    prom["Prometheus / Thanos"] --> operator["robne-operator\n(collector only)"]
+    operator -- "CSV tar.gz" --> central["Central ros-ocp-backend"]
+```
+
+## Mode-dependent component deployment
+
+| Component | Local | Hybrid | Remote |
+|-----------|-------|--------|--------|
+| Prometheus collection | Active | Active | Active |
+| Recommendation engine | Active | Active | Inactive |
+| Managed PostgreSQL | Active | Active | Inactive |
+| REST API pod | Configurable (default on) | Configurable (default on) | Unavailable (CRD validation rejects) |
+| Console Plugin | Configurable (default on) | Configurable (default on) | Unavailable (CRD validation rejects) |
+| Summary Prometheus metrics | Configurable (default on) | Configurable (default on) | Unavailable |
+| CSV packaging + upload | Inactive | Active (JSON format) | Active (CSV format) |
+
+CRD validation rejects `spec.api.enabled: true` and `spec.console_plugin.enabled: true`
+when `spec.mode: remote`.
+
+## Mode switching
+
+| Transition | Behavior |
+|------------|----------|
+| Local → Hybrid | Engine continues; `internal/pushresults/` starts uploading |
+| Hybrid → Local | Push stops; engine continues |
+| Local/Hybrid → Remote | Engine stops; API/plugin reconcilers tear down deployments; PostgreSQL StatefulSet scaled to 0 (PVC retained by default) |
+| Remote → Local/Hybrid | PostgreSQL provisioned or resumed; engine starts; first recommendations after one `recommendation_cycle` |
+
+## Managed PostgreSQL lifecycle
+
+| Event | Behavior |
+|-------|----------|
+| Default install | Operator deploys StatefulSet + PVC + Service (`database.type: managed`) |
+| External DB | `database.type: external` + user-provided Secret |
+| Mode → Remote | StatefulSet scaled to 0; PVC retained (`retain_data: true` default) |
+| Explicit cleanup | `database.managed_config.retain_data: false` → delete StatefulSet + PVC |
+| CR deletion | All managed resources GC'd via `ownerReference` |
+
+## Engine code sharing
+
+The recommendation engine is extracted into a shared Go module `ros-ocp-engine`
+imported by:
+
+- **robne-operator** — on-cluster computation (`internal/engine/` wraps the module)
+- **ros-ocp-backend** — central computation (existing `internal/engine/` migrates to import)
+
+Same algorithms, single source of truth. Remote-mode central processing continues
+to use digest tables via `RemoteProvider`; Local/Hybrid uses `PrometheusProvider`.
 
 ## Key design decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Eliminate digest/sample tables | Prometheus IS the TSDB; no need to replicate metrics in PostgreSQL |
+| Separate operator (`robne-operator`) | Clean lifecycle; no mode conflicts with koku-metrics-operator cost collection |
+| Three modes in one CRD | Single install path; customers migrate Remote → Hybrid → Local incrementally |
+| Eliminate digest/sample tables (Local/Hybrid) | Prometheus IS the TSDB; no need to replicate metrics in PostgreSQL |
 | PromQL aggregation server-side | `quantile_over_time()`, `avg_over_time()` computed by Prometheus; Go only does decay weighting |
 | OCP labels from K8s API directly | Real-time labels, no Koku tag-sync delay; cloud tags re-associated at central |
-| PostgreSQL (in-cluster or external) | Recommendations-only schema (~70 MB / 1000 containers); may reuse cost-onprem DB or external managed service |
-| Extend existing operator | Reuses Prometheus RBAC, OLM lifecycle, upload mechanism; no new operator |
-| Push via existing tar.gz upload | No new transport; recommendation JSON as new file type in existing payload |
-| One mode per cluster | Upload OR local-recommendations, never both (avoids duplicate computation) |
-| Dollar savings optional on-cluster | Central enrichment after push; or optionally fetch `effective_rates` locally |
-| Separate API deployment | Operator computes + pushes; ros-ocp-api serves (clean separation of concerns) |
+| Managed PostgreSQL default | Recommendations-only schema (~70 MB / 1000 containers); external option for RDS/Azure DB |
+| Embedded API (not separate ros-ocp-api pod) | Same binary serves REST + reconciliation; reduces deployment complexity |
+| Push via existing tar.gz upload (Hybrid) | No new transport; JSON recommendations + digests as new file types |
+| Remote mode = koku-metrics-operator parity | Drop-in replacement during migration; CSV format unchanged |
+| Dollar savings optional on-cluster | Central enrichment after push; or `effective_rates` fetch via `spec.central.effective_rates` |
+| Summary metrics only (not per-container) | Alerting gauges; per-container detail via REST API |
 
 ## Tag and label reconciliation
 
 Tags/labels are a critical cross-cutting concern because the current system
 unifies OCP labels, cloud tags, tag mappings, and enable/disable policies
-into a single filterable namespace. Local Mode preserves full tag functionality.
+into a single filterable namespace. Local/Hybrid modes preserve full tag
+functionality.
 
 ### Data flow
 
 ```mermaid
 flowchart LR
     subgraph on_cluster["On-cluster"]
-        k8s["K8s API labels"]
+        k8s["K8s API labels\n(internal/k8slabels/)"]
     end
 
     subgraph central["Central enrichment"]
@@ -81,7 +159,7 @@ flowchart LR
 
 - **New node (< 24h)**: Cloud tag association may lag until next CUR/export arrives.
   Same behavior as current architecture.
-- **Disconnected cluster**: No cloud tags (bare-metal). OCP labels fully functional.
+- **Disconnected cluster (Local mode)**: No cloud tags (bare-metal). OCP labels fully functional.
 - **Tag mapping changes**: Next enrichment cycle picks up new mappings. Previously
   indexed recommendations retain old mapping until re-enriched (acceptable staleness).
 
@@ -98,11 +176,11 @@ The enrichment step (already needed for savings) extends to:
 
 ## Business hours without reship
 
-In the current architecture, changing a BH schedule triggers a reship: masu
+In the current Remote architecture, changing a BH schedule triggers a reship: masu
 re-publishes historical CSVs from S3 → Kafka → ros-ocp-backend re-ingests with
 new weighting. This works because raw CSVs persist in S3 for ~90 days.
 
-Local Mode eliminates the entire reship mechanism. The replacement depends on
+Local/Hybrid modes eliminate the entire reship mechanism. The replacement depends on
 the metrics backend:
 
 ### With Thanos (RHACM): immediate full re-computation
@@ -114,21 +192,24 @@ re-queries the full window with BH-weighted PromQL. Strictly superior to reship
 ### With Prometheus only: forward-only convergence
 
 Prometheus typically retains ~15 days. On BH change:
+
 - Days within retention: re-queried with new BH weighting immediately
 - Days beyond retention: data is gone; old recommendations age out naturally
 
 Convergence timeline:
+
 - Day 0: long-term (15d) rec = 0 days new + 15 days old schedule
 - Day 7: long-term rec = 7 days new + 8 days old
 - Day 15: fully converged
 
 This matches the existing `MarkReshipForwardOnly` fallback behavior (triggered
-when reship retries are exhausted). In Local Mode it becomes the default for
+when reship retries are exhausted). In Local/Hybrid it becomes the default for
 Prometheus-only deployments.
 
 ### Design decision
 
 **Forward-only is acceptable** because:
+
 1. BH schedules change very rarely (once per quarter assumption from design doc)
 2. 15-day convergence is invisible to most users
 3. Avoids reintroducing digest-style storage tables
@@ -141,36 +222,43 @@ A lightweight daily aggregate table could store hourly-bucketed percentiles
 re-weight these stored aggregates without raw Prometheus data. Estimated storage:
 ~5–10 MB per 1000 containers per 90-day window.
 
-This would partially reintroduce what `daily_container_digests` provides today,
-but at a fraction of the size (only key percentiles, no full sample arrays).
-
 ## What changes in the engine
 
-### Eliminated (not needed in local mode)
+### Shared module: `ros-ocp-engine`
+
+Extracted from ros-ocp-backend `internal/engine/`:
+
+- `recommend_cpu.go`, `recommend_memory.go`
+- `decay.go` (input: daily values from Prometheus step query or digest tables)
+- `idle.go`, `gpu_recommender.go`, `recommend_nodes.go`
+- `quality.go`, `retention.go`, `savings.go`
+
+Both robne-operator and ros-ocp-backend import this module.
+
+### Eliminated in Local/Hybrid (not needed on-cluster)
 
 - `internal/ingestion/` — CSV parsing, digest computation, pipeline, partition management
-- `internal/services/report_processor.go` — Kafka consumer
+- `internal/services/report_processor.go` — Kafka consumer (central only)
 - `internal/reship/` — S3 CSV re-fetch for business hours (replaced by direct Prometheus re-query)
-- All `daily_*_digests` tables and migrations
+- All `daily_*_digests` tables and migrations (central Remote path retains these)
 - `container_usage_samples`, `namespace_usage_samples` tables
 
-### Preserved (unchanged algorithms)
+### Preserved
 
-- `internal/engine/recommend_cpu.go`, `recommend_memory.go`
-- `internal/engine/decay.go` (input: daily values from Prometheus step query)
-- `internal/engine/idle.go`, `gpu_recommender.go`, `recommend_nodes.go`
-- `internal/engine/quality.go`, `retention.go`, `savings.go`
-- `internal/api/` (serves from PostgreSQL via ros-ocp-api deployment)
-- `internal/model/`
+- `internal/api/` — serves from PostgreSQL (embedded in robne-operator; standalone in ros-ocp-backend)
+- `internal/model/` — recommendation schema (shared)
 
-### New components
+### New components (robne-operator)
 
-| Component | Purpose |
-|-----------|---------|
+| Package | Purpose |
+|---------|---------|
 | `internal/promquery/` | PromQL client implementing `MetricsProvider` interface |
 | `internal/k8slabels/` | Kubernetes label reader (replaces tag sync) |
-| `internal/pushresults/` | JSON serialization + upload of recommendation results |
-| `MetricsProvider` interface | Abstraction allowing engine to work with either digest tables (remote) or Prometheus (local) |
+| `internal/pushresults/` | JSON serialization + upload of recommendations and digests (Hybrid) |
+| `internal/metrics/` | Summary Prometheus gauges (`robne_*` metrics) |
+| `internal/database/` | Managed PostgreSQL reconciliation (StatefulSet, PVC, Service) |
+| `internal/consoleplugin/` | OpenShift Console plugin deployment |
+| `internal/collector/` | CSV collection for Remote mode (koku-metrics-operator parity) |
 
 ## MetricsProvider interface
 
@@ -188,8 +276,9 @@ type MetricsProvider interface {
 ```
 
 Two implementations:
-- `RemoteProvider` — reads from `daily_container_digests` (current mode, used by central ROS)
-- `PrometheusProvider` — queries Prometheus/Thanos directly (local mode)
+
+- `RemoteProvider` — reads from `daily_container_digests` (central ros-ocp-backend, Remote mode)
+- `PrometheusProvider` — queries Prometheus/Thanos directly (robne-operator Local/Hybrid)
 
 ## Prometheus query patterns
 
@@ -204,9 +293,21 @@ avg_over_time(rate(container_cpu_usage_seconds_total{...}[5m])[1d])
 max_over_time(container_memory_working_set_bytes{...}[7d])
 ```
 
-~30-40 vectorized PromQL queries per recommendation cycle (each returns all matching containers). At hourly cadence: negligible Prometheus load.
+~30-40 vectorized PromQL queries per recommendation cycle (each returns all matching
+containers). At 15-minute cadence (default `recommendation_cycle: 900`): negligible
+Prometheus load.
 
-## Push payload schema
+## Hybrid push payload
+
+Hybrid mode pushes **both** pre-computed recommendations and raw daily digests
+(compressed JSON tar.gz). This enables central to:
+
+1. Store recommendations for fleet views
+2. Re-compute with different parameters (fleet-wide BH, tag policies)
+3. Enrich with dollar savings using cost model rates
+4. Associate cloud tags via OCP-on-cloud correlation
+
+### Recommendation file
 
 File type: `ros-openshift-recommendations-YYYYMM.json`
 
@@ -233,83 +334,180 @@ File type: `ros-openshift-recommendations-YYYYMM.json`
 }
 ```
 
-Central handler: UPSERT into `recommendation_sets` + savings enrichment via cost model lookup + tag reconciliation (cloud tags from OCP-on-cloud correlation using `node` field, mapping resolution, enable/disable policy).
+### Digest file (Hybrid only)
 
-## Local API deployment (ros-ocp-api)
+File type: `ros-openshift-digests-YYYYMM.json` — daily percentile aggregates per
+container, enabling central re-computation without raw Prometheus access.
 
-Recommendations are served locally via a lightweight deployment of the existing
-ros-ocp-backend binary — with all ingestion code stripped (no Kafka consumer,
-no CSV parsing, no digest computation). It reads from the same PostgreSQL
-that the operator writes to (whether that DB is in-cluster or external).
+Central handler: UPSERT into `recommendation_sets` + savings enrichment via cost
+model lookup + tag reconciliation (cloud tags from OCP-on-cloud correlation using
+`node` field, mapping resolution, enable/disable policy).
+
+## Local API (embedded in robne-operator)
+
+Recommendations are served locally via the REST API embedded in the operator binary
+— same handlers as ros-ocp-backend (`internal/api/`), with ingestion code excluded.
 
 ### What it is
 
-- Same Go binary, same API handlers (`internal/api/`)
-- Same REST contract: identical endpoints, pagination, `filter[tag:*]`, response shapes
+- Same Go module (`ros-ocp-engine` + `internal/api/`), same REST contract
+- Same endpoints, pagination, `filter[tag:*]`, response shapes
 - Read-only: no write paths, no ingestion, no Kafka dependency
-- Single pod, ~50 Mi memory
+- Deployed as part of the operator Deployment (not a separate ros-ocp-api pod)
 
 ### Authentication
 
-Two supported mechanisms (configurable via Helm):
+| Mechanism | Use case | Implementation |
+|-----------|----------|----------------|
+| OpenShift OAuth proxy | Standalone operator (default) | Sidecar container; `oc login` credentials |
+| Keycloak/RHBK JWT | cost-onprem / RHBK deployments | Same JWT validation as koku-server |
 
-| Mechanism | Use case | How |
-|-----------|----------|-----|
-| Keycloak/RHBK JWT | cost-onprem chart deployments | Same JWT validation as koku-server; token issued by in-cluster Keycloak |
-| OpenShift OAuth proxy | Standalone operator deployments | Sidecar container; transparent to the API binary; standard OpenShift pattern |
+Configured via `spec.api.auth.type`: `"oauth-proxy"` or `"jwt"`.
 
 The koku-ui-onprem frontend connects unchanged — it already sends JWT tokens
 to the API via the same proxy configuration.
 
-### Deployment topology
+### Component ownership
 
-```yaml
-# Helm values (cost-onprem chart)
-ros:
-  api:
-    enabled: true  # set false to skip local API deployment
-    replicas: 1
-    resources:
-      requests: { cpu: 100m, memory: 50Mi }
-      limits: { memory: 128Mi }
-    auth:
-      type: jwt  # or "oauth-proxy"
-      jwksUrl: "https://keycloak.example.com/realms/cost/protocol/openid-connect/certs"
+| Component | robne-operator | ros-ocp-backend (central) |
+|-----------|----------------|----------------------------|
+| `internal/api/` | Yes (embedded, serves) | Yes (standalone ros-api pod) |
+| `ros-ocp-engine` | Yes (computes) | Yes (computes from digests) |
+| `internal/ingestion/` | No | Yes (Remote path only) |
+| `internal/model/` | Yes (reads + writes) | Yes (reads + writes) |
+| Database migrations | Yes (on startup) | Yes (on startup) |
+| `internal/pushresults/` | Yes (Hybrid only) | No (receives via Koku listener) |
+| `internal/collector/` | Yes (Remote mode CSV) | No |
+
+## Summary Prometheus metrics
+
+Exposed by `internal/metrics/` for alerting. Not per-container detail.
+
+```
+robne_idle_containers_total{cluster, namespace}
+robne_oversized_containers_total{cluster, namespace}
+robne_undersized_containers_total{cluster, namespace}
+robne_optimal_containers_total{cluster, namespace}
+robne_estimated_monthly_savings_usd{cluster}
+robne_stale_recommendations_total{cluster}
+robne_recommendation_freshness_seconds{cluster}
+robne_idle_nodes_total{cluster}
+robne_consolidation_candidates_total{cluster}
+robne_recommendation_cycles_total{cluster}
+robne_recommendation_errors_total{cluster, plugin}
 ```
 
-The CRD also exposes `spec.local_recommendations.serve_api` (default `true`).
-When set to `false`, the operator does not deploy ros-ocp-api. This is useful
-when recommendations are consumed exclusively via the central Cost Management
-API (push-only mode) or when querying PostgreSQL directly from custom tooling.
+## Plugins
 
-In the cost-onprem chart, this replaces the current full ros-ocp-backend
-deployment (which includes ingestion). The operator takes over the computation
-role; the API deployment becomes read-only. The PostgreSQL may be the same
-in-cluster instance used by Koku, or an external managed service (RDS, Azure
-Database, etc.) — the Helm values point to a Secret with connection details.
+All enabled by default via CRD `spec.engine.plugins.<name>.enabled`. Disable individually:
 
-### What stays in ros-ocp-api vs what moves to the operator
+| Plugin | Package (ros-ocp-engine) |
+|--------|--------------------------|
+| `container` | `plugins/container/` |
+| `namespace` | `plugins/namespace/` |
+| `node` | `plugins/node/` |
+| `vm` | `plugins/vm/` |
+| `pvc` | `plugins/pvc/` |
+| `quota` | `plugins/quota/` |
+| `cluster_quota` | `plugins/cluster_quota/` |
+| `gpu` | `plugins/gpu/` |
+| `snapshot` | `plugins/snapshot/` |
 
-| Component | ros-ocp-api | Operator |
-|-----------|-------------|----------|
-| `internal/api/` | Yes (serves) | No |
-| `internal/engine/` | No | Yes (computes) |
-| `internal/ingestion/` | No | No (eliminated) |
-| `internal/services/report_processor.go` | No | No (eliminated) |
-| `internal/model/` | Yes (reads) | Yes (writes) |
-| Database migrations | Yes (runs on startup) | No |
+Additional engine features: `idle_detection`, `business_hours`, `savings_estimation`.
+
+## Dollar savings
+
+Cost and performance engines differ only in thresholds. Without `effective_rates`,
+dollar values are unavailable but all sizing recommendations still work.
+
+Optional on-cluster fetch: `spec.central.effective_rates.enabled: true` — uses same
+auth as central connection to pull rates from Cost Management `effective_rates` endpoint.
+
+## Migration from koku-metrics-operator
+
+| Phase | Change |
+|-------|--------|
+| Phase 1 | robne-operator ships alongside koku-metrics-operator (overlap) |
+| Phase 2 | koku-metrics-operator removes ROS queries in future version |
+| Phase 3 | koku-metrics-operator docs reference robne-operator for ROS |
+
+OLM dependency is documented but not declared (avoids installation friction).
+
+Remote mode (`spec.mode: remote`) provides koku-metrics-operator ROS parity for
+incremental migration.
 
 ## Central-side changes required
 
 1. New file-type handler in Koku listener for `ros-openshift-recommendations-*.json`
-2. Savings enrichment pass (apply cost model rates to compute `estimated_monthly_savings`)
-3. Tag reconciliation pass:
+2. New file-type handler for `ros-openshift-digests-*.json` (Hybrid)
+3. Savings enrichment pass (apply cost model rates to compute `estimated_monthly_savings`)
+4. Tag reconciliation pass:
    - Store raw OCP labels from pushed JSON
    - Re-associate cloud tags via OCP-on-cloud correlation tables
    - Resolve tag mappings (aliases)
    - Apply enabled/disabled policy at API query time (existing mechanism)
-4. `source` column on `recommendation_sets` (`'local'` vs `'central'`) for auditing
-5. Optionally: promote `effective_rates` endpoint from masu-internal to public authenticated
+5. `source` column on `recommendation_sets` (`'local'` vs `'central'`) for auditing
+6. Optionally: promote `effective_rates` endpoint from masu-internal to public authenticated
+
+## CRD reference
+
+```yaml
+apiVersion: resource-optimization.openshift.io/v1beta1
+kind: ResourceOptimizationConfig
+metadata:
+  name: resourceoptimizationcfg
+spec:
+  mode: "hybrid"
+  prometheus_config:
+    service_address: "https://thanos-querier.openshift-monitoring.svc:9091"
+    context_timeout: 120
+    collect_previous_data: true
+  engine:
+    recommendation_cycle: 900
+    plugins:
+      container: {enabled: true}
+      namespace: {enabled: true}
+      node: {enabled: true}
+      vm: {enabled: true}
+      pvc: {enabled: true}
+      quota: {enabled: true}
+      cluster_quota: {enabled: true}
+      gpu: {enabled: true}
+      snapshot: {enabled: true}
+    idle_detection: {enabled: true}
+    business_hours: {enabled: true}
+    savings_estimation: {enabled: true}
+  database:
+    type: "managed"
+    managed_config:
+      storage_size: "1Gi"
+      retain_data: true
+  api:
+    enabled: true
+    route: true
+    auth:
+      type: "oauth-proxy"
+  console_plugin:
+    enabled: true
+  central:
+    api_url: "https://console.redhat.com"
+    authentication:
+      type: "token"
+    upload:
+      upload_cycle: 360
+      upload_toggle: true
+    effective_rates:
+      enabled: false
+  source:
+    name: ""
+    create_source: false
+  volume_claim_template:
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: "10Gi"
+```
 
 ## Effort estimate
 
