@@ -1,5 +1,7 @@
 # Recommendation Engine Reference
 
+> **Date:** 2026-06-07
+
 Complete reference for recommendation thresholds, percentiles, term windows, and
 configuration parameters across all native-engine plugins.
 
@@ -21,8 +23,10 @@ formulas, see [Cost Integration](cost-integration.md).
 | **node** | Yes (`cost` 80%, `performance` 55%) | 1d / 7d / 15d | Yes (ingestion) | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |
 | **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) |
 | **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
+| **quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_quota.go`](../../internal/engine/recommend_quota.go) |
+| **cluster-quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go) |
 | **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) |
-| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (short / medium / long) | Yes (ingestion); API field `savings` | [`recommend_vm.go`](../../internal/engine/vm_recommender.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
@@ -36,6 +40,13 @@ same cost/performance percentiles as container. See [Business Hours](../features
 | Staleness threshold | 48 hours | `ROS_STALENESS_THRESHOLD_HOURS` | [`recommend_all.go`](../../internal/engine/recommend_all.go) |
 | Max lookback (container, namespace, node, GPU) | 90 days | `ROS_MAX_LOOKBACK_DAYS` | [`config.go`](../../internal/config/config.go), plugin `MaxWindowDays()` |
 | Max lookback (PVC) | 365 days | (plugin cap via term `WINDOW_DAYS`) | [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.go) |
+| Max lookback (VM) | 90 days | `ROS_VM_REC_HISTORY_RETENTION_DAYS` (history table) | [`internal/plugins/vm/plugin.go`](../../internal/plugins/vm/plugin.go) |
+| Quota headroom | 10% | `ROS_QUOTA_HEADROOM_PERCENT` | [`quota_settings.go`](../../internal/engine/quota_settings.go) |
+| Quota high-risk utilization | 90% | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | [`quota_settings.go`](../../internal/engine/quota_settings.go) |
+| Quota medium-risk utilization | 70% | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | [`quota_settings.go`](../../internal/engine/quota_settings.go) |
+| Cluster-quota headroom | 10% | `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT` | [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
+| Cluster-quota high-risk utilization | 90% | `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
+| Cluster-quota medium-risk utilization | 70% | `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
 | OOM base bump factor | 0.15 | `ROS_OOM_BASE_BUMP` | [`types.go`](../../internal/engine/types.go) |
 | OOM max bump multiplier | 1.60 | `ROS_OOM_MAX_BUMP` | [`types.go`](../../internal/engine/types.go) |
 | Savings kill-switch | enabled | `ROS_SAVINGS_ESTIMATES_ENABLED` | [`config.go`](../../internal/config/config.go) |
@@ -234,6 +245,105 @@ See also [PVC Right-Sizing](../features/pvc-rightsizing.md).
 
 ---
 
+## ResourceQuota Recommendations
+
+No cost/performance engine split. One recommendation per namespace `ResourceQuota`
+hard limit set. The engine runs after container recommendations are written during
+container CSV processing (not as an `IngestHook` — namespace CSV hooks fire before
+`recommendation_sets` exist).
+
+### Input signals
+
+| Signal | Source | Notes |
+|--------|--------|-------|
+| Quota hard / used | Latest namespace quota snapshot from namespace CSV digests | CPU, memory, storage, pods, object count |
+| Recommended workload totals | Sum of container `cost` engine **`medium_term`** recommendations per namespace | Fixed term/engine in [`recommend_quota.go`](../../internal/engine/recommend_quota.go) |
+
+### Classification thresholds
+
+Recommended values apply configurable headroom (default **10%**) to container sums
+and quota-used metrics. Utilization compares the greater of quota **used** and
+recommended totals against hard limits (basis points).
+
+| Recommendation type | Condition | Source |
+|---------------------|-----------|--------|
+| **raise** | Max utilization ≥ high-risk threshold (default **90%**) | [`classifyQuotaRecommendation()`](../../internal/engine/recommend_quota.go) |
+| **tighten** | Recommended hard limits below current hard on CPU, memory, storage, or pods | same |
+| **optimal** | Hard limits present, no raise/tighten signal | same |
+| **none** | No actionable quota hard limits | same |
+
+| Risk level | Condition | Default threshold |
+|------------|-----------|-------------------|
+| **high** | Max utilization ≥ high-risk | 90% (`ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`) |
+| **medium** | Max utilization ≥ medium-risk | 70% (`ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT`) |
+| **low** | Utilization > 0 below medium-risk | — |
+| **none** | No utilization signal | — |
+
+### Settings and API
+
+Settings precedence: env (locked) → per-org DB (`recommendation_thresholds`) → compiled default.
+Settings API: `GET/PUT/DELETE /recommendations/openshift/settings/quota`.
+
+List API: `GET /recommendations/openshift/quota`. Detail:
+`GET /recommendations/openshift/quota/detail`.
+
+### Savings
+
+`estimated_savings_cents` is computed at ingestion for **`tighten`** recommendations
+only, from freed CPU/memory/storage capacity and Koku `effective_rates`. Fleet rollup:
+`GET .../savings-summary` → `by_plugin.quota`.
+
+Plugin: [`internal/plugins/quota/plugin.go`](../../internal/plugins/quota/plugin.go).
+
+---
+
+## ClusterResourceQuota Recommendations
+
+No cost/performance engine split. One recommendation per OpenShift
+`ClusterResourceQuota`. Ingests `cluster-quota` CSV metrics into
+`daily_cluster_quota_digests`; recommendations run on cluster-quota CSV processing.
+
+### Input signals
+
+| Signal | Source | Notes |
+|--------|--------|-------|
+| CRQ hard / used | Latest snapshot from cluster-quota digests | Scoped namespace list on the CRQ |
+| Namespace quota aggregates | Sum of namespace `quota` plugin recommendations for CRQ namespaces | CPU/memory request/limit totals |
+
+### Classification thresholds
+
+Same headroom and risk model as namespace **quota** (default headroom **10%**,
+high-risk **90%**, medium-risk **70%**). Recommended values apply headroom to the
+greater of CRQ **used** and aggregated namespace recommendations.
+
+| Recommendation type | Condition |
+|---------------------|-----------|
+| **raise** | Max utilization ≥ high-risk threshold |
+| **tighten** | Recommended limits below current hard on CPU, memory, storage, or pods |
+| **optimal** | Hard limits present, no raise/tighten signal |
+| **none** | No actionable hard limits |
+
+Env overrides: `ROS_CLUSTER_QUOTA_HEADROOM_PERCENT`,
+`ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT`,
+`ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT`.
+
+### Settings and API
+
+Settings API: `GET/PUT/DELETE /recommendations/openshift/settings/cluster-quota`.
+
+List API: `GET /recommendations/openshift/cluster-quota`. Detail:
+`GET /recommendations/openshift/cluster-quota/detail`.
+
+### Savings
+
+`estimated_savings_cents` at ingestion for **`tighten`** only (same rate model as
+namespace quota). Fleet rollup: `by_plugin.cluster-quota`.
+
+Source: [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go).
+Plugin: [`internal/plugins/cluster-quota/plugin.go`](../../internal/plugins/cluster-quota/plugin.go).
+
+---
+
 ## Snapshot Recommendations
 
 No engines, no terms. Single classification per snapshot at ingestion time.
@@ -289,19 +399,26 @@ engine rows per term. Source: [`recommendVM()`](../../internal/engine/vm_recomme
 
 | Engine | CPU percentile | Memory percentile | Notes |
 |--------|----------------|-------------------|-------|
-| **cost** | P60 (default) | P95 + margin | Adaptive CPU margin 15–50%; downsize hysteresis |
-| **performance** | P98 (default) | P99 + margin | Higher headroom for burst workloads |
+| **cost** | P95 (default) | P95 + 20% margin | Adaptive CPU margin 15–50% when enabled; downsize hysteresis |
+| **performance** | P99 (default) | P99 + margin | Higher headroom for burst workloads; downsize stability days |
+
+Defaults: [`DefaultVMRecConfig()`](../../internal/engine/vm_config.go) (`ROS_VM_CPU_PERCENTILE_COST`,
+`ROS_VM_CPU_PERCENTILE_PERF`). Digest fields: `CPUUsageP95MC` / `CPUUsageP99MC`,
+`MemUsageP95KiB` / `MemUsageP99KiB`.
 
 ### Default terms (VM only — longer windows)
 
-| Term | Window | Min data days |
-|------|--------|---------------|
-| short | 7 days | 1 |
-| medium | 15 days | 3 |
-| long | 30 days | 7 |
+| Term | Window | Min data days | Decay half-life |
+|------|--------|---------------|-----------------|
+| short | 7 days | 3 | 0 (no decay) |
+| medium | 15 days | 7 | 0 |
+| long | 30 days | 15 | 0 |
 
-Plugin defaults and tenant overrides: `GET/PUT/DELETE .../settings/vm/terms`.
-Max window: **90 days** (`ROS_VM_REC_HISTORY_RETENTION_DAYS` for history table).
+Plugin defaults: [`internal/plugins/vm/plugin.go`](../../internal/plugins/vm/plugin.go).
+Tenant term overrides: `GET/PUT/DELETE .../settings/terms?recommendation_type=vm`.
+Threshold overrides: `GET/PUT/DELETE .../settings/vm` (percentiles, margins, idle, disk, GPU, network).
+Max window: **90 days** (`MaxWindowDays()`). History retention:
+`ROS_VM_REC_HISTORY_RETENTION_DAYS`.
 
 ### Savings
 
@@ -342,7 +459,7 @@ ROS_TERMS_PVC_MEDIUM_MIN_DATA_DAYS=21
 ROS_TERMS_GPU_SHORT_DECAY_HALFLIFE_HOURS=0
 ```
 
-**Plugin names** (uppercase in env): `CONTAINER`, `NAMESPACE`, `NODE`, `GPU`, `PVC`.
+**Plugin names** (uppercase in env): `CONTAINER`, `NAMESPACE`, `NODE`, `GPU`, `PVC`, `VM`.
 
 When `WINDOW_DAYS` is set without `MIN_DATA_DAYS`, min data days auto-derives as
 `max(1, window_days / 2)` via [`ComputeMinDataDays()`](../../internal/engine/term_config.go).
@@ -356,7 +473,8 @@ DELETE /recommendations/openshift/settings/terms?recommendation_type=<plugin>
 ```
 
 Valid `recommendation_type` values: plugins implementing `TermProvider`
-(container, namespace, node, gpu, pvc). Snapshot does not support terms.
+(container, namespace, node, gpu, pvc, vm). **quota**, **cluster-quota**, and
+**snapshot** use threshold-based settings endpoints instead of terms.
 
 Implementation: [`handlers_terms.go`](../../internal/api/handlers_terms.go),
 [`term_config.go`](../../internal/engine/term_config.go).
@@ -401,7 +519,10 @@ Admin guide: [Business Hours](../features/business-hours.md).
 | Node | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go), [`node_savings.go`](../../internal/engine/node_savings.go) |
 | GPU | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
 | PVC | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go), [`pvc_savings.go`](../../internal/engine/pvc_savings.go) |
+| Quota | [`recommend_quota.go`](../../internal/engine/recommend_quota.go), [`quota_settings.go`](../../internal/engine/quota_settings.go), [`quota_run.go`](../../internal/engine/quota_run.go) |
+| Cluster-quota | [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go), [`cluster_quota_run.go`](../../internal/engine/cluster_quota_run.go) |
 | Snapshot | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot_settings.go) |
+| VM | [`vm_recommender.go`](../../internal/engine/vm_recommender.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`vm_savings.go`](../../internal/engine/vm_savings.go), [`vm_settings.go`](../../internal/engine/vm_settings.go) |
 | Terms | [`term_config.go`](../../internal/engine/term_config.go), [`handlers_terms.go`](../../internal/api/handlers_terms.go) |
 | Global config | [`internal/config/config.go`](../../internal/config/config.go) |
 | Plugin defaults | [`internal/plugins/*/plugin.go`](../../internal/plugins/) |

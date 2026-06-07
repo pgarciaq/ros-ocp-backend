@@ -1,5 +1,12 @@
 # Tag filtering
 
+!!! info "Quick Facts"
+    **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
+    **Data source:** Koku `reporting_ocptags_values` table (enabled tag keys only)  
+    **Feature gate:** `ROS_TAGS_ENABLED=true` (default: `false`)  
+    **Supported plugins:** Containers, Namespaces, Nodes, GPU MIG, GPU Time-Slicing, PVC, Quota, Cluster-Quota  
+    **Multi-value:** Comma-separated values use OR logic within a key; multiple keys use AND
+
 Filter OpenShift optimization recommendations by labels (tags) that Cost Management already tracks for billing. Tag keys must be **enabled** under **Settings → Tags** in Cost Management; ROS does not expose a separate public tag catalog.
 
 ## Filter syntax
