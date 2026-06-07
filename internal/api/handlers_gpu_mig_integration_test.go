@@ -294,6 +294,36 @@ func TestGetGPUMIGRecommendations_FilterTag(t *testing.T) {
 	}
 }
 
+func TestGetGPUMIGRecommendations_FilterTagIgnoredWhenDisabled(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "false")
+	require.False(t, config.TagsFeatureEnabled())
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"tagged-mig-ns", "wl-tagged", "ctr-tagged", "gpu-node-tag"},
+		{"untagged-mig-ns", "wl-other", "ctr-other", "gpu-node-tag"},
+	})
+
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, 'tagged-mig-ns', 'wl-tagged', 'deployment', 'ctr-tagged', '{"environment":"production"}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags, cluster_uuid = EXCLUDED.cluster_uuid`,
+		testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	app := setupGPUMIGEcho(pool)
+	resp := migListGET(t, app, "?filter%5Btag%3Aenvironment%5D=production")
+	assert.GreaterOrEqual(t, resp.Meta.Count, 2, "tag filter must be ignored when ROS_TAGS_ENABLED=false")
+}
+
 func TestGetGPUMIGRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 	const cluster1 = "c1111111-1111-1111-1111-111111111111"
 	const cluster2 = "c2222222-2222-2222-2222-222222222222"

@@ -683,6 +683,9 @@ func applyNodeGPURecTagFilters(
 	orgID string,
 	recs []model.NodeGPURecommendation,
 ) ([]model.NodeGPURecommendation, error) {
+	if !config.TagsFeatureEnabled() {
+		return recs, nil
+	}
 	tagFilters, err := parseTagFiltersFromRequest(c)
 	if err != nil {
 		return recs, c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
