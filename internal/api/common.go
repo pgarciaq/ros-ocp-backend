@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -53,7 +54,7 @@ var validWorkloadTypes = map[string]bool{
 
 func validateWorkloadTypeValues(vals []string) error {
 	for _, v := range vals {
-		if !validWorkloadTypes[v] {
+		if !validWorkloadTypes[strings.ToLower(v)] {
 			return namespaceAPIErrf(EnableUserAPIErr, "invalid workload_type %q, must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset", v)
 		}
 	}

@@ -328,11 +328,14 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 			if err != nil {
 				return nil, err
 			}
+			if param == "workload_type" {
+				s = strings.ToLower(s)
+			}
 			if modeClause.Wrap {
 				s = "%" + s + "%"
 			}
 			allParamVals = append(allParamVals, s)
-			allSQLClauses = append(allSQLClauses, column+modeClause.Suffix)
+			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))
 		}
 	}
 	if len(allSQLClauses) == 0 {
@@ -340,6 +343,13 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 	}
 	joinedSQLClause := strings.Join(allSQLClauses, modeClause.Join)
 	return map[string]any{joinedSQLClause: allParamVals}, nil
+}
+
+func workloadTypeSQLColumn(param, column, suffix string) string {
+	if param == "workload_type" {
+		return "LOWER(" + column + ")" + suffix
+	}
+	return column + suffix
 }
 
 // parsing of string params based on mode -> include, exclude, exact.
@@ -575,11 +585,14 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 			if err != nil {
 				return nil, err
 			}
+			if param == "workload_type" {
+				s = strings.ToLower(s)
+			}
 			if modeClause.Wrap {
 				s = "%" + s + "%"
 			}
 			allParamVals = append(allParamVals, s)
-			allSQLClauses = append(allSQLClauses, column+modeClause.Suffix)
+			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))
 		}
 	}
 	if len(allSQLClauses) == 0 {

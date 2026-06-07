@@ -46,16 +46,10 @@ var termNameToOrd = map[string]int{"short": 1, "medium": 2, "long": 3}
 func getRecommendationType(c echo.Context) (string, error) {
 	rt := c.QueryParam("recommendation_type")
 	if rt == "" {
-		return "", c.JSON(http.StatusBadRequest, echo.Map{
-			"status":  "error",
-			"message": "recommendation_type query parameter is required",
-		})
+		return "", echo.NewHTTPError(http.StatusBadRequest, "recommendation_type query parameter is required")
 	}
 	if !isValidTermPlugin(rt) {
-		return "", c.JSON(http.StatusBadRequest, echo.Map{
-			"status":  "error",
-			"message": "recommendation_type must be a plugin that supports terms",
-		})
+		return "", echo.NewHTTPError(http.StatusBadRequest, "recommendation_type must be a plugin that supports terms")
 	}
 	return rt, nil
 }
@@ -79,7 +73,7 @@ func GetTermSettings(c echo.Context) error {
 
 	rt, err := getRecommendationType(c)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	ctx := c.Request().Context()
@@ -129,7 +123,7 @@ func PutTermSettings(c echo.Context) error {
 
 	rt, err := getRecommendationType(c)
 	if err != nil {
-		return nil
+		return err
 	}
 	if termsSettingsLocked(rt) {
 		return respondSettingsLockedForbidden(c)
@@ -273,7 +267,7 @@ func DeleteTermSettings(c echo.Context) error {
 
 	rt, err := getRecommendationType(c)
 	if err != nil {
-		return nil
+		return err
 	}
 	if termsSettingsLocked(rt) {
 		return respondSettingsLockedForbidden(c)

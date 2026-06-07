@@ -72,7 +72,7 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 4, summary.TotalContainers)
-	assert.Equal(t, 3, summary.ActiveContainers)
+	assert.Equal(t, 2, summary.ActiveContainers)
 	assert.Equal(t, 1, summary.IdleContainers)
 	assert.Equal(t, 1, summary.AbandonedContainers)
 	assert.Equal(t, 1, summary.ClusterCount)

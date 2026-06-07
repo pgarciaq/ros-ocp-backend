@@ -92,7 +92,7 @@ func TestMapQueryParametersKokuFilterSyntax(t *testing.T) {
 	result, err := MapQueryParameters(c)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"%alpha%"}, result["workloads.namespace ILIKE ?"])
-	assert.Equal(t, []string{"deployment"}, result["workloads.workload_type = ?"])
+	assert.Equal(t, []string{"deployment"}, result["LOWER(workloads.workload_type) = ?"])
 }
 
 func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
@@ -127,11 +127,18 @@ func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "workload_type filter uses exact match not partial",
+			name:        "workload_type filter uses case-insensitive exact match",
 			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"deployment"}, result[workloadTypeCol+" = ?"])
+				assert.Equal(t, []string{"deployment"}, result["LOWER("+workloadTypeCol+") = ?"])
 				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
+			},
+		},
+		{
+			name:        "workload_type filter accepts canonical K8s casing",
+			queryParams: map[string][]string{"filter[workload_type]": {"DaemonSet"}},
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"daemonset"}, result["LOWER("+workloadTypeCol+") = ?"])
 			},
 		},
 		{
@@ -247,10 +254,10 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "workload_type filter uses exact match not partial",
+			name:        "workload_type filter uses case-insensitive exact match",
 			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"deployment"}, result[workloadTypeCol+" = ?"])
+				assert.Equal(t, []string{"deployment"}, result["LOWER("+workloadTypeCol+") = ?"])
 				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
 			},
 		},
@@ -258,14 +265,14 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "workload_type exact match",
 			queryParams: map[string][]string{"filter[exact:workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"deployment"}, result[workloadTypeCol+" = ?"])
+				assert.Equal(t, []string{"deployment"}, result["LOWER("+workloadTypeCol+") = ?"])
 			},
 		},
 		{
 			name:        "workload_type exclude",
 			queryParams: map[string][]string{"exclude[workload_type]": {"daemonset"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"daemonset"}, result[workloadTypeCol+" != ?"])
+				assert.Equal(t, []string{"daemonset"}, result["LOWER("+workloadTypeCol+") != ?"])
 			},
 		},
 		{
