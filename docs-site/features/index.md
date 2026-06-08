@@ -10,18 +10,18 @@ dollar impact using Koku cost model rates.
 | Feature | Plugins | Engines | Savings | Configurable |
 |---------|---------|---------|---------|--------------|
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
-| Namespace Quota Optimization | namespace | cost, performance | Planned | Yes |
+| Namespace Quota Optimization | namespace | cost, performance | No (by design; use container-level savings) | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
 | GPU MIG Profiling | gpu | single | Yes (container detail) | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
 | ResourceQuota Right-Sizing | quota | single | Yes (tighten) | Yes |
 | ClusterResourceQuota Right-Sizing | cluster-quota | single | Yes (tighten) | Yes |
-| Snapshot Lifecycle | snapshot | single | Yes (cost) | Yes |
+| Snapshot Lifecycle | snapshot | single | Yes (cost model rates; single engine) | Yes |
 | Business Hours | container, namespace | cost, performance | No (sizing only; savings use all_hours) | Yes |
-| Configurable Thresholds | all | all | N/A | Yes |
-| Savings Estimations | container, node, pvc, snapshot, vm (Preview); GPU idle on container detail | cost, performance | Core feature | N/A |
-| Idle / Zombie Detection | container, GPU, namespace, node (PVC: orphaned only) | single | Yes (full waste) | Yes |
+| Configurable Thresholds | all | container, namespace, node (dual); gpu, pvc (single); quota, snapshot, vm (separate settings) | N/A | Yes |
+| Savings Estimations | container, node, pvc, snapshot, vm (Preview); quota (tighten), cluster-quota (tighten); GPU MIG/time-slicing/idle on container detail (excluded from fleet summary) | cost, performance (container, node, vm only); N/A for pvc, snapshot, quota, GPU | Core feature | N/A |
+| Idle / Zombie Detection | container, GPU, namespace, node (PVC: orphaned only) | single | Yes: container & GPU (full waste), PVC (orphaned cost); No: namespace, node (uses consolidation savings) | Yes |
 | Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
 
 ## All feature pages
