@@ -311,7 +311,7 @@ Add:
 ## Phase 4: Tests (TDD)
 
 **This phase uses strict TDD red-green-refactor.** See
-[plans/gpu-timeslicing-tdd-plan.md](plans/gpu-timeslicing-tdd-plan.md) for the
+[archive/gpu-timeslicing-tdd-plan.md](archive/gpu-timeslicing-tdd-plan.md) for the
 full 21-cycle TDD plan with exact test code and execution order.
 
 ### Summary of test files
@@ -385,7 +385,7 @@ future use by GORM-based node queries.
 
 1. Update `docs/gpu-time-slicing-plan.md` with pagination and RBAC sections
 2. Update `docs/plans/gpu-recommendations-test-plan.md` Phase E status
-3. Update `docs/plans/gpu-timeslicing-tdd-plan.md` status
+3. Update `docs/archive/gpu-timeslicing-tdd-plan.md` status
 4. Update OpenAPI spec with pagination parameters and links schema
 
 ---
@@ -393,7 +393,7 @@ future use by GORM-based node queries.
 ## Implementation Order (TDD)
 
 Tests are written **before** production code in every step.  See
-[plans/gpu-timeslicing-tdd-plan.md](plans/gpu-timeslicing-tdd-plan.md) for
+[archive/gpu-timeslicing-tdd-plan.md](archive/gpu-timeslicing-tdd-plan.md) for
 the cycle-by-cycle breakdown.
 
 ```
@@ -473,7 +473,7 @@ inline hints on the container recommendation detail view (via the
 ## Design Decisions
 
 Decisions made during design review.  See also
-[plans/gpu-recommendations.md](plans/gpu-recommendations.md) Phase E section E13
+[archive/gpu-recommendations.md](archive/gpu-recommendations.md) Phase E section E13
 for the canonical list with full rationale.
 
 | # | Decision | Summary |

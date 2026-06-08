@@ -135,7 +135,7 @@ Namespace recommendations aggregate container recommendations within a namespace
 - CPU/memory recommendations summed across containers
 - P60/P98/P99 percentiles computed from namespace-level digests
 - Trend slope computed from namespace aggregate usage
-- Uses the same sizing parameters as container (see [Recommendation Engine Reference](recommendation-engines.md#container--namespace-recommendations))
+- Uses the same sizing parameters as container (see [Recommendation Engine Reference](recommendation-engines.md#container-namespace-recommendations))
 
 ## Node Recommendations
 

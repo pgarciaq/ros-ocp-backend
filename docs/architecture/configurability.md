@@ -174,7 +174,7 @@ whether each is currently enabled, so clients do not hard-code plugin lists.
   return `404` and the field is omitted or `false` in capabilities.
 
 Implementation: [`GetCapabilities`](../../internal/api/handlers_capabilities.go) iterates
-[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/traits.go)
+[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/plugin.go)
 trait for `supports_terms`.
 
 ### Settings PUT side effects
@@ -354,7 +354,7 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Sources API base URL <br><em>Sources service base URL for cluster/source metadata.</em> | platform / `http://127.0.0.1:8002` | `SOURCES_API_BASE_URL` | — | — | No |
 | Sources API prefix <br><em>Sources API version prefix (`/api/sources/v3.1`).</em> | `/api/sources/v3.1` | `SOURCES_API_PREFIX` | — | — | No |
 
-Deployment-focused subsets are also summarized in [Configuration](../configuration.md) (database, Kafka, performance tuning, tags).
+Deployment-focused subsets are also summarized in [Configuration](../operations/configuration.md) (database, Kafka, performance tuning, tags).
 
 ---
 
@@ -592,7 +592,7 @@ because storage growth is slow.
 
 \* Threshold fields via `PUT /settings/pvc` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=pvc`.
 
-See [PVC right-sizing](../features/pvc-rightsizing.md).
+See [PVC right-sizing](../features-f27-pvc-rightsizing.md).
 
 ---
 
@@ -749,7 +749,7 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 
 \* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
 
-See [Snapshot staleness](../features/snapshot-staleness.md).
+See [Snapshot staleness](../features-f-snapshot-staleness.md).
 
 ---
 
@@ -1056,7 +1056,7 @@ and mirror the env re-apply step used in
 | [GPU Classification](gpu-classification.md) | GPU decision tree and MIG profile selection |
 | [Cost Integration](cost-integration.md) | Savings formulas, fleet summary, savings recalculation |
 | [Notification codes](notification-codes.md) | Full notification code catalog |
-| [Upgrade Runbook](../operations/upgrade-runbook.md) | Migration procedures and deploy notes |
+| [Upgrade Runbook](../upgrade-runbook.md) | Migration procedures and deploy notes |
 
 ## Source File Index
 

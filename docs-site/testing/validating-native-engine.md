@@ -9,7 +9,7 @@ This guide is for senior QE engineers (and developers) validating the **entire R
 If you are validating the native engine for the first time:
 
 1. **Read** [Validation priority](#validation-priority-suggested-order) — follow **P0 → P3** order.
-2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem--native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`).
+2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem-native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`).
 3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
 4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images: **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
@@ -22,7 +22,7 @@ If you are validating the native engine for the first time:
 
 **What changed:** `ros-ocp-backend` now computes OpenShift resource optimization recommendations in **Go** (the “native engine”), using plugins for containers, namespaces, nodes, GPU, PVC, quota, cluster-quota, snapshots, and VMs. The legacy **Kruize** path is optional and **mutually exclusive** with native plugins.
 
-See also: [Native migration guide](../../docs/architecture/native-migration.md), [Features index](../features/index.md).
+See also: [Native migration guide](../architecture/native-migration.md), [Features index](../features/index.md).
 
 ### Scope of validation (entire engine)
 
@@ -1668,7 +1668,7 @@ For environments still running Kruize, compare outputs before cutover. **Product
 
 ### Migration path
 
-Follow [Native migration guide](../../docs/architecture/native-migration.md): enable native plugins → verify P0/P1 checklist → disable Kruize → optional cleanup of `workload_metrics` via retention.
+Follow [Native migration guide](../architecture/native-migration.md): enable native plugins → verify P0/P1 checklist → disable Kruize → optional cleanup of `workload_metrics` via retention.
 
 ---
 
@@ -2187,7 +2187,7 @@ Re-ingest that data, then re-run container/node list or detail calls to confirm 
 
 ## GPU recommendations testing
 
-GPU validation spans **container workloads** (MIG profiles, per-container classification) and **node-level time-slicing**, plus **VM guest GPU** (see [VM GPU](#vm-gpu-vm-usage--optional-gpu-device-csv) below). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
+GPU validation spans **container workloads** (MIG profiles, per-container classification) and **node-level time-slicing**, plus **VM guest GPU** (see [VM GPU](#vm-gpu-vm-usage-optional-gpu-device-csv) below). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
 
 ### Container GPU (ROS usage CSV + container plugin)
 
@@ -2249,7 +2249,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 | API filter | `filter[gpu_classification]=idle` (and `underutilized`, `memory_saturated`, `compute_saturated`, `mixed`) |
 | API detail | `GET .../recommendations/openshift/vm/detail?...` → verify `gpu_devices[]` (uuid, model, classification, utilization) |
 | DB | `vm_gpu_device_digests` joined to `daily_vm_digests` |
-| Notifications | **50**–**54** (see [VM notification quick reference](#vm-notification-quick-reference-codes-1819-3754)) |
+| Notifications | **50**–**54** (see [VM notification quick reference](#vm-notification-quick-reference)) |
 | Logs | `VM GPU device CSV: no digest for` if device CSV precedes usage digest |
 
 ```bash
@@ -2367,7 +2367,7 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 |----------|------------|
 | **This guide (MkDocs)** | `ros-ocp-backend/docs-site/testing/validating-native-engine.md` |
 | **Repo copy** | `ros-ocp-backend/docs/testing/validating-native-engine.md` |
-| **Native migration** | [docs/architecture/native-migration.md](../../docs/architecture/native-migration.md) |
+| **Native migration** | [docs/architecture/native-migration.md](../architecture/native-migration.md) |
 | **Detail response (code)** | `internal/model/detail_response.go` |
 | **Handlers (containers)** | `internal/api/handlers.go` |
 | **Handlers (VM)** | `internal/api/handlers_vm_recs.go` |

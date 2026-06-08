@@ -159,4 +159,4 @@ Env locks: `ROS_PVC_*`. See [Configurability](../architecture/configurability.md
 
 - [PVC right-sizing (feature)](../features/pvc-rightsizing.md)
 - [Cost integration](../architecture/cost-integration.md)
-- Internal design: [`docs/features-f27-pvc-rightsizing.md`](../../docs/features-f27-pvc-rightsizing.md)
+- Internal design: [`docs/features-f27-pvc-rightsizing.md`](../features/pvc-rightsizing.md)

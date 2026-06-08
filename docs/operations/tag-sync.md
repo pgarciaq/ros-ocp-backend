@@ -30,7 +30,7 @@ They return **404** when `ROS_TAGS_SOURCE=db`.
 | `sync_ros_ocp_tags` | Tag settings mutations, OCP summarization complete |
 | `sync_ros_ocp_tags_periodic` | Celery beat every 6 hours (`:15` past the hour) — all tenants |
 
-Koku implementation: [`koku/masu/processor/ros_tag_sync.py`](../../../../koku/koku/masu/processor/ros_tag_sync.py)
+Koku implementation: [`koku/masu/processor/ros_tag_sync.py`](../../../koku/koku/masu/processor/ros_tag_sync.py)
 
 When `ROS_TAGS_SOURCE=db`, these tasks are no-ops.
 
@@ -105,5 +105,5 @@ Migration: [`000082_create_org_tag_sync_metadata.up.sql`](../../migrations/00008
 
 - Sync service: [`internal/tags/sync.go`](../../internal/tags/sync.go)
 - HTTP handlers: [`internal/api/handlers_tags_sync.go`](../../internal/api/handlers_tags_sync.go)
-- Koku sender: [`koku/masu/processor/ros_tag_sync.py`](../../../../koku/koku/masu/processor/ros_tag_sync.py)
+- Koku sender: [`koku/masu/processor/ros_tag_sync.py`](../../../koku/koku/masu/processor/ros_tag_sync.py)
 - Dual-path overview: [tag-filtering.md](../features/tag-filtering.md)

@@ -54,7 +54,7 @@ changes are required for data collection.
 > **File routing (implemented):** The storage CSV is in the manifest `files`
 > array (cost pipeline). The Koku listener was updated to also route it to the
 > ROS Kafka topic — see `koku/masu/external/kafka_msg_handler.py` (the
-> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](snapshot-staleness.md#two-strategies-both-documented) for the
+> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](../../docs/features-f-snapshot-staleness.md#two-strategies-both-documented) for the
 > architectural rationale behind this "Strategy A" approach.
 
 **CSV columns used:**

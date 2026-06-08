@@ -191,7 +191,7 @@ GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container--namespace).
+Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container-namespace).
 
 ### Filters
 

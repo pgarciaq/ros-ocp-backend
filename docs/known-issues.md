@@ -144,7 +144,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
-| Multi-GPU awareness | REQ-5.5 | See [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **2** |
+| Multi-GPU awareness | REQ-5.5 | See [GPU: Deferred / Future Work](#gpu-deferred-future-work) item **2** |
 | Confidence bounds | ~~REQ-1.4~~ | Statistical methodology not designed; cost/performance dual-model provides range |
 | QoS class recommendations | ~~REQ-6.2~~ | Implicit from request/limit values; revisit if user research demands |
 | Engine versioning | REQ-3.5 (full) | Unit tests exist; formal semantic versioning scheme deferred |
@@ -422,7 +422,7 @@ otherwise falls back to `ROS_NODE_ALLOCATABLE_FACTOR` × request totals.
 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | 10 | Idle: memory util % of allocatable |
 | `ROS_NODE_IDLE_MAX_PODS` | 10 | Idle: max pod count |
 
-**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
+**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../internal/engine/recommend_nodes.go)
 groups underutilized nodes by `instance_type` and distributes `node_count_reduction`
 across the fleet (not per-node binary only).
 
@@ -446,7 +446,7 @@ reflects the Koku cost model unit. Deprecated alias:
 
 **Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 15 (node idle/zombie), 25 (`NotifNoCostData` when savings cannot be computed).
 
-**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
+**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
 **UI status:** Not implemented. Requires a node recommendations view and a null
 state for the 3-day cold start period.
@@ -538,7 +538,7 @@ dedicated **koku-ui views are deferred** (large effort; ResourceQuota status rep
 | Notification integration (codes **70–73**) | Emitted on quota / cluster-quota rows |
 | Historical trend visualization | `history[]` on detail endpoints |
 
-See [quota-recommendations.md](features/quota-recommendations.md#roadmap--future-work) and
+See [quota-recommendations.md](features/quota-recommendations.md#roadmap-future-work) and
 [ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
 
 ### GPU MIG — Known limitations (Gap 5)
@@ -550,11 +550,11 @@ below, not as defects.
 
 #### MIG list in-memory pagination
 
-`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../../internal/api/handlers_gpu_mig.go))
+`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../internal/api/handlers_gpu_mig.go))
 loads MIG recommendations for every cluster in the org by calling
 `QueryGPURecommendations` per cluster, builds the full result set in memory, then applies
 RBAC, tag filters, sort, and `offset`/`limit` pagination in Go. Filter and sort keys are
-not pushed to SQL (see [`GpuMigAllowedOrderBy`](../../internal/api/listoptions/list_options.go)).
+not pushed to SQL (see [`GpuMigAllowedOrderBy`](../internal/api/listoptions/list_options.go)).
 
 **Why this is acceptable now:** Typical fleets have tens to low hundreds of MIG-enabled
 containers. The in-memory path adds well under ~50 ms of API latency at that scale.
@@ -647,13 +647,13 @@ item **10** below.
 
 The following items are **not** shipping defects. They are tracked enhancements
 deferred until prerequisites or customer scale justify the investment. Gap 5 detail:
-[GPU MIG — Known limitations (Gap 5)](#gpu-mig--known-limitations-gap-5).
+[GPU MIG — Known limitations (Gap 5)](#gpu-mig-known-limitations-gap-5).
 
 | # | Item | Consumer | Why deferred | Prerequisites |
 |---|------|----------|--------------|---------------|
 | **1** | **GPUs per node** — add `node_gpu_count` to ROS data from `kube_node_status_allocatable{resource='nvidia.com/gpu'}` | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only. | Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin |
-| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation; no cluster-wide "free a GPU by co-locating workloads" (see [Gap 5](#gpu-mig--known-limitations-gap-5)) | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3; nodes where many containers each hold a slice on a different GPU | Rare outside dedicated ML clusters (<5% of GPU workloads). Per-container MIG sizing does not perform bin-packing across GPUs on a node. Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; node-level consolidation engine + notification changes |
-| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` (see [Gap 5](#gpu-mig--known-limitations-gap-5)) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
+| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation; no cluster-wide "free a GPU by co-locating workloads" (see [Gap 5](#gpu-mig-known-limitations-gap-5)) | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3; nodes where many containers each hold a slice on a different GPU | Rare outside dedicated ML clusters (<5% of GPU workloads). Per-container MIG sizing does not perform bin-packing across GPUs on a node. Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; node-level consolidation engine + notification changes |
+| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` (see [Gap 5](#gpu-mig-known-limitations-gap-5)) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
 | **4** | **MIG + time-slicing combined strategy** — time-slicing within MIG partitions instead of mutually exclusive strategies in `partitionContainers` (MIG recs currently exclude time-slicing candidates) | Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node | Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand. | MIG instance scheduling model; operator partition telemetry |
 | **5** | **UI for GPU time-slicing recommendations** — frontend views for `GET /recommendations/openshift/gpu/timeslicing` and `GET /recommendations/openshift/gpu/mig` | Cluster admins who want visual guidance on GPU sharing without using the API directly | All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in [ui-integration-guide.md](ui-integration-guide.md). | koku-ui GPU optimizations pages |
 | **9** | **ROS MIG recommendations Optimizations UI** — no koku-ui pages for `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` (see [Gap 5 § ROS MIG recommendations UI](#ros-mig-recommendations-ui-not-shipped)) | FinOps users who need recommended MIG profiles, classification, and confidence in the console | Cost-side MIG **spend** UI exists (`reports/openshift/gpu/mig_profiles/`); ROS **recommendation** UX is a separate product surface. Backend APIs are ready; UI is deferred. | koku-ui Optimizations GPU section per [ui-integration-guide.md](ui-integration-guide.md#12-gpu-recommendations) |
@@ -774,7 +774,7 @@ The **`quota`** plugin (Phase 1, priority 35) compares ResourceQuota **hard** an
 API: `GET /api/cost-management/v1/recommendations/openshift/quota/`. See
 [quota-recommendations.md](features/quota-recommendations.md).
 
-**Operator dependency (namespace quota):** Non-compute quota resources (`requests.storage`, `pods`, `count/*`) and per-`ResourceQuota` object name are **not** in the operator CSV today — PromQL sums by namespace only. See [quota-recommendations.md](features/quota-recommendations.md#future-work-namespace-quota).
+**Operator dependency (namespace quota):** Non-compute quota resources (`requests.storage`, `pods`, `count/*`) and per-`ResourceQuota` object name are **not** in the operator CSV today — PromQL sums by namespace only. See [quota-recommendations.md](features/quota-recommendations.md#operator-data).
 
 ### ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
 
@@ -846,12 +846,12 @@ Responses include `estimated_monthly_savings` when Masu storage rates are availa
 CSV includes a `pod` column (often a `virt-launcher-*` name). ROS does not ingest either
 field today: `ParseVMCSVRows` ignores PVC/pod columns on VM usage, and PVC ingestion
 did not persist `pod` until migration **000114**. VM shared-storage notifications
-([`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go)) therefore use a
+([`DetectSharedPVCs`](../internal/engine/vm_pvc_correlation.go)) therefore use a
 namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
 requires ROS to ingest `pod` on storage digests and either `vm_persistentvolumeclaim_name`
 or `exported_pod` on VM digests (operator ROS VM CSV would need the latter column added).
 
-**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go)
+**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
 Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
@@ -976,7 +976,7 @@ Authoritative detail: [docs-site/features/gpu-time-slicing.md](../docs-site/feat
 
 ## GPU Summary `timeslicing.count` Divergence
 
-Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **8** — not a defect backlog item.
+Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred-future-work) item **8** — not a defect backlog item.
 
 **Severity:** Cosmetic / semantic gap (not a bug)
 
@@ -1026,11 +1026,11 @@ actionable node-level guidance.
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
 See docs-site [Summary vs list count semantics](../docs-site/features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](../docs-site/ui-integration-guide.md#which-count-to-use-summary-vs-list).
+[UI Integration Guide](../docs-site/features/gpu-time-slicing.md#summary-vs-list-count-semantics).
 
 ### Resolution options (if product requires alignment later)
 
-Deferred item **8** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) catalogs these paths:
+Deferred item **8** in [GPU: Deferred / Future Work](#gpu-deferred-future-work) catalogs these paths:
 
 1. **Rename field** to `gpu_node_groups` and document as monitored groups only
 2. **Run the engine** on all triples during summary (adds query cost)

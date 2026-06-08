@@ -108,4 +108,4 @@ Namespace recommendations provide sizing guidance only — **no dollar savings f
 - [Namespace recommendations (feature)](../features/namespace-recommendations.md)
 - [Recommendation engines](../architecture/recommendation-engines.md)
 - [Recommendation math](../architecture/recommendation-math.md)
-- Internal design: [`docs/features/namespace-recommendations.md`](../../docs/features/namespace-recommendations.md)
+- Internal design: [`docs/features/namespace-recommendations.md`](../features/namespace-recommendations.md)

@@ -266,7 +266,7 @@ ROS applies the same **dual-engine** model as containers:
 - **Batch processing, ETL, internal cron** → cost profile; accept higher GC pause if throughput is fine.
 - **User-facing API, checkout, real-time** → performance profile; pay for headroom and low-latency GC.
 
-You select the engine per recommendation the same way as [container right-sizing](container-recommendations.md) — see [Dual engine](dual-engine.md).
+You select the engine per recommendation the same way as [container right-sizing](../features/container-recommendations.md) — see [Dual engine](../features/dual-engine.md).
 
 ---
 

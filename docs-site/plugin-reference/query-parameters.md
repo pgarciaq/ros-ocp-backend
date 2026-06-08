@@ -263,4 +263,4 @@ separate rows rather than embedded JSON cells.
 All endpoints require the `x-rh-identity` header. On-prem deployments may adopt **mTLS**
 for service accounts in a future release; query syntax will not change.
 
-See also: [OpenAPI specification](../openapi.md), [operations API reference](../../docs/operations/api-query-parameters.md).
+See also: [OpenAPI specification](../openapi.md), [operations API reference](../plugin-reference/query-parameters.md).

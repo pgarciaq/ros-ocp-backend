@@ -29,7 +29,7 @@ Package: [`internal/plugins/container`](../../internal/plugins/container/)
 3. Persist recommendations per container × term × engine; expose list and detail APIs.
 4. Compute dollar savings at ingestion when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Masu rates are available.
 
-See [Container recommendations](../../docs/features/container-recommendations.md) and [Recommendation engines](../architecture/recommendation-engines.md).
+See [Container recommendations](../features/container-recommendations.md) and [Recommendation engines](../architecture/recommendation-engines.md).
 
 ## Endpoints
 
@@ -52,7 +52,7 @@ GET /api/cost-management/v1/recommendations/openshift/history?filter[container]=
 
 There is no per-container-ID history sub-resource. Use query filters on the fleet endpoint to retrieve history for a specific container.
 
-See [Recommendation History & Quality](../../docs/features/history-and-quality.md#history).
+See [Recommendation History & Quality](../features/history-and-quality.md#history).
 
 ### Quality
 
@@ -74,7 +74,7 @@ GET /api/cost-management/v1/recommendations/openshift/quality?filter[engine]=per
 
 Default `filter[engine]` is **cost** when omitted. Node, PVC, VM, and namespace plugins do not expose a fleet `/quality` endpoint.
 
-See [Recommendation History & Quality](../../docs/features/history-and-quality.md#quality).
+See [Recommendation History & Quality](../features/history-and-quality.md#quality).
 
 ## Key features
 
@@ -140,7 +140,7 @@ See [Business hours](business-hours.md) and [Business Hours feature](../features
 
 Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=container`.
 
-See [Notification codes — Containers](../architecture/notification-codes.md#containers).
+See [Notification codes — Containers](../architecture/notification-codes.md#containers-and-idle-detection).
 
 ## Savings
 
@@ -162,7 +162,7 @@ When no cost data is available for a namespace, notification code **25** (`Notif
 
 Savings estimates always use the **`all_hours`** recommendation (the `config` block), not the optional `business_hours` nested engine block. Business-hours schedule changes therefore do not change dollar savings.
 
-See [Savings estimations](../../docs/features/savings-estimations.md) and [Cost integration](../architecture/cost-integration.md).
+See [Savings estimations](../features/savings-estimations.md) and [Cost integration](../architecture/cost-integration.md).
 
 ## Settings
 
@@ -178,7 +178,7 @@ See [Configurability](../architecture/configurability.md) (container section).
 
 ## Architecture
 
-- [Container recommendations (feature)](../../docs/features/container-recommendations.md)
+- [Container recommendations (feature)](../features/container-recommendations.md)
 - [Recommendation engines](../architecture/recommendation-engines.md)
 - [Recommendation math](../architecture/recommendation-math.md)
-- Internal design: [`docs/features/container-recommendations.md`](../../docs/features/container-recommendations.md)
+- Internal design: [`docs/features/container-recommendations.md`](../features/container-recommendations.md)

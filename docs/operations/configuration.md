@@ -327,7 +327,7 @@ Node idle/zombie classification (`classification.idle_state` on
 | `ROS_NODE_IDLE_MAX_PODS` | `10` | Max running pods for idle classification. |
 
 See [`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go) and
-[Node recommendations](../docs-site/features/node-recommendations.md).
+[Node recommendations](../../docs-site/features/node-recommendations.md).
 
 ### GPU
 

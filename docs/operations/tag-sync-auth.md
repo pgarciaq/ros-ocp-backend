@@ -315,4 +315,4 @@ mTLS applies when operators choose `api` source or for other ROS↔Koku HTTP int
 - Tag sync data flow (api): [`tag-sync.md`](tag-sync.md)
 - Configuration: [`configuration.md`](configuration.md#tag-sync)
 - Public docs: [`../../docs-site/features/tag-filtering.md`](../../docs-site/features/tag-filtering.md)
-- Koku integration: [`koku/docs/architecture/ros-ocp-integration.md`](../../../../koku/docs/architecture/ros-ocp-integration.md)
+- Koku integration: [`koku/docs/architecture/ros-ocp-integration.md`](../../../koku/docs/architecture/ros-ocp-integration.md)

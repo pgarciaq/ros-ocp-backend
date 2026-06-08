@@ -343,7 +343,7 @@ are **not** currently collected by the operator or analyzed by the `cluster-quot
 visibility + alerting only unless Koku exposes a matching cost-model rate.
 
 Track alongside namespace quota extended-resource work in
-[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap--future-work).
+[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap-future-work).
 
 ---
 

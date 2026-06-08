@@ -1277,7 +1277,7 @@ These rules were learned through painful debugging. Violating any of them will c
 | Phase 4 plan | `docs/plans/phase-4-oom-feedback.md` | OOM bump formula, quality tracking, cross-repo merge order |
 | Phase 5 plan | `docs/plans/phase-5-history-and-boxplots.md` | History snapshots, raw samples, boxplot assembly, retention |
 | Replica count + savings | `docs/plans/replica-count-and-cost-impact.md` | Operator PromQL, cost calculation formula, rate selection |
-| GPU recommendations | `docs/plans/gpu-recommendations.md` | DCGM metrics, competitive analysis, classification algorithm, MIG profiles |
+| GPU recommendations | `docs/archive/gpu-recommendations.md` | DCGM metrics, competitive analysis, classification algorithm, MIG profiles |
 | GPU test plan | `docs/plans/gpu-recommendations-test-plan.md` | Test matrix, E2E playbook, nise configuration |
 | Known issues | `docs/known-issues.md` | Missing UI, engine gaps, gpu_distributed concern |
 | Performance analysis | `docs/native-engine-performance.md` | Benchmarks, scale concerns |
@@ -1367,7 +1367,7 @@ These rules were learned through painful debugging. Violating any of them will c
 
 During the design review of the Phase E time-slicing plan, seven design
 questions were raised and resolved.  All decisions are documented in
-`docs/plans/gpu-recommendations.md` (section E13) and
+`docs/archive/gpu-recommendations.md` (section E13) and
 `docs/gpu-time-slicing-plan.md` (Design Decisions table).
 
 ### D1: Node Name Storage

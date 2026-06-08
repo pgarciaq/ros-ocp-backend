@@ -226,7 +226,7 @@ cost model better than a hardcoded `$0.05`.
 When `ROS_SAVINGS_ESTIMATES_ENABLED=false` or Masu is unreachable, step 3 is
 skipped and ROS falls back to the Settings API value, env var, or compiled default.
 
-See [architecture/cost-integration.md](architecture/cost-integration.md).
+See [architecture/cost-integration.md](../architecture/cost-integration.md).
 
 The rate remains **user-configurable** via the Settings API because actual
 snapshot economics still vary by provider and storage tier:

@@ -86,7 +86,7 @@ recommendations back to the cluster.
 ### Container right-sizing
 
 Apply per-pod CPU and memory recommendations for HPA-managed workloads today via
-[Container Right-Sizing](container-recommendations.md). Use notification code **22**
+[Container Right-Sizing](../features/container-recommendations.md). Use notification code **22**
 (reserved) as a signal that replica advice may be suppressed once the HPA plugin ships.
 
 ### External automation
@@ -128,13 +128,13 @@ before changing production scaling policy:
 | **Rollback** | Snapshot HPA spec before patch; revert on error-rate or latency regression |
 
 Node consolidation uses the same advisory model with built-in headroom gates —
-see [Node Recommendations Roadmap — Tier 1](../architecture/node-recommendations-roadmap.md#tier-1--advisory-consolidation-with-safety-gates-shipped).
+see [Node Recommendations Roadmap — Tier 1](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
 
 ### VPA dual-advisor validation (available today)
 
 Even without the HPA plugin, you can validate container rightsizing confidence
 using Kubernetes VPA in `updateMode: Off`. See
-[Validating recommendations with VPA](container-recommendations.md#validating-recommendations-with-vpa)
+[Validating recommendations with VPA](../features/container-recommendations.md#validating-recommendations-with-vpa)
 and [VPA Recommendations](vpa-recommendations.md).
 
 ---
@@ -159,4 +159,4 @@ Filters will align with existing conventions: `filter[cluster]`, `filter[namespa
 - [VPA Recommendations](vpa-recommendations.md) — planned VPA policy plugin (Phase 2 Enrich)
 - [Container Right-Sizing](../features/container-recommendations.md) — shipped; foundation for HPA analysis
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — Phase 1 vs Phase 2 architecture
-- [Notification codes — Containers](../architecture/notification-codes.md#containers) — codes 21, 22 reserved for HPA
+- [Notification codes — Containers](../architecture/notification-codes.md#containers-and-idle-detection) — codes 21, 22 reserved for HPA

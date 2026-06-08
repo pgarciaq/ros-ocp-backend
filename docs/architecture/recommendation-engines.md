@@ -236,7 +236,7 @@ Source: [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go).
 Plugin defaults: [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.go).
 Max window: **365 days**.
 
-See also [PVC Right-Sizing](../features/pvc-rightsizing.md).
+See also [PVC Right-Sizing](../features-f27-pvc-rightsizing.md).
 
 ---
 

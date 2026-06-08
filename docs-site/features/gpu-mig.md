@@ -250,7 +250,7 @@ cluster outside RBAC returns an **empty** list (200).
 | `filter[engine]` | Not supported (by design) |
 | ROS Optimizations UI | Backend ready; koku-ui pages not shipped |
 
-Details: [Known issues — GPU MIG](../known-issues.md#gpu-mig--known-limitations-gap-5).
+Details: [Known issues — GPU MIG](../known-issues.md#gpu-mig-known-limitations-gap-5).
 
 ## Test data generation
 

@@ -71,7 +71,7 @@ Current baseline: **1 digest row per container per day** (with ~15 percentile/st
 | B: Hourly digests | 24 | **~24×** | 1 row per hour |
 | C: Daily + hourly samples | 1 + 24 lightweight | **~6×** | Full daily row + 24 small rows (~20% size each); `1 + 24×0.2 ≈ 6` row-equivalents |
 
-Business hours definitions change infrequently. Paying ~2× on partitioned digest tables (not raw CSV storage) is acceptable. Raw metrics remain in S3; PostgreSQL stores only pre-computed percentiles ([`daily_container_digests`](migrations/000024_create_daily_container_digests.up.sql)).
+Business hours definitions change infrequently. Paying ~2× on partitioned digest tables (not raw CSV storage) is acceptable. Raw metrics remain in S3; PostgreSQL stores only pre-computed percentiles ([`daily_container_digests`](../migrations/000024_create_daily_container_digests.up.sql)).
 
 Choice C was rejected despite its flexibility because 6× ongoing storage cost is hard to justify for a setting that changes perhaps once per quarter. Choice A's weakness (retroactive application requires re-ingestion) is mitigated by the Koku `reship_ros` endpoint — acceptable given the "rarely changes" assumption.
 
@@ -139,13 +139,13 @@ For each `MetricRow`:
    - Row always contributes to **all_hours** aggregate.
    - Row contributes to **business_hours** aggregate only when inside the window.
 
-Grouping today is in [`GroupCSVRows`](internal/ingestion/digest.go) (container + UTC calendar day). The change extends `DigestKey` (or parallel grouping) with `schedule_type`.
+Grouping today is in [`GroupCSVRows`](../internal/ingestion/digest.go) (container + UTC calendar day). The change extends `DigestKey` (or parallel grouping) with `schedule_type`.
 
-Percentile computation stays in [`ComputeContainerDigest`](internal/ingestion/digest.go) / [`ComputeDigest`](internal/ingestion/digest.go) — only the input row sets differ.
+Percentile computation stays in [`ComputeContainerDigest`](../internal/ingestion/digest.go) / [`ComputeDigest`](../internal/ingestion/digest.go) — only the input row sets differ.
 
 ### 3. Recommendation engine
 
-[`RecommendWorkloadsStreaming`](internal/engine/recommend_all.go) loads digests from `daily_container_digests` filtered by `schedule_type`. When business hours are enabled for a namespace:
+[`RecommendWorkloadsStreaming`](../internal/engine/recommend_all.go) loads digests from `daily_container_digests` filtered by `schedule_type`. When business hours are enabled for a namespace:
 
 - Run engine against `business_hours` digests → business-hours recommendations.
 - Run against `all_hours` digests → current behavior (unchanged semantics).
@@ -259,7 +259,7 @@ Resolution order for a container row: namespace override → cluster override �
 - `off_hours_weight`: float in `[0.0, 1.0]`; default `0.0` if omitted
 - `cluster_id` path param: cluster UUID string (consistent with other ROS APIs)
 
-**Side effect on `PUT`:** Persist schedule, then trigger re-ingestion (async job) for affected `provider_uuid` over `[today - max_window_days, today]` per plugin ([`MaxWindowDays()`](internal/plugins/container/plugin.go) returns 90 for container).
+**Side effect on `PUT`:** Persist schedule, then trigger re-ingestion (async job) for affected `provider_uuid` over `[today - max_window_days, today]` per plugin ([`MaxWindowDays()`](../internal/plugins/container/plugin.go) returns 90 for container).
 
 ### Administrator Kill-Switch
 
@@ -286,7 +286,7 @@ Existing schedules are preserved in the database (not deleted) so re-enabling is
 
 ### New table: `business_hours_schedules`
 
-Stores hierarchy parallel to [`snapshot_settings`](migrations/000049_create_snapshot_tables.up.sql) (per-org configuration pattern in [`internal/engine/snapshot_settings.go`](../internal/engine/snapshot_settings.go)).
+Stores hierarchy parallel to [`snapshot_settings`](../migrations/000049_create_snapshot_tables.up.sql) (per-org configuration pattern in [`internal/engine/snapshot_settings.go`](../internal/engine/snapshot_settings.go)).
 
 ```sql
 CREATE TABLE business_hours_schedules (
@@ -358,7 +358,7 @@ Update upsert in [`internal/ingestion/pipeline.go`](../internal/ingestion/pipeli
 
 ## Ingestion Implementation Notes
 
-**Entry point:** [`ParseAndDigestCSV`](internal/ingestion/pipeline.go) → extend grouping before [`ComputeContainerDigest`](internal/ingestion/digest.go).
+**Entry point:** [`ParseAndDigestCSV`](../internal/ingestion/pipeline.go) → extend grouping before [`ComputeContainerDigest`](../internal/ingestion/digest.go).
 
 **Pseudocode:**
 
@@ -427,7 +427,7 @@ Schedules change rarely (assumption), so a per-batch cache with no TTL-based inv
 
 **Performance:** O(rows) with one `time.In(location)` and weekday/time comparison per row — negligible vs CSV parse and percentile sort.
 
-**Sample counts:** `sample_count` on business-hours digests reflects only in-window intervals (~40 samples/day for 8h at 15-min granularity vs ~96 for 24h). Engine [`MinDataDays`](internal/plugins/container/plugin.go) applies unchanged; sparse business-hours days widen effective confidence (documented under Edge Cases).
+**Sample counts:** `sample_count` on business-hours digests reflects only in-window intervals (~40 samples/day for 8h at 15-min granularity vs ~96 for 24h). Engine [`MinDataDays`](../internal/plugins/container/plugin.go) applies unchanged; sparse business-hours days widen effective confidence (documented under Edge Cases).
 
 ### Plugin Scope
 
@@ -911,7 +911,7 @@ Unit tests: `BH-UNIT-039`, `BH-UNIT-095`; mirror cases in [`digest_test.go`](../
 
 | Topic | Decision |
 |-------|----------|
-| **Masu Kafka messages** | **One Kafka message per S3 object** (existing [`build_ros_msg`](../koku/koku/masu/external/ros_report_shipper.py) pattern). A 90-day window × ~1–2 files/day ⇒ ~90–180 messages **per cluster** per reship. |
+| **Masu Kafka messages** | **One Kafka message per S3 object** (existing [`build_ros_msg`](../../koku/koku/masu/external/ros_report_shipper.py) pattern). A 90-day window × ~1–2 files/day ⇒ ~90–180 messages **per cluster** per reship. |
 | **Org-level PUT** | Fan out **one `reship_ros` HTTP call per cluster** (provider UUID from `clusters` / Kafka metadata). For 50 clusters ⇒ 50 masu calls, not one megacall. |
 | **Single-flight lock** | **Per `(org_id, cluster_uuid)`** — not org-wide. Allows different clusters to reship concurrently; prevents duplicate work on the same cluster. |
 | **Org fan-out concurrency** | Cap **2 concurrent cluster reshships per org** (align with Koku `WORKER_CACHE_LARGE_CUSTOMER_CONCURRENT_TASKS=2`). Additional clusters queue until a slot frees. |
@@ -1016,7 +1016,7 @@ DROP TABLE IF EXISTS business_hours_schedules;
 | Dry-run mode | **No** — reship is already async and bounded; dry-run would duplicate listing logic with little benefit. |
 | Upgrade runbook | **Yes** — storage formula: `~2×` digest rows for enabled scopes ([Storage Math](#storage-math)). |
 
-Matches precedent: [`snapshot_settings`](migrations/000049_create_snapshot_tables.up.sql) has no pre-flight quota; terms settings have no dry-run.
+Matches precedent: [`snapshot_settings`](../migrations/000049_create_snapshot_tables.up.sql) has no pre-flight quota; terms settings have no dry-run.
 
 ### G1: Rate limiting on Settings PUT
 
@@ -1039,7 +1039,7 @@ Optional future: Echo rate limiter on mutating BH routes if abuse is observed.
 
 **Decision:** **`updated_at` only; no `updated_by` column in v1.**
 
-- [`snapshot_settings`](migrations/000049_create_snapshot_tables.up.sql) and [`handlers_terms.go`](../internal/api/handlers_terms.go) use `updated_at` (or implicit write time) without user attribution.
+- [`snapshot_settings`](../migrations/000049_create_snapshot_tables.up.sql) and [`handlers_terms.go`](../internal/api/handlers_terms.go) use `updated_at` (or implicit write time) without user attribution.
 - Platform identity middleware provides org context; **who** changed a setting is available from **ingress/API gateway audit logs** (OpenShift/Kafka audit, RHBK access logs on-prem).
 - Add `updated_by TEXT` later if product requires in-app audit history.
 

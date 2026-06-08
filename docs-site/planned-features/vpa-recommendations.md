@@ -84,7 +84,7 @@ a deliberate cluster-admin decision with appropriate safety gates.
 
 ### Container right-sizing (shipped)
 
-Use [Container Right-Sizing](container-recommendations.md) for CPU and memory
+Use [Container Right-Sizing](../features/container-recommendations.md) for CPU and memory
 request/limit recommendations today. No VPA plugin or additional ROS configuration
 is required.
 
@@ -115,7 +115,7 @@ agreement between two independent advisors is a strong apply signal.
 **Works in all deployment modes:** SaaS, on-prem, and hybrid fleet views. No ROS
 feature flag or plugin enablement is needed — only VPA CRs in `Off` mode and API access.
 
-Full walkthrough: [Validating recommendations with VPA](container-recommendations.md#validating-recommendations-with-vpa).
+Full walkthrough: [Validating recommendations with VPA](../features/container-recommendations.md#validating-recommendations-with-vpa).
 
 ### External automation
 
@@ -148,7 +148,7 @@ requires pod restarts. **Always** use safety gates:
 | **Change magnitude** | Large memory decreases need human review |
 | **Rollback** | Snapshot VPA + Deployment spec before apply; revert on OOM or latency regression |
 
-See [Node Recommendations Roadmap — safety gates](../architecture/node-recommendations-roadmap.md#tier-1--advisory-consolidation-with-safety-gates-shipped)
+See [Node Recommendations Roadmap — safety gates](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1)
 for the advisory automation model ROS uses across recommendation types.
 
 ---

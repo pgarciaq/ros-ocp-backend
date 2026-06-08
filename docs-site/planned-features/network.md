@@ -262,7 +262,7 @@ flowchart LR
 
 ## Configuration
 
-Uses the same **three-tier** model as other ROS features ([configurable thresholds](configurable-thresholds.md)):
+Uses the same **three-tier** model as other ROS features ([configurable thresholds](../features/configurable-thresholds.md)):
 
 | Setting | Default (planned) | Purpose |
 |---------|-------------------|---------|
@@ -281,7 +281,7 @@ Uses the same **three-tier** model as other ROS features ([configurable threshol
 **Terms API (planned):**  
 `GET/PUT/DELETE .../settings/ros/terms/?recommendation_type=network`
 
-**SaaS integration:** Egress $ uses Koku `effective_rates` — same trust model as [savings estimations](savings-estimations.md).
+**SaaS integration:** Egress $ uses Koku `effective_rates` — same trust model as [savings estimations](../features/savings-estimations.md).
 
 ---
 

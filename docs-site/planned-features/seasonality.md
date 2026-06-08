@@ -86,7 +86,7 @@ The same underlying engine applies across plugins; what changes is the **entity*
 | **Bi-weekly / monthly** | Payroll namespace spikes every 14 or 30 days | Quota, container |
 | **Annual** | Holiday catalog refresh | Container, cluster quota |
 
-**Scenario (daily):** `pos-api` namespace shows a reliable midday CPU bump; proactive guidance may suggest a **higher Monday–Friday ceiling** or integration with [business hours](business-hours.md) for dual profiles.
+**Scenario (daily):** `pos-api` namespace shows a reliable midday CPU bump; proactive guidance may suggest a **higher Monday–Friday ceiling** or integration with [business hours](../features/business-hours.md) for dual profiles.
 
 **Why it matters:** FinOps teams budget for **peak** capacity; SRE teams need **dated** actions, not another generic "you might be oversized" message during the quiet season.
 
@@ -283,7 +283,7 @@ Proactive items will appear alongside existing recommendation types (exact path 
 | `pattern.lead_time_days` / `action_by` | How far in advance ROS warns you to act |
 | `recommended_values` | Sized for the forecast peak, not recent quiet period |
 
-Filter and pagination will follow the same conventions as [container recommendations](container-recommendations.md) and the [UI Integration Guide](../ui-integration-guide.md).
+Filter and pagination will follow the same conventions as [container recommendations](../features/container-recommendations.md) and the [UI Integration Guide](../ui-integration-guide.md).
 
 ---
 
@@ -307,7 +307,7 @@ Seasonality applies across ROS plugins, not only namespaces.
 
 ## Configuration options
 
-Settings will follow the same three-tier model as other ROS features: compiled defaults, tenant [Settings API](configurable-thresholds.md), and environment locks.
+Settings will follow the same three-tier model as other ROS features: compiled defaults, tenant [Settings API](../features/configurable-thresholds.md), and environment locks.
 
 ### Master and scope
 
@@ -437,9 +437,9 @@ See the [internal design doc](../../docs/design/seasonality-plugin.md) for engin
 
 ## Relationship to other features
 
-- **[Business hours](business-hours.md)** — You define fixed schedules (Mon–Fri 9–5). Seasonality **learns** patterns from data; both can apply on scheduled clusters.
-- **[Container](container-recommendations.md), [node](node-recommendations.md), [PVC](pvc-rightsizing.md), [quota](quota-recommendations.md), [cluster quota](cluster-resource-quota.md), [GPU](gpu-time-slicing.md) / [MIG](gpu-mig.md), [VM](virtual-machines.md)** — Proactive sizing reuses the same engines with forward-looking context.
-- **[History & quality](history-and-quality.md)** — Tracks adoption of past recommendations; seasonality uses **usage** history, not past recommendation rows.
+- **[Business hours](../features/business-hours.md)** — You define fixed schedules (Mon–Fri 9–5). Seasonality **learns** patterns from data; both can apply on scheduled clusters.
+- **[Container](../features/container-recommendations.md), [node](../features/node-recommendations.md), [PVC](../features/pvc-rightsizing.md), [quota](../features/quota-recommendations.md), [cluster quota](../features/cluster-resource-quota.md), [GPU](../features/gpu-time-slicing.md) / [MIG](../features/gpu-mig.md), [VM](../features/virtual-machines.md)** — Proactive sizing reuses the same engines with forward-looking context.
+- **[History & quality](../features/history-and-quality.md)** — Tracks adoption of past recommendations; seasonality uses **usage** history, not past recommendation rows.
 
 ---
 

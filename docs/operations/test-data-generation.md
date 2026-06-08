@@ -167,7 +167,7 @@ mc cp /tmp/upload.tar.gz local/ocp-ingress/$PAYLOAD_NAME
 curl "http://localhost:5042/api/cost-management/v1/ingest_ocp_payload/?org_id=1234567&payload_name=$PAYLOAD_NAME"
 ```
 
-See the [koku AGENTS.md](../../koku/AGENTS.md) for full MinIO workflow details.
+See the [koku AGENTS.md](../../../koku/AGENTS.md) for full MinIO workflow details.
 
 ---
 

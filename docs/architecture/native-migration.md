@@ -80,7 +80,7 @@ export ROS_ENABLE_VM_RECS=true   # required for VM routes and processing (defaul
 export ROS_USE_NATIVE_ENGINE=true   # deprecated; strips kruize from allowlist if present
 ```
 
-See the [Configuration Reference](../configuration.md) for `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`, and per-plugin kill switches.
+See the [Configuration Reference](../operations/configuration.md) for `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`, and per-plugin kill switches.
 
 ### 2. Data separation
 
@@ -159,4 +159,4 @@ No manual cleanup is required.
 - [Plugin Execution Phases](plugin-phases.md) — execution order and future plugins
 - [Configurability Reference](configurability.md) — env vars, Settings API, locks
 - [Recommendation Engines](recommendation-engines.md) — percentiles, thresholds, terms
-- [Features overview](../features/index.md) — per-domain feature pages
+- [Features overview](../../docs-site/features/index.md) — per-domain feature pages

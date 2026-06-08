@@ -203,7 +203,7 @@ radius of a bad apply is high (OOM kills, HPA flapping, eviction storms).
 ROS design choices that reinforce advisory-first:
 
 - Node consolidation Tier 1 is explicitly
-  [advisory only](../../docs-site/planned-features/machineset-recommendations.md#tier-1--advisory-consolidation-with-safety-gates-shipped).
+  [advisory only](../../docs-site/planned-features/machineset-recommendations.md#tier-1-advisory-consolidation-with-safety-gates-shipped).
 - Ephemeral storage recs: "never auto-apply" (unreliable cadvisor metrics).
 - Seasonality plugin: "auto-apply advisory only in v1."
 - REQ-8.1 HPA: code **22** `HPA_ACTIVE` **suppresses** replica-count advice when

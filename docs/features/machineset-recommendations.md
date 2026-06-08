@@ -2,7 +2,7 @@
 
 **Status:** Tier 1 aggregation **shipped**; Tier 2a engine **ready to implement**; Tier 2b **blocked on catalog**  
 **Public doc:** [docs-site/planned-features/machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)  
-**Requirements:** [REQ-8c.4–8c.6](architecture/requirements.md)  
+**Requirements:** [REQ-8c.4–8c.6](../architecture/requirements.md)  
 **Roadmap:** [machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md), [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
 
 ---
@@ -449,7 +449,7 @@ Edge cases:
 ### 7. Notification codes (Tier 2a)
 
 Register in migration + [`internal/notifications/names.go`](../../internal/notifications/names.go)
-+ [`notification-codes.md`](architecture/notification-codes.md).
++ [`notification-codes.md`](../architecture/notification-codes.md).
 
 | Code | Constant | Severity | When |
 |------|----------|----------|------|
@@ -556,7 +556,7 @@ default (extend `MachineSetCursor`).
 8. Switch list API to table-backed rows
 9. Add `filter[recommendation_type]`, `order_by`
 10. IQE fixtures for detail + history
-11. Update [`notification-codes.md`](architecture/notification-codes.md)
+11. Update [`notification-codes.md`](../architecture/notification-codes.md)
 
 **Effort estimate:** ~2–3 weeks total (Tier 2a + Tier 2b)
 
@@ -754,7 +754,7 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 - **Tier 3 MachineAutoscaler** min/max tuning (REQ-8c.7)
 - **PDB/scheduling simulation** — changes replica math; separate engine work
 - **Bare metal / SNO / NULL `machineset_name`** — Tier 1 only
-- **Automated apply** — advisory; see [hpa-vpa-deployment-modes.md](architecture/hpa-vpa-deployment-modes.md)
+- **Automated apply** — advisory; see [hpa-vpa-deployment-modes.md](../architecture/hpa-vpa-deployment-modes.md)
 
 ---
 
@@ -762,9 +762,9 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 
 - [machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)
 - [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
-- [plugin-phases.md](architecture/plugin-phases.md) — `machineset` in Phase 3
+- [plugin-phases.md](../architecture/plugin-phases.md) — `machineset` in Phase 3
 - [handlers_machinesets.go](../../internal/api/handlers_machinesets.go) — Tier 1 list
 - [recommend_nodes.go](../../internal/engine/recommend_nodes.go) — `applyInstanceTypeConsolidation`
-- [requirements.md § REQ-8c.5](architecture/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)
-- [requirements.md § REQ-8c.6](architecture/requirements.md#req-8c6-instance-type-catalog--cloud-api-integration-medium--not-implemented)
-- [cost-integration.md](architecture/cost-integration.md) — `effective_rates`
+- [requirements.md § REQ-8c.5](../architecture/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)
+- [requirements.md § REQ-8c.6](../architecture/requirements.md#req-8c6-instance-type-catalog--cloud-api-integration-medium--not-implemented)
+- [cost-integration.md](../architecture/cost-integration.md) — `effective_rates`

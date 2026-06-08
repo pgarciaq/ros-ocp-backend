@@ -1237,7 +1237,7 @@ memory_limit = max(memory_limit_from_percentile, last_oom_limit × backoff_multi
 
 ### GPU deferred items (beyond REQ-5.5)
 
-Documented in [known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred--future-work). Summary:
+Documented in [known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred-future-work). Summary:
 
 | # | Item | Consumer | Why deferred |
 |---|------|----------|--------------|

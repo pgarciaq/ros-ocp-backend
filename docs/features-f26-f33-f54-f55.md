@@ -3,7 +3,7 @@
 Last updated: 2026-06-08
 
 These features were implemented as "low-hanging fruit" from the
-[ros-ocp-backend-superpowers requirements](../../rh/costm/ros%20for%20openshift/performance/ros-ocp-backend-superpowers.md)
+[ros-ocp-backend requirements](architecture/requirements.md)
 (REQ-6.1, REQ-7.6, REQ-10.7, REQ-10.8).
 
 ---

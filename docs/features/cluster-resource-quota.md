@@ -307,7 +307,7 @@ Koku exposes a matching cost-model rate. Do not emit tighten/raise or `estimated
 for extended resources without a workload-derived target and a FinOps metric.
 
 Track alongside namespace quota extended-resource work in
-[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap--future-work).
+[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap-future-work).
 
 ---
 

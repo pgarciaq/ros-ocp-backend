@@ -219,7 +219,7 @@ The ros-processor retention ticker runs every 24 hours. See [Configuration — R
 
 `confidence_level` is a **float from 0.0 to 1.0** (1.0 = highest confidence) on live container recommendations and on container history rows. It is **not** exposed on `/quality` list rows.
 
-When `confidence_level` is below `low_confidence_threshold` (configurable via container settings; default **0.5**) and digest data exists (`data_days > 0`), notification code **1** (`NotifLowConfidence`) is emitted. See [Notification codes — Containers](../architecture/notification-codes.md#containers).
+When `confidence_level` is below `low_confidence_threshold` (configurable via container settings; default **0.5**) and digest data exists (`data_days > 0`), notification code **1** (`NotifLowConfidence`) is emitted. See [Notification codes — Containers](../architecture/notification-codes.md#containers-and-idle-detection).
 
 ### Pipeline resilience
 
@@ -232,6 +232,6 @@ This design ensures recommendations are never blocked by analytics failures.
 
 ## Related
 
-- [Container recommendations](../../docs/features/container-recommendations.md) — Source recommendations
+- [Container recommendations](../features/container-recommendations.md) — Source recommendations
 - [Configurability](../architecture/configurability.md) — Tuning that affects stability
 - [UI Integration Guide — History](../ui-integration-guide.md#13-recommendation-history) and [Quality](../ui-integration-guide.md#14-recommendation-quality)

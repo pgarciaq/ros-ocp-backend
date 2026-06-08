@@ -40,7 +40,7 @@ Three tiers differ by **how much automation is safe**, not by whether recommenda
 - **Does not include:** PDB checks, scheduling simulation, or MachineSet replica metrics from the operator.
 - **Industry alignment:** Same advisory model as AWS Compute Optimizer, Kubecost, and CAST AI (recommendations without automated apply).
 
-See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1) for full Tier 1 behavior.
+See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1) for full Tier 1 behavior.
 
 ### Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)
 
@@ -150,7 +150,7 @@ notifications, no detail endpoint, no instance-type catalog recommendations.
 
 ## Consolidation model — current scope and limitations
 
-Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](../../internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1--advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1).
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](../../internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
 
 ### Current scope (Tier 1)
 

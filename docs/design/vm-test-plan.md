@@ -1,7 +1,7 @@
 # VM Recommendations — Test Plan
 
 **Status:** Production-ready (phase11) — unit, default CI, extended E2E, and IQE coverage  
-**Related:** [VM Recommendations Design](vm-recommendations.md) · [Public VM feature doc](../docs-site/features/virtual-machines.md)
+**Related:** [VM Recommendations Design](vm-recommendations.md) · [Public VM feature doc](../../docs-site/features/virtual-machines.md)
 
 ---
 

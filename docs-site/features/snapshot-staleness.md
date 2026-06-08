@@ -36,7 +36,7 @@ flowchart TD
 4. **API** — List and summary endpoints expose classifications, notifications, and reclaimable totals.
 
 See the [snapshot plugin reference](../plugin-reference/snapshot.md) for handler links and
-the [internal design doc](../../docs/features-f-snapshot-staleness.md) for full classification rules.
+the [internal design doc](../features/snapshot-staleness.md) for full classification rules.
 
 ## Classification types
 
@@ -204,10 +204,10 @@ cost data exists.
 - **CRD requirement** — Operator skips collection when `snapshot.storage.k8s.io` is not installed.
 
 See [known issues](../known-issues.md) and the
-[internal design doc](../../docs/features-f-snapshot-staleness.md#limitations-and-considerations).
+[internal design doc](../features/snapshot-staleness.md#limitations-and-considerations).
 
 ## Related documentation
 
 - [Snapshot plugin reference](../plugin-reference/snapshot.md)
 - [Configurability — Snapshot](../architecture/configurability.md#snapshot)
-- [Internal design doc](../../docs/features-f-snapshot-staleness.md)
+- [Internal design doc](../features/snapshot-staleness.md)
