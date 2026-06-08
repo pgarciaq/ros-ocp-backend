@@ -63,7 +63,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
-| Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=db` on-prem, `api` on SaaS) |
+| Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=db` on-prem, `api` on SaaS). On-prem joins `org_container_keys.resolved_tags`; namespace list uses direct DB namespace-tag join. Empty matches return **HTTP 200** with `meta.count=0` (not 500); optional `meta.warnings` when tag key unknown or push sync stale |
 | Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, and quality list endpoints. **`GET .../history` is container-only** (namespace has a separate history route; there is no node history API). VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
 
 ### Validation priority (suggested order)
@@ -571,7 +571,7 @@ ROS_MAX_LOOKBACK_DAYS=15
 |--------|--------|---------------|
 | Recommendation algorithms | Fixed percentiles (proprietary) | Configurable: P60/P95 (cost), P98/P100 (performance) |
 | Data window | 15 days rolling | 15 days (with `ROS_MAX_LOOKBACK_DAYS=15`) |
-| Terms | short (24h), medium (7d), long (15d) | Same defaults |
+| Terms | short (24h), medium (7d), long (15d) | **Container/namespace/node:** short 1d, medium 7d, long 15d. **PVC:** short **7d**, medium **30d**, long **90d** (see [Term defaults by plugin](#term-defaults-by-plugin)) |
 | Engine selection | Single engine per request | Both always computed; select via `filter[engine]=cost` or `performance` |
 | Response format | ros-ocp-backend API (nested `recommendation_terms`) | Identical — same API contract |
 | OOM feedback | Not supported | Supported (bumps memory recommendation after OOM) |
@@ -1265,8 +1265,8 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
 | 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
-| 8 | Tag filter | `filter[tag:app]=<value>` when `ROS_TAGS_ENABLED=true` | Subset of workloads |
-| 9 | Workload type filter | `filter[workload_type]=deployment` (case-insensitive; also `filter[exact:workload_type]`, `exclude[workload_type]`) | Subset matches K8s kind enum; invalid value → **400** |
+| 8 | Tag filter | `filter[tag:app]=<value>` when `ROS_TAGS_ENABLED=true` | Subset of workloads; no matches → **200** + empty `data[]` (never crash). Namespace list: `GET .../namespaces?filter[tag:...]`. Check `meta.warnings` when count is 0 |
+| 9 | Workload type filter | `filter[workload_type]=deployment`, `exclude[workload_type]=daemonset`, or `filter[workload_type]!=daemonset` (case-insensitive; also `filter[exact:workload_type]`) | Subset matches K8s kind enum; `rs.workload_type` joined to `org_container_keys.workload_type`; invalid value → **400** |
 | 10 | Savings (optional) | `estimated_monthly_savings` on list | Non-zero when `KOKU_MASU_URL` + cost model; else code **25** |
 | 11 | Processor log | Grep processor | `native engine: wrote N recommendations` |
 
@@ -1285,6 +1285,25 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 curl -s -H "x-rh-identity: $IDENTITY" \
   'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[idle_state]=idle&limit=10' \
   | jq '.meta.count, .data[0].idle_state'
+
+# Workload type — case-insensitive exact match (native allowlist: rs.workload_type atoms)
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[workload_type]=deployment&limit=50' \
+  | jq '.meta.count, ([.data[].workload_type] | unique)'
+
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?exclude[workload_type]=daemonset&limit=50' \
+  | jq '.meta.count, ([.data[] | select((.workload_type // "") | ascii_downcase == "daemonset")] | length)'
+
+# Tag filter — empty result is success (200), not an error
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[tag:environment]=nonexistent-tag-value&limit=10' \
+  | jq '.meta.count, .meta.warnings'
+
+# Namespace list tag filter (direct DB namespace-tag join)
+curl -s -H "x-rh-identity: $IDENTITY" \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/namespaces?filter[tag:environment]=production' \
+  | jq '.meta.count, [.data[].project]'
 ```
 
 ---
@@ -1467,8 +1486,16 @@ Data: `ocp_storage_usage.csv` in manifest `files` (cost pipeline) and storage me
 | 4 | Growth projection | `recommended_bytes` < current for oversized; growth rate fields populated |
 | 5 | Savings on tighten | `estimated_monthly_savings` when Masu rates available |
 | 6 | DB | `pvc_recommendation_sets` rows with `notification_codes` |
+| 7 | Term defaults | `GET .../settings/terms?recommendation_type=pvc` | short **7d** / min **3d**, medium **30d** / min **14d**, long **90d** / min **30d** (differs from container/namespace/node) |
 
 Logs: `native storage engine: wrote`.
+
+```bash
+# PVC term defaults (larger windows than container plugin)
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/settings/terms?recommendation_type=pvc" \
+  | jq '.terms[] | {name, window_days, min_data_days, is_default}'
+```
 
 ---
 
@@ -1508,11 +1535,49 @@ Data: `ocp_snapshot_inventory.csv`.
 |---------|------------------|
 | **History** | After second ingest or threshold change: `GET .../history?limit=20` shows versioned entries |
 | **Quality** | `GET .../quality` returns stability/adoption metrics for containers |
-| **Fleet summary** | `GET .../fleet-summary` aggregates across clusters (multi-cluster NISE or multiple sources) |
+| **Fleet summary** | `GET .../fleet-summary` aggregates medium-term **cost** containers across clusters. **active_containers** and **idle_containers** are **mutually exclusive** (idle = notification code **5** on non-stale rows; active = non-stale without code 5). Expect `active_containers + idle_containers` ≤ non-stale count; no container counted in both buckets |
 | **Savings summary** | `GET .../savings-summary?engine=cost&term=medium`; repeat with `term=short` / `long` and compare node totals to `node_recommendations` for that term |
-| **Business hours** | Configure `PUT .../settings/business-hours`; verify `business_hours` on detail engines after reship |
+| **Business hours** | Requires koku-masu `POST /api/cost-management/v1/reship_ros/` (koku branch with `reship_ros` endpoint). `PUT .../settings/business-hours` triggers async reship → dual `schedule_type` digests (`all_hours` + `business_hours`). Poll cluster settings `reship_status` until `complete`; then verify `business_hours` block on container/namespace detail engines. If masu returns **404** for `reship_ros`, skip BH reship-dependent tests (see cost-onprem-chart `test_business_hours.py`) |
+| **Tag filtering** | With `ROS_TAGS_ENABLED=true`: test containers, namespaces, nodes, PVCs, quota, VM, GPU MIG. No matches → **200** + empty list; check `meta.warnings` when catalog/sync suggests ineffective filter |
 | **Capabilities** | `GET .../settings/capabilities` lists enabled plugins and `locked_fields` |
 | **CSV export** | List endpoints with `?format=csv` or `Accept: text/csv` (containers, **nodes**, PVCs, etc.); node CSV includes `pod_capacity`, `pod_scheduling_headroom` |
+
+### Fleet summary consistency check
+
+```bash
+BASE='http://localhost:8000/api/cost-management/v1'
+
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "${BASE}/recommendations/openshift/fleet-summary" \
+  | jq '{
+      total: .total_containers,
+      active: .active_containers,
+      idle: .idle_containers,
+      abandoned: .abandoned_containers,
+      active_plus_idle: (.active_containers + .idle_containers)
+    }'
+```
+
+Compare to DB: idle rows have `notification_codes @> ARRAY[5]`; active non-stale rows must **not** include code 5. A container must never appear in both `active_containers` and `idle_containers`.
+
+### Business hours reship dependency
+
+Business hours cannot be fully validated without historical re-ingestion:
+
+1. `PUT .../settings/business-hours` (org, cluster, or namespace scope) sets `reship_pending_since`.
+2. ros-api calls koku-masu **`reship_ros`** → S3 presigned URLs → Kafka → processor re-parses ROS CSVs with dual digests.
+3. `GET .../settings/business-hours/clusters/{cluster_uuid}` → `reship_status` transitions `pending` → `complete`.
+4. Container/namespace detail/list responses include `business_hours` under `recommendation_engines` when reship is complete.
+
+Probe masu before BH E2E:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST "http://localhost:5042/api/cost-management/v1/reship_ros/?schema=org1234567&provider_uuid=${PROVIDER_UUID}&start_date=2026-01-01&end_date=2026-01-31"
+# Expect 200 (or 202-style success), not 404
+```
+
+See [Business Hours](../features/business-hours.md) for schedule fields and `off_hours_weight`.
 
 ---
 
@@ -1808,11 +1873,59 @@ curl -s -X PUT -H "x-rh-identity: $IDENTITY" -H "Content-Type: application/json"
 
 Partial PUT is supported per settings type. After PUT, re-query recommendations or wait for threshold recalculation (if `ROS_THRESHOLD_RECALCULATION_ENABLED=true`).
 
+### Term defaults by plugin
+
+Default term windows come from each plugin's `DefaultTerms()` (`internal/plugins/*/plugin.go`). Verify with `GET .../settings/terms?recommendation_type=<plugin>` (`is_default: true` on fresh org).
+
+| Plugin | short (`window_days` / `min_data_days`) | medium | long | Notes |
+|--------|----------------------------------------|--------|------|-------|
+| **container**, **namespace**, **node**, **gpu** | 1 / 1 | 7 / 3 | 15 / 7 | Node/container/gpu medium & long default `decay_halflife_hours`: **168** / **360** |
+| **pvc** | **7 / 3** | **30 / 14** | **90 / 30** | Larger windows for storage growth signals; `decay_halflife_hours` default **0** |
+| **vm** | **7 / 3** (`short_term`) | **15 / 7** (`medium_term`) | **30 / 15** (`long_term`) | VM term names use `_term` suffix; also exposed at `/settings/vm/terms` |
+
+PVC defaults are **not** the same as container — do not assume 1/7/15 day windows for storage recommendations.
+
+```bash
+# Compare container vs PVC defaults side by side
+for rt in container pvc; do
+  echo "=== $rt ==="
+  curl -s -H "x-rh-identity: $IDENTITY" \
+    "${BASE}/recommendations/openshift/settings/terms?recommendation_type=${rt}" \
+    | jq '.terms[] | {name, window_days, min_data_days, is_default}'
+done
+```
+
+### Idle detection settings
+
+`GET/PUT/DELETE .../settings/idle-detection` controls org-wide idle/zombie thresholds (separate from per-plugin `/settings/container` idle fields).
+
+| Check | How to verify | Expected |
+|-------|---------------|----------|
+| GET defaults | `GET .../settings/idle-detection` | `idle_detection.thresholds` populated; `locked_fields: []` when unlocked |
+| PUT persists | `PUT` with valid `idle_detection.thresholds` body | **200** + updated GET response |
+| Async recalc (all 5 types) | After PUT/DELETE, grep **processor** logs or `ros_threshold_recalculation_total` metric | Recalculation triggered for **`container`**, **`gpu`**, **`namespace`**, **`node`**, **`pvc`** (requires `ROS_THRESHOLD_RECALCULATION_ENABLED=true`) |
+| Per-field lock | Set e.g. `ROS_IDLE_CPU_UTILIZATION_PERCENT` on API+processor, restart | GET shows field in `locked_fields`; PUT changing that field → **403** + `locked_fields` in body |
+| Global/plugin lock | `ROS_SETTINGS_LOCKED=true` or `ROS_SETTINGS_LOCKED_IDLE=true` | PUT/DELETE entire endpoint → **403** with `settings_locked` |
+
+```bash
+# PUT idle detection — triggers background recalc for container, gpu, namespace, node, pvc
+curl -s -X PUT -H "x-rh-identity: $IDENTITY" -H "Content-Type: application/json" \
+  "${BASE}/recommendations/openshift/settings/idle-detection" \
+  -d '{"idle_detection":{"thresholds":{"cpu_utilization_percent":5}}}' | jq .
+
+# Verify processor picked up recalc (after a few seconds)
+# docker compose logs --since=2m ros-processor 2>&1 | grep -i 'threshold recalc\|idle'
+```
+
 ### Env-var locking
+
+Environment-locked thresholds override tenant Settings API writes. Locks apply on **both API and processor** (restart after env change).
 
 1. Set e.g. `ROS_VM_IDLE_CPU_MC=50` on **API and processor**, restart both.
 2. GET settings — expect `locked_fields` containing the mapped field name.
-3. PUT the same field — expect **403** Forbidden with `locked_fields`.
+3. PUT the same field — expect **403** Forbidden with `locked_fields` in the response body.
+
+Idle detection uses `ROS_IDLE_*` env vars (see `internal/config/config.go`). Per-plugin thresholds use `ROS_CONTAINER_*`, `ROS_NODE_*`, etc.
 
 Global freeze:
 
@@ -1821,7 +1934,7 @@ export ROS_SETTINGS_LOCKED=true
 # PUT/DELETE any settings route → 403 with settings_locked
 ```
 
-Per-feature opt-out when global lock is on: `ROS_SETTINGS_LOCKED_VM=false` (see `docs-site/configuration.md`).
+Per-feature opt-out when global lock is on: `ROS_SETTINGS_LOCKED_VM=false`, `ROS_SETTINGS_LOCKED_IDLE=false`, etc. (see `docs-site/configuration.md`). When global lock is **false**, individual `ROS_SETTINGS_LOCKED_<PLUGIN>=true` still blocks that plugin's settings routes.
 
 ### Reset to defaults (DELETE)
 
