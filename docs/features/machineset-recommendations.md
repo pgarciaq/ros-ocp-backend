@@ -558,7 +558,7 @@ default (extend `MachineSetCursor`).
 10. IQE fixtures for detail + history
 11. Update [`notification-codes.md`](architecture/notification-codes.md)
 
-**Effort estimate:** ~1–1.5 weeks
+**Effort estimate:** ~2–3 weeks total (Tier 2a + Tier 2b)
 
 ---
 
@@ -745,7 +745,7 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 | AC-B6 | Cost comparison uses 730h/month | Unit test |
 | AC-B7 | On-prem without catalog skips Tier 2b gracefully | Deployment test |
 
-**Effort estimate:** ~1–1.5 weeks after catalog
+**Effort estimate:** (included in Tier 2 total above)
 
 ---
 

@@ -27,7 +27,7 @@ Check whether a corresponding `docs-site/` page exists that covers the same topi
 | `docs/features/quota-recommendations.md` | `docs-site/plugin-reference/quota.md` |
 | `docs/features/cluster-resource-quota.md` | `docs-site/plugin-reference/cluster-quota.md` |
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
-| `docs/architecture/recommendation-engines.md` | (no public equivalent yet) |
+| `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
 
 ## Action required

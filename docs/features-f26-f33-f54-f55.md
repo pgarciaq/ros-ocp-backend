@@ -1,6 +1,6 @@
 # Implemented Features: F26, F33, F54, F55
 
-Last updated: 2026-05-07
+Last updated: 2026-06-08
 
 These features were implemented as "low-hanging fruit" from the
 [ros-ocp-backend-superpowers requirements](../../rh/costm/ros%20for%20openshift/performance/ros-ocp-backend-superpowers.md)
@@ -35,13 +35,15 @@ digest `bucket_date`).
 
 ### API Filter
 
-`GET /recommendations/openshift?stale=<value>`
+`GET /recommendations/openshift?filter[stale]=<value>` (legacy alias: `?stale=<value>`)
 
 | Value | Behavior |
 |-------|----------|
 | `false` (default) | Exclude stale recommendations (backward compatible) |
 | `true` | Include all recommendations (stale + non-stale) |
 | `only` | Return only stale recommendations |
+
+Namespace list supports the same `filter[stale]` / `?stale=` values.
 
 ### Configuration
 
@@ -56,7 +58,7 @@ digest `bucket_date`).
 - `internal/engine/recommend_namespace.go` — Same logic for namespace recs
 - `internal/engine/notifications.go` — `NotifStaleData` emission
 - `internal/engine/retention.go` — Stale cleanup sweep
-- `internal/api/handlers.go` — `?stale` query parameter parsing
+- `internal/api/handlers.go`, `internal/api/utils.go` — `filter[stale]` / `?stale` query parameter parsing
 - `internal/model/recommendation_set_native.go` — Removed hardcoded `WHERE stale = false`
 - `internal/config/config.go` — Config fields
 

@@ -3,7 +3,7 @@
 !!! info "Quick Facts"
     **Query param:** `?engine=cost` or `?engine=performance` (where supported)  
     **Default:** cost engine for savings aggregation and node list sorting  
-    **Applies to:** container, namespace, node recommendations  
+    **Applies to:** container, namespace, node, VM recommendations  
     **Configurable:** Percentiles and targets are tenant-tunable
 
 ## Overview

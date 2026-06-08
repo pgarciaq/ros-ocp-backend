@@ -461,7 +461,7 @@ nodes in the same group (not a single global binary flag).
     physical GPU sharing among containers on a worker node (`recommended_replicas`,
     `nvidia.com/gpu.replicas`).
 
-    **VM GPU time-slicing**: `GET /recommendations/openshift/vms/{id}` only — vGPU profile and
+    **VM GPU time-slicing**: `GET /recommendations/openshift/vm/detail` only — vGPU profile and
     slice count on the VM `gpu` object (`gpu_timeslice_*`, `recommended_vgpu_profile`,
     notifications **56**–**57**). Configured via `PUT /settings/vm`, not `/settings/thresholds?recommendation_type=gpu`.
 
@@ -1067,7 +1067,7 @@ Resolution order: **namespace → cluster → org default**.
 {
   "timezone": "America/New_York",
   "enabled": true,
-  "off_hours_weight": 0.1,
+  "off_hours_weight": 0.0,
   "schedule": {
     "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
     "start_time": "08:00",
@@ -1081,7 +1081,7 @@ Resolution order: **namespace → cluster → org default**.
 | `timezone` | IANA timezone name |
 | `days[]` | Lowercase English day names |
 | `start_time`, `end_time` | `HH:MM` 24-hour format |
-| `off_hours_weight` | 0.0–1.0 — weight for samples outside the window (default 0.1) |
+| `off_hours_weight` | 0.0–1.0 — weight for samples outside the window (default 0.0) |
 | `enabled` | `false` disables business-hours digests for the scope |
 
 PUT returns `warnings` including storage-doubling notice when enabling.

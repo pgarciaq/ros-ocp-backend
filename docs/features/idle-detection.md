@@ -1,8 +1,9 @@
 # Idle and Zombie Workload Detection
 
-Implementation-ready design for classifying provisioned-but-unused OpenShift workloads,
-estimating recoverable waste, and surfacing actionable termination guidance through
-the ROS recommendations API.
+**Status:** Shipped. Public feature guide: [Idle / zombie detection](../../docs-site/features/idle-detection.md).
+
+Classifies provisioned-but-unused OpenShift workloads, estimates recoverable waste,
+and surfaces actionable termination guidance through the ROS recommendations API.
 
 ---
 

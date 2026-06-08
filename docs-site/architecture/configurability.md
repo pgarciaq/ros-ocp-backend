@@ -193,14 +193,15 @@ The HTTP response returns immediately; long-running work runs in the background 
 | `/settings/quota` | Async recalc (quota) |
 | `/settings/cluster-quota` | Async recalc (cluster-quota) |
 | `/settings/snapshot` | Async recalc (snapshot) |
-| `/settings/idle-detection` | Async recalc (container) |
+| `/settings/idle-detection` | Async recalc (container, gpu, namespace, node, pvc) |
 | `/settings/vm` | Cache invalidation; next ingest applies |
 | `/settings/vm/terms` | Cache invalidation; next ingest applies |
 | `/settings/terms` | Cache invalidation; next ingest applies |
 | `/settings/business-hours*` | Digest reship + schedule apply |
 
 **DELETE** on threshold-style routes also invalidates the in-process settings cache;
-idle-detection DELETE additionally triggers container async recalc. Snapshot DELETE
+idle-detection DELETE additionally triggers async recalc for container, gpu, namespace,
+node, and pvc. Snapshot DELETE
 returns `204` without recalc (effective values revert on the next classification run).
 
 ---

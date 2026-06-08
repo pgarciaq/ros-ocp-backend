@@ -93,8 +93,8 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 
 | Tier | Feature | REQs | Est. effort | Status |
 |------|---------|------|-------------|--------|
-| **2a** | MachineSet engine (replica count, persistence, detail API — **no catalog**) | REQ-8c.5 (partial), REQ-8c.11 | ~1–1.5 weeks | Planned |
-| **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | ~1–1.5 weeks after 2a | Planned |
+| **2a** | MachineSet engine (replica count, persistence, detail API — **no catalog**) | REQ-8c.5 (partial), REQ-8c.11 | ~2–3 weeks total (2a + 2b) | Planned |
+| **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | (included in Tier 2 total) | Planned |
 | **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
 
 **Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [machineset-recommendations.md](../docs-site/planned-features/machineset-recommendations.md).
@@ -590,7 +590,7 @@ UI, docs, and API clients must keep them distinct.
 | Surface | API | Scope | What it recommends |
 |---------|-----|-------|-------------------|
 | **GPU time-slicing (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
-| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vms/{id}` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
+| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vm/detail` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. History: `GET .../vms/{vm_name}/history`. |
 
 - Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
 - VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.

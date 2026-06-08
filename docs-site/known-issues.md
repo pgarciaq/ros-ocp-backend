@@ -902,7 +902,7 @@ for full design details.
 See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full details.
 
 - **Staleness detection (F55, REQ-10.8):** `?stale=` API filter, configurable threshold,
-  archive sweep, `NotifStaleData` notification.
+  stale cleanup sweep (retention delete), `NotifStaleData` notification.
 - **Idle/abandoned detection (F26, REQ-6.1):** Combined CPU+memory idle (< 10mc AND < 10 MiB),
   zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
 - **Adoption detection (F54, REQ-10.7):** Compares current requests to prior recommendation

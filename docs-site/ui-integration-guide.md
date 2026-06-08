@@ -484,7 +484,7 @@ GET /recommendations/openshift/gpu/timeslicing
 
 ```json
 {
-  "meta": { "count": 2, "limit": 20, "offset": 0, "total_savings_usd": 1200.0, "currency": "USD" },
+  "meta": { "count": 2, "limit": 20, "offset": 0, "currency": "USD" },
   "data": [
     {
       "node_name": "gpu-node-1",
@@ -493,7 +493,6 @@ GET /recommendations/openshift/gpu/timeslicing
       "recommendation_type": "gpu_timeslicing",
       "gpu_model": "NVIDIA-A100",
       "recommended_replicas": 4,
-      "savings_per_gpu_usd": 150.0,
       "total_node_savings": { "value": "450.00", "units": "USD" },
       "savings_per_gpu": { "value": "150.00", "units": "USD" },
       "confidence": 0.65,
