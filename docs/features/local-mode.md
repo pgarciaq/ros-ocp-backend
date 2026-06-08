@@ -19,13 +19,14 @@ operating modes:
 |------|--------|-----------|-----------------|----------|
 | **Local** | On-cluster | Yes | No | Disconnected, single-cluster, latency-sensitive |
 | **Remote** | Central (ros-ocp-backend) | No | CSV metrics | Drop-in koku-metrics-operator ROS replacement |
-| **Hybrid** | On-cluster | Yes | Recs + digests (JSON) | Fleet view + local freshness |
+| **Hybrid** | On-cluster | Yes | Recs + daily summaries (JSON) | Fleet view + local freshness |
 
 In Local and Hybrid modes, the operator queries Prometheus/Thanos directly via
 PromQL, computes recommendations using the shared `ros-ocp-engine` Go module, and
 writes results to PostgreSQL (managed or external). An embedded REST API and
 OpenShift Console plugin serve recommendations locally. Hybrid mode additionally
-pushes pre-computed recommendations and daily digests to central Cost Management.
+pushes pre-computed recommendations and persisted daily summaries to central
+Cost Management.
 
 In Remote mode, the operator is a lightweight collector/uploader only — no engine,
 database, API, console plugin, or summary metrics.
@@ -57,6 +58,26 @@ flowchart LR
     prom["Prometheus / Thanos"] --> operator["robne-operator\n(collector only)"]
     operator -- "CSV tar.gz" --> central["Central ros-ocp-backend"]
 ```
+
+### On-cluster pipeline (Local / Hybrid)
+
+```mermaid
+flowchart LR
+    prom["Prometheus / Thanos"] -- "instant queries +\nquantile_over_time()" --> collect["internal/promquery/"]
+    collect --> engine["ros-ocp-engine\nplugins"]
+    engine --> pg["PostgreSQL upsert\nrecs + daily summaries"]
+    pg --> api["internal/api/"]
+    engine -- "Hybrid only" --> push["internal/pushresults/\nrecs + daily summaries JSON"]
+    push --> central["Central ros-ocp-backend"]
+```
+
+1. **Collection:** Instant PromQL queries plus `quantile_over_time()`, `avg_over_time()`,
+   `max_over_time()` — statistics computed server-side by Prometheus
+2. **Engine:** `ros-ocp-engine` plugins apply decay weighting and recommendation logic
+3. **Persistence:** PostgreSQL upsert of recommendations and daily summary rows
+   (p50/p95/p99/min/max/avg/count per container per metric per day)
+4. **Hybrid push:** Pre-computed recommendations + daily summaries as compressed JSON
+   tar.gz (not raw metrics, not t-digest centroids)
 
 ## Mode-dependent component deployment
 
@@ -109,15 +130,23 @@ to use digest tables via `RemoteProvider`; Local/Hybrid uses `PrometheusProvider
 |----------|-----------|
 | Separate operator (`robne-operator`) | Clean lifecycle; no mode conflicts with koku-metrics-operator cost collection |
 | Three modes in one CRD | Single install path; customers migrate Remote → Hybrid → Local incrementally |
-| Eliminate digest/sample tables (Local/Hybrid) | Prometheus IS the TSDB; no need to replicate metrics in PostgreSQL |
-| PromQL aggregation server-side | `quantile_over_time()`, `avg_over_time()` computed by Prometheus; Go only does decay weighting |
+| Prometheus-side aggregation (Option C) | `quantile_over_time()`, `avg_over_time()`, `max_over_time()` computed by Prometheus; operator persists daily summary rows, not in-memory t-digests |
+| Eliminate digest/sample tables (Local/Hybrid) | Prometheus IS the TSDB; no need to replicate raw metrics or t-digest centroids in PostgreSQL |
+| Persisted daily summaries | p50/p95/p99/min/max/avg/count per container per metric per day; enables long-term accuracy beyond Prometheus retention and meaningful Hybrid push payload |
 | OCP labels from K8s API directly | Real-time labels, no Koku tag-sync delay; cloud tags re-associated at central |
-| Managed PostgreSQL default | Recommendations-only schema (~70 MB / 1000 containers); external option for RDS/Azure DB |
+| Managed PostgreSQL default | Recommendations + daily summaries schema (~70 MB / 1000 containers); external option for RDS/Azure DB |
 | Embedded API (not separate ros-ocp-api pod) | Same binary serves REST + reconciliation; reduces deployment complexity |
-| Push via existing tar.gz upload (Hybrid) | No new transport; JSON recommendations + digests as new file types |
+| Push via existing tar.gz upload (Hybrid) | No new transport; JSON recommendations + daily summaries as new file types (not raw metrics, not t-digest centroids) |
 | Remote mode = koku-metrics-operator parity | Drop-in replacement during migration; CSV format unchanged |
 | Dollar savings optional on-cluster | Central enrichment after push; or `effective_rates` fetch via `spec.central.effective_rates` |
 | Summary metrics only (not per-container) | Alerting gauges; per-container detail via REST API |
+
+### Rejected alternatives for percentile computation
+
+| Alternative | Why rejected |
+|-------------|--------------|
+| **A — Operator-maintained t-digests** | Duplicates Prometheus; complex state management (pod restarts lose in-memory digests); ~60 MB memory overhead for 5000 containers; overkill for central push needs |
+| **B — Fully stateless, no persistence** | Prometheus retention (default 15d) limits long-term accuracy; no meaningful Hybrid push payload; heavy burst load at push time; pod restart = cold start |
 
 ## Tag and label reconciliation
 
@@ -215,12 +244,12 @@ Prometheus-only deployments.
 3. Avoids reintroducing digest-style storage tables
 4. Customers who need instant retroactive BH should use Thanos
 
-### Future enhancement (if customer demand warrants)
+### Daily summaries and business hours
 
-A lightweight daily aggregate table could store hourly-bucketed percentiles
-(p50, p95, p99, max per container per hour-of-day per day). On BH change,
-re-weight these stored aggregates without raw Prometheus data. Estimated storage:
-~5–10 MB per 1000 containers per 90-day window.
+Persisted daily summary rows (p50/p95/p99/min/max/avg/count per container per
+metric) support retroactive BH re-computation for data within the summary
+retention window. With Thanos, the operator can also re-query Prometheus directly
+for full-window retroactive re-computation.
 
 ## What changes in the engine
 
@@ -229,7 +258,7 @@ re-weight these stored aggregates without raw Prometheus data. Estimated storage
 Extracted from ros-ocp-backend `internal/engine/`:
 
 - `recommend_cpu.go`, `recommend_memory.go`
-- `decay.go` (input: daily values from Prometheus step query or digest tables)
+- `decay.go` (input: daily values from Prometheus step query or persisted daily summary rows)
 - `idle.go`, `gpu_recommender.go`, `recommend_nodes.go`
 - `quality.go`, `retention.go`, `savings.go`
 
@@ -254,7 +283,7 @@ Both robne-operator and ros-ocp-backend import this module.
 |---------|---------|
 | `internal/promquery/` | PromQL client implementing `MetricsProvider` interface |
 | `internal/k8slabels/` | Kubernetes label reader (replaces tag sync) |
-| `internal/pushresults/` | JSON serialization + upload of recommendations and digests (Hybrid) |
+| `internal/pushresults/` | JSON serialization + upload of recommendations and daily summaries (Hybrid) |
 | `internal/metrics/` | Summary Prometheus gauges (`robne_*` metrics) |
 | `internal/database/` | Managed PostgreSQL reconciliation (StatefulSet, PVC, Service) |
 | `internal/consoleplugin/` | OpenShift Console plugin deployment |
@@ -306,24 +335,30 @@ containers).
 CRD fields: `spec.collection.interval` (how often to query Prometheus) and
 `spec.engine.recommendation_cycle` (how often to run the engine). By default the
 engine runs every collection cycle. Users can decouple them (e.g., collect@15s,
-engine@60s) to reduce CPU while maintaining full-resolution digest data.
+engine@60s) to reduce CPU while maintaining full-resolution Prometheus queries.
 
 At 15-second intervals (~100 queries/minute), Prometheus load is negligible for
-instant vector queries using `rate(...[5m])` windows. For conservative environments,
-`interval: "60s"` or `interval: "5m"` reduces load proportionally.
+instant vector queries using `rate(...[5m])` windows plus range aggregations via
+`quantile_over_time()`. For conservative environments, `interval: "60s"` or
+`interval: "5m"` reduces load proportionally.
 
-**Digest efficiency:** Rolling t-digest structures handle 15-second updates with
-~2 KB memory per container per metric. A cluster with 5000 containers × 6 metrics
-= ~60 MB digest memory. At 15s over 7 days = 40,320 samples per metric per container,
-compressed to ~200 centroids with no accuracy loss for p50/p95/p99.
+**Prometheus-side aggregation:** Percentile and aggregate computation is delegated
+to Prometheus — the operator does not maintain in-memory t-digests. Each collection
+cycle fires instant queries plus `quantile_over_time()`, `avg_over_time()`, and
+`max_over_time()`. Daily summary rows (p50/p95/p99/min/max/avg/count per container
+per metric) are persisted to PostgreSQL. Pod restarts do not lose statistical
+history; Prometheus retention plus persisted summaries provide long-term accuracy.
 
 ## Hybrid push payload
 
-Hybrid mode pushes **both** pre-computed recommendations and raw daily digests
-(compressed JSON tar.gz). This enables central to:
+Hybrid mode pushes **both** pre-computed recommendations and persisted daily
+summary rows (compressed JSON tar.gz). This is **not** raw metrics and **not**
+t-digest centroids — only p50/p95/p99/min/max/avg/count per container per metric
+per day. Bandwidth is ~190x lower than Remote mode CSV upload (~1 MB/day vs.
+~190 MB/day for 1000 containers). This enables central to:
 
 1. Store recommendations for fleet views
-2. Re-compute with different parameters (fleet-wide BH, tag policies)
+2. Re-compute with different parameters (fleet-wide BH, tag policies) using daily summaries
 3. Enrich with dollar savings using cost model rates
 4. Associate cloud tags via OCP-on-cloud correlation
 
@@ -354,10 +389,11 @@ File type: `ros-openshift-recommendations-YYYYMM.json`
 }
 ```
 
-### Digest file (Hybrid only)
+### Daily summary file (Hybrid only)
 
-File type: `ros-openshift-digests-YYYYMM.json` — daily percentile aggregates per
-container, enabling central re-computation without raw Prometheus access.
+File type: `ros-openshift-daily-summaries-YYYYMM.json` — persisted daily summary
+rows (p50/p95/p99/min/max/avg/count per container per metric per day), enabling
+central re-computation without raw Prometheus access or t-digest centroids.
 
 Central handler: UPSERT into `recommendation_sets` + savings enrichment via cost
 model lookup + tag reconciliation (cloud tags from OCP-on-cloud correlation using
@@ -459,7 +495,7 @@ incremental migration.
 ## Central-side changes required
 
 1. New file-type handler in Koku listener for `ros-openshift-recommendations-*.json`
-2. New file-type handler for `ros-openshift-digests-*.json` (Hybrid)
+2. New file-type handler for `ros-openshift-daily-summaries-*.json` (Hybrid)
 3. Savings enrichment pass (apply cost model rates to compute `estimated_monthly_savings`)
 4. Tag reconciliation pass:
    - Store raw OCP labels from pushed JSON
