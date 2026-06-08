@@ -4,7 +4,21 @@
 
 **Date:** 2026-06-08  
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
-**Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed a production on-prem deployment (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
+**Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
+
+---
+
+## Deployment Context
+
+ros-ocp-backend runs in three distinct deployment postures. Several findings in this review reflect **SNO/dev overrides** rather than production vulnerabilities in the default SaaS or on-prem chart configurations.
+
+| Posture | Auth | RBAC | Tags source | Internal endpoints |
+|---------|------|------|-------------|-------------------|
+| **SaaS** (console.redhat.com) | 3scale validates JWT upstream | Enabled (`RBAC_ENABLE=true`) | `api` (push sync with SA auth) | Cluster-internal only |
+| **On-prem chart (default)** | Envoy gateway validates JWT via JWKS, injects X-Rh-Identity | Enabled (`rbac.enabled: true`) | `db` (direct PG join) | NetworkPolicy restricted to gateway/UI |
+| **SNO/dev overrides** | No gateway; direct API access | Disabled (`rbac.enabled: false`) | `db` | Unrestricted |
+
+**Review scope:** This audit was conducted against the **SNO/dev posture**. Findings #3, #4, and #5 are mitigated or eliminated in the default production postures (SaaS and on-prem chart). Findings #6 and #16 reflect accepted platform architecture with optional hardening levers, not production gaps when compensating controls are in place.
 
 ---
 
@@ -12,13 +26,14 @@
 
 1. [Executive Scorecard](#executive-scorecard)
 2. [Priority Remediation Order](#priority-remediation-order)
-3. [Findings — Critical](#findings--critical)
-4. [Findings — High](#findings--high)
-5. [Findings — Medium](#findings--medium)
-6. [Findings — Low / Info](#findings--low--info)
-7. [What Held Up Well](#what-held-up-well)
-8. [Cross-Cutting Failure Scenario Matrix](#cross-cutting-failure-scenario-matrix)
-9. [Tracking](#tracking)
+3. [Findings by Deployment Posture](#findings-by-deployment-posture)
+4. [Findings — Critical](#findings--critical)
+5. [Findings — High](#findings--high)
+6. [Findings — Medium](#findings--medium)
+7. [Findings — Low / Info](#findings--low--info)
+8. [What Held Up Well](#what-held-up-well)
+9. [Cross-Cutting Failure Scenario Matrix](#cross-cutting-failure-scenario-matrix)
+10. [Tracking](#tracking)
 
 ---
 
@@ -27,7 +42,8 @@
 | Area | Verdict | Summary |
 |------|---------|---------|
 | **Data integrity (Kafka ingestion)** | 🔴 Critical | Offset commits after partial file failure; native ingestion errors swallowed |
-| **Authentication & authorization** | 🔴 High risk | Identity header unverified; internal endpoints under-protected on-prem |
+| **Authentication** | 🟢 Delegated to gateway | Accepted architecture; weak only if gateway bypassed (SNO/dev posture) |
+| **Authorization** | 🟢 Strong when chart defaults used | `rbac.enabled: true` in production; weak only in SNO/dev overrides |
 | **API security** | 🟠 Medium–High | ILIKE injection, unbounded offset, SSRF when allowlist unset |
 | **Database & connections** | 🟠 Medium | Dual connection pools; statement timeout conflicts with large ingestion |
 | **Memory & performance** | 🟠 Medium | Streaming ingest holds full grouped map; node GPU endpoints paginate in memory |
@@ -36,7 +52,7 @@
 | **Engineering governance** | 🟡 Low–Medium | No CHANGELOG; no ADR index; 134+ migrations without CONCURRENTLY automation |
 | **Positive controls** | 🟢 Strong | Plugin architecture, parameterized SQL, service-account auth patterns (when enabled), structured metrics |
 
-**Overall assessment:** The native engine and API surface are functionally mature, but **two Critical data-integrity defects in the Kafka commit path** create silent, permanent data loss under routine operational failures. Security posture depends heavily on perimeter controls (gateway, network policy) rather than defense-in-depth within the service. Remediation of Critical and High findings should precede broad production hardening claims.
+**Overall assessment:** The native engine and API surface are functionally mature, but **two Critical data-integrity defects in the Kafka commit path** create silent, permanent data loss under routine operational failures. Several auth findings (#3, #5, #6) are **deployment-specific shortcuts** in the SNO/dev posture and are mitigated by gateway JWT validation, RBAC defaults, and NetworkPolicy in standard SaaS and on-prem chart deployments. Remediation of Critical findings (#1, #2) should precede broad production hardening claims; auth hardening items are defense-in-depth or SNO/dev-only.
 
 ---
 
@@ -46,21 +62,56 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 
 | # | Finding(s) | Rationale |
 |---|------------|-----------|
-| 1 | **#1, #2** (Critical) | Kafka offset commit after partial failure + swallowed ingestion errors form a compound silent data-loss chain. Any fix to commit logic is ineffective until native processors propagate errors. |
-| 2 | **#4, #5, #6** (High — auth) | On-prem defaults expose internal tag enumeration, unauthenticated settings mutation, and cross-tenant SA actions. Low effort, high impact. |
-| 3 | **#3** (High — identity) | Defense-in-depth JWT validation or strict network policy; document as architecture requirement regardless. |
-| 4 | **#18** (Medium — Kafka stall) | Unclassified errors cause infinite redelivery — consumer group makes no progress; pairs with #1 for opposite failure mode (stall vs. skip). |
-| 5 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
-| 6 | **#9** (High — pipeline degraded) | Fresh recommendations without analytics misleads operators and fleet metrics; add strict mode or staleness signaling. |
-| 7 | **#7** (High — dual pools) | Connection exhaustion is silent until cascade failure; large effort but prevents production incidents under load. |
-| 8 | **#11, #28** (Medium — recalc storms) | Unbounded goroutines and overlapping threshold jobs threaten availability after settings changes. |
-| 9 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
-| 10 | **#15, #16** (Medium — tag auth) | Dev token bypass and empty SA allowlist are configuration footguns in production. |
-| 11 | **#17, #19, #20** (Medium — ops) | Readiness depth, graceful shutdown, PII in poison logs. |
-| 12 | **#22, #23** (Medium — memory/panic) | Node GPU in-memory pagination; panic on parse failures. |
-| 13 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
-| 14 | **#10, #30** (High/Low — governance) | CHANGELOG and ADR index — process debt, not incident drivers. |
-| 15 | **#25–#29** (Low/Info) | Cardinality limits, float formatting, cache bounds, deterministic IDs — address opportunistically. |
+| 1 | **#1, #2** (Critical) | Kafka offset commit after partial failure + swallowed ingestion errors form a compound silent data-loss chain. Any fix to commit logic is ineffective until native processors propagate errors. **Clear top priority — applies to all deployment postures.** |
+| 2 | **#18** (Medium — Kafka stall) | Unclassified errors cause infinite redelivery — consumer group makes no progress; pairs with #1 for opposite failure mode (stall vs. skip). |
+| 3 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
+| 4 | **#9** (High — pipeline degraded) | Fresh recommendations without analytics misleads operators and fleet metrics; add strict mode or staleness signaling. |
+| 5 | **#7** (High — dual pools) | Connection exhaustion is silent until cascade failure; large effort but prevents production incidents under load. |
+| 6 | **#11, #28** (Medium — recalc storms) | Unbounded goroutines and overlapping threshold jobs threaten availability after settings changes. |
+| 7 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
+| 8 | **#15, #16** (Medium — tag auth config) | Dev token bypass and empty SA allowlist are configuration footguns; primary risk when `api` tag mode is used without explicit SA allowlist. |
+| 9 | **#17, #19, #20** (Medium — ops) | Readiness depth, graceful shutdown, PII in poison logs. |
+| 10 | **#22, #23** (Medium — memory/panic) | Node GPU in-memory pagination; panic on parse failures. |
+| 11 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
+| 12 | **#10, #30** (High/Low — governance) | CHANGELOG and ADR index — process debt, not incident drivers. |
+| 13 | **#25–#29** (Low/Info) | Cardinality limits, float formatting, cache bounds, deterministic IDs — address opportunistically. |
+| — | **#3** (Info — architecture) | Gateway enforcement is already in place in SaaS and on-prem chart. Document as architecture requirement; optional in-app JWT validation is defense-in-depth only. |
+| — | **#4** (Medium — hardening) | Authenticate `/internal/*` in db mode — hardening nice-to-have; NetworkPolicy mitigates in default on-prem chart. |
+| — | **#5, #6** (Low/Info — deployment-specific) | RBAC disabled and cross-tenant SA scope are SNO/dev overrides or accepted platform architecture, not production gaps. |
+
+---
+
+## Findings by Deployment Posture
+
+Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated or not applicable; ⚠ = partially mitigated.
+
+| Finding | SaaS | On-prem (default) | SNO/dev |
+|---------|------|---------------------|---------|
+| #1 Kafka commit | ✓ | ✓ | ✓ |
+| #2 Error swallowed | ✓ | ✓ | ✓ |
+| #3 Identity header | ✗ (gateway) | ✗ (gateway) | ✓ |
+| #4 Tags unauth | ✗ (api mode) | ⚠ (db mode, NetworkPolicy) | ✓ |
+| #5 No RBAC | ✗ (enabled) | ✗ (enabled) | ✓ |
+| #6 SA any org | ✗ (by design) | ✗ (by design) | ✗ (by design) |
+| #7 Dual pools | ✓ | ✓ | ✓ |
+| #8 Memory grouped map | ✓ | ✓ | ✓ |
+| #9 Pipeline degraded | ✓ | ✓ | ✓ |
+| #10 No CHANGELOG | ✓ | ✓ | ✓ |
+| #11 Recalc storms | ✓ | ✓ | ✓ |
+| #12 SSRF allowlist | ✓ | ✓ | ✓ |
+| #13 ILIKE injection | ✓ | ✓ | ✓ |
+| #14 Deep pagination | ✓ | ✓ | ✓ |
+| #15 Dev token | ✗ (not set) | ✗ (not set) | ⚠ (if configured) |
+| #16 Empty SA allowlist | ⚠ (if unset) | ⚠ (api mode only) | ⚠ (if configured) |
+| #17 Readiness shallow | ✓ | ✓ | ✓ |
+| #18 Kafka stall | ✓ | ✓ | ✓ |
+| #19 Housekeeper shutdown | ✓ | ✓ | ✓ |
+| #20 PII in logs | ✓ | ✓ | ✓ |
+| #21 Statement timeout | ✓ | ✓ | ✓ |
+| #22 Node GPU memory | ✓ | ✓ | ✓ |
+| #23 panic() parse | ✓ | ✓ | ✓ |
+| #24 Migrations CONCURRENTLY | ✓ | ✓ | ✓ |
+| #25–#30 Low/Info | ✓ | ✓ | ✓ |
 
 ---
 
@@ -113,102 +164,6 @@ Return wrapped errors for all ingestion failures unless explicitly classified as
 ---
 
 ## Findings — High
-
-### Finding #3 — Identity header trusted without JWT verification
-
-| Field | Value |
-|-------|-------|
-| **Severity** | High |
-| **Category** | Authentication |
-| **Location** | `internal/api/middleware/identity.go` (lines 12–25) |
-| **Effort** | M |
-
-**Description**
-
-The middleware base64-decodes the `X-Rh-Identity` header and trusts its contents without verifying JWT signatures, expiry, issuer, or entitlements. Any client that can reach the API port can impersonate any organization.
-
-**Exploit / trigger**
-
-Attacker with network access to the ROS API port crafts a base64 JSON identity with arbitrary `org_id` and admin flags. Full cross-tenant data access if no gateway validates tokens upstream.
-
-**Mitigation (architecture)**
-
-Production deployments must place an identity-validating gateway in front (3scale, oauth2-proxy, OpenShift route with JWT validation). Document as a hard architecture requirement.
-
-**Recommended fix**
-
-Defense-in-depth: validate JWT signature and claims when `RBAC_ENABLE` or a new `IDENTITY_VALIDATION_ENABLE` flag is set; alternatively enforce strict NetworkPolicy restricting API port to gateway pods only.
-
----
-
-### Finding #4 — `/internal/tags/status` unauthenticated in on-prem (db mode)
-
-| Field | Value |
-|-------|-------|
-| **Severity** | High |
-| **Category** | Authorization / multi-tenancy |
-| **Location** | `internal/api/handlers_tags_status.go` (lines 17–44), `internal/api/server.go` (lines 169–174) |
-| **Effort** | S |
-
-**Description**
-
-When `ROS_TAGS_SOURCE=db` (on-prem default), bearer authentication is skipped for `/internal/tags/status`. The endpoint accepts an arbitrary `org_id` query parameter, enabling cross-tenant tag enumeration.
-
-**Exploit / trigger**
-
-Any pod or user on the cluster network calls `GET /internal/tags/status?org_id=<victim>` without credentials and receives tag sync status for other tenants.
-
-**Recommended fix**
-
-Always require service-account bearer auth on `/internal/*` routes regardless of tag source mode. Bind `org_id` to the authenticated caller's namespace or explicit SA allowlist.
-
----
-
-### Finding #5 — Settings mutation without RBAC (on-prem default)
-
-| Field | Value |
-|-------|-------|
-| **Severity** | High |
-| **Category** | Authorization / integrity |
-| **Location** | `internal/api/settings_rbac.go` (lines 14–16), `internal/config/config.go` (line 503) |
-| **Effort** | S |
-
-**Description**
-
-When `RBAC_ENABLE=false` (on-prem default), any authenticated user can `PUT` optimization thresholds, triggering cluster-wide recalculation jobs. No `settings.write` permission check is enforced.
-
-**Exploit / trigger**
-
-Compromised or over-privileged user account changes thresholds for all recommendation types, causing incorrect recommendations fleet-wide and spawning expensive recalc goroutines (availability impact).
-
-**Recommended fix**
-
-Require `settings.write` permission even when RBAC is disabled, or document and enforce a single-admin deployment constraint with network-level access control. Fail startup in production if `RBAC_ENABLE=false` without explicit `ROS_ACCEPT_INSECURE_RBAC=true` acknowledgment.
-
----
-
-### Finding #6 — Internal service account can act on any org_id
-
-| Field | Value |
-|-------|-------|
-| **Severity** | High |
-| **Category** | Authorization / multi-tenancy |
-| **Location** | `internal/api/handlers_savings_recalculate.go` (lines 61–78), `internal/api/handlers_tags_sync.go` (lines 37–52) |
-| **Effort** | M |
-
-**Description**
-
-Bearer token authentication validates the caller is a Kubernetes service account, but `org_id` in the request body is not bound to the caller's identity, namespace, or audience. Any allowed SA can trigger recalculation or tag sync for any organization.
-
-**Exploit / trigger**
-
-Compromised listener or masu pod (or any SA passing TokenReview) sends recalc/tag-sync requests targeting victim `org_id` values.
-
-**Recommended fix**
-
-Restrict allowed service accounts per operation type. Validate `org_id` against token namespace, audience, or a configured SA→org mapping. Reject mismatched org claims.
-
----
 
 ### Finding #7 — Dual DB connection pools (GORM + pgxpool)
 
@@ -303,6 +258,33 @@ Add `CHANGELOG.md` at repo root. Enforce OpenAPI spec diff in CI with failure on
 ---
 
 ## Findings — Medium
+
+### Finding #4 — `/internal/tags/status` unauthenticated in on-prem (db mode)
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium (on-prem db-mode only) |
+| **Category** | Authorization / multi-tenancy |
+| **Location** | `internal/api/handlers_tags_status.go` (lines 17–44), `internal/api/server.go` (lines 169–174) |
+| **Effort** | S |
+
+**Description**
+
+When `ROS_TAGS_SOURCE=db` (on-prem default), bearer authentication is skipped for `/internal/tags/status`. The endpoint accepts an arbitrary `org_id` query parameter, enabling cross-tenant tag enumeration.
+
+**Exploit / trigger**
+
+Any pod or user on the cluster network calls `GET /internal/tags/status?org_id=<victim>` without credentials and receives tag sync status for other tenants.
+
+**Deployment context**
+
+Only affects `ROS_TAGS_SOURCE=db` (on-prem). In SaaS (`api` mode), bearer auth is always required. On-prem chart NetworkPolicy restricts access to internal endpoints. Low blast radius but should still be hardened.
+
+**Recommended fix**
+
+Always require service-account bearer auth on `/internal/*` routes regardless of tag source mode. Bind `org_id` to the authenticated caller's namespace or explicit SA allowlist.
+
+---
 
 ### Finding #11 — No rate limiting; recalc goroutines spawn without dedup
 
@@ -413,6 +395,10 @@ When `ROS_TAGS_DEV_TOKEN` is set, it bypasses Kubernetes TokenReview entirely, a
 
 Misconfiguration in production leaves a known static token granting full tag-sync API access.
 
+**Deployment context**
+
+Not set in any production values (chart default is empty string). Risk only if accidentally configured. Startup guard recommended as defense-in-depth.
+
 **Recommended fix**
 
 Fail startup if `ROS_TAGS_DEV_TOKEN` is set when `DEVELOPMENT` is not `true`. Log prominent warning in development mode.
@@ -435,6 +421,10 @@ When `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` is empty, any service account passing T
 **Exploit / trigger**
 
 Any compromised pod in the cluster can call tag-sync internal APIs.
+
+**Deployment context**
+
+Chart default is empty (permissive). SaaS guidance sets explicit allowlist. Primary risk is on-prem deployments that use `api` tag mode without configuring allowed SAs.
 
 **Recommended fix**
 
@@ -628,6 +618,87 @@ CI check flagging new indexes on large tables. Automate CONCURRENTLY index creat
 
 ## Findings — Low / Info
 
+### Finding #3 — Identity header trusted without JWT verification
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Info (accepted architecture) |
+| **Category** | Authentication |
+| **Location** | `internal/api/middleware/identity.go` (lines 12–25) |
+| **Effort** | M (optional defense-in-depth) |
+
+**Description**
+
+The middleware base64-decodes the `X-Rh-Identity` header and trusts its contents without verifying JWT signatures, expiry, issuer, or entitlements. Any client that can reach the API port directly can impersonate any organization.
+
+**Exploit / trigger**
+
+Attacker with network access to the ROS API port crafts a base64 JSON identity with arbitrary `org_id` and admin flags. Full cross-tenant data access **only if no gateway validates tokens upstream** (SNO/dev posture).
+
+**Deployment context**
+
+By design, this service relies on an upstream gateway (3scale/Envoy/Keycloak) to validate JWT and inject trusted X-Rh-Identity. The ROS API must never be exposed directly to untrusted networks. NetworkPolicy enforces this in the cost-onprem chart. This matches the pattern used by all Insights platform services.
+
+**Recommended fix (optional defense-in-depth)**
+
+Validate JWT signature and claims when `RBAC_ENABLE` or a new `IDENTITY_VALIDATION_ENABLE` flag is set; alternatively enforce strict NetworkPolicy restricting API port to gateway pods only. Not a required fix when gateway and NetworkPolicy are correctly deployed.
+
+---
+
+### Finding #5 — Settings mutation without RBAC (SNO/dev override)
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low (deployment-specific) |
+| **Category** | Authorization / integrity |
+| **Location** | `internal/api/settings_rbac.go` (lines 14–16), `internal/config/config.go` (line 503) |
+| **Effort** | S |
+
+**Description**
+
+When `RBAC_ENABLE=false`, any authenticated user can `PUT` optimization thresholds, triggering cluster-wide recalculation jobs. No `settings.write` permission check is enforced.
+
+**Exploit / trigger**
+
+Compromised or over-privileged user account changes thresholds for all recommendation types, causing incorrect recommendations fleet-wide and spawning expensive recalc goroutines (availability impact). **Only exploitable when RBAC is disabled.**
+
+**Deployment context**
+
+Default cost-onprem chart sets `rbac.enabled: true`. Only the SNO aarch64 dev cluster disables RBAC due to insights-rbac being amd64-only. Not a production vulnerability in standard deployments.
+
+**Recommended fix**
+
+Require `settings.write` permission even when RBAC is disabled, or document and enforce a single-admin deployment constraint with network-level access control. Fail startup in production if `RBAC_ENABLE=false` without explicit `ROS_ACCEPT_INSECURE_RBAC=true` acknowledgment.
+
+---
+
+### Finding #6 — Internal service account can act on any org_id
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Info (accepted architecture) |
+| **Category** | Authorization / multi-tenancy |
+| **Location** | `internal/api/handlers_savings_recalculate.go` (lines 61–78), `internal/api/handlers_tags_sync.go` (lines 37–52) |
+| **Effort** | M (optional hardening) |
+
+**Description**
+
+Bearer token authentication validates the caller is a Kubernetes service account, but `org_id` in the request body is not bound to the caller's identity, namespace, or audience. Any allowed SA can trigger recalculation or tag sync for any organization.
+
+**Exploit / trigger**
+
+Compromised listener or masu pod (or any SA passing TokenReview) sends recalc/tag-sync requests targeting victim `org_id` values.
+
+**Deployment context**
+
+By design, platform service accounts (koku-worker, masu) operate cross-tenant. Internal endpoints are not user-facing and are restricted by NetworkPolicy + SA allowlist. Hardening lever is Finding #16 (explicit SA allowlist).
+
+**Recommended fix (optional hardening)**
+
+Restrict allowed service accounts per operation type. Validate `org_id` against token namespace, audience, or a configured SA→org mapping. Reject mismatched org claims.
+
+---
+
 ### Finding #25 — History endpoints lack filter cardinality limits
 
 | Field | Value |
@@ -797,14 +868,14 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | **S3/MinIO down (all files)** | Fails | Stale | N/A | Stale | Depends on error class | Log + metric |
 | **Masu/Koku cost API down** | Recs without cost (degraded) | Savings $0 or cached | N/A | Partial | May commit (#9) | Cost provider errors in logs |
 | **History DB write fails** | Recs written (#9) | Fresh recs, no history | N/A | **Gap** | Committed | No API staleness flag |
-| **Identity gateway bypassed (#3)** | N/A | **Cross-tenant access** | **Unauthorized mutation** | N/A | N/A | No in-app signal |
-| **`RBAC_ENABLE=false` (#5)** | N/A | All data (if identity trusted) | **Any user changes thresholds** | Recalc storm | N/A | None |
+| **Identity gateway bypassed (#3)** | N/A | Cross-tenant access *(SNO/dev only)* | Unauthorized mutation *(SNO/dev only)* | N/A | N/A | No in-app signal |
+| **`RBAC_ENABLE=false` (#5)** | N/A | All data (if identity trusted) | Any user changes thresholds *(SNO/dev only)* | Recalc storm | N/A | None |
 | **Unclassified Kafka error (#18)** | **Infinite retry** | Stale | N/A | Stale | **Never committed** | Lag grows; partition stuck |
 | **Large cluster + 25s timeout (#21)** | Timeout → transient loop | OK | OK | Stalled | Not committed | Repeated timeout logs |
 | **OOM during ingest (#8)** | Pod killed mid-batch | 503 if same pod | 503 | Partial | **May commit partial (#1)** | OOMKilled event |
-| **NetworkPolicy missing (#3, #4)** | N/A | Internal routes exposed | Tag enum cross-tenant | N/A | N/A | None without network audit |
+| **NetworkPolicy missing (#3, #4)** | N/A | Internal routes exposed *(SNO/dev)* | Tag enum cross-tenant *(db mode)* | N/A | N/A | None without network audit |
 
-**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall) and **auth configuration on on-prem defaults** (trust perimeter, not service). Dependency failure modes are otherwise reasonably observable except analytics degradation (Finding #9).
+**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall). Auth findings (#3–#6) are largely mitigated in SaaS and default on-prem chart deployments by gateway JWT validation, RBAC defaults, and NetworkPolicy; they remain relevant only in SNO/dev overrides or as optional hardening targets. Dependency failure modes are otherwise reasonably observable except analytics degradation (Finding #9).
 
 ---
 
@@ -814,10 +885,10 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 |-----------|-------|------|--------|--------|
 | 1 | Kafka offset committed after partial file failure | TBD | Open | — |
 | 2 | Native ingestion errors swallowed (return nil) | TBD | Open | — |
-| 3 | Identity header trusted without JWT verification | TBD | Open | — |
-| 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | Open | — |
-| 5 | Settings mutation without RBAC (on-prem default) | TBD | Open | — |
-| 6 | Internal SA can act on any org_id | TBD | Open | — |
+| 3 | Identity header trusted without JWT verification | TBD | Accepted (architecture) | — |
+| 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | Open (db-mode hardening) | — |
+| 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
+| 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
 | 7 | Dual DB connection pools (GORM + pgxpool) | TBD | Open | — |
 | 8 | Streaming ingest accumulates all groups in memory | TBD | Open | — |
 | 9 | Pipeline writes recs when history/quality fails | TBD | Open | — |
@@ -845,4 +916,4 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 ---
 
-*Document version: 1.0 — 2026-06-08. Next review recommended after Critical and High findings are remediated or explicitly accepted with compensating controls documented.*
+*Document version: 1.1 — 2026-06-08. Reclassified auth findings (#3–#6) by deployment posture. Next review recommended after Critical findings (#1, #2) are remediated.*
