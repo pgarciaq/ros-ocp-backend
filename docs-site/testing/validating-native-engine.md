@@ -4,6 +4,18 @@ This guide is for senior QE engineers (and developers) validating the **entire R
 
 **Document organization:** general platform and bread-and-butter features first (containers, API compat, cross-cutting), then specialized plugins (GPU, node, PVC, quota, snapshot), then VM scenarios and checklists at the end.
 
+### Start here (new QE engineers)
+
+If you are validating the native engine for the first time:
+
+1. **Read** [Validation priority](#validation-priority-suggested-order) — follow **P0 → P3** order.
+2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem--native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`).
+3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
+4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images: **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
+5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
+
+**Branches:** `pgarciaq-rosocp-superpowers-phase12` on `ros-ocp-backend`, `koku`, and `koku-metrics-operator` for full native coverage (all plugins + savings). Stock `main` on koku/operator is enough for container + namespace Kruize comparison only.
+
 ---
 
 ## Overview
@@ -32,8 +44,8 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | **gpu** | MIG bin-packing + time-slicing + classification | Same as container (+ GPU metrics) | `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` |
 | **node** | Underutilized nodes, fleet consolidation, pod headroom | Piggybacks on container CSV (+ `pod_capacity`) | `GET .../nodes` (filters, `format=csv`, RBAC) |
 | **pvc** | Oversized, near-full, growth projection | `ocp_storage_usage.csv` | `GET .../pvcs` |
-| **quota** | ResourceQuota tighten/raise/optimal | Namespace digests + `ocp_ros_cluster_quota.csv` context | `GET .../quota/` |
-| **cluster-quota** | ClusterResourceQuota vs namespace sums | `ocp_ros_cluster_quota.csv` | `GET .../cluster-quota/` |
+| **quota** | ResourceQuota tighten/raise/optimal | Namespace digests + `ocp_ros_cluster_quota.csv` context | `GET .../quota` |
+| **cluster-quota** | ClusterResourceQuota vs namespace sums | `ocp_ros_cluster_quota.csv` | `GET .../cluster-quota` |
 | **snapshot** | Stale / orphaned / never-restored VolumeSnapshots | `ocp_snapshot_inventory.csv` | `GET .../snapshots` |
 | **vm** | KubeVirt guest sizing (Preview/Beta) | `ocp_ros_vm_usage.csv` (+ optional GPU device CSV) | `GET .../vm`, `/vm/detail` |
 
@@ -51,6 +63,7 @@ See also: [Native migration guide](../../docs/architecture/native-migration.md),
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
+| Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=db` on-prem, `api` on SaaS) |
 | Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, and quality list endpoints. **`GET .../history` is container-only** (namespace has a separate history route; there is no node history API). VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
 
 ### Validation priority (suggested order)
@@ -887,13 +900,16 @@ Base URL: `http://localhost:8000/api/cost-management/v1` (Koku proxy) or direct 
 | **Container** | GET | `/recommendations/openshift` | `meta.count` > 0 (list); detail via `/{recommendation-id}` |
 | **Namespace** | GET | `/recommendations/openshift/namespaces` or `/namespace` | `meta.count` > 0 |
 | **Node** | GET | `/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}` | `meta.count` > 0; nested `recommendation_terms` |
+| **Node detail** | GET | `/recommendations/openshift/nodes/{node}?filter[cluster]=...` | Full `recommendation_terms` for one node |
+| **MachineSet** | GET | `/recommendations/openshift/machinesets?filter[cluster]=...` | Fleet consolidation by MachineSet |
 | **Snapshot** | GET | `/recommendations/openshift/snapshots` | Rows when `ocp_snapshot_inventory.csv` ingested |
 | **PVC** | GET | `/recommendations/openshift/pvcs` | Rows when storage usage ingested |
 | **VM** | GET | `/recommendations/openshift/vm` | `meta.count` > 0 when VM CSV present |
-| **GPU (workloads)** | GET | `/recommendations/openshift/gpu/mig` | MIG recommendations |
+| **GPU (summary)** | GET | `/recommendations/openshift/gpu` | Fleet GPU utilization summary |
+| **GPU (MIG)** | GET | `/recommendations/openshift/gpu/mig` | Per-workload MIG recommendations |
 | **GPU (time-slicing)** | GET | `/recommendations/openshift/gpu/timeslicing` | Node-level time-slicing recs |
-| **Quota** | GET | `/recommendations/openshift/quota/` | Namespace ResourceQuota recs |
-| **Cluster quota** | GET | `/recommendations/openshift/cluster-quota/` | CRQ recs |
+| **Quota** | GET | `/recommendations/openshift/quota` | Namespace ResourceQuota recs |
+| **Cluster quota** | GET | `/recommendations/openshift/cluster-quota` | CRQ recs |
 | **Notification catalog** | GET | `/recommendations/openshift/notification-codes` | **No** identity header; `meta.count` > 0 |
 | **Savings** | GET | `/recommendations/openshift/savings-summary?engine=cost&term=medium` | `total` / `by_plugin` populated when Masu + cost model configured |
 
@@ -923,9 +939,10 @@ cd ~/dev/koku/cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh          # CI mode (~88 tests)
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros    # ROS-focused suite
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenarios
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all    # full suite incl. extended (~538 tests)
 ```
 
-**Rules:** Rebuild and push **new image tags** before E2E; never run raw `pytest` without `run-pytest.sh` (venv + env setup). See `cost-onprem-chart/.cursor/rules/testing.mdc`.
+**Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). See `cost-onprem-chart/.cursor/rules/testing.mdc`.
 
 ### 4. IQE integration tests (iqe-cost-management-plugin)
 
@@ -1248,9 +1265,10 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
 | 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
-| 8 | Tag filter | `filter[tag:app]=<value>` when tags enabled | Subset of workloads |
-| 9 | Savings (optional) | `estimated_monthly_savings` on list | Non-zero when `KOKU_MASU_URL` + cost model; else code **25** |
-| 10 | Processor log | Grep processor | `native engine: wrote N recommendations` |
+| 8 | Tag filter | `filter[tag:app]=<value>` when `ROS_TAGS_ENABLED=true` | Subset of workloads |
+| 9 | Workload type filter | `filter[workload_type]=deployment` (case-insensitive; also `filter[exact:workload_type]`, `exclude[workload_type]`) | Subset matches K8s kind enum; invalid value → **400** |
+| 10 | Savings (optional) | `estimated_monthly_savings` on list | Non-zero when `KOKU_MASU_URL` + cost model; else code **25** |
+| 11 | Processor log | Grep processor | `native engine: wrote N recommendations` |
 
 ### Workload pattern matrix (NISE / manual)
 
@@ -1289,6 +1307,10 @@ Data file: `ocp_ros_namespace_usage.csv`. Logs: `native namespace engine: wrote`
 Handlers: `internal/api/handlers_node_utilization.go` (CPU/memory nodes). GPU time-slicing uses `internal/api/handlers_node_recs.go` at `GET .../gpu/timeslicing` — do not confuse the two paths.
 
 Design reference: [Known issues — Node recommendations](../known-issues.md) (engine behavior, thresholds, notification codes).
+
+**Business hours** do not apply to node recommendations (containers and namespaces only). Node idle behavior uses `idle_state` and `/settings/node` idle/zombie thresholds.
+
+**List API RBAC:** With `RBAC_ENABLE=true`, `GET .../nodes` requires `openshift.cluster` and `openshift.node` permissions (same as CSV export and detail). Restricted users see only allowed clusters/nodes.
 
 ### Prerequisites
 
@@ -1440,8 +1462,8 @@ Data: `ocp_storage_usage.csv` in manifest `files` (cost pipeline) and storage me
 | # | Check | API / signal |
 |---|--------|--------------|
 | 1 | List returns PVCs | `GET .../pvcs?filter[cluster]=...` |
-| 2 | Oversized PVC | `recommendation_type` or classification = oversized; notification **11** region |
-| 3 | Near-full PVC | Growth projection; codes **12–13** |
+| 2 | Oversized PVC | `recommendation_type` or classification = oversized; notification **29** |
+| 3 | Near-full PVC | Growth projection; notification **30** |
 | 4 | Growth projection | `recommended_bytes` < current for oversized; growth rate fields populated |
 | 5 | Savings on tighten | `estimated_monthly_savings` when Masu rates available |
 | 6 | DB | `pvc_recommendation_sets` rows with `notification_codes` |
@@ -1454,12 +1476,13 @@ Logs: `native storage engine: wrote`.
 
 | # | ResourceQuota (`quota` plugin) | ClusterResourceQuota (`cluster-quota`) |
 |---|-------------------------------|----------------------------------------|
-| 1 | `GET .../quota/?filter[namespace]=...` | `GET .../cluster-quota/` |
-| 2 | Recommendation types: **tighten**, **raise**, **optimal** | Same classification model |
-| 3 | `risk_level`: low / medium / high | Aligns with headroom % thresholds |
-| 4 | Settings | `GET/PUT .../settings/quota` | `GET/PUT .../settings/cluster-quota` |
-| 5 | DB tables | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` |
-| 6 | Notifications | Codes **14–17** (see [Notification codes](#notification-codes)) | CRQ-specific codes in catalog |
+| 1 | `GET .../quota?filter[namespace]=...` | `GET .../cluster-quota` |
+| 2 | Detail | `GET .../quota/detail` | `GET .../cluster-quota/detail` |
+| 3 | Recommendation types: **tighten**, **raise**, **optimal** | Same classification model |
+| 4 | `risk_level`: low / medium / high | Aligns with headroom % thresholds |
+| 5 | Settings | `GET/PUT .../settings/quota` | `GET/PUT .../settings/cluster-quota` |
+| 6 | DB tables | `quota_recommendation_sets` | `cluster_quota_recommendation_sets` |
+| 7 | Notifications | Codes **70–72** (near capacity, oversized, blocking) | Code **73** (cluster quota at capacity) |
 
 Cluster quota CSV: `ocp_ros_cluster_quota.csv`. Quota plugin also reads namespace digests after container processing.
 
@@ -1666,9 +1689,13 @@ Server prefix: `/api/cost-management/v1`
 | GPU MIG | GET | `/recommendations/openshift/gpu/mig` |
 | GPU time-slicing | GET | `/recommendations/openshift/gpu/timeslicing` |
 | Nodes | GET | `/recommendations/openshift/nodes` |
+| Node detail | GET | `/recommendations/openshift/nodes/{node}` |
+| MachineSet fleet | GET | `/recommendations/openshift/machinesets` |
 | PVCs | GET | `/recommendations/openshift/pvcs` |
-| ResourceQuota | GET | `/recommendations/openshift/quota/` |
-| ClusterResourceQuota | GET | `/recommendations/openshift/cluster-quota/` |
+| ResourceQuota | GET | `/recommendations/openshift/quota` |
+| ResourceQuota detail | GET | `/recommendations/openshift/quota/detail` |
+| ClusterResourceQuota | GET | `/recommendations/openshift/cluster-quota` |
+| ClusterResourceQuota detail | GET | `/recommendations/openshift/cluster-quota/detail` |
 | Snapshots | GET | `/recommendations/openshift/snapshots` |
 | Fleet summary | GET | `/recommendations/openshift/fleet-summary` |
 | Savings summary | GET | `/recommendations/openshift/savings-summary` |
@@ -1785,7 +1812,7 @@ Partial PUT is supported per settings type. After PUT, re-query recommendations 
 
 1. Set e.g. `ROS_VM_IDLE_CPU_MC=50` on **API and processor**, restart both.
 2. GET settings — expect `locked_fields` containing the mapped field name.
-3. PUT the same field — expect **422** Unprocessable Entity.
+3. PUT the same field — expect **403** Forbidden with `locked_fields`.
 
 Global freeze:
 
@@ -1839,7 +1866,7 @@ Bruno: `PUT Settings VM.bru`, `DELETE Settings VM.bru`, `GET Settings Thresholds
 
 ## Notification codes
 
-ROS attaches integer **notification codes** to recommendations. There are **57 codes** across all plugins.
+ROS attaches integer **notification codes** to recommendations. The catalog defines **76 codes** across all plugins (containers through VM placement and quota; some reserved codes are not emitted yet).
 
 - **Full catalog (all codes, severity, UI hints):** [Notification Codes](../architecture/notification-codes.md) (`docs-site/architecture/notification-codes.md`)
 - **Maintainer emitters:** `docs/architecture/notification-codes.md` in the repository
@@ -1871,8 +1898,14 @@ ROS attaches integer **notification codes** to recommendations. There are **57 c
 | 55 | WARNING | Network-saturated — n1 instance type | `network-heavy-vm-01` (chart E2E) |
 | 56 | INFO | vGPU profile recommended | `gpu-timeslice-underutil-vm` (chart E2E) |
 | 57 | WARNING | Time-slicing unsafe (frame buffer) | `gpu-fb-saturated-vm` (chart E2E) |
+| 58–59 | INFO | Sequential / random I/O pattern | `high-io-vm-01` and I/O-heavy NISE VMs |
+| 60–63 | WARNING/INFO | Placement / NUMA / shared storage | `network-heavy-vm-01`, multi-VM co-location fixtures |
+| 64–69 | INFO | Power schedule, network QoS, storage tiering | Extended chart E2E templates |
+| 74 | WARNING | Near pod scheduling limit | Nodes with `pod_scheduling_headroom` &lt; 10% |
+| 76 | INFO | Fleet consolidation (MachineSet) | `node_count_reduction` with `machineset_name` |
+| 70–73 | WARNING/INFO/CRITICAL | ResourceQuota / ClusterResourceQuota | Near capacity, oversized, blocking, CRQ at capacity |
 
-**VM list filters (phase11):** `filter[is_network_bound]=true|false`, `filter[guest_os]=windows` (substring, comma OR), plus existing `filter[has_gpu]`, `filter[gpu_classification]`.
+**VM list filters (phase11+):** `filter[is_network_bound]=true|false`, `filter[guest_os]=windows` (substring, comma OR), plus existing `filter[has_gpu]`, `filter[gpu_classification]`.
 
 API: VM list/detail return `notifications` as a JSON array (`type`: `info` | `warning` | `critical`). List `metadata.is_network_bound` mirrors notification **55** eligibility. Containers use `notification_codes` + `notifications` map.
 
@@ -2197,7 +2230,7 @@ Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, 
 | Combined `openshift_report` CSV | `--insights-upload` mixed report | Use `--write-monthly` + typed files |
 | Tarball `./` prefix | `tar czf .` without transform | `tar czf ... --transform='s|^\./||' .` |
 | Settings PUT **403** | `ROS_SETTINGS_LOCKED=true` | Disable lock or use per-feature opt-out |
-| Settings PUT **422** | Field locked by `ROS_*` env | Unset env on API + processor |
+| Settings PUT **403** (`locked_fields`) | Field locked by `ROS_*` env | Unset env on API + processor |
 | `kruize` + native both enabled | Invalid config | Native only: `ROS_DISABLED_PLUGINS=kruize` |
 | Wrong tenant / empty RBAC | Bad identity | Use `org_id: "1234567"`, admin user; or `RBAC_ENABLE=false` locally |
 | Stale API responses | Koku/Valkey cache | `docker exec koku_valkey redis-cli FLUSHALL`; restart `koku-server` |
