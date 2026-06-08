@@ -51,6 +51,8 @@ Most specific wins: **namespace → cluster → org → disabled** (no BH digest
 
 Schedule changes set `reship_pending_since` and trigger async historical re-processing via Koku masu `reship_ros` so `business_hours` digests can be rebuilt from stored ROS CSVs.
 
+Full request/response contract: [Cost Integration — Business-hours reship](../architecture/cost-integration.md#business-hours-reship-reship_ros).
+
 ## Scope
 
 **v1: Container + Namespace only**

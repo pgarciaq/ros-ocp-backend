@@ -1,6 +1,8 @@
-# Cost Data Integration Contract
+# Koku Integration Contract
 
-This document describes the integration between ROS-OCP-Backend and Koku for cost/savings estimation.
+This document describes integration between ROS-OCP-Backend and Koku: **data ingestion**,
+**tag filtering**, **cost/savings estimation** (`effective_rates`), **savings recalculation**,
+and **business-hours reship** (`reship_ros`).
 
 For recommendation thresholds and term configuration (not cost-specific), see
 [Recommendation Engine Reference](recommendation-engines.md).
@@ -15,7 +17,65 @@ endpoint. To change rates, update the cost model in Koku (which triggers rate re
 on the next ingestion cycle or via [savings recalculation](#savings-recalculation-after-cost-model-changes)
 when configured).
 
-## Endpoint
+## Integration map
+
+| Integration | Direction | Contract | ROS implementation | Koku implementation |
+|-------------|-----------|----------|-------------------|---------------------|
+| **Data ingestion** | Koku → ROS (Kafka + S3) | [Data ingestion](#data-ingestion-contract) · [`kafka-schema.md`](kafka-schema.md) | `internal/kafka/consumer.go`, `internal/services/report_processor.go` | [`masu/external/ros_report_shipper.py`](../../../koku/koku/masu/external/ros_report_shipper.py), [`kafka_msg_handler.py`](../../../koku/koku/masu/external/kafka_msg_handler.py) |
+| **Effective rates** | ROS → Koku (HTTP GET) | [Effective rates](#effective-rates-endpoint) | [`internal/costdata/provider.go`](../../internal/costdata/provider.go) | [`masu/api/effective_rates.py`](../../../koku/koku/masu/api/effective_rates.py) |
+| **Savings recalculation** | Koku → ROS (HTTP POST) | [Savings recalculation](#savings-recalculation-after-cost-model-changes) | [`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go) | [`masu/processor/ros_savings_recalc.py`](../../../koku/koku/masu/processor/ros_savings_recalc.py) |
+| **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](#tag-filtering-enabled-tag-keys) | [`internal/tags/`](../../internal/tags/) | [`masu/processor/ros_tag_sync.py`](../../../koku/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
+| **Business-hours reship** | ROS → Koku (HTTP POST) | [Reship](#business-hours-reship-reship_ros) | [`internal/reship/`](../../internal/reship/) | [`masu/api/reship_ros.py`](../../../koku/koku/masu/api/reship_ros.py) |
+
+Koku architecture overview: [`koku/docs/architecture/ros-ocp-integration.md`](../../../koku/docs/architecture/ros-ocp-integration.md) (sibling repository).
+
+---
+
+## Data ingestion contract
+
+ROS does **not** read Koku PostgreSQL line-item tables for recommendations. Usage data flows through the **same operator upload pipeline** as Cost Management, with ROS-specific CSVs shipped separately.
+
+### Pipeline
+
+1. **koku-metrics-operator** uploads a tarball to ingress (`/api/ingress/v1/upload`) containing `manifest.json` with `resource_optimization_files` (ROS container, namespace, GPU, storage, VM, quota CSVs).
+2. **Koku listener** processes cost CSVs; [`ROSReportShipper`](../../../koku/koku/masu/external/ros_report_shipper.py) copies ROS files to the ROS S3 bucket and publishes one Kafka announce per file.
+3. **ROS processor** consumes `platform.upload.announce`, filters `category == "ros"`, downloads the presigned CSV URL, parses rows, and writes digests/recommendations to the **ROS PostgreSQL** database.
+
+ROS and Koku use **separate databases**. The only shared persistence in on-prem mode is PostgreSQL **instance** access for tag filtering (`ROS_TAGS_SOURCE=db`).
+
+### Kafka message shape
+
+Documented in [`kafka-schema.md`](kafka-schema.md). Reship uses the same Kafka payload as initial upload (see [Business-hours reship](#business-hours-reship-reship_ros)).
+
+### Manifest contract
+
+| Field | ROS uses |
+|-------|----------|
+| `resource_optimization_files[]` | Filenames Koku ships to ROS S3 (container, namespace, GPU, storage, VM, quota CSVs) |
+| `files[]` | Koku cost pipeline only (pod/node labels, etc.) — not consumed by ROS |
+
+CSV column headers must match koku-metrics-operator output ([`internal/ingestion/csv_contract_test.go`](../../internal/ingestion/csv_contract_test.go)).
+
+---
+
+## Tag filtering (enabled tag keys)
+
+ROS recommendation list APIs support `filter[tag:key]=value`. Tag **keys** are governed by Koku's **enabled tag keys** (`reporting_enabledtagkeys`, managed via Cost Management **Settings → Tags** and [`masu/api/enabled_tags.py`](../../../koku/koku/masu/api/enabled_tags.py) for pipeline enablement). Tags do **not** flow through `effective_rates` or the ingestion Kafka message; they are a parallel concern.
+
+| Deployment | `ROS_TAGS_SOURCE` | How tags reach ROS |
+|------------|-------------------|-------------------|
+| **On-prem** (default) | `db` | ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time — no HTTP sync |
+| **SaaS** | `api` | Koku Celery [`sync_ros_ocp_tags`](../../../koku/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` |
+
+Detailed docs:
+
+- [tag-filtering.md](../features/tag-filtering.md) — filter syntax, lifecycle, SQL paths
+- [operations/tag-sync.md](../operations/tag-sync.md) — SaaS push API contract
+- Koku: [`ros-ocp-integration.md` § Tag Sync](../../../koku/docs/architecture/ros-ocp-integration.md#tag-sync-koku--ros)
+
+---
+
+## Effective rates endpoint
 
 ```
 GET {KOKU_MASU_URL}/api/cost-management/v1/effective_rates/
@@ -618,6 +678,79 @@ kubectl logs -n cost-onprem -l app.kubernetes.io/component=ros-api --tail=50 | g
 
 Savings will still refresh on the next successful operator upload and ingestion cycle
 even when notification fails.
+
+## Business-hours reship (`reship_ros`)
+
+When an administrator changes a business-hours schedule, ROS must rebuild historical `business_hours` digests from stored ROS CSVs. ROS triggers Koku Masu to **re-publish** existing S3 objects to Kafka (no re-upload from the cluster).
+
+### Endpoint
+
+```
+POST {KOKU_MASU_URL}/api/cost-management/v1/reship_ros/
+```
+
+**Koku implementation:** [`masu/api/reship_ros.py`](../../../koku/koku/masu/api/reship_ros.py)
+
+**ROS client:** [`internal/reship/client.go`](../../internal/reship/client.go) (`PostReship`)
+
+### Query parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `schema` | Yes | Tenant schema (e.g. `org1234567`) |
+| `provider_uuid` | Yes | Koku provider UUID (ROS resolves cluster UUID → provider via `effective_rates` metadata) |
+| `start_date` | Yes | Inclusive start date `YYYY-MM-DD` |
+| `end_date` | Yes | Inclusive end date `YYYY-MM-DD` |
+
+ROS builds the window from the container plugin max lookback (`PluginMaxWindowDays("container")`, default 90 days).
+
+### Response (`200 OK`)
+
+```json
+{
+  "request_id": "abc123...",
+  "files_processed": 42,
+  "files_total": 42
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `request_id` | Masu correlation ID |
+| `files_processed` | Kafka messages published |
+| `files_total` | S3 objects matched under `{schema}/source={provider_uuid}/date={day}/` |
+
+Masu lists one S3 prefix per day in the date range, presigns each object (48h TTL), and publishes to the ROS Kafka topic. Message shape matches [`ROSReportShipper.build_ros_msg`](../../../koku/koku/masu/external/ros_report_shipper.py) (`request_id`, `b64_identity`, `metadata`, `files`, `object_keys`).
+
+### Error responses
+
+| Status | Cause |
+|--------|-------|
+| `400` | Missing/invalid `schema`, `provider_uuid`, or date range (`end_date` before `start_date`) |
+| `503` | ROS S3 credentials not configured on Masu (`S3_ROS_*`) |
+| `500` | S3 list failure or Kafka publish failure |
+
+### ROS orchestration
+
+| Component | Role |
+|-----------|------|
+| [`internal/reship/trigger.go`](../../internal/reship/trigger.go) | Async fan-out from BH settings PUT/DELETE |
+| [`internal/reship/poller.go`](../../internal/reship/poller.go) | Retries when `reship_pending_since` is set |
+| [`internal/reship/service.go`](../../internal/reship/service.go) | Single-flight lock, trailing reship, metrics |
+
+Configuration: `KOKU_MASU_URL`, `ROS_RESHIP_CONCURRENCY`, `ROS_RESHIP_POLLER_INTERVAL_SECS`, `ROS_RESHIP_MAX_RETRIES` — see [configurability.md](configurability.md) and [upgrade-runbook.md](../upgrade-runbook.md).
+
+### Authentication
+
+Internal Masu API — **no** `x-rh-identity` required (service-to-service, same as `effective_rates`).
+
+### Prerequisites
+
+- Koku deployed with `reship_ros` endpoint and ROS S3 bucket credentials (`S3_ROS_*`)
+- Historical ROS CSVs already in S3 from prior operator uploads
+- `ROS_BUSINESS_HOURS_ENABLED=true` on ROS API (starts reship poller)
+
+---
 
 ## Future: GPU savings persistence (v2)
 
