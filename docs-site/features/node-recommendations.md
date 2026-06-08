@@ -350,6 +350,14 @@ Env vars: `ROS_NODE_*` — see [Configurability](../architecture/configurability
 
 ## MachineSet aggregation
 
+!!! note "Aggregation endpoint, not the planned engine"
+    `GET /api/cost-management/v1/recommendations/openshift/machinesets` is an
+    **aggregation endpoint** — it rolls up existing per-node recommendations by
+    `machineset_name` (sums `node_count_reduction` and savings). It does **not**
+    run the planned catalog-driven MachineSet engine (replica count and
+    instance-family optimization). That engine is documented in
+    [MachineSet recommendations](../planned-features/machineset-recommendations.md).
+
 `GET /api/cost-management/v1/recommendations/openshift/machinesets` groups existing per-node recommendations by OpenShift MachineSet name (aggregation over `node_recommendations`; no separate engine table yet).
 
 ```

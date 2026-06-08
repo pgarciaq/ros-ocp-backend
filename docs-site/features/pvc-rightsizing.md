@@ -73,11 +73,17 @@ changes are required for data collection.
 
 ## Classification
 
+PVC recommendations use **capacity/usage types** (`oversized`, `near_full`,
+`orphaned`, `healthy`) — not the container `idle_state` system (`active` /
+`idle` / `zombie`). **Orphaned** means the PVC has no mounting pods and
+sustained zero usage in digests; `idle_since` / `idle_duration_days` on
+orphaned rows track unused duration only.
+
 | Type | Condition | Action |
 |------|-----------|--------|
 | **Oversized** | max usage / capacity < 20% (sustained `min_trend_days`, default 2) | Recommends 2× max usage (min 1 GiB) |
 | **Near-full** | max usage / capacity > 85% | Recommends expansion to 2× current usage |
-| **Orphaned** | zero usage for `min_trend_days`+ (default 2) | Recommends deletion |
+| **Orphaned** | no mounting pods; zero usage for `min_trend_days`+ (default 2) | Recommends deletion |
 | **Healthy** | usage between 20-85% | No action needed |
 
 ### Minimum data requirements

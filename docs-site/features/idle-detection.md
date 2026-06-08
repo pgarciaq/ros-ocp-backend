@@ -104,7 +104,7 @@ Key thresholds: utilization percents, `burst_ratio` (protects CronJobs), `minimu
 
 - **Nodes** — idle/zombie from node digests and pod counts; filter with `filter[idle_state]` on the node utilization API. Notification code **15** (`NODE_IDLE`).
 - **GPUs** — DCGM SM/DRAM basis points on container and MIG rows; `gpu_idle_state` on list/detail `gpu` blocks. Filter with `filter[gpu_idle_state]=idle,zombie`. Notification code **26** (`GPU_IDLE`).
-- **PVC orphans** — orphaned PVC recommendations (`recommendation_type=orphaned`) include `idle_since` and `idle_duration_days` tracking when zero usage was first detected.
+- **PVCs** — PVC recommendations do **not** use `idle_state` (`active` / `idle` / `zombie`). They use **`recommendation_type=orphaned`** when a volume has no mounting pods (sustained zero usage in digests). Orphaned rows expose `idle_since` and `idle_duration_days` for how long the volume has been unused — distinct from container idle/zombie classification. See [PVC right-sizing](pvc-rightsizing.md).
 
 ## Notification codes
 

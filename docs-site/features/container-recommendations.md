@@ -49,16 +49,22 @@ Algorithm details: [Recommendation Math](../architecture/recommendation-math.md)
 
 ## Classification
 
-| Type | Condition | Typical action |
-|------|-----------|----------------|
-| **Active** | Normal usage above idle thresholds | Apply right-sizing |
-| **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB | Consider scale-down or removal |
-| **Zombie** (`idle_state: "zombie"`) | All digest rows show zero CPU **and** zero memory | Decommission candidate; UI may label this **Abandoned** |
+Each container is classified into one of three **idle states** (`active`,
+`idle`, `zombie`) by [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
+after at least `minimum_observation_days` of digest data (default **14**).
+DaemonSets and excluded namespaces (e.g. `kube-system`, `openshift-*`) stay
+**active**.
+
+| State | Key criteria | Typical action |
+|-------|--------------|----------------|
+| **active** | Default; utilization above idle thresholds, or bursty (peak/P95 CPU > `burst_ratio`, default 10) | Apply right-sizing |
+| **idle** | CPU P95 < **2%** of request **and** memory P95 < **5%** of request (configurable via `settings/idle-detection`) | Scale-down candidate |
+| **zombie** | CPU P95 < **1 mc** **and** peak CPU < **10 mc** (configurable zombie millicore thresholds) | Decommission candidate; UI may label **Abandoned** |
 
 Idle and zombie containers still receive recommendations; savings estimates
 treat them as **100% recoverable** when cost data is available. Filter with
-`filter[idle_state]=zombie` (API value); the UI displays zombie workloads as
-"Abandoned".
+`filter[idle_state]=zombie,idle`. See [Idle detection](idle-detection.md) for
+GPU, namespace, and node rollups.
 
 ## OOM detection and bump
 

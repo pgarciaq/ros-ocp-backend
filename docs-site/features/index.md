@@ -12,16 +12,16 @@ dollar impact using Koku cost model rates.
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
 | Namespace Quota Optimization | namespace | cost, performance | Planned | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
-| GPU MIG Profiling | gpu | single | No | Yes |
+| GPU MIG Profiling | gpu | single | Yes (container detail) | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
 | ResourceQuota Right-Sizing | quota | single | Yes (tighten) | Yes |
 | ClusterResourceQuota Right-Sizing | cluster-quota | single | Yes (tighten) | Yes |
 | Snapshot Lifecycle | snapshot | single | Yes (cost) | Yes |
-| Business Hours | container, namespace | cost, performance | Yes | Yes |
+| Business Hours | container, namespace | cost, performance | No (sizing only; savings use all_hours) | Yes |
 | Configurable Thresholds | all | all | N/A | Yes |
-| Savings Estimations | container, node, pvc, snapshot | cost, performance | Core feature | N/A |
-| Idle / Zombie Detection | container (GPU, PVC, node planned) | single | Yes (full waste) | Yes |
+| Savings Estimations | container, node, pvc, snapshot, vm (Preview); GPU idle on container detail | cost, performance | Core feature | N/A |
+| Idle / Zombie Detection | container, GPU, namespace, node (PVC: orphaned only) | single | Yes (full waste) | Yes |
 | Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
 
 ## All feature pages
