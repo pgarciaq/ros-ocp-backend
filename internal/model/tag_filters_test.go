@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -116,6 +118,27 @@ func TestTagFilterExistsClause_DBSourceBalancedParentheses(t *testing.T) {
 	assert.Contains(t, clause, " AND (")
 	require.GreaterOrEqual(t, len(args), 4)
 	assert.Greater(t, next, 1)
+}
+
+func TestApplyDBTagFiltersToClusterNamespace_DirectTagTableJoin(t *testing.T) {
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "db")
+
+	filters := []model.TagFilter{{Key: "environment", Values: []string{"production"}}}
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{DryRun: true})
+	require.NoError(t, err)
+
+	query := db.Table("namespace_recommendation_sets ns")
+	query = model.ApplyTagFiltersToClusterNamespace(query, "1234567", filters, "ns.cluster_uuid", "ns.namespace_name")
+
+	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		return tx.Find(nil)
+	})
+	assert.Contains(t, sql, "reporting_ocptags_values")
+	assert.Contains(t, sql, "ns.cluster_uuid")
+	assert.Contains(t, sql, "ns.namespace_name")
+	assert.NotContains(t, sql, "org_container_keys")
 }
 
 func TestTagFilterExistsClauseForCommaSeparatedNamespaces_DBSource(t *testing.T) {

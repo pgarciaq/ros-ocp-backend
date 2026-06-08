@@ -786,6 +786,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 	}
 
 	hlog.Info("native namespace engine returned 0 results, falling back to Kruize path")
+	stripTagFiltersFromQueryParams(queryParams)
 	return GetNamespaceRecommendationSetList(c)
 }
 

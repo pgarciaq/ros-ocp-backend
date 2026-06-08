@@ -432,6 +432,9 @@ func applyNativeNamespaceRBAC(query *gorm.DB, userPerms map[string][]string) *go
 // applyNSQueryParams adds dynamic WHERE clauses from parsed namespace query parameters.
 func applyNSQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
 	for key, values := range queryParams {
+		if key == TagFiltersQueryKey {
+			continue
+		}
 		if !isAllowedNativeNamespaceQueryKey(key) {
 			log.Warnf("applyNSQueryParams: skipping unknown query key %q", key)
 			continue

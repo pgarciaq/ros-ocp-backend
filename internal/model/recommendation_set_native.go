@@ -350,6 +350,7 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 		Where("ock.cluster_uuid = rs.cluster_uuid").
 		Where("ock.namespace = rs.namespace").
 		Where("ock.workload = rs.workload").
+		Where("ock.workload_type = rs.workload_type").
 		Where("ock.container_name = rs.container_name")
 	ockExists = ApplyNativeRBAC(ockExists, userPerms, "ock.namespace")
 	ockExists = ApplyQueryParamsToKeys(ockExists, keysParams)

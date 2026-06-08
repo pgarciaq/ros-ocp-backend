@@ -51,12 +51,22 @@ func splitNativeListQueryParams(queryParams map[string]interface{}) (keysParams,
 	keysParams = make(map[string]interface{})
 	detailParams = make(map[string]interface{})
 	for key, values := range queryParams {
+		if key == TagFiltersQueryKey {
+			continue
+		}
 		if _, ok := nativeRecDetailOnlyQueryKeys[key]; ok {
 			detailParams[key] = values
 			continue
 		}
 		if isAllowedNativeRecommendationQueryKey(key) {
 			keysParams[key] = values
+			// Identity filters must also constrain recommendation_sets rows. The org_keys
+			// leg alone is insufficient when org_container_keys collapses workload_type
+			// (and cluster) across tenants of the same namespace/workload/container tuple.
+			if _, isAtom := nativeRecFilterAtoms[key]; isAtom ||
+				isCompositeOfAtoms(key, nativeRecFilterAtoms, []string{" OR ", " AND "}) {
+				detailParams[key] = values
+			}
 		}
 	}
 	return keysParams, detailParams

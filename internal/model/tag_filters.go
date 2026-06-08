@@ -205,17 +205,54 @@ func ApplyTagFiltersToClusterNamespace(query *gorm.DB, orgID string, filters []T
 	if len(filters) == 0 {
 		return query
 	}
-	subq := database.GetDB().Table("org_container_keys ock").
-		Select("1").
-		Where("ock.org_id = ?", orgID).
-		Where(clusterColumn + " = ock.cluster_uuid").
-		Where(namespaceColumn + " = ock.namespace")
 	if config.TagsSource() == "api" {
+		subq := database.GetDB().Table("org_container_keys ock").
+			Select("1").
+			Where("ock.org_id = ?", orgID).
+			Where(clusterColumn + " = ock.cluster_uuid").
+			Where(namespaceColumn + " = ock.namespace")
 		subq = applyAPITagFiltersToKeys(subq, filters)
-	} else {
-		subq = applyDBTagFiltersToKeys(subq, orgID, filters)
+		return query.Where("EXISTS (?)", subq)
 	}
-	return query.Where("EXISTS (?)", subq)
+	return applyDBTagFiltersToClusterNamespace(query, orgID, filters, clusterColumn, namespaceColumn)
+}
+
+func applyDBTagFiltersToClusterNamespace(
+	query *gorm.DB,
+	orgID string,
+	filters []TagFilter,
+	clusterColumn, namespaceColumn string,
+) *gorm.DB {
+	schema, err := tags.TenantSchema(orgID)
+	if err != nil {
+		log.Warnf("ApplyTagFiltersToClusterNamespace: invalid org_id %q: %v", orgID, err)
+		return query
+	}
+	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
+
+	for _, f := range filters {
+		if f.Key == "" || len(f.Values) == 0 {
+			continue
+		}
+		var matchClause string
+		args := []interface{}{f.Key}
+		if len(f.Values) == 1 && f.Values[0] == "*" {
+			matchClause = "tv.key = ?"
+		} else {
+			matchClause = "tv.key = ? AND tv.value IN ?"
+			args = append(args, f.Values)
+		}
+		existsSQL := fmt.Sprintf(`EXISTS (
+			SELECT 1
+			FROM %s tv,
+			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
+			WHERE %s
+			  AND t.cluster_id = %s::text
+			  AND t.namespace = %s
+		)`, tagValuesTable, matchClause, clusterColumn, namespaceColumn)
+		query = query.Where(existsSQL, args...)
+	}
+	return query
 }
 
 // TagFilterExistsClause builds a parameterized EXISTS subquery for pgx handlers.

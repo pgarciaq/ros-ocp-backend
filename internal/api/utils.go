@@ -1141,6 +1141,12 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 	return nil
 }
 
+// stripTagFiltersFromQueryParams removes parsed tag filters before legacy SQL query builders
+// that iterate queryParams keys as column predicates.
+func stripTagFiltersFromQueryParams(queryParams map[string]interface{}) {
+	delete(queryParams, model.TagFiltersQueryKey)
+}
+
 // attachTagFiltersToQueryParams parses tag filters from the request when enabled and stores them on queryParams.
 func attachTagFiltersToQueryParams(c echo.Context, queryParams map[string]interface{}) error {
 	if !config.TagsFeatureEnabled() {
