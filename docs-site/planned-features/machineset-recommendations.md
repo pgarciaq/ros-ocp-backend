@@ -92,10 +92,10 @@ Group nodes by **MachineSet** (not only by `instance_type`) and recommend **repl
 
 ### Prerequisites and implementation steps
 
-1. **Operator (koku-metrics-operator)**
-   - Collect `machine.openshift.io/machine-set` (or equivalent) from node labels via Prometheus.
+1. **Operator (koku-metrics-operator)** — **done for Tier 1 / Tier 2a identity**
+   - Map each node to its owning MachineSet via the OpenShift **Machine API** (`machine.openshift.io/v1beta1` `Machine` → `MachineSet` owner reference). When the Machine API is unavailable, `machineset_name` is empty (bare metal, SNO, UPI).
    - Emit `machineset_name` on ROS container CSV (production path). **Nise** also generates `machineset_name` and `node_capacity_pods` for test data.
-   - Optional for Tier 2 core: MachineSet replica counts (`machineset_replicas`, `desired`/`available`) — required before Tier 3.
+   - **Not yet collected:** MachineSet replica counts (`machineset_replicas`, `desired`/`available`) — required before Tier 3 autoscaler work.
 
 2. **Ingestion (ros-ocp-backend)** — **done for Tier 1**
    - Parse `machineset_name` / `node_capacity_pods` from ROS CSV into `daily_node_digests`.
@@ -385,9 +385,9 @@ flowchart LR
 |-------|--------|------|
 | **1 — Produce** | `node` | Per-node classification, `node_count_reduction` |
 | **1 — Produce** (2b) | `instance-type` | Catalog refresh, smallest-fit lookup |
-| **3 — Optimize** | `machineset` | MachineSet aggregation, replica + instance recs |
+| **3 — Optimize** | `machineset` | MachineSet aggregation, replica + instance recs (depends on `node`; Tier 2b adds `instance-type`) |
 
-See [Plugin Execution Phases](../architecture/plugin-phases.md).
+A separate **`binpacking`** plugin (Phase 3, future) targets placement-aware fragmentation — it is **not** a Tier 2a prerequisite for replica guidance. See [Plugin Execution Phases](../architecture/plugin-phases.md).
 
 ---
 
