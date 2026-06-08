@@ -10,6 +10,7 @@
     **Operator:** Red Hat Lightspeed Resource Optimization Operator (`robne-operator`)  
     **CRD:** `ResourceOptimizationConfig` (`resource-optimization.openshift.io/v1beta1`)  
     **Modes:** Local (on-cluster only), Remote (central compute), Hybrid (both)  
+    **Collection frequency:** 15 seconds (Local/Hybrid), 15 minutes (Remote) — configurable  
     **Data source:** Prometheus / Thanos (direct PromQL, no CSV intermediary in Local/Hybrid)  
     **Tags:** Kubernetes labels (real-time) + cloud tags reconciled at central enrichment  
     **Local API:** Embedded REST API (same contract as central ros-ocp-backend)  
@@ -52,18 +53,20 @@ computation remains on central ros-ocp-backend.
 
 ## Why it matters
 
-### Faster recommendations
+### Real-time rightsizing
 
 The current pipeline introduces 6–12 hours of end-to-end latency (operator upload
-cycle + Koku processing + ROS ingestion). Local and Hybrid modes provide
-recommendations within minutes of workload changes.
+cycle + Koku processing + ROS ingestion). Local and Hybrid modes collect metrics
+every **15 seconds** (default) and compute recommendations immediately — VPA-like
+responsiveness with the full plugin suite (idle detection, business hours, GPU, etc.).
 
 ### Higher data fidelity
 
 Today the operator samples metrics at 15-minute intervals, 4 times per hour
-(96 data points per container per day). On-cluster modes leverage Prometheus
+(96 data points per container per day). On-cluster modes sample every 15 seconds
+(5,760 data points per container per day) and leverage Prometheus
 `quantile_over_time()` and `avg_over_time()` over the full-resolution scrape data —
-no sampling loss.
+no sampling loss, 60x more granular than the current architecture.
 
 ### Dramatically simpler pipeline
 
@@ -171,6 +174,91 @@ You can change `spec.mode` at any time:
 
 ---
 
+## Metric capture frequency
+
+The collection frequency is **mode-dependent** and **user-configurable** via
+`spec.collection.interval` in the CRD.
+
+### Defaults by mode
+
+| Parameter | Local | Hybrid | Remote |
+|-----------|-------|--------|--------|
+| **Collection interval** | 15 seconds | 15 seconds | 15 minutes |
+| Configurable range | 15s – 5m | 15s – 5m | 5m – 60m |
+| **Engine run interval** | Same as collection (default) | Same as collection (default) | N/A |
+| Configurable range | 15s – 5m | 15s – 5m | N/A |
+| **Upload cycle** | N/A | 6 hours (min 1h) | 6 hours (min 1h) |
+
+### Why 15 seconds for Local/Hybrid?
+
+In Local and Hybrid modes, the operator computes recommendations on-cluster with
+no external bottleneck. The goal is **real-time rightsizing** — recommendations
+that track workload behavior within seconds. This enables:
+
+- Burst detection: a workload that spikes has its recommendation updated in 15s
+- VPA-like responsiveness without VPA's instability (recommendations inform, not act)
+- Immediate visibility into idle/oversized containers after deployment changes
+
+The 15-second default matches the Prometheus scrape interval. Each sample updates
+a rolling t-digest (percentile sketch) in memory. The engine runs immediately after
+each collection: percentiles are recomputed, recommendations refreshed, and
+PostgreSQL updated via upsert.
+
+### Why 15 minutes for Remote?
+
+Remote mode packages CSVs with hourly granularity for upload to central. Higher
+frequency would produce enormous files without benefit (central processing is
+batch-oriented). The 15-minute default matches koku-metrics-operator's current
+behavior.
+
+### Prometheus query load
+
+At 15-second intervals, the operator fires ~20–25 instant queries per cycle
+(~100 queries/minute). This is well within Prometheus capacity. The queries use
+`rate(...[5m])` windows regardless of collection interval, so they are cheap
+vector operations.
+
+For clusters concerned about Prometheus load, configure a longer interval:
+
+| `collection.interval` | Queries/minute | Recommendation freshness |
+|----------------------|----------------|--------------------------|
+| `15s` (default Local/Hybrid) | ~100 | ≤ 15 seconds |
+| `60s` | ~25 | ≤ 1 minute |
+| `5m` | ~5 | ≤ 5 minutes |
+| `15m` (default Remote) | ~2 | ≤ 15 minutes |
+
+### Decoupling collection from engine
+
+By default, the engine runs after every collection cycle. For CPU-constrained
+environments, you can decouple them:
+
+```yaml
+spec:
+  collection:
+    interval: "15s"     # collect frequently
+  engine:
+    recommendation_cycle: "60s"  # but compute recommendations less often
+```
+
+This still feeds the digest with 15-second resolution data, but the engine plugins
+(percentile extraction, idle classification, recommendation generation) only execute
+once per minute.
+
+### Digest efficiency at high frequency
+
+Rolling t-digest structures handle high-frequency updates efficiently:
+
+- Each new sample: single `Add(value)` call (~O(log n) merge)
+- Memory: ~2 KB per container per metric (fixed-size sketch, regardless of samples)
+- 5000 containers × 6 metrics = ~60 MB digest memory
+- Percentile extraction: O(1) from the compressed sketch
+
+At 15s intervals over a 7-day window, that's 40,320 samples per metric per
+container — the t-digest compresses this to ~200 centroids with no accuracy loss
+for p50/p95/p99.
+
+---
+
 ## How it works
 
 ### On-cluster computation (Local / Hybrid)
@@ -275,8 +363,9 @@ robne_recommendation_errors_total{cluster, plugin}
 | Aspect | Current (koku-metrics-operator + central) | Local / Hybrid (robne-operator) |
 |--------|------------------------------------------|--------------------------------|
 | Operator | koku-metrics-operator (ROS CSV upload) | robne-operator (standalone) |
-| Recommendation freshness | 6–12 hours | Minutes (configurable) |
-| Data fidelity | 96 samples/day | Full Prometheus resolution |
+| Collection frequency | Every 15 minutes (instant queries) | Every 15 seconds (configurable 15s–5m) |
+| Recommendation freshness | 6–12 hours | ≤ 15 seconds (configurable) |
+| Data fidelity | 96 samples/day | 5,760 samples/day (full Prometheus resolution) |
 | On-cluster footprint (Remote) | ~50 Mi (collector only) | ~50 Mi (collector only) |
 | On-cluster footprint (Local/Hybrid) | N/A | ~200 Mi (operator + engine + DB) |
 | PostgreSQL | Central only | Dedicated (managed or external) |
@@ -316,8 +405,10 @@ spec:
     service_address: "https://thanos-querier.openshift-monitoring.svc:9091"
     context_timeout: 120
     collect_previous_data: true
+  collection:
+    interval: ""   # auto: 15s for local/hybrid, 15m for remote
   engine:
-    recommendation_cycle: 900
+    recommendation_cycle: ""   # auto: same as collection.interval
     plugins:
       container: {enabled: true}
       namespace: {enabled: true}

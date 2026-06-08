@@ -294,8 +294,28 @@ max_over_time(container_memory_working_set_bytes{...}[7d])
 ```
 
 ~30-40 vectorized PromQL queries per recommendation cycle (each returns all matching
-containers). At 15-minute cadence (default `recommendation_cycle: 900`): negligible
-Prometheus load.
+containers).
+
+### Collection frequency
+
+| Mode | Default interval | Range | Rationale |
+|------|-----------------|-------|-----------|
+| Local / Hybrid | **15 seconds** | 15s – 5m | Real-time rightsizing; matches Prometheus scrape interval |
+| Remote | **15 minutes** | 5m – 60m | CSV batch pipeline; matches koku-metrics-operator behavior |
+
+CRD fields: `spec.collection.interval` (how often to query Prometheus) and
+`spec.engine.recommendation_cycle` (how often to run the engine). By default the
+engine runs every collection cycle. Users can decouple them (e.g., collect@15s,
+engine@60s) to reduce CPU while maintaining full-resolution digest data.
+
+At 15-second intervals (~100 queries/minute), Prometheus load is negligible for
+instant vector queries using `rate(...[5m])` windows. For conservative environments,
+`interval: "60s"` or `interval: "5m"` reduces load proportionally.
+
+**Digest efficiency:** Rolling t-digest structures handle 15-second updates with
+~2 KB memory per container per metric. A cluster with 5000 containers × 6 metrics
+= ~60 MB digest memory. At 15s over 7 days = 40,320 samples per metric per container,
+compressed to ~200 centroids with no accuracy loss for p50/p95/p99.
 
 ## Hybrid push payload
 
@@ -462,8 +482,10 @@ spec:
     service_address: "https://thanos-querier.openshift-monitoring.svc:9091"
     context_timeout: 120
     collect_previous_data: true
+  collection:
+    interval: ""              # auto: 15s for local/hybrid, 15m for remote
   engine:
-    recommendation_cycle: 900
+    recommendation_cycle: ""  # auto: same as collection.interval
     plugins:
       container: {enabled: true}
       namespace: {enabled: true}
