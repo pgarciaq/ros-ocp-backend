@@ -785,8 +785,12 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		return serveNativeNamespaceList(c, page, apiListOptions)
 	}
 
+	if len(model.TagFiltersFromParams(queryParams)) > 0 {
+		// Tag filtering is native/DB-aware; do not fall back to legacy Kruize JSONB rows.
+		return serveNativeNamespaceList(c, page, apiListOptions)
+	}
+
 	hlog.Info("native namespace engine returned 0 results, falling back to Kruize path")
-	stripTagFiltersFromQueryParams(queryParams)
 	return GetNamespaceRecommendationSetList(c)
 }
 

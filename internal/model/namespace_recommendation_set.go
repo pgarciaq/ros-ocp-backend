@@ -78,6 +78,14 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSets(orgID string
 		return recommendationSets, int(count), err
 	}
 
+	tagFilters := TagFiltersFromParams(queryParams)
+	if len(tagFilters) > 0 {
+		query = ApplyTagFiltersToClusterNamespace(
+			query, orgID, tagFilters, "clusters.cluster_uuid", "namespace_recommendation_sets.namespace_name",
+		)
+	}
+	delete(queryParams, TagFiltersQueryKey)
+
 	for key, values := range queryParams {
 		switch v := values.(type) {
 		case []string:
