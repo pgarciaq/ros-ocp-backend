@@ -27,13 +27,12 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 1. [Executive Scorecard](#executive-scorecard)
 2. [Priority Remediation Order](#priority-remediation-order)
 3. [Findings by Deployment Posture](#findings-by-deployment-posture)
-4. [Findings — Critical](#findings--critical)
-5. [Findings — High](#findings--high)
-6. [Findings — Medium](#findings--medium)
-7. [Findings — Low / Info](#findings--low--info)
-8. [What Held Up Well](#what-held-up-well)
-9. [Cross-Cutting Failure Scenario Matrix](#cross-cutting-failure-scenario-matrix)
-10. [Tracking](#tracking)
+4. [Findings — High](#findings--high)
+5. [Findings — Medium](#findings--medium)
+6. [Findings — Low / Info](#findings--low--info)
+7. [What Held Up Well](#what-held-up-well)
+8. [Cross-Cutting Failure Scenario Matrix](#cross-cutting-failure-scenario-matrix)
+9. [Tracking](#tracking)
 
 ---
 
@@ -41,7 +40,7 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 
 | Area | Verdict | Summary |
 |------|---------|---------|
-| **Data integrity (Kafka ingestion)** | 🔴 Critical | Offset commits after partial file failure; native ingestion errors swallowed |
+| **Data integrity (Kafka ingestion)** | 🟠 High (mitigated) | Per-file tracking and error surfacing implemented; manual reship still required for recovery |
 | **Authentication** | 🟢 Delegated to gateway | Accepted architecture; weak only if gateway bypassed (SNO/dev posture) |
 | **Authorization** | 🟢 Strong when chart defaults used | `rbac.enabled: true` in production; weak only in SNO/dev overrides |
 | **API security** | 🟠 Medium–High | ILIKE injection, unbounded offset, SSRF when allowlist unset |
@@ -52,7 +51,7 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 | **Engineering governance** | 🟡 Low–Medium | No CHANGELOG; no ADR index; 134+ migrations without CONCURRENTLY automation |
 | **Positive controls** | 🟢 Strong | Plugin architecture, parameterized SQL, service-account auth patterns (when enabled), structured metrics |
 
-**Overall assessment:** The native engine and API surface are functionally mature, but **two Critical data-integrity defects in the Kafka commit path** create silent, permanent data loss under routine operational failures. Several auth findings (#3, #5, #6) are **deployment-specific shortcuts** in the SNO/dev posture and are mitigated by gateway JWT validation, RBAC defaults, and NetworkPolicy in standard SaaS and on-prem chart deployments. Remediation of Critical findings (#1, #2) should precede broad production hardening claims; auth hardening items are defense-in-depth or SNO/dev-only.
+**Overall assessment:** The native engine and API surface are functionally mature. **Findings #1 and #2 are mitigated** via per-file `report_file_status` tracking, surfaced ingestion errors, recommendation gating, and a `ros_ingestion_file_failures_total` Prometheus alert — matching the platform pattern used by Koku's `CostUsageReportStatus`. Residual risk: operators must run `reship_ros` for stuck manifests with failed files. Several auth findings (#3, #5, #6) are **deployment-specific shortcuts** in the SNO/dev posture and are mitigated by gateway JWT validation, RBAC defaults, and NetworkPolicy in standard SaaS and on-prem chart deployments.
 
 ---
 
@@ -62,7 +61,7 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 
 | # | Finding(s) | Rationale |
 |---|------------|-----------|
-| 1 | **#1, #2** (Critical) | Kafka offset commit after partial failure + swallowed ingestion errors form a compound silent data-loss chain. Any fix to commit logic is ineffective until native processors propagate errors. **Clear top priority — applies to all deployment postures.** |
+| 1 | **#1, #2** (High — mitigated) | Per-file tracking, error propagation, recommendation gating, and alerting implemented. Residual: manual `reship_ros` for failed files. |
 | 2 | **#18** (Medium — Kafka stall) | Unclassified errors cause infinite redelivery — consumer group makes no progress; pairs with #1 for opposite failure mode (stall vs. skip). |
 | 3 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
 | 4 | **#9** (High — pipeline degraded) | Fresh recommendations without analytics misleads operators and fleet metrics; add strict mode or staleness signaling. |
@@ -115,28 +114,37 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 
 ---
 
-## Findings — Critical
+## Findings — High
 
 ### Finding #1 — Kafka offset committed after partial file failure
 
 | Field | Value |
 |-------|-------|
-| **Severity** | Critical |
+| **Severity** | High (mitigated) |
 | **Category** | Data integrity / Kafka consumer semantics |
-| **Location** | `internal/services/report_processor.go` (lines 483–495) |
+| **Location** | `internal/services/report_processor.go`, `internal/model/report_file_status.go` |
 | **Effort** | M |
 
 **Description**
 
-The report processing loop iterates over files in a multi-file Kafka payload. When a single file fails, the loop sets `reportProcessingFailed = true` but `continue`s to the next file. After the loop completes, the Kafka offset is committed unless `kafkaTransientErr` is set. Permanent file failures (S3 404, CSV parse errors, schema mismatches) therefore commit the offset without retrying the failed file.
+The report processing loop iterates over files in a multi-file Kafka payload. When a single file fails permanently, the Kafka offset is still committed (by design, to avoid blocking the consumer group). Previously this caused silent data loss with no recovery path.
 
 **Exploit / trigger**
 
-Not attacker-driven. Any transient or permanent S3/MinIO glitch, corrupt CSV, or missing object key on **one file** in a multi-file payload permanently drops that file's data. The consumer advances; the file is never redelivered. Operators see a successful consume with no alert for the skipped file.
+Not attacker-driven. Any permanent S3/MinIO glitch, corrupt CSV, or missing object key on **one file** in a multi-file payload could permanently drop that file's data without operator visibility.
 
-**Recommended fix**
+**Mitigation (implemented)**
 
-Do not commit the offset unless all files succeeded or were explicitly classified as poison (dead-letter). Treat `reportProcessingFailed` as a commit blocker (same as transient), or implement per-file idempotency with a dead-letter queue for poison messages. Add a metric `rosocp_ingestion_file_failed_total` labeled by failure class.
+- Added `report_file_status` table tracking per-file state (`pending`, `processing`, `done`, `failed`) keyed by `(manifest_id, filename)`.
+- Kafka messages now carry `manifest_id` and `expected_files` (from Koku `ROSReportShipper`) so ros-ocp-backend knows the full expected file set.
+- Failed files are recorded with `status=failed` and `error_message`; idempotent re-delivery skips files already marked `done`.
+- Recommendation engines are **gated** until all expected manifest files reach `done` — processed data is kept, recommendations wait for complete ingestion.
+- Matches the platform pattern used by Koku's `CostUsageReportStatus` per-file tracking.
+- `ros_ingestion_file_failures_total` Prometheus counter (labels: `org_id`, `cluster_id`, `report_type`, `error_class`) surfaces failures immediately; cost-onprem chart includes an alerting rule.
+
+**Residual risk**
+
+Operators must manually intervene via Koku's `reship_ros` API (with optional `manifest_id` filter) to re-deliver failed files. Offset commit behavior is unchanged — the queue does not stall on partial failure.
 
 ---
 
@@ -144,26 +152,31 @@ Do not commit the offset unless all files succeeded or were explicitly classifie
 
 | Field | Value |
 |-------|-------|
-| **Severity** | Critical |
+| **Severity** | High (mitigated) |
 | **Category** | Data integrity / error propagation |
-| **Location** | `internal/services/report_processor.go` — `processContainerCSVNative` and siblings (lines 510–513, 525–528) |
+| **Location** | `internal/services/report_processor.go` — native ingest functions |
 | **Effort** | S |
 
 **Description**
 
-Non-transient ingestion errors (S3 403, fetch failures, parse errors) are logged and metrics incremented, but the functions return `nil` (success). The caller's file-processing loop never learns the file failed, so `reportProcessingFailed` may remain false even when data was not ingested.
+Non-transient ingestion errors (S3 403, fetch failures, parse errors) were logged and metrics incremented, but functions returned `nil` (success). The caller never learned the file failed.
 
 **Exploit / trigger**
 
-Compounds Finding #1: even if commit logic were fixed to check `reportProcessingFailed`, this bug prevents the flag from being set. Any S3 permission error or fetch failure silently succeeds from the caller's perspective.
+Compounded Finding #1: permanent fetch/parse failures appeared successful, preventing failure tracking and recommendation gating.
 
-**Recommended fix**
+**Mitigation (implemented)**
 
-Return wrapped errors for all ingestion failures unless explicitly classified as poison (e.g., unrecoverable schema violation after N retries). Let the outer loop set `reportProcessingFailed` and drive commit/retry semantics. Add unit tests asserting non-nil return on S3 403/404.
+- All native ingest functions (`processContainerCSVIngest`, `processNamespaceCSVIngest`, etc.) now return wrapped errors for permanent failures.
+- `ProcessReport` classifies errors as transient (blocks offset commit) vs permanent (records `report_file_status.failed`, increments `ros_ingestion_file_failures_total`, continues to next file).
+- Structured error logging on file failure includes `org_id`, `cluster_uuid`, `report_type`, and `error_class`.
+- Unit tests assert non-nil return on S3 403 and HTTP failures.
+
+**Residual risk**
+
+Same as Finding #1: recovery requires targeted `reship_ros` after investigating `report_file_status` and Prometheus alerts.
 
 ---
-
-## Findings — High
 
 ### Finding #7 — Dual DB connection pools (GORM + pgxpool)
 
@@ -864,7 +877,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 |----------|-----------|-----------|------------|-----------|-----------------|-----------------|
 | **PostgreSQL down** | Fails (transient) | 503 /readyz fails | 503 | Blocked | Not committed (retry) | `/readyz` fails; pod not ready |
 | **Kafka down** | Stalled | Unaffected | Unaffected | Stale | N/A | Consumer lag alert (external) |
-| **S3/MinIO down (one file in payload)** | **Silent skip (Critical #1+#2)** | Stale recs | N/A | Stale | **Committed** | Metric increment only; easy to miss |
+| **S3/MinIO down (one file in payload)** | **Tracked failure (#1+#2 mitigated)** | Stale recs (gated) | N/A | Stale | **Committed** | `ros_ingestion_file_failures_total` alert + `report_file_status.failed` |
 | **S3/MinIO down (all files)** | Fails | Stale | N/A | Stale | Depends on error class | Log + metric |
 | **Masu/Koku cost API down** | Recs without cost (degraded) | Savings $0 or cached | N/A | Partial | May commit (#9) | Cost provider errors in logs |
 | **History DB write fails** | Recs written (#9) | Fresh recs, no history | N/A | **Gap** | Committed | No API staleness flag |
@@ -883,8 +896,8 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 | Finding # | Title | Jira | Status | Target |
 |-----------|-------|------|--------|--------|
-| 1 | Kafka offset committed after partial file failure | TBD | Open | — |
-| 2 | Native ingestion errors swallowed (return nil) | TBD | Open | — |
+| 1 | Kafka offset committed after partial file failure | TBD | Mitigated | per-file tracking + gating |
+| 2 | Native ingestion errors swallowed (return nil) | TBD | Mitigated | error propagation + metrics |
 | 3 | Identity header trusted without JWT verification | TBD | Accepted (architecture) | — |
 | 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | Open (db-mode hardening) | — |
 | 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
@@ -916,4 +929,4 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 ---
 
-*Document version: 1.1 — 2026-06-08. Reclassified auth findings (#3–#6) by deployment posture. Next review recommended after Critical findings (#1, #2) are remediated.*
+*Document version: 1.2 — 2026-06-08. Mitigated findings #1 and #2 (reclassified Critical → High). Next review recommended after operator runbook for `reship_ros` recovery is documented.*

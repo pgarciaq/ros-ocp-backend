@@ -38,6 +38,10 @@ var (
 		Name: "rosocp_ingestion_errors_total",
 		Help: "Ingestion pipeline failures by stage (csv_parse, digest, recommend, write)",
 	}, []string{"stage"})
+	IngestionFileFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "ros_ingestion_file_failures_total",
+		Help: "Permanent per-file ingestion failures tracked in report_file_status",
+	}, []string{"org_id", "cluster_id", "report_type", "error_class"})
 )
 
 // PluginHookErrors counts non-fatal failures from plugin ingest hooks (processing continues).

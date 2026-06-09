@@ -151,11 +151,13 @@ func TestProcessContainerCSVNative_HTTPFailure(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
 	kafkaMsg.Metadata.Cluster_alias = "fail-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	err := processContainerCSVNative(ts.URL, kafkaMsg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
 
 	ctx := context.Background()
 	var count int
-	err := pool.QueryRow(ctx,
+	err = pool.QueryRow(ctx,
 		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1`, "org-fail").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count, "no digests should be written on HTTP failure")

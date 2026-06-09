@@ -69,14 +69,18 @@ func GetLogger() *logrus.Entry {
 // logs include Kafka metadata. This is internal diagnostics only; HTTP response bodies and OpenAPI contracts
 // are unaffected.
 func Set_request_details(data types.KafkaMsg) *logrus.Entry {
-	return GetLogger().WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"request_id":    data.Request_id,
 		"account":       data.Metadata.Account,
 		"org_id":        data.Metadata.Org_id,
 		"source_id":     data.Metadata.Source_id,
 		"cluster_uuid":  data.Metadata.Cluster_uuid,
 		"cluster_alias": data.Metadata.Cluster_alias,
-	})
+	}
+	if data.Metadata.Manifest_id != "" {
+		fields["manifest_id"] = data.Metadata.Manifest_id
+	}
+	return GetLogger().WithFields(fields)
 }
 
 // Set_request_details_recommendations returns a request-scoped logger for poller messages (same contract as
