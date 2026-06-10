@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work)
+Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work); 2026-06-10 (Kafka DLQ / consumer stall mitigated)
 
 ---
 
@@ -82,7 +82,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | MachineSet right-sizing (Tier 2) | REQ-8c.4, REQ-8c.5, REQ-8c.6 | Instance type + replica count recommendations via cloud catalog | High | Medium |
 | VM recommendations | REQ-8b.1 – REQ-8b.9 | Virtual machine right-sizing for OpenShift Virtualization | Medium | Medium |
 | On-demand real-time recs | REQ-3.4 | API-time recommendation for custom timeframe requests | Low | Low |
-| Poison message DLQ | REQ-0.7 | Dead-letter topic for Kafka messages that fail after max retries | Low | Low |
+| ~~Poison message DLQ~~ | ~~REQ-0.7~~ | **DONE** — Dead-letter topic `hccm.ros.events.dlq` with retry headers and forensic metadata after max retries | — | — |
 | Shadow mode | REQ-1.12 | Production dual-engine comparison (offline CLI tool exists) | Low | Low |
 | ~~Keyset pagination (container/namespace lists)~~ | — | **DONE** — `after` cursor on container and namespace list APIs; `offset`/`limit` remain as fallback. Other list endpoints still use offset (see §Keyset Pagination). | — | — |
 | ~~Replica count from operator~~ | ~~REQ-7.1~~ | **DONE** — Operator now emits `desired_replicas` and `available_replicas`; backend stores and exposes via API. | — | — |
@@ -195,12 +195,16 @@ or would rather use a correlation ID to look up the URL separately.
 
 - **Strip query strings** from presigned URLs before logging (log only
   `s3://bucket/key` path).
-- **Route failures to a dead-letter topic** with stricter access controls,
-  keeping only correlation IDs in general application logs.
+- **Dead-letter topic (implemented):** Transient processing failures that exhaust
+  retries are routed to `hccm.ros.events.dlq` with forensic metadata, unblocking
+  the consumer partition. Tune with `ROS_KAFKA_MAX_TRANSIENT_RETRIES` and
+  `ROS_KAFKA_DLQ_TOPIC`. Parse/validation failures still commit on the source
+  topic with full payload logged.
 
-This caveat aligns with the broader **poison message / DLQ** gap tracked as
-REQ-0.7 in the executive summary; **`docs/audits/490-issues.md` #149** documents the
-correctness and observability trade-offs for the current path.
+**Kafka consumer stall (mitigated):** Unclassified transient errors previously
+retried indefinitely and could block a partition. Retry counting and DLQ escalation
+after max retries now unblocks the consumer. Monitor `rosocp_kafka_retries_total`
+and `rosocp_kafka_dlq_messages_total` (see [Monitoring](monitoring.md)).
 
 #### Node Recommendation Cold Start
 

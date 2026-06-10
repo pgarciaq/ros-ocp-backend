@@ -44,6 +44,7 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
 | `rosocp_kafka_messages_processed_total` | Counter | — | Throughput — should increase when clusters upload data |
+| `rosocp_kafka_retries_total` | Counter | — | Messages requeued for retry (precursor to DLQ routing) |
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations saved (`container`, `namespace`, `node`, `pvc`) |
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | How long each recommendation domain takes |
 | `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Ingestion sub-phases (`digest`, `gpu_enrichment`) |
@@ -64,6 +65,7 @@ sum by (type) (increase(rosocp_recommendations_written_total[1h]))
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
+| `rosocp_kafka_dlq_messages_total` | Counter | — | Messages sent to the Dead Letter Queue after max retries |
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Pipeline failures: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_invalid_csv_total` | Counter | — | Bad container CSV from upstream |
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Bad namespace CSV |

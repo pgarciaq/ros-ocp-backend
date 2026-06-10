@@ -121,6 +121,13 @@ Pool tuning variables are listed under [Performance Tuning](#performance-tuning)
 
 Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance Tuning).
 
+### Kafka resilience
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_KAFKA_MAX_TRANSIENT_RETRIES` | `5` | How many times a message is retried before it is moved to the Dead Letter Queue. Increase in environments with intermittent storage or database connectivity issues. |
+| `ROS_KAFKA_DLQ_TOPIC` | `hccm.ros.events.dlq` | Topic that stores messages that could not be processed after all retries. Requires a Kafka topic (Helm/cost-onprem chart creates it automatically). |
+
 ---
 
 ## API and HTTP
