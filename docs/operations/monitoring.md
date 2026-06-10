@@ -164,6 +164,7 @@ These metrics appear on the **metrics listener** scrape (`PROMETHEUS_PORT`), not
 | `rosocp_ingest_groups_in_memory` | Gauge | — | Container-day digest groups currently held in memory during streaming CSV ingest |
 | `rosocp_ingest_flush_total` | Counter | — | Incremental digest-group flush operations (each flush is its own transaction) |
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Duration of incremental digest-group flush operations |
+| `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Container ingestion batches where history or quality analytics writes failed in degraded mode. `error_type`: `history` or `quality`. Not incremented in strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`) because the message is retried instead. |
 
 Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `1000`).
 

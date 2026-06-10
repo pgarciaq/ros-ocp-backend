@@ -51,19 +51,17 @@ The `/quality` endpoint aggregates post-hoc signals per container cycle: `stabil
 
 ## Pipeline behavior
 
-Recommendations are always persisted first. Analytics writes (history, quality) must not block delivery, but **transient** database errors on history must not leave gaps.
+By default (`ROS_INGEST_STRICT_ANALYTICS=false`), recommendations are persisted first and analytics gaps are surfaced via metrics and API flags. Set `ROS_INGEST_STRICT_ANALYTICS=true` to require history/quality writes before recommendations (transient failure retries the Kafka message).
 
 ### Container path (streaming batches)
 
-History and quality writes are **non-fatal for all errors** (the Kafka message cannot retry individual batches). If `WriteRecommendationHistory` or `WriteRecommendationQuality` fails, the pipeline:
+Orchestrated by `WriteContainerRecBatch` in [`internal/engine/analytics_pipeline.go`](../../internal/engine/analytics_pipeline.go) from [`internal/services/report_processor.go`](../../internal/services/report_processor.go).
 
-1. Logs an error
-2. Sets `pipelineDegraded=true`
-3. Continues processing; recommendations were already written in the same batch callback
+**Degraded mode (default):** recommendations written first; history/quality failures log structured errors, increment `rosocp_analytics_incomplete_total`, set `clusters.analytics_incomplete`, and expose `analytics_incomplete` on container list/detail responses.
 
-See [`internal/services/report_processor.go`](../../internal/services/report_processor.go) (streaming container path).
+**Strict mode:** history and quality written before recommendations; failures abort the batch (no offset commit).
 
-When `ReadClusterOldRecommendations` fails, quality metrics are skipped for that cycle (no prior row to compare) and the pipeline is also marked degraded.
+When `ReadClusterOldRecommendations` fails, quality metrics are skipped for that cycle (no prior row to compare) and the pipeline is also marked degraded (degraded mode only).
 
 ### Namespace path (single CSV / message)
 

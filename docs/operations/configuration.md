@@ -55,6 +55,7 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout for API/GORM connections. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
+| `ROS_INGEST_STRICT_ANALYTICS` | `false` | When `true`, history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. When `false` (default), recommendations are written first and analytics gaps are flagged via metrics and API fields. |
 
 ---
 

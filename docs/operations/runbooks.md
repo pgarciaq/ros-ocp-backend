@@ -123,6 +123,52 @@ All metrics use the `rosocp_` prefix.
 
 ---
 
+## Runbook: Analytics-Degraded Pipeline State
+
+**Alert condition:** `increase(rosocp_analytics_incomplete_total[1h]) > 0` or container list responses include `"analytics_incomplete": true`
+
+### Symptoms
+
+- Fresh container recommendations are available via the API, but `/history` or `/quality` data is missing or stale for the affected cluster.
+- Processor logs contain `analytics pipeline incomplete (history and/or quality)`.
+- `clusters.analytics_incomplete` is `true` for the cluster (see diagnosis below).
+
+### Diagnosis
+
+1. Check which analytics path failed:
+   ```promql
+   sum by (org_id, cluster_uuid, error_type) (increase(rosocp_analytics_incomplete_total[1h]))
+   ```
+
+2. Confirm cluster flag in PostgreSQL:
+   ```sql
+   SELECT ra.org_id, c.cluster_uuid, c.analytics_incomplete, c.analytics_incomplete_at
+   FROM clusters c
+   JOIN rh_accounts ra ON ra.id = c.tenant_id
+   WHERE c.analytics_incomplete = true;
+   ```
+
+3. Inspect processor logs for the cluster UUID — look for `writing recommendation history failed` or `writing quality metrics failed`.
+
+4. Common root causes: missing monthly partition (`rosocp_quality_partition_missing_total`), ingest statement timeout, transient DB connectivity.
+
+### Resolution
+
+**Default (degraded mode, `ROS_INGEST_STRICT_ANALYTICS=false`):**
+
+- Recommendations were intentionally persisted. Re-trigger ingestion for the cluster (Kafka message replay or `reship_ros`) once the underlying DB issue is fixed. A successful run clears `analytics_incomplete`.
+
+**Strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`):**
+
+- The Kafka offset was not committed; the message will retry automatically. Fix the root cause (partitions, DB load, timeout) and allow the consumer to catch up.
+
+**Operational hardening:**
+
+- Enable strict mode in environments where analytics/history parity is required for compliance dashboards.
+- Monitor `rosocp_analytics_incomplete_total` alongside `rosocp_partition_missing_error_total`.
+
+---
+
 ## Runbook: GPU Model Unrecognized
 
 **Alert condition:** `rate(rosocp_gpu_unrecognized_model_total[1h]) > 0`

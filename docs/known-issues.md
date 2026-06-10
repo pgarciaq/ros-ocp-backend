@@ -352,7 +352,9 @@ stability, adoption, and OOM events post-recommendation.
 `GET /api/cost-management/v1/recommendations/openshift/history` returns
 paginated recommendation snapshots with filtering by date range, cluster,
 project, workload, container, term, and engine. Supports JSON and CSV
-export.
+export. Container list/detail responses include `analytics_incomplete` and
+`analytics_incomplete_at` when history/quality writes failed during the
+most recent ingestion (see `ROS_INGEST_STRICT_ANALYTICS` in configuration docs).
 
 **UI status:** Not implemented. No timeline or trend visualization of how
 recommendations have changed.

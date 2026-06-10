@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-_No unreleased changes beyond the dated sections below._
+### Added
+
+- Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `false`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried).
+- Prometheus counter `rosocp_analytics_incomplete_total` (labels: `org_id`, `cluster_uuid`, `error_type` where `error_type` is `history` or `quality`).
+- Per-cluster analytics staleness flag on container recommendation list/detail responses: `analytics_incomplete` and `analytics_incomplete_at` (stored on `clusters` table, migration 000141).
+
+### Changed
+
+- Container ingestion degraded mode now sets `clusters.analytics_incomplete`, emits structured warnings, and increments `rosocp_analytics_incomplete_total` when history or quality writes fail (adversarial review finding #9 mitigated).
 
 ---
 

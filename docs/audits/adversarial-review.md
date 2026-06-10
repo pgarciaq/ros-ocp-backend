@@ -50,7 +50,7 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 | **Database & connections** | 🟠 Medium | Dual connection pools; statement timeout conflicts with large ingestion |
 | **Memory & performance** | 🟠 Medium | Streaming ingest holds full grouped map; node GPU endpoints paginate in memory |
 | **Operational resilience** | 🟡 Low–Medium (mitigated) | Readiness probe shallow; Kafka transient errors now retry/DLQ after 5 attempts (#18 mitigated); no graceful housekeeper shutdown |
-| **Pipeline correctness** | 🟠 Medium | Recommendations persist when history/quality writes fail |
+| **Pipeline correctness** | 🟢 Low (mitigated) | Strict analytics mode + staleness signaling for history/quality gaps |
 | **Engineering governance** | 🟡 Low–Medium | CHANGELOG exists; no ADR index; 140 migrations without CONCURRENTLY automation |
 | **Positive controls** | 🟢 Strong | Plugin architecture, parameterized SQL, service-account auth patterns (when enabled), structured metrics, ingestion unit tests |
 
@@ -66,7 +66,7 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 |---|------------|-----------|
 | 1 | **#1, #2** (High — mitigated) | Per-file tracking, error propagation, recommendation gating, and alerting implemented. Residual: empty `manifest_id`, legacy Kruize path, manual `reship_ros` for failed files. |
 | 2 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
-| 3 | **#9** (High — pipeline degraded) | Fresh recommendations without analytics misleads operators and fleet metrics; add strict mode or staleness signaling. |
+| 3 | **#9** (High — mitigated) | Strict analytics mode, `rosocp_analytics_incomplete_total`, and API `analytics_incomplete` cluster flag. Default remains degraded-compatible. |
 | 4 | **#7** (High — dual pools) | Connection exhaustion is silent until cascade failure; GORM pool still has no `SetMaxOpenConns`. |
 | 5 | **#11, #28** (Medium — recalc storms) | Concurrency capped at 3 per job but overlapping async jobs still possible after settings changes. |
 | 6 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
@@ -98,7 +98,7 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #6 SA any org | ✗ (by design) | ✗ (by design) | ✗ (by design) |
 | #7 Dual pools | ✓ | ✓ | ✓ |
 | #8 Memory grouped map | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
-| #9 Pipeline degraded | ✓ | ✓ | ✓ |
+| #9 Pipeline degraded | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #10 No CHANGELOG | ✗ (exists) | ✗ (exists) | ✗ (exists) |
 | #11 Recalc storms | ⚠ (concurrency cap) | ⚠ | ⚠ |
 | #12 SSRF allowlist | ✓ | ✓ | ✓ |
@@ -237,23 +237,21 @@ Streaming ingest now flushes digest groups incrementally when the in-memory grou
 
 | Field | Value |
 |-------|-------|
-| **Severity** | High |
+| **Severity** | High → **Mitigated** |
 | **Category** | Data consistency |
-| **Location** | `internal/services/report_processor.go` — `pipelineDegraded` (lines 642–698) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/services/report_processor.go`, `internal/engine/analytics_pipeline.go` |
+| **Status** | **Mitigated** (verified 2026-06-10) |
 | **Effort** | M |
 
 **Description**
 
 Container recommendations are persisted and Kafka offsets committed even when history or quality metric writes fail. The API serves fresh recommendations without corresponding analytics history.
 
-**Exploit / trigger**
+**Mitigation**
 
-Operational — transient DB error or timeout on history/quality tables during otherwise successful ingestion. Fleet savings summaries and quality dashboards diverge from recommendation data without surfacing error state to API consumers.
-
-**Recommended fix**
-
-Add configurable strict mode that blocks recommendation commit on analytics failure. Alternatively expose `rosocp_analytics_incomplete_total` metric and an API staleness flag on affected clusters. Document degraded-mode behavior in operations runbooks.
+- **`ROS_INGEST_STRICT_ANALYTICS`** (default `false`): when `true`, analytics writes run before recommendations; failures abort the batch and return a transient error (no offset commit, message retried).
+- **Degraded mode (default):** recommendations persist; `rosocp_analytics_incomplete_total{error_type="history|quality"}` increments; `clusters.analytics_incomplete` flag set; container list/detail responses expose `analytics_incomplete` and `analytics_incomplete_at`.
+- Runbook: [Analytics-Degraded Pipeline State](../operations/runbooks.md#runbook-analytics-degraded-pipeline-state).
 
 ---
 
@@ -854,7 +852,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | **S3/MinIO down (all files)** | Fails | Stale | N/A | Stale | Depends on error class | Log + metric |
 | **Empty manifest_id in Kafka msg** | **No per-file tracking** | May run recs early | N/A | Partial | Committed | No `report_file_status` rows |
 | **Masu/Koku cost API down** | Recs without cost (degraded) | Savings $0 or cached | N/A | Partial | May commit (#9) | Cost provider errors in logs |
-| **History DB write fails** | Recs written (#9) | Fresh recs, no history | N/A | **Gap** | Committed | No API staleness flag |
+| **History DB write fails** | Recs written (degraded) or retried (strict) | Fresh recs; flag if degraded | N/A | **Gap if degraded** | Committed if degraded; retry if strict | `rosocp_analytics_incomplete_total`, API `analytics_incomplete` |
 | **Identity gateway bypassed (#3)** | N/A | Cross-tenant access *(SNO/dev only)* | Unauthorized mutation *(SNO/dev only)* | N/A | N/A | No in-app signal |
 | **`RBAC_ENABLE=false` (#5)** | N/A | All data (if identity trusted) | Any user changes thresholds *(SNO/dev only)* | Recalc storm | N/A | None |
 | **Unclassified Kafka error (#18)** | **Retry then DLQ** | Stale during retries | N/A | Stale | **Committed after DLQ** | `rosocp_kafka_retries_total`, `rosocp_kafka_dlq_messages_total` |
@@ -863,7 +861,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | **NetworkPolicy missing (#3, #4)** | N/A | Internal routes exposed *(SNO/dev)* | Tag enum cross-tenant *(db mode)* | N/A | N/A | None without network audit |
 | **workload_type filter + pagination (#31)** | N/A | **Fixed** — filter honored on all pages | N/A | N/A | N/A | N/A |
 
-**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall). Per-file tracking (#1+#2) materially improves the partial-failure case for native ingestion when `manifest_id` is present. Auth findings (#3–#6) are largely mitigated in SaaS and default on-prem chart deployments. Dependency failure modes are otherwise reasonably observable except analytics degradation (Finding #9).
+**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall). Per-file tracking (#1+#2) materially improves the partial-failure case for native ingestion when `manifest_id` is present. Auth findings (#3–#6) are largely mitigated in SaaS and default on-prem chart deployments. Analytics degradation (#9) is now observable via metrics and API flags; strict mode available for environments requiring history/quality parity.
 
 ---
 
@@ -879,7 +877,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
 | 7 | Dual DB connection pools (GORM + pgxpool) | TBD | Open | No `SetMaxOpenConns` on GORM |
 | 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Incremental flush via `ROS_INGEST_FLUSH_BATCH_SIZE`; ingest memory metrics |
-| 9 | Pipeline writes recs when history/quality fails | TBD | Open | `pipelineDegraded` logs only |
+| 9 | Pipeline writes recs when history/quality fails | TBD | **Mitigated** | Strict mode + `rosocp_analytics_incomplete_total` + API flag |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |
 | 11 | No rate limiting; recalc goroutines without dedup | TBD | Partially addressed | Semaphore cap=3; no single-flight |
 | 12 | SSRF risk when CSV host allowlist unset | TBD | Open | — |
@@ -917,4 +915,4 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 ---
 
-*Document version: 1.5 — 2026-06-10. Mitigated Findings #8 (incremental digest flush) and #21 (ingest statement timeout).*
+*Document version: 1.6 — 2026-06-10. Mitigated Finding #9 (analytics strict mode + staleness signaling).*

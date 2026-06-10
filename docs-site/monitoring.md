@@ -118,6 +118,7 @@ sum(rate(rosocp_requests_total{code=~"5.."}[5m]))
 | `rosocp_ingest_groups_in_memory` | Gauge | — | Digest groups buffered during CSV ingest; sustained high values may indicate flush batch size is too large |
 | `rosocp_ingest_flush_total` | Counter | — | Incremental digest flush count |
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Time spent in each incremental flush |
+| `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Analytics write failures during container ingestion. `error_type`: `history` or `quality`. Increments in degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`); strict mode retries instead. |
 
 **DB healthy?**
 
