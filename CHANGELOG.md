@@ -17,10 +17,13 @@ _No unreleased changes beyond the dated sections below._
 - Kafka DLQ (Dead Letter Queue) support: messages that fail processing after 5 retries (configurable via `ROS_KAFKA_MAX_TRANSIENT_RETRIES`) are routed to `hccm.ros.events.dlq` with forensic metadata headers, unblocking the consumer partition.
 - New Prometheus metrics: `rosocp_kafka_dlq_messages_total`, `rosocp_kafka_retries_total`
 - New configuration: `ROS_KAFKA_MAX_TRANSIENT_RETRIES`, `ROS_KAFKA_DLQ_TOPIC`
+- Incremental digest flush during streaming ingest (`ROS_INGEST_FLUSH_BATCH_SIZE`, default 1000) with metrics `rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`
+- Ingestion-specific DB statement timeout (`ROS_DB_INGEST_STATEMENT_TIMEOUT`, default 120s) via `SET LOCAL` on batch transactions; API timeout configurable via `ROS_DB_STATEMENT_TIMEOUT` (default 25s)
 
 ### Changed
 
 - Kafka commit resilience: consumer commits offsets only after successful processing; transient failures retry with backoff before DLQ routing (findings #1 and #2 from adversarial review).
+- Streaming ingest flushes container-day digest groups incrementally instead of holding the full map until EOF (adversarial review finding #8).
 
 ### Fixed
 
@@ -28,6 +31,7 @@ _No unreleased changes beyond the dated sections below._
 - `workload_type` and namespace tag list filters on the org-keys pagination path
 - Namespace tag filters crashing legacy SQL path when tags enabled
 - E2E blockers: terms handler, fleet summary counts, `workload_type` filter
+- Large-cluster ingestion no longer hits the 25s global `statement_timeout` on batch upserts (adversarial review finding #21)
 
 ---
 

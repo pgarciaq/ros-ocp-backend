@@ -97,7 +97,7 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #5 No RBAC | ✗ (enabled) | ✗ (enabled) | ✓ |
 | #6 SA any org | ✗ (by design) | ✗ (by design) | ✗ (by design) |
 | #7 Dual pools | ✓ | ✓ | ✓ |
-| #8 Memory grouped map | ✓ | ✓ | ✓ |
+| #8 Memory grouped map | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #9 Pipeline degraded | ✓ | ✓ | ✓ |
 | #10 No CHANGELOG | ✗ (exists) | ✗ (exists) | ✗ (exists) |
 | #11 Recalc storms | ⚠ (concurrency cap) | ⚠ | ⚠ |
@@ -110,7 +110,7 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #18 Kafka stall | ⚠ (mitigated) | ⚠ (mitigated) | ⚠ (mitigated) |
 | #19 Housekeeper shutdown | ✓ | ✓ | ✓ |
 | #20 PII in logs | ✓ | ✓ | ✓ |
-| #21 Statement timeout | ✓ | ✓ | ✓ |
+| #21 Statement timeout | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #22 Node GPU memory | ✓ | ✓ | ✓ |
 | #23 panic() parse | ✓ | ✓ | ✓ |
 | #24 Migrations CONCURRENTLY | ✓ | ✓ | ✓ |
@@ -217,23 +217,19 @@ Migrate remaining GORM code paths to pgxpool, or configure `sql.DB` `SetMaxOpenC
 
 | Field | Value |
 |-------|-------|
-| **Severity** | High |
+| **Severity** | High (mitigated) |
 | **Category** | Performance / availability |
-| **Location** | `internal/ingestion/pipeline_stream.go` — `groupedAll` map (lines 135–221) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/ingestion/pipeline_stream.go` — incremental digest flush |
+| **Status** | **Mitigated** (verified 2026-06-10) |
 | **Effort** | M |
 
 **Description**
 
-Despite streaming CSV parsing, all container-day digest groups are held in a `groupedAll` map until EOF. Large clusters (10k containers × 14 days) can accumulate gigabytes in memory before flush, risking OOMKill mid-ingestion.
+Despite streaming CSV parsing, all container-day digest groups were held in a `groupedAll` map until EOF. Large clusters (10k containers × 14 days) could accumulate gigabytes in memory before flush, risking OOMKill mid-ingestion.
 
-**Exploit / trigger**
+**Mitigation**
 
-Operational — large fleet report payload processed on a pod with constrained memory limits. OOMKill loses in-flight work; combined with Finding #1 may commit offset after partial processing.
-
-**Recommended fix**
-
-Flush digest groups incrementally by month or fixed batch size. Do not retain the full grouped map through EOF. Add memory usage metrics during ingestion.
+Streaming ingest now flushes digest groups incrementally when the in-memory group count reaches `ROS_INGEST_FLUSH_BATCH_SIZE` (default 1000). Each flush runs in its own transaction; maps are cleared after flush. Prometheus gauges/counters track in-memory group count and flush operations (`rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`). Small payloads below the batch threshold retain the prior flush-at-EOF behavior.
 
 ---
 
@@ -544,19 +540,19 @@ Log only `request_id`, `org_id`, `cluster_uuid`, and error class. Store full pay
 
 | Field | Value |
 |-------|-------|
-| **Severity** | Medium |
+| **Severity** | Medium (mitigated) |
 | **Category** | Data integrity / performance |
-| **Location** | `internal/db/db.go` (`setStatementTimeout`) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/db/db.go`, `internal/db/statement_timeout.go` |
+| **Status** | **Mitigated** (verified 2026-06-10) |
 | **Effort** | S |
 
 **Description**
 
-A global 25-second `statement_timeout` applies to both GORM and pgxpool connections via `AfterConnect`. Large ingestion batch inserts/upserts may exceed this limit.
+A global 25-second `statement_timeout` applied to both GORM and pgxpool connections via `AfterConnect`. Large ingestion batch inserts/upserts could exceed this limit, causing timeout errors classified as transient and retried indefinitely.
 
-**Recommended fix**
+**Mitigation**
 
-Session-level timeout override for processor database role, or raise timeout for ingestion-specific connections.
+API connections keep `ROS_DB_STATEMENT_TIMEOUT` (default 25s). Ingestion batch transactions call `SET LOCAL statement_timeout` using `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default 120s) at transaction start; the override resets automatically when the transaction ends.
 
 ---
 
@@ -882,7 +878,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
 | 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
 | 7 | Dual DB connection pools (GORM + pgxpool) | TBD | Open | No `SetMaxOpenConns` on GORM |
-| 8 | Streaming ingest accumulates all groups in memory | TBD | Open | `groupedAll` unchanged |
+| 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Incremental flush via `ROS_INGEST_FLUSH_BATCH_SIZE`; ingest memory metrics |
 | 9 | Pipeline writes recs when history/quality fails | TBD | Open | `pipelineDegraded` logs only |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |
 | 11 | No rate limiting; recalc goroutines without dedup | TBD | Partially addressed | Semaphore cap=3; no single-flight |
@@ -895,7 +891,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 18 | Unclassified Kafka errors default to transient | TBD | **Mitigated** | `kafka_retry.go`; DLQ `hccm.ros.events.dlq`; max 5 retries |
 | 19 | Housekeeper lacks graceful shutdown | TBD | Open | Processor/API have signals; housekeeper does not |
 | 20 | Poison message payload logged (PII risk) | TBD | Open | 64 KB payload in logs |
-| 21 | 25s statement_timeout kills large ingestion | TBD | Open | Both pools use `setStatementTimeout` |
+| 21 | 25s statement_timeout kills large ingestion | TBD | **Mitigated** | `SET LOCAL` ingest timeout via `ROS_DB_INGEST_STATEMENT_TIMEOUT` |
 | 22 | Node GPU endpoint paginates in memory | TBD | Open | — |
 | 23 | panic() in boxplot/GPU YAML parse | TBD | Open | Also `gpu_metadata.go` |
 | 24 | 140 migrations with no CONCURRENTLY automation | TBD | Open | Was 134+; now 140 |
@@ -921,4 +917,4 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 ---
 
-*Document version: 1.4 — 2026-06-10. Mitigated Finding #18 (Kafka retry headers + DLQ). Next review recommended after operator runbook for `report_file_status` / `reship_ros` recovery is added to `docs/operations/runbooks.md`.*
+*Document version: 1.5 — 2026-06-10. Mitigated Findings #8 (incremental digest flush) and #21 (ingest statement timeout).*

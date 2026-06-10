@@ -111,6 +111,14 @@ sum(rate(rosocp_requests_total{code=~"5.."}[5m]))
 | `rosocp_db_query_duration_seconds` | Histogram | `operation` | Query latency |
 | `rosocp_db_error_total` | Counter | — | Connection or query failures |
 
+### Ingestion streaming
+
+| Metric | Type | Labels | What to watch |
+|--------|------|--------|---------------|
+| `rosocp_ingest_groups_in_memory` | Gauge | — | Digest groups buffered during CSV ingest; sustained high values may indicate flush batch size is too large |
+| `rosocp_ingest_flush_total` | Counter | — | Incremental digest flush count |
+| `rosocp_ingest_flush_duration_seconds` | Histogram | — | Time spent in each incremental flush |
+
 **DB healthy?**
 
 ```promql

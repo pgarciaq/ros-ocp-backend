@@ -83,6 +83,9 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_DB_STATEMENT_CACHE_MODE` | `describe` | pgx statement cache mode (`describe`, `prepare`, `describe_exec`). |
 | `ROS_DB_MAX_CONNS` | `10` | Maximum pgxpool connections per process. |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool acquire timeout. `0` = no limit. |
+| `ROS_DB_STATEMENT_TIMEOUT` | `25` | Session statement timeout in **seconds** for API connections. |
+| `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` | Per-transaction ingest timeout in **seconds** (`SET LOCAL` on batch writes). |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max digest groups in memory before incremental flush during streaming ingest. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel masu reship calls per org. |
 
 !!! tip "Tuning order"

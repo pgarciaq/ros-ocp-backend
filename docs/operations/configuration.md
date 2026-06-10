@@ -52,6 +52,9 @@ Related database pool settings (pre-existing, often tuned together):
 |----------|---------|---------|
 | `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller each have their own pool). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
+| `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout for API/GORM connections. |
+| `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
 
 ---
 

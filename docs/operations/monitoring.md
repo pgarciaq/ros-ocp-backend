@@ -157,7 +157,15 @@ These metrics appear on the **metrics listener** scrape (`PROMETHEUS_PORT`), not
 |--------|------|--------|------------------|
 | `rosocp_db_query_duration_seconds` | Histogram | `operation` | Labeled DB operation latency. Known `operation` values: `upsert_usage_samples`, `write_recommendations`, `persist_node_recommendations` |
 
-Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`).
+### Ingestion streaming
+
+| Metric | Type | Labels | What it measures |
+|--------|------|--------|------------------|
+| `rosocp_ingest_groups_in_memory` | Gauge | — | Container-day digest groups currently held in memory during streaming CSV ingest |
+| `rosocp_ingest_flush_total` | Counter | — | Incremental digest-group flush operations (each flush is its own transaction) |
+| `rosocp_ingest_flush_duration_seconds` | Histogram | — | Duration of incremental digest-group flush operations |
+
+Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `1000`).
 
 ### GPU
 
