@@ -11,6 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 const streamSampleFlushRows = 1000
@@ -125,6 +126,51 @@ func appendBusinessHoursRow(
 	appendGroupedRow(groups, row, orgID, clusterUUID, ScheduleTypeBusinessHours, BusinessHoursRowWeightFn(sched))
 }
 
+func digestGroupCount(all, bh map[DigestKey][]MetricRow) int {
+	return len(all) + len(bh)
+}
+
+func ingestFlushBatchSize() int {
+	size := config.GetConfig().IngestFlushBatchSize
+	if size <= 0 {
+		return 1000
+	}
+	return size
+}
+
+func flushDigestGroupBatch(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	groupedAll, groupedBH map[DigestKey][]MetricRow,
+	scheduleCache *bhschedule.Cache,
+	orgID, clusterUUID string,
+) error {
+	if len(groupedAll) == 0 && len(groupedBH) == 0 {
+		return nil
+	}
+	grouped := mergeDigestGroups(groupedAll, groupedBH)
+	start := time.Now()
+	defer func() {
+		metrics.ObserveIngestFlush(start)
+		metrics.IncIngestFlushTotal()
+	}()
+
+	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
+		return fmt.Errorf("digest partitions: %w", err)
+	}
+	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
+		return err
+	}
+
+	clear(groupedAll)
+	clear(groupedBH)
+	metrics.SetIngestGroupsInMemory(0)
+
+	logging.ForOrg(orgID, clusterUUID).Infof(
+		"ProcessCSVToDigests: flushed %d digest groups (incremental)", len(grouped))
+	return nil
+}
+
 func parseAndDigestCSVStream(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -137,6 +183,8 @@ func parseAndDigestCSVStream(
 	sampleBatch := make([]MetricRow, 0, streamSampleFlushRows)
 	var deferredSamples []MetricRow
 	useSingleIngestTx := false
+	digestBatchesFlushed := 0
+	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
 	var nodeAccum map[NodeDayKey]*NodeDayAccumulator
 	if opts.EnableGPU {
@@ -189,6 +237,15 @@ func parseAndDigestCSVStream(
 		appendGroupedRow(groupedAll, row, orgID, clusterUUID, ScheduleTypeAllHours, nil)
 		appendBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 
+		groupCount := digestGroupCount(groupedAll, groupedBH)
+		metrics.SetIngestGroupsInMemory(groupCount)
+		if groupCount >= flushBatchSize {
+			if err := flushDigestGroupBatch(ctx, pool, groupedAll, groupedBH, scheduleCache, orgID, clusterUUID); err != nil {
+				return fmt.Errorf("incremental digest flush: %w", err)
+			}
+			digestBatchesFlushed++
+		}
+
 		if gpuAccum != nil {
 			gpuAccum.add(row)
 		}
@@ -212,15 +269,16 @@ func parseAndDigestCSVStream(
 		return 0, nil
 	}
 
-	useSingleIngestTx = rowCount <= ingestSingleTxRowThreshold
+	useSingleIngestTx = rowCount <= ingestSingleTxRowThreshold && digestBatchesFlushed == 0
 
 	if err := flushSamples(sampleBatch); err != nil {
 		return rowCount, err
 	}
 
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d all_hours groups, %d business_hours groups",
-		rowCount, len(groupedAll), len(groupedBH))
+	metrics.SetIngestGroupsInMemory(len(grouped))
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
+		rowCount, len(grouped), digestBatchesFlushed)
 
 	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
 		return rowCount, fmt.Errorf("digest partitions: %w", err)

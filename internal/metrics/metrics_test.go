@@ -3,6 +3,7 @@ package metrics
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -19,6 +20,9 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	KafkaMessagesProcessed.Inc()
 	KafkaDLQMessagesTotal.Inc()
 	KafkaRetriesTotal.Inc()
+	SetIngestGroupsInMemory(1)
+	IncIngestFlushTotal()
+	ObserveIngestFlush(time.Now())
 
 	names := []string{
 		"rosocp_db_query_duration_seconds",
@@ -26,6 +30,9 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 		"rosocp_kafka_messages_processed_total",
 		"rosocp_kafka_dlq_messages_total",
 		"rosocp_kafka_retries_total",
+		"rosocp_ingest_groups_in_memory",
+		"rosocp_ingest_flush_total",
+		"rosocp_ingest_flush_duration_seconds",
 	}
 
 	mfs, err := prometheus.DefaultGatherer.Gather()
@@ -50,6 +57,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 			require.NotEmpty(t, h.GetBucket(), "metric %q histogram buckets must be configured", name)
 		case dto.MetricType_COUNTER:
 			require.NotEmpty(t, mf.GetMetric(), "metric %q must expose counter samples", name)
+		case dto.MetricType_GAUGE:
+			require.NotEmpty(t, mf.GetMetric(), "metric %q must expose gauge samples", name)
 		default:
 			t.Fatalf("unexpected metric type for %q: %v", name, mf.GetType())
 		}

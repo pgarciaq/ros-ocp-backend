@@ -66,8 +66,11 @@ type Config struct {
 	DBMinConns            int    `mapstructure:"ROS_DB_MIN_CONNS"`
 	DBMaxConnLifetimeMins int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
 	DBMaxConnIdleTimeMins int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
-	DBStatementCacheMode  string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
-	DBAcquireTimeoutSecs  int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
+	DBStatementCacheMode         string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
+	DBAcquireTimeoutSecs         int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
+	DBStatementTimeoutSecs       int    `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
+	DBIngestStatementTimeoutSecs int    `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
+	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
 
 	// RBAC config
 	RBACHost     string
@@ -571,6 +574,9 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_MAX_CONN_IDLE_TIME", 5)
 	viper.SetDefault("ROS_DB_STATEMENT_CACHE_MODE", "describe")
 	viper.SetDefault("ROS_DB_ACQUIRE_TIMEOUT_SECS", 5)
+	viper.SetDefault("ROS_DB_STATEMENT_TIMEOUT", 25)
+	viper.SetDefault("ROS_DB_INGEST_STATEMENT_TIMEOUT", 120)
+	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
@@ -840,6 +846,15 @@ func validateLoadedConfig(c *Config) {
 	if c.DBAcquireTimeoutSecs < 0 {
 		log.Printf("config: ROS_DB_ACQUIRE_TIMEOUT_SECS (%d) is invalid; using 5", c.DBAcquireTimeoutSecs)
 		c.DBAcquireTimeoutSecs = 5
+	}
+	if c.DBStatementTimeoutSecs <= 0 {
+		c.DBStatementTimeoutSecs = 25
+	}
+	if c.DBIngestStatementTimeoutSecs <= 0 {
+		c.DBIngestStatementTimeoutSecs = 120
+	}
+	if c.IngestFlushBatchSize <= 0 {
+		c.IngestFlushBatchSize = 1000
 	}
 	if c.ReshipConcurrency <= 0 {
 		c.ReshipConcurrency = 2

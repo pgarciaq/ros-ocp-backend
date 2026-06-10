@@ -65,6 +65,28 @@ var (
 			Help: "Kafka messages requeued with an incremented retry count after transient processing errors",
 		},
 	)
+
+	IngestGroupsInMemory = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "rosocp_ingest_groups_in_memory",
+			Help: "Current number of container-day digest groups held in memory during streaming ingest",
+		},
+	)
+
+	IngestFlushTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_ingest_flush_total",
+			Help: "Total incremental digest-group flush operations during streaming ingest",
+		},
+	)
+
+	IngestFlushDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "rosocp_ingest_flush_duration_seconds",
+			Help:    "Duration of incremental digest-group flush operations during streaming ingest",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120},
+		},
+	)
 )
 
 // ObserveDB records elapsed time for a labeled DB operation.
@@ -85,4 +107,19 @@ func ObservePipelinePhase(phase string, start time.Time) {
 // IncRecommendationsWritten increments the written counter for a recommendation type.
 func IncRecommendationsWritten(typ string, count int) {
 	RecommendationsWritten.WithLabelValues(typ).Add(float64(count))
+}
+
+// SetIngestGroupsInMemory updates the in-memory digest group gauge during streaming ingest.
+func SetIngestGroupsInMemory(count int) {
+	IngestGroupsInMemory.Set(float64(count))
+}
+
+// ObserveIngestFlush records duration for an incremental digest-group flush.
+func ObserveIngestFlush(start time.Time) {
+	IngestFlushDuration.Observe(time.Since(start).Seconds())
+}
+
+// IncIngestFlushTotal increments the incremental flush counter.
+func IncIngestFlushTotal() {
+	IngestFlushTotal.Inc()
 }
