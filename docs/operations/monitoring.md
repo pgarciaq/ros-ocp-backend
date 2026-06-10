@@ -157,6 +157,25 @@ These metrics appear on the **metrics listener** scrape (`PROMETHEUS_PORT`), not
 |--------|------|--------|------------------|
 | `rosocp_db_query_duration_seconds` | Histogram | `operation` | Labeled DB operation latency. Known `operation` values: `upsert_usage_samples`, `write_recommendations`, `persist_node_recommendations` |
 
+### Connection pool (pgxpool)
+
+GORM and direct pgxpool access share one pool per process. Metrics are point-in-time snapshots from `pool.Stat()` on each Prometheus scrape.
+
+| Metric | Type | What it measures |
+|--------|------|------------------|
+| `rosocp_db_pool_total_conns` | Gauge | Total connections (acquired + idle + constructing) |
+| `rosocp_db_pool_acquired_conns` | Gauge | Connections currently in use |
+| `rosocp_db_pool_idle_conns` | Gauge | Idle connections |
+| `rosocp_db_pool_max_conns` | Gauge | Configured max connections (`ROS_DB_MAX_CONNS`) |
+| `rosocp_db_pool_acquire_count_total` | Counter | Cumulative successful acquires |
+| `rosocp_db_pool_acquire_duration_seconds` | Counter | Cumulative time spent acquiring connections |
+
+**Alerting example:**
+
+```promql
+rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns > 0.9
+```
+
 ### Ingestion streaming
 
 | Metric | Type | Labels | What it measures |

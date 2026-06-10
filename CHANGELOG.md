@@ -11,10 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `false`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried).
 - Prometheus counter `rosocp_analytics_incomplete_total` (labels: `org_id`, `cluster_uuid`, `error_type` where `error_type` is `history` or `quality`).
 - Per-cluster analytics staleness flag on container recommendation list/detail responses: `analytics_incomplete` and `analytics_incomplete_at` (stored on `clusters` table, migration 000141).
+- Prometheus pgxpool metrics: `rosocp_db_pool_total_conns`, `rosocp_db_pool_acquired_conns`, `rosocp_db_pool_idle_conns`, `rosocp_db_pool_max_conns`, `rosocp_db_pool_acquire_count_total`, `rosocp_db_pool_acquire_duration_seconds`.
 
 ### Changed
 
 - Container ingestion degraded mode now sets `clusters.analytics_incomplete`, emits structured warnings, and increments `rosocp_analytics_incomplete_total` when history or quality writes fail (adversarial review finding #9 mitigated).
+- GORM now shares the pgxpool via `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all database connections per process (adversarial review finding #7 mitigated).
 
 ---
 

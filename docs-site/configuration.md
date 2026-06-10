@@ -81,7 +81,7 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_DB_MAX_CONN_LIFETIME` | `30` | Max connection lifetime in **minutes**. |
 | `ROS_DB_MAX_CONN_IDLE_TIME` | `5` | Max idle connection time in **minutes**. |
 | `ROS_DB_STATEMENT_CACHE_MODE` | `describe` | pgx statement cache mode (`describe`, `prepare`, `describe_exec`). |
-| `ROS_DB_MAX_CONNS` | `10` | Maximum pgxpool connections per process. |
+| `ROS_DB_MAX_CONNS` | `10` | Maximum pgxpool connections per process. GORM and pgxpool share this single pool; all DB paths honor the same limit. |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool acquire timeout. `0` = no limit. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` | Session statement timeout in **seconds** for API connections. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` | Per-transaction ingest timeout in **seconds** (`SET LOCAL` on batch writes). |

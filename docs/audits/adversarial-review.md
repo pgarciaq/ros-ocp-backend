@@ -47,7 +47,7 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 | **Authentication** | 🟢 Delegated to gateway | Accepted architecture; weak only if gateway bypassed (SNO/dev posture) |
 | **Authorization** | 🟢 Strong when chart defaults used | `rbac.enabled: true` in production; weak only in SNO/dev overrides |
 | **API security** | 🟠 Medium | ILIKE wildcard injection, unbounded offset, SSRF when allowlist unset; pagination filter bypass (#31) fixed |
-| **Database & connections** | 🟠 Medium | Dual connection pools; statement timeout conflicts with large ingestion |
+| **Database & connections** | 🟢 Low (mitigated) | Unified pgxpool for GORM and pgx paths; pool metrics exported |
 | **Memory & performance** | 🟠 Medium | Streaming ingest holds full grouped map; node GPU endpoints paginate in memory |
 | **Operational resilience** | 🟡 Low–Medium (mitigated) | Readiness probe shallow; Kafka transient errors now retry/DLQ after 5 attempts (#18 mitigated); no graceful housekeeper shutdown |
 | **Pipeline correctness** | 🟢 Low (mitigated) | Strict analytics mode + staleness signaling for history/quality gaps |
@@ -67,14 +67,14 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 | 1 | **#1, #2** (High — mitigated) | Per-file tracking, error propagation, recommendation gating, and alerting implemented. Residual: empty `manifest_id`, legacy Kruize path, manual `reship_ros` for failed files. |
 | 2 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
 | 3 | **#9** (High — mitigated) | Strict analytics mode, `rosocp_analytics_incomplete_total`, and API `analytics_incomplete` cluster flag. Default remains degraded-compatible. |
-| 4 | **#7** (High — dual pools) | Connection exhaustion is silent until cascade failure; GORM pool still has no `SetMaxOpenConns`. |
-| 5 | **#11, #28** (Medium — recalc storms) | Concurrency capped at 3 per job but overlapping async jobs still possible after settings changes. |
-| 6 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
-| 7 | **#15, #16** (Medium — tag auth config) | Dev token bypass and empty SA allowlist are configuration footguns. |
-| 8 | **#17, #19, #20** (Medium — ops) | Readiness depth, graceful shutdown, PII in poison logs. |
-| 9 | **#22, #23** (Medium — memory/panic) | Node GPU in-memory pagination; panic on parse failures. |
-| 10 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
-| 11 | **#30** (Info — governance) | ADR index — process debt, not incident drivers. |
+| 4 | **#11, #28** (Medium — recalc storms) | Concurrency capped at 3 per job but overlapping async jobs still possible after settings changes. |
+| 5 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
+| 6 | **#15, #16** (Medium — tag auth config) | Dev token bypass and empty SA allowlist are configuration footguns. |
+| 7 | **#17, #19, #20** (Medium — ops) | Readiness depth, graceful shutdown, PII in poison logs. |
+| 8 | **#22, #23** (Medium — memory/panic) | Node GPU in-memory pagination; panic on parse failures. |
+| 9 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
+| 10 | **#30** (Info — governance) | ADR index — process debt, not incident drivers. |
+| — | **#7** (Mitigated) | GORM uses `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all connections; pool metrics on scrape. |
 | — | **#18** (Mitigated) | Retry-count headers + DLQ after 5 attempts; `rosocp_kafka_dlq_messages_total` for alerting. |
 | — | **#10** (Resolved) | `CHANGELOG.md` exists at repo root. Optional: enforce OpenAPI diff in CI. |
 | — | **#31** (Resolved) | Pagination filter bypass fixed in `f66feaf7`. |
@@ -96,7 +96,7 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #4 Tags unauth | ✗ (api mode) | ⚠ (db mode, NetworkPolicy) | ✓ |
 | #5 No RBAC | ✗ (enabled) | ✗ (enabled) | ✓ |
 | #6 SA any org | ✗ (by design) | ✗ (by design) | ✗ (by design) |
-| #7 Dual pools | ✓ | ✓ | ✓ |
+| #7 Dual pools | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #8 Memory grouped map | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #9 Pipeline degraded | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #10 No CHANGELOG | ✗ (exists) | ✗ (exists) | ✗ (exists) |
@@ -195,21 +195,21 @@ Compounded Finding #1: permanent fetch/parse failures appeared successful, preve
 |-------|-------|
 | **Severity** | High |
 | **Category** | Performance / reliability |
-| **Location** | `internal/db/db.go` |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/db/db.go`, `internal/metrics/pool_collector.go` |
+| **Status** | **Mitigated** (verified 2026-06-10) |
 | **Effort** | L |
 
 **Description**
 
-Two independent database connection pools exist: GORM (via `database/sql` defaults — no `SetMaxOpenConns`/`SetMaxIdleConns` configured) and pgxpool (tuned via `ROS_DB_MAX_CONNS`). Under load, one pool can exhaust connections while the other remains idle, or combined usage can exceed PostgreSQL `max_connections`.
+Two independent database connection pools existed: GORM (via `database/sql` defaults — no `SetMaxOpenConns`/`SetMaxIdleConns` configured) and pgxpool (tuned via `ROS_DB_MAX_CONNS`). Under load, one pool could exhaust connections while the other remained idle, or combined usage could exceed PostgreSQL `max_connections`.
 
-**Exploit / trigger**
+**Mitigation**
 
-Production traffic spike or parallel ingestion + API queries cause silent connection wait timeouts, 500 errors, or ingestion stalls with no clear single-pool metric.
+GORM now wraps the shared pgxpool via `stdlib.OpenDBFromPool`. `GetDB()` initializes `GetPool()` first; `database/sql` idle/open limits are set to zero so pgxpool governs all connections. Prometheus pool metrics (`rosocp_db_pool_*`) are exported on scrape via a custom collector reading `pool.Stat()`.
 
-**Recommended fix**
+**Residual risk**
 
-Migrate remaining GORM code paths to pgxpool, or configure `sql.DB` `SetMaxOpenConns` / `SetMaxIdleConns` from the same config source. Export per-pool connection metrics and alert on saturation.
+Each process (API, processor, poller) still has its own pool instance — coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`.
 
 ---
 
@@ -875,7 +875,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | Open | db-mode hardening |
 | 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
 | 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
-| 7 | Dual DB connection pools (GORM + pgxpool) | TBD | Open | No `SetMaxOpenConns` on GORM |
+| 7 | Dual DB connection pools (GORM + pgxpool) | TBD | **Mitigated** | GORM shares pgxpool via `OpenDBFromPool`; `rosocp_db_pool_*` metrics |
 | 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Incremental flush via `ROS_INGEST_FLUSH_BATCH_SIZE`; ingest memory metrics |
 | 9 | Pipeline writes recs when history/quality fails | TBD | **Mitigated** | Strict mode + `rosocp_analytics_incomplete_total` + API flag |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |

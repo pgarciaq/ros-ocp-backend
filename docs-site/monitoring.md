@@ -109,6 +109,19 @@ sum(rate(rosocp_requests_total{code=~"5.."}[5m]))
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
 | `rosocp_db_query_duration_seconds` | Histogram | `operation` | Query latency |
+
+### Connection pool (pgxpool)
+
+GORM and direct pgxpool access share one pool per process. Metrics reflect `pool.Stat()` at scrape time.
+
+| Metric | Type | What it measures |
+|--------|------|------------------|
+| `rosocp_db_pool_total_conns` | Gauge | Total connections (acquired + idle + constructing) |
+| `rosocp_db_pool_acquired_conns` | Gauge | Connections currently in use |
+| `rosocp_db_pool_idle_conns` | Gauge | Idle connections |
+| `rosocp_db_pool_max_conns` | Gauge | Configured max connections (`ROS_DB_MAX_CONNS`) |
+| `rosocp_db_pool_acquire_count_total` | Counter | Cumulative successful acquires |
+| `rosocp_db_pool_acquire_duration_seconds` | Counter | Cumulative time spent acquiring connections |
 | `rosocp_db_error_total` | Counter | — | Connection or query failures |
 
 ### Ingestion streaming
