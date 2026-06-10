@@ -13,6 +13,22 @@ import (
 var p *kafka.Producer = nil
 var log *logrus.Entry = nil
 
+// GetProducer returns the shared Kafka producer, initializing it on first use.
+func GetProducer() *kafka.Producer {
+	if p == nil {
+		startProducer()
+	}
+	return p
+}
+
+// CloseProducer closes the shared producer if it was initialized.
+func CloseProducer() {
+	if p != nil {
+		p.Close()
+		p = nil
+	}
+}
+
 func startProducer() {
 	cfg := config.GetConfig()
 	var configMap kafka.ConfigMap
@@ -56,7 +72,7 @@ func SendMessage(msg []byte, topic string, key string) error {
 	}
 	if p == nil {
 		log.Info("initializing kafka producer")
-		startProducer()
+		GetProducer()
 	}
 	if p == nil {
 		return fmt.Errorf("kafka producer failed to initialize; cannot send message to topic %s", topic)

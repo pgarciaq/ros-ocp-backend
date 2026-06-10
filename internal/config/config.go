@@ -30,10 +30,12 @@ type Config struct {
 	// Kafka config
 	KafkaBootstrapServers string `mapstructure:"KAFKA_BOOTSTRAP_SERVERS"`
 	KafkaConsumerGroupId  string `mapstructure:"KAFKA_CONSUMER_GROUP_ID"`
-	KafkaAutoCommit       bool   `mapstructure:"KAFKA_AUTO_COMMIT"`
-	UploadTopic           string `mapstructure:"UPLOAD_TOPIC"`
-	RecommendationTopic   string `mapstructure:"RECOMMENDATION_TOPIC"`
-	SourcesEventTopic     string `mapstructure:"SOURCES_EVENT_TOPIC"`
+	KafkaAutoCommit          bool   `mapstructure:"KAFKA_AUTO_COMMIT"`
+	KafkaMaxTransientRetries int    `mapstructure:"ROS_KAFKA_MAX_TRANSIENT_RETRIES"`
+	KafkaDLQTopic            string `mapstructure:"ROS_KAFKA_DLQ_TOPIC"`
+	UploadTopic              string `mapstructure:"UPLOAD_TOPIC"`
+	RecommendationTopic      string `mapstructure:"RECOMMENDATION_TOPIC"`
+	SourcesEventTopic        string `mapstructure:"SOURCES_EVENT_TOPIC"`
 	KafkaUsername         string
 	KafkaPassword         string
 	KafkaSASLMechanism    string
@@ -538,6 +540,8 @@ func initConfig() {
 	viper.SetDefault("KRUIZE_MAX_BULK_CHUNK_SIZE", 100)
 	viper.SetDefault("KAFKA_CONSUMER_GROUP_ID", "ros-ocp")
 	viper.SetDefault("KAFKA_AUTO_COMMIT", false)
+	viper.SetDefault("ROS_KAFKA_MAX_TRANSIENT_RETRIES", 5)
+	viper.SetDefault("ROS_KAFKA_DLQ_TOPIC", "hccm.ros.events.dlq")
 	viper.SetDefault("LOG_LEVEL", "INFO")
 	viper.SetDefault("KRUIZE_HOST", "localhost")
 	viper.SetDefault("KRUIZE_PORT", "8080")

@@ -51,6 +51,20 @@ var (
 			Help: "Kafka messages processed successfully by the consumer handler",
 		},
 	)
+
+	KafkaDLQMessagesTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_kafka_dlq_messages_total",
+			Help: "Kafka messages routed to the dead-letter topic after exhausting transient retries",
+		},
+	)
+
+	KafkaRetriesTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_kafka_retries_total",
+			Help: "Kafka messages requeued with an incremented retry count after transient processing errors",
+		},
+	)
 )
 
 // ObserveDB records elapsed time for a labeled DB operation.

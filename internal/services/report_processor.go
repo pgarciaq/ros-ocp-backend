@@ -548,8 +548,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	appCfg := config.GetConfig()
 	if consumer != nil && !appCfg.KafkaAutoCommit {
 		if kafkaTransientErr != nil {
-			log.Errorf("kafka: offset not committed for partition=%s (transient processing error — message will be redelivered): %v",
-				msg.TopicPartition, kafkaTransientErr)
+			handleKafkaTransientError(consumer, kafkaProducerForRetry(), msg, kafkaTransientErr)
 		} else if _, err := consumer.CommitMessage(msg); err != nil {
 			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
 		} else {

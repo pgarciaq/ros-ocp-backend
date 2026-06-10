@@ -17,11 +17,15 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	DBQueryDuration.WithLabelValues("metric_test").Observe(0)
 	RecommendationDuration.WithLabelValues("metric_test").Observe(0)
 	KafkaMessagesProcessed.Inc()
+	KafkaDLQMessagesTotal.Inc()
+	KafkaRetriesTotal.Inc()
 
 	names := []string{
 		"rosocp_db_query_duration_seconds",
 		"rosocp_recommendation_duration_seconds",
 		"rosocp_kafka_messages_processed_total",
+		"rosocp_kafka_dlq_messages_total",
+		"rosocp_kafka_retries_total",
 	}
 
 	mfs, err := prometheus.DefaultGatherer.Gather()
