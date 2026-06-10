@@ -133,6 +133,9 @@ type Config struct {
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
+	// CostCacheMaxEntries caps the in-memory effective-rates LRU cache (default 1000).
+	CostCacheMaxEntries int `mapstructure:"ROS_COST_CACHE_MAX_ENTRIES"`
+
 	// SavingsEstimatesEnabled gates Masu effective-rates fetches for container and GPU savings.
 	// Default true; set ROS_SAVINGS_ESTIMATES_ENABLED=false to disable all savings calculations.
 	SavingsEstimatesEnabled bool `mapstructure:"ROS_SAVINGS_ESTIMATES_ENABLED"`
@@ -606,6 +609,7 @@ func initConfig() {
 	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
 	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", false)
 	viper.SetDefault("KOKU_MASU_URL", "")
+	viper.SetDefault("ROS_COST_CACHE_MAX_ENTRIES", 1000)
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
 	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)

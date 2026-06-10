@@ -10,10 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 )
 
-const defaultCostDataCacheTTL = 5 * time.Minute
+const (
+	defaultCostDataCacheTTL     = 5 * time.Minute
+	defaultCostCacheMaxEntries  = 1000
+)
 
 // ClusterCostData holds the cost model rates and namespace-level cost/usage
 // aggregates returned by the Koku effective-rates endpoint.
@@ -51,13 +55,9 @@ type CostDataProvider interface {
 		start, end time.Time) (*ClusterCostData, error)
 }
 
-type costCacheEntry struct {
-	data      *ClusterCostData
-	expiresAt time.Time
-}
-
 var (
-	costDataCache    sync.Map // key: orgID+"\x00"+clusterID -> costCacheEntry
+	costDataCacheMu sync.RWMutex
+	costDataCache   *boundedCostCache
 	costDataCacheTTL = defaultCostDataCacheTTL
 )
 
@@ -65,20 +65,40 @@ func costCacheKey(orgID, clusterID string) string {
 	return orgID + "\x00" + clusterID
 }
 
+func currentCostCache() *boundedCostCache {
+	costDataCacheMu.RLock()
+	cache := costDataCache
+	costDataCacheMu.RUnlock()
+	if cache != nil {
+		return cache
+	}
+	return initCostCache()
+}
+
+func initCostCache() *boundedCostCache {
+	costDataCacheMu.Lock()
+	defer costDataCacheMu.Unlock()
+	if costDataCache != nil {
+		return costDataCache
+	}
+	maxEntries := defaultCostCacheMaxEntries
+	if cfg := config.GetConfig(); cfg != nil && cfg.CostCacheMaxEntries > 0 {
+		maxEntries = cfg.CostCacheMaxEntries
+	}
+	costDataCache = newBoundedCostCache(maxEntries)
+	costCacheSize.Set(0)
+	return costDataCache
+}
+
 // InvalidateCostDataCache clears cached effective rates for an org/cluster pair.
 // Pass empty clusterID to invalidate all clusters for the org.
 func InvalidateCostDataCache(orgID, clusterID string) {
+	cache := currentCostCache()
 	if clusterID == "" {
-		prefix := orgID + "\x00"
-		costDataCache.Range(func(k, _ any) bool {
-			if key, ok := k.(string); ok && len(key) >= len(prefix) && key[:len(prefix)] == prefix {
-				costDataCache.Delete(k)
-			}
-			return true
-		})
+		cache.deletePrefix(orgID + "\x00")
 		return
 	}
-	costDataCache.Delete(costCacheKey(orgID, clusterID))
+	cache.delete(costCacheKey(orgID, clusterID))
 }
 
 // HTTPCostDataProvider fetches cost data from the Koku masu API over HTTP.
@@ -101,12 +121,9 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 	start, end time.Time,
 ) (*ClusterCostData, error) {
 	key := costCacheKey(orgID, clusterID)
-	if v, ok := costDataCache.Load(key); ok {
-		entry := v.(costCacheEntry)
-		if time.Now().Before(entry.expiresAt) {
-			return entry.data, nil
-		}
-		costDataCache.Delete(key)
+	cache := currentCostCache()
+	if data, ok := cache.get(key); ok {
+		return data, nil
 	}
 
 	data, err := p.fetchEffectiveRates(ctx, orgID, clusterID, start, end)
@@ -114,10 +131,7 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 		return nil, err
 	}
 
-	costDataCache.Store(key, costCacheEntry{
-		data:      data,
-		expiresAt: time.Now().Add(costDataCacheTTL),
-	})
+	cache.put(key, data, costDataCacheTTL)
 	return data, nil
 }
 
@@ -181,10 +195,26 @@ func SetCostDataCacheTTLForTest(ttl time.Duration) func() {
 	return func() { costDataCacheTTL = prev }
 }
 
+// ResetCostDataCacheForTest replaces the cache with a fresh instance (tests only).
+func ResetCostDataCacheForTest(maxEntries int) func() {
+	costDataCacheMu.Lock()
+	prev := costDataCache
+	costDataCache = newBoundedCostCache(maxEntries)
+	costDataCacheMu.Unlock()
+	costCacheSize.Set(0)
+	return func() {
+		costDataCacheMu.Lock()
+		costDataCache = prev
+		costDataCacheMu.Unlock()
+		if prev != nil {
+			costCacheSize.Set(float64(prev.len()))
+		} else {
+			costCacheSize.Set(0)
+		}
+	}
+}
+
 // ClearCostDataCacheForTest removes all cached entries (tests only).
 func ClearCostDataCacheForTest() {
-	costDataCache.Range(func(k, _ any) bool {
-		costDataCache.Delete(k)
-		return true
-	})
+	currentCostCache().clear()
 }
