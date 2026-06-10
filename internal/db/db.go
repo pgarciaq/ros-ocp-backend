@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -56,34 +57,15 @@ type ReadyzDB interface {
 var ReadyzPoolProvider func() ReadyzDB
 
 func initDB() {
-	cfg := config.GetConfig()
+	pool := GetPool()
 	log := logging.GetLogger()
-	var (
-		user     = cfg.DBUser
-		password = cfg.DBPassword
-		dbname   = cfg.DBName
-		host     = cfg.DBHost
-		port     = cfg.DBPort
-		dbssl    = cfg.DBssl
-	)
 
-	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s", user, password, dbname, host, port, dbssl)
-
-	if dbssl != "disable" {
-		rdsCA := CreateCACertFile(cfg.DBCACert)
-		sslCertParam := fmt.Sprintf(" sslrootcert=%s", rdsCA)
-		dsn = fmt.Sprintf("%s %s", dsn, sslCertParam)
-
-	}
-
-	pgxCfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		log.Fatal(err)
-	}
-	pgxCfg.AfterConnect = setStatementTimeout
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	sqlDB.SetMaxIdleConns(0)
+	sqlDB.SetMaxOpenConns(0)
 
 	db, err := gorm.Open(postgres.New(postgres.Config{
-		Conn: stdlib.OpenDB(*pgxCfg),
+		Conn: sqlDB,
 	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -93,7 +75,7 @@ func initDB() {
 
 	DB = db
 
-	log.Info("DB initialization complete")
+	log.Info("DB initialization complete (GORM shares pgxpool)")
 }
 
 func GetDB() *gorm.DB {
@@ -146,6 +128,7 @@ func initPool() {
 	}
 
 	Pool = pool
+	metrics.RegisterPoolCollector(func() *pgxpool.Pool { return Pool })
 	log.Info("pgxpool initialization complete")
 }
 

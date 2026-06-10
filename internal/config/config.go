@@ -60,8 +60,9 @@ type Config struct {
 	DBssl      string
 	DBCACert   string
 
-	// pgxpool tuning (REST / GPU paths). ROS_DB_MAX_CONNS defaults to 10;
-	// ROS_DB_ACQUIRE_TIMEOUT_SECS sets ContextWithAcquireTimeout (0 = no limit).
+	// pgxpool tuning (shared by pgxpool and GORM via stdlib.OpenDBFromPool).
+	// ROS_DB_MAX_CONNS defaults to 10; ROS_DB_ACQUIRE_TIMEOUT_SECS sets
+	// ContextWithAcquireTimeout (0 = no limit).
 	DBMaxConns            int    `mapstructure:"ROS_DB_MAX_CONNS"`
 	DBMinConns            int    `mapstructure:"ROS_DB_MIN_CONNS"`
 	DBMaxConnLifetimeMins int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
