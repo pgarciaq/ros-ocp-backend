@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
@@ -79,6 +80,10 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 		return fmt.Errorf("begin tx for usage samples: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 
 	if err := upsertUsageSamplesOnSender(ctx, tx, rows, orgID, clusterUUID); err != nil {
 		return err
@@ -316,6 +321,9 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 		return fmt.Errorf("begin tx for GPU digests: %w", err)
 	}
 	defer txGPU.Rollback(ctx)
+	if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 
 	type gpuGroupEntry struct {
 		key gpuKey

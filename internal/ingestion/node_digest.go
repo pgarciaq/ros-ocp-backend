@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -202,6 +203,10 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 		return fmt.Errorf("begin tx for node digests: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 
 	if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor); err != nil {
 		return err

@@ -23,7 +23,8 @@ var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
 
 func setStatementTimeout(ctx context.Context, conn *pgconn.PgConn) error {
-	_, err := conn.Exec(ctx, "SET statement_timeout = '25s'").ReadAll()
+	secs := StatementTimeoutSecs()
+	_, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", secs)).ReadAll()
 	return err
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
 func buildBusinessHoursGroups(
@@ -87,6 +88,9 @@ func upsertContainerDigests(
 		return fmt.Errorf("begin tx for container digests: %w", err)
 	}
 	defer txDigests.Rollback(ctx)
+	if err := db.SetLocalIngestStatementTimeout(ctx, txDigests); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 	if err := upsertContainerDigestsOnSender(ctx, txDigests, grouped, scheduleCache); err != nil {
 		return err
 	}

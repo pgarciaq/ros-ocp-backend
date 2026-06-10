@@ -8,6 +8,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -26,6 +27,10 @@ func commitIngestInSingleTx(
 		return fmt.Errorf("begin ingest tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 
 	if len(samples) > 0 {
 		if err := upsertUsageSamplesOnSender(ctx, tx, samples, orgID, clusterUUID); err != nil {

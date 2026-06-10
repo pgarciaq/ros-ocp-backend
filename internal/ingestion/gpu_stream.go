@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
@@ -154,6 +155,9 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 		return fmt.Errorf("begin tx for GPU digests: %w", err)
 	}
 	defer txGPU.Rollback(ctx)
+	if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
+		return fmt.Errorf("set ingest statement timeout: %w", err)
+	}
 	if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID); err != nil {
 		return err
 	}
