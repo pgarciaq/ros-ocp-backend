@@ -28,7 +28,7 @@ The API runs **two HTTP listeners**:
 
 1. **Application server** (`API_PORT`) — REST routes, probes, and Echo middleware metrics
    - `GET /status` — liveness (returns `{"api-server":"working"}`)
-   - `GET /readyz` — readiness (PostgreSQL pool ping; 503 if DB unavailable)
+   - `GET /readyz` — readiness (PostgreSQL pool ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled)
    - `GET /api/cost-management/v1/...` — recommendation API
 
 2. **Metrics server** (`PROMETHEUS_PORT`) — dedicated listener in `internal/api/server.go`
@@ -44,7 +44,7 @@ A single HTTP server on `PROMETHEUS_PORT` (`internal/utils/utils.go` → `Start_
 |------|---------|
 | `GET /metrics` | Prometheus scrape target |
 | `GET /status` | Liveness (`{"status":"ok"}`) |
-| `GET /readyz` | Readiness (DB pool ping) |
+| `GET /readyz` | Readiness (DB ping; optional Kafka/S3) |
 
 Clowder and cost-onprem set `PROMETHEUS_PORT=9000` and use port `9000` for probes on processor/poller. The API deployment must set `PROMETHEUS_PORT` to match the exposed metrics Service port (typically `9000`).
 
@@ -401,7 +401,8 @@ increase(rosocp_retention_partitions_dropped_total[24h])
 | Gap | Impact | Workaround |
 |-----|--------|------------|
 | **No `/healthz`** | Liveness probes use `/status`, which does not detect deadlocks or goroutine leaks | Monitor process restarts; consider external watchdog |
-| **No Kafka-aware readiness** | `/readyz` only pings PostgreSQL; pod may be "ready" while Kafka is unreachable | Monitor `rosocp_kafka_messages_processed_total` and consumer lag externally |
+| **Shallow readiness by default** | `/readyz` pings PostgreSQL only unless `ROS_READINESS_CHECK_KAFKA` / `ROS_READINESS_CHECK_S3` are enabled | Enable deep checks on processor/ingestion pods; monitor Kafka lag externally on API pods |
+| `rosocp_threshold_recalc_coalesced_total` | Threshold settings PUT coalesced into follow-up recalc | Alert if rate is sustained high (settings churn) |
 | **Snapshot write counter missing** | `rosocp_recommendations_written_total{type="snapshot"}` is never incremented despite duration being tracked | Use logs (`native snapshot engine: wrote N`) or DB row counts |
 | **No OpenTelemetry tracing** | No distributed trace IDs across Kafka → processor → DB → API | Correlate via `request_id` and `org_id` log fields |
 | **Pipeline phase coverage incomplete** | Help text lists `recommend`, `write`, `quality`, `history` phases but only `digest` and `gpu_enrichment` are instrumented | Use `rosocp_recommendation_duration_seconds` for end-to-end timing |

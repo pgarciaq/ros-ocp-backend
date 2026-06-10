@@ -73,6 +73,14 @@ Related database pool settings (pre-existing, often tuned together):
 | `CSV_STREAM_INTERVAL` | `100` | Rows between CSV stream flush intervals. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values allowed per repeated query parameter. |
 | `ROS_API_MAX_OFFSET` | `10000` | Max `offset` query parameter; returns HTTP 400 above this (use keyset pagination for deeper pages). |
+| `ROS_API_MAX_NODE_RESULTS` | `1000` | Hard cap on rows returned per request by node utilization and GPU time-slicing list endpoints. |
+| `ROS_READINESS_CHECK_KAFKA` | `false` | When `true`, `/readyz` verifies Kafka broker metadata (processor/poller). |
+| `ROS_READINESS_CHECK_S3` | `false` | When `true`, `/readyz` HEAD-checks the configured S3 bucket (ingestion). |
+| `ROS_READINESS_S3_BUCKET` | (empty) | Bucket name for S3 readiness check (required when `ROS_READINESS_CHECK_S3=true`). |
+| `ROS_READINESS_S3_ENDPOINT` | (empty) | S3/MinIO endpoint URL (path-style). |
+| `ROS_READINESS_S3_ACCESS_KEY` | (empty) | S3 access key for readiness HEAD request. |
+| `ROS_READINESS_S3_SECRET_KEY` | (empty) | S3 secret key for readiness HEAD request. |
+| `ROS_READINESS_S3_REGION` | `us-east-1` | AWS region for S3 client. |
 | `DEVELOPMENT` | `false` | When `true`, relaxes certain security checks for local dev (empty CSV allowlist, tag dev token). **Never set in production.** |
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Default timeout for outbound HTTP clients (RBAC, masu, sources). |
 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | `24` | Legacy Kruize poller interval (hours). |

@@ -312,22 +312,14 @@ Always require service-account bearer auth on `/internal/*` routes regardless of
 | **Severity** | Medium (partially addressed) |
 | **Category** | Availability |
 | **Location** | `internal/api/server.go`, `internal/engine/threshold_recalculate.go` |
-| **Status** | **Partially addressed** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | M |
 
-**Description**
+**Mitigation (implemented)**
 
-Settings `PUT` handlers spawn async goroutines for threshold recalculation with no deduplication or rate limiting.
-
-**Current state**
-
-- `RecalculateThresholdsForOrg` uses a semaphore (`thresholdRecalcConcurrency()`, default 3) to cap concurrent cluster recalcs within a single job.
-- Hash-based skip (`shouldSkipClusterThresholdRecalc`) avoids redundant work when settings unchanged.
-- **`TriggerThresholdRecalculationAsync` still launches a new goroutine per PUT** with no per-`(org_id, recType)` single-flight guard — rapid settings changes spawn overlapping jobs.
-
-**Recommended fix**
-
-Per-org mutex or job queue with coalescing of duplicate in-flight jobs. Reject or queue when recalc already running for `(org_id, recType)`.
+- Per-`(org_id, recType)` single-flight guard in `internal/engine/threshold_recalc_guard.go` coalesces overlapping triggers; at most one follow-up run after the in-flight job completes.
+- Prometheus counter `rosocp_threshold_recalc_coalesced_total`.
+- Unit tests: `internal/engine/threshold_recalc_guard_test.go`.
 
 ---
 
@@ -433,16 +425,19 @@ When `ROS_CSV_ALLOWED_HOSTS` is empty, any URL in a Kafka message payload could 
 | **Severity** | Medium |
 | **Category** | Operational readiness |
 | **Location** | `internal/db/db.go`, `internal/utils/utils.go` (`/readyz`) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | M |
 
-**Description**
+**Mitigation (implemented)**
 
-The `/readyz` endpoint verifies PostgreSQL connectivity only. Kafka, S3/MinIO, and Masu/Koku reachability are not checked.
+- Default `/readyz` remains PostgreSQL-only (intentional for API-only pods).
+- Opt-in deep checks via `ROS_READINESS_CHECK_KAFKA` and `ROS_READINESS_CHECK_S3` (default `false`); failures return HTTP 503 with per-dependency JSON `checks`.
+- S3 check uses `HeadBucket` against `ROS_READINESS_S3_BUCKET` (+ endpoint/credentials env vars).
+- Shared logic in `internal/health/readyz.go`; unit tests in `internal/health/readyz_test.go` and `internal/api/handlers_readyz_test.go`.
 
-**Recommended fix**
+**Accepted risk**
 
-Add optional dependency health checks (configurable per deployment mode). Document accepted risk with external lag alerts if shallow probe is intentional.
+Processor/ingestion pods should enable deep checks in production; API deployments may keep shallow probe and monitor Kafka lag / S3 errors externally.
 
 ---
 
@@ -540,16 +535,18 @@ API connections keep `ROS_DB_STATEMENT_TIMEOUT` (default 25s). Ingestion batch t
 | **Severity** | Medium |
 | **Category** | Performance / scalability |
 | **Location** | `internal/api/handlers_node_recs.go`, `internal/api/handlers_node_utilization.go` |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | M |
 
-**Description**
+**Mitigation (implemented)**
 
-Node and GPU recommendation endpoints load all matching results into memory, compute recommendations, then paginate in Go.
+- GPU time-slicing uses `CountNodeGPUTriples` + `ListNodeGPUTriplesPage` with SQL `LIMIT`/`OFFSET` (or keyset seek); only the current page of triples is enriched.
+- Node utilization already paginated in SQL; added `ROS_API_MAX_NODE_RESULTS` hard cap (default 1000).
+- Integration test with 55 nodes: `handlers_node_utilization_pagination_integration_test.go`.
 
-**Recommended fix**
+**Residual risk**
 
-Push pagination and filtering into SQL. Limit cluster fan-out per request. Add integration tests at 1k+ node scale.
+GPU list fallback path (unsupported `order_by` columns) still loads all cluster data before paginating in Go.
 
 ---
 
@@ -578,16 +575,15 @@ Push pagination and filtering into SQL. Limit cluster fan-out per request. Add i
 | **Severity** | Medium |
 | **Category** | Operations / deploy safety |
 | **Location** | `migrations/` (140 `.up.sql` files), `migrations/README.md` |
-| **Status** | **Open** (verified 2026-06-10; count updated from 134+) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | L |
 
-**Description**
+**Mitigation (implemented)**
 
-golang-migrate wraps migrations in transactions, making `CREATE INDEX CONCURRENTLY` impossible within standard migration files. Latest migration: `000140_report_file_status`.
-
-**Recommended fix**
-
-CI check flagging new indexes on large tables. Automate CONCURRENTLY index creation via separate Kubernetes Job documented in upgrade runbook.
+- CI lint script `scripts/lint-migrations.sh` flags new non-`CONCURRENTLY` indexes on configured large tables.
+- Runbook: `docs/operations/large-table-migrations.md`.
+- K8s Job template: `deploy/migrations/concurrent-index-job.yaml`.
+- Updated `migrations/README.md` with lint policy.
 
 ---
 
@@ -734,20 +730,12 @@ Recommendation IDs are UUID v5 derived from cluster, namespace, workload, and co
 | **Severity** | Low (partially addressed) |
 | **Category** | Correctness / availability |
 | **Location** | `internal/engine/threshold_recalculate.go` |
-| **Status** | **Partially addressed** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-Rapid successive settings `PUT` requests launch concurrent recalc goroutines.
-
-**Current state**
-
-Hash-based cluster skip reduces redundant work within overlapping jobs, but no single-flight guard prevents multiple concurrent `RecalculateThresholdsForOrg` runs for the same `(org_id, recType)`.
-
-**Recommended fix**
-
-Per-`(org_id, recType)` single-flight guard. Coalesce or cancel superseded jobs.
+Same single-flight coalescing as finding #11 (`threshold_recalc_guard.go`).
 
 ---
 
@@ -853,24 +841,24 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Incremental flush via `ROS_INGEST_FLUSH_BATCH_SIZE`; ingest memory metrics |
 | 9 | Pipeline writes recs when history/quality fails | TBD | **Mitigated** | Strict mode + `rosocp_analytics_incomplete_total` + API flag |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |
-| 11 | No rate limiting; recalc goroutines without dedup | TBD | Partially addressed | Semaphore cap=3; no single-flight |
+| 11 | No rate limiting; recalc goroutines without dedup | TBD | **Mitigated** | Single-flight + `rosocp_threshold_recalc_coalesced_total` |
 | 12 | SSRF risk when CSV host allowlist unset | TBD | **Mitigated** | `csv_security.go`; startup + private-network deny |
 | 13 | ILIKE wildcard injection | TBD | **Mitigated** | `escapeILIKE` + `ESCAPE '\\'` |
 | 14 | Unbounded offset (deep-pagination DoS) | TBD | **Mitigated** | `ROS_API_MAX_OFFSET` default 10000 |
 | 15 | ROS_TAGS_DEV_TOKEN static bypass | TBD | **Mitigated** | Blocked outside `DEVELOPMENT=true` |
 | 16 | Empty SA allowlist permits any K8s SA | TBD | **Mitigated** | Required in api mode (non-dev) |
-| 17 | Readiness probe only checks PostgreSQL | TBD | Open | — |
+| 17 | Readiness probe only checks PostgreSQL | TBD | **Mitigated** | Opt-in Kafka/S3 via `ROS_READINESS_CHECK_*` |
 | 18 | Unclassified Kafka errors default to transient | TBD | **Mitigated** | `kafka_retry.go`; DLQ `hccm.ros.events.dlq`; max 5 retries |
 | 19 | Housekeeper lacks graceful shutdown | TBD | **Mitigated** | `signal.NotifyContext`; `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` |
 | 20 | Poison message payload logged (PII risk) | TBD | **Mitigated** | Metadata-only logs; `ROS_LOG_POISON_PAYLOAD` opt-in |
 | 21 | 25s statement_timeout kills large ingestion | TBD | **Mitigated** | `SET LOCAL` ingest timeout via `ROS_DB_INGEST_STATEMENT_TIMEOUT` |
-| 22 | Node GPU endpoint paginates in memory | TBD | Open | — |
+| 22 | Node GPU endpoint paginates in memory | TBD | **Mitigated** | SQL triple pagination; `ROS_API_MAX_NODE_RESULTS` |
 | 23 | panic() in boxplot/GPU YAML parse | TBD | **Mitigated** | Error returns; `log.Fatal` for embedded catalog only |
-| 24 | 140 migrations with no CONCURRENTLY automation | TBD | Open | Was 134+; now 140 |
+| 24 | 140 migrations with no CONCURRENTLY automation | TBD | **Mitigated** | `lint-migrations.sh` + K8s Job runbook |
 | 25 | History endpoints lack filter cardinality limits | TBD | **Mitigated** | `checkHistoryFilterCardinality` |
 | 26 | Float64 in money formatting | TBD | Open | — |
 | 27 | Deterministic recommendation IDs (info) | TBD | Open (info) | — |
-| 28 | Overlapping threshold recalc jobs | TBD | Partially addressed | Hash skip; no single-flight |
+| 28 | Overlapping threshold recalc jobs | TBD | **Mitigated** | Same as #11 |
 | 29 | Effective-rates cache unbounded | TBD | Open | — |
 | 30 | No formal ADR index | TBD | Open | — |
 | 31 | Native list pagination dropped workload_type filter | TBD | **Resolved** | `f66feaf7` |

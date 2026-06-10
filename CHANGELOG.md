@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Threshold recalculation single-flight coalescing per `(org_id, recommendation_type)` with metric `rosocp_threshold_recalc_coalesced_total` (findings #11, #28 mitigated).
+- Optional deep readiness checks: `ROS_READINESS_CHECK_KAFKA`, `ROS_READINESS_CHECK_S3` (default `false`); S3 bucket settings `ROS_READINESS_S3_*` (finding #17 mitigated).
+- `ROS_API_MAX_NODE_RESULTS` (default `1000`) hard cap for node utilization and GPU time-slicing list endpoints (finding #22 mitigated).
+- Migration CI lint [`scripts/lint-migrations.sh`](../scripts/lint-migrations.sh), [`docs/operations/large-table-migrations.md`](operations/large-table-migrations.md), and [`deploy/migrations/concurrent-index-job.yaml`](../deploy/migrations/concurrent-index-job.yaml) (finding #24 mitigated).
 - Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `false`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried).
 - Security hardening env vars: `DEVELOPMENT`, `ROS_API_MAX_OFFSET`, `ROS_CSV_DENY_PRIVATE_NETWORKS`, `ROS_LOG_POISON_PAYLOAD`, `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS`.
 - Startup validation for CSV SSRF allowlist, tag dev token, and tag SA allowlist (`ValidateSecurityConfig`, `ValidateTagAuthConfig`).
@@ -23,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - History endpoints enforce `MAXIMUM_COUNT_PER_QUERY_PARAM` on filter params (finding #25 mitigated).
 - `offset` query parameter capped at `ROS_API_MAX_OFFSET` (default 10000) (finding #14 mitigated).
 - Tag auth: `ROS_TAGS_DEV_TOKEN` blocked outside development; empty SA allowlist blocked in api mode (findings #15, #16 mitigated).
-- GPU catalog/boxplot parse failures return errors instead of panicking (finding #23 mitigated).
+- GPU time-slicing list uses SQL triple pagination (`CountNodeGPUTriples` / `ListNodeGPUTriplesPage`) instead of loading all clusters into memory (finding #22 mitigated).
 
 ---
 

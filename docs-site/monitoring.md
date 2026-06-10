@@ -23,7 +23,7 @@ Set `PROMETHEUS_PORT` to match the container metrics port exposed by your Servic
 | Endpoint | Port | Component | Purpose |
 |----------|------|-----------|---------|
 | `/status` | API port (`8000`) or metrics port | All | Liveness — process is running |
-| `/readyz` | API port or metrics port | All | Readiness — PostgreSQL pool responds to ping |
+| `/readyz` | API port or metrics port | All | Readiness — PostgreSQL ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled |
 | `/metrics` | `PROMETHEUS_PORT` | All | Prometheus scrape |
 
 !!! note "No `/healthz` endpoint"
@@ -381,7 +381,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 | Limitation | Operator impact |
 |------------|-----------------|
 | No `/healthz` | Use `/status` for liveness; no deadlock detection |
-| Readiness is DB-only | Pod may be "ready" while Kafka is down — monitor consumer lag separately |
+| Readiness is shallow by default | Enable `ROS_READINESS_CHECK_KAFKA` / `ROS_READINESS_CHECK_S3` on processor pods |
 | No distributed tracing | Correlate with `request_id` in logs |
 | Snapshot write counter missing | Use logs or DB queries for snapshot output volume |
 

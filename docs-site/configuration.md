@@ -144,6 +144,9 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Outbound HTTP client timeout. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values per repeated query param. |
 | `ROS_API_MAX_OFFSET` | `10000` | Max `offset` before HTTP 400; use keyset pagination for deeper pages. |
+| `ROS_API_MAX_NODE_RESULTS` | `1000` | Max rows per node utilization / GPU time-slicing list request. |
+| `ROS_READINESS_CHECK_KAFKA` | `false` | Opt-in Kafka broker check on `/readyz`. |
+| `ROS_READINESS_CHECK_S3` | `false` | Opt-in S3 bucket HEAD check on `/readyz`. |
 | `DEVELOPMENT` | `false` | Local dev only — relaxes CSV allowlist and tag dev-token checks. Never enable in production. |
 | `RECORD_LIMIT_CSV` | `1000` | CSV export row limit per batch. |
 | `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |
