@@ -2,6 +2,10 @@
 
 Apply migrations via `./rosocp db migrate up` (see project docs).
 
+## CI migration lint
+
+New migrations are checked by [`scripts/lint-migrations.sh`](../scripts/lint-migrations.sh) for non-`CONCURRENTLY` indexes on large tables. When the linter fails, follow [`docs/operations/large-table-migrations.md`](../docs/operations/large-table-migrations.md) and use [`deploy/migrations/concurrent-index-job.yaml`](../deploy/migrations/concurrent-index-job.yaml).
+
 ## Index conventions
 
 **Prefer `CREATE INDEX CONCURRENTLY`** for new indexes on large tables so deployments do not block writes during index builds.

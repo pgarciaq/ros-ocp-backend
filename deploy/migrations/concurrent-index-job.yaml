@@ -1,0 +1,59 @@
+# Apply a concurrent index outside golang-migrate (large tables).
+# Render with envsubst or Helm, then kubectl apply -f ...
+#
+# Required env:
+#   PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+#   INDEX_DDL — full CREATE INDEX CONCURRENTLY statement (no trailing semicolon required)
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rosocp-concurrent-index
+  labels:
+    app: ros-ocp-backend
+    component: db-migration
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: ros-ocp-backend
+        component: db-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: psql
+          image: postgres:16
+          env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: rosocp-db
+                  key: host
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: rosocp-db
+                  key: database
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: rosocp-db
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rosocp-db
+                  key: password
+            - name: INDEX_DDL
+              value: "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_example ON node_recommendations (org_id, cluster_uuid, node, term)"
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              echo "Applying: $INDEX_DDL"
+              psql -v ON_ERROR_STOP=1 -c "$INDEX_DDL"
+              echo "Concurrent index job complete"
