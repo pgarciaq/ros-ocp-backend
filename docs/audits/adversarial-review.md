@@ -249,8 +249,8 @@ Container recommendations are persisted and Kafka offsets committed even when hi
 
 **Mitigation**
 
-- **`ROS_INGEST_STRICT_ANALYTICS`** (default `false`): when `true`, analytics writes run before recommendations; failures abort the batch and return a transient error (no offset commit, message retried).
-- **Degraded mode (default):** recommendations persist; `rosocp_analytics_incomplete_total{error_type="history|quality"}` increments; `clusters.analytics_incomplete` flag set; container list/detail responses expose `analytics_incomplete` and `analytics_incomplete_at`.
+- **`ROS_INGEST_STRICT_ANALYTICS`** (default `true`): when `true`, analytics writes run before recommendations; failures abort the batch and return a transient error (no offset commit, message retried).
+- **Degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`):** recommendations persist; `rosocp_analytics_incomplete_total{error_type="history|quality"}` increments; `clusters.analytics_incomplete` flag set; container list/detail responses expose `analytics_incomplete` and `analytics_incomplete_at`.
 - Runbook: [Analytics-Degraded Pipeline State](../operations/runbooks.md#runbook-analytics-degraded-pipeline-state).
 
 ---
@@ -904,7 +904,7 @@ The v1.6 remediation sprint materially improved ingestion resilience, API harden
 
 | Dimension | Grade | Trend | Notes |
 |-----------|-------|-------|-------|
-| Security | B | ↑ | SSRF/ILIKE/offset/tag-auth hardening landed; entitlement check, RBAC cache bounds, internal rate limits still missing |
+| Security | B | ↑ | SSRF DNS fail-closed, RBAC cache bounds; entitlement check and internal rate limits still missing |
 | Correctness | B− | ↑ | Per-file tracking + manifest gating for native path; Kruize path bypass (#33) |
 | Auditability | B+ | ↑ | DLQ runbook, metrics, ADR index; `report_file_status` operator runbook still absent |
 | Operational Robustness | B | ↑ | DLQ, housekeeper shutdown, opt-in deep readiness; async jobs ignore API shutdown |
@@ -933,6 +933,7 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 ### Finding #33: Legacy Kruize CSV path lacks `report_file_status` tracking
 
 - **Severity:** High
+- **Status:** Accepted — Kruize plugin is slated for removal; no enhancements will be made to legacy paths.
 - **Dimension:** Correctness / Data integrity
 - **Location:** `internal/services/report_processor.go:246-305` (ReadCSVFromUrl + Kruize experiment loop)
 - **Description:** When the Kruize plugin is enabled, files fall through to the legacy dataframe/Kruize path which does not call `markFileProcessing`, `markFileDone`, or `handlePermanentFileError`. Parse and experiment errors `continue` without permanent classification.
@@ -945,10 +946,15 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Medium
 - **Dimension:** Security
 - **Location:** `internal/utils/csv_security.go:76-82`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** `denyRestrictedHost` allows the fetch when `LookupIPAddr` returns an error (“Hostname did not resolve; allowlist already validated the name”). An attacker controlling DNS intermittently or via race can point an allowlisted hostname to a private IP on retry.
 - **Risk:** Processor fetches internal services (metadata APIs, kubelet, MinIO admin) despite `ROS_CSV_DENY_PRIVATE_NETWORKS=true`.
 - **Recommendation:** Fail closed on DNS errors in non-development mode, or resolve at connection time with pinned IPs (custom `DialContext`) after validation.
 - **Effort:** M
+
+**Resolution**
+
+`denyRestrictedHost` now returns an error when DNS lookup fails in non-development mode. Development mode (`DEVELOPMENT=true`) still allows unresolved hostnames for local testing convenience.
 
 ### Finding #35: No cost-management entitlement validation on API routes
 
@@ -965,10 +971,15 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Medium
 - **Dimension:** Operational Robustness / Availability
 - **Location:** `internal/api/handlers_savings_recalculate.go:78`, `internal/api/handlers_business_hours_settings.go:366`, `internal/engine/threshold_recalculate.go:89`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** `POST /internal/recalculate-savings`, business-hours PUT (triggers fleet reship), and threshold settings PUT spawn unbounded async work. Only threshold recalc has single-flight coalescing; savings recalc and reship do not deduplicate per org.
 - **Risk:** A compromised or misconfigured service account can trigger masu reship storms, DB recalc load, and masu API abuse across all clusters in an org.
 - **Recommendation:** Add per-org token-bucket rate limits, idempotency keys, and coalescing for savings recalc/reship similar to `threshold_recalc_guard.go`.
 - **Effort:** M
+
+**Resolution**
+
+Added per-org single-flight coalescing for savings recalculation (`internal/engine/savings_recalc_guard.go`) and business-hours reship (`internal/reship/trigger_guard.go`), mirroring the existing threshold recalc guard. Metrics: `rosocp_savings_recalc_coalesced_total`, `rosocp_reship_coalesced_total`.
 
 ### Finding #37: `/internal/tags/status` unauthenticated in on-prem db mode (carried from #4)
 
@@ -985,14 +996,20 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Low
 - **Dimension:** Security / Privacy
 - **Location:** `internal/kafka/consumer.go:56,92`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** At DEBUG log level, the consumer logs the first 512 bytes of every Kafka message value. Payloads contain presigned URLs, cluster metadata, and file lists.
 - **Risk:** Credential leakage in centralized logging when DEBUG is enabled during incidents (common operator response).
 - **Recommendation:** Log only `len`, `org_id`, `cluster_uuid`, and `manifest_id` at DEBUG; never log message bodies unless `ROS_LOG_POISON_PAYLOAD`-style opt-in.
 - **Effort:** S
 
+**Resolution**
+
+Removed DEBUG payload prefix logging from the Kafka consumer. Message metadata (topic, partition, offset, length) is still logged via `logKafkaMessageReceived`. Poison message bodies remain opt-in via `ROS_LOG_POISON_PAYLOAD`.
+
 ### Finding #39: Kruize API debug logs include full HTTP payloads
 
 - **Severity:** Low
+- **Status:** Accepted — Kruize plugin is slated for removal; no enhancements will be made to legacy paths.
 - **Dimension:** Security / Privacy
 - **Location:** `internal/utils/kruize/kruize_api.go:112,164,216`
 - **Description:** Kruize experiment and updateResults calls log complete JSON payloads at DEBUG, including container names, namespaces, and resource metrics.
@@ -1005,10 +1022,15 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Low
 - **Dimension:** Performance / Availability
 - **Location:** `internal/api/middleware/rbac_cache.go:15-51`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** RBAC responses are cached in a `sync.Map` keyed by identity hash with TTL expiry but no maximum entry count. Expired entries are removed only on access.
 - **Risk:** Memory growth under high user cardinality (large enterprises, automated polling) or identity-token rotation patterns; API pod OOM under load test or incident traffic.
 - **Recommendation:** Replace with bounded LRU (mirror `ROS_COST_CACHE_MAX_ENTRIES` pattern) and export `rosocp_rbac_cache_size` metric.
 - **Effort:** S
+
+**Resolution**
+
+Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, default 500). TTL-on-access preserved. Metrics: `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total`.
 
 ### Finding #41: Prometheus `/metrics` exposed without authentication
 
@@ -1043,6 +1065,7 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 ### Finding #44: Kruize legacy fetch errors misclassified as transient
 
 - **Severity:** Medium
+- **Status:** Accepted — Kruize plugin is slated for removal; no enhancements will be made to legacy paths.
 - **Dimension:** Correctness / Kafka semantics
 - **Location:** `internal/services/report_processor.go:246-252`
 - **Description:** Legacy path calls `recordKafkaTransient(fetchError)` on CSV fetch failure and `continue`s without permanent file tracking. HTTP 403/404 from presigned URLs retry until DLQ instead of being immediately classified permanent.
@@ -1055,10 +1078,15 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Medium
 - **Dimension:** Correctness / Data consistency
 - **Location:** `internal/config/config.go:76-78`, `internal/services/report_processor.go` (analytics pipeline)
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** `ROS_INGEST_STRICT_ANALYTICS` defaults to `false`. History/quality write failures allow recommendation persistence and offset commit with only a cluster-level `analytics_incomplete` flag.
 - **Risk:** Production serves fresh recommendations without history/quality parity unless operators explicitly opt into strict mode — easy to miss during deployment.
 - **Recommendation:** Default strict mode to `true` for on-prem chart; keep degraded mode as explicit opt-in with documented trade-offs.
 - **Effort:** S
+
+**Resolution**
+
+Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded mode remains available by explicitly setting `ROS_INGEST_STRICT_ANALYTICS=false`.
 
 ### Finding #46: Business-hours org PUT triggers fleet-wide masu reship
 
@@ -1153,6 +1181,7 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 ### Finding #55: Kruize heavy endpoints share global HTTP client timeout
 
 - **Severity:** Medium
+- **Status:** Accepted — Kruize plugin is slated for removal; no enhancements will be made to legacy paths.
 - **Dimension:** Performance / Operational Robustness
 - **Location:** `internal/utils/utils.go:71-86`, `internal/utils/kruize/kruize_api.go:162-277`
 - **Description:** `/updateResults` and `/updateRecommendations` use `utils.HTTPClient` (default 30s). Code comments acknowledge need for per-endpoint timeouts (FLPATH-3407) but no histogram or extended timeout exists.
@@ -1214,12 +1243,12 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 
 Ordered by **compound risk × effort**. Findings that amplify each other are grouped.
 
-1. **#32, #33, #44** — Ingestion tracking gaps (empty manifest + Kruize path + hook failures) undermine the v1.6 data-integrity fixes
-2. **#34** — SSRF DNS fail-open compounds with allowlist-only defense (#12 mitigated)
+1. **#33, #44** — Ingestion tracking gaps (Kruize path + hook failures) undermine the v1.6 data-integrity fixes; ~~**#32**~~ resolved
+2. ~~**#34**~~ — SSRF DNS fail-open **resolved**
 3. **#48, #49** — GPU API memory paths block fleet-scale adoption (1000+ clusters)
-4. **#36, #46** — Unbounded async triggers + fleet reship can cause operational incidents
-5. **#35, #37, #40** — AuthZ hardening for non-gateway postures (entitlement, internal tags, RBAC cache)
-6. **#45** — Strict analytics default aligns production with data-consistency expectations
+4. ~~**#36**~~ coalescing **resolved**; **#46** — fleet reship scope remains
+5. **#35, #37** — AuthZ hardening for non-gateway postures; ~~**#40**~~ RBAC cache bounds **resolved**
+6. ~~**#45**~~ — Strict analytics default **resolved**
 7. **#55, #56, #57** — Kruize/CSV/Kafka edge cases under load
 8. **#47, #58** — Operational polish (shutdown, runbooks)
 9. **#50–#54, #59, #60** — Governance, UX, and maintenance debt
@@ -1245,19 +1274,19 @@ Improvements since v1.6 worth acknowledging:
 | Finding # | Title | Severity | Status |
 |-----------|-------|----------|--------|
 | 32 | Empty manifest_id bypasses tracking/gating | High | **Resolved** |
-| 33 | Kruize path lacks report_file_status | High | Open |
-| 34 | SSRF DNS fail-open | Medium | Open |
+| 33 | Kruize path lacks report_file_status | High | Accepted |
+| 34 | SSRF DNS fail-open | Medium | **Resolved** |
 | 35 | No entitlement validation | Medium | Open |
-| 36 | No rate limit on async internal triggers | Medium | Open |
+| 36 | No rate limit on async internal triggers | Medium | **Resolved** |
 | 37 | /internal/tags/status unauthenticated (db mode) | Medium | Open (was #4) |
-| 38 | Kafka debug payload logging | Low | Open |
-| 39 | Kruize debug payload logging | Low | Open |
-| 40 | RBAC cache unbounded | Low | Open |
+| 38 | Kafka debug payload logging | Low | **Resolved** |
+| 39 | Kruize debug payload logging | Low | Accepted |
+| 40 | RBAC cache unbounded | Low | **Resolved** |
 | 41 | Unauthenticated /metrics | Info | Accepted (NetworkPolicy) |
 | 42 | CORS allow-all origins | Low | Open |
 | 43 | Plugin ingest hooks non-fatal | Medium | Open |
-| 44 | Kruize fetch errors misclassified transient | Medium | Open |
-| 45 | Strict analytics default false | Medium | Open |
+| 44 | Kruize fetch errors misclassified transient | Medium | Accepted |
+| 45 | Strict analytics default false | Medium | **Resolved** |
 | 46 | Org BH PUT triggers fleet reship | Medium | Open |
 | 47 | Async jobs ignore shutdown context | Low | Open |
 | 48 | GPU MIG in-memory fleet load | Medium | Open |
@@ -1267,7 +1296,7 @@ Improvements since v1.6 worth acknowledging:
 | 52 | Fleet summary uncached aggregation | Low | Open |
 | 53 | No OpenAPI/CHANGELOG CI | Info | Open |
 | 54 | ADR drift detection absent | Info | Open |
-| 55 | Kruize shared HTTP timeout | Medium | Open |
+| 55 | Kruize shared HTTP timeout | Medium | Accepted |
 | 56 | CSV 512 MiB default body | Medium | Open |
 | 57 | Parallel Kafka shared committer | Low | Open |
 | 58 | report_file_status runbook missing | Low | Open |
