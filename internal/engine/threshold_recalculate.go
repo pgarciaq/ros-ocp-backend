@@ -42,6 +42,9 @@ var (
 
 	// thresholdRecalcHook runs at the start of TriggerThresholdRecalculationAsync (tests only).
 	thresholdRecalcHook func(orgID, recType string)
+
+	// thresholdRecalcRunHook runs at the start of each RecalculateThresholdsForOrg invocation (tests only).
+	thresholdRecalcRunHook func(orgID, recType string)
 )
 
 // SetClusterRecalcFuncForTest replaces the per-cluster recalculation function and returns a restore func.
@@ -61,6 +64,16 @@ func ClearThresholdRecalcHookForTest() {
 	thresholdRecalcHook = nil
 }
 
+// SetThresholdRecalcRunHookForTest registers a hook invoked when RecalculateThresholdsForOrg starts.
+func SetThresholdRecalcRunHookForTest(hook func(orgID, recType string)) {
+	thresholdRecalcRunHook = hook
+}
+
+// ClearThresholdRecalcRunHookForTest removes the recalc run test hook.
+func ClearThresholdRecalcRunHookForTest() {
+	thresholdRecalcRunHook = nil
+}
+
 // TriggerThresholdRecalculationAsync starts background recalculation after threshold settings change.
 // The PUT handler returns immediately; work runs in a detached goroutine.
 func TriggerThresholdRecalculationAsync(pool *pgxpool.Pool, orgID, recType string) {
@@ -74,13 +87,15 @@ func TriggerThresholdRecalculationAsync(pool *pgxpool.Pool, orgID, recType strin
 		thresholdRecalcHook(orgID, recType)
 	}
 	go func() {
-		ctx := context.Background()
-		RecalculateThresholdsForOrg(ctx, pool, orgID, recType)
+		triggerThresholdRecalcCoalesced(pool, orgID, recType)
 	}()
 }
 
 // RecalculateThresholdsForOrg re-runs the recommendation engine for all clusters in an org.
 func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, recType string) {
+	if thresholdRecalcRunHook != nil {
+		thresholdRecalcRunHook(orgID, recType)
+	}
 	log := logging.ForOrgOnly(orgID)
 	started := time.Now()
 
