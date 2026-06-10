@@ -13,6 +13,32 @@ func TestFormatCentsToAmount(t *testing.T) {
 	assert.Equal(t, "USD", obj.Units)
 }
 
+func TestFormatCentsToAmount_exactValues(t *testing.T) {
+	obj := FormatCentsToAmount(199, "USD")
+	assert.Equal(t, "1.99", obj.Value)
+}
+
+func TestFormatCentsToAmount_negative(t *testing.T) {
+	obj := FormatCentsToAmount(-105, "USD")
+	assert.Equal(t, "-1.05", obj.Value)
+}
+
+func TestFormatCentsToAmount_largeValueAvoidsFloatRounding(t *testing.T) {
+	// 1999999999999 cents would lose precision with float64 division.
+	obj := FormatCentsToAmount(1999999999999, "USD")
+	assert.Equal(t, "19999999999.99", obj.Value)
+}
+
+func TestFormatCentsToAmount_singleCent(t *testing.T) {
+	obj := FormatCentsToAmount(1, "USD")
+	assert.Equal(t, "0.01", obj.Value)
+}
+
+func TestFormatCentsToAmount_negativeSingleCent(t *testing.T) {
+	obj := FormatCentsToAmount(-1, "USD")
+	assert.Equal(t, "-0.01", obj.Value)
+}
+
 func TestFormatUSDPtrToAmountPtr(t *testing.T) {
 	v := float32(12.5)
 	obj := FormatUSDPtrToAmountPtr(&v, "USD")

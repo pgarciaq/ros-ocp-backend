@@ -9,13 +9,21 @@ type MoneyAmount struct {
 }
 
 // FormatCentsToAmount converts integer cents to a MoneyAmount with two decimal places.
+// Formatting uses integer division and remainder only (no float64) to avoid rounding errors.
 func FormatCentsToAmount(cents int64, currency string) MoneyAmount {
 	if currency == "" {
 		currency = DefaultCurrency
 	}
-	usd := float64(cents) / 100.0
+	sign := ""
+	magnitude := uint64(cents)
+	if cents < 0 {
+		sign = "-"
+		magnitude = uint64(-cents)
+	}
+	dollars := magnitude / 100
+	remainder := magnitude % 100
 	return MoneyAmount{
-		Value: fmt.Sprintf("%.2f", usd),
+		Value: fmt.Sprintf("%s%d.%02d", sign, dollars, remainder),
 		Units: currency,
 	}
 }
