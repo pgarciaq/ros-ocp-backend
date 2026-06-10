@@ -128,7 +128,10 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 
 	allowed := parseAllowedServiceAccounts(allowedAccounts)
 	if len(allowed) == 0 {
-		return nil
+		if config.IsDevelopment() {
+			return nil
+		}
+		return fmt.Errorf("service account allowlist is not configured (ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS)")
 	}
 
 	saName := serviceAccountName(username)

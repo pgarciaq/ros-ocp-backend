@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
+	"time"
 
 	k "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"gorm.io/gorm"
@@ -103,12 +101,9 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 	return nil
 }
 
-func StartSourcesListenerService() {
+func StartSourcesListenerService(ctx context.Context) {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	var err error
 	cost_app_id, err = sources.GetCostApplicationID()
@@ -117,6 +112,18 @@ func StartSourcesListenerService() {
 	}
 
 	kafka.StartConsumer(ctx, cfg.SourcesEventTopic, sourcesListener)
+
+	if ctx.Err() != nil {
+		log.Info("shutting down housekeeper gracefully")
+		waitHousekeeperShutdownGrace(cfg.HousekeeperShutdownGraceSecs)
+	}
+}
+
+func waitHousekeeperShutdownGrace(secs int) {
+	if secs <= 0 {
+		return
+	}
+	time.Sleep(time.Duration(secs) * time.Second)
 }
 
 func sourcesListener(msg *k.Message, _ *k.Consumer) {

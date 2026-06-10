@@ -10,11 +10,15 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-// RunStartupHealthCheck verifies Koku tag table access when ROS_TAGS_SOURCE=db.
-// On failure it logs a clear message and disables tag filtering for the process.
-func RunStartupHealthCheck(ctx context.Context) {
+// RunStartupHealthCheck verifies tag auth settings and Koku tag table access when ROS_TAGS_SOURCE=db.
+// Returns a fatal startup error when production security requirements are not met.
+func RunStartupHealthCheck(ctx context.Context) error {
+	if err := ValidateTagAuthConfig(); err != nil {
+		return err
+	}
+
 	if !config.TagsFeatureEnabled() || config.TagsSource() != "db" {
-		return
+		return nil
 	}
 
 	pool := database.GetPool()
@@ -23,7 +27,7 @@ func RunStartupHealthCheck(ctx context.Context) {
 			"Tag filtering (ROS_TAGS_SOURCE=db) is enabled but the database pool is unavailable. Disabling tag filtering.",
 		)
 		config.DisableTagsFeature()
-		return
+		return nil
 	}
 
 	orgID, schema := probeOrgSchema(ctx, pool)
@@ -35,6 +39,7 @@ func RunStartupHealthCheck(ctx context.Context) {
 		)
 		config.DisableTagsFeature()
 	}
+	return nil
 }
 
 func probeOrgSchema(ctx context.Context, pool *pgxpool.Pool) (orgID, schema string) {

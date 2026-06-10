@@ -1,15 +1,29 @@
 package housekeeper
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-func DeletePartitions() {
+func DeletePartitions(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	log := logging.GetLogger()
 	cfg := config.GetConfig()
+
+	select {
+	case <-ctx.Done():
+		log.Info("shutting down housekeeper gracefully before partition cleanup")
+		return
+	default:
+	}
+
 	db := database.GetDB()
 	currentTime := time.Now().UTC()
 
@@ -30,5 +44,10 @@ func DeletePartitions() {
 	// drop_ros_partition only considers partitions of ROS-owned parent tables (see migration 000011).
 	if tx.Error != nil {
 		fmt.Println(tx.Error.Error())
+	}
+
+	if ctx.Err() != nil {
+		log.Info("shutting down housekeeper gracefully")
+		waitHousekeeperShutdownGrace(cfg.HousekeeperShutdownGraceSecs)
 	}
 }

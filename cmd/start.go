@@ -32,7 +32,12 @@ var startCmdLog = logging.GetLogger()
 func runServiceStartup(ctx context.Context) {
 	plugin.Init()
 	_ = db.GetPool()
-	tags.RunStartupHealthCheck(ctx)
+	if err := config.ValidateSecurityConfig(); err != nil {
+		startCmdLog.Fatal(err)
+	}
+	if err := tags.RunStartupHealthCheck(ctx); err != nil {
+		startCmdLog.Fatal(err)
+	}
 	logEnabledPlugins()
 	engine.LogSettingsLockedStartup(startCmdLog.Warnf)
 }
@@ -131,13 +136,16 @@ var houseKeeperCmd = &cobra.Command{
 	Short: "starts ros-ocp housekeeper service",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting ros-ocp housekeeper service")
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		runServiceStartup(ctx)
 		sourcesFlag, _ := cmd.Flags().GetBool("sources")
 		partitionFlag, _ := cmd.Flags().GetBool("partitions")
 		if sourcesFlag {
-			housekeeper.StartSourcesListenerService()
+			housekeeper.StartSourcesListenerService(ctx)
 		}
 		if partitionFlag {
-			housekeeper.DeletePartitions()
+			housekeeper.DeletePartitions(ctx)
 		}
 	},
 }
