@@ -34,7 +34,7 @@ All metrics use the `rosocp_` prefix.
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Invalid namespace CSVs received |
 | `rosocp_csv_fetch_error_total` | Counter | — | S3/HTTP CSV download failures |
 | `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Plugin ingest hook failures (non-fatal) |
-| `rosocp_gpu_unrecognized_model_total` | Counter | `model_string` | GPU model strings not found in catalog |
+| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | GPU model strings not found in catalog |
 
 ### Operational Health
 
@@ -154,13 +154,13 @@ All metrics use the `rosocp_` prefix.
 
 ### Resolution
 
-**Default (degraded mode, `ROS_INGEST_STRICT_ANALYTICS=false`):**
-
-- Recommendations were intentionally persisted. Re-trigger ingestion for the cluster (Kafka message replay or `reship_ros`) once the underlying DB issue is fixed. A successful run clears `analytics_incomplete`.
-
-**Strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`):**
+**Default (strict mode, `ROS_INGEST_STRICT_ANALYTICS=true`):**
 
 - The Kafka offset was not committed; the message will retry automatically. Fix the root cause (partitions, DB load, timeout) and allow the consumer to catch up.
+
+**Degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`):**
+
+- Recommendations were intentionally persisted. Re-trigger ingestion for the cluster (Kafka message replay or `reship_ros`) once the underlying DB issue is fixed. A successful run clears `analytics_incomplete`.
 
 **Operational hardening:**
 
@@ -171,13 +171,13 @@ All metrics use the `rosocp_` prefix.
 
 ## Runbook: GPU Model Unrecognized
 
-**Alert condition:** `rate(rosocp_gpu_unrecognized_model_total[1h]) > 0`
+**Alert condition:** `rate(rosocp_gpu_model_unrecognized_total[1h]) > 0`
 
 ### Diagnosis
 
 1. Check which model strings are unrecognized:
    ```promql
-   topk(10, sum by (model_string) (rosocp_gpu_unrecognized_model_total))
+   topk(10, sum by (model_name) (rosocp_gpu_model_unrecognized_total))
    ```
 
 2. This indicates the NVIDIA GPU catalog (`internal/engine/gpu_catalog.yaml`) needs updating.

@@ -814,6 +814,8 @@ Internal reship poller for business-hours historical data backfill. Admin-only.
 | Retry interval. <br><em>Expanded: How often (in seconds) the reship poller checks for pending reship requests and retries failed ones. The reship poller manages backfill of historical usage data needed for business-hours analysis. 60 seconds means failed reship attempts are retried every minute until success or max retries.</em> | 60 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | — | — | No |
 | Max failures. <br><em>Expanded: Maximum number of retry attempts for a failed reship request before it is abandoned. After this many failures, the reship request is marked as permanently failed and business-hours recommendations for that time range will use whatever data is available (possibly with reduced confidence). Prevents infinite retry loops against unreachable clusters.</em> | 10 | `ROS_RESHIP_MAX_RETRIES` | — | — | No |
 
+Prometheus: duplicate reship triggers coalesced while in-flight — `rosocp_reship_coalesced_total{org_id}`.
+
 ---
 
 ## Threshold Recalculation
@@ -826,7 +828,7 @@ backfill is required.
 |---------|---------|---------|--------------|------------|----------|
 | Kill-switch for async recalculation after threshold PUT. <br><em>Expanded: When true (default), each successful threshold settings PUT triggers background re-recommendation for all clusters in the org (bounded to 3 concurrent clusters). When false, settings are saved and the threshold cache is invalidated, but existing recommendations are not recomputed until the next ingestion cycle.</em> | true | `ROS_THRESHOLD_RECALCULATION_ENABLED` | — | — | No |
 
-Prometheus: `ros_threshold_recalculation_total{org_id,recommendation_type,status}`.
+Prometheus: `ros_threshold_recalculation_total{org_id,recommendation_type,status}`. Coalesced duplicate triggers: `rosocp_threshold_recalc_coalesced_total{org_id,recommendation_type}`.
 
 ---
 
@@ -853,6 +855,22 @@ Configure on the **Koku** worker / masu deployment so rate changes trigger ROS r
 | `ROS_SERVICE_TOKEN` | (unset) | Optional bearer token for `POST /internal/recalculate-savings`; otherwise Koku uses the projected service account token. |
 
 See [Cost Integration — Savings recalculation](cost-integration.md#savings-recalculation-after-cost-model-changes).
+
+Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`; coalesced duplicate triggers — `rosocp_savings_recalc_coalesced_total{org_id}`. Effective-rates cache capacity (`ROS_COST_CACHE_MAX_ENTRIES`): `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total`.
+
+---
+
+## Cache and coalescing observability
+
+Tune in-memory caches and observe duplicate async-job suppression via Prometheus (full catalog in [Monitoring](../operations/monitoring.md)):
+
+| Configuration | Observable metrics |
+|---------------|-------------------|
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` |
+| `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` |
+| Threshold recalc coalescing | `rosocp_threshold_recalc_coalesced_total` |
+| Savings recalc coalescing | `rosocp_savings_recalc_coalesced_total` |
+| Reship coalescing | `rosocp_reship_coalesced_total` |
 
 ---
 

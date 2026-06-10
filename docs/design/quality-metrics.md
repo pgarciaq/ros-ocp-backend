@@ -51,7 +51,7 @@ The `/quality` endpoint aggregates post-hoc signals per container cycle: `stabil
 
 ## Pipeline behavior
 
-By default (`ROS_INGEST_STRICT_ANALYTICS=false`), recommendations are persisted first and analytics gaps are surfaced via metrics and API flags. Set `ROS_INGEST_STRICT_ANALYTICS=true` to require history/quality writes before recommendations (transient failure retries the Kafka message).
+By default (`ROS_INGEST_STRICT_ANALYTICS=true`), history and quality writes must succeed before recommendations are persisted; analytics failures retry the Kafka message. Set `ROS_INGEST_STRICT_ANALYTICS=false` for degraded mode: recommendations persist first and analytics gaps are surfaced via metrics and API flags.
 
 ### Container path (streaming batches)
 

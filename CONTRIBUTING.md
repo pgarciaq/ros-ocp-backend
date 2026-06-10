@@ -969,7 +969,7 @@ Don't be surprised when test data "disappears" — check the retention sweep.
 | `rosocp_invalid_csv_total` | Counter | — | Malformed CSVs received |
 | `rosocp_csv_fetch_error_total` | Counter | — | S3/HTTP download failures |
 | `rosocp_db_error_total` | Counter | — | Database errors |
-| `rosocp_partition_missing_error_total` | Counter | `table_name` | Missing partition errors |
+| `rosocp_partition_missing_error_total` | Counter | `resource_name` | Missing partition errors |
 | `rosocp_retention_partitions_dropped_total` | Counter | — | Partitions dropped by sweep |
 | `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | Unrecognized GPU models |
 | `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Plugin hook failures |

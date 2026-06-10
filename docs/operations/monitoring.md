@@ -62,7 +62,7 @@ From `Makefile` / `CONTRIBUTING.md`:
 
 ## Prometheus Metrics Catalog
 
-All application metrics use the `rosocp_` prefix except business-hours reship metrics (`ros_reship_*`, `ros_threshold_*`).
+All application metrics use the `rosocp_` prefix except business-hours reship metrics (`ros_reship_*`, `ros_threshold_*`) and a few legacy counters documented in [Legacy / non-prefixed metrics](#legacy--non-prefixed-metrics).
 
 ### Pipeline health and throughput
 
@@ -199,6 +199,29 @@ In-memory LRU cache for masu `effective_rates` responses (used by savings estima
 
 **Source file:** `internal/costdata/provider.go`, `internal/costdata/metrics.go`
 
+### RBAC permission cache
+
+In-memory LRU cache for RBAC permission lookups keyed by `X-Rh-Identity`. TTL is set by `ROS_RBAC_CACHE_TTL` (default **60 seconds**; `0` disables). Capacity is capped by `ROS_RBAC_CACHE_MAX_ENTRIES` (default **500**).
+
+| Metric | Type | What it measures |
+|--------|------|------------------|
+| `rosocp_rbac_cache_size` | Gauge | Current number of cached RBAC permission entries |
+| `rosocp_rbac_cache_evictions_total` | Counter | Entries evicted because the cache reached max capacity |
+
+**Source file:** `internal/api/middleware/rbac_cache.go`
+
+### Async job coalescing
+
+Per-org single-flight guards prevent duplicate background work when settings or internal triggers fire in rapid succession.
+
+| Metric | Type | Labels | What it measures |
+|--------|------|--------|------------------|
+| `rosocp_threshold_recalc_coalesced_total` | Counter | `org_id`, `recommendation_type` | Threshold recalc triggers coalesced while a job was in-flight |
+| `rosocp_savings_recalc_coalesced_total` | Counter | `org_id` | Savings recalc triggers coalesced while a job was in-flight |
+| `rosocp_reship_coalesced_total` | Counter | `org_id` | Business-hours reship triggers coalesced while a job was in-flight |
+
+**Source files:** `internal/engine/threshold_recalc_guard.go`, `internal/engine/savings_recalc_guard.go`, `internal/reship/trigger_guard.go`
+
 ### GPU
 
 | Metric | Type | Labels | What it measures |
@@ -228,6 +251,17 @@ The `/recommendations/openshift/quality` API returns `stability_pct` on a **0.0â
 | `rosocp_retention_partitions_dropped_total` | Counter | â€” | Monthly partitions dropped by the retention sweep |
 
 Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_H`. See [retention.md](retention.md).
+
+### Legacy / non-prefixed metrics
+
+Some counters predate the `rosocp_` naming convention and retain their original names:
+
+| Metric | Type | Labels | What it measures |
+|--------|------|--------|------------------|
+| `ros_ingestion_file_failures_total` | Counter | `org_id`, `cluster_id`, `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
+| `ros_savings_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations. `status`: `success`, `error` |
+
+**Source files:** `internal/services/metrics.go`, `internal/engine/savings_recalculate.go`
 
 ---
 

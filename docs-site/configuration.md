@@ -76,7 +76,8 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_KAFKA_PARALLEL` | `true` | Enable parallel Kafka message processing. |
 | `ROS_KAFKA_WORKERS` | `3` | Worker goroutines when parallel mode is on. Messages on the same Kafka partition are still processed serially. |
 | `ROS_RBAC_CACHE_TTL` | `60` | RBAC permission cache TTL in seconds. `0` disables caching. |
-| `ROS_THRESHOLD_RECALC_CONCURRENCY` | `3` | Max parallel clusters during threshold recalculation. |
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `500` | Max entries in the in-memory RBAC permission LRU cache. Observable via `rosocp_rbac_cache_size` and `rosocp_rbac_cache_evictions_total` (see [Monitoring](monitoring.md)). |
+| `ROS_THRESHOLD_RECALC_CONCURRENCY` | `3` | Max parallel clusters during threshold recalculation. Coalesced duplicate triggers appear on `rosocp_threshold_recalc_coalesced_total`. |
 | `ROS_DB_MIN_CONNS` | `2` | Minimum pgxpool connections. |
 | `ROS_DB_MAX_CONN_LIFETIME` | `30` | Max connection lifetime in **minutes**. |
 | `ROS_DB_MAX_CONN_IDLE_TIME` | `5` | Max idle connection time in **minutes**. |
@@ -86,7 +87,7 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` | Session statement timeout in **seconds** for API connections. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` | Per-transaction ingest timeout in **seconds** (`SET LOCAL` on batch writes). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max digest groups in memory before incremental flush during streaming ingest. |
-| `ROS_INGEST_STRICT_ANALYTICS` | `false` | When `true`, block recommendation persistence and Kafka commit if history or quality writes fail (message retried). When `false`, write recommendations and surface gaps via `rosocp_analytics_incomplete_total` and `analytics_incomplete` on container list responses. |
+| `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), block recommendation persistence and Kafka commit if history or quality writes fail (message retried). Set `false` for degraded mode: write recommendations and surface gaps via `rosocp_analytics_incomplete_total` and `analytics_incomplete` on container list responses. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel masu reship calls per org. |
 
 !!! tip "Tuning order"
@@ -185,6 +186,7 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 | `RBACPort` | (platform) | RBAC service port. |
 | `RBACProtocol` | `http` | RBAC URL scheme. |
 | `ROS_RBAC_CACHE_TTL` | `60` | Permission cache TTL (seconds). See Performance Tuning. |
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `500` | Max RBAC cache entries (LRU). Observable via `rosocp_rbac_cache_size` and `rosocp_rbac_cache_evictions_total`. |
 
 ---
 
@@ -247,8 +249,8 @@ Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the conta
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KOKU_MASU_URL` | (empty) | Koku masu API base URL for `effective_rates` (required for non-null VM `savings` and fleet `by_plugin.vm`). |
-| `ROS_COST_CACHE_MAX_ENTRIES` | `1000` | Max entries in the in-memory LRU cache for masu `effective_rates` (5-minute TTL per entry). |
-| `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Business-hours reship retry interval. |
+| `ROS_COST_CACHE_MAX_ENTRIES` | `1000` | Max entries in the in-memory LRU cache for masu `effective_rates` (5-minute TTL per entry). Observable via `rosocp_cost_cache_size` and `rosocp_cost_cache_evictions_total`. |
+| `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Business-hours reship retry interval. Duplicate reship triggers coalesce on `rosocp_reship_coalesced_total`. |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Max consecutive reship failures. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel reship calls (see Performance Tuning). |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | Forward-only fallback after reship exhaustion. |

@@ -39,6 +39,7 @@ caching, threshold recalc fan-out, reship concurrency).
 | `ROS_KAFKA_PARALLEL` | `true` | Enable parallel Kafka message processing. When `true` and `ROS_KAFKA_WORKERS` > 1, messages are dispatched to a worker pool. Partition-level mutexes preserve ordering within a partition. |
 | `ROS_KAFKA_WORKERS` | `3` | Number of Kafka worker goroutines when parallel mode is enabled. Increase for CPU-bound clusters with low per-message I/O; decrease if DB pool is saturated. |
 | `ROS_RBAC_CACHE_TTL` | `60` (seconds) | In-memory TTL for RBAC permission lookups keyed by `X-Rh-Identity`. Set `0` to disable caching (every API request hits RBAC). |
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `500` | Max entries in the in-memory RBAC permission LRU cache. Evicts oldest entries when full. |
 | `ROS_THRESHOLD_RECALC_CONCURRENCY` | `3` | Max parallel clusters during async threshold recalculation after Settings API PUT. |
 | `ROS_DB_MIN_CONNS` | `2` | pgxpool minimum idle connections kept open. |
 | `ROS_DB_MAX_CONN_LIFETIME` | `30` (minutes) | Maximum lifetime of a pooled connection before recycle. |
@@ -55,7 +56,7 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout applied on pool connect (`AfterConnect`) for API and GORM paths. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
-| `ROS_INGEST_STRICT_ANALYTICS` | `false` | When `true`, history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. When `false` (default), recommendations are written first and analytics gaps are flagged via metrics and API fields. |
+| `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
 
 ---
 
@@ -462,8 +463,9 @@ Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 ### API latency under RBAC load
 
 1. Default `ROS_RBAC_CACHE_TTL=60` reduces RBAC HTTP round-trips per identity.
-2. Lower TTL (e.g. `30`) if permission changes must propagate faster.
-3. Set `0` only for debugging — every request hits RBAC.
+2. `ROS_RBAC_CACHE_MAX_ENTRIES=500` caps memory; watch `rosocp_rbac_cache_size` and `rosocp_rbac_cache_evictions_total`.
+3. Lower TTL (e.g. `30`) if permission changes must propagate faster.
+4. Set TTL `0` only for debugging — every request hits RBAC.
 
 ### Threshold recalculation
 

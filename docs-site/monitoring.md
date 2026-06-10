@@ -48,6 +48,7 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations saved (`container`, `namespace`, `node`, `pvc`) |
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | How long each recommendation domain takes |
 | `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Ingestion sub-phases (`digest`, `gpu_enrichment`) |
+| `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
 
 **Is it processing?**
 
@@ -69,9 +70,11 @@ sum by (type) (increase(rosocp_recommendations_written_total[1h]))
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Pipeline failures: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_invalid_csv_total` | Counter | — | Bad container CSV from upstream |
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Bad namespace CSV |
+| `rosocp_invalid_datapoints_total` | Counter | — | Invalid rows within otherwise parseable CSVs |
 | `rosocp_csv_fetch_error_total` | Counter | — | Failed S3/HTTP downloads |
 | `rosocp_db_error_total` | Counter | — | Database errors |
 | `rosocp_partition_missing_error_total` | Counter | `resource_name` | Missing monthly table partition |
+| `rosocp_quality_partition_missing_total` | Counter | — | Quality-metrics write failed due to missing partition |
 | `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Non-fatal plugin hook failures |
 
 **Any errors?**
@@ -122,7 +125,6 @@ GORM and direct pgxpool access share one pool per process. Metrics reflect `pool
 | `rosocp_db_pool_max_conns` | Gauge | Configured max connections (`ROS_DB_MAX_CONNS`) |
 | `rosocp_db_pool_acquire_count_total` | Counter | Cumulative successful acquires |
 | `rosocp_db_pool_acquire_duration_seconds` | Counter | Cumulative time spent acquiring connections |
-| `rosocp_db_error_total` | Counter | — | Connection or query failures |
 
 ### Ingestion streaming
 
@@ -214,12 +216,28 @@ logs batch progress every 100 messages at INFO level.
 
 The API caches RBAC permission lookups in memory keyed by `X-Rh-Identity`.
 TTL is set by `ROS_RBAC_CACHE_TTL` (default **60 seconds**; `0` disables).
+Capacity is capped by `ROS_RBAC_CACHE_MAX_ENTRIES` (default **500**).
 
-There is no exported cache hit/miss metric. Observable effects:
+| Metric | Type | What to watch |
+|--------|------|---------------|
+| `rosocp_rbac_cache_size` | Gauge | Current cached RBAC entries; should stay below max |
+| `rosocp_rbac_cache_evictions_total` | Counter | LRU evictions when cache is full |
+
+Observable effects:
 
 - Lower RBAC service request rate at steady API traffic.
 - Permission changes may take up to TTL seconds to propagate for cached identities.
 - Set `ROS_RBAC_CACHE_TTL=0` temporarily when debugging authorization issues.
+
+### Async job coalescing
+
+Per-org single-flight guards deduplicate rapid savings recalc, reship, and threshold recalc triggers.
+
+| Metric | Type | Labels | What to watch |
+|--------|------|--------|---------------|
+| `rosocp_threshold_recalc_coalesced_total` | Counter | `org_id`, `recommendation_type` | Settings churn coalesced into follow-up recalc |
+| `rosocp_savings_recalc_coalesced_total` | Counter | `org_id` | Duplicate savings recalc triggers while in-flight |
+| `rosocp_reship_coalesced_total` | Counter | `org_id` | Duplicate business-hours reship triggers while in-flight |
 
 ### Recommendation quality (processor)
 
@@ -242,6 +260,15 @@ Controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, and related 
 ### Legacy Kruize path
 
 If the recommendation poller is deployed (Kruize mode), additional counters track Kruize API calls and invalid responses (`rosocp_kruize_api_exception_total`, `kruize_*_request_total`, etc.). These are zero when running the native Go engine only.
+
+### Legacy / non-prefixed metrics
+
+Some counters predate the `rosocp_` naming convention and retain their original names:
+
+| Metric | Type | Labels | What to watch |
+|--------|------|--------|---------------|
+| `ros_ingestion_file_failures_total` | Counter | `org_id`, `cluster_id`, `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
+| `ros_savings_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations (`success`, `error`) |
 
 ---
 
