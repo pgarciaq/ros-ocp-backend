@@ -97,6 +97,12 @@ func nativeContainerSortUsesOrgKeysOnly(sortExpr string) bool {
 var log *logrus.Entry = logging.GetLogger()
 
 // Fixed namespace UUID for deterministic ID generation (UUID v5).
+//
+// Deterministic IDs enable idempotent upserts: the same cluster/namespace/workload/container
+// always maps to the same recommendation UUID across ingest runs. The UUID does NOT encode
+// org_id — it is derived only from cluster and workload identity. Every detail lookup MUST
+// filter by org_id (via rh_accounts or recommendation_sets.org_id) so one tenant cannot
+// read another tenant's data by guessing a UUID. See docs/architecture/recommendation-ids.md.
 var nativeIDNamespace = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 
 // SmallintArray implements sql.Scanner and driver.Valuer for PostgreSQL
@@ -277,6 +283,9 @@ type NativeContainerResult struct {
 // NativeContainerID generates a deterministic UUID v5 from the composite key.
 // workloadType is included to distinguish same-name workloads of different kinds
 // (e.g. Deployment "api" vs StatefulSet "api" in the same namespace).
+//
+// Security: the returned ID is not tenant-scoped. Callers must always pair it with org_id
+// when querying recommendation_sets (see nativeContainerDetailQuery).
 func NativeContainerID(clusterUUID, namespace, workload, workloadType, container string) string {
 	name := fmt.Sprintf("%s/%s/%s/%s/%s", clusterUUID, namespace, workload, workloadType, container)
 	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
@@ -284,6 +293,8 @@ func NativeContainerID(clusterUUID, namespace, workload, workloadType, container
 
 // NativeNamespaceID generates a deterministic UUID v5 for a namespace
 // recommendation, keyed by cluster UUID and namespace name.
+//
+// Security: same org_id invariant as NativeContainerID — see nativeNamespaceDetailQuery.
 func NativeNamespaceID(clusterUUID, namespace string) string {
 	name := fmt.Sprintf("%s/%s", clusterUUID, namespace)
 	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
@@ -626,15 +637,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
 	db := database.GetDB()
 
-	// Primary path: indexed lookup on container_id.
-	query := db.Table("recommendation_sets rs").
-		Select(nativeDetailSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("rs.container_id = ?", id).
-		Where("rs.stale = false")
-	query = ApplyNativeRBAC(query, userPerms)
+	query := nativeContainerDetailQuery(db, orgID, id, userPerms)
 
 	var rows []NativeRecommendationRow
 	if err := query.Order("rs.term, rs.engine").Find(&rows).Error; err != nil {
@@ -651,6 +654,19 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 	// Fallback for pre-migration rows where container_id is NULL.
 	// TODO: remove getNativeRecommendationByIDFallback after container_id backfill verified in production.
 	return getNativeRecommendationByIDFallback(db, orgID, id, userPerms)
+}
+
+// nativeContainerDetailQuery builds the primary detail lookup for a container recommendation.
+// orgID is required: recommendation IDs are deterministic UUID v5 values that do not encode tenant scope.
+func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[string][]string) *gorm.DB {
+	query := db.Table("recommendation_sets rs").
+		Select(nativeDetailSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("rs.container_id = ?", id).
+		Where("rs.stale = false")
+	return ApplyNativeRBAC(query, userPerms)
 }
 
 // getNativeRecommendationByIDFallback scans up to 500 distinct container keys

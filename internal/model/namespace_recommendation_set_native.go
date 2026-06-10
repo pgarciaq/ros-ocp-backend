@@ -225,16 +225,7 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
 	db := database.GetDB()
 
-	query := db.Table("namespace_recommendation_sets ns").
-		Select(nativeNSSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("ns.namespace_id = ?", id).
-		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
-		Where("ns.stale = false")
-	query = applyNativeNamespaceRBAC(query, userPerms)
+	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
 
 	var rows []NativeNamespaceRow
 	if err := query.Order("ns.term, ns.engine").Find(&rows).Error; err != nil {
@@ -250,6 +241,21 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 
 	// Fallback: scan namespace keys and match by UUID v5.
 	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms)
+}
+
+// nativeNamespaceDetailQuery builds the primary detail lookup for a namespace recommendation.
+// orgID is required: recommendation IDs are deterministic UUID v5 values that do not encode tenant scope.
+func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[string][]string) *gorm.DB {
+	query := db.Table("namespace_recommendation_sets ns").
+		Select(nativeNSSelect).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
+		Where("ra.org_id = ?", orgID).
+		Where("ns.namespace_id = ?", id).
+		Where("ns.term IS NOT NULL").
+		Where("ns.schedule_type = 'all_hours'").
+		Where("ns.stale = false")
+	return applyNativeNamespaceRBAC(query, userPerms)
 }
 
 func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
