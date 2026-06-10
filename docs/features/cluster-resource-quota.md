@@ -314,6 +314,6 @@ Track alongside namespace quota extended-resource work in
 ## Related documentation
 
 - [Namespace ResourceQuota recommendations](quota-recommendations.md)
-- [REQ-8.4b](../architecture/requirements.md) — requirements traceability
+- [REQ-8.4b](../archive/requirements.md) — requirements traceability
 - [Plugin phases](../architecture/plugin-phases.md) — `cluster-quota` priority 36
 - [Known issues](../known-issues.md) — timing and remaining gaps

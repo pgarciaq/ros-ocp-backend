@@ -18,4 +18,4 @@ Single API call returns both perspectives. Slightly more complex response schema
 
 ## References
 
-- [docs/features/business-hours.md](docs/features/business-hours.md)
+- [docs/features-business-hours.md](docs/features-business-hours.md)

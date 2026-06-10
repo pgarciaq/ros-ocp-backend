@@ -619,7 +619,7 @@ UI should show **human-readable rationale**: `plugin`, entity, pattern type, pri
 ## Open questions
 
 1. **Entity granularity:** Namespace default vs. container UUID for opt-in namespaces; workload name vs. UUID for display — UUID is stable; display name in API only?
-2. **Notifications:** Integrate with [native-engine-notification-gap.md](../native-engine-notification-gap.md) in v1 or API-only?
+2. **Notifications:** Integrate with [native-engine-notification-gap.md](../archive/native-engine-notification-gap.md) in v1 or API-only?
 3. **Auto-apply:** Proactive recs advisory only in v1 (recommended).
 4. **Federation:** Fleet-level seasonality on aggregated metrics vs. per-cluster only?
 5. **Timezone:** Cluster-local vs. UTC for daily `date` bucket — affects Monday 9am detection.

@@ -18,5 +18,5 @@ No extension dependencies. Exact math. Slightly more CPU at ingest (negligible a
 
 ## References
 
-- [docs/architecture/requirements.md](docs/architecture/requirements.md)
+- [docs/archive/requirements.md](docs/archive/requirements.md)
 - [internal/ingestion/digest.go](internal/ingestion/digest.go)

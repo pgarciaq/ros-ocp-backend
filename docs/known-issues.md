@@ -161,14 +161,14 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
 | Savings stale until re-ingestion | **Mitigated** when `ROS_SAVINGS_RECALCULATION_ENABLED=true` (default) and Koku calls `POST /internal/recalculate-savings` after cost model updates ([`ros_savings_recalc.py`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) must be deployed in koku). Without that integration, container/node/PVC/quota/cluster-quota savings still reflect rates from the last ingestion only | Low — mitigated with recalc; legacy path by design | REQ-7.5 |
 | No UI for most new features | Node recs, PVC recs, snapshots, GPU recs, **quota/CRQ recs**, fleet summary, quality, history, settings all have APIs but no koku-ui views | Medium — features are API-only until UI catches up | Multiple |
-| Unparsable Kafka messages log full payload | Fix for **`docs/audits/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/audits/490-issues.md` #149** |
+| Unparsable Kafka messages log full payload | Fix for **`docs/archive/490-issues.md` #149** (`commitOnPermanentFailure` in `internal/services/report_processor.go`): when a message cannot be parsed or validated, the **entire Kafka message body is written to application logs** to support manual recovery and debugging. Those payloads routinely include **`org_id`**, **`cluster_uuid`**, and **file URLs**. Presigned S3 URLs in particular may carry **access tokens or signing parameters in the query string**, which some compliance regimes treat as sensitive even when logs are access-controlled. | Medium — policy-dependent (data classification, log retention, SIEM exposure) | **`docs/archive/490-issues.md` #149** |
 
 #### Unparsable Kafka message logging (sensitive payload fields)
 
 When ingestion encounters JSON/validation failures on the ROS report Kafka path,
 the handler logs the **full raw payload** alongside the error. This was added so
 operators can reconstruct or forward poison messages after failures that would
-otherwise commit the offset with no replay path (see **`docs/audits/490-issues.md` #149** —
+otherwise commit the offset with no replay path (see **`docs/archive/490-issues.md` #149** —
 `commitOnPermanentFailure` / permanent failure handling).
 
 **Fields of note in logged payloads:**
@@ -207,7 +207,7 @@ previously retried indefinitely and could block a partition. Retry counting via
 `X-Retry-Count` headers and DLQ escalation after max retries now unblocks the
 consumer. Monitor `rosocp_kafka_retries_total` and `rosocp_kafka_dlq_messages_total`.
 
-This caveat aligns with permanent-failure handling for **`docs/audits/490-issues.md` #149**
+This caveat aligns with permanent-failure handling for **`docs/archive/490-issues.md` #149**
 (`commitOnPermanentFailure` in `internal/services/report_processor.go`); **`docs/audits/adversarial-review.md` Finding #18** documents transient retry/DLQ behavior.
 
 #### Node Recommendation Cold Start

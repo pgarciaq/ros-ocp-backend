@@ -7,7 +7,7 @@ Every production function is driven by a failing test written first.
 
 **Parent docs:**
 - Design: [gpu-recommendations.md](gpu-recommendations.md) (Phase E)
-- Implementation: [../gpu-time-slicing-plan.md](../gpu-time-slicing-plan.md)
+- Implementation: [../plans/gpu-timeslicing-implementation-plan.md](../plans/gpu-timeslicing-implementation-plan.md)
 - Test inventory: [gpu-recommendations-test-plan.md](gpu-recommendations-test-plan.md) (Phase E)
 
 **Conventions:**

@@ -18,5 +18,5 @@ Single code path. On-prem requires Kafka+S3 infrastructure. No HTTP upload API.
 
 ## References
 
-- [docs/architecture/requirements.md](docs/architecture/requirements.md)
+- [docs/archive/requirements.md](docs/archive/requirements.md)
 - [internal/services/report_processor.go](internal/services/report_processor.go)

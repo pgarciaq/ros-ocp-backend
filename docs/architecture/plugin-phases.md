@@ -176,7 +176,7 @@ documented here so phase and priority slots stay stable when implementations lan
 | binpacking | 3 | (TBD) | Fleet pod placement |
 | machineset | 3 | (TBD) | Node pool right-sizing |
 
-See [performance-analysis.md §23](performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
+See [performance-analysis.md §23](../archive/performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
 for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota and ClusterResourceQuota recommendations are implemented — see
 [quota-recommendations.md](../features/quota-recommendations.md) and
 [cluster-resource-quota.md](../features/cluster-resource-quota.md).

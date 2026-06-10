@@ -255,7 +255,7 @@ Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendation
 
 ## Related documentation
 
-- Native engine notification mapping: [`docs/native-engine-notification-gap.md`](../native-engine-notification-gap.md)
+- Native engine notification mapping: [`docs/archive/native-engine-notification-gap.md`](../archive/native-engine-notification-gap.md)
 - UI integration (partial table): [`docs/ui-integration-guide.md`](../ui-integration-guide.md)
 - Consolidated feature notes: [`docs/known-issues.md`](../known-issues.md) (notification sections)
 - Migrations: `migrations/000027_*.sql` through `migrations/000098_*.sql`

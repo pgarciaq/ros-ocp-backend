@@ -1,4 +1,4 @@
-> **Status: Implemented.** See [`docs/phase5-implementation-notes.md`](../phase5-implementation-notes.md) for as-built details.
+> **Status: Implemented.** See [`phase5-implementation-notes.md`](phase5-implementation-notes.md) for as-built details.
 
 # Phase 5: Recommendation History, Boxplots, and Retention
 

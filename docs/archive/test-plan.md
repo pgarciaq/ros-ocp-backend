@@ -732,7 +732,7 @@ Go recommendation function tests use a **golden-file approach**: expected output
 
 #### T-6.5: Namespace boxplots (REQ-6.5)
 
-> **Performance analysis:** See [namespace-boxplots-performance-analysis.md](../namespace-boxplots-performance-analysis.md)
+> **Performance analysis:** See [namespace-boxplots-performance-analysis.md](namespace-boxplots-performance-analysis.md)
 >
 > Mirrors the Phase 5 container boxplot architecture. Creates `namespace_usage_samples`
 > table (partitioned by `sample_time`), stores raw per-interval measurements during

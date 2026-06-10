@@ -27,7 +27,7 @@ formulas, see [Cost Integration](cost-integration.md).
 | **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
-same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
+same cost/performance percentiles as container. See [Business Hours](../features-business-hours.md).
 
 ---
 
@@ -491,7 +491,7 @@ OOM bump, adaptive margin, limit multiplier, and floor match container defaults.
 Terms and decay follow the container plugin configuration.
 
 Source: [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go).
-Admin guide: [Business Hours](../features/business-hours.md).
+Admin guide: [Business Hours](../business-hours-admin-guide.md).
 
 ---
 

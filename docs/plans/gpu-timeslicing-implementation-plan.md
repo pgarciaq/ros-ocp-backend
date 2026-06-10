@@ -383,7 +383,7 @@ future use by GORM-based node queries.
 
 ### Phase 5c: Documentation
 
-1. Update `docs/gpu-time-slicing-plan.md` with pagination and RBAC sections
+1. Update this plan with pagination and RBAC sections (canonical GPU time-slicing design doc)
 2. Update `docs/plans/gpu-recommendations-test-plan.md` Phase E status
 3. Update `docs/archive/gpu-timeslicing-tdd-plan.md` status
 4. Update OpenAPI spec with pagination parameters and links schema

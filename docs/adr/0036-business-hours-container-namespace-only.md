@@ -18,4 +18,4 @@ No misleading BH recommendations for infrastructure. Simpler for ops-focused plu
 
 ## References
 
-- [docs/features/business-hours.md](docs/features/business-hours.md)
+- [docs/features-business-hours.md](docs/features-business-hours.md)

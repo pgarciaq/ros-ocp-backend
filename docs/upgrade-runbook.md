@@ -9,7 +9,7 @@ instance from a Kruize-era database schema to the native engine schema.
 thresholds, GPU confidence tiers, PVC parameters, etc.), see
 [Configurability Reference](architecture/configurability.md).
 
-**Scope:** Covers migration safety concerns documented in 490-issues.md
+**Scope:** Covers migration safety concerns documented in [490-issues.md](archive/490-issues.md)
 (#84, #89, #90, #91, #92, #100). Fresh installations do NOT need this
 runbook — all migrations run safely on an empty database.
 

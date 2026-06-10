@@ -4,8 +4,8 @@
 **Last updated:** 2026-06-01  
 **Public overview:** [Virtual Machine Recommendations (docs-site)](../../docs-site/features/virtual-machines.md)
 
-**Related requirements:** [requirements.md §12b (Phase 8b)](../architecture/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)  
-**Related analysis:** [performance-analysis.md §30](../architecture/performance-analysis.md#30-openshift-virtualization-vm-recommendations)  
+**Related requirements:** [requirements.md §12b (Phase 8b)](../archive/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)  
+**Related analysis:** [performance-analysis.md §30](../archive/performance-analysis.md#30-openshift-virtualization-vm-recommendations)  
 **Test plan:** [vm-test-plan.md](vm-test-plan.md)
 
 ---

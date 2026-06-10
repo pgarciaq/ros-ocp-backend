@@ -18,4 +18,4 @@ Access to PG16 features (better partitioning, MERGE). Must test against 16 speci
 
 ## References
 
-- [docs/architecture/requirements.md](docs/architecture/requirements.md)
+- [docs/archive/requirements.md](docs/archive/requirements.md)

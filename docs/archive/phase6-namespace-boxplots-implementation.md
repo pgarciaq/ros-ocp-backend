@@ -3,7 +3,7 @@
 > **Date:** 2026-03-24
 > **Status:** Implemented
 > **Performance analysis:** [namespace-boxplots-performance-analysis.md](namespace-boxplots-performance-analysis.md)
-> **Test plan:** T-6.5 in [`architecture/test-plan.md`](architecture/test-plan.md)
+> **Test plan:** T-6.5 in [`test-plan.md`](test-plan.md)
 
 ---
 

@@ -5,7 +5,7 @@
 **Public overview:** [Network Optimization (docs-site)](../../docs-site/planned-features/network.md)
 
 **Related requirements:** Reserved in plugin phase inventory (Phase 1 Produce candidate)  
-**Ecosystem analysis:** [performance-analysis.md](../architecture/performance-analysis.md) — VM network metrics noted as future placement input
+**Ecosystem analysis:** [performance-analysis.md](../archive/performance-analysis.md) — VM network metrics noted as future placement input
 
 ---
 
@@ -308,5 +308,5 @@ Rough estimate: **8–12 weeks** for Tier A MVP (NET-A through NET-D); +4–6 we
 
 - [Network feature page (public)](../../docs-site/planned-features/network.md)
 - OpenShift: [Network Observability](https://docs.openshift.com/container-platform/latest/networking/network_observability/installing-operators.html)
-- KubeVirt network metrics (VM placement — separate from this plugin): [performance-analysis.md §30](../architecture/performance-analysis.md#30-openshift-virtualization-vm-recommendations)
+- KubeVirt network metrics (VM placement — separate from this plugin): [performance-analysis.md §30](../archive/performance-analysis.md#30-openshift-virtualization-vm-recommendations)
 - [Plugin phases](../architecture/plugin-phases.md)

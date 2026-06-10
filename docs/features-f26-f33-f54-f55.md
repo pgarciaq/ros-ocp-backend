@@ -3,7 +3,7 @@
 Last updated: 2026-06-08
 
 These features were implemented as "low-hanging fruit" from the
-[ros-ocp-backend requirements](architecture/requirements.md)
+[ros-ocp-backend requirements](archive/requirements.md)
 (REQ-6.1, REQ-7.6, REQ-10.7, REQ-10.8).
 
 ---

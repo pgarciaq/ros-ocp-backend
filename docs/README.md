@@ -15,7 +15,6 @@
 | [design/vm-test-plan.md](design/vm-test-plan.md) | VM recommendations test inventory (unit, E2E, IQE) |
 | [design/java-recommendations.md](design/java-recommendations.md) | **Planned** — Java/JVM heap, GC, thread pools, non-heap OOM, MaxRAMPercentage (Phase 9) |
 | [design/network-recommendations.md](design/network-recommendations.md) | **Planned** — NetObserv integration, egress/DNS/drops, SaaS cost attribution, cross-zone v2 |
-| [requirements.md](architecture/requirements.md) | Master requirements document — 60 features, 87 REQs, database schema, phasing strategy, deployment model |
 | [plugin-architecture.md](architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
 | [recommendation-engines.md](architecture/recommendation-engines.md) | Plugin thresholds, percentiles, terms, and engine behavior |
 | [configurability.md](architecture/configurability.md) | **Environment variable reference** — all `ROS_*` vars, Settings API routes, precedence model, tuning guidance |
@@ -27,9 +26,7 @@
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |
 | [api-versioning.md](architecture/api-versioning.md) | API versioning strategy and compatibility policy |
 | [native-migration.md](architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
-| [performance-analysis.md](architecture/performance-analysis.md) | Legacy pipeline performance analysis (historical — see staleness notice) |
-| [test-plan.md](architecture/test-plan.md) | TDD test plan covering all phases |
-| [koku-tdigest-idea.md](architecture/koku-tdigest-idea.md) | **Not adopted** — historical Koku/ROS t-digest feasibility study; shipped engine uses exact Go percentiles on daily digests |
+| [plans/gpu-timeslicing-implementation-plan.md](plans/gpu-timeslicing-implementation-plan.md) | GPU time-slicing design and implementation plan |
 
 ## Operations & Maintenance
 
@@ -51,20 +48,28 @@
 | [features-f26-f33-f54-f55.md](features-f26-f33-f54-f55.md) | Staleness, idle/abandoned detection, adoption, fleet summary, fleet savings summary |
 | [features-f27-pvc-rightsizing.md](features-f27-pvc-rightsizing.md) | PVC right-sizing: oversized, near-full, orphaned, growth trend |
 | [features-f-snapshot-staleness.md](features-f-snapshot-staleness.md) | Snapshot staleness detection |
+| [features-business-hours.md](features-business-hours.md) | Business hours recommendations — design specification |
+| [business-hours-admin-guide.md](business-hours-admin-guide.md) | Business hours — admin and operator guide |
 | [known-issues.md](known-issues.md) | Feature status report — executive summary, implementation status, caveats |
 | [kruize-vs-native-comparison.md](kruize-vs-native-comparison.md) | Comparison between Kruize and native engine |
 | [native-engine-performance.md](native-engine-performance.md) | Native engine performance benchmarks |
-| [native-engine-notification-gap.md](native-engine-notification-gap.md) | Notification gap analysis (native vs legacy) |
-| [gpu-time-slicing-plan.md](gpu-time-slicing-plan.md) | GPU time-slicing design |
-| [phase5-implementation-notes.md](phase5-implementation-notes.md) | Phase 5 implementation notes |
-| [phase6-namespace-boxplots-implementation.md](phase6-namespace-boxplots-implementation.md) | Phase 6 namespace box plots implementation |
 
 ## Archive
 
-| Location | Description |
+Historical planning documents, superseded requirements, and completed phase notes live in [`docs/archive/`](archive/). Authoritative architectural decisions are recorded in [`docs/adr/`](adr/).
+
+| Document | Description |
 |----------|-------------|
-| [docs/archive/](archive/) | Completed phase plans and historical development notes |
-| [docs/audits/](audits/) | Issue audits ([490-issues.md](audits/490-issues.md)) |
+| [requirements.md](archive/requirements.md) | Master requirements document — 60 features, 87 REQs (historical) |
+| [490-issues.md](archive/490-issues.md) | Issue audit and resolution tracker |
+| [performance-analysis.md](archive/performance-analysis.md) | Legacy pipeline performance analysis |
+| [test-plan.md](archive/test-plan.md) | TDD test plan covering all phases |
+| [koku-tdigest-idea.md](archive/koku-tdigest-idea.md) | **Not adopted** — t-digest feasibility study |
+| [native-engine-notification-gap.md](archive/native-engine-notification-gap.md) | Notification gap analysis (native vs legacy) |
+| [phase5-implementation-notes.md](archive/phase5-implementation-notes.md) | Phase 5 implementation notes |
+| [phase6-namespace-boxplots-implementation.md](archive/phase6-namespace-boxplots-implementation.md) | Phase 6 namespace box plots implementation |
+| [namespace-boxplots-performance-analysis.md](archive/namespace-boxplots-performance-analysis.md) | Namespace boxplots performance analysis |
+| [test-plan-business-hours.md](archive/test-plan-business-hours.md) | Business hours test plan |
 
 ## API Reference
 

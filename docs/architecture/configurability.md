@@ -801,7 +801,7 @@ See [Idle / zombie detection](../features/idle-detection.md).
 
 `Global` under `ROS_SETTINGS_LOCKED` + `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` (default true): PUT/DELETE return `403`; GET returns `enabled: false`, `settings_locked: true`.
 
-Admin guide: [Business Hours](../features/business-hours.md).
+Admin guide: [Business Hours](../business-hours-admin-guide.md).
 
 ---
 

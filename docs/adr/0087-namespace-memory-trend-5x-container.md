@@ -18,4 +18,4 @@ Fewer false trend alerts at namespace level. Different tuning per scope.
 
 ## References
 
-- [docs/architecture/requirements.md](docs/architecture/requirements.md)
+- [docs/archive/requirements.md](docs/archive/requirements.md)

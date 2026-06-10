@@ -2168,7 +2168,7 @@ Additional fixes from the P0/P1 pass:
 
 ### Documentation / Spec (446-465)
 
-**#446 — `docs/architecture/requirements.md` describes `/healthz`, `/readyz` — not implemented**
+**#446 — `docs/archive/requirements.md` describes `/healthz`, `/readyz` — not implemented**
 - Repo: ros-ocp-backend
 - **Status:** ✅ Fixed — Added implementation status disclaimer to requirements.md (REQ-10.5, NFR-4 sections) noting `/healthz`/`/readyz` are unimplemented; current binary uses `/status`.
 

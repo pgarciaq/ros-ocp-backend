@@ -314,6 +314,6 @@ pod_quota_savings = pods_freed × cost_per_pod_slot
 
 - [Namespace Quota Optimization](../../docs-site/features/namespace-recommendations.md) — usage-based namespace sizing
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — phase and priority table
-- [REQ-8.4](../architecture/requirements.md) — requirements traceability
+- [REQ-8.4](../archive/requirements.md) — requirements traceability
 - [ClusterResourceQuota recommendations](cluster-resource-quota.md) — `cluster-quota` plugin
 - [Known issues](../known-issues.md) — ClusterResourceQuota and remaining gaps

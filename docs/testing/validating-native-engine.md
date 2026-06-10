@@ -1577,7 +1577,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 # Expect 200 (or 202-style success), not 404
 ```
 
-See [Business Hours](../features/business-hours.md) for schedule fields and `off_hours_weight`.
+See [Business Hours](../features-business-hours.md) for schedule fields and `off_hours_weight`.
 
 ---
 

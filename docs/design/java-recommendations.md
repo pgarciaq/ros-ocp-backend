@@ -4,7 +4,7 @@
 **Last updated:** 2026-05-30  
 **Public overview:** [Java & JVM Optimization (docs-site)](../../docs-site/planned-features/java-jvm.md)
 
-**Related requirements:** [requirements.md §13 (Phase 9)](../architecture/requirements.md) — REQ-9.1 through REQ-9.5  
+**Related requirements:** [requirements.md §13 (Phase 9)](../archive/requirements.md) — REQ-9.1 through REQ-9.5  
 **Feature inventory:** F48–F52 (not implemented)
 
 ---
