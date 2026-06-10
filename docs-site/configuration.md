@@ -247,6 +247,7 @@ Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the conta
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KOKU_MASU_URL` | (empty) | Koku masu API base URL for `effective_rates` (required for non-null VM `savings` and fleet `by_plugin.vm`). |
+| `ROS_COST_CACHE_MAX_ENTRIES` | `1000` | Max entries in the in-memory LRU cache for masu `effective_rates` (5-minute TTL per entry). |
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Business-hours reship retry interval. |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Max consecutive reship failures. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel reship calls (see Performance Tuning). |

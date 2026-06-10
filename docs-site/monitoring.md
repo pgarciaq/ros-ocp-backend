@@ -133,6 +133,13 @@ GORM and direct pgxpool access share one pool per process. Metrics reflect `pool
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Time spent in each incremental flush |
 | `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Analytics write failures during container ingestion. `error_type`: `history` or `quality`. Increments in degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`); strict mode retries instead. |
 
+### Koku effective-rates cache
+
+| Metric | Type | What to watch |
+|--------|------|---------------|
+| `rosocp_cost_cache_size` | Gauge | Cached org×cluster effective-rates entries; should stay below `ROS_COST_CACHE_MAX_ENTRIES` |
+| `rosocp_cost_cache_evictions_total` | Counter | LRU evictions when cache is full; sustained growth may mean raising `ROS_COST_CACHE_MAX_ENTRIES` |
+
 **DB healthy?**
 
 ```promql

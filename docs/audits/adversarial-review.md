@@ -7,7 +7,7 @@
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
+**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
 
 ---
 
@@ -694,16 +694,16 @@ Bearer token authentication validates the caller is a Kubernetes service account
 | **Severity** | Low |
 | **Category** | Correctness |
 | **Location** | `internal/money/format.go` (lines 16–18) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
 **Description**
 
 Integer cents are divided by `100.0` into `float64` for display formatting.
 
-**Recommended fix**
+**Mitigation (implemented)**
 
-Use integer-only formatting (cents → dollars via div/mod) or a decimal library.
+`FormatCentsToAmount` formats via integer division and remainder (`cents/100`, `cents%100`) with explicit negative handling. Unit tests cover large cent values that would exhibit float64 rounding.
 
 ---
 
@@ -714,12 +714,16 @@ Use integer-only formatting (cents → dollars via div/mod) or a decimal library
 | **Severity** | Info |
 | **Category** | Security awareness |
 | **Location** | `internal/model/recommendation_set_native.go` |
-| **Status** | **Open** (info only; unchanged) |
+| **Status** | **Verified** (2026-06-10) |
 | **Effort** | Info only |
 
 **Description**
 
 Recommendation IDs are UUID v5 derived from cluster, namespace, workload, and container identifiers. Acceptable if org boundary is enforced on all detail endpoints.
+
+**Mitigation (verified)**
+
+Audited all detail endpoints — each filters by `org_id`. Documented security invariant in [`docs/architecture/recommendation-ids.md`](../architecture/recommendation-ids.md). Regression test: `internal/model/recommendation_detail_org_scope_test.go`.
 
 ---
 
@@ -746,16 +750,16 @@ Same single-flight coalescing as finding #11 (`threshold_recalc_guard.go`).
 | **Severity** | Low |
 | **Category** | Performance / memory |
 | **Location** | `internal/costdata/provider.go` (`sync.Map`, 5 min TTL) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
 **Description**
 
 The effective-rates cache grows with distinct org×cluster pairs. Entries expire by TTL but there is no max size.
 
-**Recommended fix**
+**Mitigation (implemented)**
 
-Replace with LRU cache capped at configurable max entries. Export cache size metric.
+Replaced `sync.Map` with bounded LRU cache (`ROS_COST_CACHE_MAX_ENTRIES`, default 1000). TTL-on-access preserved (5 minutes). Metrics: `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total`.
 
 ---
 
@@ -856,10 +860,10 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 23 | panic() in boxplot/GPU YAML parse | TBD | **Mitigated** | Error returns; `log.Fatal` for embedded catalog only |
 | 24 | 140 migrations with no CONCURRENTLY automation | TBD | **Mitigated** | `lint-migrations.sh` + K8s Job runbook |
 | 25 | History endpoints lack filter cardinality limits | TBD | **Mitigated** | `checkHistoryFilterCardinality` |
-| 26 | Float64 in money formatting | TBD | Open | — |
-| 27 | Deterministic recommendation IDs (info) | TBD | Open (info) | — |
+| 26 | Float64 in money formatting | TBD | **Mitigated** | Integer cents formatting in `FormatCentsToAmount` |
+| 27 | Deterministic recommendation IDs (info) | TBD | **Verified** | `docs/architecture/recommendation-ids.md`; org_id regression test |
 | 28 | Overlapping threshold recalc jobs | TBD | **Mitigated** | Same as #11 |
-| 29 | Effective-rates cache unbounded | TBD | Open | — |
+| 29 | Effective-rates cache unbounded | TBD | **Mitigated** | LRU + `ROS_COST_CACHE_MAX_ENTRIES`; cache metrics |
 | 30 | No formal ADR index | TBD | Open | — |
 | 31 | Native list pagination dropped workload_type filter | TBD | **Resolved** | `f66feaf7` |
 

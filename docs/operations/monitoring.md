@@ -187,6 +187,17 @@ rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns > 0.9
 
 Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `1000`).
 
+### Koku effective-rates cache
+
+In-memory LRU cache for masu `effective_rates` responses (used by savings estimates). Entries expire after 5 minutes; capacity is capped by `ROS_COST_CACHE_MAX_ENTRIES` (default `1000`).
+
+| Metric | Type | What it measures |
+|--------|------|------------------|
+| `rosocp_cost_cache_size` | Gauge | Current number of cached org×cluster effective-rates entries |
+| `rosocp_cost_cache_evictions_total` | Counter | Entries evicted because the cache reached max capacity |
+
+**Source file:** `internal/costdata/provider.go`, `internal/costdata/metrics.go`
+
 ### GPU
 
 | Metric | Type | Labels | What it measures |
