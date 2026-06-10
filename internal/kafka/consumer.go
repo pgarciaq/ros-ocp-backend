@@ -53,7 +53,6 @@ func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaRe
 		msg, err := reader.ReadMessage(time.Second)
 		if err == nil {
 			logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
-			log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
 			handler(msg, consumer)
 			continue
 		}
@@ -89,7 +88,6 @@ func consumeMessagesParallelUntilCancelled(
 				mu := muIface.(*sync.Mutex)
 				mu.Lock()
 				logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
-				log.Debugf("Message payload (truncated): %.512s", string(msg.Value))
 				handler(msg, consumer)
 				mu.Unlock()
 			}

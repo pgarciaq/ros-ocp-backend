@@ -39,6 +39,9 @@ var (
 
 	// savingsRecalcHook runs at the start of TriggerSavingsRecalculationAsync (tests only).
 	savingsRecalcHook func(orgID string, recTypes []string)
+
+	// savingsRecalcRunHook runs at the start of each RecalculateSavingsForOrg invocation (tests only).
+	savingsRecalcRunHook func(orgID string, recTypes []string)
 )
 
 // SetClusterSavingsRecalcFuncForTest replaces the per-cluster savings recalculation function.
@@ -58,6 +61,16 @@ func ClearSavingsRecalcHookForTest() {
 	savingsRecalcHook = nil
 }
 
+// SetSavingsRecalcRunHookForTest registers a hook invoked when RecalculateSavingsForOrg starts.
+func SetSavingsRecalcRunHookForTest(hook func(orgID string, recTypes []string)) {
+	savingsRecalcRunHook = hook
+}
+
+// ClearSavingsRecalcRunHookForTest removes the recalc run test hook.
+func ClearSavingsRecalcRunHookForTest() {
+	savingsRecalcRunHook = nil
+}
+
 // TriggerSavingsRecalculationAsync starts background savings-only recalculation after Koku cost model
 // rate changes. The caller returns immediately; work runs in a detached goroutine.
 func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
@@ -75,14 +88,16 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 		savingsRecalcHook(orgID, types)
 	}
 	go func() {
-		ctx := context.Background()
-		RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, types)
+		triggerSavingsRecalcCoalesced(pool, orgID, clusterUUID, types)
 	}()
 }
 
 // RecalculateSavingsForOrg recomputes estimated_savings_cents for persisted recommendations
 // using current Koku effective rates. Classification and sizing are not re-run.
 func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
+	if savingsRecalcRunHook != nil {
+		savingsRecalcRunHook(orgID, recTypes)
+	}
 	log := logging.ForOrgOnly(orgID)
 	started := time.Now()
 	types := normalizeSavingsRecTypes(recTypes)

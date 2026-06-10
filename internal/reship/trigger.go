@@ -2,7 +2,6 @@ package reship
 
 import (
 	"context"
-	"sync"
 
 	"github.com/google/uuid"
 
@@ -45,18 +44,6 @@ func TriggerAsync(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 		return
 	}
 	go func() {
-		ctx := context.Background()
-		sem := make(chan struct{}, orgMaxConcurrent())
-		var wg sync.WaitGroup
-		for _, id := range clusterUUIDs {
-			wg.Add(1)
-			go func(clusterID uuid.UUID) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-				_ = trigger.TriggerReship(ctx, orgID, clusterID)
-			}(id)
-		}
-		wg.Wait()
+		triggerReshipCoalesced(trigger, orgID, clusterUUIDs)
 	}()
 }

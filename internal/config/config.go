@@ -75,7 +75,7 @@ type Config struct {
 	DBIngestStatementTimeoutSecs int    `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
 	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
 	// IngestStrictAnalytics blocks recommendation persistence when history or quality writes fail.
-	// Default false preserves degraded-mode behavior (recommendations written, analytics flagged).
+	// Default true (strict mode). Set false for degraded mode (recommendations written, analytics flagged).
 	IngestStrictAnalytics bool `mapstructure:"ROS_INGEST_STRICT_ANALYTICS"`
 
 	// RBAC config
@@ -85,6 +85,8 @@ type Config struct {
 	RBACEnabled  bool `mapstructure:"RBAC_ENABLE"`
 	// RBACCacheTTLSecs caches RBAC permissions in-memory (0 disables). Default 60.
 	RBACCacheTTLSecs int `mapstructure:"ROS_RBAC_CACHE_TTL"`
+	// RBACCacheMaxEntries caps the in-memory RBAC permission LRU cache (default 500).
+	RBACCacheMaxEntries int `mapstructure:"ROS_RBAC_CACHE_MAX_ENTRIES"`
 
 	// KafkaWorkers is the worker pool size when ROS_KAFKA_PARALLEL is enabled (default 3).
 	KafkaWorkers int `mapstructure:"ROS_KAFKA_WORKERS"`
@@ -607,7 +609,7 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_STATEMENT_TIMEOUT", 25)
 	viper.SetDefault("ROS_DB_INGEST_STATEMENT_TIMEOUT", 120)
 	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
-	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", false)
+	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", true)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_COST_CACHE_MAX_ENTRIES", 1000)
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
@@ -615,6 +617,7 @@ func initConfig() {
 	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_SAVINGS_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)
+	viper.SetDefault("ROS_RBAC_CACHE_MAX_ENTRIES", 500)
 	viper.SetDefault("ROS_KAFKA_WORKERS", 3)
 	viper.SetDefault("ROS_KAFKA_PARALLEL", true)
 	viper.SetDefault("ROS_THRESHOLD_RECALC_CONCURRENCY", 3)

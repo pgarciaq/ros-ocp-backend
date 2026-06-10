@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
+- SSRF DNS fail-closed in production: unresolved hostnames block CSV fetch when `DEVELOPMENT=false` (adversarial review finding #34 resolved).
+- Per-org single-flight coalescing for savings recalculation and business-hours reship with metrics `rosocp_savings_recalc_coalesced_total` and `rosocp_reship_coalesced_total` (finding #36 resolved).
+- Bounded LRU cache for RBAC permissions with `ROS_RBAC_CACHE_MAX_ENTRIES` (default 500) and metrics `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` (finding #40 resolved).
 - Architecture Decision Records: 162 ADRs in [`docs/adr/`](docs/adr/README.md) with index, covering engine, data model, API, ingestion, plugins, cost, tags, deployment, testing, security, Kafka, and configuration decisions (adversarial review finding #30 resolved).
 - Bounded LRU cache for masu effective-rates with `ROS_COST_CACHE_MAX_ENTRIES` (default 1000) and metrics `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` (finding #29 mitigated).
 - Architecture doc for deterministic recommendation IDs and org_id detail-query invariant (finding #27 verified).
@@ -16,11 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Optional deep readiness checks: `ROS_READINESS_CHECK_KAFKA`, `ROS_READINESS_CHECK_S3` (default `false`); S3 bucket settings `ROS_READINESS_S3_*` (finding #17 mitigated).
 - `ROS_API_MAX_NODE_RESULTS` (default `1000`) hard cap for node utilization and GPU time-slicing list endpoints (finding #22 mitigated).
 - Migration CI lint [`scripts/lint-migrations.sh`](../scripts/lint-migrations.sh), [`docs/operations/large-table-migrations.md`](operations/large-table-migrations.md), and [`deploy/migrations/concurrent-index-job.yaml`](../deploy/migrations/concurrent-index-job.yaml) (finding #24 mitigated).
-- Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `false`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried).
+- Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `true`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried). Set `false` for degraded mode.
 - Security hardening env vars: `DEVELOPMENT`, `ROS_API_MAX_OFFSET`, `ROS_CSV_DENY_PRIVATE_NETWORKS`, `ROS_LOG_POISON_PAYLOAD`, `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS`.
 - Startup validation for CSV SSRF allowlist, tag dev token, and tag SA allowlist (`ValidateSecurityConfig`, `ValidateTagAuthConfig`).
 
 ### Changed
+
+- `ROS_INGEST_STRICT_ANALYTICS` now defaults to `true` (strict mode). Set `false` explicitly for degraded mode (finding #45 resolved).
+- Kafka consumer no longer logs message payload prefixes at DEBUG; metadata only (finding #38 resolved).
 
 - Legacy Kafka messages without `metadata.manifest_id` now receive a deterministic synthesized manifest ID (`synth-` prefix) derived from `(org_id, cluster_uuid, date)` or a payload fingerprint, enabling per-file tracking and recommendation gating. Emits `rosocp_ingest_manifest_id_synthesized_total` and a WARN log when synthesis occurs (adversarial review finding #32 resolved).
 

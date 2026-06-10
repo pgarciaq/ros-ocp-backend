@@ -1,0 +1,76 @@
+package reship
+
+import (
+	"context"
+	"sync"
+
+	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var reshipCoalescedTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "rosocp_reship_coalesced_total",
+		Help: "Business-hours reship triggers coalesced because a job was already in-flight for the same org",
+	},
+	[]string{"org_id"},
+)
+
+type reshipFlight struct {
+	mu      sync.Mutex
+	running bool
+	pending bool
+}
+
+var reshipFlights sync.Map // map[string]*reshipFlight
+
+func resetReshipFlightsForTest() {
+	reshipFlights = sync.Map{}
+}
+
+func triggerReshipCoalesced(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
+	key := orgID
+	flightIface, _ := reshipFlights.LoadOrStore(key, &reshipFlight{})
+	flight := flightIface.(*reshipFlight)
+
+	flight.mu.Lock()
+	if flight.running {
+		flight.pending = true
+		flight.mu.Unlock()
+		reshipCoalescedTotal.WithLabelValues(orgID).Inc()
+		return
+	}
+	flight.running = true
+	flight.mu.Unlock()
+
+	for {
+		runReshipBatch(trigger, orgID, clusterUUIDs)
+
+		flight.mu.Lock()
+		if flight.pending {
+			flight.pending = false
+			flight.mu.Unlock()
+			continue
+		}
+		flight.running = false
+		flight.mu.Unlock()
+		return
+	}
+}
+
+func runReshipBatch(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
+	ctx := context.Background()
+	sem := make(chan struct{}, orgMaxConcurrent())
+	var wg sync.WaitGroup
+	for _, id := range clusterUUIDs {
+		wg.Add(1)
+		go func(clusterID uuid.UUID) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			_ = trigger.TriggerReship(ctx, orgID, clusterID)
+		}(id)
+	}
+	wg.Wait()
+}

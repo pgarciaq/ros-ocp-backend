@@ -77,8 +77,11 @@ func denyRestrictedHost(host string) error {
 	defer cancel()
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
-		// Hostname did not resolve; allowlist already validated the name when configured.
-		return nil
+		if config.IsDevelopment() {
+			// Development convenience: allow unresolved hostnames when allowlist matched.
+			return nil
+		}
+		return fmt.Errorf("CSV URL host %q DNS lookup failed: %w", host, err)
 	}
 	for _, addr := range addrs {
 		if isRestrictedIP(addr.IP) {

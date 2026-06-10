@@ -99,3 +99,28 @@ func parseTestIP(t *testing.T, s string) net.IP {
 	}
 	return ip
 }
+
+func TestDenyRestrictedHost_DNSFailureFailsClosedInProduction(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "false")
+	_ = config.GetConfig()
+
+	err := denyRestrictedHost("nonexistent-host-ros-test.invalid")
+	if err == nil {
+		t.Fatal("expected DNS failure to block fetch in non-development mode")
+	}
+	if !strings.Contains(err.Error(), "DNS lookup failed") {
+		t.Fatalf("expected DNS lookup error, got %v", err)
+	}
+}
+
+func TestDenyRestrictedHost_DNSFailureAllowedInDevelopment(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "true")
+	_ = config.GetConfig()
+
+	err := denyRestrictedHost("nonexistent-host-ros-test.invalid")
+	if err != nil {
+		t.Fatalf("expected dev mode to allow unresolved hostname: %v", err)
+	}
+}
