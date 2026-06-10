@@ -20,6 +20,7 @@ func applyContainerListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	opts.HasCursor = true
 	opts.AfterNamespace = cursor.Namespace
 	opts.AfterWorkload = cursor.Workload
+	opts.AfterWorkloadType = cursor.WorkloadType
 	opts.AfterContainer = cursor.ContainerName
 	opts.AfterContainerClusterUUID = cursor.ClusterUUID
 	if len(cursor.SortValue) > 0 {
@@ -64,6 +65,7 @@ func containerNextCursor(page model.NativeListPage) string {
 	return EncodeContainerCursor(ContainerCursor{
 		Namespace:     anchor.Namespace,
 		Workload:      anchor.Workload,
+		WorkloadType:  anchor.WorkloadType,
 		ContainerName: anchor.ContainerName,
 		ClusterUUID:   anchor.ClusterUUID,
 		SortValue:     model.PaginationSortValueJSON(anchor.SortValue),

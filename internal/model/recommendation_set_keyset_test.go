@@ -78,6 +78,7 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	opts.HasCursor = true
 	opts.AfterNamespace = page1.LastAnchor.Namespace
 	opts.AfterWorkload = page1.LastAnchor.Workload
+	opts.AfterWorkloadType = page1.LastAnchor.WorkloadType
 	opts.AfterContainer = page1.LastAnchor.ContainerName
 	opts.AfterContainerClusterUUID = page1.LastAnchor.ClusterUUID
 	opts.AfterContainerSortPresent = true
@@ -195,6 +196,50 @@ func TestGetNativeRecommendations_RBACClusterFilter(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	assert.Equal(t, clusterAllowed, page.Results[0].ClusterUUID)
+}
+
+func TestGetNativeRecommendations_WorkloadTypeFilter(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	const (
+		sharedNamespace = "shared-ns"
+		sharedWorkload  = "api"
+		sharedContainer = "main"
+	)
+	for _, spec := range []struct {
+		workloadType string
+	}{
+		{"deployment"},
+		{"statefulset"},
+	} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (
+				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+				term, engine, stale, notification_codes, estimated_savings_cents, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, 'short', 'cost', false, '{}', 0, now())`,
+			testutil.TestOrgID, testutil.TestClusterUUID, sharedNamespace, sharedWorkload,
+			spec.workloadType, sharedContainer,
+		)
+		require.NoError(t, err)
+	}
+
+	// Omit rs.stale from queryParams so the distinct-on path is exercised (stale=false is
+	// already enforced in the native list SQL).
+	queryParams := map[string]interface{}{
+		"LOWER(rs.workload_type) = ?": []string{"deployment"},
+	}
+	page, err := model.GetNativeRecommendations(
+		testutil.TestOrgID,
+		listoptions.ListOptions{Limit: 10},
+		queryParams,
+		map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, "deployment", page.Results[0].WorkloadType)
 }
 
 func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {

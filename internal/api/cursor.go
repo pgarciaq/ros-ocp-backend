@@ -10,6 +10,7 @@ import (
 type ContainerCursor struct {
 	Namespace     string          `json:"ns"`
 	Workload      string          `json:"wl"`
+	WorkloadType  string          `json:"wt,omitempty"`
 	ContainerName string          `json:"cn"`
 	ClusterUUID   string          `json:"cu,omitempty"`
 	SortValue     json.RawMessage `json:"sv,omitempty"`

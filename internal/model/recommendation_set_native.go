@@ -360,7 +360,7 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select(fmt.Sprintf(
-			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, (%s)::text AS ros_container_page_sort",
+			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, (%s)::text AS ros_container_page_sort",
 			sortExpr,
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
@@ -376,7 +376,7 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	distinctSubquery = applyNativeContainerPageSeek(distinctSubquery, opts, sortExpr)
 
 	countQuery := db.Table("org_container_keys ock").
-		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.container_name").
+		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name").
 		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
 		Where("ock.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "ock.namespace")
@@ -386,7 +386,7 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	}
 
 	pageSubquery := db.Table("(?) AS page", distinctSubquery).
-		Select("page.cluster_uuid, page.namespace, page.workload, page.container_name, page.ros_container_page_sort").
+		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
 		Order(nativeContainerPageOrder("page", orderHow))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
@@ -395,16 +395,17 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 
 	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
-	err := db.Table("recommendation_sets rs").
+	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
+			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery).
-		Where("rs.stale = false").
-		Order(nativeContainerDetailOrder(orderHow)).
-		Find(&rows).Error
+		Where("rs.stale = false")
+	detailQuery = ApplyQueryParams(detailQuery, detailParams)
+	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -420,6 +421,7 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 			ClusterUUID:   last.ClusterUUID,
 			Namespace:     last.Project,
 			Workload:      last.Workload,
+			WorkloadType:  last.WorkloadType,
 			ContainerName: last.Container,
 		}
 		results = results[:limit]
@@ -453,7 +455,7 @@ func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions
 
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select(fmt.Sprintf(
-			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, (%s)::text AS ros_container_page_sort",
+			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, (%s)::text AS ros_container_page_sort",
 			sortExpr,
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
@@ -468,10 +470,10 @@ func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions
 	distinctSubquery = applyNativeContainerPageSeek(distinctSubquery, opts, sortExpr)
 
 	countDistinct := db.Table("(?) AS dn", distinctSubquery).
-		Select("dn.cluster_uuid, dn.namespace, dn.workload, dn.container_name")
+		Select("dn.cluster_uuid, dn.namespace, dn.workload, dn.workload_type, dn.container_name")
 
 	pageSubquery := db.Table("(?) AS page", distinctSubquery).
-		Select("page.cluster_uuid, page.namespace, page.workload, page.container_name, page.ros_container_page_sort").
+		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
 		Order(nativeContainerPageOrder("page", orderHow))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
@@ -480,16 +482,17 @@ func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions
 
 	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
-	err := db.Table("recommendation_sets rs").
+	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
+			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery).
-		Where("rs.stale = false").
-		Order(nativeContainerDetailOrder(orderHow)).
-		Find(&rows).Error
+		Where("rs.stale = false")
+	detailQuery = ApplyQueryParams(detailQuery, queryParams)
+	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -505,6 +508,7 @@ func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions
 			ClusterUUID:   last.ClusterUUID,
 			Namespace:     last.Project,
 			Workload:      last.Workload,
+			WorkloadType:  last.WorkloadType,
 			ContainerName: last.Container,
 		}
 		results = results[:limit]

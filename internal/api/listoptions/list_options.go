@@ -38,6 +38,7 @@ type ListOptions struct {
 	HasCursor            bool
 	AfterNamespace       string
 	AfterWorkload        string
+	AfterWorkloadType    string
 	AfterContainer       string
 	AfterNSClusterUUID   string
 	AfterNamespaceName   string
