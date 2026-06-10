@@ -120,6 +120,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			limit = n
 		}
 	}
+	limit = capNodeListLimit(limit)
 
 	offset := 0
 	if v := strings.TrimSpace(c.QueryParam("offset")); v != "" {

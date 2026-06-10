@@ -48,6 +48,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	opts.Limit = capNodeListLimit(opts.Limit)
 
 	pool := database.GetPool()
 	if pool == nil {
@@ -104,15 +105,14 @@ func GetNodeRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
 	}
 
-	useTripleSQL := termFilter == "" &&
-		opts.Format != listoptions.ResponseFormatCSV &&
+	useTripleSQL := opts.Format != listoptions.ResponseFormatCSV &&
 		engine.GPUOrderColumnSupportsTriplePagination(opts.OrderBy) &&
 		len(clusterUUIDs) > 0
 
 	if useTripleSQL {
 		return respondNodeGPURecommendationsTripleSQL(
 			c, ctx, pool, orgIDStr, userPerms, opts, terms, clusterUUIDs, start, now,
-			clusterFilter, nodeNameFilter, gpuModelFilter,
+			clusterFilter, nodeNameFilter, gpuModelFilter, termFilter,
 		)
 	}
 
@@ -213,7 +213,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	terms []engine.TermConfig,
 	clusterUUIDs []string,
 	start, now time.Time,
-	clusterFilter, nodeNameFilter, gpuModelFilter string,
+	clusterFilter, nodeNameFilter, gpuModelFilter, termFilter string,
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 
@@ -225,55 +225,33 @@ func respondNodeGPURecommendationsTripleSQL(
 		opts.Offset = 0
 	}
 
-	triples, err := engine.ListNodeGPUTriplesPage(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc, 0, 0, nil)
-	if err != nil {
-		hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
-	}
-
-	costProvider := getGPUCostProvider()
-	clusterRates := make(map[string]*float32)
-	for _, t := range triples {
-		if _, ok := clusterRates[t.ClusterUUID]; ok {
-			continue
-		}
-		var gpuRate *float32
-		if costProvider != nil && orgIDStr != "" {
-			if cd := GetCachedCostRates(ctx, orgIDStr, t.ClusterUUID, start, now); cd != nil {
-				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
-					r := float32(rate)
-					gpuRate = &r
-				}
-			}
-		}
-		clusterRates[t.ClusterUUID] = gpuRate
-	}
-
+	const tripleBatchSize = 50
 	var allRecs []model.NodeGPURecommendation
 	var gpuClusterErrors []error
-	for _, tr := range triples {
-		f := &engine.GPUQueryFilters{NodeNameExact: tr.NodeName, GPUModelExact: tr.GPUModel}
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, tr.ClusterUUID, start, now, terms, f)
+	var firstTripleCluster string
+	tripleOffset := 0
+	for {
+		triples, err := engine.ListNodeGPUTriplesPage(
+			ctx, pool, orgIDStr, clusterUUIDs, start, now, now,
+			nodeNameFilter, gpuModelFilter, opts.OrderBy, opts.OrderHow == listoptions.OrderDesc,
+			tripleBatchSize, tripleOffset, nil,
+		)
 		if err != nil {
-			hlog.Warnf("GetNodeRecommendations: failed for cluster %s: %v", tr.ClusterUUID, err)
-			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", tr.ClusterUUID, err))
-			continue
+			hlog.Errorf("GetNodeRecommendations: triple page failed: %v", err)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
 		}
-		if gpuRecs == nil {
-			continue
+		if len(triples) == 0 {
+			break
 		}
-		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, tr.ClusterUUID)
-		gpuRate := clusterRates[tr.ClusterUUID]
-		for _, group := range groups {
-			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
-				continue
-			}
-			tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
-			if tsRec == nil {
-				continue
-			}
-			currency := fetchClusterCurrency(ctx, orgIDStr, tr.ClusterUUID)
-			allRecs = append(allRecs, toNodeGPURecommendation(tsRec, currency))
+		if firstTripleCluster == "" {
+			firstTripleCluster = triples[0].ClusterUUID
+		}
+		batchRecs, batchErrs := expandNodeGPURecsFromTriples(ctx, pool, orgIDStr, terms, triples, start, now)
+		allRecs = append(allRecs, batchRecs...)
+		gpuClusterErrors = append(gpuClusterErrors, batchErrs...)
+		tripleOffset += len(triples)
+		if len(triples) < tripleBatchSize {
+			break
 		}
 	}
 
@@ -300,21 +278,81 @@ func respondNodeGPURecommendationsTripleSQL(
 		allRecs = []model.NodeGPURecommendation{}
 	}
 
+	if termFilter != "" {
+		allRecs = filterNodeRecs(allRecs, "", "", termFilter)
+	}
+
 	sortNodeRecs(allRecs, opts.OrderBy, opts.OrderHow)
 	totalCount := len(allRecs)
-	paged, hasNext, nextCursor, pageErr := paginateNodeGPURecs(allRecs, opts, cursor, hasCursor)
-	if pageErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
+
+	paged, hasNext, nextCursor, err := paginateNodeGPURecs(allRecs, opts, cursor, hasCursor)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
 	nodeCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
 		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
-	} else if len(triples) > 0 {
-		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, triples[0].ClusterUUID)
+	} else if firstTripleCluster != "" {
+		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, firstTripleCluster)
 	}
 	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 	return respondNodeGPURecommendations(c, opts, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
+}
+
+func expandNodeGPURecsFromTriples(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgIDStr string,
+	terms []engine.TermConfig,
+	triples []engine.NodeGPUTriple,
+	start, now time.Time,
+) ([]model.NodeGPURecommendation, []error) {
+	costProvider := getGPUCostProvider()
+	clusterRates := make(map[string]*float32)
+	for _, t := range triples {
+		if _, ok := clusterRates[t.ClusterUUID]; ok {
+			continue
+		}
+		var gpuRate *float32
+		if costProvider != nil && orgIDStr != "" {
+			if cd := GetCachedCostRates(ctx, orgIDStr, t.ClusterUUID, start, now); cd != nil {
+				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
+					r := float32(rate)
+					gpuRate = &r
+				}
+			}
+		}
+		clusterRates[t.ClusterUUID] = gpuRate
+	}
+
+	var allRecs []model.NodeGPURecommendation
+	var gpuClusterErrors []error
+	for _, tr := range triples {
+		f := &engine.GPUQueryFilters{NodeNameExact: tr.NodeName, GPUModelExact: tr.GPUModel}
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, tr.ClusterUUID, start, now, terms, f)
+		if err != nil {
+			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", tr.ClusterUUID, err))
+			continue
+		}
+		if gpuRecs == nil {
+			continue
+		}
+		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, tr.ClusterUUID)
+		gpuRate := clusterRates[tr.ClusterUUID]
+		for _, group := range groups {
+			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
+				continue
+			}
+			tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
+			if tsRec == nil {
+				continue
+			}
+			currency := fetchClusterCurrency(ctx, orgIDStr, tr.ClusterUUID)
+			allRecs = append(allRecs, toNodeGPURecommendation(tsRec, currency))
+		}
+	}
+	return allRecs, gpuClusterErrors
 }
 
 func respondNodeGPURecommendations(
