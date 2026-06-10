@@ -7,7 +7,7 @@
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** Implemented Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
+**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
 
 ---
 
@@ -46,10 +46,10 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 | **Data integrity (Kafka ingestion)** | 🟠 High (mitigated) | Per-file tracking and error surfacing implemented in native path (`90e5ed52`); gaps remain for empty `manifest_id` and legacy Kruize path |
 | **Authentication** | 🟢 Delegated to gateway | Accepted architecture; weak only if gateway bypassed (SNO/dev posture) |
 | **Authorization** | 🟢 Strong when chart defaults used | `rbac.enabled: true` in production; weak only in SNO/dev overrides |
-| **API security** | 🟠 Medium | ILIKE wildcard injection, unbounded offset, SSRF when allowlist unset; pagination filter bypass (#31) fixed |
+| **API security** | 🟢 Low (mitigated) | ILIKE wildcard injection, unbounded offset, SSRF when allowlist unset, history filter cardinality — mitigated (#12–#14, #25); pagination filter bypass (#31) fixed |
 | **Database & connections** | 🟢 Low (mitigated) | Unified pgxpool for GORM and pgx paths; pool metrics exported |
 | **Memory & performance** | 🟠 Medium | Streaming ingest holds full grouped map; node GPU endpoints paginate in memory |
-| **Operational resilience** | 🟡 Low–Medium (mitigated) | Readiness probe shallow; Kafka transient errors now retry/DLQ after 5 attempts (#18 mitigated); no graceful housekeeper shutdown |
+| **Operational resilience** | 🟢 Low (mitigated) | Readiness probe shallow; Kafka transient errors retry/DLQ (#18); housekeeper graceful shutdown (#19 mitigated) |
 | **Pipeline correctness** | 🟢 Low (mitigated) | Strict analytics mode + staleness signaling for history/quality gaps |
 | **Engineering governance** | 🟡 Low–Medium | CHANGELOG exists; no ADR index; 140 migrations without CONCURRENTLY automation |
 | **Positive controls** | 🟢 Strong | Plugin architecture, parameterized SQL, service-account auth patterns (when enabled), structured metrics, ingestion unit tests |
@@ -68,10 +68,10 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 | 2 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
 | 3 | **#9** (High — mitigated) | Strict analytics mode, `rosocp_analytics_incomplete_total`, and API `analytics_incomplete` cluster flag. Default remains degraded-compatible. |
 | 4 | **#11, #28** (Medium — recalc storms) | Concurrency capped at 3 per job but overlapping async jobs still possible after settings changes. |
-| 5 | **#12, #13, #14** (Medium — API hardening) | SSRF, ILIKE wildcard injection, deep-pagination DoS — quick wins. |
-| 6 | **#15, #16** (Medium — tag auth config) | Dev token bypass and empty SA allowlist are configuration footguns. |
-| 7 | **#17, #19, #20** (Medium — ops) | Readiness depth, graceful shutdown, PII in poison logs. |
-| 8 | **#22, #23** (Medium — memory/panic) | Node GPU in-memory pagination; panic on parse failures. |
+| 5 | **#12, #13, #14** (Medium — API hardening) | **Mitigated** — SSRF allowlist + private-network deny, ILIKE escape, offset cap. |
+| 6 | **#15, #16** (Medium — tag auth config) | **Mitigated** — startup validation; dev token blocked outside `DEVELOPMENT=true`. |
+| 7 | **#17, #19, #20** (Medium — ops) | **Partially mitigated** — housekeeper SIGTERM (#19), poison log redaction (#20); readiness depth (#17) open. |
+| 8 | **#22, #23** (Medium — memory/panic) | **Partially mitigated** — panic-to-error for catalogs (#23); node GPU in-memory pagination (#22) open. |
 | 9 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
 | 10 | **#30** (Info — governance) | ADR index — process debt, not incident drivers. |
 | — | **#7** (Mitigated) | GORM uses `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all connections; pool metrics on scrape. |
@@ -101,20 +101,20 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #9 Pipeline degraded | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #10 No CHANGELOG | ✗ (exists) | ✗ (exists) | ✗ (exists) |
 | #11 Recalc storms | ⚠ (concurrency cap) | ⚠ | ⚠ |
-| #12 SSRF allowlist | ✓ | ✓ | ✓ |
-| #13 ILIKE injection | ✓ | ✓ | ✓ |
-| #14 Deep pagination | ✓ | ✓ | ✓ |
-| #15 Dev token | ✗ (not set) | ✗ (not set) | ⚠ (if configured) |
-| #16 Empty SA allowlist | ⚠ (if unset) | ⚠ (api mode only) | ⚠ (if configured) |
+| #12 SSRF allowlist | ✗ (mitigated) | ✗ (mitigated) | ⚠ (dev allows empty) |
+| #13 ILIKE injection | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
+| #14 Deep pagination | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
+| #15 Dev token | ✗ (blocked prod) | ✗ (blocked prod) | ⚠ (if configured + DEVELOPMENT) |
+| #16 Empty SA allowlist | ✗ (blocked api mode) | ✗ (blocked api mode) | ⚠ (dev warning) |
 | #17 Readiness shallow | ✓ | ✓ | ✓ |
 | #18 Kafka stall | ⚠ (mitigated) | ⚠ (mitigated) | ⚠ (mitigated) |
-| #19 Housekeeper shutdown | ✓ | ✓ | ✓ |
-| #20 PII in logs | ✓ | ✓ | ✓ |
+| #19 Housekeeper shutdown | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
+| #20 PII in logs | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #21 Statement timeout | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #22 Node GPU memory | ✓ | ✓ | ✓ |
-| #23 panic() parse | ✓ | ✓ | ✓ |
+| #23 panic() parse | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #24 Migrations CONCURRENTLY | ✓ | ✓ | ✓ |
-| #25–#30 Low/Info | ✓ | ✓ | ✓ |
+| #25–#30 Low/Info | ⚠ (#25 mitigated) | ⚠ (#25 mitigated) | ⚠ (#25 mitigated) |
 | #31 Pagination filter bypass | ✗ (fixed) | ✗ (fixed) | ✗ (fixed) |
 
 ---
@@ -337,21 +337,20 @@ Per-org mutex or job queue with coalescing of duplicate in-flight jobs. Reject o
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Security / SSRF |
-| **Location** | `internal/utils/utils.go` (`validateCSVDownloadURL`, lines 59–83) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/utils/csv_security.go` (`validateCSVDownloadURL`) |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
 **Description**
 
-When `ROS_CSV_ALLOWED_HOSTS` is empty, any URL in a Kafka message payload can be fetched by the processor (only scheme and host presence are validated).
+When `ROS_CSV_ALLOWED_HOSTS` is empty, any URL in a Kafka message payload could be fetched by the processor (only scheme and host presence were validated).
 
-**Exploit / trigger**
+**Mitigation (implemented)**
 
-Compromised Kafka producer or poison message with internal metadata URL causes server-side fetch of cloud metadata, internal services, or RFC1918 addresses.
-
-**Recommended fix**
-
-Require explicit allowlist in all environments. When empty, block all fetches or deny RFC1918/link-local ranges. Fail startup if allowlist unset in non-development mode.
+- Non-development mode: startup fails if `ROS_CSV_ALLOWED_HOSTS` is empty (`ValidateSecurityConfig`); runtime fetches blocked with clear error.
+- Development mode (`DEVELOPMENT=true`): empty allowlist logs a one-time warning and allows fetches (backwards compatible for local httptest).
+- `ROS_CSV_DENY_PRIVATE_NETWORKS` (default `true`): always blocks RFC1918, link-local, loopback, and `localhost`; resolves hostnames before fetch.
+- Unit tests: `internal/utils/csv_security_test.go`.
 
 ---
 
@@ -361,21 +360,15 @@ Require explicit allowlist in all environments. When empty, block all fetches or
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Authorization bypass |
-| **Location** | `internal/api/common.go` (FilterModeClause), `internal/api/utils.go` (`buildModeClause`, lines 303–345) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/api/common.go`, `internal/api/utils.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-Filter values containing `%` or `_` are wrapped with `%` for ILIKE include mode without escaping wildcards, matching all rows instead of the intended literal substring. Note: `workload_type` uses exact `LOWER(...) = ?` match (not ILIKE) — partially mitigated for that field only.
-
-**Exploit / trigger**
-
-User with limited RBAC scope passes `filter[namespace]=%` and receives rows across all namespaces, bypassing authorization-by-filter intent.
-
-**Recommended fix**
-
-Escape `%` and `_` in ILIKE operands (e.g., `escape '\'` clause). Add tests for wildcard characters in filter values.
+- `escapeILIKE()` escapes `\`, `%`, `_` in filter operands; ILIKE clauses use `ESCAPE '\\'`.
+- Applied in `buildModeClause`, `parseClusterParams`, and `gpu_model` filter in `handlers.go`.
+- Unit tests: `internal/api/ilike_escape_test.go`.
 
 ---
 
@@ -385,21 +378,14 @@ Escape `%` and `_` in ILIKE operands (e.g., `escape '\'` clause). Add tests for 
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Availability / DoS |
-| **Location** | `internal/api/listoptions/list_options.go` (`parseOffset`, lines 138–145) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/api/listoptions/list_options.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-The `offset` query parameter accepts any non-negative integer with no upper bound. Requests like `?limit=1000&offset=999999999` force PostgreSQL to skip millions of rows. Keyset/cursor pagination exists for native container lists but offset-based pagination remains unbounded on other endpoints.
-
-**Exploit / trigger**
-
-Authenticated client sends deep-offset requests, causing long-running queries and connection pool exhaustion.
-
-**Recommended fix**
-
-Cap offset (e.g., 10,000) with clear 400 response, or require keyset/cursor pagination for pages beyond the cap.
+- `ROS_API_MAX_OFFSET` (default `10000`): returns HTTP 400 when exceeded with message directing callers to keyset pagination.
+- Unit tests: `internal/api/listoptions/list_options_test.go`.
 
 ---
 
@@ -409,17 +395,15 @@ Cap offset (e.g., 10,000) with clear 400 response, or require keyset/cursor pagi
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Authentication |
-| **Location** | `internal/tags/auth.go` (lines 52–56) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/tags/auth_config.go`, `internal/tags/startup.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-When `ROS_TAGS_DEV_TOKEN` is set, it bypasses Kubernetes TokenReview entirely, accepting a static shared secret.
-
-**Recommended fix**
-
-Fail startup if `ROS_TAGS_DEV_TOKEN` is set when `DEVELOPMENT` is not `true`. Log prominent warning in development mode.
+- Startup fails if `ROS_TAGS_DEV_TOKEN` is set and `DEVELOPMENT` is not `true`.
+- Development mode logs prominent warning when dev token is active.
+- Unit tests: `internal/tags/auth_config_test.go`.
 
 ---
 
@@ -429,17 +413,16 @@ Fail startup if `ROS_TAGS_DEV_TOKEN` is set when `DEVELOPMENT` is not `true`. Lo
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Authentication |
-| **Location** | `internal/tags/auth.go` (lines 129–132) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/tags/auth_config.go`, `internal/tags/auth.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-When `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` is empty, any service account passing TokenReview is accepted (`len(allowed) == 0` returns nil).
-
-**Recommended fix**
-
-Default-deny: require explicit non-empty allowlist in production. Fail startup validation if allowlist empty outside development.
+- Startup fails when `ROS_TAGS_SOURCE=api`, allowlist empty, and not in development mode.
+- Runtime default-deny for empty allowlist outside development.
+- Development mode logs warning when allowlist is empty.
+- Unit tests: `internal/tags/auth_config_test.go`.
 
 ---
 
@@ -500,17 +483,15 @@ After N retries, invert default for unclassified errors to permanent/poison with
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Operational resilience |
-| **Location** | `cmd/start.go` (housekeeper subcommand, lines 126–139) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `cmd/start.go`, `internal/services/housekeeper/` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-The housekeeper process does not wire `signal.NotifyContext` or graceful consumer close (unlike `processorCmd`, `apiCmd`, and `recommendationPollerCmd` which use `signal.NotifyContext`). Pod termination interrupts in-flight retention or cleanup work.
-
-**Recommended fix**
-
-Wire SIGTERM/SIGINT handling with configurable grace period and consumer/worker drain before exit.
+- Housekeeper subcommand wires `signal.NotifyContext` (SIGTERM/SIGINT) like processor and API.
+- Context passed to sources listener and partition cleaner; in-flight cleanup respects cancellation with `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` (default 30) when interrupted mid-work.
+- Unit tests: `internal/services/housekeeper/shutdown_test.go`.
 
 ---
 
@@ -520,17 +501,15 @@ Wire SIGTERM/SIGINT handling with configurable grace period and consumer/worker 
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Privacy / logging |
-| **Location** | `internal/services/report_processor.go` (`commitOnPermanentFailure`, lines 69–75) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/services/poison_message_log.go`, `internal/services/report_processor.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-Up to 64 KB of raw Kafka payload is logged for debugging when permanently failing a message. Payloads may contain cluster metadata, namespace names, workload identifiers, and resource usage.
-
-**Recommended fix**
-
-Log only `request_id`, `org_id`, `cluster_uuid`, and error class. Store full payload in a restricted dead-letter store with retention policy.
+- `logPoisonMessage()` logs metadata only: `request_id`, `org_id`, `cluster_uuid`, `error_class`, `payload_size_bytes`; references DLQ topic for full payload recovery.
+- `ROS_LOG_POISON_PAYLOAD` (default `false`): when `true`, logs first 256 bytes as `payload_preview` for debugging.
+- Unit tests: `internal/services/poison_message_log_test.go`.
 
 ---
 
@@ -580,17 +559,15 @@ Push pagination and filtering into SQL. Limit cluster fan-out per request. Add i
 |-------|-------|
 | **Severity** | Medium |
 | **Category** | Reliability |
-| **Location** | `internal/model/boxplot.go` (line 58), `internal/engine/vgpu_profiles.go` (line 37), `internal/engine/gpu_metadata.go` (line 46) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/model/boxplot.go`, `internal/engine/vgpu_profiles.go`, `internal/engine/gpu_metadata.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-Unhandled enum values or YAML parse failures call `panic()`, crashing the process at runtime rather than returning a controlled error.
-
-**Recommended fix**
-
-Return errors to callers. Validate GPU profiles and enum mappings at startup with non-fatal degraded mode.
+- `BucketGranularity.sql()` returns `(string, error)` instead of panicking on unknown values.
+- Embedded GPU catalog YAML loaders return errors; `init()` uses `log.Fatal` for corrupt compile-time data only.
+- Unit tests: `internal/model/boxplot_granularity_test.go`.
 
 ---
 
@@ -703,17 +680,14 @@ Bearer token authentication validates the caller is a Kubernetes service account
 |-------|-------|
 | **Severity** | Low |
 | **Category** | Availability |
-| **Location** | `internal/api/handlers_history.go` (lines 64–80) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Location** | `internal/api/handlers_history.go` |
+| **Status** | **Mitigated** (2026-06-10) |
 | **Effort** | S |
 
-**Description**
+**Mitigation (implemented)**
 
-History handlers build `IN ?` clauses directly from query params without `MaxCountPerQueryParam` checks applied in main list handlers.
-
-**Recommended fix**
-
-Reuse cardinality checks from main list handlers. Return 400 when count exceeds limit.
+- `checkHistoryFilterCardinality()` applies `MAXIMUM_COUNT_PER_QUERY_PARAM` to cluster, project, workload, container, term, and engine filters (same pattern as main list handlers).
+- Unit tests: `internal/api/handlers_history_filter_test.go`.
 
 ---
 
@@ -880,20 +854,20 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 9 | Pipeline writes recs when history/quality fails | TBD | **Mitigated** | Strict mode + `rosocp_analytics_incomplete_total` + API flag |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |
 | 11 | No rate limiting; recalc goroutines without dedup | TBD | Partially addressed | Semaphore cap=3; no single-flight |
-| 12 | SSRF risk when CSV host allowlist unset | TBD | Open | — |
-| 13 | ILIKE wildcard injection | TBD | Open | `workload_type` uses exact match |
-| 14 | Unbounded offset (deep-pagination DoS) | TBD | Open | — |
-| 15 | ROS_TAGS_DEV_TOKEN static bypass | TBD | Open | — |
-| 16 | Empty SA allowlist permits any K8s SA | TBD | Open | — |
+| 12 | SSRF risk when CSV host allowlist unset | TBD | **Mitigated** | `csv_security.go`; startup + private-network deny |
+| 13 | ILIKE wildcard injection | TBD | **Mitigated** | `escapeILIKE` + `ESCAPE '\\'` |
+| 14 | Unbounded offset (deep-pagination DoS) | TBD | **Mitigated** | `ROS_API_MAX_OFFSET` default 10000 |
+| 15 | ROS_TAGS_DEV_TOKEN static bypass | TBD | **Mitigated** | Blocked outside `DEVELOPMENT=true` |
+| 16 | Empty SA allowlist permits any K8s SA | TBD | **Mitigated** | Required in api mode (non-dev) |
 | 17 | Readiness probe only checks PostgreSQL | TBD | Open | — |
 | 18 | Unclassified Kafka errors default to transient | TBD | **Mitigated** | `kafka_retry.go`; DLQ `hccm.ros.events.dlq`; max 5 retries |
-| 19 | Housekeeper lacks graceful shutdown | TBD | Open | Processor/API have signals; housekeeper does not |
-| 20 | Poison message payload logged (PII risk) | TBD | Open | 64 KB payload in logs |
+| 19 | Housekeeper lacks graceful shutdown | TBD | **Mitigated** | `signal.NotifyContext`; `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` |
+| 20 | Poison message payload logged (PII risk) | TBD | **Mitigated** | Metadata-only logs; `ROS_LOG_POISON_PAYLOAD` opt-in |
 | 21 | 25s statement_timeout kills large ingestion | TBD | **Mitigated** | `SET LOCAL` ingest timeout via `ROS_DB_INGEST_STATEMENT_TIMEOUT` |
 | 22 | Node GPU endpoint paginates in memory | TBD | Open | — |
-| 23 | panic() in boxplot/GPU YAML parse | TBD | Open | Also `gpu_metadata.go` |
+| 23 | panic() in boxplot/GPU YAML parse | TBD | **Mitigated** | Error returns; `log.Fatal` for embedded catalog only |
 | 24 | 140 migrations with no CONCURRENTLY automation | TBD | Open | Was 134+; now 140 |
-| 25 | History endpoints lack filter cardinality limits | TBD | Open | — |
+| 25 | History endpoints lack filter cardinality limits | TBD | **Mitigated** | `checkHistoryFilterCardinality` |
 | 26 | Float64 in money formatting | TBD | Open | — |
 | 27 | Deterministic recommendation IDs (info) | TBD | Open (info) | — |
 | 28 | Overlapping threshold recalc jobs | TBD | Partially addressed | Hash skip; no single-flight |

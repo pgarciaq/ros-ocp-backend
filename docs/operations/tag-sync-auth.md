@@ -79,9 +79,12 @@ sequenceDiagram
 - Native Kubernetes identity — caller must be a real pod ServiceAccount.
 - Standard RBAC: grant the Koku worker SA permission to reach ROS internal routes.
 
-**Dev fallback:** When `ROS_TAGS_DEV_TOKEN` is set, matching bearer tokens are accepted
+**Dev fallback:** When `ROS_TAGS_DEV_TOKEN` is set **and** `DEVELOPMENT=true`, matching bearer tokens are accepted
 with a warning log. Use only for local/docker-compose where TokenReview is unavailable.
+Startup **fails** if the dev token is set outside development mode.
 Set the **same** token on Koku (`ROS_TAGS_DEV_TOKEN`) and ROS.
+
+**Production (api mode):** `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` must be non-empty. Empty allowlist is rejected at startup and at runtime outside development.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|

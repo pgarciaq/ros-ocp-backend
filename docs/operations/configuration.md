@@ -72,6 +72,8 @@ Related database pool settings (pre-existing, often tuned together):
 | `RECORD_LIMIT_CSV` | `1000` | Max CSV rows per export batch. |
 | `CSV_STREAM_INTERVAL` | `100` | Rows between CSV stream flush intervals. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values allowed per repeated query parameter. |
+| `ROS_API_MAX_OFFSET` | `10000` | Max `offset` query parameter; returns HTTP 400 above this (use keyset pagination for deeper pages). |
+| `DEVELOPMENT` | `false` | When `true`, relaxes certain security checks for local dev (empty CSV allowlist, tag dev token). **Never set in production.** |
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Default timeout for outbound HTTP clients (RBAC, masu, sources). |
 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | `24` | Legacy Kruize poller interval (hours). |
 | `DATA_RETENTION_PERIOD` | `15` | Legacy data retention period (days). |
@@ -248,8 +250,8 @@ exposed for list filtering when tag sync is enabled.
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag list filters (and push API when source=api); cost-onprem chart default. |
 | `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). **Required non-empty in production when `ROS_TAGS_SOURCE=api`.** |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). **Blocked at startup when `DEVELOPMENT` is not `true`.** |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
@@ -266,6 +268,30 @@ AND across keys). Fleet savings summary supports `?group_by[tag:key]=*` for per-
 container savings aggregation. Empty tag-filtered lists may include `meta.warnings`.
 With `ROS_TAGS_SOURCE=db`, startup verifies `reporting_enabledtagkeys` is reachable.
 See [features/tag-filtering.md](../features/tag-filtering.md).
+
+---
+
+## CSV Download Security (Kafka ingestion)
+
+Presigned CSV URLs in Kafka messages are validated before fetch.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_CSV_ALLOWED_HOSTS` | (empty) | Comma-separated hostname allowlist for CSV URLs. **Required in non-development mode** (startup fails if empty). |
+| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Deny RFC1918, link-local, loopback, and `localhost` targets even when allowlisted. Set `false` only for local httptest. |
+| `ROS_CSV_MAX_BODY_BYTES` | `524288000` | Max CSV download size (bytes). |
+| `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | `120` | CSV fetch timeout. |
+
+Startup validation: `ValidateSecurityConfig()` in `internal/config/security.go` (called from service startup, not config load).
+
+---
+
+## Housekeeper & Logging
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | `30` | Grace period (seconds) when housekeeper receives SIGTERM/SIGINT mid-cleanup. |
+| `ROS_LOG_POISON_PAYLOAD` | `false` | When `true`, log first 256 bytes of permanently failed Kafka payloads (debug only). Default logs metadata only; full payload is on the DLQ topic. |
 
 ---
 
@@ -406,7 +432,8 @@ Per-plugin term overrides use dynamic keys (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`)
 [`config.EnvString`](../../internal/config/env.go) — see [Term windows](#term-windows-per-plugin).
 
 Plugin fields: `EnabledPlugins` (`ROS_ENABLED_PLUGINS`), `DisabledPlugins` (`ROS_DISABLED_PLUGINS`).
-CSV download: `CSVMaxBodyBytes`, `CSVDownloadTimeoutSecs`, `CSVAllowedHosts`.
+CSV download: `CSVMaxBodyBytes`, `CSVDownloadTimeoutSecs`, `CSVAllowedHosts`, `CSVDenyPrivateNetworks`.
+Security startup: `Development`, `APIMaxOffset`, `LogPoisonPayload`, `HousekeeperShutdownGraceSecs`.
 Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 
 `KRUIZE_HOST` and `KRUIZE_PORT` are viper-only keys used to build the default `KRUIZE_URL`.

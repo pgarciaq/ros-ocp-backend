@@ -9,14 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `false`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried).
-- Prometheus counter `rosocp_analytics_incomplete_total` (labels: `org_id`, `cluster_uuid`, `error_type` where `error_type` is `history` or `quality`).
-- Per-cluster analytics staleness flag on container recommendation list/detail responses: `analytics_incomplete` and `analytics_incomplete_at` (stored on `clusters` table, migration 000141).
-- Prometheus pgxpool metrics: `rosocp_db_pool_total_conns`, `rosocp_db_pool_acquired_conns`, `rosocp_db_pool_idle_conns`, `rosocp_db_pool_max_conns`, `rosocp_db_pool_acquire_count_total`, `rosocp_db_pool_acquire_duration_seconds`.
+- Security hardening env vars: `DEVELOPMENT`, `ROS_API_MAX_OFFSET`, `ROS_CSV_DENY_PRIVATE_NETWORKS`, `ROS_LOG_POISON_PAYLOAD`, `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS`.
+- Startup validation for CSV SSRF allowlist, tag dev token, and tag SA allowlist (`ValidateSecurityConfig`, `ValidateTagAuthConfig`).
 
 ### Changed
 
 - Container ingestion degraded mode now sets `clusters.analytics_incomplete`, emits structured warnings, and increments `rosocp_analytics_incomplete_total` when history or quality writes fail (adversarial review finding #9 mitigated).
 - GORM now shares the pgxpool via `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all database connections per process (adversarial review finding #7 mitigated).
+- ILIKE filter values escape `%`, `_`, and `\` with `ESCAPE '\\'` (finding #13 mitigated).
+- CSV URL fetch requires explicit allowlist in non-development mode; private networks denied by default (finding #12 mitigated).
+- Poison Kafka message logs redact payload by default; optional `ROS_LOG_POISON_PAYLOAD` for debug preview (finding #20 mitigated).
+- Housekeeper handles SIGTERM/SIGINT with configurable grace period (finding #19 mitigated).
+- History endpoints enforce `MAXIMUM_COUNT_PER_QUERY_PARAM` on filter params (finding #25 mitigated).
+- `offset` query parameter capped at `ROS_API_MAX_OFFSET` (default 10000) (finding #14 mitigated).
+- Tag auth: `ROS_TAGS_DEV_TOKEN` blocked outside development; empty SA allowlist blocked in api mode (findings #15, #16 mitigated).
+- GPU catalog/boxplot parse failures return errors instead of panicking (finding #23 mitigated).
 
 ---
 

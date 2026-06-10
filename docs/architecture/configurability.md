@@ -343,12 +343,17 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Plugin denylist (CSV) <br><em>CSV of plugins to skip; overrides allowlist.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 | Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | true | `ROS_TAGS_ENABLED` | — | — | No |
 | Tag source (`db` or `api`) <br><em>`db` = ROS-stored tags; `api` = live Koku (slower, fresher).</em> | `db` | `ROS_TAGS_SOURCE` | — | — | No |
-| Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; empty may deny all.</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
-| Tag sync dev bearer token <br><em>Dev-only static token; never in production.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
+| Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; required in api mode (non-dev).</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
+| Tag sync dev bearer token <br><em>Dev-only static token; blocked outside DEVELOPMENT=true.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
 | Tag sync max body (MiB) <br><em>Max tag sync POST body; prevents OOM from huge payloads.</em> | 10 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | — | — | No |
 | CSV download max body (bytes) <br><em>Max external CSV download size (500 MiB default).</em> | 524288000 | `ROS_CSV_MAX_BODY_BYTES` | — | — | No |
 | CSV download timeout (s) <br><em>Timeout for external CSV fetch.</em> | 120 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | — | — | No |
 | CSV allowed hosts (CSV) <br><em>SSRF allowlist hostnames for CSV URLs.</em> | (empty) | `ROS_CSV_ALLOWED_HOSTS` | — | — | No |
+| CSV deny private networks <br><em>Block RFC1918/link-local/loopback CSV targets.</em> | true | `ROS_CSV_DENY_PRIVATE_NETWORKS` | — | — | No |
+| API max offset <br><em>Max pagination offset before HTTP 400.</em> | 10000 | `ROS_API_MAX_OFFSET` | — | — | No |
+| Development mode <br><em>Relaxes security checks for local dev only.</em> | false | `DEVELOPMENT` | — | — | No |
+| Log poison Kafka payload <br><em>Log truncated payload on permanent failure (debug).</em> | false | `ROS_LOG_POISON_PAYLOAD` | — | — | No |
+| Housekeeper shutdown grace (s) <br><em>Grace period on SIGTERM during cleanup.</em> | 30 | `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | — | — | No |
 | K8s SA token path (tag sync) <br><em>Projected SA token path for TokenReview auth.</em> | `/var/run/secrets/.../token` | `KUBERNETES_SA_TOKEN_PATH` | — | — | No |
 | K8s TokenReview URL <br><em>Override TokenReview URL; default in-cluster.</em> | cluster default | `KUBERNETES_TOKEN_REVIEW_URL` | — | — | No |
 | Sources API base URL <br><em>Sources service base URL for cluster/source metadata.</em> | platform / `http://127.0.0.1:8002` | `SOURCES_API_BASE_URL` | — | — | No |

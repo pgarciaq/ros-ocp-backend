@@ -143,6 +143,8 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 | `READ_HEADER_TIMEOUT` | `15` | HTTP read-header timeout (seconds). |
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Outbound HTTP client timeout. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values per repeated query param. |
+| `ROS_API_MAX_OFFSET` | `10000` | Max `offset` before HTTP 400; use keyset pagination for deeper pages. |
+| `DEVELOPMENT` | `false` | Local dev only — relaxes CSV allowlist and tag dev-token checks. Never enable in production. |
 | `RECORD_LIMIT_CSV` | `1000` | CSV export row limit per batch. |
 | `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |
 
@@ -161,6 +163,13 @@ Quick example:
 GET /recommendations/openshift?limit=100
 GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 ```
+
+### CSV download security (processor)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_CSV_ALLOWED_HOSTS` | (empty) | Hostname allowlist for presigned CSV URLs. Required when not in development mode. |
+| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Block private/link-local/loopback targets. |
 
 ---
 
@@ -222,7 +231,8 @@ All production environment variables load through `internal/config/config.go` (V
 |-------------|-------------------------|---------|
 | `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS` | `EnabledPlugins`, `DisabledPlugins` | Plugin allowlist/denylist |
 | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` | `config.EnvString` | Term window overrides (`WINDOW_DAYS`, `MIN_DATA_DAYS`, `DECAY_HALFLIFE_HOURS`) |
-| `ROS_CSV_*`, `KUBERNETES_*` | `CSV*`, `Kubernetes*` fields | CSV download limits; tag sync TokenReview |
+| `ROS_CSV_*`, `KUBERNETES_*` | `CSV*`, `Kubernetes*` fields | CSV download limits and SSRF controls; tag sync TokenReview |
+| `ROS_API_MAX_OFFSET`, `DEVELOPMENT`, `ROS_LOG_POISON_PAYLOAD`, `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | Security / ops fields | Pagination cap, dev mode, poison log redaction, housekeeper shutdown |
 | `KRUIZE_HOST`, `KRUIZE_PORT`, `KRUIZE_URL` | Viper defaults | Kruize HTTP endpoint (URL defaults from host + port) |
 
 Example term override: `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45` locks the container long-term window.
@@ -422,8 +432,8 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 |----------|---------|---------|------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters; push API active only when source=`api` |
 | `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags` |
-| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Optional | Comma-separated SA names allowed to call push API; empty = any authenticated SA |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only | Static bearer token when projected SA token unavailable; must match Koku |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Required (non-dev) | Comma-separated SA names allowed to call push API |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only (`DEVELOPMENT=true`) | Static bearer token; blocked at startup outside development |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | — | SaaS (`api`) | Max request body size (MiB) for `POST /internal/tags/sync` |
 
 ### Koku environment variables (SaaS / `api` source only)
