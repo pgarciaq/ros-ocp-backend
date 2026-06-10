@@ -132,7 +132,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	ctx := context.Background()
 	pool := db.GetPool()
-	manifestID := manifestIDFromMsg(kafkaMsg)
+	manifestID := resolveManifestID(&kafkaMsg, log)
 	if err := ensureManifestExpectations(ctx, pool, kafkaMsg); err != nil {
 		log.Errorf("unable to register expected manifest files: %v", err)
 		recordKafkaTransient(err)

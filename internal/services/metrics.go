@@ -42,6 +42,10 @@ var (
 		Name: "ros_ingestion_file_failures_total",
 		Help: "Permanent per-file ingestion failures tracked in report_file_status",
 	}, []string{"org_id", "cluster_id", "report_type", "error_class"})
+	IngestManifestIDSynthesized = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_ingest_manifest_id_synthesized_total",
+		Help: "Kafka messages that omitted metadata.manifest_id and received a deterministic synthesized manifest ID",
+	})
 )
 
 // PluginHookErrors counts non-fatal failures from plugin ingest hooks (processing continues).

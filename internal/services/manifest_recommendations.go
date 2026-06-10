@@ -19,9 +19,6 @@ import (
 // manifest files have been ingested successfully.
 func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMsg types.KafkaMsg) error {
 	manifestID := manifestIDFromMsg(kafkaMsg)
-	if manifestID == "" {
-		return nil
-	}
 	complete, err := model.IsManifestIngestionComplete(ctx, pool, manifestID)
 	if err != nil {
 		return err
