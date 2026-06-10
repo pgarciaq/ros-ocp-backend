@@ -73,7 +73,7 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 | 7 | **#17, #19, #20** (Medium — ops) | **Partially mitigated** — housekeeper SIGTERM (#19), poison log redaction (#20); readiness depth (#17) open. |
 | 8 | **#22, #23** (Medium — memory/panic) | **Partially mitigated** — panic-to-error for catalogs (#23); node GPU in-memory pagination (#22) open. |
 | 9 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
-| 10 | **#30** (Info — governance) | ADR index — process debt, not incident drivers. |
+| 10 | **#30** (Info — governance) | **Resolved** — 162 ADRs indexed at [`docs/adr/README.md`](../adr/README.md). |
 | — | **#7** (Mitigated) | GORM uses `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all connections; pool metrics on scrape. |
 | — | **#18** (Mitigated) | Retry-count headers + DLQ after 5 attempts; `rosocp_kafka_dlq_messages_total` for alerting. |
 | — | **#10** (Resolved) | `CHANGELOG.md` exists at repo root. Optional: enforce OpenAPI diff in CI. |
@@ -150,7 +150,7 @@ Not attacker-driven. Any permanent S3/MinIO glitch, corrupt CSV, or missing obje
 
 **Residual risk / gaps**
 
-- **Empty `manifest_id`:** When `manifestIDFromMsg` returns empty, all tracking is skipped (`ensureManifestExpectations`, `markFileProcessing`, `markFileDone` no-op). Legacy or malformed Kafka messages bypass per-file tracking entirely.
+- **Empty `manifest_id`:** **Resolved (#32).** When omitted, the processor synthesizes a deterministic `synth-*` manifest ID from `(org_id, cluster_uuid, date|payload fingerprint)` so per-file tracking and recommendation gating still apply. Legacy Kruize path (#33) remains untracked.
 - **Legacy Kruize path:** Files processed via `ReadCSVFromUrl` + dataframe (when Kruize plugin enabled) do not use `report_file_status`; fetch/parse failures `continue` without permanent classification.
 - Operators must manually intervene via Koku's `reship_ros` API to re-deliver failed files. Offset commit behavior is unchanged — the queue does not stall on partial failure.
 - Operator runbook for querying `report_file_status` and triggering recovery is not yet in `docs/operations/runbooks.md`.
@@ -770,16 +770,16 @@ Replaced `sync.Map` with bounded LRU cache (`ROS_COST_CACHE_MAX_ENTRIES`, defaul
 | **Severity** | Info |
 | **Category** | Governance |
 | **Location** | `docs/` (no `docs/adr/` directory) |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Resolved** (2026-06-11) |
 | **Effort** | S |
 
 **Description**
 
 Architectural decisions are discoverable only by archaeology across scattered docs and commit history.
 
-**Recommended fix**
+**Resolution**
 
-Add `docs/adr/` with numbered Architecture Decision Records.
+Added [`docs/adr/`](../adr/) with 162 numbered Architecture Decision Records (Michael Nygard format) and an index at [`docs/adr/README.md`](../adr/README.md). Decisions are grouped by domain: engine/algorithm, data model, API design, ingestion, plugins, cost/savings, tags, reship/business hours, deployment/ops, testing, security, Kafka, and configuration.
 
 ---
 
@@ -816,7 +816,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | **Kafka down** | Stalled | Unaffected | Unaffected | Stale | N/A | Consumer lag alert (external) |
 | **S3/MinIO down (one file in payload)** | **Tracked failure (#1+#2 mitigated)** | Stale recs (gated) | N/A | Stale | **Committed** | `ros_ingestion_file_failures_total` + `report_file_status.failed` |
 | **S3/MinIO down (all files)** | Fails | Stale | N/A | Stale | Depends on error class | Log + metric |
-| **Empty manifest_id in Kafka msg** | **No per-file tracking** | May run recs early | N/A | Partial | Committed | No `report_file_status` rows |
+| **Empty manifest_id in Kafka msg** | **Synthesized ID (#32 resolved)** | Gated | N/A | Partial | Committed | `rosocp_ingest_manifest_id_synthesized_total` when fallback used |
 | **Masu/Koku cost API down** | Recs without cost (degraded) | Savings $0 or cached | N/A | Partial | May commit (#9) | Cost provider errors in logs |
 | **History DB write fails** | Recs written (degraded) or retried (strict) | Fresh recs; flag if degraded | N/A | **Gap if degraded** | Committed if degraded; retry if strict | `rosocp_analytics_incomplete_total`, API `analytics_incomplete` |
 | **Identity gateway bypassed (#3)** | N/A | Cross-tenant access *(SNO/dev only)* | Unauthorized mutation *(SNO/dev only)* | N/A | N/A | No in-app signal |
@@ -864,7 +864,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 27 | Deterministic recommendation IDs (info) | TBD | **Verified** | `docs/architecture/recommendation-ids.md`; org_id regression test |
 | 28 | Overlapping threshold recalc jobs | TBD | **Mitigated** | Same as #11 |
 | 29 | Effective-rates cache unbounded | TBD | **Mitigated** | LRU + `ROS_COST_CACHE_MAX_ENTRIES`; cache metrics |
-| 30 | No formal ADR index | TBD | Open | — |
+| 30 | No formal ADR index | TBD | **Resolved** | [`docs/adr/README.md`](../adr/README.md) |
 | 31 | Native list pagination dropped workload_type filter | TBD | **Resolved** | `f66feaf7` |
 
 ---
@@ -882,3 +882,398 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 ---
 
 *Document version: 1.6 — 2026-06-10. Mitigated Finding #9 (analytics strict mode + staleness signaling).*
+
+---
+
+# Adversarial Due Diligence Review v2.0
+
+**Date:** 2026-06-11  
+**Reviewer:** AI Adversarial Auditor  
+**Scope:** Full codebase as of commit `5c257248cafb30076be1d7d005e985c849d0cb2a`  
+**Previous version:** v1.6 (31 findings, all resolved/mitigated/accepted except #4)
+
+## Prior Review Status
+
+All v1.6 findings (#1–#31) were re-validated against current source. **Thirty are resolved or mitigated** as documented in v1.6. **Finding #4** (`/internal/tags/status` unauthenticated in db mode) remains open and is carried forward as **Finding #37** below with unchanged severity. Residual gaps called out in v1.6 (#1 empty `manifest_id`, Kruize legacy path, GPU fallback pagination, strict-analytics default) are escalated to new numbered findings where they still represent material risk.
+
+## Executive Summary
+
+The v1.6 remediation sprint materially improved ingestion resilience, API hardening, operational observability, and governance (ADR index, CHANGELOG, DLQ runbook). The native engine path is production-grade for the common case when `manifest_id` is present and Kruize is disabled. **Remaining risk concentrates in three areas:** (1) **legacy and edge-case ingestion paths** that bypass per-file tracking, (2) **unbounded or in-memory API hot paths** for GPU MIG/time-slicing at fleet scale, and (3) **missing abuse controls** (rate limits, entitlement checks, RBAC cache bounds) that assume gateway and NetworkPolicy compensating controls. No Critical-severity regressions were introduced by v1.6 fixes, but several mitigations are opt-in or dev-posture-dependent.
+
+## Executive Scorecard
+
+| Dimension | Grade | Trend | Notes |
+|-----------|-------|-------|-------|
+| Security | B | ↑ | SSRF/ILIKE/offset/tag-auth hardening landed; entitlement check, RBAC cache bounds, internal rate limits still missing |
+| Correctness | B− | ↑ | Per-file tracking + manifest gating for native path; Kruize path bypass (#33) |
+| Auditability | B+ | ↑ | DLQ runbook, metrics, ADR index; `report_file_status` operator runbook still absent |
+| Operational Robustness | B | ↑ | DLQ, housekeeper shutdown, opt-in deep readiness; async jobs ignore API shutdown |
+| Performance | C+ | → | Incremental ingest flush helps; GPU MIG/time-slicing still O(clusters×containers) in memory |
+| Design Quality | B | → | Plugin architecture clean; hook non-fatal semantics and dual Kruize/native paths add complexity |
+| Maintainability | B | ↑ | 162 ADRs, CHANGELOG; no ADR/OpenAPI drift CI; Kruize TODOs persist |
+| Governance | B+ | ↑ | ADR index + migration lint; no automated vuln scan in CI |
+
+## Findings
+
+### Finding #32: Empty `manifest_id` bypasses per-file tracking and recommendation gating
+
+- **Severity:** High
+- **Dimension:** Correctness / Data integrity
+- **Location:** `internal/services/report_file_tracker.go:16-18`, `internal/services/manifest_recommendations.go:21-24`
+- **Status:** **Resolved** (2026-06-11)
+- **Description:** When Kafka messages omit `metadata.manifest_id`, all `report_file_status` functions no-op and `runManifestRecommendations` returns immediately without checking ingestion completeness. Recommendations may run on partial payloads with no operator-visible failure state.
+- **Risk:** Silent partial ingestion and stale/premature recommendations for legacy publishers or malformed messages — the exact scenario v1.6 #1/#2 aimed to fix.
+- **Recommendation:** Treat missing `manifest_id` as a permanent validation failure (DLQ + metric) or synthesize a deterministic manifest key from `(org_id, cluster_uuid, payload hash, date)`. Block recommendation engines until tracking completes.
+- **Effort:** M
+
+**Resolution**
+
+When `metadata.manifest_id` is empty, the processor now synthesizes a deterministic manifest ID with prefix `synth-` using UUID v5 over `(org_id, cluster_uuid, scope_key)` where `scope_key` is the `date=YYYY-MM-DD` segment from ROS `object_keys` when present, otherwise a SHA-256 fingerprint of the sorted file list. Per-file tracking, failure recording, and `runManifestRecommendations` gating all use the resolved ID. Operators see a WARN log and `rosocp_ingest_manifest_id_synthesized_total` when synthesis occurs. Kruize legacy path (#33) remains untracked.
+
+### Finding #33: Legacy Kruize CSV path lacks `report_file_status` tracking
+
+- **Severity:** High
+- **Dimension:** Correctness / Data integrity
+- **Location:** `internal/services/report_processor.go:246-305` (ReadCSVFromUrl + Kruize experiment loop)
+- **Description:** When the Kruize plugin is enabled, files fall through to the legacy dataframe/Kruize path which does not call `markFileProcessing`, `markFileDone`, or `handlePermanentFileError`. Parse and experiment errors `continue` without permanent classification.
+- **Risk:** Identical silent-loss semantics as pre-v1.6 native path; mitigations #1/#2 do not apply in Kruize mode.
+- **Recommendation:** Wrap legacy path with the same per-file tracker or deprecate Kruize ingestion entirely. At minimum, return wrapped errors and increment `ros_ingestion_file_failures_total`.
+- **Effort:** M
+
+### Finding #34: SSRF allowlist bypass when DNS resolution fails
+
+- **Severity:** Medium
+- **Dimension:** Security
+- **Location:** `internal/utils/csv_security.go:76-82`
+- **Description:** `denyRestrictedHost` allows the fetch when `LookupIPAddr` returns an error (“Hostname did not resolve; allowlist already validated the name”). An attacker controlling DNS intermittently or via race can point an allowlisted hostname to a private IP on retry.
+- **Risk:** Processor fetches internal services (metadata APIs, kubelet, MinIO admin) despite `ROS_CSV_DENY_PRIVATE_NETWORKS=true`.
+- **Recommendation:** Fail closed on DNS errors in non-development mode, or resolve at connection time with pinned IPs (custom `DialContext`) after validation.
+- **Effort:** M
+
+### Finding #35: No cost-management entitlement validation on API routes
+
+- **Severity:** Medium
+- **Dimension:** Security / Authorization
+- **Location:** `internal/api/middleware/identity.go:12-25`, `internal/api/server.go:176-180`
+- **Description:** Identity middleware decodes `X-Rh-Identity` and extracts `org_id` but never checks `entitlements.cost_management.is_entitled`. Any structurally valid identity header grants full API access when RBAC is disabled or gateway omits entitlement enforcement.
+- **Risk:** Unentitled or expired accounts access optimization data in SNO/dev or misconfigured gateway deployments.
+- **Recommendation:** Reject requests where `entitlements.cost_management.is_entitled != true` unless `DEVELOPMENT=true`. Add integration test.
+- **Effort:** S
+
+### Finding #36: No rate limiting on expensive async internal endpoints
+
+- **Severity:** Medium
+- **Dimension:** Operational Robustness / Availability
+- **Location:** `internal/api/handlers_savings_recalculate.go:78`, `internal/api/handlers_business_hours_settings.go:366`, `internal/engine/threshold_recalculate.go:89`
+- **Description:** `POST /internal/recalculate-savings`, business-hours PUT (triggers fleet reship), and threshold settings PUT spawn unbounded async work. Only threshold recalc has single-flight coalescing; savings recalc and reship do not deduplicate per org.
+- **Risk:** A compromised or misconfigured service account can trigger masu reship storms, DB recalc load, and masu API abuse across all clusters in an org.
+- **Recommendation:** Add per-org token-bucket rate limits, idempotency keys, and coalescing for savings recalc/reship similar to `threshold_recalc_guard.go`.
+- **Effort:** M
+
+### Finding #37: `/internal/tags/status` unauthenticated in on-prem db mode (carried from #4)
+
+- **Severity:** Medium
+- **Dimension:** Security / Multi-tenancy
+- **Location:** `internal/api/handlers_tags_status.go:17-44`, `internal/api/server.go:169-173`
+- **Description:** Bearer auth is skipped when `ROS_TAGS_SOURCE=db`. Any caller on the pod network can enumerate tag catalogs for arbitrary `org_id` query values.
+- **Risk:** Cross-tenant tag metadata disclosure when NetworkPolicy is misconfigured (common in SNO/dev).
+- **Recommendation:** Require service-account bearer auth on all `/internal/*` routes regardless of tag source mode; bind `org_id` to authenticated caller scope.
+- **Effort:** S
+
+### Finding #38: Kafka consumer debug logs expose message payload prefix
+
+- **Severity:** Low
+- **Dimension:** Security / Privacy
+- **Location:** `internal/kafka/consumer.go:56,92`
+- **Description:** At DEBUG log level, the consumer logs the first 512 bytes of every Kafka message value. Payloads contain presigned URLs, cluster metadata, and file lists.
+- **Risk:** Credential leakage in centralized logging when DEBUG is enabled during incidents (common operator response).
+- **Recommendation:** Log only `len`, `org_id`, `cluster_uuid`, and `manifest_id` at DEBUG; never log message bodies unless `ROS_LOG_POISON_PAYLOAD`-style opt-in.
+- **Effort:** S
+
+### Finding #39: Kruize API debug logs include full HTTP payloads
+
+- **Severity:** Low
+- **Dimension:** Security / Privacy
+- **Location:** `internal/utils/kruize/kruize_api.go:112,164,216`
+- **Description:** Kruize experiment and updateResults calls log complete JSON payloads at DEBUG, including container names, namespaces, and resource metrics.
+- **Risk:** PII/workload metadata in log aggregators; compounds when Kruize plugin is enabled.
+- **Recommendation:** Redact or truncate payloads; log experiment name and row count only.
+- **Effort:** S
+
+### Finding #40: RBAC permission cache is unbounded
+
+- **Severity:** Low
+- **Dimension:** Performance / Availability
+- **Location:** `internal/api/middleware/rbac_cache.go:15-51`
+- **Description:** RBAC responses are cached in a `sync.Map` keyed by identity hash with TTL expiry but no maximum entry count. Expired entries are removed only on access.
+- **Risk:** Memory growth under high user cardinality (large enterprises, automated polling) or identity-token rotation patterns; API pod OOM under load test or incident traffic.
+- **Recommendation:** Replace with bounded LRU (mirror `ROS_COST_CACHE_MAX_ENTRIES` pattern) and export `rosocp_rbac_cache_size` metric.
+- **Effort:** S
+
+### Finding #41: Prometheus `/metrics` exposed without authentication
+
+- **Severity:** Informational
+- **Dimension:** Security
+- **Location:** `internal/api/server.go:141-149`
+- **Description:** Metrics listener on `PROMETHEUS_PORT` serves `/metrics` without auth. Labels include `org_id` on several counters.
+- **Risk:** Information disclosure of tenant activity patterns to any pod on the network; acceptable when NetworkPolicy restricts scrape to Prometheus only.
+- **Recommendation:** Document NetworkPolicy requirement; consider `authorization` header or mTLS for on-prem chart.
+- **Effort:** S
+
+### Finding #42: CORS middleware allows all origins by default
+
+- **Severity:** Low
+- **Dimension:** Security
+- **Location:** `internal/api/server.go:158-160`
+- **Description:** `CORSWithConfig` sets `AllowMethods` only. Echo's CORS middleware treats empty `AllowOrigins` as allow-all (`Access-Control-Allow-Origin: *`).
+- **Risk:** Browser-based cross-origin requests from malicious pages when a user has a valid session cookie/token — low practical impact since auth is header-based, but violates least-privilege.
+- **Recommendation:** Set explicit `AllowOrigins` to console/on-prem UI hostnames.
+- **Effort:** S
+
+### Finding #43: Plugin ingest hook failures are silently non-fatal
+
+- **Severity:** Medium
+- **Dimension:** Correctness
+- **Location:** `internal/plugin/dispatch.go:47-49`, `internal/services/report_processor.go:47-50`
+- **Description:** `RunIngestHooks` collects hook errors but `ProcessReport` only logs a warning and increments a counter. Ingestion is considered successful; downstream recommendations proceed with incomplete derived data (e.g., GPU digest hooks, namespace hooks).
+- **Risk:** Recommendations computed on stale or partial digest state with no API-visible degradation flag for hook failures.
+- **Recommendation:** Classify hook failures as transient (retry message) or permanent (file failure) based on error type; surface `ingest_hooks_failed` on cluster metadata.
+- **Effort:** M
+
+### Finding #44: Kruize legacy fetch errors misclassified as transient
+
+- **Severity:** Medium
+- **Dimension:** Correctness / Kafka semantics
+- **Location:** `internal/services/report_processor.go:246-252`
+- **Description:** Legacy path calls `recordKafkaTransient(fetchError)` on CSV fetch failure and `continue`s without permanent file tracking. HTTP 403/404 from presigned URLs retry until DLQ instead of being immediately classified permanent.
+- **Risk:** Delayed visibility of permanent S3 failures; unnecessary retry/DLQ volume; inconsistent with native path behavior (`TestConsumer_PresignedDownload403`).
+- **Recommendation:** Align legacy path error classification with native ingest functions; use `handlePermanentFileError` for non-transient HTTP status codes.
+- **Effort:** S
+
+### Finding #45: Strict analytics mode disabled by default
+
+- **Severity:** Medium
+- **Dimension:** Correctness / Data consistency
+- **Location:** `internal/config/config.go:76-78`, `internal/services/report_processor.go` (analytics pipeline)
+- **Description:** `ROS_INGEST_STRICT_ANALYTICS` defaults to `false`. History/quality write failures allow recommendation persistence and offset commit with only a cluster-level `analytics_incomplete` flag.
+- **Risk:** Production serves fresh recommendations without history/quality parity unless operators explicitly opt into strict mode — easy to miss during deployment.
+- **Recommendation:** Default strict mode to `true` for on-prem chart; keep degraded mode as explicit opt-in with documented trade-offs.
+- **Effort:** S
+
+### Finding #46: Business-hours org PUT triggers fleet-wide masu reship
+
+- **Severity:** Medium
+- **Dimension:** Operational Robustness
+- **Location:** `internal/api/handlers_business_hours_settings.go:355-366`, `internal/reship/trigger.go:42-61`
+- **Description:** Enabling business hours at org scope resolves all cluster UUIDs and fires async masu `reship_ros` for each (fan-out capped at `ROS_RESHIP_CONCURRENCY`, default 2). No confirmation, idempotency window, or “dry run” mode.
+- **Risk:** Accidental org-level toggle during business hours causes full historical re-ingestion across all clusters — masu/Kafka/DB load spike.
+- **Recommendation:** Require explicit `confirm_fleet_reship=true` body field for org-level enable; expose reship scope in API response before execution.
+- **Effort:** S
+
+### Finding #47: Background async jobs ignore API shutdown context
+
+- **Severity:** Low
+- **Dimension:** Operational Robustness
+- **Location:** `internal/engine/threshold_recalculate.go:89`, `internal/engine/savings_recalculate.go:77`, `internal/reship/trigger.go:47-48`
+- **Description:** Threshold recalc, savings recalc, and reship triggers spawn goroutines with `context.Background()` detached from the API server shutdown context.
+- **Risk:** In-flight recalculations continue during pod termination, causing connection errors, partial DB writes, and confusing metrics during rollouts.
+- **Recommendation:** Use a process-level cancellable context wired from `StartAPIServer` shutdown; wait for in-flight jobs up to termination grace period.
+- **Effort:** M
+
+### Finding #48: GPU MIG list loads entire fleet into memory before pagination
+
+- **Severity:** Medium
+- **Dimension:** Performance
+- **Location:** `internal/api/handlers_gpu_mig.go:102-213`
+- **Description:** Handler iterates all RBAC-filtered clusters, calls `engine.QueryGPURecommendations` per cluster, accumulates all MIG entries in a slice, then sorts and paginates in Go. No SQL-level pagination equivalent to container keyset path.
+- **Risk:** API latency and memory scale O(clusters × GPU containers). A 1000-cluster tenant with GPU workloads can OOM or timeout the API pod on a single list request.
+- **Recommendation:** Add SQL-backed pagination mirroring `ListNodeGPUTriplesPage` or cap cluster iteration with cursor-based cluster paging.
+- **Effort:** L
+
+### Finding #49: GPU time-slicing fallback path still paginates in memory
+
+- **Severity:** Medium
+- **Dimension:** Performance
+- **Location:** `internal/api/handlers_node_recs.go:119-188`
+- **Description:** When `order_by` is unsupported for triple SQL pagination or format is CSV, handler loads recommendations for all clusters (errgroup limit 5), concatenates, sorts, and slices in memory. v1.6 #22 mitigated the primary path only.
+- **Risk:** CSV export and non-standard sort keys trigger the expensive fallback at fleet scale.
+- **Recommendation:** Reject unsupported `order_by` for large fleets with 400 + guidance; implement SQL pagination for CSV path; or stream CSV from DB cursor.
+- **Effort:** M
+
+### Finding #50: History CSV export capped at paginated limit, not `RECORD_LIMIT_CSV`
+
+- **Severity:** Low
+- **Dimension:** Correctness / UX
+- **Location:** `internal/model/recommendation_history.go:48-100`, `internal/api/handlers_history.go:139-171`
+- **Description:** Container/namespace lists override limit to `RECORD_LIMIT_CSV` (default 1000) for CSV format. History uses `opts.Limit` from `ListAPIOptions` (default 100) with no CSV override.
+- **Risk:** Operators receive truncated history exports believing they got the full dataset; compliance/audit gaps.
+- **Recommendation:** Apply the same CSV limit override as `recommendation_set_native.go:354-355`; document in OpenAPI.
+- **Effort:** S
+
+### Finding #51: History endpoint wide default date window without cluster filter
+
+- **Severity:** Low
+- **Dimension:** Performance
+- **Location:** `internal/api/handlers_history.go:51-57`, `internal/model/recommendation_history.go:73-82`
+- **Description:** Default `start_date` is first of month; no default cluster/project filter. Count query scans all history rows for the org in the window before pagination.
+- **Risk:** Expensive COUNT(*) on `recommendation_history` for large orgs; statement timeout under load (25s API default).
+- **Recommendation:** Require at least one scoping filter (cluster or project) when date range exceeds N days, or use approximate counts for unscoped queries.
+- **Effort:** M
+
+### Finding #52: Fleet summary executes uncached full-org aggregation
+
+- **Severity:** Low
+- **Dimension:** Performance
+- **Location:** `internal/api/handlers_fleet.go:60-80`, `internal/model/org_recommendation_stats.go`
+- **Description:** Fleet summary queries aggregate container counts and savings across all clusters for the org on every request with 5-minute HTTP cache only.
+- **Risk:** Repeated dashboard polling hammers PostgreSQL; no materialized summary table or Redis cache layer.
+- **Recommendation:** Populate `org_recommendation_stats` incrementally during recommendation runs; serve fleet summary from pre-aggregated table.
+- **Effort:** M
+
+### Finding #53: No CI enforcement of OpenAPI spec vs CHANGELOG on breaking changes
+
+- **Severity:** Informational
+- **Dimension:** Governance
+- **Location:** `docs/architecture/api-versioning.md`, `.github/workflows/` (no openapi diff job)
+- **Description:** v1.6 #10 resolved CHANGELOG existence but noted missing CI enforcement. No workflow validates OpenAPI diff against `[Unreleased]` changelog entries.
+- **Risk:** Breaking API changes ship without documentation; IQE catches late.
+- **Recommendation:** Add CI step comparing `openapi.json` diff to CHANGELOG `[Unreleased]` section (oasdiff or similar).
+- **Effort:** M
+
+### Finding #54: ADR index has no drift detection against code
+
+- **Severity:** Informational
+- **Dimension:** Governance / Maintainability
+- **Location:** `docs/adr/README.md` (162 ADRs), `docs/adr/_generate_adrs.py` (untracked generator in workspace)
+- **Description:** ADR index was bulk-generated to resolve #30. No CI checks that code changes contradict accepted ADRs (e.g., ADR-0011 fixed idle thresholds vs configurable settings).
+- **Risk:** ADRs become stale documentation within one release cycle; false confidence for auditors.
+- **Recommendation:** Require ADR amendment PR for changes touching `internal/engine/` algorithm constants; add lint linking ADR numbers in commit messages for engine changes.
+- **Effort:** M
+
+### Finding #55: Kruize heavy endpoints share global HTTP client timeout
+
+- **Severity:** Medium
+- **Dimension:** Performance / Operational Robustness
+- **Location:** `internal/utils/utils.go:71-86`, `internal/utils/kruize/kruize_api.go:162-277`
+- **Description:** `/updateResults` and `/updateRecommendations` use `utils.HTTPClient` (default 30s). Code comments acknowledge need for per-endpoint timeouts (FLPATH-3407) but no histogram or extended timeout exists.
+- **Risk:** Large bulk payloads timeout mid-upload; partial Kruize state with unclear recovery; ingestion appears as transient failures.
+- **Recommendation:** Dedicated Kruize client with 120s+ timeout for bulk endpoints; expose `rosocp_kruize_api_duration_seconds` histogram.
+- **Effort:** S
+
+### Finding #56: CSV download default max body 512 MiB per file
+
+- **Severity:** Medium
+- **Dimension:** Performance / Availability
+- **Location:** `internal/utils/utils.go:33-38`
+- **Description:** `ROS_CSV_MAX_BODY_BYTES` defaults to 512 MiB. Processor reads entire CSV into memory before streaming parse (legacy path loads full dataframe).
+- **Risk:** Multi-file Kafka payloads with large CSVs can exhaust processor memory despite incremental digest flush (Finding #8 mitigated grouping, not raw CSV size).
+- **Recommendation:** Lower default to 128 MiB; stream-parse without full buffering; reject oversized files as permanent failures with metric.
+- **Effort:** M
+
+### Finding #57: Parallel Kafka workers share consumer for offset commit
+
+- **Severity:** Low
+- **Dimension:** Correctness
+- **Location:** `internal/kafka/consumer.go:68-130`, `internal/services/kafka_retry.go:186-204`
+- **Description:** `ROS_KAFKA_PARALLEL=true` (default) dispatches handler work to a worker pool but all workers call `CommitMessage` on the same `*kafka.Consumer`. librdkafka consumer is not documented as thread-safe for concurrent commits.
+- **Risk:** Rare offset commit corruption or consumer crash under high throughput; difficult to reproduce.
+- **Recommendation:** Serialize commits on the reader goroutine (commit channel) or verify/constrain to partition-locked commits only with documented thread-safety guarantee.
+- **Effort:** M
+
+### Finding #58: `report_file_status` operator recovery runbook absent
+
+- **Severity:** Low
+- **Dimension:** Auditability / Operational Robustness
+- **Location:** `docs/operations/runbooks.md` (DLQ runbook exists; no `report_file_status` section)
+- **Description:** v1.6 #1 noted operators must use `reship_ros` for stuck files but no runbook documents SQL queries against `report_file_status`, failure classification, or recovery verification.
+- **Risk:** On-call cannot quickly determine whether a manifest is stuck vs. complete; MTTR for partial ingestion regressions.
+- **Recommendation:** Add runbook section with example queries, Prometheus alert rules, and reship procedure linked to Koku masu API.
+- **Effort:** S
+
+### Finding #59: Native recommendation detail fallback path retained as technical debt
+
+- **Severity:** Low
+- **Dimension:** Maintainability
+- **Location:** `internal/model/recommendation_set_native.go:655` (`getNativeRecommendationByIDFallback`)
+- **Description:** TODO documents a fallback query path pending `container_id` backfill verification in production. Two code paths increase test matrix and IDOR audit surface.
+- **Risk:** Fallback path may diverge from primary path filters (org scope, workload_type); regression during removal.
+- **Recommendation:** Complete backfill verification, remove fallback, add migration to enforce NOT NULL if appropriate.
+- **Effort:** M
+
+### Finding #60: `aws-sdk-go` v1 remains a direct dependency
+
+- **Severity:** Informational
+- **Dimension:** Governance / Security
+- **Location:** `go.mod:7` (`github.com/aws/aws-sdk-go v1.55.8`)
+- **Description:** AWS SDK v1 is in maintenance mode. Used for S3/MinIO operations in readiness checks and ingestion. No `govulncheck` in CI (tool not present in dev environment).
+- **Risk:** Missed CVE advisories; increasing incompatibility with modern AWS APIs.
+- **Recommendation:** Migrate to aws-sdk-go-v2; add `govulncheck` to CI workflow.
+- **Effort:** L
+
+## Priority Remediation Order
+
+Ordered by **compound risk × effort**. Findings that amplify each other are grouped.
+
+1. **#32, #33, #44** — Ingestion tracking gaps (empty manifest + Kruize path + hook failures) undermine the v1.6 data-integrity fixes
+2. **#34** — SSRF DNS fail-open compounds with allowlist-only defense (#12 mitigated)
+3. **#48, #49** — GPU API memory paths block fleet-scale adoption (1000+ clusters)
+4. **#36, #46** — Unbounded async triggers + fleet reship can cause operational incidents
+5. **#35, #37, #40** — AuthZ hardening for non-gateway postures (entitlement, internal tags, RBAC cache)
+6. **#45** — Strict analytics default aligns production with data-consistency expectations
+7. **#55, #56, #57** — Kruize/CSV/Kafka edge cases under load
+8. **#47, #58** — Operational polish (shutdown, runbooks)
+9. **#50–#54, #59, #60** — Governance, UX, and maintenance debt
+
+## Positive Observations
+
+Improvements since v1.6 worth acknowledging:
+
+| Area | Observation |
+|------|-------------|
+| **Ingestion resilience** | Native path per-file tracking, DLQ escalation, incremental digest flush, and ingest statement timeout form a coherent failure-handling story when `manifest_id` is present |
+| **API hardening** | ILIKE escape, offset cap, SSRF allowlist + private-network deny, history filter cardinality — reduce practical injection/DoS surface |
+| **Observability** | DLQ/retry metrics, analytics incomplete signaling, pool metrics, ingest flush gauges — operators can alert on real failure modes |
+| **Governance** | 162 ADRs with index, CHANGELOG with Keep a Changelog format, migration CONCURRENTLY lint — onboarding and audit trail significantly improved |
+| **Threshold recalc** | Single-flight coalescing prevents the worst recalc storms (#11/#28) |
+| **Cost cache** | Bounded LRU for effective-rates prevents unbounded memory (#29) |
+| **Plugin tests** | 14 plugin test files covering lifecycle, disabled routes, and integration paths — better than typical greenfield plugin systems |
+| **Security startup validation** | `ValidateSecurityConfig` + `ValidateTagAuthConfig` fail fast on unsafe production configs |
+| **Documentation** | DLQ runbook, large-table migration runbook, cost-integration contract, recommendation ID security invariant |
+
+## v2.0 Tracking
+
+| Finding # | Title | Severity | Status |
+|-----------|-------|----------|--------|
+| 32 | Empty manifest_id bypasses tracking/gating | High | **Resolved** |
+| 33 | Kruize path lacks report_file_status | High | Open |
+| 34 | SSRF DNS fail-open | Medium | Open |
+| 35 | No entitlement validation | Medium | Open |
+| 36 | No rate limit on async internal triggers | Medium | Open |
+| 37 | /internal/tags/status unauthenticated (db mode) | Medium | Open (was #4) |
+| 38 | Kafka debug payload logging | Low | Open |
+| 39 | Kruize debug payload logging | Low | Open |
+| 40 | RBAC cache unbounded | Low | Open |
+| 41 | Unauthenticated /metrics | Info | Accepted (NetworkPolicy) |
+| 42 | CORS allow-all origins | Low | Open |
+| 43 | Plugin ingest hooks non-fatal | Medium | Open |
+| 44 | Kruize fetch errors misclassified transient | Medium | Open |
+| 45 | Strict analytics default false | Medium | Open |
+| 46 | Org BH PUT triggers fleet reship | Medium | Open |
+| 47 | Async jobs ignore shutdown context | Low | Open |
+| 48 | GPU MIG in-memory fleet load | Medium | Open |
+| 49 | GPU time-slicing fallback in-memory | Medium | Open |
+| 50 | History CSV wrong row limit | Low | Open |
+| 51 | History wide default scan | Low | Open |
+| 52 | Fleet summary uncached aggregation | Low | Open |
+| 53 | No OpenAPI/CHANGELOG CI | Info | Open |
+| 54 | ADR drift detection absent | Info | Open |
+| 55 | Kruize shared HTTP timeout | Medium | Open |
+| 56 | CSV 512 MiB default body | Medium | Open |
+| 57 | Parallel Kafka shared committer | Low | Open |
+| 58 | report_file_status runbook missing | Low | Open |
+| 59 | Recommendation detail fallback debt | Low | Open |
+| 60 | aws-sdk-go v1 dependency | Info | Open |
+
+---
+
+*Document version: 2.0 — 2026-06-11. Fresh adversarial review; v1.6 findings #1–#31 acknowledged as resolved/mitigated except #4 → #37.*

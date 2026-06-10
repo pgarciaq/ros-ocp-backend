@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
+- Architecture Decision Records: 162 ADRs in [`docs/adr/`](docs/adr/README.md) with index, covering engine, data model, API, ingestion, plugins, cost, tags, deployment, testing, security, Kafka, and configuration decisions (adversarial review finding #30 resolved).
 - Bounded LRU cache for masu effective-rates with `ROS_COST_CACHE_MAX_ENTRIES` (default 1000) and metrics `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` (finding #29 mitigated).
 - Architecture doc for deterministic recommendation IDs and org_id detail-query invariant (finding #27 verified).
 - Threshold recalculation single-flight coalescing per `(org_id, recommendation_type)` with metric `rosocp_threshold_recalc_coalesced_total` (findings #11, #28 mitigated).
@@ -19,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Startup validation for CSV SSRF allowlist, tag dev token, and tag SA allowlist (`ValidateSecurityConfig`, `ValidateTagAuthConfig`).
 
 ### Changed
+
+- Legacy Kafka messages without `metadata.manifest_id` now receive a deterministic synthesized manifest ID (`synth-` prefix) derived from `(org_id, cluster_uuid, date)` or a payload fingerprint, enabling per-file tracking and recommendation gating. Emits `rosocp_ingest_manifest_id_synthesized_total` and a WARN log when synthesis occurs (adversarial review finding #32 resolved).
 
 - Money formatting (`FormatCentsToAmount`) uses integer cents division instead of float64 to avoid display rounding errors (finding #26 mitigated).
 - Container ingestion degraded mode now sets `clusters.analytics_incomplete`, emits structured warnings, and increments `rosocp_analytics_incomplete_total` when history or quality writes fail (adversarial review finding #9 mitigated).
