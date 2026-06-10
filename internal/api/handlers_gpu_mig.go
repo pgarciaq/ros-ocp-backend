@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
@@ -87,6 +88,13 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusOK, gpuResp)
 	}
 
+	if !engine.GPUMIGOrderColumnSupportsPagination(opts.OrderBy) {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": fmt.Sprintf("order_by %q cannot be paginated at scale; use cluster_uuid, namespace, workload, container, or gpu_model", opts.OrderBy),
+		})
+	}
+
 	cursor, hasCursor, cursorErr := applyGPUMIGCursor(c)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
@@ -95,54 +103,40 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		opts.Offset = 0
 	}
 
-	var warnings []string
-	var gpuClusterErrors []error
-	var entries []model.GPUMIGRecommendationEntry
-
-	for _, clusterUUID := range clusterUUIDs {
-		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, orgIDStr, clusterUUID, start, now, terms, nil)
-		if err != nil {
-			hlog.Warnf("GetGPUMIGRecommendations: failed for cluster %s: %v", clusterUUID, err)
-			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
-			continue
-		}
-		if gpuRecs == nil {
-			continue
-		}
-		for key, recs := range gpuRecs {
-			parts := strings.SplitN(key, "/", 3)
-			if len(parts) != 3 {
-				continue
-			}
-			ns, wl, cn := parts[0], parts[1], parts[2]
-			nodeName := nodeMap[key]
-			for _, rec := range recs {
-				if rec == nil || !rec.HasMIGRecommendation() {
-					continue
-				}
-				gpuIdle := string(rec.GPUIdleState)
-				if gpuIdle == "" {
-					gpuIdle = "active"
-				}
-				entries = append(entries, model.GPUMIGRecommendationEntry{
-					ClusterUUID:           clusterUUID,
-					Namespace:             ns,
-					Workload:              wl,
-					Container:             cn,
-					Term:                  rec.Term,
-					GPUModel:              rec.GPUModelName,
-					NodeName:              nodeName,
-					RecommendedGPUProfile: rec.RecommendedGPUProfile,
-					CurrentGPUProfile:     rec.CurrentGPUProfile,
-					Classification:        string(rec.Classification),
-					Confidence:            rec.Confidence,
-					ConfidenceLevel:       rec.Confidence,
-					GPUIdleState:          gpuIdle,
-				})
-			}
+	pageLimit := opts.Limit
+	if opts.Format == listoptions.ResponseFormatCSV {
+		pageLimit = config.GetConfig().RecordLimitCSV
+		if pageLimit <= 0 {
+			pageLimit = listoptions.MaxLimit
 		}
 	}
+	if pageLimit <= 0 {
+		pageLimit = listoptions.DefaultLimit
+	}
 
+	totalCount, err := engine.CountGPUMIGKeys(ctx, pool, clusterUUIDs, start, now)
+	if err != nil {
+		hlog.Errorf("GetGPUMIGRecommendations: count keys failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
+	}
+
+	queryLimit := pageLimit + 1
+	var seek *engine.GPUMIGKeySeek
+	if hasCursor {
+		seek = gpuMIGCursorToSeek(cursor)
+	}
+	keys, err := engine.ListGPUMIGKeysPage(
+		ctx, pool, clusterUUIDs, start, now,
+		opts.OrderBy, opts.OrderHow == listoptions.OrderDesc,
+		queryLimit, opts.Offset, seek,
+	)
+	if err != nil {
+		hlog.Errorf("GetGPUMIGRecommendations: list keys failed: %v", err)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
+	}
+
+	var warnings []string
+	entries, gpuClusterErrors := buildGPUMIGEntriesFromKeys(ctx, pool, orgIDStr, clusterUUIDs, keys, start, now, terms)
 	if len(gpuClusterErrors) > 0 {
 		hlog.Warnf("GetGPUMIGRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
 		switch len(gpuClusterErrors) {
@@ -208,11 +202,15 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = []model.GPUMIGRecommendationEntry{}
 	}
 
-	sortGPUMIGEntries(entries, opts.OrderBy, opts.OrderHow)
-	totalCount := len(entries)
-	paged, hasNext, nextCursor, pageErr := paginateGPUMIGEntries(entries, opts, cursor, hasCursor)
-	if pageErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
+	hasNext := opts.Format != listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit
+	var nextCursor string
+	paged := entries
+	if hasNext {
+		last := entries[pageLimit-1]
+		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy))
+		paged = entries[:pageLimit]
+	} else if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
+		paged = entries[:pageLimit]
 	}
 
 	setRecommendationNoStore(c)
@@ -236,6 +234,106 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, gpuResp)
+}
+
+func gpuMIGCursorToSeek(cursor GPUMIGCursor) *engine.GPUMIGKeySeek {
+	if cursor.ClusterUUID == "" {
+		return nil
+	}
+	seek := &engine.GPUMIGKeySeek{
+		ClusterUUID: cursor.ClusterUUID,
+		Namespace:   cursor.Namespace,
+		Container:   cursor.Container,
+		GPUModel:    cursor.GPUModel,
+	}
+	if len(cursor.SortValue) > 0 {
+		if sortVal, err := decodeCursorSortValue(cursor.SortValue); err == nil {
+			seek.SortValue = sortVal
+		}
+	}
+	return seek
+}
+
+func buildGPUMIGEntriesFromKeys(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	clusterUUIDs []string,
+	keys []engine.GPUMIGKey,
+	start, now time.Time,
+	terms []engine.TermConfig,
+) ([]model.GPUMIGRecommendationEntry, []error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	allowedClusters := make(map[string]struct{}, len(clusterUUIDs))
+	for _, id := range clusterUUIDs {
+		allowedClusters[id] = struct{}{}
+	}
+	keyIndex := make(map[string]map[string]engine.GPUMIGKey, len(keys))
+	clustersNeeded := make(map[string]struct{})
+	for _, k := range keys {
+		if _, ok := allowedClusters[k.ClusterUUID]; !ok {
+			continue
+		}
+		clustersNeeded[k.ClusterUUID] = struct{}{}
+		rowKey := k.Namespace + "\x00" + k.Workload + "\x00" + k.Container + "\x00" + k.GPUModel
+		if keyIndex[k.ClusterUUID] == nil {
+			keyIndex[k.ClusterUUID] = make(map[string]engine.GPUMIGKey)
+		}
+		keyIndex[k.ClusterUUID][rowKey] = k
+	}
+
+	var entries []model.GPUMIGRecommendationEntry
+	var gpuClusterErrors []error
+	for clusterUUID := range clustersNeeded {
+		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, terms, nil)
+		if err != nil {
+			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
+			continue
+		}
+		if gpuRecs == nil {
+			continue
+		}
+		index := keyIndex[clusterUUID]
+		for key, recs := range gpuRecs {
+			parts := strings.SplitN(key, "/", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			ns, wl, cn := parts[0], parts[1], parts[2]
+			nodeName := nodeMap[key]
+			for _, rec := range recs {
+				if rec == nil || !rec.HasMIGRecommendation() {
+					continue
+				}
+				rowKey := ns + "\x00" + wl + "\x00" + cn + "\x00" + rec.GPUModelName
+				if _, wanted := index[rowKey]; !wanted {
+					continue
+				}
+				gpuIdle := string(rec.GPUIdleState)
+				if gpuIdle == "" {
+					gpuIdle = "active"
+				}
+				entries = append(entries, model.GPUMIGRecommendationEntry{
+					ClusterUUID:           clusterUUID,
+					Namespace:             ns,
+					Workload:              wl,
+					Container:             cn,
+					Term:                  rec.Term,
+					GPUModel:              rec.GPUModelName,
+					NodeName:              nodeName,
+					RecommendedGPUProfile: rec.RecommendedGPUProfile,
+					CurrentGPUProfile:     rec.CurrentGPUProfile,
+					Classification:        string(rec.Classification),
+					Confidence:            rec.Confidence,
+					ConfidenceLevel:       rec.Confidence,
+					GPUIdleState:          gpuIdle,
+				})
+			}
+		}
+	}
+	return entries, gpuClusterErrors
 }
 
 func paginateGPUMIGEntries(entries []model.GPUMIGRecommendationEntry, opts listoptions.ListOptions, cursor GPUMIGCursor, hasCursor bool) ([]model.GPUMIGRecommendationEntry, bool, string, error) {

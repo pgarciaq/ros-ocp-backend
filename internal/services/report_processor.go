@@ -45,8 +45,17 @@ func nativeCSVIngestViaPlugins(ctx context.Context, pool *pgxpool.Pool, r io.Rea
 	}
 	log := logging.GetLogger()
 	for _, he := range hookErrs {
-		log.Warnf("IngestHook %s failed (non-fatal): %v", he.HookName, he.Err)
+		log.Warnf("IngestHook %s failed (non-fatal): org=%s cluster=%s %v", he.HookName, orgID, clusterUUID, he.Err)
 		PluginHookErrors.WithLabelValues(he.HookName, "after_ingest").Inc()
+	}
+	if len(hookErrs) > 0 {
+		if setErr := engine.SetClusterIngestHooksFailed(ctx, pool, orgID, clusterUUID, true); setErr != nil {
+			log.Warnf("unable to mark ingest_hooks_failed: %v", setErr)
+		}
+	} else if handled {
+		if setErr := engine.SetClusterIngestHooksFailed(ctx, pool, orgID, clusterUUID, false); setErr != nil {
+			log.Warnf("unable to clear ingest_hooks_failed: %v", setErr)
+		}
 	}
 	return handled, nil
 }

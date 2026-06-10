@@ -28,6 +28,7 @@ type Config struct {
 	UpdateKruizePerfProfile         bool   `mapstructure:"UPDATE_KRUIZE_PERF_PROFILE"`
 	APIMaxOffset                    int    `mapstructure:"ROS_API_MAX_OFFSET"`
 	Development                     bool   `mapstructure:"DEVELOPMENT"`
+	CORSAllowedOrigins              string `mapstructure:"ROS_CORS_ALLOWED_ORIGINS"`
 
 	// Kafka config
 	KafkaBootstrapServers string `mapstructure:"KAFKA_BOOTSTRAP_SERVERS"`
@@ -904,7 +905,7 @@ func validateLoadedConfig(c *Config) {
 		c.KubernetesTokenReviewURL = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
 	}
 	if c.CSVMaxBodyBytes <= 0 {
-		c.CSVMaxBodyBytes = 524288000
+		c.CSVMaxBodyBytes = 104857600 // 100 MiB
 	}
 	if c.CSVDownloadTimeoutSecs <= 0 {
 		c.CSVDownloadTimeoutSecs = 120
@@ -932,6 +933,26 @@ func (c *Config) TagsSyncBodyLimit() string {
 		return "10M"
 	}
 	return fmt.Sprintf("%dM", c.TagsSyncMaxBodyMiB)
+}
+
+// CORSAllowOrigins returns explicit CORS Allow-Origin values. When empty and DEVELOPMENT is true,
+// returns wildcard. When empty in non-development, returns nil (caller should deny cross-origin).
+func (c *Config) CORSAllowOrigins() []string {
+	if c == nil || strings.TrimSpace(c.CORSAllowedOrigins) == "" {
+		if c != nil && c.Development {
+			return []string{"*"}
+		}
+		return nil
+	}
+	parts := strings.Split(c.CORSAllowedOrigins, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func GetConfig() *Config {

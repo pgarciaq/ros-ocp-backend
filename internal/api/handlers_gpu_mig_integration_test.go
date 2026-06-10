@@ -197,24 +197,18 @@ func TestGetGPUMIGRecommendations_FilterProjectNamespaceAlias(t *testing.T) {
 	}
 }
 
-func TestGetGPUMIGRecommendations_OrderByConfidence(t *testing.T) {
+func TestGetGPUMIGRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
-		ns, wl, cn, node string
-	}{
-		{"mig-ns-1", "wl-1", "ctr-1", "gpu-node-1"},
-		{"mig-ns-2", "wl-2", "ctr-2", "gpu-node-1"},
-	})
-
 	app := setupGPUMIGEcho(pool)
-	resp := migListGET(t, app, "?order_by=confidence&order_how=desc&limit=100")
-	require.Greater(t, len(resp.Data), 0)
-	for i := 1; i < len(resp.Data); i++ {
-		assert.GreaterOrEqual(t, resp.Data[i-1].Confidence, resp.Data[i].Confidence)
-	}
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/mig?order_by=confidence&order_how=desc", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestGetGPUMIGRecommendations_InvalidOrderBy(t *testing.T) {

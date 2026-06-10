@@ -103,7 +103,7 @@ var NodeRecsAllowedOrderBy = OrderByMap{
 	"total_node_savings_usd": "total_node_savings",
 }
 
-// GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (applied in memory after query).
+// GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (SQL-backed pagination for digest keys).
 var GpuMigAllowedOrderBy = OrderByMap{
 	"cluster_uuid": "cluster_uuid",
 	"namespace":    "namespace",

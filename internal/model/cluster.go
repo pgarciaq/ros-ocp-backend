@@ -19,6 +19,8 @@ type Cluster struct {
 	LastReportedAtStr string `gorm:"-"`
 	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
 	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
+	IngestHooksFailed     bool       `gorm:"column:ingest_hooks_failed"`
+	IngestHooksFailedAt   *time.Time `gorm:"column:ingest_hooks_failed_at"`
 }
 
 func (c *Cluster) AfterFind(tx *gorm.DB) error {

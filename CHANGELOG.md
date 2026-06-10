@@ -25,6 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- GPU MIG list (`GET /recommendations/openshift/gpu/mig`) uses SQL key pagination (`ListGPUMIGKeysPage`) instead of loading all clusters into memory (finding #48 resolved).
+- GPU time-slicing list rejects unsupported `order_by` values and uses SQL triple pagination for JSON and CSV exports; in-memory fleet fallback removed (finding #49 resolved).
+- Plugin ingest hook failures set `clusters.ingest_hooks_failed` and expose `ingest_hooks_failed` / `ingest_hooks_failed_at` on container list responses (finding #43 resolved).
+- Business-hours settings changes log masu reship cluster count and return a warning when re-ingestion is triggered (finding #46 resolved).
+- `ROS_CSV_MAX_BODY_BYTES` default lowered from 512 MiB to 100 MiB (finding #56 resolved).
+- CORS middleware restricts origins via `ROS_CORS_ALLOWED_ORIGINS`; production defaults deny cross-origin unless configured (finding #42 resolved).
+
 - `ROS_INGEST_STRICT_ANALYTICS` now defaults to `true` (strict mode). Set `false` explicitly for degraded mode (finding #45 resolved).
 - Kafka consumer no longer logs message payload prefixes at DEBUG; metadata only (finding #38 resolved).
 

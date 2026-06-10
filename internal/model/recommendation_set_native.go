@@ -240,6 +240,8 @@ type NativeRecommendationRow struct {
 	LastReported time.Time `gorm:"column:last_reported_at"`
 	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
 	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
+	IngestHooksFailed     bool       `gorm:"column:ingest_hooks_failed"`
+	IngestHooksFailedAt   *time.Time `gorm:"column:ingest_hooks_failed_at"`
 
 	PageSortText *string `gorm:"column:ros_container_page_sort"`
 }
@@ -262,6 +264,8 @@ type NativeContainerResult struct {
 	LastReported            string                        `json:"last_reported"`
 	AnalyticsIncomplete     bool                          `json:"analytics_incomplete,omitempty"`
 	AnalyticsIncompleteAt   *string                       `json:"analytics_incomplete_at,omitempty"`
+	IngestHooksFailed       bool                          `json:"ingest_hooks_failed,omitempty"`
+	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
 	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
@@ -628,7 +632,8 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.monitoring_end_time,
 	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at,
-	c.analytics_incomplete, c.analytics_incomplete_at`
+	c.analytics_incomplete, c.analytics_incomplete_at,
+	c.ingest_hooks_failed, c.ingest_hooks_failed_at`
 
 // GetNativeRecommendationByID fetches a single container's recommendations
 // by its deterministic UUID. Primary path uses the indexed container_id column
@@ -797,6 +802,8 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 			LastReported:          first.LastReported.Format(time.RFC3339),
 			AnalyticsIncomplete:   first.AnalyticsIncomplete,
 			AnalyticsIncompleteAt: formatOptionalRFC3339(first.AnalyticsIncompleteAt),
+			IngestHooksFailed:     first.IngestHooksFailed,
+			IngestHooksFailedAt:   formatOptionalRFC3339(first.IngestHooksFailedAt),
 			Replicas:              replicas,
 			MonitoringEndTime:     maxMonEnd,
 			Recommendations:       make(map[string]TermRecommendation),

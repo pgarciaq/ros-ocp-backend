@@ -1045,6 +1045,7 @@ Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, defaul
 ### Finding #42: CORS middleware allows all origins by default
 
 - **Severity:** Low
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Security
 - **Location:** `internal/api/server.go:158-160`
 - **Description:** `CORSWithConfig` sets `AllowMethods` only. Echo's CORS middleware treats empty `AllowOrigins` as allow-all (`Access-Control-Allow-Origin: *`).
@@ -1052,15 +1053,20 @@ Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, defaul
 - **Recommendation:** Set explicit `AllowOrigins` to console/on-prem UI hostnames.
 - **Effort:** S
 
+**Resolution:** `ROS_CORS_ALLOWED_ORIGINS` configures explicit origins; production denies cross-origin when unset; `DEVELOPMENT=true` allows `*`.
+
 ### Finding #43: Plugin ingest hook failures are silently non-fatal
 
 - **Severity:** Medium
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Correctness
 - **Location:** `internal/plugin/dispatch.go:47-49`, `internal/services/report_processor.go:47-50`
 - **Description:** `RunIngestHooks` collects hook errors but `ProcessReport` only logs a warning and increments a counter. Ingestion is considered successful; downstream recommendations proceed with incomplete derived data (e.g., GPU digest hooks, namespace hooks).
 - **Risk:** Recommendations computed on stale or partial digest state with no API-visible degradation flag for hook failures.
 - **Recommendation:** Classify hook failures as transient (retry message) or permanent (file failure) based on error type; surface `ingest_hooks_failed` on cluster metadata.
 - **Effort:** M
+
+**Resolution:** Hook failures set `clusters.ingest_hooks_failed`; container API exposes `ingest_hooks_failed` / `ingest_hooks_failed_at`; runbook and `ros_ocp_plugin_hook_errors_total` alerting guidance added.
 
 ### Finding #44: Kruize legacy fetch errors misclassified as transient
 
@@ -1091,12 +1097,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 ### Finding #46: Business-hours org PUT triggers fleet-wide masu reship
 
 - **Severity:** Medium
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Operational Robustness
 - **Location:** `internal/api/handlers_business_hours_settings.go:355-366`, `internal/reship/trigger.go:42-61`
 - **Description:** Enabling business hours at org scope resolves all cluster UUIDs and fires async masu `reship_ros` for each (fan-out capped at `ROS_RESHIP_CONCURRENCY`, default 2). No confirmation, idempotency window, or “dry run” mode.
 - **Risk:** Accidental org-level toggle during business hours causes full historical re-ingestion across all clusters — masu/Kafka/DB load spike.
 - **Recommendation:** Require explicit `confirm_fleet_reship=true` body field for org-level enable; expose reship scope in API response before execution.
 - **Effort:** S
+
+**Resolution:** Existing `triggerReshipCoalesced` single-flight per org; WARN log with cluster count; API response warning when reship triggered.
 
 ### Finding #47: Background async jobs ignore API shutdown context
 
@@ -1111,6 +1120,7 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 ### Finding #48: GPU MIG list loads entire fleet into memory before pagination
 
 - **Severity:** Medium
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Performance
 - **Location:** `internal/api/handlers_gpu_mig.go:102-213`
 - **Description:** Handler iterates all RBAC-filtered clusters, calls `engine.QueryGPURecommendations` per cluster, accumulates all MIG entries in a slice, then sorts and paginates in Go. No SQL-level pagination equivalent to container keyset path.
@@ -1118,15 +1128,20 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 - **Recommendation:** Add SQL-backed pagination mirroring `ListNodeGPUTriplesPage` or cap cluster iteration with cursor-based cluster paging.
 - **Effort:** L
 
+**Resolution:** Handler uses `CountGPUMIGKeys` / `ListGPUMIGKeysPage` with per-page enrichment; unsupported `order_by` (term, confidence) rejected with 400.
+
 ### Finding #49: GPU time-slicing fallback path still paginates in memory
 
 - **Severity:** Medium
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Performance
 - **Location:** `internal/api/handlers_node_recs.go:119-188`
 - **Description:** When `order_by` is unsupported for triple SQL pagination or format is CSV, handler loads recommendations for all clusters (errgroup limit 5), concatenates, sorts, and slices in memory. v1.6 #22 mitigated the primary path only.
 - **Risk:** CSV export and non-standard sort keys trigger the expensive fallback at fleet scale.
 - **Recommendation:** Reject unsupported `order_by` for large fleets with 400 + guidance; implement SQL pagination for CSV path; or stream CSV from DB cursor.
 - **Effort:** M
+
+**Resolution:** In-memory fleet fallback removed; SQL triple pagination used for JSON and CSV; unsupported `order_by` returns 400.
 
 ### Finding #50: History CSV export capped at paginated limit, not `RECORD_LIMIT_CSV`
 
@@ -1192,12 +1207,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 ### Finding #56: CSV download default max body 512 MiB per file
 
 - **Severity:** Medium
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Performance / Availability
 - **Location:** `internal/utils/utils.go:33-38`
 - **Description:** `ROS_CSV_MAX_BODY_BYTES` defaults to 512 MiB. Processor reads entire CSV into memory before streaming parse (legacy path loads full dataframe).
 - **Risk:** Multi-file Kafka payloads with large CSVs can exhaust processor memory despite incremental digest flush (Finding #8 mitigated grouping, not raw CSV size).
 - **Recommendation:** Lower default to 128 MiB; stream-parse without full buffering; reject oversized files as permanent failures with metric.
 - **Effort:** M
+
+**Resolution:** Default `ROS_CSV_MAX_BODY_BYTES` lowered to 100 MiB (`104857600`); documented in configuration reference.
 
 ### Finding #57: Parallel Kafka workers share consumer for offset commit
 
@@ -1212,12 +1230,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 ### Finding #58: `report_file_status` operator recovery runbook absent
 
 - **Severity:** Low
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Auditability / Operational Robustness
 - **Location:** `docs/operations/runbooks.md` (DLQ runbook exists; no `report_file_status` section)
 - **Description:** v1.6 #1 noted operators must use `reship_ros` for stuck files but no runbook documents SQL queries against `report_file_status`, failure classification, or recovery verification.
 - **Risk:** On-call cannot quickly determine whether a manifest is stuck vs. complete; MTTR for partial ingestion regressions.
 - **Recommendation:** Add runbook section with example queries, Prometheus alert rules, and reship procedure linked to Koku masu API.
 - **Effort:** S
+
+**Resolution:** Added runbook section in `docs/operations/runbooks.md` with SQL queries, synthesized manifest ID guidance, reship procedure, and alert thresholds.
 
 ### Finding #59: Native recommendation detail fallback path retained as technical debt
 

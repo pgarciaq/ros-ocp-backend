@@ -363,6 +363,7 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 				hlog.Errorf("mark reship pending: %v", err)
 			}
 		}
+		hlog.Warnf("business-hours settings change triggered masu reship for org=%s clusters=%d", orgID, len(clusterIDs))
 		reship.TriggerAsync(h.Reship, orgID, clusterIDs)
 	}
 
@@ -371,6 +372,9 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 	}
 	if orgLevel {
 		resp.Warnings = []string{businessHoursStorageWarning}
+	}
+	if len(clusterIDs) > 0 && config.BusinessHoursFeatureEnabled() {
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Historical re-ingestion (masu reship) triggered for %d cluster(s)", len(clusterIDs)))
 	}
 
 	return c.JSON(http.StatusAccepted, resp)
@@ -445,6 +449,7 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 				hlog.Errorf("mark reship pending: %v", err)
 			}
 		}
+		hlog.Warnf("business-hours settings delete triggered masu reship for org=%s clusters=%d", orgID, len(clusterIDs))
 		reship.TriggerAsync(h.Reship, orgID, clusterIDs)
 	}
 

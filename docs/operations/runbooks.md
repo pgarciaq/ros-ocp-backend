@@ -169,6 +169,120 @@ All metrics use the `rosocp_` prefix.
 
 ---
 
+## Runbook: Plugin Ingest Hook Failures
+
+**Alert condition:** `increase(ros_ocp_plugin_hook_errors_total[1h]) > 0` or container list responses include `"ingest_hooks_failed": true`
+
+### Symptoms
+
+- Container CSV ingestion succeeded but GPU/node digest hooks failed (logged as `IngestHook <name> failed (non-fatal)`).
+- `clusters.ingest_hooks_failed` is `true` for the cluster.
+- Recommendations may proceed with stale or partial GPU/node digest data.
+
+### Diagnosis
+
+1. Check hook failure rate by plugin:
+   ```promql
+   sum by (plugin, hook_type) (increase(ros_ocp_plugin_hook_errors_total[1h]))
+   ```
+
+2. Confirm cluster flag in PostgreSQL:
+   ```sql
+   SELECT ra.org_id, c.cluster_uuid, c.ingest_hooks_failed, c.ingest_hooks_failed_at
+   FROM clusters c
+   JOIN rh_accounts ra ON ra.id = c.tenant_id
+   WHERE c.ingest_hooks_failed = true;
+   ```
+
+3. Inspect processor logs for the cluster UUID — look for `IngestHook` warnings with org and cluster context.
+
+### Resolution
+
+- Fix the underlying hook failure (DB write errors, schema mismatch, plugin misconfiguration).
+- Re-trigger ingestion for the cluster via Kafka replay or Koku masu `reship_ros`. A successful ingest with all hooks passing clears `ingest_hooks_failed`.
+
+**Operational hardening:**
+
+- Monitor `ros_ocp_plugin_hook_errors_total` alongside `rosocp_ingestion_errors_total`.
+- Treat sustained hook failures like analytics degradation: investigate before trusting GPU/node recommendations for affected clusters.
+
+---
+
+## Runbook: Partial Manifest Ingestion (`report_file_status`)
+
+**Alert condition:** `increase(ros_ingestion_file_failures_total[1h]) > 0`, recommendations missing for expected workloads, or `increase(rosocp_ingest_manifest_id_synthesized_total[1h]) > 0`
+
+### Symptoms
+
+- Kafka payload partially processed: some CSV files ingested, others permanently failed.
+- Recommendation engines gated until all expected files reach `done` state.
+- Legacy messages without `metadata.manifest_id` receive synthesized IDs (`synth-*` prefix).
+
+### Diagnosis
+
+1. List incomplete or failed manifests:
+   ```sql
+   SELECT manifest_id, filename, status, error_class, error_message, updated_at
+   FROM report_file_status
+   WHERE status IN ('failed', 'processing', 'pending')
+   ORDER BY updated_at DESC
+   LIMIT 50;
+   ```
+
+2. Check manifest completion for a specific manifest:
+   ```sql
+   SELECT status, count(*) FROM report_file_status
+   WHERE manifest_id = '<manifest-id>'
+   GROUP BY status;
+   ```
+
+3. Identify synthesized manifest IDs (legacy Kafka messages):
+   ```sql
+   SELECT manifest_id, count(*) FROM report_file_status
+   WHERE manifest_id LIKE 'synth-%'
+   GROUP BY manifest_id
+   ORDER BY max(updated_at) DESC;
+   ```
+
+4. Prometheus:
+   ```promql
+   sum by (org_id, cluster_id, report_type, error_class) (increase(ros_ingestion_file_failures_total[1h]))
+   increase(rosocp_ingest_manifest_id_synthesized_total[1h])
+   ```
+
+### Resolution
+
+1. **Investigate failed files** — check `error_class` and `error_message` in `report_file_status` (S3 403/404, corrupt CSV, parse errors).
+
+2. **Fix root cause** (object storage access, operator CSV format, missing file in payload).
+
+3. **Re-deliver failed files** via Koku masu reship (preferred):
+   ```bash
+   curl -s "http://masu-server:5042/api/cost-management/v1/reship_ros/?manifest_id=<MANIFEST_ID>"
+   ```
+
+4. **Verify recovery:**
+   ```sql
+   SELECT status, count(*) FROM report_file_status
+   WHERE manifest_id = '<manifest-id>'
+   GROUP BY status;
+   ```
+   All expected files should be `done`; recommendations should resume on the next successful ingest pass.
+
+5. **Manual status reset (last resort):** If a file was incorrectly marked `failed` and you have confirmed data is valid after a fix, delete the stale row and re-trigger reship:
+   ```sql
+   DELETE FROM report_file_status
+   WHERE manifest_id = '<manifest-id>' AND filename = '<filename>' AND status = 'failed';
+   ```
+
+### Notes
+
+- Kafka offsets commit after partial failure by design — the queue does not stall on one bad file.
+- Synthesized manifest IDs (`synth-*`) are deterministic from `(org_id, cluster_uuid, date|payload fingerprint)` and behave like real manifest IDs for gating.
+- See also [Runbook: Kafka Dead Letter Queue (DLQ) Messages](#runbook-kafka-dead-letter-queue-dlq-messages) for message-level failures.
+
+---
+
 ## Runbook: GPU Model Unrecognized
 
 **Alert condition:** `rate(rosocp_gpu_model_unrecognized_total[1h]) > 0`

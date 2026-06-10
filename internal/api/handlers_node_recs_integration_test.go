@@ -812,54 +812,17 @@ func TestGetNodeRecommendations_LimitOnePerRecommendation(t *testing.T) {
 	assert.True(t, resp.Meta.HasNext)
 }
 
-func TestGetNodeRecommendations_OrderByConfidence(t *testing.T) {
+func TestGetNodeRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
-	require.NoError(t, err)
-
-	cluster1 := "d1111111-1111-1111-1111-111111111111"
-	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
-		VALUES (1, $1, 'order-cluster', 'src-o1', now()) ON CONFLICT DO NOTHING`, cluster1)
-	require.NoError(t, err)
-
-	start := testutil.RecentStart()
-	for _, nd := range []string{"node-alpha", "node-beta"} {
-		for i := 0; i < 7; i++ {
-			for _, c := range []string{"a", "b", "c"} {
-				sm := 0.10
-				if nd == "node-beta" {
-					sm = 0.05
-				}
-				testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
-					IntervalStart: start.AddDate(0, 0, i), ClusterUUID: cluster1,
-					Namespace: "ns-" + nd, Workload: "wl-" + c, WorkloadType: "deployment",
-					ContainerName: c, GPUModelName: "NVIDIA T4", NodeName: nd,
-					SMActiveAvg: sm, DRAMActiveAvg: 0.05,
-					FBUsageMaxMiB: 2000, FBUsageAvgMiB: 1000,
-				})
-			}
-		}
-	}
-
 	app := setupNodeRecsEcho(pool)
-	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by%5Bconfidence%5D=asc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=confidence&order_how=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp model.NodeRecommendationListResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.GreaterOrEqual(t, len(resp.Data), 2)
-
-	for i := 1; i < len(resp.Data); i++ {
-		assert.LessOrEqual(t, resp.Data[i-1].Confidence, resp.Data[i].Confidence,
-			"results should be sorted by confidence ascending")
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {

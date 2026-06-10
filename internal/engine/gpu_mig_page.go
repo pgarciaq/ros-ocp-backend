@@ -26,6 +26,16 @@ type GPUMIGKeySeek struct {
 	GPUModel    string
 }
 
+// GPUMIGOrderColumnSupportsPagination reports whether ORDER BY can be pushed to SQL key pagination.
+func GPUMIGOrderColumnSupportsPagination(orderByColumn string) bool {
+	switch orderByColumn {
+	case "cluster_uuid", "namespace", "workload", "container", "gpu_model":
+		return true
+	default:
+		return false
+	}
+}
+
 func gpuMIGPageOrderExpr(orderBy string, desc bool) string {
 	col := "page_keys.cluster_uuid::text"
 	switch orderBy {

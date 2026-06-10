@@ -170,9 +170,15 @@ func StartAPIServer(ctx context.Context) {
 	}))
 	app.Use(middleware.RequestID())
 	app.Use(middleware.RequestLogger())
-	app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+	corsCfg := middleware.CORSConfig{
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},
-	}))
+	}
+	if origins := cfg.CORSAllowOrigins(); len(origins) > 0 {
+		corsCfg.AllowOrigins = origins
+	} else if !cfg.Development {
+		corsCfg.AllowOriginFunc = func(_ string) (bool, error) { return false, nil }
+	}
+	app.Use(middleware.CORSWithConfig(corsCfg))
 
 	app.GET("/status", GetAppStatus)
 	app.GET("/readyz", GetReadyz)

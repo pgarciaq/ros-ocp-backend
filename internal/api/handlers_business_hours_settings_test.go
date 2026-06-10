@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -578,8 +579,9 @@ func TestSettingsAPI_PUT_ResponseIncludesStorageWarning(t *testing.T) {
 
 	var resp businessHoursPutResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Warnings, 1)
+	require.GreaterOrEqual(t, len(resp.Warnings), 1)
 	assert.Contains(t, resp.Warnings[0], "doubles digest storage")
+	assert.Contains(t, strings.Join(resp.Warnings, " "), "re-ingestion")
 }
 
 func TestSettingsAPI_PUT_DayNameCaseSensitive(t *testing.T) {

@@ -33,7 +33,7 @@ var csvDownloadHTTPClientSingleton *http.Client
 func csvMaxBodyBytes() int64 {
 	n := config.GetConfig().CSVMaxBodyBytes
 	if n <= 0 {
-		return 512 * 1024 * 1024
+		return 104857600 // 100 MiB
 	}
 	return n
 }
