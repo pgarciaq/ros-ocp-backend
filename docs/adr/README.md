@@ -171,3 +171,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0160](0160-savings-estimates-kill-switch.md) | Use ROS_SAVINGS_ESTIMATES_ENABLED global kill-switch | Configuration | Accepted |
 | [0161](0161-staleness-threshold-hours-alias.md) | Use ROS_STALENESS_THRESHOLD_HOURS=48 with alias | Configuration | Accepted |
 | [0162](0162-housekeeper-graceful-shutdown.md) | Use housekeeper graceful shutdown with configurable grace period | Configuration | Accepted |
+| [0163](0163-deprecate-kruize-plugin.md) | Deprecate and remove the Kruize plugin | Plugins | Accepted |
