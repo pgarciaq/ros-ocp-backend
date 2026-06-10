@@ -91,7 +91,7 @@ func TestMapQueryParametersKokuFilterSyntax(t *testing.T) {
 
 	result, err := MapQueryParameters(c)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"%alpha%"}, result["workloads.namespace ILIKE ?"])
+	assert.Equal(t, []string{"%alpha%"}, result["workloads.namespace ILIKE ? ESCAPE '\\'"])
 	assert.Equal(t, []string{"deployment"}, result["LOWER(workloads.workload_type) = ?"])
 }
 
@@ -104,7 +104,7 @@ func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
 	result, err := MapNativeQueryParameters(c)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"550e8400-e29b-41d4-a716-446655440000"}, result["c.cluster_uuid = ?"])
-	assert.Equal(t, []string{"%payments%"}, result["rs.namespace ILIKE ?"])
+	assert.Equal(t, []string{"%payments%"}, result["rs.namespace ILIKE ? ESCAPE '\\'"])
 }
 
 func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
@@ -123,7 +123,7 @@ func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"filter[workload]": {"my-app (prod)"}},
 			wantErr:     false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"%my-app (prod)%"}, result[workloadCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%my-app (prod)%"}, result[workloadCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -131,7 +131,7 @@ func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				assert.Equal(t, []string{"deployment"}, result["LOWER("+workloadTypeCol+") = ?"])
-				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
+				assert.Nil(t, result[workloadTypeCol+" ILIKE ? ESCAPE '\\'"], "workload_type plain param must not use ILIKE")
 			},
 		},
 		{
@@ -211,7 +211,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "container include (partial match)",
 			queryParams: map[string][]string{"filter[container]": {"web-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -258,7 +258,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"filter[workload_type]": {"deployment"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
 				assert.Equal(t, []string{"deployment"}, result["LOWER("+workloadTypeCol+") = ?"])
-				assert.Nil(t, result[workloadTypeCol+" ILIKE ?"], "workload_type plain param must not use ILIKE")
+				assert.Nil(t, result[workloadTypeCol+" ILIKE ? ESCAPE '\\'"], "workload_type plain param must not use ILIKE")
 			},
 		},
 		{
@@ -305,7 +305,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "project koku filter bracket syntax",
 			queryParams: map[string][]string{"filter[project]": {"payments,frontend"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := projectContainerCol + " ILIKE ? OR " + projectContainerCol + " ILIKE ?"
+				key := projectContainerCol + " ILIKE ? ESCAPE '\\' OR " + projectContainerCol + " ILIKE ? ESCAPE '\\'"
 				assert.Equal(t, []string{"%payments%", "%frontend%"}, result[key])
 			},
 		},
@@ -313,14 +313,14 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "container koku filter partial match",
 			queryParams: map[string][]string{"filter[container]": {"web-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%web-server%"}, result[containerCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
 			name:        "container partial match multiple values",
 			queryParams: map[string][]string{"filter[container]": {"web-server", "api-server"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := containerCol + " ILIKE ? OR " + containerCol + " ILIKE ?"
+				key := containerCol + " ILIKE ? ESCAPE '\\' OR " + containerCol + " ILIKE ? ESCAPE '\\'"
 				assert.Equal(t, []string{"%web-server%", "%api-server%"}, result[key])
 			},
 		},
@@ -336,7 +336,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "workload partial match multiple values",
 			queryParams: map[string][]string{"filter[workload]": {"cart-svc", "pay-svc"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := workloadCol + " ILIKE ? OR " + workloadCol + " ILIKE ?"
+				key := workloadCol + " ILIKE ? ESCAPE '\\' OR " + workloadCol + " ILIKE ? ESCAPE '\\'"
 				assert.Equal(t, []string{"%cart-svc%", "%pay-svc%"}, result[key])
 			},
 		},
@@ -344,7 +344,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			name:        "project partial match multiple values",
 			queryParams: map[string][]string{"filter[project]": {"ns-alpha", "ns-beta"}},
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := projectContainerCol + " ILIKE ? OR " + projectContainerCol + " ILIKE ?"
+				key := projectContainerCol + " ILIKE ? ESCAPE '\\' OR " + projectContainerCol + " ILIKE ? ESCAPE '\\'"
 				assert.Equal(t, []string{"%ns-alpha%", "%ns-beta%"}, result[key])
 			},
 		},
@@ -353,7 +353,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"filter[container]": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := containerCol + " ILIKE ?"
+				key := containerCol + " ILIKE ? ESCAPE '\\'"
 				val, ok := result[key]
 				assert.True(t, ok, "oversized container should still produce a clause")
 				assert.Equal(t, []string{"%" + strings.Repeat("a", model.NamespaceMaxLen+1) + "%"}, val)
@@ -364,7 +364,7 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			queryParams: map[string][]string{"filter[project]": {strings.Repeat("a", model.NamespaceMaxLen+1)}},
 			wantErr:     false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				key := projectContainerCol + " ILIKE ?"
+				key := projectContainerCol + " ILIKE ? ESCAPE '\\'"
 				val, ok := result[key]
 				assert.True(t, ok, "oversized project should still produce a clause")
 				assert.Equal(t, []string{"%" + strings.Repeat("a", model.NamespaceMaxLen+1) + "%"}, val)
@@ -378,8 +378,8 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, result map[string]interface{}) {
-				assert.Contains(t, result, containerCol+" ILIKE ?")
-				assert.Contains(t, result, projectContainerCol+" ILIKE ?")
+				assert.Contains(t, result, containerCol+" ILIKE ? ESCAPE '\\'")
+				assert.Contains(t, result, projectContainerCol+" ILIKE ? ESCAPE '\\'")
 			},
 		},
 	}
@@ -487,7 +487,7 @@ func TestBuildSQLClauseWithFilterType(t *testing.T) {
 			column:      projectCol,
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 1)
-				key := projectCol + " ILIKE ?"
+				key := projectCol + " ILIKE ? ESCAPE '\\'"
 				assert.Contains(t, clause, key)
 				assert.Equal(t, []string{"%foo%"}, clause[key])
 			},
@@ -534,8 +534,8 @@ func TestBuildSQLClauseWithFilterType(t *testing.T) {
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 1)
-				assert.Contains(t, clause, "clusters.cluster_alias ILIKE ?")
-				assert.Equal(t, []string{"%foo-cluster%"}, clause["clusters.cluster_alias ILIKE ?"])
+				assert.Contains(t, clause, "clusters.cluster_alias ILIKE ? ESCAPE '\\'")
+				assert.Equal(t, []string{"%foo-cluster%"}, clause["clusters.cluster_alias ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -640,7 +640,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 2)
 				assert.Equal(t, []string{"bar"}, clause[projectCol+" = ?"])
-				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -649,7 +649,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			includeVals: []string{"foo", "bar"},
 			column:      projectCol,
 			checkClause: func(t *testing.T, clause map[string]any) {
-				key := projectCol + " ILIKE ? OR " + projectCol + " ILIKE ?"
+				key := projectCol + " ILIKE ? ESCAPE '\\' OR " + projectCol + " ILIKE ? ESCAPE '\\'"
 				assert.Contains(t, clause, key)
 				assert.Equal(t, []string{"%foo%", "%bar%"}, clause[key])
 			},
@@ -663,7 +663,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 2)
 				assert.Equal(t, []string{"bar"}, clause[projectCol+" != ?"])
-				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -674,7 +674,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 2)
-				assert.Equal(t, []string{"%prod%"}, clause["clusters.cluster_alias ILIKE ?"])
+				assert.Equal(t, []string{"%prod%"}, clause["clusters.cluster_alias ILIKE ? ESCAPE '\\'"])
 				assert.Equal(t, []string{"dev"}, clause["clusters.cluster_alias = ?"])
 			},
 		},
@@ -689,7 +689,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 				assert.Len(t, clause, 3)
 				assert.Equal(t, []string{"staging"}, clause["clusters.cluster_alias != ?"])
 				assert.Equal(t, []string{"dev"}, clause["clusters.cluster_alias = ?"])
-				assert.Equal(t, []string{"%prod%"}, clause["clusters.cluster_alias ILIKE ?"])
+				assert.Equal(t, []string{"%prod%"}, clause["clusters.cluster_alias ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -703,7 +703,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 				assert.Len(t, clause, 3)
 				assert.Equal(t, []string{"baz"}, clause[projectCol+" != ?"])
 				assert.Equal(t, []string{"bar"}, clause[projectCol+" = ?"])
-				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ?"])
+				assert.Equal(t, []string{"%foo%"}, clause[projectCol+" ILIKE ? ESCAPE '\\'"])
 			},
 		},
 		{
@@ -724,7 +724,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			includeVals: []string{"prod", "dev"},
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
-				key := "clusters.cluster_alias ILIKE ? OR clusters.cluster_alias ILIKE ?"
+				key := "clusters.cluster_alias ILIKE ? ESCAPE '\\' OR clusters.cluster_alias ILIKE ? ESCAPE '\\'"
 				assert.Contains(t, clause, key)
 				assert.Equal(t, []string{"%prod%", "%dev%"}, clause[key])
 			},

@@ -67,7 +67,7 @@ var FilterModeClause = map[string]struct {
 	Wrap   bool
 	Join   string
 }{
-	FilterModeInclude: {" ILIKE ?", true, " OR "},
+	FilterModeInclude: {" ILIKE ? ESCAPE '\\'", true, " OR "},
 	FilterModeExact:   {" = ?", false, " OR "},
 	FilterModeExclude: {" != ?", false, " AND "},
 }

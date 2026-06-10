@@ -8,6 +8,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 func TestSQLOrderByFragment(t *testing.T) {
@@ -111,4 +113,25 @@ func TestListAPIOptions_KokuOrderBySyntax(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ContainerAllowedOrderBy["container"], opts.OrderBy)
 	assert.Equal(t, OrderAsc, opts.OrderHow)
+}
+
+func TestListAPIOptions_OffsetValidation(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_API_MAX_OFFSET", "10000")
+	_ = config.GetConfig()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?offset=10001", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	_, err := ListAPIOptions(c, DefaultContainerRecsDBColumn, ContainerAllowedOrderBy)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "offset exceeds maximum")
+}
+
+func TestParseOffset_WithinLimit(t *testing.T) {
+	offset, err := parseOffset("5000", 10000)
+	require.NoError(t, err)
+	assert.Equal(t, 5000, offset)
 }

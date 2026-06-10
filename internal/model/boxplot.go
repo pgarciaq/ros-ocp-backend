@@ -48,14 +48,14 @@ const (
 	BucketGranularityDaily
 )
 
-func (bg BucketGranularity) sql() string {
+func (bg BucketGranularity) sql() (string, error) {
 	switch bg {
 	case BucketGranularity6Hour:
-		return "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'"
+		return "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'", nil
 	case BucketGranularityDaily:
-		return "date_trunc('day', sample_time AT TIME ZONE 'UTC')"
+		return "date_trunc('day', sample_time AT TIME ZONE 'UTC')", nil
 	default:
-		panic(fmt.Sprintf("unhandled BucketGranularity: %d", bg))
+		return "", fmt.Errorf("unhandled BucketGranularity: %d", bg)
 	}
 }
 
@@ -165,6 +165,11 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	end := time.Now().UTC()
 	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
 
+	bucketSQL, err := tw.Bucket.sql()
+	if err != nil {
+		return nil, fmt.Errorf("bucket granularity: %w", err)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			%s AS bucket,
@@ -184,7 +189,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 		  AND sample_time >= $6 AND sample_time < $7
 		GROUP BY bucket
 		ORDER BY bucket`,
-		tw.Bucket.sql())
+		bucketSQL)
 
 	rows, err := pool.Query(ctx, query,
 		key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.ContainerName,
@@ -253,6 +258,10 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 			continue
 		}
 		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+		bucketSQL, err := tw.Bucket.sql()
+		if err != nil {
+			return nil, fmt.Errorf("bucket granularity for %s: %w", termName, err)
+		}
 		unionParts = append(unionParts, fmt.Sprintf(`
 			SELECT '%s' AS term_name,
 				%s AS bucket,
@@ -270,7 +279,7 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
 			  AND workload = $4 AND container_name = $5
 			  AND sample_time >= $%d AND sample_time < $6
-			GROUP BY bucket`, termName, tw.Bucket.sql(), argN))
+			GROUP BY bucket`, termName, bucketSQL, argN))
 		args = append(args, start)
 		argN++
 	}
@@ -361,6 +370,11 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 	end := time.Now().UTC()
 	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
 
+	bucketSQL, err := tw.Bucket.sql()
+	if err != nil {
+		return nil, fmt.Errorf("bucket granularity: %w", err)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			%s AS bucket,
@@ -379,7 +393,7 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		  AND sample_time >= $4 AND sample_time < $5
 		GROUP BY bucket
 		ORDER BY bucket`,
-		tw.Bucket.sql())
+		bucketSQL)
 
 	rows, err := pool.Query(ctx, query,
 		key.OrgID, key.ClusterUUID, key.Namespace,
@@ -448,6 +462,10 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 			continue
 		}
 		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+		bucketSQL, err := tw.Bucket.sql()
+		if err != nil {
+			return nil, fmt.Errorf("bucket granularity for %s: %w", termName, err)
+		}
 		unionParts = append(unionParts, fmt.Sprintf(`
 			SELECT '%s' AS term_name,
 				%s AS bucket,
@@ -464,7 +482,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 			FROM namespace_usage_samples
 			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
 			  AND sample_time >= $%d AND sample_time < $4
-			GROUP BY bucket`, termName, tw.Bucket.sql(), argN))
+			GROUP BY bucket`, termName, bucketSQL, argN))
 		args = append(args, start)
 		argN++
 	}

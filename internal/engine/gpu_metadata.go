@@ -37,23 +37,30 @@ type gpuCatalogFile struct {
 	Models map[string]GPUModelSpec `yaml:"models"`
 }
 
-// gpuModels is the loaded GPU catalog. Populated by init().
+// gpuModels is the loaded GPU catalog. Populated by loadGPUCatalog().
 var gpuModels map[string]GPUModelSpec
 
-func init() {
+func loadGPUCatalog() error {
 	var catalog gpuCatalogFile
 	if err := yaml.Unmarshal(gpuCatalogYAML, &catalog); err != nil {
-		panic(fmt.Sprintf("gpu_catalog.yaml: parse error: %v", err))
+		return fmt.Errorf("gpu_catalog.yaml: parse error: %w", err)
 	}
-	gpuModels = make(map[string]GPUModelSpec, len(catalog.Models))
+	models := make(map[string]GPUModelSpec, len(catalog.Models))
 	for key, spec := range catalog.Models {
-		// Compute MIG profile fractions from slice counts.
 		if spec.MIGSupported {
 			for i := range spec.Profiles {
 				spec.Profiles[i].ComputeFrac = migFrac(spec.Profiles[i].Slices)
 			}
 		}
-		gpuModels[key] = spec
+		models[key] = spec
+	}
+	gpuModels = models
+	return nil
+}
+
+func init() {
+	if err := loadGPUCatalog(); err != nil {
+		logging.GetLogger().Fatal(err)
 	}
 }
 

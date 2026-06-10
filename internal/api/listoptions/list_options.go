@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 const (
@@ -135,14 +136,18 @@ var NsAllowedOrderBy = OrderByMap{
 	"memory_variation_long_performance":   "namespace_recommendation_sets.memory_variation_long_performance_pct",
 }
 
-func parseOffset(val string) int {
+func parseOffset(val string, maxOffset int) (int, error) {
 	if val == "" {
-		return DefaultOffset
+		return DefaultOffset, nil
 	}
-	if i, err := strconv.Atoi(val); err == nil && i >= 0 {
-		return i
+	i, err := strconv.Atoi(val)
+	if err != nil || i < 0 {
+		return DefaultOffset, nil
 	}
-	return DefaultOffset
+	if maxOffset > 0 && i > maxOffset {
+		return 0, fmt.Errorf("offset exceeds maximum allowed value of %d; use cursor/keyset pagination for deeper result sets", maxOffset)
+	}
+	return i, nil
 }
 
 func parseLimit(val string) (int, error) {
@@ -171,7 +176,10 @@ func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy Order
 	if err != nil {
 		return ListOptions{}, err
 	}
-	offset := parseOffset(c.QueryParam("offset"))
+	offset, err := parseOffset(c.QueryParam("offset"), config.GetConfig().APIMaxOffset)
+	if err != nil {
+		return ListOptions{}, err
+	}
 
 	defaultAPIField := ""
 	for apiField, dbCol := range allowedOrderBy {

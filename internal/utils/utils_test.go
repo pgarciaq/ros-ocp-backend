@@ -15,6 +15,10 @@ import (
 )
 
 func TestValidateCSVDownloadURLHTTPS(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "true")
+	_ = config.GetConfig()
+
 	u, err := validateCSVDownloadURL("https://bucket.s3.amazonaws.com/object.csv")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -25,6 +29,10 @@ func TestValidateCSVDownloadURLHTTPS(t *testing.T) {
 }
 
 func TestValidateCSVDownloadURLRejectsFTP(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "true")
+	_ = config.GetConfig()
+
 	_, err := validateCSVDownloadURL("ftp://evil.example/x.csv")
 	if err == nil {
 		t.Fatal("expected error")
@@ -33,6 +41,7 @@ func TestValidateCSVDownloadURLRejectsFTP(t *testing.T) {
 
 func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
 	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "good.example,other.example")
 	_ = config.GetConfig()
 
@@ -49,6 +58,8 @@ func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
 func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
 	config.ResetForTest()
 	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +76,8 @@ func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
 func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
 	config.ResetForTest()
 	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	t.Setenv("ROS_CSV_MAX_BODY_BYTES", "16")
 	_ = config.GetConfig()
 
@@ -190,6 +203,8 @@ func TestUnique(t *testing.T) {
 func TestReadCSVFromUrl(t *testing.T) {
 	config.ResetForTest()
 	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
 
 	testdata := "container_name,cpu_request_avg_container\nros,23\ntest_container,24"

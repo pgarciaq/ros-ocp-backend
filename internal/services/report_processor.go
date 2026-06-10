@@ -67,12 +67,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	validate := validator.New()
 
 	commitOnPermanentFailure := func(reason string) {
-		payload := string(msg.Value)
-		const maxPayloadLog = 65536
-		if len(payload) > maxPayloadLog {
-			payload = payload[:maxPayloadLog] + "…(truncated)"
-		}
-		log.Warnf("committing poison message (partition=%s, reason=%s); payload for manual recovery=%s", msg.TopicPartition, reason, payload)
+		logPoisonMessage(log, msg, reason, nil)
 		if consumer != nil {
 			if _, err := consumer.CommitMessage(msg); err != nil {
 				log.Errorf("unable to commit poison message: %v", err)

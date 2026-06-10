@@ -68,11 +68,11 @@ func TestNativeQueryAllowlist_MapNativeQueryParameters(t *testing.T) {
 
 	// Wrapped-parens composite (single-column OR) still resolves to allowlisted atoms.
 	require.True(t, model.IsAllowedNativeRecommendationQueryKey(
-		"(rs.namespace ILIKE ? OR rs.namespace ILIKE ? OR rs.namespace ILIKE ?)"))
+		"(rs.namespace ILIKE ? ESCAPE '\\' OR rs.namespace ILIKE ? ESCAPE '\\' OR rs.namespace ILIKE ? ESCAPE '\\')"))
 	require.True(t, model.IsAllowedNativeRecommendationQueryKey(
-		"(rs.workload ILIKE ? AND rs.workload ILIKE ?)"))
+		"(rs.workload ILIKE ? ESCAPE '\\' AND rs.workload ILIKE ? ESCAPE '\\')"))
 	require.True(t, model.IsAllowedNativeRecommendationQueryKey(
-		"(rs.namespace ILIKE ? OR rs.workload ILIKE ?)"))
+		"(rs.namespace ILIKE ? ESCAPE '\\' OR rs.workload ILIKE ? ESCAPE '\\')"))
 }
 
 func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
@@ -97,9 +97,9 @@ func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 	assert.Equal(t, true, paramsStale["ns.stale = ?"])
 
 	require.True(t, model.IsAllowedNativeNamespaceQueryKey(
-		"(ns.namespace_name ILIKE ? OR ns.namespace_name ILIKE ?)"))
+		"(ns.namespace_name ILIKE ? ESCAPE '\\' OR ns.namespace_name ILIKE ? ESCAPE '\\')"))
 	require.True(t, model.IsAllowedNativeNamespaceQueryKey(
-		"(c.cluster_alias ILIKE ? OR c.cluster_uuid = ?)"))
+		"(c.cluster_alias ILIKE ? ESCAPE '\\' OR c.cluster_uuid = ?)"))
 }
 
 func TestNativeQueryAllowlist_MapQualityQueryParameters(t *testing.T) {
@@ -146,8 +146,8 @@ func TestNativeQueryAllowlist_GPUFilters(t *testing.T) {
 	require.NoError(t, err)
 	assertAllNativeRecKeysAllowed(t, params)
 
-	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ?"))
-	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ? OR rs.gpu_model_name ILIKE ?"))
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ? ESCAPE '\\'"))
+	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_model_name ILIKE ? ESCAPE '\\' OR rs.gpu_model_name ILIKE ? ESCAPE '\\'"))
 	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.gpu_classification IN ?"))
 	require.True(t, model.IsAllowedNativeRecommendationQueryKey("rs.has_gpu = ?"))
 }

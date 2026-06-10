@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"gopkg.in/yaml.v3"
 )
@@ -31,14 +32,22 @@ type vgpuProfilesFile struct {
 
 var vgpuModels map[string]VGPUModelSpec
 
-func init() {
+func loadVGPUProfiles() error {
 	var catalog vgpuProfilesFile
 	if err := yaml.Unmarshal(vgpuProfilesYAML, &catalog); err != nil {
-		panic(fmt.Sprintf("vgpu_profiles.yaml: parse error: %v", err))
+		return fmt.Errorf("vgpu_profiles.yaml: parse error: %w", err)
 	}
-	vgpuModels = make(map[string]VGPUModelSpec, len(catalog.Models))
+	models := make(map[string]VGPUModelSpec, len(catalog.Models))
 	for key, spec := range catalog.Models {
-		vgpuModels[key] = spec
+		models[key] = spec
+	}
+	vgpuModels = models
+	return nil
+}
+
+func init() {
+	if err := loadVGPUProfiles(); err != nil {
+		logging.GetLogger().Fatal(err)
 	}
 }
 

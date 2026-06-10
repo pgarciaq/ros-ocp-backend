@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,33 +53,6 @@ func csvDownloadHTTPClient() *http.Client {
 		},
 	}
 	return csvDownloadHTTPClientSingleton
-}
-
-func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, fmt.Errorf("parse CSV URL: %w", err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("CSV URL scheme must be http or https")
-	}
-	host := u.Hostname()
-	if host == "" {
-		return nil, fmt.Errorf("CSV URL must include a host")
-	}
-	if allowed := strings.TrimSpace(config.GetConfig().CSVAllowedHosts); allowed != "" {
-		ok := false
-		for _, h := range strings.Split(allowed, ",") {
-			if strings.EqualFold(strings.TrimSpace(h), host) {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			return nil, fmt.Errorf("CSV URL host %q is not allowed by ROS_CSV_ALLOWED_HOSTS", host)
-		}
-	}
-	return u, nil
 }
 
 func getCSVHTTPResponse(rawURL string) (*http.Response, error) {

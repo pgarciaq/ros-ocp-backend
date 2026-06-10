@@ -28,6 +28,14 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
 )
 
+// escapeILIKE escapes ILIKE wildcard characters so user input is matched literally.
+func escapeILIKE(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
 func CollectionResponse(collection []interface{}, req *http.Request, count, limit, offset int) *Collection {
 	var first, previous, next, last string
 	q := req.URL.Query()
@@ -295,7 +303,7 @@ func parseClusterParams(value string, mode string) ([]string, []string, error) {
 	}
 	s := value
 	if modeClause.Wrap {
-		s = "%" + s + "%"
+		s = "%" + escapeILIKE(s) + "%"
 	}
 	return []string{"clusters.cluster_alias" + modeClause.Suffix}, []string{s}, nil
 }
@@ -332,7 +340,7 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 				s = strings.ToLower(s)
 			}
 			if modeClause.Wrap {
-				s = "%" + s + "%"
+				s = "%" + escapeILIKE(s) + "%"
 			}
 			allParamVals = append(allParamVals, s)
 			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))
@@ -550,7 +558,7 @@ func parseNativeClusterParams(value string, mode string) ([]string, []string, er
 		return nil, nil, err
 	}
 	if modeClause.Wrap {
-		s = "%" + s + "%"
+		s = "%" + escapeILIKE(s) + "%"
 	}
 	return []string{"c.cluster_alias" + modeClause.Suffix}, []string{s}, nil
 }
@@ -589,7 +597,7 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 				s = strings.ToLower(s)
 			}
 			if modeClause.Wrap {
-				s = "%" + s + "%"
+				s = "%" + escapeILIKE(s) + "%"
 			}
 			allParamVals = append(allParamVals, s)
 			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))

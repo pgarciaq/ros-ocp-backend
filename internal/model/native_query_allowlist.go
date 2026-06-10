@@ -40,23 +40,23 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 var nativeRecFilterAtoms = map[string]struct{}{
 	"c.cluster_uuid = ?":        {},
 	"c.cluster_uuid != ?":       {},
-	"c.cluster_alias ILIKE ?":   {},
-	"c.cluster_alias != ?":      {},
-	"rs.namespace ILIKE ?":      {},
+	"c.cluster_alias ILIKE ? ESCAPE '\\'": {},
+	"c.cluster_alias != ?":              {},
+	"rs.namespace ILIKE ? ESCAPE '\\'":      {},
 	"rs.namespace = ?":          {},
 	"rs.namespace != ?":         {},
-	"rs.workload ILIKE ?":       {},
+	"rs.workload ILIKE ? ESCAPE '\\'":       {},
 	"rs.workload = ?":           {},
 	"rs.workload != ?":          {},
-	"rs.workload_type ILIKE ?":   {},
+	"rs.workload_type ILIKE ? ESCAPE '\\'":   {},
 	"rs.workload_type = ?":       {},
 	"rs.workload_type != ?":      {},
 	"LOWER(rs.workload_type) = ?":  {},
 	"LOWER(rs.workload_type) != ?": {},
-	"rs.container_name ILIKE ?": {},
+	"rs.container_name ILIKE ? ESCAPE '\\'": {},
 	"rs.container_name = ?":     {},
 	"rs.container_name != ?":    {},
-	"rs.gpu_model_name ILIKE ?": {},
+	"rs.gpu_model_name ILIKE ? ESCAPE '\\'": {},
 }
 
 // Keys from MapNativeNamespaceQueryParameters for namespace_recommendation_sets (ns alias).
@@ -71,9 +71,9 @@ var nativeNSFixedQueryKeys = map[string]struct{}{
 var nativeNSFilterAtoms = map[string]struct{}{
 	"c.cluster_uuid = ?":        {},
 	"c.cluster_uuid != ?":       {},
-	"c.cluster_alias ILIKE ?":   {},
-	"c.cluster_alias != ?":      {},
-	"ns.namespace_name ILIKE ?": {},
+	"c.cluster_alias ILIKE ? ESCAPE '\\'": {},
+	"c.cluster_alias != ?":              {},
+	"ns.namespace_name ILIKE ? ESCAPE '\\'": {},
 	"ns.namespace_name = ?":     {},
 	"ns.namespace_name != ?":    {},
 }

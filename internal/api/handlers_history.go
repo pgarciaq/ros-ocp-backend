@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -28,6 +29,17 @@ var HistoryAllowedOrderBy = listoptions.OrderByMap{
 }
 
 const defaultHistoryOrderBy = "h.recorded_at"
+
+func checkHistoryFilterCardinality(param string, values []string) error {
+	max := config.GetConfig().MaxCountPerQueryParam
+	if max <= 0 {
+		max = 5
+	}
+	if len(values) > max {
+		return fmt.Errorf("too many %s parameters, a maximum of %d is allowed", param, max)
+	}
+	return nil
+}
 
 // MapHistoryQueryParameters parses query params for the history endpoint.
 // Uses the same date/filter pattern as MapNativeQueryParameters but with
@@ -62,21 +74,39 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	if clusters := queryparams.IncludeValues(c, "cluster"); len(clusters) > 0 {
+		if err := checkHistoryFilterCardinality("cluster", clusters); err != nil {
+			return queryParams, err
+		}
 		queryParams["c.cluster_alias IN ?"] = clusters
 	}
 	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
+		if err := checkHistoryFilterCardinality("project", projects); err != nil {
+			return queryParams, err
+		}
 		queryParams["h.namespace IN ?"] = projects
 	}
 	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
+		if err := checkHistoryFilterCardinality("workload", workloads); err != nil {
+			return queryParams, err
+		}
 		queryParams["h.workload IN ?"] = workloads
 	}
 	if containers := queryparams.IncludeValues(c, "container"); len(containers) > 0 {
+		if err := checkHistoryFilterCardinality("container", containers); err != nil {
+			return queryParams, err
+		}
 		queryParams["h.container_name IN ?"] = containers
 	}
 	if terms := queryparams.IncludeValues(c, "term"); len(terms) > 0 {
+		if err := checkHistoryFilterCardinality("term", terms); err != nil {
+			return queryParams, err
+		}
 		queryParams["h.term IN ?"] = terms
 	}
 	if engines := queryparams.IncludeValues(c, "engine"); len(engines) > 0 {
+		if err := checkHistoryFilterCardinality("engine", engines); err != nil {
+			return queryParams, err
+		}
 		queryParams["h.engine IN ?"] = engines
 	}
 	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {
