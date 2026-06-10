@@ -39,10 +39,11 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		 VALUES (1, $1, 'node-test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterUUID)
 	require.NoError(t, err)
 
-	start := testutil.RecentStart()
-	end := start.AddDate(0, 0, 7)
+	now := time.Now().UTC()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -30)
+	end := start.AddDate(0, 0, 29)
 
-	seedNodeDigests(t, pool, orgID, clusterUUID, start, 8)
+	seedNodeDigests(t, pool, orgID, clusterUUID, start, 30)
 
 	t.Run("QueryNodeDigests returns seeded data", func(t *testing.T) {
 		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end.AddDate(0, 0, 1))
