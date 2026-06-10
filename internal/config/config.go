@@ -26,6 +26,8 @@ type Config struct {
 	CSVStreamInterval               int    `mapstructure:"CSV_STREAM_INTERVAL"`
 	MaxCountPerQueryParam           int    `mapstructure:"MAXIMUM_COUNT_PER_QUERY_PARAM"`
 	UpdateKruizePerfProfile         bool   `mapstructure:"UPDATE_KRUIZE_PERF_PROFILE"`
+	APIMaxOffset                    int    `mapstructure:"ROS_API_MAX_OFFSET"`
+	Development                     bool   `mapstructure:"DEVELOPMENT"`
 
 	// Kafka config
 	KafkaBootstrapServers string `mapstructure:"KAFKA_BOOTSTRAP_SERVERS"`
@@ -374,6 +376,9 @@ type Config struct {
 	CSVMaxBodyBytes        int64  `mapstructure:"ROS_CSV_MAX_BODY_BYTES"`
 	CSVDownloadTimeoutSecs int    `mapstructure:"ROS_CSV_DOWNLOAD_TIMEOUT_SECS"`
 	CSVAllowedHosts        string `mapstructure:"ROS_CSV_ALLOWED_HOSTS"`
+	CSVDenyPrivateNetworks bool   `mapstructure:"ROS_CSV_DENY_PRIVATE_NETWORKS"`
+	LogPoisonPayload       bool   `mapstructure:"ROS_LOG_POISON_PAYLOAD"`
+	HousekeeperShutdownGraceSecs int `mapstructure:"ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS"`
 
 	// Per-plugin term overrides use dynamic env keys (not struct fields):
 	// ROS_TERMS_<PLUGIN>_<TERM>_{WINDOW_DAYS,MIN_DATA_DAYS,DECAY_HALFLIFE_HOURS}
@@ -570,6 +575,8 @@ func initConfig() {
 	viper.SetDefault("ROS_STALE_CLEANUP_DAYS", 30)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
+	viper.SetDefault("ROS_API_MAX_OFFSET", 10000)
+	viper.SetDefault("DEVELOPMENT", false)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
 	viper.SetDefault("ROS_DB_MAX_CONNS", 10)
@@ -758,6 +765,9 @@ func initConfig() {
 	viper.SetDefault("ROS_CSV_MAX_BODY_BYTES", 524288000)
 	viper.SetDefault("ROS_CSV_DOWNLOAD_TIMEOUT_SECS", 120)
 	viper.SetDefault("ROS_CSV_ALLOWED_HOSTS", "")
+	viper.SetDefault("ROS_CSV_DENY_PRIVATE_NETWORKS", true)
+	viper.SetDefault("ROS_LOG_POISON_PAYLOAD", false)
+	viper.SetDefault("ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS", 30)
 	viper.SetDefault("ROS_SETTINGS_LOCKED", false)
 	viper.SetDefault("ROS_SETTINGS_LOCKED_CONTAINER", true)
 	viper.SetDefault("ROS_SETTINGS_LOCKED_GPU", true)
@@ -878,6 +888,12 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.TagsSyncMaxBodyMiB <= 0 {
 		c.TagsSyncMaxBodyMiB = 10
+	}
+	if c.APIMaxOffset <= 0 {
+		c.APIMaxOffset = 10000
+	}
+	if c.HousekeeperShutdownGraceSecs <= 0 {
+		c.HousekeeperShutdownGraceSecs = 30
 	}
 }
 
