@@ -70,6 +70,8 @@ type RecommendationSetResult struct {
 	SourceID            string                 `json:"source_id"`
 	Workload            string                 `json:"workload"`
 	WorkloadType        string                 `json:"workload_type"`
+	AnalyticsIncomplete bool                   `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt *string              `json:"analytics_incomplete_at,omitempty"`
 	// Embedded stored variation percentages (scanned from SELECT, excluded from JSON output).
 	StoredVariationPcts `gorm:"embedded"`
 }

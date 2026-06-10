@@ -232,6 +232,8 @@ type NativeRecommendationRow struct {
 	SourceID     string    `gorm:"column:source_id"`
 	ClusterAlias string    `gorm:"column:cluster_alias"`
 	LastReported time.Time `gorm:"column:last_reported_at"`
+	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
+	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
 
 	PageSortText *string `gorm:"column:ros_container_page_sort"`
 }
@@ -252,6 +254,8 @@ type NativeContainerResult struct {
 	WorkloadType            string                        `json:"workload_type"`
 	SourceID                string                        `json:"source_id"`
 	LastReported            string                        `json:"last_reported"`
+	AnalyticsIncomplete     bool                          `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt   *string                       `json:"analytics_incomplete_at,omitempty"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
 	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
@@ -612,7 +616,8 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
 	rs.monitoring_end_time,
 	rs.updated_at,
-	c.source_id, c.cluster_alias, c.last_reported_at`
+	c.source_id, c.cluster_alias, c.last_reported_at,
+	c.analytics_incomplete, c.analytics_incomplete_at`
 
 // GetNativeRecommendationByID fetches a single container's recommendations
 // by its deterministic UUID. Primary path uses the indexed container_id column
@@ -765,19 +770,21 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 
 		pageSort := nativeContainerParseSortText(sortExpr, first.PageSortText)
 		result := NativeContainerResult{
-			ID:               NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
-			ClusterAlias:     first.ClusterAlias,
-			ClusterUUID:      first.ClusterUUID,
-			Container:        first.ContainerName,
-			Project:          first.Namespace,
-			Workload:         first.Workload,
-			WorkloadType:     first.WorkloadType,
-			SourceID:         first.SourceID,
-			LastReported:     first.LastReported.Format(time.RFC3339),
-			Replicas:         replicas,
-			MonitoringEndTime: maxMonEnd,
-			Recommendations:  make(map[string]TermRecommendation),
-			PaginationSort:   pageSort,
+			ID:                    NativeContainerID(first.ClusterUUID, first.Namespace, first.Workload, first.WorkloadType, first.ContainerName),
+			ClusterAlias:          first.ClusterAlias,
+			ClusterUUID:           first.ClusterUUID,
+			Container:             first.ContainerName,
+			Project:               first.Namespace,
+			Workload:              first.Workload,
+			WorkloadType:          first.WorkloadType,
+			SourceID:              first.SourceID,
+			LastReported:          first.LastReported.Format(time.RFC3339),
+			AnalyticsIncomplete:   first.AnalyticsIncomplete,
+			AnalyticsIncompleteAt: formatOptionalRFC3339(first.AnalyticsIncompleteAt),
+			Replicas:              replicas,
+			MonitoringEndTime:     maxMonEnd,
+			Recommendations:       make(map[string]TermRecommendation),
+			PaginationSort:        pageSort,
 		}
 		idleRow := pickIdleSourceRow(rowGroup)
 		savingsEnabled := idleRow.EstimatedSavingsCents != nil || idleRow.EstimatedWasteCents != nil
@@ -860,4 +867,12 @@ func derefInt(p *int) int {
 		return 0
 	}
 	return *p
+}
+
+func formatOptionalRFC3339(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	formatted := t.UTC().Format(time.RFC3339)
+	return &formatted
 }

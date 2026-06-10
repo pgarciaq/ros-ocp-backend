@@ -71,6 +71,9 @@ type Config struct {
 	DBStatementTimeoutSecs       int    `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
 	DBIngestStatementTimeoutSecs int    `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
 	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
+	// IngestStrictAnalytics blocks recommendation persistence when history or quality writes fail.
+	// Default false preserves degraded-mode behavior (recommendations written, analytics flagged).
+	IngestStrictAnalytics bool `mapstructure:"ROS_INGEST_STRICT_ANALYTICS"`
 
 	// RBAC config
 	RBACHost     string
@@ -577,6 +580,7 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_STATEMENT_TIMEOUT", 25)
 	viper.SetDefault("ROS_DB_INGEST_STATEMENT_TIMEOUT", 120)
 	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
+	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", false)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)

@@ -87,6 +87,14 @@ var (
 			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120},
 		},
 	)
+
+	AnalyticsIncompleteTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rosocp_analytics_incomplete_total",
+			Help: "Container ingestion batches where history or quality analytics writes failed (degraded mode) or would have failed (strict mode path logs only on success)",
+		},
+		[]string{"org_id", "cluster_uuid", "error_type"},
+	)
 )
 
 // ObserveDB records elapsed time for a labeled DB operation.
@@ -122,4 +130,10 @@ func ObserveIngestFlush(start time.Time) {
 // IncIngestFlushTotal increments the incremental flush counter.
 func IncIngestFlushTotal() {
 	IngestFlushTotal.Inc()
+}
+
+// IncAnalyticsIncomplete increments the analytics-incomplete counter for a cluster batch failure.
+// errorType must be "history" or "quality".
+func IncAnalyticsIncomplete(orgID, clusterUUID, errorType string) {
+	AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, errorType).Inc()
 }

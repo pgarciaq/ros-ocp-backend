@@ -638,38 +638,20 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 
 	engine.EnsureRecommendationPartitionsAtStartup(ctx, pool)
 
-	pipelineDegraded := false
+	batchState := &engine.ContainerRecBatchState{}
 	totalWritten := 0
 	tRec := time.Now()
+	strictAnalytics := appCfg.IngestStrictAnalytics
 
 	err = engine.RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []engine.ContainerRec) error {
-		engine.ApplySavingsEstimates(batch, costData)
-
-		if oldRecs != nil {
-			adoptedKeys := engine.FindAdoptedContainers(batch, oldRecs["cost"])
-			if markErr := engine.MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
-				log.Warnf("native engine: adoption marking incomplete: %v", markErr)
-			}
+		n, batchErr := engine.WriteContainerRecBatch(
+			ctx, pool, log, batch, oldRecs, costData, orgID, clusterUUID, strictAnalytics, batchState,
+			func() { ingestionErrors.WithLabelValues("write").Inc() },
+		)
+		if batchErr != nil {
+			return batchErr
 		}
-
-		if writeErr := engine.WriteRecommendations(ctx, pool, batch); writeErr != nil {
-			ingestionErrors.WithLabelValues("write").Inc()
-			return writeErr
-		}
-		totalWritten += len(batch)
-
-		if histErr := engine.WriteContainerHistory(ctx, pool, batch, ""); histErr != nil {
-			log.Errorf("native engine: writing recommendation history failed: %v", histErr)
-			pipelineDegraded = true
-		}
-		if oldRecs != nil {
-			oomCounts := engine.OOMCountsByContainer(batch)
-			if qualErr := engine.WriteContainerQuality(ctx, pool, batch, oldRecs, oomCounts); qualErr != nil {
-				log.Errorf("native engine: writing quality metrics failed: %v", qualErr)
-				pipelineDegraded = true
-			}
-		}
-
+		totalWritten += n
 		return nil
 	})
 	metrics.ObserveRecommendation("container", tRec)
@@ -689,11 +671,20 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 
 	if oldRecs == nil {
 		log.Warn("native engine: skipping quality metrics (old recs unavailable)")
-		pipelineDegraded = true
+		batchState.Degraded = true
 	}
 
-	if pipelineDegraded {
-		log.Warn("native engine: analytics pipeline incomplete (history and/or quality) — container recommendations were written")
+	if batchState.Degraded {
+		log.WithFields(map[string]interface{}{
+			"org_id": orgID, "cluster_uuid": clusterUUID, "strict_analytics": strictAnalytics,
+		}).Warn("native engine: analytics pipeline incomplete (history and/or quality) — container recommendations were written")
+		if markErr := engine.SetClusterAnalyticsIncomplete(ctx, pool, orgID, clusterUUID, true); markErr != nil {
+			log.Warnf("native engine: failed to mark cluster analytics incomplete: %v", markErr)
+		}
+	} else if totalWritten > 0 {
+		if markErr := engine.SetClusterAnalyticsIncomplete(ctx, pool, orgID, clusterUUID, false); markErr != nil {
+			log.Warnf("native engine: failed to clear cluster analytics incomplete flag: %v", markErr)
+		}
 	}
 
 	eg, egCtx := errgroup.WithContext(ctx)

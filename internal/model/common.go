@@ -33,6 +33,8 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"COALESCE(clusters.cluster_uuid, recommendation_sets.cluster_uuid) AS cluster_uuid, "+
 				"COALESCE(clusters.cluster_alias, recommendation_sets.cluster_uuid) AS cluster_alias, "+
 				"COALESCE(clusters.last_reported_at, recommendation_sets.updated_at) AS last_reported, "+
+				"COALESCE(clusters.analytics_incomplete, false) AS analytics_incomplete, "+
+				"clusters.analytics_incomplete_at AS analytics_incomplete_at, "+
 				"recommendation_sets.recommendations, "+
 				"recommendation_sets.cpu_variation_short_cost_pct, "+
 				"recommendation_sets.cpu_variation_short_performance_pct, "+

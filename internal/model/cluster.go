@@ -17,6 +17,8 @@ type Cluster struct {
 	ClusterAlias      string    `gorm:"type:text;unique"`
 	LastReportedAt    time.Time
 	LastReportedAtStr string `gorm:"-"`
+	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
+	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
 }
 
 func (c *Cluster) AfterFind(tx *gorm.DB) error {
