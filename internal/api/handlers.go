@@ -16,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/health"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -955,7 +956,7 @@ func GetAppStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, status)
 }
 
-// GetReadyz reports readiness by pinging the primary DB pool.
+// GetReadyz reports readiness by pinging the primary DB pool and optional dependencies.
 func GetReadyz(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
 	defer cancel()
@@ -965,21 +966,20 @@ func GetReadyz(c echo.Context) error {
 	} else {
 		pool = db.GetPool()
 	}
-	if pool == nil {
+	result := health.RunReadyzChecks(ctx, pool)
+	if !result.OK {
+		for name, status := range result.Checks {
+			if status != "ok" {
+				log.Warnf("readyz: %s check failed: %s", name, status)
+			}
+		}
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status": "error",
-			"checks": echo.Map{"database": "pool_uninitialized"},
-		})
-	}
-	if err := pool.Ping(ctx); err != nil {
-		log.Warnf("readyz: database ping failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status": "error",
-			"checks": echo.Map{"database": "unavailable"},
+			"checks": result.Checks,
 		})
 	}
 	return c.JSON(http.StatusOK, echo.Map{
 		"status": "ok",
-		"checks": echo.Map{"database": "ok"},
+		"checks": result.Checks,
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	rosdb "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/health"
 	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -375,19 +376,21 @@ func Start_prometheus_server() error {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		pool := rosdb.GetPool()
-		if pool == nil {
+		result := health.RunReadyzChecks(ctx, pool)
+		if !result.OK {
+			for name, status := range result.Checks {
+				if status != "ok" {
+					log.Warnf("readyz: %s check failed: %s", name, status)
+				}
+			}
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"status":"error","checks":{"database":"pool_uninitialized"}}`))
-			return
-		}
-		if err := pool.Ping(ctx); err != nil {
-			log.Warnf("readyz: database ping failed: %v", err)
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"status":"error","checks":{"database":"unavailable"}}`))
+			body, _ := json.Marshal(map[string]interface{}{"status": "error", "checks": result.Checks})
+			_, _ = w.Write(body)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","checks":{"database":"ok"}}`))
+		body, _ := json.Marshal(map[string]interface{}{"status": "ok", "checks": result.Checks})
+		_, _ = w.Write(body)
 	})
 	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("ListenAndServe prometheus: %w", err)
