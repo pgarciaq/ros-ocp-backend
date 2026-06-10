@@ -2,7 +2,7 @@
 
 Operational guide for ROS-OCP Backend metrics, logging, and alerting. Complements the runbooks in [runbooks.md](runbooks.md) with a complete metric catalog and scrape configuration.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-06-10
 
 ---
 
@@ -69,6 +69,7 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
 | `rosocp_kafka_messages_processed_total` | Counter | — | Kafka messages committed successfully after processing (processor and poller) |
+| `rosocp_kafka_retries_total` | Counter | — | Kafka messages requeued with incremented retry count |
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations persisted to PostgreSQL. `type`: `container`, `namespace`, `node`, `pvc`. **Note:** `snapshot` is observed for duration but not incremented on write (known gap) |
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | End-to-end recommendation computation time. `type`: `container`, `node`, `gpu`, `namespace`, `pvc`, `snapshot` |
 | `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Sub-phase timing within ingestion. Observed phases: `digest`, `gpu_enrichment` |
@@ -80,6 +81,7 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
+| `rosocp_kafka_dlq_messages_total` | Counter | — | Messages routed to Dead Letter Queue after exhausting retry budget |
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Native pipeline failures. `stage`: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_invalid_csv_total` | Counter | — | Malformed container ROS CSV |
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Malformed namespace ROS CSV |

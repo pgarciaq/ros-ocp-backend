@@ -8,6 +8,34 @@ This document describes the Kafka message formats used by ROS-OCP-Backend.
 |-------|-----------|---------|
 | `platform.upload.announce` | Consume | Notification of new OCP report uploads |
 | `platform.sources.event-stream` | Consume | Source lifecycle events (create/update/delete) |
+| `hccm.ros.events` | Consume | ROS upload events (processor primary topic; configured via `UPLOAD_TOPIC`) |
+| `hccm.ros.events.dlq` | Produce | Dead Letter Queue for messages that fail processing after max retries |
+
+## Dead Letter Queue (`hccm.ros.events.dlq`)
+
+Messages that exhaust the transient retry budget (`ROS_KAFKA_MAX_TRANSIENT_RETRIES`, default 5) are produced to this topic so the source partition can advance. Configure the topic name with `ROS_KAFKA_DLQ_TOPIC`.
+
+| Property | Value |
+|----------|-------|
+| **Purpose** | Preserve failed messages for forensic analysis and manual replay |
+| **Partitions** | 3 |
+| **Replication factor** | Matches cluster config (same as other ROS topics) |
+| **Retention** | 30 days (`retention.ms: 2592000000`) — longer than the source topic for forensics |
+| **Segment** | 1 day (`segment.ms: 86400000`) |
+
+### Forensic headers
+
+DLQ messages include the original payload plus these headers:
+
+| Header | Description |
+|--------|-------------|
+| `X-Original-Topic` | Source topic (typically `hccm.ros.events`) |
+| `X-Original-Partition` | Source partition number |
+| `X-Failure-Reason` | Error that caused routing to the DLQ |
+| `X-Failed-At` | UTC timestamp when the message was dead-lettered |
+| `X-Retry-Count` | Number of retries attempted (equals max at DLQ routing) |
+
+Retry counting uses the `X-Retry-Count` header on requeued messages in the source topic. See [Operational Runbooks — Kafka DLQ](../operations/runbooks.md#runbook-kafka-dead-letter-queue-dlq-messages) for diagnosis and replay.
 
 ## Upload Announce Message (`platform.upload.announce`)
 

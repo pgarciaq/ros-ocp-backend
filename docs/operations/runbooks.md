@@ -18,6 +18,7 @@ All metrics use the `rosocp_` prefix.
 |--------|------|--------|-------------|
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations persisted (`container`, `namespace`, `node`, `pvc`, `snapshot`) |
 | `rosocp_kafka_messages_processed_total` | Counter | — | Kafka messages consumed successfully |
+| `rosocp_kafka_retries_total` | Counter | — | Kafka messages requeued with incremented retry count |
 | `rosocp_recommendation_request_total` | Counter | — | Kruize recommendation requests (legacy path) |
 | `rosocp_recommendation_success_total` | Counter | — | Kruize recommendations saved (legacy path) |
 
@@ -25,6 +26,7 @@ All metrics use the `rosocp_` prefix.
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
+| `rosocp_kafka_dlq_messages_total` | Counter | — | Messages routed to Dead Letter Queue after exhausting retry budget |
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Ingestion failures by stage: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_db_error_total` | Counter | — | Generic database errors |
 | `rosocp_partition_missing_error_total` | Counter | `resource_name` | Table partition not found |
@@ -160,6 +162,79 @@ See [GPU Catalog Maintenance](gpu-catalog.md) for the update procedure and
 - Verify database connectivity (the consumer blocks on DB writes).
 - If the consumer is healthy but slow, check `rosocp_recommendation_duration_seconds` for slow recommendations that are back-pressuring consumption.
 - Consider scaling workers if sustained lag is due to throughput limits.
+
+---
+
+## Runbook: Kafka Dead Letter Queue (DLQ) Messages
+
+**Alert condition:** `rate(rosocp_kafka_dlq_messages_total[5m]) > 0`
+
+### Diagnosis
+
+1. Check DLQ message rate:
+   ```promql
+   rate(rosocp_kafka_dlq_messages_total[5m])
+   ```
+
+2. Check retry rate (precursor to DLQ):
+   ```promql
+   rate(rosocp_kafka_retries_total[5m])
+   ```
+
+3. Inspect DLQ messages for failure reasons:
+   ```bash
+   kubectl exec -n kafka cost-onprem-kafka-broker-0 -- \
+     bin/kafka-console-consumer.sh \
+     --bootstrap-server localhost:9092 \
+     --topic hccm.ros.events.dlq \
+     --from-beginning --max-messages 5 \
+     --property print.headers=true
+   ```
+
+4. Key headers on DLQ messages:
+   - `X-Original-Topic` — source topic
+   - `X-Original-Partition` — source partition
+   - `X-Failure-Reason` — error that caused permanent failure
+   - `X-Failed-At` — UTC timestamp of DLQ routing
+   - `X-Retry-Count` — number of retries attempted (should equal max)
+
+### Resolution
+
+1. **Identify root cause** from `X-Failure-Reason` header:
+   - Database errors → check PostgreSQL health
+   - S3/MinIO errors → check object storage connectivity
+   - Parse errors → check for corrupt CSV data from operator
+   - Unknown errors → check processor logs around `X-Failed-At` timestamp
+
+2. **Fix the root cause** before replaying messages.
+
+3. **Replay DLQ messages** after fix:
+   ```bash
+   # Option A: Use reship_ros endpoint (preferred)
+   curl -s "http://masu-server:5042/api/cost-management/v1/reship_ros/?manifest_id=<ID>"
+   
+   # Option B: Manual replay from DLQ topic
+   # Produce DLQ messages back to hccm.ros.events (strip X-Retry-Count header)
+   ```
+
+4. **Verify recovery:**
+   ```promql
+   rate(rosocp_kafka_messages_processed_total[5m])  # Should resume normal rate
+   rate(rosocp_kafka_dlq_messages_total[5m])        # Should drop to zero
+   ```
+
+### Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_KAFKA_MAX_TRANSIENT_RETRIES` | `5` | Attempts before routing to DLQ |
+| `ROS_KAFKA_DLQ_TOPIC` | `hccm.ros.events.dlq` | Dead Letter Queue topic name |
+
+### Notes
+
+- DLQ messages are preserved with 30-day retention (configured on the KafkaTopic CR).
+- The retry mechanism uses Kafka message headers (`X-Retry-Count`), which survive pod restarts and consumer rebalances.
+- If the DLQ produce itself fails, the offset is NOT committed — natural Kafka redeliver continues (infinite retry as fallback).
 
 ---
 

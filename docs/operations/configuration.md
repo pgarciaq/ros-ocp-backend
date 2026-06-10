@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-06-10
 
 ---
 
@@ -108,6 +108,13 @@ SASL/TLS variables (`KafkaUsername`, `KafkaPassword`, `KafkaSASLMechanism`,
 enabled — not set manually in production.
 
 See **Performance Tuning** for `ROS_KAFKA_PARALLEL` and `ROS_KAFKA_WORKERS`.
+
+### Kafka resilience
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_KAFKA_MAX_TRANSIENT_RETRIES` | `5` | Maximum number of times a message is requeued before being routed to the Dead Letter Queue. Applies to unclassified transient errors only. Set higher for environments with flaky S3/DB connectivity. |
+| `ROS_KAFKA_DLQ_TOPIC` | `hccm.ros.events.dlq` | Kafka topic for dead-lettered messages. Must exist (auto-created by Strimzi if `auto.create.topics.enable` is true, or declare as KafkaTopic CR). |
 
 ---
 
