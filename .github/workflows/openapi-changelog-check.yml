@@ -1,0 +1,110 @@
+name: OpenAPI / CHANGELOG Advisory Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  advisory-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          list-files: json
+          filters: |
+            api:
+              - 'internal/api/**'
+              - 'internal/model/**'
+              - 'internal/plugins/**/handlers*.go'
+            go:
+              - '**/*.go'
+            openapi:
+              - 'openapi.json'
+            changelog:
+              - 'CHANGELOG.md'
+
+      - name: Evaluate documentation updates
+        id: evaluate
+        run: |
+          set -euo pipefail
+
+          api_changed="${{ steps.changes.outputs.api }}"
+          go_changed="${{ steps.changes.outputs.go }}"
+          openapi_changed="${{ steps.changes.outputs.openapi }}"
+          changelog_changed="${{ steps.changes.outputs.changelog }}"
+
+          warnings=()
+          if [[ "$api_changed" == "true" && "$openapi_changed" != "true" ]]; then
+            warnings+=("API-affecting files changed (see \`.github/openapi-paths.txt\`) but \`openapi.json\` was not updated in this PR.")
+          fi
+          if [[ "$go_changed" == "true" && "$changelog_changed" != "true" ]]; then
+            warnings+=("Go files changed but \`CHANGELOG.md\` was not updated in this PR.")
+          fi
+
+          if [[ ${#warnings[@]} -eq 0 ]]; then
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+            echo "All advisory documentation checks passed."
+            exit 0
+          fi
+
+          {
+            echo "status=warn"
+            echo "message<<EOF"
+            echo "## Advisory: documentation update reminder"
+            echo
+            for warning in "${warnings[@]}"; do
+              echo "- ${warning}"
+            done
+            echo
+            echo "This check is advisory and does not block merge. Please update \`openapi.json\` and/or \`CHANGELOG.md\` when the change affects API behavior or user-visible behavior."
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::warning title=Documentation update reminder::${warnings[*]}"
+
+      - name: Post advisory PR comment
+        if: steps.evaluate.outputs.status == 'warn'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- openapi-changelog-advisory -->';
+            const body = `${marker}\n${{ steps.evaluate.outputs.message }}`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail with advisory message
+        if: steps.evaluate.outputs.status == 'warn'
+        run: |
+          echo "${{ steps.evaluate.outputs.message }}"
+          exit 1

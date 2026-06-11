@@ -1,0 +1,6 @@
+# Path patterns that constitute API-affecting changes.
+# Used by .github/workflows/openapi-changelog-check.yml.
+# One glob pattern per line; lines starting with # are ignored.
+internal/api/**
+internal/model/**
+internal/plugins/**/handlers*.go

@@ -1,0 +1,8 @@
+# Architectural trigger paths for ADR review reminders.
+# Used by .github/workflows/adr-reminder.yml.
+# One glob pattern per line; lines starting with # are ignored.
+internal/config/**
+internal/kafka/**
+internal/db/migrations/**
+internal/plugins/*/plugin.go
+internal/api/middleware/**

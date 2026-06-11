@@ -7,7 +7,7 @@
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29, #35, #37, #47, #50–#52, #57, #59** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
+**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29, #35, #37, #47, #50–#54, #57, #59, #60** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache, OpenAPI/CHANGELOG advisory CI, ADR review reminder CI, govulncheck CI. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
 
 ---
 
@@ -1206,6 +1206,7 @@ Added in-memory LRU cache (`internal/fleetsummary`) keyed by org_id and RBAC sco
 ### Finding #53: No CI enforcement of OpenAPI spec vs CHANGELOG on breaking changes
 
 - **Severity:** Informational
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Governance
 - **Location:** `docs/architecture/api-versioning.md`, `.github/workflows/` (no openapi diff job)
 - **Description:** v1.6 #10 resolved CHANGELOG existence but noted missing CI enforcement. No workflow validates OpenAPI diff against `[Unreleased]` changelog entries.
@@ -1213,15 +1214,24 @@ Added in-memory LRU cache (`internal/fleetsummary`) keyed by org_id and RBAC sco
 - **Recommendation:** Add CI step comparing `openapi.json` diff to CHANGELOG `[Unreleased]` section (oasdiff or similar).
 - **Effort:** M
 
+**Resolution**
+
+Added advisory workflow [`.github/workflows/openapi-changelog-check.yml`](../../.github/workflows/openapi-changelog-check.yml) with path patterns in [`.github/openapi-paths.txt`](../../.github/openapi-paths.txt). On PRs, API-affecting changes without `openapi.json` updates and Go changes without `CHANGELOG.md` updates emit GitHub warnings and an advisory PR comment (`continue-on-error: true`).
+
 ### Finding #54: ADR index has no drift detection against code
 
 - **Severity:** Informational
+- **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Governance / Maintainability
 - **Location:** `docs/adr/README.md` (162 ADRs), `docs/adr/_generate_adrs.py` (untracked generator in workspace)
 - **Description:** ADR index was bulk-generated to resolve #30. No CI checks that code changes contradict accepted ADRs (e.g., ADR-0011 fixed idle thresholds vs configurable settings).
 - **Risk:** ADRs become stale documentation within one release cycle; false confidence for auditors.
 - **Recommendation:** Require ADR amendment PR for changes touching `internal/engine/` algorithm constants; add lint linking ADR numbers in commit messages for engine changes.
 - **Effort:** M
+
+**Resolution**
+
+Added advisory workflow [`.github/workflows/adr-reminder.yml`](../../.github/workflows/adr-reminder.yml) with architectural trigger paths in [`.github/architectural-paths.txt`](../../.github/architectural-paths.txt). PRs touching config, migrations, Kafka, middleware, or plugin registration receive an advisory comment to review or create ADRs.
 
 ### Finding #55: Kruize heavy endpoints share global HTTP client timeout
 
@@ -1293,12 +1303,17 @@ Removed `getNativeRecommendationByIDFallback`. All new writes populate `containe
 ### Finding #60: `aws-sdk-go` v1 remains a direct dependency
 
 - **Severity:** Informational
+- **Status:** **Resolved** (2026-06-11) — govulncheck CI added; v2 migration documented, not executed
 - **Dimension:** Governance / Security
 - **Location:** `go.mod:7` (`github.com/aws/aws-sdk-go v1.55.8`)
 - **Description:** AWS SDK v1 is in maintenance mode. Used for S3/MinIO operations in readiness checks and ingestion. No `govulncheck` in CI (tool not present in dev environment).
 - **Risk:** Missed CVE advisories; increasing incompatibility with modern AWS APIs.
 - **Recommendation:** Migrate to aws-sdk-go-v2; add `govulncheck` to CI workflow.
 - **Effort:** L
+
+**Resolution**
+
+Added [`.github/workflows/govulncheck.yml`](../../.github/workflows/govulncheck.yml) running `govulncheck ./...` on PRs and weekly. Documented deferred v1→v2 migration plan at [`docs/plans/aws-sdk-v2-migration.md`](../plans/aws-sdk-v2-migration.md) — direct usage is limited to S3 readiness checks and CloudWatch logging configuration.
 
 ## Priority Remediation Order
 
@@ -1312,7 +1327,7 @@ Ordered by **compound risk × effort**. Findings that amplify each other are gro
 6. ~~**#45**~~ — Strict analytics default **resolved**
 7. **#55, #56, #57** — Kruize/CSV/Kafka edge cases under load
 8. **#47, #58** — Operational polish (shutdown, runbooks)
-9. **#50–#54, #59, #60** — Governance, UX, and maintenance debt
+9. ~~**#50–#54, #59, #60**~~ — Governance items **#50–#54, #59, #60 resolved**; remaining UX debt in #48/#49
 
 ## Positive Observations
 
@@ -1355,14 +1370,14 @@ Improvements since v1.6 worth acknowledging:
 | 50 | History CSV wrong row limit | Low | **Resolved** |
 | 51 | History wide default scan | Low | **Resolved** |
 | 52 | Fleet summary uncached aggregation | Low | **Resolved** |
-| 53 | No OpenAPI/CHANGELOG CI | Info | Open |
-| 54 | ADR drift detection absent | Info | Open |
+| 53 | No OpenAPI/CHANGELOG CI | Info | **Resolved** |
+| 54 | ADR drift detection absent | Info | **Resolved** |
 | 55 | Kruize shared HTTP timeout | Medium | Accepted |
 | 56 | CSV 512 MiB default body | Medium | Open |
 | 57 | Parallel Kafka shared committer | Low | **Resolved** |
 | 58 | report_file_status runbook missing | Low | Open |
 | 59 | Recommendation detail fallback debt | Low | **Resolved** |
-| 60 | aws-sdk-go v1 dependency | Info | Open |
+| 60 | aws-sdk-go v1 dependency | Info | **Resolved** (govulncheck CI; v2 migration planned) |
 
 ---
 

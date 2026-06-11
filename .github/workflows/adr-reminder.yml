@@ -1,0 +1,72 @@
+name: ADR Review Reminder
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  adr-reminder:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect architectural changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            architectural:
+              - 'internal/config/**'
+              - 'internal/kafka/**'
+              - 'internal/db/migrations/**'
+              - 'internal/plugins/*/plugin.go'
+              - 'internal/api/middleware/**'
+
+      - name: Post ADR reminder comment
+        if: steps.changes.outputs.architectural == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- adr-review-reminder -->';
+            const body = `${marker}
+            ## Advisory: architectural change reminder
+
+            This PR touches architectural code (see \`.github/architectural-paths.txt\`).
+
+            Please check whether any ADRs in [\`docs/adr/\`](docs/adr/README.md) need updating, or whether a new ADR should be created to document this change.
+
+            This reminder is advisory and does not block merge.
+            `;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Emit advisory warning
+        if: steps.changes.outputs.architectural == 'true'
+        run: |
+          echo "::warning title=ADR review reminder::This PR touches architectural code. Review docs/adr/ for needed updates."
+          exit 1
