@@ -13,6 +13,7 @@ If you are validating the native engine for the first time:
 3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
 4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images: **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
+6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
 
 **Branches:** `pgarciaq-rosocp-superpowers-phase12` on `ros-ocp-backend`, `koku`, and `koku-metrics-operator` for full native coverage (all plugins + savings). Stock `main` on koku/operator is enough for container + namespace Kruize comparison only.
 
@@ -33,7 +34,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 | **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, box plots |
 | **Data pipeline** | Kafka → S3 CSV download → digest → recommend | Listener + processor logs, `meta.count` |
 | **Performance** | Latency, memory, DB query time under load | Prometheus, `hey`/`k6`, processor duration logs |
-| **Regression** | Native vs Kruize where both can run (legacy env only) | Side-by-side comparison, known diffs doc |
+| **Regression** | Native vs Kruize where both can run (legacy env only) | [Comparison CLI](#kruize-vs-native-comparison-cli), side-by-side API diff, known diffs doc |
 
 #### Native plugins (all must be in scope)
 
@@ -539,7 +540,7 @@ This path uses **separate** `db-ros` on port **15432** and Kafka on **29092** �
 
 ## Testing in Kruize-equivalent mode
 
-To validate the native engine against Kruize output, run `ros-ocp-backend` with configuration restricted to match Kruize's feature set. Use this mode for apples-to-apples A/B comparison before cutover (see also [Regression testing (native vs Kruize)](#regression-testing-native-vs-kruize)).
+To validate the native engine against Kruize output, run `ros-ocp-backend` with configuration restricted to match Kruize's feature set. Use this mode for apples-to-apples A/B comparison before cutover (see also [Regression testing (native vs Kruize)](#regression-testing-native-vs-kruize)). For a **local side-by-side spreadsheet** without deploying two full stacks, use the [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli).
 
 ### Environment variables
 
@@ -1648,6 +1649,188 @@ Watch API pod/container CPU, `ROS_DB_MAX_CONNS`, and p95 latency. Flush Valkey i
 
 For environments still running Kruize, compare outputs before cutover. **Production validation should be native-only** (`ROS_DISABLED_PLUGINS=kruize`).
 
+### Kruize vs Native comparison CLI
+
+`ros-ocp-backend` includes a self-contained CLI at `cmd/compare/` that runs the **same nise-generated OpenShift utilization data** through both the native Go engine and Kruize, then writes a side-by-side `comparison.csv` with percentage differences. Use it for local algorithm validation without standing up two full ROS deployments.
+
+The tool uses [testcontainers-go](https://golang.testcontainers.org/) to spin up isolated Docker containers automatically — you only need Docker running locally.
+
+#### Architecture
+
+```mermaid
+flowchart TD
+    nise["nise report ocp --ros-ocp-info"] --> rosCSV["ROS CSV (operator format)"]
+    rosCSV --> transformer["Column Transformer"]
+    transformer --> nativeCSV["Native-format CSV"]
+    rosCSV --> kruizeAdapter["Kruize Payload Builder"]
+
+    nativeCSV --> nativeEngine["Native Go Engine"]
+    kruizeAdapter --> kruizeAPI["Kruize HTTP API"]
+
+    subgraph testcontainers [Testcontainers]
+        pg1["PostgreSQL (native)"]
+        pg2["PostgreSQL (Kruize)"]
+        kruize["Kruize Container"]
+    end
+
+    nativeEngine --> pg1
+    kruizeAPI --> kruize
+    kruize --> pg2
+
+    nativeEngine --> nativeRecs["Native Recommendations"]
+    kruizeAPI --> kruizeRecs["Kruize Recommendations"]
+
+    nativeRecs --> compare["Comparison Generator"]
+    kruizeRecs --> compare
+    compare --> spreadsheet["comparison.csv"]
+```
+
+Both engines receive the same input data but run in fully isolated containers. Total runtime is about **2 minutes** (dominated by Kruize Java startup and metric upload).
+
+#### Prerequisites
+
+**1. Build the Kruize Docker image**
+
+```bash
+cd ~/dev/koku/autotune
+./build.sh -i kruize:local
+```
+
+First build takes ~5–10 minutes; subsequent builds use the Docker cache.
+
+**2. Generate test data with nise**
+
+```bash
+mkdir -p /tmp/nise-comparison/output
+
+cd ~/dev/koku/nise
+.venv/bin/nise report ocp \
+  --static-report-file /tmp/nise-comparison/cluster1.yml \
+  --ocp-cluster-id comparison-cluster-1 \
+  --ros-ocp-info \
+  --insights-upload /tmp/nise-comparison/output \
+  --daily-reports
+```
+
+The tool needs the `*_openshift_report.6.csv` file (container-level metrics) from the nise output.
+
+| Flag | Purpose |
+|------|---------|
+| `--ros-ocp-info` | Container-level data (not just pod-level) |
+| `--daily-reports` | One interval per 15-minute period |
+| `--insights-upload <dir>` | Writes output to a directory structure |
+
+Generate at least **15+ days** of 15-minute interval data so Kruize has enough history to produce recommendations.
+
+**3. Docker daemon running**
+
+The tool starts three containers: PostgreSQL (native), PostgreSQL (Kruize), and `kruize:local`.
+
+#### Usage
+
+```bash
+cd ~/dev/koku/ros-ocp-backend
+
+go run ./cmd/compare/ <nise-ros-csv-path> [cluster-id] [org-id] [cluster-uuid]
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `nise-ros-csv-path` | *(required)* | Path to the `*_openshift_report.6.csv` from nise |
+| `cluster-id` | `comparison-cluster-1` | Human-readable cluster identifier |
+| `org-id` | `org1234567` | Organization ID for tenant scoping |
+| `cluster-uuid` | `a1b2c3d4-e5f6-...` | UUID used in the database |
+
+**Example:**
+
+```bash
+go run ./cmd/compare/ \
+  /tmp/nise-comparison/output/comparison-cluster-1/20260301-20260401/*_openshift_report.6.csv \
+  comparison-cluster-1 \
+  org1234567
+```
+
+**Output:** `comparison.csv` in the current directory, plus a console summary with sample recommendations from each engine.
+
+#### Column mapping (nise → native engine)
+
+| Nise CSV column | Native CSV column | Notes |
+|-----------------|-------------------|-------|
+| `interval_start` | `interval_start` | Same |
+| `interval_end` | `interval_end` | Same |
+| `namespace` | `namespace` | Same |
+| `workload` | `workload_name` | Renamed |
+| `workload_type` | `workload_type` | Same |
+| `container_name` | `container_name` | Same |
+| `cpu_request_container_avg` | `cpu_request` | Cores (float) |
+| `cpu_limit_container_avg` | `cpu_limit` | Cores (float) |
+| `cpu_usage_container_avg` | `cpu_usage` | Cores (float) |
+| `cpu_throttle_container_avg` | `cpu_throttle` | Cores (float) |
+| `memory_request_container_avg` | `mem_request` | Bytes (float) |
+| `memory_limit_container_avg` | `mem_limit` | Bytes (float) |
+| `memory_usage_container_avg` | `mem_usage` | Bytes (float) |
+| `memory_rss_usage_container_avg` | `mem_rss` | Bytes (float) |
+
+CPU values are fractional cores; memory values are bytes. The native engine converts internally to millicores and KiB.
+
+#### Output format (`comparison.csv`)
+
+One row per (container, term, engine) combination:
+
+| Column | Description |
+|--------|-------------|
+| `cluster_id` | Cluster identifier |
+| `namespace`, `workload`, `container` | Workload identity |
+| `term` | `short`, `medium`, or `long` |
+| `engine` | `cost` or `performance` |
+| `native_cpu_request_mc` | Native CPU request (millicores) |
+| `native_cpu_limit_mc` | Native CPU limit (millicores) |
+| `native_mem_request_kib` | Native memory request (KiB) |
+| `native_mem_limit_kib` | Native memory limit (KiB) |
+| `kruize_cpu_request_mc` | Kruize CPU request (millicores) |
+| `kruize_cpu_limit_mc` | Kruize CPU limit (millicores) |
+| `kruize_mem_request_kib` | Kruize memory request (KiB) |
+| `kruize_mem_limit_kib` | Kruize memory limit (KiB) |
+| `cpu_request_diff_pct` | `(native - kruize) / kruize * 100` |
+| `mem_request_diff_pct` | `(native - kruize) / kruize * 100` |
+
+Term names are normalized before joining: native uses `short`/`medium`/`long`; Kruize uses `short_term`/`medium_term`/`long_term`.
+
+#### Example results
+
+From a test run with 5 containers and 21 days of 15-minute data (10,080 rows):
+
+| Container | CPU request diff | Memory request diff | Pattern |
+|-----------|------------------|---------------------|---------|
+| frontend-abc12 | +5.9% to +7.5% | -1.3% to +0.3% | Very close; native slightly higher CPU |
+| backend-def34 | +5.1% to +5.4% | -4.3% to -3.0% | Native higher CPU, Kruize higher memory |
+| postgres-ghi56 | -0.7% to -0.9% | -16.1% to -15.3% | CPU identical; Kruize ~16% more memory |
+| prometheus-jkl78 | +1.9% to +2.2% | -15.8% to -16.8% | CPU close; Kruize ~16% more memory |
+| grafana-mno90 | -2.4% to +4.8% | -10.8% to -11.7% | Mixed CPU; Kruize ~11% more memory |
+
+**Takeaway:** CPU recommendations are generally within 0–7%. Memory diverges more — Kruize often recommends 10–16% more for memory-heavy workloads, likely due to different percentile calculations or safety margins.
+
+#### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `kruize:local` image not found | Image not built | `cd ~/dev/koku/autotune && ./build.sh -i kruize:local` |
+| Kruize container exits with code 1 | Database connection failure | Check Docker network; ensure `kruize-compare-net` is created |
+| `updateResults` returns 400 | Metric payload format wrong | Verify nise CSV has `_sum`, `_avg`, `_min`, `_max` columns |
+| `no partition found` | Data dates outside partition range | Tool creates partitions for ±6/+3 months; check nise date range |
+| Native engine produces 0 recs | Insufficient data (< 1 day) | Generate at least 2+ days of 15-minute interval data |
+| Kruize produces 0 recs | Insufficient intervals | Generate 15+ days of data |
+
+#### Key files
+
+| File | Purpose |
+|------|---------|
+| `cmd/compare/main.go` | Comparison CLI tool |
+| `resource_optimization_openshift.json` | Kruize performance profile |
+| `migrations/` | Database schema (applied to native PostgreSQL) |
+
+---
+
 | Aspect | Kruize (legacy) | Native | QE action |
 |--------|-----------------|--------|-----------|
 | Wait time | Up to `KRUIZE_WAIT_TIME` (hours) | Seconds–minutes inline | Native must not require poller |
@@ -1659,6 +1842,8 @@ For environments still running Kruize, compare outputs before cutover. **Product
 | `monitoring_start_time` | In Kruize JSON | Derived from digests | May differ by hours; document delta |
 
 ### Side-by-side procedure (legacy lab only)
+
+For local development, prefer the [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) above. Use this full-stack procedure only when validating against deployed Kruize and native ROS services in a lab cluster:
 
 1. Ingest same tarball with `ROS_ENABLED_PLUGINS=kruize` (poller + Kruize pod running).
 2. Record container detail JSON for sample workload ID.
