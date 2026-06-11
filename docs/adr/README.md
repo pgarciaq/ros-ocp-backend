@@ -266,3 +266,33 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0255](0255-org-container-keys-refresh-deletes-stale.md) | org_container_keys refresh deletes stale keys on ingest | Data Model | Accepted |
 | [0256](0256-dual-tag-filter-syntax-legacy-koku.md) | Dual tag filter syntax (legacy and Koku-style) | Tags | Accepted |
 | [0257](0257-stale-tag-sync-warning-on-list-responses.md) | Stale tag sync warning on list responses | Tags | Accepted |
+| [0258](0258-recommendation-profiles-seeded-unused-percentiles-in-settings.md) | recommendation_profiles seeded but unused — percentiles live in settings API | Data Model | Accepted |
+| [0259](0259-synchronous-ingest-time-engine-replaces-kruize-experiment-lifecycle.md) | Replace Kruize experiment lifecycle with synchronous ingest-time engine | Engine / Algorithm | Accepted |
+| [0260](0260-per-container-recommendation-granularity-operator-csv-grain.md) | Per-container recommendation granularity matching operator CSV grain | Data Model | Accepted |
+| [0261](0261-three-terms-short-medium-long-kruize-aligned-defaults.md) | Three terms (short/medium/long) with Kruize-aligned defaults (1d/7d/15d) | Engine / Algorithm | Accepted |
+| [0262](0262-shadow-mode-native-engine-explicitly-rejected.md) | Shadow-mode native engine explicitly rejected | Deployment / Ops | Accepted |
+| [0263](0263-stop-writing-workload-metrics-in-native-mode.md) | Stop writing workload_metrics in native mode | Data Model | Accepted |
+| [0264](0264-kruize-era-legacy-table-background-deletion.md) | Kruize-era legacy table background deletion strategy | Deployment / Ops | Accepted |
+| [0265](0265-operator-csv-column-contract-optional-columns-partial-upgrade.md) | Operator CSV column contract — optional columns and partial-upgrade tolerance | Ingestion | Accepted |
+| [0266](0266-go-language-choice-inherited-kafka-integration-service.md) | Go language choice — inherited from pre-existing Kafka integration service | Deployment / Ops | Accepted |
+| [0267](0267-echo-framework-inherited-pre-existing-service.md) | Echo framework inherited from pre-existing service | API Design | Accepted |
+| [0268](0268-phase1-dual-pool-pgx-gorm-before-unification.md) | Phase-1 dual pool (pgx + GORM) before unification | Deployment / Ops | Accepted |
+| [0269](0269-testcontainers-over-docker-compose-test-isolation.md) | testcontainers over docker-compose for test isolation | Testing | Accepted |
+| [0270](0270-on-demand-api-time-recommendations-deferred.md) | On-demand API-time recommendations deferred (ROS_ENABLE_REALTIME_RECS) | API Design | Accepted |
+| [0271](0271-recommendation-history-boxplots-deferred-phase4-to-phase5.md) | Recommendation history and boxplots deferred from phase 4 to phase 5 | Data Model | Accepted |
+| [0272](0272-detail-response-typed-struct-replaces-adhoc-json-maps.md) | DetailResponse typed struct replaces ad-hoc JSON maps | API Design | Accepted |
+| [0273](0273-subquery-pagination-replacing-row-multiplier.md) | Subquery pagination replacing row-multiplier approach | API Design | Accepted |
+| [0274](0274-remove-rh-accounts-join-direct-org-id-filtering.md) | Remove rh_accounts join — direct org_id filtering on recommendation tables | Data Model | Accepted |
+| [0275](0275-quality-metrics-container-only-internal-not-primary-ui.md) | Quality metrics are container-only and internal (not primary UI surface) | API Design | Accepted |
+| [0276](0276-hpa-vpa-recommendations-deferred-advisory-only.md) | HPA/VPA recommendations deferred — advisory automation model only | Engine / Algorithm | Accepted |
+| [0277](0277-local-hybrid-on-cluster-engine-deferred-central-only-v1.md) | Local/hybrid on-cluster engine deferred — central processing only for v1 | Deployment / Ops | Accepted |
+| [0278](0278-machineset-tier2-engine-deferred-scope-criteria.md) | MachineSet Tier-2 engine deferred — scope criteria documented | Engine / Algorithm | Accepted |
+| [0279](0279-namespace-recommendations-unleash-killswitch-then-default-on.md) | Namespace recommendations: Unleash kill-switch then default-on | Plugins | Accepted |
+| [0280](0280-fixed-point-savings-migration-float-to-integer-cents.md) | Fixed-point savings migration (float → integer cents) | Cost / Savings | Accepted |
+| [0281](0281-jsonb-vs-normalized-columns-when-each-appropriate.md) | JSONB vs normalized columns — when each is appropriate | Data Model | Accepted |
+| [0282](0282-cgo-confluent-kafka-go-test-isolation-strategy.md) | CGO dependency via confluent-kafka-go — test isolation strategy | Ingestion | Accepted |
+| [0283](0283-synchronous-rest-api-no-websocket-sse-recommendation-updates.md) | Synchronous REST API — no WebSocket/SSE for recommendation updates | API Design | Accepted |
+| [0284](0284-custom-profile-names-deferred-dual-engines-only.md) | Custom profile names deferred — v1 limited to dual cost/performance engines | API Design | Accepted |
+| [0285](0285-phase-branch-merge-order-migration-renumbering.md) | Phase branch merge order and migration renumbering | Deployment / Ops | Accepted |
+| [0286](0286-adversarial-review-architecture-governance-loop.md) | Adversarial review as architecture governance loop | Deployment / Ops | Accepted |
+| [0287](0287-operator-14-day-prometheus-lookback-integration-boundary.md) | Operator 14-day Prometheus lookback as integration boundary | Ingestion | Accepted |

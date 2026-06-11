@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADRs 0258-0287: Historical phase decisions — Kruize elimination, per-container granularity, three-term architecture, shadow mode rejection, operator CSV contract, framework/language inheritance, phase deferrals, migration strategy, governance process
 - ADRs 0208-0257: Comprehensive coverage for settings architecture, business hours reship, notifications model, staleness semantics, tag sync, effective rates, snapshots, reship concurrency, migration strategy, configuration catalog, plugin system details, API contract decisions, quota/PVC algorithms
 - ADRs 0172-0207: Comprehensive architecture decision coverage for idle detection, savings methodology, list query performance, threshold recalculation, node/VM/GPU algorithms, API design patterns, Kafka tuning, RBAC semantics, and retention mechanics
 - ADR-0166: Per-file report_file_status tracking with manifest completeness gating
