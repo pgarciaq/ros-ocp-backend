@@ -75,8 +75,7 @@ type Config struct {
 	DBStatementTimeoutSecs       int    `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
 	DBIngestStatementTimeoutSecs int    `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
 	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
-	// IngestStrictAnalytics blocks recommendation persistence when history or quality writes fail.
-	// Default true (strict mode). Set false for degraded mode (recommendations written, analytics flagged).
+	// ADR-0096: Strict analytics mode default true; set false for degraded ingest.
 	IngestStrictAnalytics bool `mapstructure:"ROS_INGEST_STRICT_ANALYTICS"`
 
 	// RBAC config

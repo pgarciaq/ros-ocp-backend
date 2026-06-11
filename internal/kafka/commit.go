@@ -15,9 +15,8 @@ type MessageCommitter interface {
 
 var parallelCommitMu sync.Mutex
 
-// CommitMessage commits a Kafka offset. When ROS_KAFKA_PARALLEL is enabled with
-// multiple workers, commits are serialized because librdkafka consumers are not
-// documented as thread-safe for concurrent CommitMessage calls.
+// CommitMessage commits a Kafka offset. ADR-0154: Serialize commits when parallel workers enabled.
+// When ROS_KAFKA_PARALLEL is enabled with multiple workers, commits are serialized because
 func CommitMessage(consumer MessageCommitter, msg *kafka.Message) error {
 	if consumer == nil || msg == nil {
 		return nil

@@ -53,6 +53,8 @@ func resolveManifestID(kafkaMsg *types.KafkaMsg, log *logrus.Entry) string {
 	return id
 }
 
+// synthesizeManifestID builds a deterministic manifest ID for legacy Kafka messages
+// that omit metadata.manifest_id. ADR-0050: UUID v5 over (org_id, cluster_uuid, scope_key).
 func synthesizeManifestID(kafkaMsg types.KafkaMsg) string {
 	scopeKey := manifestScopeKey(kafkaMsg)
 	name := fmt.Sprintf("%s:%s:%s", kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Cluster_uuid, scopeKey)

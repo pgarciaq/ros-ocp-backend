@@ -28,6 +28,7 @@ jobs:
               - 'internal/api/**'
               - 'internal/model/**'
               - 'internal/plugins/**/handlers*.go'
+              - 'internal/fleetsummary/**'
             go:
               - '**/*.go'
             openapi:

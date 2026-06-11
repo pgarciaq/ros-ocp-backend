@@ -25,8 +25,14 @@ jobs:
               - 'internal/config/**'
               - 'internal/kafka/**'
               - 'internal/db/migrations/**'
+              - 'internal/db/db.go'
               - 'internal/plugins/*/plugin.go'
               - 'internal/api/middleware/**'
+              - 'internal/fleetsummary/**'
+              - 'internal/asyncjobs/**'
+              - 'internal/reship/**'
+              - 'internal/services/report_file_tracker.go'
+              - 'internal/engine/**'
 
       - name: Post ADR reminder comment
         if: steps.changes.outputs.architectural == 'true'

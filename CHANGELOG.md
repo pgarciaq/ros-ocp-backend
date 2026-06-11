@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- OpenAPI `ForbiddenEntitlement` response component documenting `cost_management` entitlement requirement on all v1 paths (adversarial review finding #70 resolved).
+- `// ADR-NNNN` cross-reference comments at key architectural decision points in Go source (adversarial review finding #74 resolved).
+
+### Changed
+
+- CI governance path files (`.github/openapi-paths.txt`, `.github/architectural-paths.txt`) expanded with maintenance comments and broader globs; workflow filters synced (adversarial review finding #71 resolved).
+- Pin `govulncheck@v1.1.4` in CI for reproducible vulnerability scans (adversarial review finding #72 resolved).
+
 - Notification code **77** (`SPARSE_DATA`, INFO): fires when `data_days` is at or below `sparse_data_threshold` (default 2) for container, namespace, node, and PVC recommendations — orthogonal to `LOW_CONFIDENCE` (code 1). Configurable via `sparse_data_threshold` on container/namespace Settings API (`ROS_CONTAINER_SPARSE_DATA_THRESHOLD`, `ROS_NAMESPACE_SPARSE_DATA_THRESHOLD`); migration `000143`.
 - Internal endpoint audit logging and metric `rosocp_internal_endpoint_calls_total` (labels `endpoint`, `org_id`, `sa_name`); optional org allowlist via `ROS_INTERNAL_ALLOWED_ORGS` (finding #63 resolved mitigated).
 - Advisory CI workflow [`.github/workflows/openapi-changelog-check.yml`](.github/workflows/openapi-changelog-check.yml): warns when API-affecting paths (see [`.github/openapi-paths.txt`](.github/openapi-paths.txt)) change without `openapi.json` updates, or when Go files change without `CHANGELOG.md` updates (finding #53 resolved).

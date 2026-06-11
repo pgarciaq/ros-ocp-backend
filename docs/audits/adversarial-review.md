@@ -1742,7 +1742,7 @@ Remove expired keys from `order` in `Get`, mirroring `boundedRBACCache`/`bounded
 | **Severity** | Informational |
 | **Dimension** | Governance |
 | **Location** | `openapi.json`, `internal/api/middleware/entitlement.go` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Introduced by** | v2.0 #35 fix |
 
 **Description**
@@ -1757,6 +1757,8 @@ External integrators and IQE authors may omit entitlement from test identities u
 
 Add `x-entitlements` extension or document in description/security section; extend contract tests.
 
+**Resolution:** Added reusable `ForbiddenEntitlement` response component in `openapi.json`, referenced from all v1 paths (excluding `/readyz`, `/status`, `/internal/*`); extended `info.description` with entitlement requirement.
+
 **Effort** | S
 
 ---
@@ -1768,7 +1770,7 @@ Add `x-entitlements` extension or document in description/security section; exte
 | **Severity** | Informational |
 | **Dimension** | Governance |
 | **Location** | `.github/workflows/openapi-changelog-check.yml`, `.github/workflows/adr-reminder.yml`, `.github/openapi-paths.txt`, `.github/architectural-paths.txt` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Introduced by** | v2.0 #53, #54 fixes |
 
 **Description**
@@ -1783,6 +1785,8 @@ Documentation drift can merge silently; developers may ignore advisory noise. v2
 
 Wire path files into workflows via script; narrow CHANGELOG trigger to API-facing paths; consider required check for OpenAPI diff on labeled PRs.
 
+**Resolution:** Updated `.github/openapi-paths.txt` and `.github/architectural-paths.txt` with broader globs (including `internal/fleetsummary/`, `internal/asyncjobs/`, `internal/reship/`, `internal/engine/**`) and maintenance comments; synced workflow path filters to match.
+
 **Effort** | M
 
 ---
@@ -1794,7 +1798,7 @@ Wire path files into workflows via script; narrow CHANGELOG trigger to API-facin
 | **Severity** | Informational |
 | **Dimension** | Governance |
 | **Location** | `.github/workflows/govulncheck.yml:26` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Introduced by** | v2.0 #60 fix |
 
 **Description**
@@ -1808,6 +1812,8 @@ Flaky CI or surprise failures when govulncheck changes behavior. Minor for advis
 **Recommendation**
 
 Pin govulncheck version in workflow or `tools.go`; record in CHANGELOG when bumped.
+
+**Resolution:** Pinned `govulncheck@v1.1.4` in `.github/workflows/govulncheck.yml` with reproducibility comment.
 
 **Effort** | S
 
@@ -1845,7 +1851,7 @@ Document in deployment guide that gateway should restrict or cache these paths i
 | **Severity** | Informational |
 | **Dimension** | Maintainability |
 | **Location** | `docs/adr/` (163 ADRs), all `internal/**/*.go` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 
 **Description**
 
@@ -1858,6 +1864,8 @@ ADRs drift from implementation within one release; auditors rely on index accura
 **Recommendation**
 
 Add optional `// ADR-NNNN` comments at decision points (manifest synthesis, coalescing, entitlement skip); extend ADR reminder workflow to grep for ADR mentions in changed files.
+
+**Resolution:** Added `// ADR-NNNN` cross-reference comments at key architectural decision points across db, plugins, kafka, config, middleware, reship, asyncjobs, and related packages.
 
 **Effort** | M
 

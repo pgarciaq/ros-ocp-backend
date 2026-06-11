@@ -17,6 +17,7 @@ import (
 )
 
 // CachedSummary is the JSON payload cached for GET /recommendations/openshift/fleet-summary.
+// ADR-0112 pattern: bounded LRU+TTL in-memory cache for API hot paths.
 type CachedSummary struct {
 	TotalContainers     int               `json:"total_containers"`
 	ActiveContainers    int               `json:"active_containers"`

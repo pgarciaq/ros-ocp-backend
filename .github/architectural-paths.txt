@@ -1,8 +1,13 @@
-# Architectural trigger paths for ADR review reminders.
-# Used by .github/workflows/adr-reminder.yml.
-# One glob pattern per line; lines starting with # are ignored.
+# Update this file when adding packages with architectural significance (config, ingestion, middleware, etc.).
+# Keep .github/workflows/adr-reminder.yml architectural filter in sync with these patterns.
 internal/config/**
 internal/kafka/**
 internal/db/migrations/**
+internal/db/db.go
 internal/plugins/*/plugin.go
 internal/api/middleware/**
+internal/fleetsummary/**
+internal/asyncjobs/**
+internal/reship/**
+internal/services/report_file_tracker.go
+internal/engine/**

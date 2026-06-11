@@ -1,4 +1,5 @@
 // Package plugins ensures all built-in production plugins are registered via init().
+// ADR-0001: Native Go recommendation engine over Kruize for production workloads.
 // The example plugin is intentionally excluded here; it exists solely as an authoring
 // template for developers and should only be imported explicitly in tests.
 package plugins

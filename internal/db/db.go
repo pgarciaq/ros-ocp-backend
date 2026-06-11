@@ -85,6 +85,7 @@ type ReadyzDB interface {
 var ReadyzPoolProvider func() ReadyzDB
 
 func initDB() {
+	// ADR-0128: Unified pgxpool via stdlib.OpenDBFromPool (GORM shares pool with pgx paths).
 	pool := GetPool()
 	log := logging.GetLogger()
 

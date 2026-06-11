@@ -17,8 +17,8 @@ var (
 	initOnce       sync.Once
 )
 
-// Init wires async job cancellation to the API server lifecycle. When parent is
-// cancelled (SIGTERM), in-flight jobs receive cancellation on shutdownCtx. Init
+// Init wires async job cancellation to the API server lifecycle. ADR-0162 pattern: graceful shutdown with drain grace.
+// When parent is cancelled (SIGTERM), in-flight jobs receive cancellation on shutdownCtx. Init
 // waits up to grace for jobs to finish, then returns.
 func Init(parent context.Context, grace time.Duration) {
 	if grace <= 0 {

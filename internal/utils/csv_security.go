@@ -17,6 +17,7 @@ var (
 )
 
 func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
+	// ADR-0146/0145: Fail-closed SSRF protection via host allowlist and private-network deny.
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse CSV URL: %w", err)

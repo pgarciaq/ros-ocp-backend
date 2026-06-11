@@ -65,8 +65,9 @@ func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaRe
 }
 
 // consumeMessagesParallelUntilCancelled runs a worker pool with per-partition mutexes
-// for handler ordering. Offset commits must use kafka.CommitMessage (serialized mutex)
-// because librdkafka consumers are not thread-safe for concurrent CommitMessage calls.
+// for handler ordering. ADR-0154: Partition-scoped parallelism; offset commits must use
+// kafka.CommitMessage (serialized mutex) because librdkafka consumers are not thread-safe
+// for concurrent CommitMessage calls.
 func consumeMessagesParallelUntilCancelled(
 	ctx context.Context,
 	reader kafkaReader,

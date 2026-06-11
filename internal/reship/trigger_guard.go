@@ -24,6 +24,7 @@ type reshipFlight struct {
 	latestClusterUUIDs []uuid.UUID
 }
 
+// reshipFlights tracks in-flight reship jobs per org. ADR-0125: Single-flight coalescing with trailing reship.
 var reshipFlights sync.Map // map[string]*reshipFlight
 
 // reshipBatchHook is invoked with the cluster list for each coalesced batch (tests only).

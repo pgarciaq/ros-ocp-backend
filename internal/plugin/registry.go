@@ -24,6 +24,7 @@ var (
 )
 
 // Register appends a plugin to the process-wide registry. Call from plugin init().
+// ADR-0104: Kruize plugin is mutually exclusive with native plugins at runtime.
 //
 // Registration order across packages is non-deterministic (Go spec does not
 // guarantee init() ordering). This is intentional: plugins are independent,
