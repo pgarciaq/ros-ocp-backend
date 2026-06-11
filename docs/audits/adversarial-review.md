@@ -928,7 +928,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 57 | Parallel Kafka shared committer | Low | Resolved | `f9dd8588` — commit mutex in parallel mode |
 | 58 | `report_file_status` runbook absent | Low | Resolved | `11f0ee77` — runbook section in `runbooks.md` |
 | 59 | Recommendation detail fallback debt | Low | Resolved | `f8dd05b1` — fallback path removed |
-| 60 | `aws-sdk-go` v1 dependency | Info | Resolved | `99296701` — govulncheck CI + v2 migration plan |
+| 60 | `aws-sdk-go` v1 dependency | Info | Resolved (non-issue) | govulncheck CI; phantom direct dep removed via `go mod tidy` |
 
 ## Prior Review Status
 
@@ -1342,9 +1342,9 @@ Removed `getNativeRecommendationByIDFallback`. All new writes populate `containe
 ### Finding #60: `aws-sdk-go` v1 remains a direct dependency
 
 - **Severity:** Informational
-- **Status:** **Resolved** (2026-06-11) — govulncheck CI added; v2 migration documented, not executed
+- **Status:** **Resolved (non-issue)** (2026-06-11) — govulncheck CI added; phantom direct dependency removed
 - **Dimension:** Governance / Security
-- **Location:** `go.mod:7` (`github.com/aws/aws-sdk-go v1.55.8`)
+- **Location:** `go.mod` (formerly direct `github.com/aws/aws-sdk-go v1.55.8`)
 - **Description:** AWS SDK v1 is in maintenance mode. Used for S3/MinIO operations in readiness checks and ingestion. No `govulncheck` in CI (tool not present in dev environment).
 - **Risk:** Missed CVE advisories; increasing incompatibility with modern AWS APIs.
 - **Recommendation:** Migrate to aws-sdk-go-v2; add `govulncheck` to CI workflow.
@@ -1352,7 +1352,7 @@ Removed `getNativeRecommendationByIDFallback`. All new writes populate `containe
 
 **Resolution**
 
-Added [`.github/workflows/govulncheck.yml`](../../.github/workflows/govulncheck.yml) running `govulncheck ./...` on PRs and weekly. Documented deferred v1→v2 migration plan at [`docs/plans/aws-sdk-v2-migration.md`](../plans/aws-sdk-v2-migration.md) — direct usage is limited to S3 readiness checks and CloudWatch logging configuration.
+Added [`.github/workflows/govulncheck.yml`](../../.github/workflows/govulncheck.yml) running `govulncheck ./...` on PRs and weekly. The direct `aws-sdk-go` v1 entry in `go.mod` was a phantom dependency — no first-party source file imported it; it was only required transitively via `platform-go-middlewares` for CloudWatch logging. Removed the direct require via `go mod tidy` after migrating S3 readiness checks to `aws-sdk-go-v2`.
 
 ## Priority Remediation Order
 
@@ -1414,7 +1414,7 @@ Improvements since v1.6 worth acknowledging:
 | 57 | Parallel Kafka shared committer | Low | **Resolved** |
 | 58 | report_file_status runbook missing | Low | **Resolved** |
 | 59 | Recommendation detail fallback debt | Low | **Resolved** |
-| 60 | aws-sdk-go v1 dependency | Info | **Resolved** (govulncheck CI; v2 migration planned) |
+| 60 | aws-sdk-go v1 dependency | Info | **Resolved (non-issue)** (govulncheck CI; phantom direct dep removed) |
 
 ---
 

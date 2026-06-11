@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -114,25 +114,29 @@ func checkS3(ctx context.Context) error {
 		return fmt.Errorf("ROS_READINESS_S3_BUCKET not configured")
 	}
 
-	awsCfg := &aws.Config{
-		Region: aws.String(cfg.ReadinessS3Region),
-		Credentials: credentials.NewStaticCredentials(
+	loadOpts := []func(*awsconfig.LoadOptions) error{
+		awsconfig.WithRegion(cfg.ReadinessS3Region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			cfg.ReadinessS3AccessKey,
 			cfg.ReadinessS3SecretKey,
 			"",
-		),
+		)),
 	}
-	if cfg.ReadinessS3Endpoint != "" {
-		awsCfg.Endpoint = aws.String(cfg.ReadinessS3Endpoint)
-		awsCfg.S3ForcePathStyle = aws.Bool(true)
-	}
-
-	sess, err := session.NewSession(awsCfg)
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
-		return fmt.Errorf("create aws session: %w", err)
+		return fmt.Errorf("load aws config: %w", err)
 	}
 
-	_, err = s3.New(sess).HeadBucketWithContext(ctx, &s3.HeadBucketInput{
+	s3Opts := []func(*s3.Options){
+		func(o *s3.Options) {
+			if cfg.ReadinessS3Endpoint != "" {
+				o.BaseEndpoint = aws.String(cfg.ReadinessS3Endpoint)
+				o.UsePathStyle = true
+			}
+		},
+	}
+
+	_, err = s3.NewFromConfig(awsCfg, s3Opts...).HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(cfg.ReadinessS3Bucket),
 	})
 	return err

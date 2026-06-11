@@ -10,12 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Fix IPv6 private address bypass in CSV URL SSRF protection (adversarial review finding #64 resolved).
 
+### Changed
+
+- Remove unused `aws-sdk-go` v1 phantom dependency (adversarial review finding #60 resolved as non-issue); migrate S3 readiness check to `aws-sdk-go-v2`.
+
 ### Added
 
 - Advisory CI workflow [`.github/workflows/openapi-changelog-check.yml`](.github/workflows/openapi-changelog-check.yml): warns when API-affecting paths (see [`.github/openapi-paths.txt`](.github/openapi-paths.txt)) change without `openapi.json` updates, or when Go files change without `CHANGELOG.md` updates (finding #53 resolved).
 - Advisory CI workflow [`.github/workflows/adr-reminder.yml`](.github/workflows/adr-reminder.yml): reminds authors to review or create ADRs when architectural paths change (see [`.github/architectural-paths.txt`](.github/architectural-paths.txt)) (finding #54 resolved).
-- `govulncheck` CI workflow [`.github/workflows/govulncheck.yml`](.github/workflows/govulncheck.yml) on PRs and weekly schedule (finding #60 partially resolved).
-- AWS SDK v1→v2 migration plan at [`docs/plans/aws-sdk-v2-migration.md`](docs/plans/aws-sdk-v2-migration.md) (finding #60 — migration deferred).
+- `govulncheck` CI workflow [`.github/workflows/govulncheck.yml`](.github/workflows/govulncheck.yml) on PRs and weekly schedule (finding #60 resolved).
 
 - Cost-management entitlement middleware on v1 API routes: rejects requests without `entitlements.cost_management.is_entitled=true` unless `DEVELOPMENT=true` (finding #35 resolved).
 - Internal tag endpoint bearer auth in db mode via `ROS_INTERNAL_TAGS_AUTH_REQUIRED` (default `true`) (finding #37 resolved).
