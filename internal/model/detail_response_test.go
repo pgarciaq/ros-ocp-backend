@@ -767,6 +767,40 @@ func TestBusinessHours_ListDetailParity(t *testing.T) {
 	assert.JSONEq(t, string(listJSON), string(detailJSON))
 }
 
+func TestBuildDetailResponse_ClusterIngestAndAnalyticsFlags(t *testing.T) {
+	at := "2026-06-01T12:00:00Z"
+	native := &NativeContainerResult{
+		ID:                    "721eb376-13a9-43ab-868e-755aa1ce7f2a",
+		ClusterUUID:           "11111111-1111-1111-1111-111111111111",
+		Container:             "app",
+		Project:               "prod",
+		Workload:              "api",
+		AnalyticsIncomplete:   true,
+		AnalyticsIncompleteAt: &at,
+		IngestHooksFailed:     true,
+		IngestHooksFailedAt:   &at,
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {Cost: &EngineRecommendation{CPURequestMillicores: int64Ptr(100)}},
+		},
+	}
+	detail := BuildDetailResponse(native, nil, time.Time{})
+	require.True(t, detail.AnalyticsIncomplete)
+	require.True(t, detail.IngestHooksFailed)
+	require.NotNil(t, detail.AnalyticsIncompleteAt)
+	require.Equal(t, at, *detail.AnalyticsIncompleteAt)
+	require.NotNil(t, detail.IngestHooksFailedAt)
+	require.Equal(t, at, *detail.IngestHooksFailedAt)
+
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &m))
+	assert.Equal(t, true, m["analytics_incomplete"])
+	assert.Equal(t, true, m["ingest_hooks_failed"])
+	assert.Equal(t, at, m["analytics_incomplete_at"])
+	assert.Equal(t, at, m["ingest_hooks_failed_at"])
+}
+
 func int64Ptr(v int64) *int64 {
 	return &v
 }

@@ -397,11 +397,13 @@ func TestAssembleNamespaceBoxplots_ExactPercentiles(t *testing.T) {
 	_, err := pool.Exec(ctx, `DELETE FROM org_recommendation_terms WHERE org_id = $1`, testutil.TestOrgID)
 	require.NoError(t, err)
 
-	// Align to the current 6-hour bucket boundary (floor(epoch/21600)*21600)
-	// so all 24 samples land in exactly one bucket.
+	// Anchor 30 minutes in the past so all 24 one-minute samples are strictly before
+	// time.Now() when AssembleNamespaceBoxplots runs (query uses sample_time < end).
 	now := time.Now().UTC()
-	bucketEpoch := (now.Unix() / 21600) * 21600
+	anchor := now.Add(-30 * time.Minute)
+	bucketEpoch := (anchor.Unix() / 21600) * 21600
 	bucketStart := time.Unix(bucketEpoch, 0).UTC().Add(time.Minute)
+	require.True(t, bucketStart.Add(23*time.Minute).Before(now), "seed window must end before query end")
 	ensureNamespaceSamplePartition(t, pool, bucketStart)
 
 	key := NamespaceKey{

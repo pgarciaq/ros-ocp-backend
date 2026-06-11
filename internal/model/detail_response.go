@@ -48,6 +48,10 @@ type DetailResponse struct {
 	WorkloadType            string                        `json:"workload_type"`
 	SourceID                string                        `json:"source_id"`
 	LastReported            string                        `json:"last_reported"`
+	AnalyticsIncomplete     bool                          `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt   *string                       `json:"analytics_incomplete_at,omitempty"`
+	IngestHooksFailed       bool                          `json:"ingest_hooks_failed,omitempty"`
+	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
 	IdleState               string                        `json:"idle_state"`
 	IdleSince               *string                       `json:"idle_since,omitempty"`
@@ -217,6 +221,10 @@ func BuildDetailResponse(
 		WorkloadType:          native.WorkloadType,
 		SourceID:              native.SourceID,
 		LastReported:          native.LastReported,
+		AnalyticsIncomplete:   native.AnalyticsIncomplete,
+		AnalyticsIncompleteAt: native.AnalyticsIncompleteAt,
+		IngestHooksFailed:     native.IngestHooksFailed,
+		IngestHooksFailedAt:   native.IngestHooksFailedAt,
 		Currency:              native.Currency,
 		IdleState:             native.IdleState,
 		IdleSince:             native.IdleSince,

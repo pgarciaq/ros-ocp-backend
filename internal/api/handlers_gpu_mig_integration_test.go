@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -413,20 +414,18 @@ func TestGPUMIGRecommendations_Pagination(t *testing.T) {
 	all := migListGET(t, app, "?limit=100")
 	require.GreaterOrEqual(t, all.Meta.Count, 3, "need multiple MIG rows for pagination")
 
-	page0 := migListGET(t, app, "?limit=1&offset=0&order_by=namespace&order_how=asc")
+	page0 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=asc")
 	assert.Equal(t, all.Meta.Count, page0.Meta.Count)
 	assert.Equal(t, 1, page0.Meta.Limit)
-	assert.Equal(t, 0, page0.Meta.Offset)
 	require.Len(t, page0.Data, 1)
+	require.True(t, page0.Meta.HasNext, "expected has_next when more MIG rows exist than limit")
+	require.NotEmpty(t, page0.Meta.NextCursor)
 
-	page1 := migListGET(t, app, "?limit=1&offset=1&order_by=namespace&order_how=asc")
-	assert.Equal(t, all.Meta.Count, page1.Meta.Count)
-	assert.Equal(t, 1, page1.Meta.Limit)
-	assert.Equal(t, 1, page1.Meta.Offset)
+	page1 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=asc&after="+url.QueryEscape(page0.Meta.NextCursor))
 	require.Len(t, page1.Data, 1)
 	page0Key := page0.Data[0].Namespace + "/" + page0.Data[0].Container + "/" + page0.Data[0].Term
 	page1Key := page1.Data[0].Namespace + "/" + page1.Data[0].Container + "/" + page1.Data[0].Term
-	assert.NotEqual(t, page0Key, page1Key, "offset pagination should return a different row")
+	assert.NotEqual(t, page0Key, page1Key, "keyset pagination should return a different row")
 }
 
 func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {

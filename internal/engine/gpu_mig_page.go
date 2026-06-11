@@ -107,13 +107,13 @@ FROM (
 		}
 		tie := "(page_keys.cluster_uuid::text, page_keys.namespace, page_keys.container_name, page_keys.gpu_model_name)"
 		if seek.SortValue != nil {
-			q += fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d, $%d, $%d)))`,
+			q += fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d::text, $%d::text, $%d::text, $%d::text)))`,
 				sortCol, sortOp, argIdx, sortCol, argIdx,
 				tie, argIdx+1, argIdx+2, argIdx+3, argIdx+4)
-			args = append(args, seek.SortValue, seek.SortValue, seek.ClusterUUID, seek.Namespace, seek.Container, seek.GPUModel)
-			argIdx += 6
+			args = append(args, seek.SortValue, seek.ClusterUUID, seek.Namespace, seek.Container, seek.GPUModel)
+			argIdx += 5
 		} else {
-			q += fmt.Sprintf(` WHERE %s > ($%d, $%d, $%d, $%d)`, tie, argIdx, argIdx+1, argIdx+2, argIdx+3)
+			q += fmt.Sprintf(` WHERE %s > ($%d::text, $%d::text, $%d::text, $%d::text)`, tie, argIdx, argIdx+1, argIdx+2, argIdx+3)
 			args = append(args, seek.ClusterUUID, seek.Namespace, seek.Container, seek.GPUModel)
 			argIdx += 4
 		}

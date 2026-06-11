@@ -191,6 +191,13 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"data_days":               {},
 		"historical_usage":        {},
 		"terms":                   {},
+		"has_next":                {},
+		"next_cursor":             {},
+		"currency":                {},
+		"analytics_incomplete":    {},
+		"analytics_incomplete_at": {},
+		"ingest_hooks_failed":     {},
+		"ingest_hooks_failed_at":  {},
 	}
 }
 
@@ -339,6 +346,7 @@ func registerContractTestRoutes(e *echo.Echo) {
 	api.RegisterTestReferenceRoutes(e)
 	api.RegisterTestInternalRoutes(e)
 	e.GET("/status", api.GetAppStatus)
+	e.GET("/readyz", api.GetReadyz)
 }
 
 func setupContractTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *echo.Echo {
@@ -382,7 +390,7 @@ func normalizeRoutePattern(path string) string {
 func collectRegisteredRoutePatterns(e *echo.Echo) map[string]struct{} {
 	out := make(map[string]struct{})
 	for _, route := range e.Routes() {
-		if !strings.HasPrefix(route.Path, apiV1Prefix) && route.Path != "/status" {
+		if !strings.HasPrefix(route.Path, apiV1Prefix) && route.Path != "/status" && route.Path != "/readyz" {
 			continue
 		}
 		if route.Method == http.MethodHead {
