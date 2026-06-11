@@ -10,7 +10,7 @@ Generated specs from Echo annotations drift and produce less readable schemas.
 
 ## Decision
 
-Hand-maintained `openapi.json` validated by contract tests against live handlers.
+Hand-maintained `openapi.json` validated by contract tests against live handlers. Contract tests in `internal/api/openapi_contract_test.go` validate response shapes against `openapi.json` for **all registered plugin routes** — not just core endpoints (incorporates former ADR-0141). Bruno-only manual verification is insufficient for CI; spec drift must fail builds.
 
 ## Alternatives Considered
 
@@ -25,9 +25,14 @@ Generating both Go types and JSON Schema validators from one source guarantees c
 
 ## Consequences
 
-Full control over spec quality. Requires discipline to keep in sync. Contract tests catch drift.
+Full control over spec quality. Requires discipline to keep in sync. Contract tests catch drift on every plugin endpoint when the spec changes intentionally or accidentally.
+
+## Related Decisions
+
+- [ADR-0073](0073-dynamic-openapi-x-plugin-required.md): Dynamic OpenAPI filtered by x-plugin-required.
+- [ADR-0249](0249-advisory-openapi-changelog-ci-non-blocking.md): Advisory OpenAPI changelog CI.
 
 ## References
 
-- [openapi.json](openapi.json)
-- [internal/api/openapi_contract_test.go](internal/api/openapi_contract_test.go)
+- [openapi.json](../../openapi.json)
+- [internal/api/openapi_contract_test.go](../../internal/api/openapi_contract_test.go)

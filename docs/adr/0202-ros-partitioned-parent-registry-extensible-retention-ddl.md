@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 The retention sweep drops old monthly partitions ([ADR-0132](0132-retention-policies-per-table.md)). Hardcoding parent table names in the drop function breaks when plugins add new partitioned tables.

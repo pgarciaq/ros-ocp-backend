@@ -37,7 +37,7 @@ No codegen; manual OpenAPI remains source ([ADR-0074](0074-manual-openapi-contra
 
 ## Consequences
 
-- Merge is possible with stale OpenAPI — contract tests ([ADR-0141](0141-openapi-contract-tests-all-plugins.md)) remain the hard gate in CI test job.
+- Merge is possible with stale OpenAPI — contract tests ([ADR-0074](0074-manual-openapi-contract-tests.md)) remain the hard gate in CI test job.
 - Authors should not ignore advisory comments without explicit review note.
 - ADR reminder workflow ([ADR-0136](0136-operational-runbooks-adversarial-review.md)) complements but does not replace OpenAPI discipline.
 
@@ -45,7 +45,7 @@ No codegen; manual OpenAPI remains source ([ADR-0074](0074-manual-openapi-contra
 
 - [ADR-0136](0136-operational-runbooks-adversarial-review.md): Operational runbooks and governance.
 - [ADR-0248](0248-v1-only-api-no-v2-migration-policy.md): v1-only API policy.
-- [ADR-0141](0141-openapi-contract-tests-all-plugins.md): Contract tests.
+- [ADR-0074](0074-manual-openapi-contract-tests.md): Contract tests.
 
 ## References
 

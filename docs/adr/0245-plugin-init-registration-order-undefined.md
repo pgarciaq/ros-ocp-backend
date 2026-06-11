@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Compile-time plugins ([ADR-0099](0099-compile-time-in-process-plugins.md)) register via `init()` functions in plugin packages imported from `main`. Go does not define `init()` order across packages — only dependency order within a single package.

@@ -8,6 +8,10 @@ Accepted
 
 Dual pools exhausted PostgreSQL max_connections with no unified config.
 
+### Historical context (phase-1 dual pool)
+
+Before unification, GORM served API queries (ORM convenience) while pgx handled high-throughput ingest batches (`pgx.Batch`, COPY protocol). Running two separate connection pools to the same PostgreSQL instance caused connection exhaustion under load in phases 2–7. Phase 1 accepted dual pools as a pragmatic delivery trade-off — GORM for reads, pgx for bulk writes — with unification planned once ingest stabilized (incorporates former ADR-0268). The dual-pool period lasted approximately six months; careful balancing of independent GORM vs pgx pool limits was required until this ADR landed.
+
 ## Decision
 
 Single pgxpool.Pool; GORM opens via `stdlib.OpenDBFromPool` with zero max-conns (delegated to pool).
@@ -25,7 +29,12 @@ Dropping GORM would remove ORM overhead, but list/detail handlers and migration 
 
 ## Consequences
 
-One pool to configure. GORM respects pgxpool limits. Metrics from single source.
+One pool to configure. GORM respects pgxpool limits. Metrics from single source. Eliminates the connection-exhaustion bugs that required pool-size tuning during the dual-pool phase.
+
+## Related Decisions
+
+- [ADR-0240](0240-connection-pool-timeout-tuning-surface.md): Pool tuning surface.
+- [ADR-0093](0093-chunked-pgx-batches-500.md): Chunked pgx batches.
 
 ## References
 

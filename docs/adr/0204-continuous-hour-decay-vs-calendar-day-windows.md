@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Recommendation algorithms weight recent data more heavily using exponential decay ([ADR-0005](0005-decay-weighted-average-half-life.md)). The decay function needs a time reference — either calendar-day boundaries or continuous hours from observation to present.

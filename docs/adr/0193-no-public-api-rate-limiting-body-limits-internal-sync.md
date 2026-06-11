@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Rate limiting at the application level adds complexity and may conflict with infrastructure-level rate limiting (3scale, HAProxy). The threat model assumes ingress handles abuse. Internal tag sync, however, accepts bulk uploads that need size bounds.

@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 ROS exposes 100+ `ROS_*` environment variables through Viper-backed `internal/config.Config` ([ADR-0135](0135-centralized-viper-config.md)). Operators, Helm chart authors, and on-prem deployers need a single inventory grouped by concern (ingest, API, Kafka, plugins, security).

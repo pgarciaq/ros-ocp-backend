@@ -22,6 +22,8 @@ Engine code paths query `recommendation_thresholds`, not `recommendation_profile
 
 The profiles table may be removed in a future cleanup migration once Kruize plugin deprecation is complete and no external consumer reads it.
 
+Custom named profiles (conservative, balanced, aggressive, user-defined CRUD) are **deferred for v1** (incorporates former ADR-0284). V1 exposes two fixed engines (cost: P60 targets, performance: P98 targets) configured via settings percentile thresholds — not profile objects. A future profile system would sit above the settings layer and require profile CRUD API, engine parameterization, and UI profile selector work that was not validated for initial delivery.
+
 ## Alternatives Considered
 
 ### Use profiles as the authoritative source
@@ -36,6 +38,14 @@ Risks breaking the Kruize plugin if it still reads profiles during rollback scen
 
 Adds resolution complexity without clear benefit — thresholds table covers all cases.
 
+### Ship custom profiles now (Kruize `/listPerformanceProfiles` parity)
+
+Significant UI/API/engine work for unvalidated demand; deferred in favor of dual-engine + settings thresholds.
+
+### Rename engines to profiles
+
+Confusing nomenclature; engines and profiles are different concepts.
+
 ## Consequences
 
 - Engineers may assume profiles drive engine behavior; they do not.
@@ -48,7 +58,7 @@ Adds resolution complexity without clear benefit — thresholds table covers all
 - [ADR-0004](0004-dual-cost-performance-engine-rows.md): Dual cost/performance engine rows.
 - [ADR-0006](0006-p60-vs-p98-cpu-p95-vs-max-memory.md): P60 vs P98 percentile targets.
 - [ADR-0208](0208-settings-scope-org-wide-only-except-business-hours.md): Settings scope org-wide only.
-- [ADR-0284](0284-custom-profile-names-deferred-dual-engines-only.md): Custom profiles deferred.
+- [ADR-0261](0261-three-terms-short-medium-long-kruize-aligned-defaults.md): Three terms.
 
 ## References
 

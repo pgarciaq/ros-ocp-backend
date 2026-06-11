@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-List endpoints use keyset pagination ([ADR-0066](0066-keyset-after-cursor-pagination.md), [ADR-0190](0190-keyset-cursor-tie-breaker-tuples-per-resource-type.md)) with base64url JSON cursors ([ADR-0067](0067-base64url-json-cursors.md)). UI and IQE expect consistent `meta` and `links` shapes across resource types.
+List endpoints use keyset pagination ([ADR-0066](0066-keyset-after-cursor-pagination.md), [ADR-0190](0190-keyset-cursor-tie-breaker-tuples-per-resource-type.md)) with base64url JSON cursors encoded in the `after` parameter. UI and IQE expect consistent `meta` and `links` shapes across resource types.
 
 Pre-computed totals ([ADR-0189](0189-precomputed-org-recommendation-stats.md)) feed `meta.count`. Keyset mode complicates offset semantics when `after` cursor is present.
 

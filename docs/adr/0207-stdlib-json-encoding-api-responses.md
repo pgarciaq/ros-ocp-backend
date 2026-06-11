@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 High-performance JSON libraries (jsoniter, sonic) offer 2–5× encoding speed. The API serves JSON responses for all endpoints. Response bodies are typically small; network latency dominates end-to-end latency.

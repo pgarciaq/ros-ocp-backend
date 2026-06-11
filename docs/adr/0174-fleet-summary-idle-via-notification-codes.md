@@ -8,7 +8,7 @@ Accepted
 
 Fleet summary must count active, idle, and abandoned containers across an org. The `idle_state` column is set by the authoritative classifier ([ADR-0172](0172-dual-path-idle-classification.md)) but not all containers have been through that path—legacy inline classification may omit or differ on `idle_state`.
 
-Notification codes are always present on recommendation rows ([ADR-0038](0038-notification-code-bitmap-1-63.md), [ADR-0039](0039-notification-codes-smallint-array.md)).
+Notification codes are always present on recommendation rows ([ADR-0038](0038-notification-code-bitmap-1-63.md)).
 
 ## Decision
 

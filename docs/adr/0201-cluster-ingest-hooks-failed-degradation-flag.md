@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Ingest hooks (tag sync, analytics triggers) can fail independently of core ingestion ([ADR-0102](0102-ingest-hook-failures-non-fatal.md)). The system needs to distinguish "data ingested but hooks failed" from "analytics incomplete" from "manifest not complete."

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-All ROS HTTP endpoints live under `/api/cost-management/v1/` per Koku platform convention ([ADR-0065](0065-kruize-compatible-json-shape.md)). Consumers include HCCM UI, on-prem shell, and IQE contract tests ([ADR-0141](0141-openapi-contract-tests-all-plugins.md)).
+All ROS HTTP endpoints live under `/api/cost-management/v1/` per Koku platform convention ([ADR-0065](0065-kruize-compatible-json-shape.md)). Consumers include HCCM UI, on-prem shell, and IQE contract tests ([ADR-0074](0074-manual-openapi-contract-tests.md)).
 
 No formal API versioning policy existed: when to bump version, how long to deprecate fields, or whether v2 namespace is planned.
 
@@ -16,7 +16,7 @@ No formal API versioning policy existed: when to bump version, how long to depre
 
 Breaking change prevention relies on:
 
-- OpenAPI contract tests on every plugin endpoint ([ADR-0141](0141-openapi-contract-tests-all-plugins.md))
+- OpenAPI contract tests on every plugin endpoint ([ADR-0074](0074-manual-openapi-contract-tests.md))
 - Advisory CI changelog checks ([ADR-0249](0249-advisory-openapi-changelog-ci-non-blocking.md))
 - Manual OpenAPI maintenance ([ADR-0074](0074-manual-openapi-contract-tests.md))
 
@@ -51,7 +51,7 @@ Rejected in [ADR-0074](0074-manual-openapi-contract-tests.md).
 ## Related Decisions
 
 - [ADR-0074](0074-manual-openapi-contract-tests.md): Manual OpenAPI and contract tests.
-- [ADR-0141](0141-openapi-contract-tests-all-plugins.md): Contract tests all plugins.
+- [ADR-0074](0074-manual-openapi-contract-tests.md): Contract tests all plugins.
 - [ADR-0249](0249-advisory-openapi-changelog-ci-non-blocking.md): Advisory OpenAPI changelog CI.
 
 ## References

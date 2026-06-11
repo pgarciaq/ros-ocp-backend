@@ -44,7 +44,7 @@ Hides cursor contents from tampering but adds key management and rotation overhe
 ## Related Decisions
 
 - [ADR-0066](0066-keyset-after-cursor-pagination.md): Keyset pagination concept and offset cap.
-- [ADR-0067](0067-base64url-json-cursors.md): Base64 JSON cursor encoding.
+- [ADR-0066](0066-keyset-after-cursor-pagination.md): Base64 JSON cursor encoding (keyset pagination).
 - [ADR-0188](0188-list-query-keys-pagination-refilter-detail.md): Keys/detail split for list queries.
 
 ## References

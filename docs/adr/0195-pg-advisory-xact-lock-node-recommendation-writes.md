@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Node recommendation persistence and migration 000058 (PK rebuild) can deadlock when running concurrently. Traditional row-level locking is insufficient because the PK rebuild acquires table-level locks.

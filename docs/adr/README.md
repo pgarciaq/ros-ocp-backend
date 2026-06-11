@@ -46,8 +46,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0035](0035-business-hours-nested-block.md) | Use business-hours as nested block, not separate API rows | Engine / Algorithm | 9 | Accepted |
 | [0036](0036-business-hours-container-namespace-only.md) | Scope business hours to container+namespace only | Engine / Algorithm | 9 | Accepted |
 | [0037](0037-adoption-detection-5-percent-tolerance.md) | Use adoption detection at 5% request tolerance | Engine / Algorithm | 4 | Accepted |
-| [0038](0038-notification-code-bitmap-1-63.md) | Use notification code bitmap (1–63) for deduplication | Engine / Algorithm | 4 | Accepted |
-| [0039](0039-notification-codes-smallint-array.md) | Persist notification codes as SMALLINT[], not JSONB | Engine / Algorithm | 4 | Accepted |
+| [0038](0038-notification-code-bitmap-1-63.md) | Use notification code bitmap (1–63) for deduplication; persist as SMALLINT[] (incorporates former ADR-0039) | Engine / Algorithm | 4 | Accepted |
 | [0040](0040-allow-negative-savings.md) | Allow negative savings (cost to implement) | Engine / Algorithm | 7 | Accepted |
 | [0041](0041-savings-on-all-hours-row-only.md) | Use savings on all_hours row only; BH affects sizing not dollars | Engine / Algorithm | 9 | Accepted |
 | [0042](0042-desired-replicas-over-pod-count-avg.md) | Use desired_replicas over pod_count_avg for savings multiplication | Engine / Algorithm | 7 | Accepted |
@@ -74,15 +73,14 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0063](0063-centralized-migrations-with-plugin-headers.md) | Centralize migrations in one numbered directory with plugin headers | Data Model | 1 | Accepted |
 | [0064](0064-money-amount-api-cents-internal.md) | Use MoneyAmount (value+units) in API while storing cents internally | Data Model | 2 | Accepted |
 | [0065](0065-kruize-compatible-json-shape.md) | Preserve Kruize-compatible list/detail JSON shape for UI | API Design | 2 | Accepted |
-| [0066](0066-keyset-after-cursor-pagination.md) | Use keyset (after cursor) pagination over deep offset | API Design | 8 | Accepted |
-| [0067](0067-base64url-json-cursors.md) | Encode cursors as base64url JSON | API Design | 8 | Accepted |
+| [0066](0066-keyset-after-cursor-pagination.md) | Use keyset (after cursor) pagination with base64url JSON cursors (incorporates former ADR-0067) | API Design | 8 | Accepted |
 | [0068](0068-filter-project-canonical-namespace-alias.md) | Use filter[project] as canonical namespace alias | API Design | 2 | Accepted |
 | [0069](0069-filter-term-normalized.md) | Use filter[term] normalized to short_term/medium_term/long_term | API Design | 2–3 | Accepted |
 | [0070](0070-engine-filter-dual-engine-resources-only.md) | Use filter[engine]=cost|performance only on dual-engine resources | API Design | Accepted |
 | [0071](0071-exclude-gpu-from-savings-summary.md) | Exclude GPU savings from savings-summary fleet total | API Design | 7 | Accepted |
 | [0072](0072-exclude-quota-from-fleet-savings.md) | Exclude quota/CRQ from fleet savings to avoid double-count | API Design | 6–7 | Accepted |
 | [0073](0073-dynamic-openapi-x-plugin-required.md) | Use dynamic OpenAPI filtered by x-plugin-required | API Design | 2–7 | Accepted |
-| [0074](0074-manual-openapi-contract-tests.md) | Use manual OpenAPI + contract tests, not code-first codegen | API Design | 12 | Accepted |
+| [0074](0074-manual-openapi-contract-tests.md) | Use manual OpenAPI + contract tests on all plugin routes (incorporates former ADR-0141) | API Design | 12 | Accepted |
 | [0075](0075-gzip-responses-over-1kb.md) | Use gzip for responses >1KB | API Design | 2 | Accepted |
 | [0076](0076-request-scoped-enrichment-cache.md) | Use request-scoped enrichment cache for cost rates | API Design | 8 | Accepted |
 | [0077](0077-notification-codes-catalog-endpoint.md) | Use GET /notification-codes public catalog | API Design | 4 | Accepted |
@@ -105,7 +103,6 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0094](0094-split-transactions-50k-rows.md) | Use split transactions above 50k rows per phase | Ingestion | 1 | Accepted |
 | [0095](0095-csv-type-longest-prefix-first.md) | Use DetermineCSVType longest-prefix-first + contains fallback | Ingestion | 1 | Accepted |
 | [0096](0096-strict-analytics-mode-optional.md) | Use strict analytics mode optional (ROS_INGEST_STRICT_ANALYTICS) | Ingestion | 1–4 | Accepted |
-| [0097](0097-csv-contract-test-operator-headers.md) | Use CSV contract test against operator headers | Ingestion | 1 | Accepted |
 | [0098](0098-csv-float-to-int64-parse-time.md) | Convert CSV floats to int64 at parse time with NaN/Inf rejection | Ingestion | 1 | Accepted |
 | [0099](0099-compile-time-in-process-plugins.md) | Use compile-time in-process plugins over gRPC/Wasm/.so | Plugins | 1 | Accepted |
 | [0100](0100-trait-interfaces-for-plugins.md) | Use trait interfaces (CSVIngestor, IngestHook, APIProvider, …) | Plugins | 1 | Accepted |
@@ -129,28 +126,25 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0118](0118-invalidate-cost-cache-on-settings-change.md) | Invalidate cost cache on threshold settings change | Cost / Savings | 7–8 | Accepted |
 | [0119](0119-tags-source-db-on-prem.md) | Use on-prem DB join to Koku tag tables (ROS_TAGS_SOURCE=db) | Tags | 11 | Accepted |
 | [0120](0120-saas-http-push-tag-sync.md) | Use SaaS HTTP push full-replace sync | Tags | 11 | Accepted |
-| [0121](0121-koku-and-legacy-tag-filter-syntax.md) | Support Koku-style filter[tag:key] and legacy tag=key:value | Tags | 11 | Accepted |
 | [0122](0122-tags-enabled-by-default.md) | Default ROS_TAGS_ENABLED=true after stabilization | Tags | 11 | Accepted |
 | [0123](0123-sa-tokenreview-allowlist-internal.md) | Use SA TokenReview allowlist for internal endpoints | Tags | 12 | Accepted |
 | [0124](0124-koku-reship-ros-rebuild-bh.md) | Trigger Koku reship_ros to rebuild BH digests from S3 | Reship / Business Hours | 9 | Accepted |
 | [0125](0125-single-flight-trailing-reship.md) | Use single-flight lock + trailing reship on concurrent schedule edits | Reship / Business Hours | 9 | Accepted |
 | [0126](0126-forward-only-fallback-reship-failure.md) | Use forward-only fallback when reship fails after max retries | Reship / Business Hours | 9 | Accepted |
 | [0127](0127-dual-digest-schedule-type-column.md) | Store dual digest streams (schedule_type=all_hours|business_hours) | Reship / Business Hours | Accepted |
-| [0128](0128-unify-gorm-pgxpool-stdlib.md) | Unify GORM and pgxpool via stdlib.OpenDBFromPool | Deployment / Ops | 8 | Accepted |
+| [0128](0128-unify-gorm-pgxpool-stdlib.md) | Unify GORM and pgxpool via stdlib.OpenDBFromPool (incorporates former ADR-0268 phase-1 dual pool) | Deployment / Ops | 8 | Accepted |
 | [0129](0129-multi-mode-cobra-binary.md) | Use separate processes (api, processor, housekeeper, poller) from one binary | Deployment / Ops | Pre-0–1 | Accepted |
 | [0130](0130-shallow-readyz-default.md) | Use shallow /readyz by default; optional deep checks | Deployment / Ops | Pre-0–12 | Accepted |
 | [0131](0131-housekeeper-batched-pk-deletes.md) | Use housekeeper batched PK deletes (5000 rows) for source cleanup | Deployment / Ops | Pre-0–12 | Accepted |
 | [0132](0132-retention-policies-per-table.md) | Use retention: 6mo digests, 90d history, 30d stale recs, 48h snapshot inventory | Deployment / Ops | 5–12 | Accepted |
-| [0133](0133-structured-logging-zerolog.md) | Use structured logging with org_id, cluster_uuid, request_id | Deployment / Ops | Pre-0–12 | Accepted |
+| [0133](0133-structured-logging-zerolog.md) | Use structured logging with logrus (org_id, cluster_uuid, request_id) | Deployment / Ops | Pre-0–12 | Accepted |
 | [0134](0134-postgresql-16-target.md) | Use PostgreSQL 16 target | Deployment / Ops | Pre-0 | Accepted |
 | [0135](0135-centralized-viper-config.md) | Centralize config in internal/config.Config (Viper) | Deployment / Ops | Pre-0–12 | Accepted |
-| [0136](0136-operational-runbooks-adversarial-review.md) | Use operational runbooks + adversarial review as first-class docs | Deployment / Ops | 12 | Accepted |
+| [0136](0136-operational-runbooks-adversarial-review.md) | Operational runbooks + adversarial review governance loop (incorporates former ADR-0286) | Deployment / Ops | 12 | Accepted |
 | [0137](0137-migration-lint-concurrently-template.md) | Use migration lint + CONCURRENTLY job template for large-table indexes | Deployment / Ops | 12 | Accepted |
 | [0138](0138-mkdocs-public-site-separate.md) | Use MkDocs public site separate from internal docs | Deployment / Ops | 12 | Accepted |
-| [0139](0139-testcontainers-pg16-integration.md) | Use testcontainers PostgreSQL 16 + golang-migrate for integration tests | Testing | 1 | Accepted |
 | [0140](0140-kruize-vs-native-comparison-tool.md) | Use Kruize vs Native comparison tool for algorithm validation | Testing | 1–12 | Accepted |
-| [0141](0141-openapi-contract-tests-all-plugins.md) | Use OpenAPI contract tests on every plugin endpoint | Testing | 12 | Accepted |
-| [0142](0142-csv-contract-test-operator-columns.md) | Use CSV contract test tied to operator column headers | Testing | 1–12 | Accepted |
+| [0142](0142-csv-contract-test-operator-columns.md) | Use CSV contract test tied to operator column headers (incorporates former ADR-0097) | Testing | 1–12 | Accepted |
 | [0143](0143-dry-run-sql-org-id-assertion.md) | Use dry-run SQL tests asserting org_id on detail queries | Testing | 12 | Accepted |
 | [0144](0144-colocated-domain-tests.md) | Keep domain tests colocated; add wiring tests per plugin extraction | Testing | 12 | Accepted |
 | [0145](0145-deny-private-networks-csv-fetch.md) | Deny private networks on CSV URL fetch unless development | Security | 12 | Accepted |
@@ -264,9 +258,9 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0253](0253-pvc-four-way-classification-healthy-orphaned.md) | PVC four-way classification including healthy and orphaned | Engine / Algorithm | 7 | Accepted |
 | [0254](0254-pvc-growth-projection-decay-weighted-slope.md) | PVC growth projection via decay-weighted slope | Engine / Algorithm | 7 | Accepted |
 | [0255](0255-org-container-keys-refresh-deletes-stale.md) | org_container_keys refresh deletes stale keys on ingest | Data Model | 6 | Accepted |
-| [0256](0256-dual-tag-filter-syntax-legacy-koku.md) | Dual tag filter syntax (legacy and Koku-style) | Tags | 11 | Accepted |
+| [0256](0256-dual-tag-filter-syntax-legacy-koku.md) | Dual tag filter syntax — legacy and Koku-style (incorporates former ADR-0121) | Tags | 11 | Accepted |
 | [0257](0257-stale-tag-sync-warning-on-list-responses.md) | Stale tag sync warning on list responses | Tags | 11 | Accepted |
-| [0258](0258-recommendation-profiles-seeded-unused-percentiles-in-settings.md) | recommendation_profiles seeded but unused — percentiles live in settings API | Data Model | 1–3 | Accepted |
+| [0258](0258-recommendation-profiles-seeded-unused-percentiles-in-settings.md) | recommendation_profiles seeded but unused; custom profiles deferred (incorporates former ADR-0284) | Data Model | 1–3 | Accepted |
 | [0259](0259-synchronous-ingest-time-engine-replaces-kruize-experiment-lifecycle.md) | Replace Kruize experiment lifecycle with synchronous ingest-time engine | Engine / Algorithm | 0–1 | Accepted |
 | [0260](0260-per-container-recommendation-granularity-operator-csv-grain.md) | Per-container recommendation granularity matching operator CSV grain | Data Model | 1 | Accepted |
 | [0261](0261-three-terms-short-medium-long-kruize-aligned-defaults.md) | Three terms (short/medium/long) with Kruize-aligned defaults (1d/7d/15d) | Engine / Algorithm | 1–3 | Accepted |
@@ -274,10 +268,9 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0263](0263-stop-writing-workload-metrics-in-native-mode.md) | Stop writing workload_metrics in native mode | Data Model | 1–2 | Accepted |
 | [0264](0264-kruize-era-legacy-table-background-deletion.md) | Kruize-era legacy table background deletion strategy | Deployment / Ops | 7–8 | Accepted |
 | [0265](0265-operator-csv-column-contract-optional-columns-partial-upgrade.md) | Operator CSV column contract — optional columns and partial-upgrade tolerance | Ingestion | 4–11 | Accepted |
-| [0266](0266-go-language-choice-inherited-kafka-integration-service.md) | Go language choice — inherited from pre-existing Kafka integration service | Deployment / Ops | Pre-0 | Accepted |
+| [0266](0266-go-language-choice-inherited-kafka-integration-service.md) | Go language choice for native engine integration (vs Java/Kruize rewrite) | Deployment / Ops | Pre-0 | Accepted |
 | [0267](0267-echo-framework-inherited-pre-existing-service.md) | Echo framework inherited from pre-existing service | API Design | Pre-0 | Accepted |
-| [0268](0268-phase1-dual-pool-pgx-gorm-before-unification.md) | Phase-1 dual pool (pgx + GORM) before unification | Deployment / Ops | 1 | Accepted |
-| [0269](0269-testcontainers-over-docker-compose-test-isolation.md) | testcontainers over docker-compose for test isolation | Testing | 1 | Accepted |
+| [0269](0269-testcontainers-over-docker-compose-test-isolation.md) | testcontainers PostgreSQL 16 + golang-migrate over docker-compose (incorporates former ADR-0139) | Testing | 1 | Accepted |
 | [0270](0270-on-demand-api-time-recommendations-deferred.md) | On-demand API-time recommendations deferred (ROS_ENABLE_REALTIME_RECS) | API Design | 1–3 | Accepted |
 | [0271](0271-recommendation-history-boxplots-deferred-phase4-to-phase5.md) | Recommendation history and boxplots deferred from phase 4 to phase 5 | Data Model | 4–5 | Accepted |
 | [0272](0272-detail-response-typed-struct-replaces-adhoc-json-maps.md) | DetailResponse typed struct replaces ad-hoc JSON maps | API Design | 5 | Accepted |
@@ -292,7 +285,5 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0281](0281-jsonb-vs-normalized-columns-when-each-appropriate.md) | JSONB vs normalized columns — when each is appropriate | Data Model | 7–8 | Accepted |
 | [0282](0282-cgo-confluent-kafka-go-test-isolation-strategy.md) | CGO dependency via confluent-kafka-go — test isolation strategy | Ingestion | 0 | Accepted |
 | [0283](0283-synchronous-rest-api-no-websocket-sse-recommendation-updates.md) | Synchronous REST API — no WebSocket/SSE for recommendation updates | API Design | Pre-0 through 12 | Accepted |
-| [0284](0284-custom-profile-names-deferred-dual-engines-only.md) | Custom profile names deferred — v1 limited to dual cost/performance engines | API Design | 3+ | Accepted |
 | [0285](0285-phase-branch-merge-order-migration-renumbering.md) | Phase branch merge order and migration renumbering | Deployment / Ops | 4–6 | Accepted |
-| [0286](0286-adversarial-review-architecture-governance-loop.md) | Adversarial review as architecture governance loop | Deployment / Ops | 11–12 | Accepted |
 | [0287](0287-operator-14-day-prometheus-lookback-integration-boundary.md) | Operator 14-day Prometheus lookback as integration boundary | Ingestion | Cross-repo (koku-metrics-operator) | Accepted |

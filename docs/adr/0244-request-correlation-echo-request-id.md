@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 API debugging requires correlating log lines across middleware, handlers, and downstream Masu calls. [ADR-0133](0133-structured-logging-zerolog.md) mandates structured fields including `request_id`.

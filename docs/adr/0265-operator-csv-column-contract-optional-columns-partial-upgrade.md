@@ -43,8 +43,8 @@ Breaks existing operator tar.gz pipeline.
 
 ## Related Decisions
 
-- [ADR-0097](0097-csv-contract-test-operator-headers.md): CSV contract tests.
-- [ADR-0139](0139-testcontainers-pg16-integration.md): Test infrastructure.
+- [ADR-0142](0142-csv-contract-test-operator-columns.md): CSV contract tests.
+- [ADR-0269](0269-testcontainers-over-docker-compose-test-isolation.md): Test infrastructure.
 - [ADR-0088](0088-kafka-s3-pipeline-both-modes.md): Kafka ingest pipeline.
 - [ADR-0287](0287-operator-14-day-prometheus-lookback-integration-boundary.md): Operator lookback boundary.
 

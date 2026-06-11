@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 CSV processing can take 30–120 seconds for large files. Default Kafka session timeout (10s) causes constant rebalances. The consumer must stay in the group while processing without blocking partition assignment for the entire cluster.

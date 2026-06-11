@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Note:** This ADR documents a straightforward or inherited decision kept for completeness and historical traceability. It does not represent a non-obvious architectural fork.
+
 ## Context
 
 Users may have RBAC permissions scoped to specific clusters AND specific projects. The system must determine how to combine these scopes when filtering recommendations.

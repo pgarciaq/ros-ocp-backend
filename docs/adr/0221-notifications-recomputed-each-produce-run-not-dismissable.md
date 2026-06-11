@@ -34,7 +34,7 @@ Complex dual model with unclear product semantics.
 ## Related Decisions
 
 - [ADR-0038](0038-notification-code-bitmap-1-63.md): Notification code bitmap.
-- [ADR-0039](0039-notification-codes-smallint-array.md): SMALLINT[] storage.
+- [ADR-0038](0038-notification-code-bitmap-1-63.md): SMALLINT[] storage and bitmap dedup.
 - [ADR-0222](0222-notification-dual-source-db-seed-and-go-definitions.md): Dual source catalog.
 
 ## References
