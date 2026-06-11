@@ -44,21 +44,32 @@ type tokenReviewResponse struct {
 // When ROS_TAGS_DEV_TOKEN is set, matching tokens are accepted (dev-only).
 // Otherwise the token is validated via the Kubernetes TokenReview API.
 func ValidateBearerToken(ctx context.Context, bearerToken string) error {
+	_, err := AuthenticateInternalCaller(ctx, bearerToken)
+	return err
+}
+
+// AuthenticateInternalCaller validates the bearer token and returns the caller
+// service account name (short form) for audit logging.
+func AuthenticateInternalCaller(ctx context.Context, bearerToken string) (string, error) {
 	bearerToken = strings.TrimSpace(bearerToken)
 	if bearerToken == "" {
-		return fmt.Errorf("missing bearer token")
+		return "", fmt.Errorf("missing bearer token")
 	}
 
 	cfg := config.GetConfig()
 	if devToken := strings.TrimSpace(cfg.TagsDevToken); devToken != "" && bearerToken == devToken {
 		log.Warn("tag sync auth: accepting ROS_TAGS_DEV_TOKEN (dev-only fallback)")
-		return nil
+		return "dev-token", nil
 	}
 
-	return validateSATokenViaTokenReview(ctx, bearerToken, cfg.TagsAllowedServiceAccounts)
+	username, err := validateSATokenViaTokenReview(ctx, bearerToken, cfg.TagsAllowedServiceAccounts)
+	if err != nil {
+		return "", err
+	}
+	return serviceAccountName(username), nil
 }
 
-func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAccounts string) error {
+func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAccounts string) (string, error) {
 	cfg := config.GetConfig()
 	tokenPath := strings.TrimSpace(cfg.KubernetesSATokenPath)
 	if tokenPath == "" {
@@ -69,7 +80,7 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 		reviewerToken, err = readFileTrim(defaultSATokenPath)
 	}
 	if err != nil || reviewerToken == "" {
-		return fmt.Errorf("service account reviewer token unavailable: %w", err)
+		return "", fmt.Errorf("service account reviewer token unavailable: %w", err)
 	}
 
 	reviewURL := strings.TrimSpace(cfg.KubernetesTokenReviewURL)
@@ -85,12 +96,12 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 		}{Token: token},
 	})
 	if err != nil {
-		return fmt.Errorf("marshal token review request: %w", err)
+		return "", fmt.Errorf("marshal token review request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reviewURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create token review request: %w", err)
+		return "", fmt.Errorf("create token review request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+reviewerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -98,49 +109,49 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("token review request failed: %w", err)
+		return "", fmt.Errorf("token review request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read token review response: %w", err)
+		return "", fmt.Errorf("read token review response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("token review returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return "", fmt.Errorf("token review returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 
 	var review tokenReviewResponse
 	if err := json.Unmarshal(respBody, &review); err != nil {
-		return fmt.Errorf("decode token review response: %w", err)
+		return "", fmt.Errorf("decode token review response: %w", err)
 	}
 	if !review.Status.Authenticated {
 		if review.Status.Error != "" {
-			return fmt.Errorf("token not authenticated: %s", review.Status.Error)
+			return "", fmt.Errorf("token not authenticated: %s", review.Status.Error)
 		}
-		return fmt.Errorf("token not authenticated")
+		return "", fmt.Errorf("token not authenticated")
 	}
 
 	username := review.Status.User.Username
 	if !strings.HasPrefix(username, "system:serviceaccount:") {
-		return fmt.Errorf("token user is not a service account: %q", username)
+		return "", fmt.Errorf("token user is not a service account: %q", username)
 	}
 
 	allowed := parseAllowedServiceAccounts(allowedAccounts)
 	if len(allowed) == 0 {
 		if config.IsDevelopment() {
-			return nil
+			return username, nil
 		}
-		return fmt.Errorf("service account allowlist is not configured (ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS)")
+		return "", fmt.Errorf("service account allowlist is not configured (ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS)")
 	}
 
 	saName := serviceAccountName(username)
 	for _, candidate := range allowed {
 		if candidate == saName || candidate == username {
-			return nil
+			return username, nil
 		}
 	}
-	return fmt.Errorf("service account %q is not allowed", saName)
+	return "", fmt.Errorf("service account %q is not allowed", saName)
 }
 
 func parseAllowedServiceAccounts(raw string) []string {

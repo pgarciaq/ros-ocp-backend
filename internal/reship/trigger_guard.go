@@ -18,15 +18,27 @@ var reshipCoalescedTotal = promauto.NewCounterVec(
 )
 
 type reshipFlight struct {
-	mu      sync.Mutex
-	running bool
-	pending bool
+	mu                 sync.Mutex
+	running            bool
+	pending            bool
+	latestClusterUUIDs []uuid.UUID
 }
 
 var reshipFlights sync.Map // map[string]*reshipFlight
 
+// reshipBatchHook is invoked with the cluster list for each coalesced batch (tests only).
+var reshipBatchHook func([]uuid.UUID)
+
 func resetReshipFlightsForTest() {
 	reshipFlights = sync.Map{}
+	reshipBatchHook = nil
+}
+
+func copyClusterUUIDs(ids []uuid.UUID) []uuid.UUID {
+	if len(ids) == 0 {
+		return nil
+	}
+	return append([]uuid.UUID(nil), ids...)
 }
 
 func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
@@ -35,6 +47,7 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 	flight := flightIface.(*reshipFlight)
 
 	flight.mu.Lock()
+	flight.latestClusterUUIDs = copyClusterUUIDs(clusterUUIDs)
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
@@ -45,7 +58,11 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 	flight.mu.Unlock()
 
 	for {
-		runReshipBatch(ctx, trigger, orgID, clusterUUIDs)
+		flight.mu.Lock()
+		clusters := copyClusterUUIDs(flight.latestClusterUUIDs)
+		flight.mu.Unlock()
+
+		runReshipBatch(ctx, trigger, orgID, clusters)
 
 		flight.mu.Lock()
 		if flight.pending {
@@ -60,6 +77,9 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 }
 
 func runReshipBatch(ctx context.Context, trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
+	if reshipBatchHook != nil {
+		reshipBatchHook(copyClusterUUIDs(clusterUUIDs))
+	}
 	sem := make(chan struct{}, orgMaxConcurrent())
 	var wg sync.WaitGroup
 	for _, id := range clusterUUIDs {

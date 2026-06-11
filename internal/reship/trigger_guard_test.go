@@ -84,3 +84,44 @@ func TestTriggerAsync_CoalescedMetricIncrements(t *testing.T) {
 
 	assert.InDelta(t, 2, promtest.ToFloat64(reshipCoalescedTotal.WithLabelValues(orgID))-before, 0)
 }
+
+func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
+	resetReshipFlightsForTest()
+
+	orgID := "org-reship-latest"
+	clusterA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	clusterB := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	clusterC := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+	var mu sync.Mutex
+	var batches [][]uuid.UUID
+	reshipBatchHook = func(ids []uuid.UUID) {
+		mu.Lock()
+		batches = append(batches, ids)
+		mu.Unlock()
+	}
+	defer func() { reshipBatchHook = nil }()
+
+	trigger := &countingTriggerer{delay: 150 * time.Millisecond, started: make(chan struct{}, 1)}
+	ctx := context.Background()
+
+	done := make(chan struct{})
+	go func() {
+		triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterA})
+		close(done)
+	}()
+	<-trigger.started
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterB})
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterC})
+	<-done
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(batches) < 2 {
+			return false
+		}
+		last := batches[len(batches)-1]
+		return len(last) == 1 && last[0] == clusterC
+	}, 2*time.Second, 10*time.Millisecond)
+}

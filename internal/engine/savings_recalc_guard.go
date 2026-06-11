@@ -17,6 +17,11 @@ var savingsRecalcCoalescedTotal = promauto.NewCounterVec(
 	[]string{"org_id"},
 )
 
+type savingsRecalcParams struct {
+	clusterUUID string
+	recTypes    []string
+}
+
 var savingsRecalcFlights sync.Map // map[string]*recalcFlight
 
 func resetSavingsRecalcFlightsForTest() {
@@ -29,6 +34,10 @@ func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgI
 	flight := flightIface.(*recalcFlight)
 
 	flight.mu.Lock()
+	flight.latestSavings = savingsRecalcParams{
+		clusterUUID: clusterUUID,
+		recTypes:    append([]string(nil), recTypes...),
+	}
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
@@ -39,7 +48,11 @@ func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgI
 	flight.mu.Unlock()
 
 	for {
-		RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, recTypes)
+		flight.mu.Lock()
+		params := flight.latestSavings
+		flight.mu.Unlock()
+
+		RecalculateSavingsForOrg(ctx, pool, orgID, params.clusterUUID, params.recTypes)
 
 		flight.mu.Lock()
 		if flight.pending {

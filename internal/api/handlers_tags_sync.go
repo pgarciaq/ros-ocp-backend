@@ -26,7 +26,8 @@ func PostTagsSync(c echo.Context) error {
 		})
 	}
 
-	if authErr := validateInternalTagsAuth(c); authErr != nil {
+	saName, authErr := validateInternalTagsAuth(c)
+	if authErr != nil {
 		return authErr
 	}
 
@@ -43,6 +44,10 @@ func PostTagsSync(c echo.Context) error {
 			"message": err.Error(),
 		})
 	}
+	if orgErr := validateInternalOrgTarget(req.OrgID); orgErr != nil {
+		return orgErr
+	}
+	auditInternalEndpoint(c, "POST /internal/tags/sync", req.OrgID, saName, "sync_tags")
 
 	svc := tags.NewSyncService(database.GetPool())
 	updated, err := svc.SyncOrgTags(c.Request().Context(), req)

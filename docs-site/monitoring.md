@@ -134,6 +134,8 @@ GORM and direct pgxpool access share one pool per process. Metrics reflect `pool
 | `rosocp_ingest_flush_total` | Counter | — | Incremental digest flush count |
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Time spent in each incremental flush |
 | `rosocp_ingest_manifest_id_synthesized_total` | Counter | — | Legacy Kafka messages without `metadata.manifest_id` that received a synthesized `synth-*` manifest ID for per-file tracking |
+| `rosocp_manifest_recommendation_deferred_total` | Counter | — | Recommendation runs deferred for synthesized manifest IDs pending the quiet period |
+| `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `org_id`, `sa_name` | Internal platform endpoint invocations for cross-tenant audit |
 | `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Analytics write failures during container ingestion. `error_type`: `history` or `quality`. Increments in degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`); strict mode retries instead. |
 
 ### Koku effective-rates cache

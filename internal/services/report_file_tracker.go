@@ -115,13 +115,17 @@ func ensureManifestExpectations(ctx context.Context, pool *pgxpool.Pool, kafkaMs
 			expected[i] = filenameForFileIndex(kafkaMsg, fileURL, i)
 		}
 	}
-	return model.EnsureReportFileExpectations(
+	if err := model.EnsureReportFileExpectations(
 		ctx, pool, manifestID,
 		kafkaMsg.Metadata.Cluster_uuid,
 		kafkaMsg.Metadata.Org_id,
 		expected,
 		reportTypeForFilename,
-	)
+	); err != nil {
+		return err
+	}
+	notifySynthManifestFileActivity(manifestID)
+	return nil
 }
 
 func shouldSkipProcessedFile(ctx context.Context, pool *pgxpool.Pool, manifestID, filename string) bool {
@@ -201,5 +205,7 @@ func markFileProcessing(
 		filename, reportType,
 	); err != nil {
 		log.Errorf("failed to mark report_file_status processing for %s: %v", filename, err)
+		return
 	}
+	notifySynthManifestFileActivity(manifestID)
 }

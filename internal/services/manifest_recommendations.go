@@ -15,9 +15,14 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
+var runManifestRecommendationsHook func(context.Context, *pgxpool.Pool, types.KafkaMsg) error
+
 // runManifestRecommendations executes recommendation engines after all expected
 // manifest files have been ingested successfully.
 func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMsg types.KafkaMsg) error {
+	if runManifestRecommendationsHook != nil {
+		return runManifestRecommendationsHook(ctx, pool, kafkaMsg)
+	}
 	manifestID := manifestIDFromMsg(kafkaMsg)
 	complete, err := model.IsManifestIngestionComplete(ctx, pool, manifestID)
 	if err != nil {

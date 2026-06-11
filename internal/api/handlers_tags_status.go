@@ -22,7 +22,8 @@ func GetTagsStatus(c echo.Context) error {
 		})
 	}
 
-	if authErr := validateInternalTagsAuth(c); authErr != nil {
+	saName, authErr := validateInternalTagsAuth(c)
+	if authErr != nil {
 		return authErr
 	}
 
@@ -33,6 +34,10 @@ func GetTagsStatus(c echo.Context) error {
 			"message": "org_id query parameter is required",
 		})
 	}
+	if orgErr := validateInternalOrgTarget(orgID); orgErr != nil {
+		return orgErr
+	}
+	auditInternalEndpoint(c, "GET /internal/tags/status", orgID, saName, "read_tag_status")
 
 	provider := tags.GetProvider()
 	catalog, err := tags.BuildTagCatalog(c.Request().Context(), provider, orgID)

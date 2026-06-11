@@ -87,12 +87,23 @@ Set the **same** token on Koku (`ROS_TAGS_DEV_TOKEN`) and ROS.
 
 **Production (api mode):** `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` must be non-empty. Empty allowlist is rejected at startup and at runtime outside development.
 
+### Internal `org_id` scope (by design)
+
+Internal endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`, `POST /internal/recalculate-savings`) authenticate the **caller** ServiceAccount but do **not** bind the request `org_id` to the caller's tenant. This is intentional: Koku/Masu invoke ROS on behalf of arbitrary tenants using cluster-internal credentials. Defense-in-depth relies on:
+
+- **NetworkPolicy** restricting who can reach internal routes (on-prem chart default)
+- **`ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`** allowlist (production)
+- **Structured audit logging** on each internal call (`caller_sa`, `target_org_id`, `action`)
+- **`rosocp_internal_endpoint_calls_total`** metric (labels `endpoint`, `org_id`, `sa_name`) for anomaly detection
+- **Optional `ROS_INTERNAL_ALLOWED_ORGS`** comma-separated allowlist when operators want to restrict target orgs (empty = all allowed, default)
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag sync API and list filters (cost-onprem chart default) |
 | `ROS_TAGS_SOURCE` | `db` | Must be `api` for push endpoints to accept traffic |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated SA names; empty accepts any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only static bearer token |
+| `ROS_INTERNAL_ALLOWED_ORGS` | (empty) | Optional comma-separated org IDs internal endpoints may target; empty allows all |
 
 Implementation: [`internal/tags/auth.go`](../../internal/tags/auth.go),
 [`internal/api/handlers_tags_sync.go`](../../internal/api/handlers_tags_sync.go).

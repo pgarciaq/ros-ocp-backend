@@ -18,9 +18,10 @@ var thresholdRecalcCoalescedTotal = promauto.NewCounterVec(
 )
 
 type recalcFlight struct {
-	mu      sync.Mutex
-	running bool
-	pending bool
+	mu            sync.Mutex
+	running       bool
+	pending       bool
+	latestSavings savingsRecalcParams
 }
 
 var thresholdRecalcFlights sync.Map // map[string]*recalcFlight

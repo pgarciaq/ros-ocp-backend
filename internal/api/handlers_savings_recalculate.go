@@ -9,7 +9,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 )
 
 // SavingsRecalcRequest is the body for POST /internal/recalculate-savings.
@@ -43,8 +42,8 @@ func PostRecalculateSavings(c echo.Context) error {
 		})
 	}
 
-	bearerToken := tags.BearerTokenFromHeader(c.Request().Header.Get(echo.HeaderAuthorization))
-	if err := tags.ValidateBearerToken(c.Request().Context(), bearerToken); err != nil {
+	saName, authErr := authenticateInternalCaller(c)
+	if authErr != nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{
 			"status":  "unauthorized",
 			"message": "invalid or missing service account token",
@@ -65,6 +64,9 @@ func PostRecalculateSavings(c echo.Context) error {
 			"message": "org_id is required",
 		})
 	}
+	if orgErr := validateInternalOrgTarget(orgID); orgErr != nil {
+		return orgErr
+	}
 
 	recTypes := engine.NormalizeSavingsRecTypesForAPI(req.RecommendationTypes)
 	if len(recTypes) == 0 {
@@ -75,6 +77,7 @@ func PostRecalculateSavings(c echo.Context) error {
 	}
 
 	clusterUUID := strings.TrimSpace(req.ClusterUUID)
+	auditInternalEndpoint(c, "POST /internal/recalculate-savings", orgID, saName, "recalculate_savings")
 	engine.TriggerSavingsRecalculationAsync(database.GetPool(), orgID, clusterUUID, recTypes)
 
 	return c.JSON(http.StatusAccepted, SavingsRecalcResponse{

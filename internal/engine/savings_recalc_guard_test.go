@@ -88,3 +88,52 @@ func TestTriggerSavingsRecalculationAsync_CoalescedMetricIncrements(t *testing.T
 
 	assert.InDelta(t, 2, promtest.ToFloat64(savingsRecalcCoalescedTotal.WithLabelValues(orgID))-before, 0)
 }
+
+func TestTriggerSavingsRecalcCoalesced_UsesLatestParameters(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
+	t.Setenv("ROS_SAVINGS_RECALCULATION_ENABLED", "true")
+	resetSavingsRecalcFlightsForTest()
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-savings-recalc-latest"
+	ctx := context.Background()
+
+	var mu sync.Mutex
+	var lastCluster string
+	var lastRecTypes []string
+	started := make(chan struct{})
+	var once sync.Once
+
+	SetSavingsRecalcRunHookForTest(func(oid string, recTypes []string) {
+		once.Do(func() { close(started) })
+		time.Sleep(150 * time.Millisecond)
+	})
+	defer ClearSavingsRecalcRunHookForTest()
+
+	restore := SetClusterSavingsRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID string, recTypes []string) error {
+		mu.Lock()
+		lastCluster = clusterUUID
+		lastRecTypes = append([]string(nil), recTypes...)
+		mu.Unlock()
+		return nil
+	})
+	defer restore()
+
+	done := make(chan struct{})
+	go func() {
+		triggerSavingsRecalcCoalesced(ctx, pool, orgID, "cluster-A", []string{"container"})
+		close(done)
+	}()
+
+	<-started
+	triggerSavingsRecalcCoalesced(ctx, pool, orgID, "cluster-B", []string{"container"})
+	triggerSavingsRecalcCoalesced(ctx, pool, orgID, "cluster-C", []string{"node"})
+	<-done
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return lastCluster == "cluster-C" && len(lastRecTypes) == 1 && lastRecTypes[0] == "node"
+	}, 2*time.Second, 10*time.Millisecond)
+}

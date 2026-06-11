@@ -264,6 +264,8 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). **Blocked at startup when `DEVELOPMENT` is not `true`.** |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
 | `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `true` | Require bearer TokenReview auth on `/internal/tags/*` regardless of `ROS_TAGS_SOURCE`. Set `false` for local dev without SA tokens. |
+| `ROS_INTERNAL_ALLOWED_ORGS` | (empty) | Optional comma-separated org IDs that internal endpoints may target. Empty allows all orgs (default for backward compatibility). |
+| `ROS_SYNTH_MANIFEST_QUIET_PERIOD` | `30` | Seconds to defer recommendation engines after synthesized manifest (`synth-*`) ingestion completes; timer resets on each new file registration for that manifest. |
 | `ROS_HISTORY_DEFAULT_DAYS` | `30` | Default lookback window for history endpoints when `start_date` and `end_date` are both omitted. |
 | `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | In-memory fleet summary cache TTL in seconds (LRU, invalidated on recommendation ingest). |
 

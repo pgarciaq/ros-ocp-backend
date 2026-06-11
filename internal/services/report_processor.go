@@ -541,7 +541,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	}
 
 	if useNativeCSVIngest {
-		if recErr := runManifestRecommendations(ctx, pool, kafkaMsg); recErr != nil {
+		if recErr := scheduleManifestRecommendations(ctx, pool, kafkaMsg); recErr != nil {
 			log.Errorf("deferred manifest recommendations failed: %v", recErr)
 			if isTransientKafkaProcessingError(recErr) {
 				recordKafkaTransient(recErr)

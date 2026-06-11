@@ -342,6 +342,11 @@ type Config struct {
 	TagsSyncMaxBodyMiB int64 `mapstructure:"ROS_TAGS_SYNC_MAX_BODY_MIB"`
 	// InternalTagsAuthRequired gates bearer auth on /internal/tags/* regardless of ROS_TAGS_SOURCE (default true).
 	InternalTagsAuthRequired bool `mapstructure:"ROS_INTERNAL_TAGS_AUTH_REQUIRED"`
+	// InternalAllowedOrgs restricts which org IDs internal endpoints may target (comma-separated).
+	// Empty means all orgs are allowed (default for backward compatibility).
+	InternalAllowedOrgs string `mapstructure:"ROS_INTERNAL_ALLOWED_ORGS"`
+	// SynthManifestQuietPeriodSecs debounces recommendation runs for synthesized manifest IDs (default 30).
+	SynthManifestQuietPeriodSecs int `mapstructure:"ROS_SYNTH_MANIFEST_QUIET_PERIOD"`
 
 	// HistoryDefaultDays is the lookback window when start_date/end_date are omitted (default 30).
 	HistoryDefaultDays int `mapstructure:"ROS_HISTORY_DEFAULT_DAYS"`
@@ -789,6 +794,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 	viper.SetDefault("ROS_TAGS_ENABLED", true)
 	viper.SetDefault("ROS_INTERNAL_TAGS_AUTH_REQUIRED", true)
+	viper.SetDefault("ROS_SYNTH_MANIFEST_QUIET_PERIOD", 30)
 	viper.SetDefault("ROS_HISTORY_DEFAULT_DAYS", 30)
 	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_TTL", 300)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
