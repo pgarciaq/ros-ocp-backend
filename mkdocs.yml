@@ -99,6 +99,7 @@ nav:
       - HPA Recommendations: planned-features/hpa-recommendations.md
       - VPA Recommendations: planned-features/vpa-recommendations.md
       - Network Optimization: planned-features/network.md
+      - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
       - Local Mode: planned-features/local-mode.md
   - Architecture:
       - Plugin Architecture: architecture/plugin-architecture.md

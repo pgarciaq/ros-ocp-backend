@@ -19,6 +19,7 @@ section.
 | [hpa-recommendations.md](hpa-recommendations.md) | Horizontal Pod Autoscaler tuning |
 | [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |
+| [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
 
 Each page is marked **Planned / Future Work** and may change before implementation.
