@@ -4,7 +4,7 @@ Authentication for tag data transfer depends on deployment mode (`ROS_TAGS_SOURC
 
 ---
 
-## On-Prem (`db` mode): No authentication needed
+## On-Prem (`db` mode): Direct DB reads, authenticated internal endpoints
 
 When ROS and Koku share a PostgreSQL instance (default for cost-onprem), ROS reads tag
 data **directly from Koku tenant tables**:
@@ -12,12 +12,13 @@ data **directly from Koku tenant tables**:
 - `org{org_id}.reporting_enabledtagkeys`
 - `org{org_id}.reporting_ocptags_values`
 
-There is **no HTTP push**, **no ServiceAccount token**, and **no mTLS** between services
-for tag filtering. ROS uses its database credentials to query Koku schemas on the same
-PostgreSQL server.
+There is **no HTTP push** from Koku for tag filtering in db mode. ROS uses its database
+credentials to query Koku schemas on the same PostgreSQL server.
 
-Internal push endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`) return
-**404** when `ROS_TAGS_SOURCE=db` — they are not part of the on-prem data path.
+Internal push endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`) remain
+registered but are not used for the on-prem data path. When called, they require bearer
+TokenReview auth when `ROS_INTERNAL_TAGS_AUTH_REQUIRED=true` (default) — set
+`ROS_INTERNAL_TAGS_AUTH_REQUIRED=false` for local dev without service account tokens.
 
 **What you still configure:**
 

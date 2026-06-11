@@ -263,6 +263,9 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). **Required non-empty in production when `ROS_TAGS_SOURCE=api`.** |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). **Blocked at startup when `DEVELOPMENT` is not `true`.** |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
+| `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `true` | Require bearer TokenReview auth on `/internal/tags/*` regardless of `ROS_TAGS_SOURCE`. Set `false` for local dev without SA tokens. |
+| `ROS_HISTORY_DEFAULT_DAYS` | `30` | Default lookback window for history endpoints when `start_date` and `end_date` are both omitted. |
+| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | In-memory fleet summary cache TTL in seconds (LRU, invalidated on recommendation ingest). |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
 using `Authorization: Bearer <service-account-token>`. Sync freshness is available at

@@ -7,7 +7,7 @@
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
+**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29, #35, #37, #47, #50–#52, #57, #59** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
 
 ---
 
@@ -961,10 +961,15 @@ When `metadata.manifest_id` is empty, the processor now synthesizes a determinis
 - **Severity:** Medium
 - **Dimension:** Security / Authorization
 - **Location:** `internal/api/middleware/identity.go:12-25`, `internal/api/server.go:176-180`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Identity middleware decodes `X-Rh-Identity` and extracts `org_id` but never checks `entitlements.cost_management.is_entitled`. Any structurally valid identity header grants full API access when RBAC is disabled or gateway omits entitlement enforcement.
 - **Risk:** Unentitled or expired accounts access optimization data in SNO/dev or misconfigured gateway deployments.
 - **Recommendation:** Reject requests where `entitlements.cost_management.is_entitled != true` unless `DEVELOPMENT=true`. Add integration test.
 - **Effort:** S
+
+**Resolution**
+
+Added `CostManagementEntitlement` middleware on the v1 API group (`internal/api/middleware/entitlement.go`). Skipped when `DEVELOPMENT=true`. Unit tests in `entitlement_test.go`. Test identity headers include `is_entitled: true`.
 
 ### Finding #36: No rate limiting on expensive async internal endpoints
 
@@ -986,10 +991,15 @@ Added per-org single-flight coalescing for savings recalculation (`internal/engi
 - **Severity:** Medium
 - **Dimension:** Security / Multi-tenancy
 - **Location:** `internal/api/handlers_tags_status.go:17-44`, `internal/api/server.go:169-173`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Bearer auth is skipped when `ROS_TAGS_SOURCE=db`. Any caller on the pod network can enumerate tag catalogs for arbitrary `org_id` query values.
 - **Risk:** Cross-tenant tag metadata disclosure when NetworkPolicy is misconfigured (common in SNO/dev).
 - **Recommendation:** Require service-account bearer auth on all `/internal/*` routes regardless of tag source mode; bind `org_id` to authenticated caller scope.
 - **Effort:** S
+
+**Resolution**
+
+`validateInternalTagsAuth` enforces TokenReview bearer auth on `/internal/tags/status` and `/internal/tags/sync` when `ROS_INTERNAL_TAGS_AUTH_REQUIRED=true` (default). Set `ROS_INTERNAL_TAGS_AUTH_REQUIRED=false` for local dev without SA tokens.
 
 ### Finding #38: Kafka consumer debug logs expose message payload prefix
 
@@ -1112,10 +1122,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 - **Severity:** Low
 - **Dimension:** Operational Robustness
 - **Location:** `internal/engine/threshold_recalculate.go:89`, `internal/engine/savings_recalculate.go:77`, `internal/reship/trigger.go:47-48`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Threshold recalc, savings recalc, and reship triggers spawn goroutines with `context.Background()` detached from the API server shutdown context.
 - **Risk:** In-flight recalculations continue during pod termination, causing connection errors, partial DB writes, and confusing metrics during rollouts.
 - **Recommendation:** Use a process-level cancellable context wired from `StartAPIServer` shutdown; wait for in-flight jobs up to termination grace period.
 - **Effort:** M
+
+**Resolution**
+
+`internal/asyncjobs` provides shutdown-aware context from `StartAPIServer`. Threshold/savings recalc and masu reship use `asyncjobs.Go` and propagate cancellation through coalesced job loops. Warns if jobs exceed 30s grace period.
 
 ### Finding #48: GPU MIG list loads entire fleet into memory before pagination
 
@@ -1148,30 +1163,45 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 - **Severity:** Low
 - **Dimension:** Correctness / UX
 - **Location:** `internal/model/recommendation_history.go:48-100`, `internal/api/handlers_history.go:139-171`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Container/namespace lists override limit to `RECORD_LIMIT_CSV` (default 1000) for CSV format. History uses `opts.Limit` from `ListAPIOptions` (default 100) with no CSV override.
 - **Risk:** Operators receive truncated history exports believing they got the full dataset; compliance/audit gaps.
 - **Recommendation:** Apply the same CSV limit override as `recommendation_set_native.go:354-355`; document in OpenAPI.
 - **Effort:** S
+
+**Resolution**
+
+History handler sets `opts.Limit = RECORD_LIMIT_CSV` and `opts.Offset = 0` when `format=csv`. OpenAPI documents CSV row cap.
 
 ### Finding #51: History endpoint wide default date window without cluster filter
 
 - **Severity:** Low
 - **Dimension:** Performance
 - **Location:** `internal/api/handlers_history.go:51-57`, `internal/model/recommendation_history.go:73-82`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Default `start_date` is first of month; no default cluster/project filter. Count query scans all history rows for the org in the window before pagination.
 - **Risk:** Expensive COUNT(*) on `recommendation_history` for large orgs; statement timeout under load (25s API default).
 - **Recommendation:** Require at least one scoping filter (cluster or project) when date range exceeds N days, or use approximate counts for unscoped queries.
 - **Effort:** M
+
+**Resolution**
+
+When both `start_date` and `end_date` are omitted, history queries default to the last `ROS_HISTORY_DEFAULT_DAYS` (default 30) instead of first-of-month through now. Configurable via env. Documented in OpenAPI.
 
 ### Finding #52: Fleet summary executes uncached full-org aggregation
 
 - **Severity:** Low
 - **Dimension:** Performance
 - **Location:** `internal/api/handlers_fleet.go:60-80`, `internal/model/org_recommendation_stats.go`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** Fleet summary queries aggregate container counts and savings across all clusters for the org on every request with 5-minute HTTP cache only.
 - **Risk:** Repeated dashboard polling hammers PostgreSQL; no materialized summary table or Redis cache layer.
 - **Recommendation:** Populate `org_recommendation_stats` incrementally during recommendation runs; serve fleet summary from pre-aggregated table.
 - **Effort:** M
+
+**Resolution**
+
+Added in-memory LRU cache (`internal/fleetsummary`) keyed by org_id and RBAC scope. TTL via `ROS_FLEET_SUMMARY_CACHE_TTL` (default 300s). Invalidated on recommendation ingest via `WriteRecommendations` and savings recalc.
 
 ### Finding #53: No CI enforcement of OpenAPI spec vs CHANGELOG on breaking changes
 
@@ -1222,10 +1252,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 - **Severity:** Low
 - **Dimension:** Correctness
 - **Location:** `internal/kafka/consumer.go:68-130`, `internal/services/kafka_retry.go:186-204`
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** `ROS_KAFKA_PARALLEL=true` (default) dispatches handler work to a worker pool but all workers call `CommitMessage` on the same `*kafka.Consumer`. librdkafka consumer is not documented as thread-safe for concurrent commits.
 - **Risk:** Rare offset commit corruption or consumer crash under high throughput; difficult to reproduce.
 - **Recommendation:** Serialize commits on the reader goroutine (commit channel) or verify/constrain to partition-locked commits only with documented thread-safety guarantee.
 - **Effort:** M
+
+**Resolution**
+
+`kafka.CommitMessage` serializes commits with a mutex when parallel mode is enabled. All commit call sites in `report_processor.go` and `kafka_retry.go` route through this helper. Partition-level handler mutex remains for message processing ordering.
 
 ### Finding #58: `report_file_status` operator recovery runbook absent
 
@@ -1245,10 +1280,15 @@ Changed default `ROS_INGEST_STRICT_ANALYTICS` from `false` to `true`. Degraded m
 - **Severity:** Low
 - **Dimension:** Maintainability
 - **Location:** `internal/model/recommendation_set_native.go:655` (`getNativeRecommendationByIDFallback`)
+- **Status:** **Resolved** (2026-06-11)
 - **Description:** TODO documents a fallback query path pending `container_id` backfill verification in production. Two code paths increase test matrix and IDOR audit surface.
 - **Risk:** Fallback path may diverge from primary path filters (org scope, workload_type); regression during removal.
 - **Recommendation:** Complete backfill verification, remove fallback, add migration to enforce NOT NULL if appropriate.
 - **Effort:** M
+
+**Resolution**
+
+Removed `getNativeRecommendationByIDFallback`. All new writes populate `container_id` via `WriteRecommendations` ON CONFLICT upsert. Detail lookup uses indexed `container_id` only; missing rows return 404.
 
 ### Finding #60: `aws-sdk-go` v1 remains a direct dependency
 
@@ -1297,9 +1337,9 @@ Improvements since v1.6 worth acknowledging:
 | 32 | Empty manifest_id bypasses tracking/gating | High | **Resolved** |
 | 33 | Kruize path lacks report_file_status | High | Accepted |
 | 34 | SSRF DNS fail-open | Medium | **Resolved** |
-| 35 | No entitlement validation | Medium | Open |
+| 35 | No entitlement validation | Medium | **Resolved** |
 | 36 | No rate limit on async internal triggers | Medium | **Resolved** |
-| 37 | /internal/tags/status unauthenticated (db mode) | Medium | Open (was #4) |
+| 37 | /internal/tags/status unauthenticated (db mode) | Medium | **Resolved** (was #4) |
 | 38 | Kafka debug payload logging | Low | **Resolved** |
 | 39 | Kruize debug payload logging | Low | Accepted |
 | 40 | RBAC cache unbounded | Low | **Resolved** |
@@ -1309,19 +1349,19 @@ Improvements since v1.6 worth acknowledging:
 | 44 | Kruize fetch errors misclassified transient | Medium | Accepted |
 | 45 | Strict analytics default false | Medium | **Resolved** |
 | 46 | Org BH PUT triggers fleet reship | Medium | Open |
-| 47 | Async jobs ignore shutdown context | Low | Open |
+| 47 | Async jobs ignore shutdown context | Low | **Resolved** |
 | 48 | GPU MIG in-memory fleet load | Medium | Open |
 | 49 | GPU time-slicing fallback in-memory | Medium | Open |
-| 50 | History CSV wrong row limit | Low | Open |
-| 51 | History wide default scan | Low | Open |
-| 52 | Fleet summary uncached aggregation | Low | Open |
+| 50 | History CSV wrong row limit | Low | **Resolved** |
+| 51 | History wide default scan | Low | **Resolved** |
+| 52 | Fleet summary uncached aggregation | Low | **Resolved** |
 | 53 | No OpenAPI/CHANGELOG CI | Info | Open |
 | 54 | ADR drift detection absent | Info | Open |
 | 55 | Kruize shared HTTP timeout | Medium | Accepted |
 | 56 | CSV 512 MiB default body | Medium | Open |
-| 57 | Parallel Kafka shared committer | Low | Open |
+| 57 | Parallel Kafka shared committer | Low | **Resolved** |
 | 58 | report_file_status runbook missing | Low | Open |
-| 59 | Recommendation detail fallback debt | Low | Open |
+| 59 | Recommendation detail fallback debt | Low | **Resolved** |
 | 60 | aws-sdk-go v1 dependency | Info | Open |
 
 ---

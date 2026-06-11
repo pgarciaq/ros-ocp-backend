@@ -449,6 +449,9 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Required (non-dev) | Comma-separated SA names allowed to call push API |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only (`DEVELOPMENT=true`) | Static bearer token; blocked at startup outside development |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | — | SaaS (`api`) | Max request body size (MiB) for `POST /internal/tags/sync` |
+| `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `true` | `true` | Both | Bearer auth on `/internal/tags/*` regardless of tag source; set `false` for local dev |
+| `ROS_HISTORY_DEFAULT_DAYS` | `30` | `30` | Both | History endpoint default lookback when dates omitted |
+| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | `300` | Both | Fleet summary in-memory cache TTL (seconds) |
 
 ### Koku environment variables (SaaS / `api` source only)
 

@@ -1970,13 +1970,13 @@
       "get": {
         "tags": ["Historical Tracking"],
         "summary": "Get recommendation history",
-        "description": "Returns paginated recommendation snapshots over time. Each row represents a recommendation that was computed for a specific container, term, and engine at a specific point in time. Only available when the native engine is enabled.",
+        "description": "Returns paginated recommendation snapshots over time. Each row represents a recommendation that was computed for a specific container, term, and engine at a specific point in time. Only available when the native engine is enabled. When start_date and end_date are both omitted, the query defaults to the last ROS_HISTORY_DEFAULT_DAYS (default 30) ending at the current UTC time. CSV export (format=csv) returns up to RECORD_LIMIT_CSV rows (default 1000).",
         "operationId": "getRecommendationHistory",
         "parameters": [
           {
             "name": "start_date",
             "in": "query",
-            "description": "Start of date range filter on recorded_at (inclusive). Defaults to first day of current month.",
+            "description": "Start of date range filter on recorded_at (inclusive). When both start_date and end_date are omitted, defaults to now minus ROS_HISTORY_DEFAULT_DAYS (default 30).",
             "required": false,
             "schema": { "type": "string", "format": "date" },
             "example": "2026-04-01"
@@ -1984,7 +1984,7 @@
           {
             "name": "end_date",
             "in": "query",
-            "description": "End of date range filter on recorded_at (inclusive). Defaults to today.",
+            "description": "End of date range filter on recorded_at (inclusive). When both start_date and end_date are omitted, defaults to the current UTC time.",
             "required": false,
             "schema": { "type": "string", "format": "date" },
             "example": "2026-04-28"

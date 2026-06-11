@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Cost-management entitlement middleware on v1 API routes: rejects requests without `entitlements.cost_management.is_entitled=true` unless `DEVELOPMENT=true` (finding #35 resolved).
+- Internal tag endpoint bearer auth in db mode via `ROS_INTERNAL_TAGS_AUTH_REQUIRED` (default `true`) (finding #37 resolved).
+- API shutdown context for async threshold/savings recalc and masu reship jobs with 30s drain grace (finding #47 resolved).
+- In-memory LRU fleet summary cache with `ROS_FLEET_SUMMARY_CACHE_TTL` (default 300s), invalidated on recommendation ingest (finding #52 resolved).
+- Serialized Kafka offset commits when `ROS_KAFKA_PARALLEL=true` via `kafka.CommitMessage` mutex (finding #57 resolved).
+- Configurable history default date window `ROS_HISTORY_DEFAULT_DAYS` (default 30) when `start_date`/`end_date` omitted (finding #51 resolved).
+
 - Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
 - SSRF DNS fail-closed in production: unresolved hostnames block CSV fetch when `DEVELOPMENT=false` (adversarial review finding #34 resolved).
 - Per-org single-flight coalescing for savings recalculation and business-hours reship with metrics `rosocp_savings_recalc_coalesced_total` and `rosocp_reship_coalesced_total` (finding #36 resolved).
@@ -25,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- History CSV export uses `RECORD_LIMIT_CSV` (default 1000) instead of the paginated list limit (finding #50 resolved).
+- Native container detail lookup uses indexed `container_id` only; pre-migration composite-key fallback removed (finding #59 resolved).
 - GPU MIG list (`GET /recommendations/openshift/gpu/mig`) uses SQL key pagination (`ListGPUMIGKeysPage`) instead of loading all clusters into memory (finding #48 resolved).
 - GPU time-slicing list rejects unsupported `order_by` values and uses SQL triple pagination for JSON and CSV exports; in-memory fleet fallback removed (finding #49 resolved).
 - Plugin ingest hook failures set `clusters.ingest_hooks_failed` and expose `ingest_hooks_failed` / `ingest_hooks_failed_at` on container list responses (finding #43 resolved).
