@@ -181,6 +181,7 @@ type Config struct {
 	ContainerIdleMemThresholdKiB    int64   `mapstructure:"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB"`
 	ContainerMemTrendSlopeThreshold float64 `mapstructure:"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD"`
 	ContainerLowConfidenceThreshold float32 `mapstructure:"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD"`
+	ContainerSparseDataThreshold  int     `mapstructure:"ROS_CONTAINER_SPARSE_DATA_THRESHOLD"`
 
 	// Namespace sizing and classification thresholds (same shape as container).
 	NamespaceCPUCostPercentile      float64 `mapstructure:"ROS_NAMESPACE_CPU_COST_PERCENTILE"`
@@ -195,6 +196,7 @@ type Config struct {
 	NamespaceIdleMemThresholdKiB    int64   `mapstructure:"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB"`
 	NamespaceMemTrendSlopeThreshold float64 `mapstructure:"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD"`
 	NamespaceLowConfidenceThreshold float32 `mapstructure:"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD"`
+	NamespaceSparseDataThreshold  int     `mapstructure:"ROS_NAMESPACE_SPARSE_DATA_THRESHOLD"`
 
 	// Node right-sizing (Tier 1) configuration
 	NodeUnderutilThreshold                  float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
@@ -664,6 +666,7 @@ func initConfig() {
 	viper.SetDefault("ROS_IDLE_GPU_DRAM_ACTIVE_BP", 500)
 	viper.SetDefault("ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD", 100.0)
 	viper.SetDefault("ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD", 0.5)
+	viper.SetDefault("ROS_CONTAINER_SPARSE_DATA_THRESHOLD", 2)
 	viper.SetDefault("ROS_NAMESPACE_CPU_COST_PERCENTILE", 0.60)
 	viper.SetDefault("ROS_NAMESPACE_CPU_PERF_PERCENTILE", 0.98)
 	viper.SetDefault("ROS_NAMESPACE_MEM_COST_PERCENTILE", 0.95)
@@ -676,6 +679,7 @@ func initConfig() {
 	viper.SetDefault("ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB", 10240)
 	viper.SetDefault("ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD", 500.0)
 	viper.SetDefault("ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD", 0.5)
+	viper.SetDefault("ROS_NAMESPACE_SPARSE_DATA_THRESHOLD", 2)
 	viper.SetDefault("ROS_NODE_UNDERUTIL_THRESHOLD", 0.30)
 	viper.SetDefault("ROS_NODE_OVERCOMMIT_THRESHOLD", 1.50)
 	viper.SetDefault("ROS_NODE_ALLOCATABLE_FACTOR", 0.93)

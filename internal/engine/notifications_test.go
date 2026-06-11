@@ -109,5 +109,39 @@ func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 	assert.Contains(t, codes, NotifOOMDetected)
 	assert.Contains(t, codes, NotifIdleWorkload)
 	assert.Contains(t, codes, NotifStaleData)
-	assert.True(t, len(codes) >= 4)
+	assert.Contains(t, codes, NotifSparseData)
+	assert.True(t, len(codes) >= 5)
+}
+
+func TestEvaluateNotifications_SparseData(t *testing.T) {
+	rec := ContainerRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluateNotifications(rec, 1)
+	assert.Contains(t, codes, NotifSparseData)
+}
+
+func TestEvaluateNotifications_SparseData_ExactThreshold(t *testing.T) {
+	rec := ContainerRec{DataDays: 2, ConfidenceLevel: 1.0}
+	codes := EvaluateNotifications(rec, 1)
+	assert.Contains(t, codes, NotifSparseData, "data_days == threshold should fire")
+}
+
+func TestEvaluateNotifications_SparseData_AboveThreshold(t *testing.T) {
+	rec := ContainerRec{DataDays: 3, ConfidenceLevel: 1.0}
+	codes := EvaluateNotifications(rec, 1)
+	assert.NotContains(t, codes, NotifSparseData, "data_days above threshold should not fire")
+}
+
+func TestEvaluateNotifications_SparseData_ZeroDays(t *testing.T) {
+	rec := ContainerRec{DataDays: 0, ConfidenceLevel: 0}
+	codes := EvaluateNotifications(rec, 1)
+	assert.NotContains(t, codes, NotifSparseData, "zero data days should not fire SPARSE_DATA (NEW_WORKLOAD fires instead)")
+}
+
+func TestEvaluateNotifications_SparseData_OrthogonalToLowConfidence(t *testing.T) {
+	// 1 day in a 1-day window: confidence=1.0, so LOW_CONFIDENCE doesn't fire
+	// but SPARSE_DATA should fire because absolute data is low
+	rec := ContainerRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluateNotifications(rec, 1)
+	assert.Contains(t, codes, NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
 }

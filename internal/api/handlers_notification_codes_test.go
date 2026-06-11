@@ -72,13 +72,13 @@ func TestGetNotificationCodes_PluginFilterNamespace(t *testing.T) {
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 4, resp.Meta.Count)
+	require.Equal(t, 5, resp.Meta.Count)
 
 	codes := make([]int16, len(resp.Data))
 	for i, entry := range resp.Data {
 		codes[i] = entry.Code
 	}
-	assert.ElementsMatch(t, []int16{1, 2, 7, 9}, codes)
+	assert.ElementsMatch(t, []int16{1, 2, 7, 9, 77}, codes)
 }
 
 func TestGetNotificationCodes_PluginFilterContainer(t *testing.T) {
@@ -98,13 +98,13 @@ func TestGetNotificationCodes_PluginFilterContainer(t *testing.T) {
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 11, resp.Meta.Count)
+	require.Equal(t, 12, resp.Meta.Count)
 
 	codes := make([]int16, len(resp.Data))
 	for i, entry := range resp.Data {
 		codes[i] = entry.Code
 	}
-	assert.ElementsMatch(t, []int16{1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25}, codes)
+	assert.ElementsMatch(t, []int16{1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25, 77}, codes)
 }
 
 func TestGetNotificationCodes_PluginFilterClusterQuota(t *testing.T) {
@@ -176,13 +176,13 @@ func TestGetNotificationCodes_PluginFilterPVC(t *testing.T) {
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 5, resp.Meta.Count)
+	require.Equal(t, 6, resp.Meta.Count)
 
 	codes := make([]int16, len(resp.Data))
 	for i, entry := range resp.Data {
 		codes[i] = entry.Code
 	}
-	assert.ElementsMatch(t, []int16{1, 20, 25, 29, 30}, codes)
+	assert.ElementsMatch(t, []int16{1, 20, 25, 29, 30, 77}, codes)
 }
 
 func TestGetNotificationCodes_PluginFilterUnknown_ReturnsEmpty(t *testing.T) {

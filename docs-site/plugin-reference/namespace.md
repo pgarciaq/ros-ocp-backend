@@ -87,6 +87,7 @@ Namespace rows may emit:
 | **2** | `STALE_DATA` | WARNING | No new metrics data received for more than 48 hours |
 | **7** | `NEW_WORKLOAD` | INFO | Less than 24 hours of data — recommendation may be unstable |
 | **9** | `MEMORY_TRENDING_UP` | WARNING | Memory usage trend suggests capacity risk within 30 days |
+| **77** | `SPARSE_DATA` | INFO | Recommendation based on limited data; accuracy improves with more observation time |
 
 Catalog: `GET /recommendations/openshift/notification-codes?filter[plugin]=namespace`.
 
@@ -102,6 +103,10 @@ Namespace recommendations provide sizing guidance only — **no dollar savings f
 ## Related features
 
 [ResourceQuota recommendations](../features/quota-recommendations.md) tune existing `ResourceQuota` **hard** limits; namespace recs propose ideal totals from observed usage.
+
+## Settings
+
+Per-organization thresholds via the Settings API (`GET/PUT/DELETE .../settings/namespace`). Includes `sparse_data_threshold` (default **2**, env lock `ROS_NAMESPACE_SPARSE_DATA_THRESHOLD`) alongside `low_confidence_threshold`. See [Configurability](../architecture/configurability.md) (namespace section).
 
 ## Architecture
 

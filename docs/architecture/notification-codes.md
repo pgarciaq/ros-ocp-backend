@@ -116,6 +116,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 63 | `VM_NUMA_OVERSIZED` | WARNING | VM | Yes | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory exceeds `numa_node_memory_gib` |
 | 74 | `NODE_POD_SCHEDULING_LIMIT` | WARNING | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) — low pod scheduling headroom on node |
 | 76 | `NODE_FLEET_CONSOLIDATION` | INFO | Node | Yes | [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) — fleet consolidation opportunity (MachineSet/instance-type group has excess nodes) |
+| 77 | `SPARSE_DATA` | INFO | Container, Namespace, Node, PVC | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/recommend_namespace.go), [`evaluateNodeNotifications`](../../internal/engine/recommend_nodes.go), [`EvaluatePVCNotifications`](../../internal/engine/pvc_recommend.go) — `data_days <= sparse_data_threshold` (default 2) |
 
 ---
 
@@ -126,6 +127,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | Code | Constant | Trigger conditions | Message (DB / mapping) |
 |------|----------|-------------------|------------------------|
 | 1 | `NotifLowConfidence` | `confidence_level < low_confidence_threshold` (default 0.5) and `data_days > 0` | Less than 4 days of data available for this workload |
+| 77 | `NotifSparseData` | `data_days > 0` and `data_days <= sparse_data_threshold` (default 2) | Recommendation based on limited data; accuracy improves with more observation time |
 | 2 | `NotifStaleData` | `stale == true` — cluster not reported within `ROS_STALENESS_THRESHOLD_HOURS` (default 48h). See [`docs/operations/stale-detection.md`](../operations/stale-detection.md) | No new metrics data received for more than 48 hours |
 | 3 | `NotifOOMDetected` | `oom_count_sum > 0` in term window | OOM kill events detected within the analysis window |
 | 5 | `NotifIdleWorkload` | `IsIdle` or `idle_state` idle/zombie, or legacy abandoned path (see `recommend_all.go`) | Workload uses less than 1% of requested resources |
@@ -144,6 +146,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | Code | Constant | Trigger |
 |------|----------|---------|
 | 1 | `NotifLowConfidence` | Same as container, namespace aggregates |
+| 77 | `NotifSparseData` | Same as container — absolute `data_days` at or below `sparse_data_threshold` |
 | 2 | `NotifStaleData` | `stale == true` — same cluster staleness as containers ([`docs/operations/stale-detection.md`](../operations/stale-detection.md)) |
 | 7 | `NotifNewWorkload` | `data_days < 1` |
 | 9 | `NotifMemoryTrendingUp` | Namespace slope threshold **500 KiB/day** ([`namespaceMemTrendSlopeThreshold`](../../internal/engine/recommend_namespace.go)) |
@@ -157,6 +160,8 @@ Emitter: [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/
 | 11 | `NotifNodeUnderutilized` | Avg CPU P95 and mem P95 both &lt; `UnderutilThreshold` |
 | 12 | `NotifNodeOvercommitted` | `max(requests) / allocatable CPU > OvercommitThreshold` |
 | 13 | `NotifStrandedResources` | EMA of CPU vs mem imbalance &gt; `StrandedImbalanceThreshold` (default 0.6) for ≥2 days |
+| 1 | `NotifLowConfidence` | [`evaluateNodeNotifications`](../../internal/engine/recommend_nodes.go) — `confidence_level < 0.5` and `data_days > 0` |
+| 77 | `NotifSparseData` | [`evaluateNodeNotifications`](../../internal/engine/recommend_nodes.go) — `data_days > 0` and `data_days <= 2` (default) |
 | 25 | `NotifNoCostData` | [`applyNodeSavings`](../../internal/engine/node_savings.go) |
 | 15 | `NotifNodeIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go)) |
 | 74 | `NotifNodePodSchedulingLimit` | `pod_scheduling_headroom` below `pod_headroom_notification_threshold` (default 10%) |
@@ -181,6 +186,8 @@ Thresholds: [`GPUThresholds`](../../internal/engine/gpu_recommender.go) / Settin
 
 | Code | Constant | Trigger |
 |------|----------|---------|
+| 1 | `NotifLowConfidence` | `confidence_level < low_confidence_threshold` and `data_days > 0` |
+| 77 | `NotifSparseData` | `data_days > 0` and `data_days <= sparse_data_threshold` (container defaults) |
 | 20 | `NotifPVCOrphaned` | All intervals zero usage, ≥ `MinDataDays` |
 | 29 | `NotifPVCOversized` | `usage_ratio < OversizedThreshold`, recommended size &lt; capacity |
 | 30 | `NotifPVCNearFull` | `usage_ratio > NearFullThreshold` or `days_to_full < DaysToFullAlert` |
@@ -250,6 +257,27 @@ Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendation
 | 14, 16–17 | MachineAutoscaler | Tier 3 MachineAutoscaler (not node idle) |
 | 21–22 | HPA | Replica display exists; scaling advice does not |
 | 23–24 | Cloud instance catalog | Node MachineSet tier 2 |
+
+---
+
+### SPARSE_DATA vs LOW_CONFIDENCE
+
+These two notifications answer different questions and are orthogonal:
+
+| | LOW_CONFIDENCE (code 1) | SPARSE_DATA (code 77) |
+|---|---|---|
+| Question | "How reliable is this recommendation *relative to the term's window*?" | "Is there enough *absolute* data to trust any recommendation?" |
+| Trigger | `confidence_level < 0.5` (data covers less than half the term window) | `data_days <= sparse_data_threshold` (default 2) |
+| Example: fires | Medium term (7-day window), 2 days of data → confidence = 0.29 | Any term, 1 day of data |
+| Example: does NOT fire | Short term (1-day window), 1 day of data → confidence = 1.0 | Any term, 3+ days of data |
+| Severity | WARNING | INFO |
+
+A recommendation can be:
+
+- **Neither**: 10 days of data in a 15-day window (plenty of data, good coverage)
+- **SPARSE_DATA only**: 1 day in a 1-day window (full coverage but objectively sparse)
+- **LOW_CONFIDENCE only**: 3 days in a 15-day window (not sparse, but poor coverage)
+- **Both**: 1 day in a 7-day window (sparse AND low coverage)
 
 ---
 

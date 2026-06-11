@@ -170,6 +170,9 @@ func evaluateNodeNotifications(codes []int16, confidence float32, dataDays int) 
 	if confidence < defaultLowConfidenceThreshold && dataDays > 0 {
 		codes = appendNotificationCode(codes, NotifLowConfidence)
 	}
+	if dataDays > 0 && dataDays <= defaultSparseDataThreshold {
+		codes = appendNotificationCode(codes, NotifSparseData)
+	}
 	return codes
 }
 

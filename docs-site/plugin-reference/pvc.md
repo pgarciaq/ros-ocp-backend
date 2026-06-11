@@ -117,10 +117,12 @@ PVC rows may emit sizing and risk codes; code **25** (`NotifNoCostData`) when Ma
 
 | Code | Trigger |
 |------|---------|
+| 1 | Low confidence (`confidence_level` below threshold, `data_days > 0`) |
 | 20 | Orphaned (no pod mount / zero usage detected) |
 | 25 | No cost data available for savings |
 | 29 | Oversized (capacity exceeds usage beyond threshold) |
 | 30 | Near full (projected to exhaust within alert window) |
+| 77 | Sparse data (`data_days` at or below `sparse_data_threshold`, default 2) |
 
 Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=pvc`.
 

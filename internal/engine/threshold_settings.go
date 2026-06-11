@@ -122,6 +122,7 @@ type SizingThresholdSettings struct {
 	IdleMemThresholdKiB    int64   `json:"idle_mem_threshold_kib"`
 	MemTrendSlopeThreshold float64 `json:"mem_trend_slope_threshold"`
 	LowConfidenceThreshold float32 `json:"low_confidence_threshold"`
+	SparseDataThreshold  int     `json:"sparse_data_threshold"`
 }
 
 // SizingThresholdSettingsResponse is the API GET response for container/namespace.
@@ -145,6 +146,7 @@ type SizingThresholdSettingsUpdate struct {
 	IdleMemThresholdKiB    *int64   `json:"idle_mem_threshold_kib,omitempty"`
 	MemTrendSlopeThreshold *float64 `json:"mem_trend_slope_threshold,omitempty"`
 	LowConfidenceThreshold *float32 `json:"low_confidence_threshold,omitempty"`
+	SparseDataThreshold  *int     `json:"sparse_data_threshold,omitempty"`
 }
 
 // NodeThresholdSettings holds node classification and dual-engine sizing parameters.
@@ -288,6 +290,7 @@ func DefaultContainerSizingThresholds() SizingThresholdSettings {
 		IdleMemThresholdKiB:    DefaultIdleThresholdMemKiB,
 		MemTrendSlopeThreshold: 100.0,
 		LowConfidenceThreshold: 0.5,
+		SparseDataThreshold:  2,
 	}
 }
 
@@ -358,6 +361,7 @@ func DefaultPVCThresholdSettings() PVCThresholdSettings {
 type NotificationThresholds struct {
 	MemTrendSlopeThreshold float64
 	LowConfidenceThreshold float32
+	SparseDataThreshold  int
 }
 
 // NotificationThresholdsFromSizing extracts notification thresholds from sizing settings.
@@ -365,6 +369,7 @@ func NotificationThresholdsFromSizing(th SizingThresholdSettings) NotificationTh
 	return NotificationThresholds{
 		MemTrendSlopeThreshold: th.MemTrendSlopeThreshold,
 		LowConfidenceThreshold: th.LowConfidenceThreshold,
+		SparseDataThreshold:  th.SparseDataThreshold,
 	}
 }
 
@@ -426,6 +431,9 @@ func applyContainerEnvLocks(base SizingThresholdSettings, cfg *config.Config) Si
 	if _, ok := os.LookupEnv("ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD"); ok {
 		base.LowConfidenceThreshold = cfg.ContainerLowConfidenceThreshold
 	}
+	if _, ok := os.LookupEnv("ROS_CONTAINER_SPARSE_DATA_THRESHOLD"); ok {
+		base.SparseDataThreshold = cfg.ContainerSparseDataThreshold
+	}
 	return base
 }
 
@@ -465,6 +473,9 @@ func applyNamespaceEnvLocks(base SizingThresholdSettings, cfg *config.Config) Si
 	}
 	if _, ok := os.LookupEnv("ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD"); ok {
 		base.LowConfidenceThreshold = cfg.NamespaceLowConfidenceThreshold
+	}
+	if _, ok := os.LookupEnv("ROS_NAMESPACE_SPARSE_DATA_THRESHOLD"); ok {
+		base.SparseDataThreshold = cfg.NamespaceSparseDataThreshold
 	}
 	return base
 }
@@ -729,6 +740,7 @@ func containerEnvLockMap() map[string]string {
 		"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
 		"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
 		"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD":  "low_confidence_threshold",
+		"ROS_CONTAINER_SPARSE_DATA_THRESHOLD":     "sparse_data_threshold",
 	}
 }
 
@@ -746,6 +758,7 @@ func namespaceEnvLockMap() map[string]string {
 		"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
 		"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
 		"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD":  "low_confidence_threshold",
+		"ROS_NAMESPACE_SPARSE_DATA_THRESHOLD":     "sparse_data_threshold",
 	}
 }
 
@@ -1038,6 +1051,7 @@ func lockedSizingFieldsInUpdate(update SizingThresholdSettingsUpdate, lockMap ma
 	check("idle_mem_threshold_kib", update.IdleMemThresholdKiB != nil)
 	check("mem_trend_slope_threshold", update.MemTrendSlopeThreshold != nil)
 	check("low_confidence_threshold", update.LowConfidenceThreshold != nil)
+	check("sparse_data_threshold", update.SparseDataThreshold != nil)
 	return locked
 }
 

@@ -174,6 +174,43 @@ func TestEvaluateNamespaceNotifications_StillNoOOMOrIdle(t *testing.T) {
 	}
 }
 
+func TestEvaluateNamespaceNotificationsWithThresholds_SparseData(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds)
+	rec := NamespaceRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluateNamespaceNotificationsWithThresholds(rec, th)
+	assert.Contains(t, codes, NotifSparseData)
+}
+
+func TestEvaluateNamespaceNotificationsWithThresholds_SparseData_ExactThreshold(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds)
+	rec := NamespaceRec{DataDays: 2, ConfidenceLevel: 1.0}
+	codes := EvaluateNamespaceNotificationsWithThresholds(rec, th)
+	assert.Contains(t, codes, NotifSparseData, "data_days == threshold should fire")
+}
+
+func TestEvaluateNamespaceNotificationsWithThresholds_SparseData_AboveThreshold(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds)
+	rec := NamespaceRec{DataDays: 3, ConfidenceLevel: 1.0}
+	codes := EvaluateNamespaceNotificationsWithThresholds(rec, th)
+	assert.NotContains(t, codes, NotifSparseData, "data_days above threshold should not fire")
+}
+
+func TestEvaluateNamespaceNotificationsWithThresholds_SparseData_ZeroDays(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds)
+	rec := NamespaceRec{DataDays: 0, ConfidenceLevel: 0.0}
+	codes := EvaluateNamespaceNotificationsWithThresholds(rec, th)
+	assert.NotContains(t, codes, NotifSparseData, "zero data days should not fire SPARSE_DATA (NEW_WORKLOAD fires instead)")
+	assert.Contains(t, codes, NotifNewWorkload)
+}
+
+func TestEvaluateNamespaceNotificationsWithThresholds_SparseData_OrthogonalToLowConfidence(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds)
+	rec := NamespaceRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluateNamespaceNotificationsWithThresholds(rec, th)
+	assert.Contains(t, codes, NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
+}
+
 // --- Integration tests (testcontainers-go) ---
 
 func TestRecommendAllNamespaces_SingleNamespace(t *testing.T) {

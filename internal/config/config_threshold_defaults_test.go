@@ -23,6 +23,7 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, int64(10240), cfg.ContainerIdleMemThresholdKiB)
 	assert.InDelta(t, 100.0, cfg.ContainerMemTrendSlopeThreshold, 1e-9)
 	assert.InDelta(t, float32(0.5), cfg.ContainerLowConfidenceThreshold, 1e-9)
+	assert.Equal(t, 2, cfg.ContainerSparseDataThreshold)
 
 	assert.InDelta(t, 0.60, cfg.NamespaceCPUCostPercentile, 1e-9)
 	assert.InDelta(t, 0.98, cfg.NamespaceCPUPerfPercentile, 1e-9)
@@ -36,6 +37,7 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, int64(10240), cfg.NamespaceIdleMemThresholdKiB)
 	assert.InDelta(t, 500.0, cfg.NamespaceMemTrendSlopeThreshold, 1e-9)
 	assert.InDelta(t, float32(0.5), cfg.NamespaceLowConfidenceThreshold, 1e-9)
+	assert.Equal(t, 2, cfg.NamespaceSparseDataThreshold)
 
 	assert.InDelta(t, 0.30, cfg.NodeUnderutilThreshold, 1e-9)
 	assert.InDelta(t, 1.50, cfg.NodeOvercommitThreshold, 1e-9)

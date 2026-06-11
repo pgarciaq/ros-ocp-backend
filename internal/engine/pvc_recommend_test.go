@@ -189,6 +189,42 @@ func TestComputePVCRecommendation_LowConfidenceOrphaned(t *testing.T) {
 	assert.Contains(t, rec.NotificationCodes, NotifLowConfidence)
 }
 
+func TestEvaluatePVCNotifications_SparseData(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultContainerSizingThresholds)
+	rec := PVCRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluatePVCNotifications(rec, th)
+	assert.Contains(t, codes, NotifSparseData)
+}
+
+func TestEvaluatePVCNotifications_SparseData_ExactThreshold(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultContainerSizingThresholds)
+	rec := PVCRec{DataDays: 2, ConfidenceLevel: 1.0}
+	codes := EvaluatePVCNotifications(rec, th)
+	assert.Contains(t, codes, NotifSparseData, "data_days == threshold should fire")
+}
+
+func TestEvaluatePVCNotifications_SparseData_AboveThreshold(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultContainerSizingThresholds)
+	rec := PVCRec{DataDays: 3, ConfidenceLevel: 1.0}
+	codes := EvaluatePVCNotifications(rec, th)
+	assert.NotContains(t, codes, NotifSparseData, "data_days above threshold should not fire")
+}
+
+func TestEvaluatePVCNotifications_SparseData_ZeroDays(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultContainerSizingThresholds)
+	rec := PVCRec{DataDays: 0, ConfidenceLevel: 0.0}
+	codes := EvaluatePVCNotifications(rec, th)
+	assert.NotContains(t, codes, NotifSparseData, "zero data days should not fire SPARSE_DATA")
+}
+
+func TestEvaluatePVCNotifications_SparseData_OrthogonalToLowConfidence(t *testing.T) {
+	th := NotificationThresholdsFromSizing(defaultContainerSizingThresholds)
+	rec := PVCRec{DataDays: 1, ConfidenceLevel: 1.0}
+	codes := EvaluatePVCNotifications(rec, th)
+	assert.Contains(t, codes, NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
+}
+
 func TestComputePVCRecommendation_ShortTermSeesBurst(t *testing.T) {
 	// 15 days of data: stable at 30 GiB for first 14 days, then spike to 90 GiB on day 15.
 	// Short term (1 day window) sees the spike at near_full, long term has enough data.

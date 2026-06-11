@@ -116,6 +116,7 @@ having no actionable savings.
 | 74 | WARNING | Node | Near pod scheduling limit | Limited headroom for additional pods — review before consolidation |
 | 75 | INFO | Node (reserved) | Autoscaler at minReplicas | *Not emitted today* |
 | 76 | INFO | Node | Fleet consolidation (MachineSet) | Review `node_count_reduction` and scale down MachineSet manually |
+| 77 | INFO | Container, Namespace, Node, PVC | Sparse data (limited observation days) | Treat as early signal; accuracy improves with more days |
 
 ---
 
@@ -123,7 +124,7 @@ having no actionable savings.
 
 ### Containers and idle detection
 
-Codes **1–9**, **21–22** (reserved), **25**. See [Container recommendations](../features/container-recommendations.md)
+Codes **1–9**, **21–22** (reserved), **25**, **77**. See [Container recommendations](../features/container-recommendations.md)
 and [Idle / zombie detection](../features/idle-detection.md).
 
 - Prefer `idle_state` (`active` / `idle` / `zombie`) over inferring from codes **5** and **8** alone.
@@ -132,7 +133,7 @@ and [Idle / zombie detection](../features/idle-detection.md).
 
 ### Namespaces
 
-Codes **1**, **2**, **7**, **9** only (namespace sizing plugin). See [Namespace recommendations](../features/namespace-recommendations.md).
+Codes **1**, **2**, **7**, **9**, **77** (namespace sizing plugin). See [Namespace recommendations](../features/namespace-recommendations.md).
 
 | Code | Name | Message |
 |------|------|---------|
@@ -140,13 +141,14 @@ Codes **1**, **2**, **7**, **9** only (namespace sizing plugin). See [Namespace 
 | 2 | `STALE_DATA` | No new metrics data received for more than 48 hours |
 | 7 | `NEW_WORKLOAD` | Less than 24 hours of data — recommendation may be unstable |
 | 9 | `MEMORY_TRENDING_UP` | Memory usage trend suggests capacity risk within 30 days |
+| 77 | `SPARSE_DATA` | Recommendation based on limited data; accuracy improves with more observation time |
 
 Namespace-level memory trend uses a higher slope threshold than containers (500 KiB/day vs 100 KiB/day).
 ResourceQuota codes **70–72** are documented under the [quota plugin](../plugin-reference/quota.md), not here.
 
 ### Nodes
 
-Emitted: **11**, **12**, **13**, **15**, **25**, **74**, **76**. Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
+Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**. Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
 
 ### GPU (containers) and time-slicing
 
@@ -154,7 +156,7 @@ Codes **10**, **26–28**, **36**. See [GPU MIG](../features/gpu-mig.md) and [GP
 
 ### PVCs
 
-Codes **1**, **20**, **25**, **29**, **30**. Code **1** appears when `confidence_level` is below the low-confidence threshold (proportional to `data_days / MinDataDays`). See [PVC plugin reference](../plugin-reference/pvc.md).
+Codes **1**, **20**, **25**, **29**, **30**, **77**. Code **1** appears when `confidence_level` is below the low-confidence threshold (proportional to `data_days / window_days`). Code **77** appears when absolute `data_days` is at or below `sparse_data_threshold` (default 2). See [PVC plugin reference](../plugin-reference/pvc.md).
 Always show `resize_note` for oversized PVCs — Kubernetes cannot shrink volumes in place.
 
 ### Snapshots
@@ -175,6 +177,29 @@ Placement flags:
 ### Quotas
 
 **ResourceQuota** and **ClusterResourceQuota** plugins do not emit notification codes today.
+
+---
+
+### SPARSE_DATA vs LOW_CONFIDENCE
+
+These two notifications answer different questions and are orthogonal:
+
+| | LOW_CONFIDENCE (code 1) | SPARSE_DATA (code 77) |
+|---|---|---|
+| Question | "How reliable is this recommendation *relative to the term's window*?" | "Is there enough *absolute* data to trust any recommendation?" |
+| Trigger | `confidence_level < 0.5` (data covers less than half the term window) | `data_days <= sparse_data_threshold` (default 2) |
+| Example: fires | Medium term (7-day window), 2 days of data → confidence = 0.29 | Any term, 1 day of data |
+| Example: does NOT fire | Short term (1-day window), 1 day of data → confidence = 1.0 | Any term, 3+ days of data |
+| Severity | WARNING | INFO |
+
+A recommendation can be:
+
+- **Neither**: 10 days of data in a 15-day window (plenty of data, good coverage)
+- **SPARSE_DATA only**: 1 day in a 1-day window (full coverage but objectively sparse)
+- **LOW_CONFIDENCE only**: 3 days in a 15-day window (not sparse, but poor coverage)
+- **Both**: 1 day in a 7-day window (sparse AND low coverage)
+
+Configurable via `sparse_data_threshold` on container and namespace Settings API; PVC and node use the same default (2 days).
 
 ---
 

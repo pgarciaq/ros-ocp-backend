@@ -96,6 +96,7 @@ var Definitions = map[int16]notifDef{
 	74: {"WARNING", "Node is near pod scheduling limit — limited headroom for additional pods"},
 	75: {"INFO", "MachineAutoscaler at minReplicas sustained — consider decreasing"},
 	76: {"INFO", "Fleet consolidation recommended for this MachineSet"},
+	77: {"INFO", "Recommendation based on limited data; accuracy improves with more observation time"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

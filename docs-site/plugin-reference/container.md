@@ -174,7 +174,14 @@ PUT /api/cost-management/v1/recommendations/openshift/settings/container
 DELETE /api/cost-management/v1/recommendations/openshift/settings/container
 ```
 
-See [Configurability](../architecture/configurability.md) (container section).
+See [Configurability](../architecture/configurability.md) (container section). Key notification thresholds:
+
+| JSON field | Default | Env lock | Purpose |
+|------------|---------|----------|---------|
+| `low_confidence_threshold` | 0.5 | `ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD` | Relative window coverage below this → code **1** |
+| `sparse_data_threshold` | 2 | `ROS_CONTAINER_SPARSE_DATA_THRESHOLD` | Absolute `data_days` at or below this → code **77** |
+
+See [SPARSE_DATA vs LOW_CONFIDENCE](../architecture/notification-codes.md#sparse_data-vs-low_confidence).
 
 ## Architecture
 

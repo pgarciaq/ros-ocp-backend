@@ -89,6 +89,9 @@ func EvaluatePVCNotifications(rec PVCRec, th NotificationThresholds) []int16 {
 	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
 	}
+	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
+		codes = append(codes, NotifSparseData)
+	}
 	return codes
 }
 

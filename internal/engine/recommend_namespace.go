@@ -357,6 +357,9 @@ func EvaluateNamespaceNotificationsWithThresholds(rec NamespaceRec, th Notificat
 	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
 	}
+	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
+		codes = append(codes, NotifSparseData)
+	}
 	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
 		codes = append(codes, NotifMemoryTrendingUp)
 	}

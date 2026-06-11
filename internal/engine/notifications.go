@@ -41,11 +41,14 @@ const (
 	NotifNodePodSchedulingLimit int16 = 74
 	// NotifNodeFleetConsolidation indicates fleet-level node removal within a MachineSet.
 	NotifNodeFleetConsolidation int16 = 76
+	// NotifSparseData indicates recommendation based on limited absolute data volume.
+	NotifSparseData int16 = 77
 )
 
 const (
 	defaultMemTrendSlopeThreshold         = 100.0
 	defaultLowConfidenceThreshold float32 = 0.5
+	defaultSparseDataThreshold    int     = 2
 )
 
 // EvaluateNotifications produces notification codes for a recommendation.
@@ -63,6 +66,9 @@ func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th N
 	}
 	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
 		codes = append(codes, NotifLowConfidence)
+	}
+	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
+		codes = append(codes, NotifSparseData)
 	}
 	if rec.OOMCountSum > 0 {
 		codes = append(codes, NotifOOMDetected)

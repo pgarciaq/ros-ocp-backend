@@ -83,6 +83,7 @@ func sizingThresholdAllowedFields() map[string]struct{} {
 		"idle_mem_threshold_kib":    {},
 		"mem_trend_slope_threshold": {},
 		"low_confidence_threshold":  {},
+		"sparse_data_threshold":     {},
 	}
 }
 
@@ -267,6 +268,9 @@ func validateSizingThresholdUpdate(update SizingThresholdSettingsUpdate, current
 	}
 	if update.LowConfidenceThreshold != nil {
 		v.addRangeFloat32("low_confidence_threshold", *update.LowConfidenceThreshold, 0.01, 1.0)
+	}
+	if update.SparseDataThreshold != nil {
+		v.addRangeInt("sparse_data_threshold", *update.SparseDataThreshold, 1, 30)
 	}
 
 	minMargin := current.MinMargin

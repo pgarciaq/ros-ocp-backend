@@ -287,6 +287,30 @@ func TestValidateNodeThresholds_IdleZombieOutOfRange(t *testing.T) {
 	assert.Contains(t, valErr.Error(), "zombie_max_pods")
 }
 
+func TestValidateSizingThresholdUpdate_SparseDataThresholdValid(t *testing.T) {
+	current := DefaultContainerSizingThresholds()
+	for _, value := range []int{1, 15, 30} {
+		err := validateSizingThresholdUpdate(SizingThresholdSettingsUpdate{
+			SparseDataThreshold: ptrInt(value),
+		}, current)
+		require.NoError(t, err, "sparse_data_threshold=%d should be valid", value)
+	}
+}
+
+func TestValidateSizingThresholdUpdate_SparseDataThresholdOutOfRange(t *testing.T) {
+	current := DefaultContainerSizingThresholds()
+	for _, value := range []int{0, 31, -1} {
+		err := validateSizingThresholdUpdate(SizingThresholdSettingsUpdate{
+			SparseDataThreshold: ptrInt(value),
+		}, current)
+		require.Error(t, err, "sparse_data_threshold=%d should be rejected", value)
+
+		var valErr *ThresholdValidationError
+		require.ErrorAs(t, err, &valErr)
+		assert.Contains(t, valErr.Error(), "sparse_data_threshold")
+	}
+}
+
 func ptrFloat64(v float64) *float64 { return &v }
 func ptrInt64(v int64) *int64       { return &v }
 func ptrInt(v int) *int             { return &v }

@@ -82,7 +82,7 @@ Each `recommendation_terms.{short|medium|long}_term` block includes:
 | `data_days` | Daily node digests in the term window |
 | `confidence_level` | `min(data_days / window_days, 1.0)` — same formula as container recommendations |
 
-When `confidence_level` is below the low-confidence threshold (default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence`) is included on the engine notifications.
+When `confidence_level` is below the low-confidence threshold (default **0.5**) and `data_days > 0`, notification code **1** (`NotifLowConfidence`) is included on the engine notifications. When `data_days` is at or below **2** (default sparse-data threshold) and greater than zero, code **77** (`SPARSE_DATA`) is also included — orthogonal to low-confidence (e.g. 1 day in a 1-day window has confidence 1.0 but still emits **77**).
 
 ### Tag filtering
 

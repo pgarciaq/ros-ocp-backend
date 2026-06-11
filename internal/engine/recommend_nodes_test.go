@@ -97,6 +97,52 @@ func TestRecommendNodes_ConfidenceLevel(t *testing.T) {
 	assert.NotContains(t, fullResults[0].NotificationCodes, NotifLowConfidence)
 }
 
+func TestEvaluateNodeNotifications_SparseData(t *testing.T) {
+	codes := evaluateNodeNotifications(nil, 1.0, 1)
+	assert.Contains(t, codes, NotifSparseData)
+}
+
+func TestEvaluateNodeNotifications_SparseData_ExactThreshold(t *testing.T) {
+	codes := evaluateNodeNotifications(nil, 1.0, defaultSparseDataThreshold)
+	assert.Contains(t, codes, NotifSparseData, "data_days == threshold should fire")
+}
+
+func TestEvaluateNodeNotifications_SparseData_AboveThreshold(t *testing.T) {
+	codes := evaluateNodeNotifications(nil, 1.0, defaultSparseDataThreshold+1)
+	assert.NotContains(t, codes, NotifSparseData, "data_days above threshold should not fire")
+}
+
+func TestEvaluateNodeNotifications_SparseData_ZeroDays(t *testing.T) {
+	codes := evaluateNodeNotifications(nil, 0.2, 0)
+	assert.NotContains(t, codes, NotifSparseData, "zero data days should not fire SPARSE_DATA")
+}
+
+func TestEvaluateNodeNotifications_SparseData_OrthogonalToLowConfidence(t *testing.T) {
+	codes := evaluateNodeNotifications(nil, 1.0, 1)
+	assert.Contains(t, codes, NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
+}
+
+func TestRecommendNodes_SparseDataViaShortTerm(t *testing.T) {
+	cfg := defaultNodeRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	digests := []NodeDigestRow{
+		makeDigestRow("node-sparse", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
+		makeDigestRow("node-sparse", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
+	}
+
+	terms := []TermConfig{{Name: "short", WindowDays: 7, MinDataDays: 1}}
+	results := RecommendNodes(digests, cfg, defaultNodeThresholdSettings, terms)
+	require.NotEmpty(t, results)
+
+	shortCost := recsByNodeEngine(results)["node-sparse/cost"]
+	require.NotEmpty(t, shortCost.Node)
+	assert.Equal(t, 2, shortCost.DataDays)
+	assert.Contains(t, shortCost.NotificationCodes, NotifSparseData)
+}
+
 func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 	cfg := defaultNodeRecConfig()
 	digests := []NodeDigestRow{
