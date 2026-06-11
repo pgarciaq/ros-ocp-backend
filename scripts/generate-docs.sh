@@ -40,6 +40,20 @@ for pkg in kruize example; do
     gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"
 done
 
+# Rewrite hardcoded GitHub branch links to use the current branch at mkdocs build time.
+rewrite_github_links() {
+    local file="$1"
+    sed -i \
+        -e 's|https://github.com/RedHatInsights/ros-ocp-backend/blob/main/|https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/|g' \
+        -e 's|https://github.com/RedHatInsights/ros-ocp-backend/tree/main/|https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/|g' \
+        -e 's|https://github.com/pgarciaq/ros-ocp-backend/blob/main/|https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/|g' \
+        -e 's|https://github.com/pgarciaq/ros-ocp-backend/tree/main/|https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/|g' \
+        "$file"
+}
+for generated in "$PLUGIN_REF_DIR/plugin.md" "$PLUGIN_REF_DIR/kruize.md" "$PLUGIN_REF_DIR/example.md"; do
+    [ -f "$generated" ] && rewrite_github_links "$generated"
+done
+
 # Copy static docs into the site directory structure
 echo "Assembling site content..."
 
@@ -48,7 +62,10 @@ mkdir -p "$DOCS_DIR/architecture"
 for f in "$ROOT_DIR/docs/architecture/"*.md; do
     # Operator-facing notification catalog is maintained in docs-site/ (not copied from docs/).
     [ "$(basename "$f")" = "notification-codes.md" ] && continue
-    [ -f "$f" ] && cp "$f" "$DOCS_DIR/architecture/"
+    if [ -f "$f" ]; then
+        cp "$f" "$DOCS_DIR/architecture/"
+        rewrite_github_links "$DOCS_DIR/architecture/$(basename "$f")"
+    fi
 done
 
 # Operations docs
@@ -65,7 +82,7 @@ mkdir -p "$DOCS_DIR/features"
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
     sed -e 's|(docs/architecture/|(architecture/|g' \
         -e 's|(openapi\.json)|(openapi.md)|g' \
-        -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/main/LICENSE)|g' \
+        -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/LICENSE)|g' \
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"
 fi
 

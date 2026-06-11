@@ -9,7 +9,7 @@ The authoritative spec is [`openapi.json`](../openapi.json) at the repository ro
 You can view it interactively using:
 
 - **Swagger UI**: Paste the raw URL into [editor.swagger.io](https://editor.swagger.io)
-- **Redoc**: Use [redocly.github.io/redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pgarciaq/ros-ocp-backend/pgarciaq-rosocp-superpowers-phase9/openapi.json)
+- **Redoc**: Use [redocly.github.io/redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pgarciaq/ros-ocp-backend/{{ git_branch }}/openapi.json)
 - **Local**: `npx @redocly/cli preview-docs openapi.json`
 
 ## Key Endpoints
