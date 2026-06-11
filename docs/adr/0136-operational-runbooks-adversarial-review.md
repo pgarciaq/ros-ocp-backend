@@ -16,6 +16,8 @@ Maintain runbooks for DLQ, migrations, SSRF, and publish adversarial audit findi
 
 Operational knowledge codified. New operators self-sufficient. Audit trail.
 
+As of v5.0 (2026-06-11), all 85 findings across four review rounds are resolved or accepted with zero open items.
+
 ## References
 
 - [docs/operations/runbooks.md](docs/operations/runbooks.md)

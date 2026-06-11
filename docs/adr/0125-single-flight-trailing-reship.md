@@ -29,6 +29,9 @@ Thundering herd on Koku listener when operators save BH schedules repeatedly; du
 
 At most one reship in-flight. Latest schedule always applied via trailing pass. Alert on repeated reship failures (`rosocp_reship_*` metrics) when trailing coalescing cannot complete.
 
+Post-completion `fleetsummary.InvalidateOrg(orgID)` is called in `trigger_guard.go` after each coalesced reship batch. Reship invalidates at completion only (no pre-trigger), unlike savings and threshold recalc which use invalidate-twice ([ADR-0118](0118-invalidate-cost-cache-on-settings-change.md)).
+
 ## References
 
 - [internal/reship/service.go](internal/reship/service.go)
+- [internal/reship/trigger_guard.go](internal/reship/trigger_guard.go)

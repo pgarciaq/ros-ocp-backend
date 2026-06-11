@@ -10,7 +10,13 @@ Admins spamming threshold PUTs could spawn unbounded goroutines.
 
 ## Decision
 
-`golang.org/x/sync/singleflight` keyed by `(org_id, recType)`.
+Custom `recalcFlight` struct in `threshold_recalc_guard.go` keyed by `(org_id, recType)`:
+
+- If a recalc is already running, set `pending` and increment `rosocp_threshold_recalc_coalesced_total`.
+- When the in-flight run completes, if `pending` was set, run again with the same parameters (trailing pass).
+- Uses the same trailing latest-params loop pattern as savings and reship guards ([ADR-0125](0125-single-flight-trailing-reship.md)).
+
+Post-completion, `fleetsummary.InvalidateOrg(orgID)` runs as part of the invalidate-twice pattern ([ADR-0118](0118-invalidate-cost-cache-on-settings-change.md)); pre-trigger invalidation occurs in `TriggerThresholdRecalculationAsync`.
 
 ## Alternatives Considered
 
@@ -25,7 +31,12 @@ A single org-wide lock is simpler than `(org_id, recType)` scoping, but PVC thre
 
 ## Consequences
 
-At most one recalc in-flight per scope. Subsequent requests coalesced. Metric for coalesced count.
+At most one recalc in-flight per scope. Subsequent requests coalesced into a trailing pass. Metric for coalesced count. Fleet/savings caches invalidated before and after recalc.
+
+## Related Decisions
+
+- [ADR-0125](0125-single-flight-trailing-reship.md): Same coalescing pattern for reship and savings recalc.
+- [ADR-0118](0118-invalidate-cost-cache-on-settings-change.md): Invalidate-twice contract for async recalc.
 
 ## References
 

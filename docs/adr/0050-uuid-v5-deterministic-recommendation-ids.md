@@ -27,6 +27,13 @@ Using `(cluster_uuid, namespace, container, term, engine)` directly in API paths
 
 Stable URLs. Deterministic. Must include org_id check to prevent IDOR.
 
+## Scope Clarification
+
+This ADR covers **recommendation set primary keys** derived via UUID v5 from composite workload identity fields (cluster, namespace, container, term, engine, etc.).
+
+**Manifest ID synthesis** for legacy Kafka messages that omit `metadata.manifest_id` uses the same UUID v5 technique but a **distinct namespace** and `synth-*` prefix in `report_file_tracker.go`. Whether to run recommendation engines on partial multi-file synthesized manifests is a separate decision: [ADR-0165](0165-defer-recommendations-for-synthesized-manifests.md) (quiet-period debouncer).
+
 ## References
 
 - [docs/architecture/recommendation-ids.md](docs/architecture/recommendation-ids.md)
+- [internal/services/report_file_tracker.go](../../internal/services/report_file_tracker.go)

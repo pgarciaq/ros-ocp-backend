@@ -27,6 +27,49 @@ Pure TTL expiration avoids LRU bookkeeping but still allows unbounded growth whe
 
 Bounded memory. Eviction on cold tenants. Metrics for cache size and evictions.
 
+## Fleet and Savings Summary Caches
+
+The same LRU+TTL pattern is applied to fleet summary and savings summary API responses in `internal/fleetsummary/cache.go`.
+
+- **Per-process scope** — no Redis/Valkey; each API pod maintains its own cache. Adversarial review v5.0 accepted this trade-off for operational simplicity (see Alternatives Considered above).
+- **Env vars:** `ROS_FLEET_SUMMARY_CACHE_TTL` (default 300s), `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default 256). Savings summary shares TTL/capacity settings.
+- **Dual LRU instances** — one for fleet summary, one for savings summary (default rollup only; `group_by` variants are not cached).
+- **Cache keys** — keyed by `org_id` plus RBAC permission hash so scoped responses do not leak across users.
+
+## Invalidation Contract
+
+`fleetsummary.InvalidateOrg(orgID)` drops both fleet and savings entries for one org (not a global flush). Eleven call-site categories:
+
+1. Ingest completion
+2. Settings PUT/DELETE (business hours)
+3. Settings PUT/DELETE (quotas and other threshold types)
+4. Retention sweep
+5. Sources cleanup
+6. Threshold recalc completion
+7. Savings recalc completion
+8. Reship completion
+9. Cost model changes
+10. Tag sync
+11. Startup
+
+Pre-trigger invalidation on async recalc scheduling and post-completion invalidation in coalescing guard loops implement the invalidate-twice pattern ([ADR-0118](0118-invalidate-cost-cache-on-settings-change.md)).
+
+Invalidation is org-scoped; coalescing guards limit burst invalidations during rapid admin edits.
+
+## Prometheus Metrics
+
+Fleet summary: `rosocp_fleet_summary_cache_{size,hits,misses,evictions,invalidations,lazy_expiry}_total` (size is a gauge; others are counters).
+
+Savings summary: parallel `rosocp_savings_summary_cache_*` metrics with the same suffixes.
+
+Cost data cache (`internal/costdata`) exposes its own hit/miss/eviction metrics; settings changes also call `costdata.InvalidateCostDataCache`.
+
+## Related Decisions
+
+- [ADR-0118](0118-invalidate-cost-cache-on-settings-change.md): Invalidation triggers on settings and async recalc.
+- [ADR-0086](0086-single-flight-threshold-recalc.md), [ADR-0125](0125-single-flight-trailing-reship.md): Coalescing guards that trigger post-completion invalidation.
+
 ## References
 
 - [internal/costdata/lru_cache.go](internal/costdata/lru_cache.go)
+- [internal/fleetsummary/cache.go](internal/fleetsummary/cache.go)
