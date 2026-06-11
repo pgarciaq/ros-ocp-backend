@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -20,14 +21,8 @@ func TestGetDBSharesPoolWithGORM_Integration(t *testing.T) {
 	}
 
 	pool := testutil.SetupTestDB(t)
-	t.Cleanup(func() {
-		Pool = nil
-		DB = nil
-	})
-	Pool = pool
-	DB = nil
 
-	gormDB := GetDB()
+	gormDB := database.GetDB()
 	require.NotNil(t, gormDB)
 
 	sqlDB, err := gormDB.DB()

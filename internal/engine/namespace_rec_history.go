@@ -41,7 +41,7 @@ type NamespaceRecommendationHistoryRow struct {
 	Current              NamespaceHistoryResourceValues  `json:"current"`
 	Utilization          *NamespaceHistoryUtilization    `json:"utilization,omitempty"`
 	ConfidenceLevel      *float32                        `json:"confidence_level,omitempty"`
-	NotificationCodes    []int16                         `json:"notification_codes,omitempty"`
+	NotificationCodes    []int16                         `json:"notification_codes"`
 }
 
 // ListNamespaceRecommendationHistory returns historical snapshots for a namespace,
@@ -142,6 +142,9 @@ func namespaceHistoryCPURow(
 	confidence *float32,
 	notificationCodes []int16,
 ) NamespaceRecommendationHistoryRow {
+	if notificationCodes == nil {
+		notificationCodes = []int16{}
+	}
 	row := NamespaceRecommendationHistoryRow{
 		Resource:           "cpu",
 		RecommendationType: engine,
@@ -176,6 +179,9 @@ func namespaceHistoryMemoryRow(
 	confidence *float32,
 	notificationCodes []int16,
 ) NamespaceRecommendationHistoryRow {
+	if notificationCodes == nil {
+		notificationCodes = []int16{}
+	}
 	row := NamespaceRecommendationHistoryRow{
 		Resource:           "memory",
 		RecommendationType: engine,

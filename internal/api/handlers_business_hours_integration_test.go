@@ -96,9 +96,9 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 
 func TestSettingsAPI_PUT_PostgresDown(t *testing.T) {
 	enableBusinessHoursForTest(t)
-	prev := db.Pool
+	restore := db.SuspendForceTestPool()
+	t.Cleanup(restore)
 	db.Pool = nil
-	t.Cleanup(func() { db.Pool = prev })
 
 	// Prevent initPool from connecting during test.
 	t.Setenv("POSTGRES_SQL_SERVICE_HOST", "")

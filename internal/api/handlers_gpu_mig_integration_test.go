@@ -14,9 +14,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
@@ -541,16 +538,11 @@ func TestGPUMIGRecommendations_NotificationCodes(t *testing.T) {
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx,
 		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)

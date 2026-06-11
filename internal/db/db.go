@@ -23,6 +23,34 @@ import (
 var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
 
+// forceTestPool pins GetPool/GetDB to the shared testcontainers pool while integration
+// tests run. Without this, parallel packages can race on Pool=nil cleanups and trigger
+// initPool() against production config (localhost:15432).
+var forceTestPool *pgxpool.Pool
+
+// SetForceTestPool directs GetPool and GetDB to use the integration-test pgxpool.
+// Called by internal/testutil when the shared testcontainers Postgres starts.
+func SetForceTestPool(p *pgxpool.Pool) {
+	forceTestPool = p
+	Pool = p
+	DB = nil
+}
+
+// SuspendForceTestPool clears the integration-test pool override so unit tests can
+// exercise GetPool auto-init or nil-pool paths. Call the returned restore func in cleanup.
+func SuspendForceTestPool() (restore func()) {
+	prevPool := forceTestPool
+	prevDB := DB
+	forceTestPool = nil
+	Pool = nil
+	DB = nil
+	return func() {
+		forceTestPool = prevPool
+		Pool = prevPool
+		DB = prevDB
+	}
+}
+
 func setStatementTimeout(ctx context.Context, conn *pgconn.PgConn) error {
 	secs := StatementTimeoutSecs()
 	_, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", secs)).ReadAll()
@@ -134,6 +162,9 @@ func initPool() {
 
 // GetPool returns the pgxpool.Pool singleton, initializing it if needed.
 func GetPool() *pgxpool.Pool {
+	if forceTestPool != nil {
+		return forceTestPool
+	}
 	if Pool == nil {
 		initPool()
 	}

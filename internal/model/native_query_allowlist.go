@@ -11,7 +11,7 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.has_gpu = ?":             {},
 	"rs.gpu_classification IN ?": {},
 	"rs.idle_state IN ?":         {},
-	"rs.gpu_idle_state IN ?":   {},
+	"rs.gpu_idle_state IN ?":     {},
 	"rs.engine IN ?":             {},
 	"rs.term IN ?":               {},
 
@@ -38,24 +38,28 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 
 // Filter fragments from buildNativeModeClause for native container listings (c.* / rs.* columns).
 var nativeRecFilterAtoms = map[string]struct{}{
-	"c.cluster_uuid = ?":        {},
-	"c.cluster_uuid != ?":       {},
-	"c.cluster_alias ILIKE ? ESCAPE '\\'": {},
-	"c.cluster_alias != ?":              {},
+	"c.cluster_uuid = ?":                    {},
+	"c.cluster_uuid != ?":                   {},
+	"c.cluster_alias ILIKE ? ESCAPE '\\'":   {},
+	"c.cluster_alias != ?":                  {},
 	"rs.namespace ILIKE ? ESCAPE '\\'":      {},
-	"rs.namespace = ?":          {},
-	"rs.namespace != ?":         {},
+	"rs.namespace = ?":                      {},
+	"rs.namespace != ?":                     {},
 	"rs.workload ILIKE ? ESCAPE '\\'":       {},
-	"rs.workload = ?":           {},
-	"rs.workload != ?":          {},
-	"rs.workload_type ILIKE ? ESCAPE '\\'":   {},
-	"rs.workload_type = ?":       {},
-	"rs.workload_type != ?":      {},
-	"LOWER(rs.workload_type) = ?":  {},
-	"LOWER(rs.workload_type) != ?": {},
+	"rs.workload = ?":                       {},
+	"rs.workload != ?":                      {},
+	"rs.workload_type ILIKE ? ESCAPE '\\'":  {},
+	"rs.workload_type = ?":                  {},
+	"rs.workload_type != ?":                 {},
+	"LOWER(rs.workload_type) = ?":           {},
+	"LOWER(rs.workload_type) != ?":          {},
 	"rs.container_name ILIKE ? ESCAPE '\\'": {},
-	"rs.container_name = ?":     {},
-	"rs.container_name != ?":    {},
+	"rs.container_name = ?":                 {},
+	"rs.container_name != ?":                {},
+}
+
+// GPU model filters apply only on recommendation_sets (rs) queries, not org_container_keys counts.
+var nativeRecDetailOnlyFilterAtoms = map[string]struct{}{
 	"rs.gpu_model_name ILIKE ? ESCAPE '\\'": {},
 }
 
@@ -65,17 +69,17 @@ var nativeNSFixedQueryKeys = map[string]struct{}{
 	"ns.monitoring_end_time < ?":  {},
 	"ns.stale = ?":                {},
 	"ns.engine IN ?":              {},
-	"ns.idle_state IN ?":        {},
+	"ns.idle_state IN ?":          {},
 }
 
 var nativeNSFilterAtoms = map[string]struct{}{
-	"c.cluster_uuid = ?":        {},
-	"c.cluster_uuid != ?":       {},
-	"c.cluster_alias ILIKE ? ESCAPE '\\'": {},
-	"c.cluster_alias != ?":              {},
+	"c.cluster_uuid = ?":                    {},
+	"c.cluster_uuid != ?":                   {},
+	"c.cluster_alias ILIKE ? ESCAPE '\\'":   {},
+	"c.cluster_alias != ?":                  {},
 	"ns.namespace_name ILIKE ? ESCAPE '\\'": {},
-	"ns.namespace_name = ?":     {},
-	"ns.namespace_name != ?":    {},
+	"ns.namespace_name = ?":                 {},
+	"ns.namespace_name != ?":                {},
 }
 
 func splitAtTopLevelSep(s, sep string) []string {
@@ -129,6 +133,9 @@ func isCompositeOfAtoms(key string, atoms map[string]struct{}, seps []string) bo
 
 func isAllowedNativeRecommendationQueryKey(key string) bool {
 	if _, ok := nativeRecFixedQueryKeys[key]; ok {
+		return true
+	}
+	if isCompositeOfAtoms(key, nativeRecDetailOnlyFilterAtoms, []string{" OR ", " AND "}) {
 		return true
 	}
 	return isCompositeOfAtoms(key, nativeRecFilterAtoms, []string{" OR ", " AND "})

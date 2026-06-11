@@ -10,9 +10,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
@@ -27,19 +24,14 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES
@@ -147,12 +139,7 @@ func TestSavingsSummary_IncludesPVCPlugin(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
@@ -160,7 +147,7 @@ func TestSavingsSummary_IncludesPVCPlugin(t *testing.T) {
 	})
 
 	orgID := "org-pvc-by-plugin-key"
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -186,12 +173,7 @@ func TestSavingsSummary_PVCRollup(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
@@ -199,7 +181,7 @@ func TestSavingsSummary_PVCRollup(t *testing.T) {
 	})
 
 	orgID := "org-pvc-rollup-only"
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'pvc-rollup', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -234,19 +216,14 @@ func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testi
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES
@@ -298,19 +275,14 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'perf-cluster', 'src-perf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -345,19 +317,14 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'term-diff-cluster', 'src-td', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -413,19 +380,14 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'savings-engine-cluster', 'src-se', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -470,19 +432,14 @@ func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'snapshot-savings-cluster', 'src-snap', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)

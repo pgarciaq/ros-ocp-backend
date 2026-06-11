@@ -7,8 +7,8 @@ import (
 )
 
 var nativeRecKeysFilterAtoms = map[string]string{
-	"c.cluster_uuid = ?":        "ock.cluster_uuid = ?",
-	"c.cluster_uuid != ?":       "ock.cluster_uuid != ?",
+	"c.cluster_uuid = ?":                    "ock.cluster_uuid = ?",
+	"c.cluster_uuid != ?":                   "ock.cluster_uuid != ?",
 	"c.cluster_alias ILIKE ? ESCAPE '\\'":   "c.cluster_alias ILIKE ? ESCAPE '\\'",
 	"c.cluster_alias != ?":                  "c.cluster_alias != ?",
 	"rs.namespace ILIKE ? ESCAPE '\\'":      "ock.namespace ILIKE ? ESCAPE '\\'",
@@ -23,9 +23,8 @@ var nativeRecKeysFilterAtoms = map[string]string{
 	"LOWER(rs.workload_type) = ?":           "LOWER(ock.workload_type) = ?",
 	"LOWER(rs.workload_type) != ?":          "LOWER(ock.workload_type) != ?",
 	"rs.container_name ILIKE ? ESCAPE '\\'": "ock.container_name ILIKE ? ESCAPE '\\'",
-	"rs.container_name = ?":     "ock.container_name = ?",
+	"rs.container_name = ?":                 "ock.container_name = ?",
 	"rs.container_name != ?":                "ock.container_name != ?",
-	"rs.gpu_model_name ILIKE ? ESCAPE '\\'": "rs.gpu_model_name ILIKE ? ESCAPE '\\'",
 }
 
 var nativeRecDetailOnlyQueryKeys = map[string]struct{}{
@@ -56,6 +55,10 @@ func splitNativeListQueryParams(queryParams map[string]interface{}) (keysParams,
 			continue
 		}
 		if _, ok := nativeRecDetailOnlyQueryKeys[key]; ok {
+			detailParams[key] = values
+			continue
+		}
+		if isCompositeOfAtoms(key, nativeRecDetailOnlyFilterAtoms, []string{" OR ", " AND "}) {
 			detailParams[key] = values
 			continue
 		}

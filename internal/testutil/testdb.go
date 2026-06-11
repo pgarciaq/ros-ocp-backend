@@ -10,19 +10,30 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
+const sharedTestDBMaxConns = 16
+
 var (
-	sharedTestDB     *pgxpool.Pool
-	sharedTestDBOnce sync.Once
-	sharedTestDBErr  error
+	sharedTestDB        *pgxpool.Pool
+	sharedTestDBOnce    sync.Once
+	sharedTestDBErr     error
+	sharedTestGORM      *gorm.DB
+	sharedTestGORMAsync sync.Once
+	sharedTestGORMErr   error
 	// sharedTestDBMu serializes tests against the shared pool so parallel test runs
 	// do not read or write each other's fixture data.
 	sharedTestDBMu sync.Mutex
@@ -42,8 +53,16 @@ func SetupTestDB(tb testing.TB) *pgxpool.Pool {
 		tb.Fatalf("shared test database: %v", sharedTestDBErr)
 	}
 	sharedTestDBMu.Lock()
+	// Registered first so it runs last: restore shared pool after per-test cleanups
+	// that assign database.Pool = nil.
+	tb.Cleanup(func() {
+		database.SetForceTestPool(sharedTestDB)
+		database.DB = OpenTestGORM(sharedTestDB)
+	})
 	tb.Cleanup(sharedTestDBMu.Unlock)
 	truncatePublicTables(tb, sharedTestDB)
+	database.SetForceTestPool(sharedTestDB)
+	database.DB = OpenTestGORM(sharedTestDB)
 	return sharedTestDB
 }
 
@@ -75,11 +94,11 @@ func truncatePublicTables(tb testing.TB, pool *pgxpool.Pool) {
 func initSharedTestDB() {
 	ctx := context.Background()
 
-	pgContainer, err := postgres.Run(ctx,
+	pgContainer, err := tcpostgres.Run(ctx,
 		"postgres:16-alpine",
-		postgres.WithDatabase("ros_test"),
-		postgres.WithUsername("postgres"),
-		postgres.WithPassword("postgres"),
+		tcpostgres.WithDatabase("ros_test"),
+		tcpostgres.WithUsername("postgres"),
+		tcpostgres.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -122,7 +141,7 @@ func initSharedTestDB() {
 		sharedTestDBErr = fmt.Errorf("parse pool config: %w", err)
 		return
 	}
-	poolCfg.MaxConns = 32
+	poolCfg.MaxConns = sharedTestDBMaxConns
 
 	sharedTestDB, err = pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
@@ -133,6 +152,7 @@ func initSharedTestDB() {
 		sharedTestDBErr = fmt.Errorf("ping database: %w", err)
 		return
 	}
+	database.SetForceTestPool(sharedTestDB)
 }
 
 // migrationsPath returns the absolute path to the migrations/ directory,
@@ -143,6 +163,27 @@ func migrationsPath() string {
 		panic("testutil: unable to determine current file path")
 	}
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
+}
+
+// OpenTestGORM returns a shared GORM handle backed by the pgxpool from SetupTestDB.
+// Tests must call SetupTestDB first. Reuses the pool instead of opening a separate
+// connection pool per test, which exhausts PostgreSQL max_connections in large suites.
+func OpenTestGORM(pool *pgxpool.Pool) *gorm.DB {
+	sharedTestGORMAsync.Do(func() {
+		sqlDB := stdlib.OpenDBFromPool(pool)
+		sqlDB.SetMaxOpenConns(sharedTestDBMaxConns)
+		sqlDB.SetMaxIdleConns(sharedTestDBMaxConns)
+
+		sharedTestGORM, sharedTestGORMErr = gorm.Open(postgres.New(postgres.Config{
+			Conn: sqlDB,
+		}), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+	})
+	if sharedTestGORMErr != nil {
+		panic(fmt.Sprintf("shared test GORM: %v", sharedTestGORMErr))
+	}
+	return sharedTestGORM
 }
 
 // TruncateTable removes all rows from the given table. Useful for test isolation.

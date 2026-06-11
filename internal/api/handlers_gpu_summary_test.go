@@ -26,6 +26,8 @@ func TestGetGPUSummary_MissingIdentity_Returns401(t *testing.T) {
 }
 
 func TestGetGPUSummary_DBUnavailable_Returns503(t *testing.T) {
+	restore := database.SuspendForceTestPool()
+	defer restore()
 	database.Pool = nil
 
 	e := echo.New()

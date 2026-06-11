@@ -12,9 +12,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/google/uuid"
 
@@ -31,13 +28,10 @@ func setupTagsIntegrationApp(t *testing.T) (*echo.Echo, string, context.Context,
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'contract-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -258,10 +252,7 @@ func TestTagFilters_WithRBACScope_Intersection(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
@@ -271,7 +262,7 @@ func TestTagFilters_WithRBACScope_Intersection(t *testing.T) {
 	clusterAllowed := testutil.TestClusterUUID
 	clusterDenied := "b2222222-2222-2222-2222-222222222222"
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'tag-rbac-allowed', 'src-1', now()), (1, $2, 'tag-rbac-denied', 'src-2', now()) ON CONFLICT DO NOTHING`,

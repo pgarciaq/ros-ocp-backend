@@ -13,9 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
@@ -48,16 +45,11 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	// Seed rh_accounts and clusters so the JOIN resolves
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -137,15 +129,10 @@ func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -190,15 +177,10 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -291,15 +273,10 @@ func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -372,15 +349,10 @@ func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -484,15 +456,10 @@ func TestGetNamespaceList_FilterEngine(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'ns-engine-cluster', 'src-ns-eng', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -537,12 +504,7 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	orgA := "orgAAAAAAAA"
@@ -551,7 +513,7 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	clusterB := "bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
 	// Seed rh_accounts and clusters for both orgs
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (100, $1), (200, $2) ON CONFLICT DO NOTHING`, orgA, orgB)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (100, $1), (200, $2) ON CONFLICT DO NOTHING`, orgA, orgB)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (100, $1, 'cluster-a', 'src-a', now()), (200, $2, 'cluster-b', 'src-b', now()) ON CONFLICT DO NOTHING`, clusterA, clusterB)
@@ -666,18 +628,13 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	cluster1 := "c1111111-1111-1111-1111-111111111111"
 	cluster2 := "c2222222-2222-2222-2222-222222222222"
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'alpha-cluster', 'src-1', now()), (1, $2, 'beta-cluster', 'src-2', now()) ON CONFLICT DO NOTHING`, cluster1, cluster2)
@@ -746,15 +703,10 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -821,18 +773,13 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	cluster1 := "a1111111-1111-1111-1111-111111111111"
 	cluster2 := "a2222222-2222-2222-2222-222222222222"
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'rbac-cluster-1', 'src-1', now()), (1, $2, 'rbac-cluster-2', 'src-2', now()) ON CONFLICT DO NOTHING`, cluster1, cluster2)
@@ -916,18 +863,13 @@ func TestGetNativeRecommendationSetList_RBAC_MetaCountZeroWhenNoAccessibleCluste
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	clusterWithData := "a1111111-1111-1111-1111-111111111111"
 	clusterDenied := "b2222222-2222-2222-2222-222222222222"
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'rbac-data-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterWithData)
@@ -998,15 +940,10 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -1115,16 +1052,15 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	config.ResetForTest()
+
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'gpu-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -1288,15 +1224,10 @@ func TestGetNativeRecommendationSetList_EmptyResults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -1326,18 +1257,13 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
 	orgID := "orgPAGINATION"
 	clusterUUID := "cccc3333-cccc-cccc-cccc-cccccccccccc"
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (300, $1) ON CONFLICT DO NOTHING`, orgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (300, $1) ON CONFLICT DO NOTHING`, orgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (300, $1, 'pagination-cluster', 'src-pag', now()) ON CONFLICT DO NOTHING`, clusterUUID)
@@ -1468,15 +1394,10 @@ func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -1557,15 +1478,10 @@ func TestGetContainerList_FilterTerm(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'term-filter-cluster', 'src-tf', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -1704,15 +1620,10 @@ func TestGetNativeRecommendationSetList_OrderByVariationFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
@@ -1781,15 +1692,10 @@ func TestGetNativeRecommendationSetList_OrderByNonVariationFields(t *testing.T) 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	t.Cleanup(func() { database.DB = nil })
 
-	_, err = pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)

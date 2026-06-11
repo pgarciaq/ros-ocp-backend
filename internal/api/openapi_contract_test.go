@@ -21,9 +21,6 @@ import (
 	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -350,13 +347,8 @@ func setupContractTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *echo
 	if pool != nil {
 		prev := database.Pool
 		database.Pool = pool
-		connStr := pool.Config().ConnString()
-		gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Silent),
-		})
-		require.NoError(t, err)
 		prevGorm := database.DB
-		database.DB = gormDB
+		database.DB = testutil.OpenTestGORM(pool)
 		t.Cleanup(func() {
 			database.Pool = prev
 			database.DB = prevGorm
@@ -672,6 +664,15 @@ func seedOpenAPINamespaceRecommendation(t *testing.T, pool *pgxpool.Pool, orgID 
 	ctx := context.Background()
 	namespaceName := "openapi-ns-hist"
 
+	if orgID != testutil.TestOrgID {
+		orgID = testutil.TestOrgID
+	}
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-ns-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
 	testutil.SeedNamespaceDigestSeries(t, pool, namespaceName, 7, 200, 10, 524288, 1024)
 	end := testutil.BaseDate.AddDate(0, 0, 6)
 	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
@@ -689,7 +690,7 @@ func TestOpenAPI_NamespaceRecommendations_List_ResponseFields(t *testing.T) {
 	}
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
-	orgID := "org-openapi-ns-list"
+	orgID := testutil.TestOrgID
 	_ = seedOpenAPINamespaceRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
@@ -698,6 +699,10 @@ func TestOpenAPI_NamespaceRecommendations_List_ResponseFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces", http.MethodGet, "200")
+	if schema == nil {
+		// Canonical list path omits 200 content in openapi.json; use component schema.
+		schema = spec.componentSchema("NamespaceRecommendationList")
+	}
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -707,7 +712,7 @@ func TestOpenAPI_NamespaceRecommendations_Detail_ResponseFields(t *testing.T) {
 	}
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
-	orgID := "org-openapi-ns-detail"
+	orgID := testutil.TestOrgID
 	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
@@ -725,7 +730,7 @@ func TestOpenAPI_NamespaceRecommendations_History_ResponseFields(t *testing.T) {
 	}
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
-	orgID := "org-openapi-ns-history"
+	orgID := testutil.TestOrgID
 	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 

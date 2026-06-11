@@ -16,9 +16,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
@@ -93,19 +90,14 @@ func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*e
 	t.Cleanup(srv.Close)
 	enableKokuMockForSavings(t, srv.URL)
 
-	connStr := pool.Config().ConnString()
-	gormDB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	database.DB = gormDB
+	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
 	t.Cleanup(func() {
 		database.DB = nil
 		database.Pool = nil
 	})
 
-	_, err = pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
 		INSERT INTO rh_accounts (id, org_id) VALUES (1, $1)
 		ON CONFLICT (id) DO UPDATE SET org_id = EXCLUDED.org_id`, testutil.TestOrgID)
 	require.NoError(t, err)

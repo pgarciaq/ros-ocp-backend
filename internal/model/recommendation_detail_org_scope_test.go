@@ -8,11 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
 func TestDetailQueries_ScopeByOrgID(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{DryRun: true})
 	require.NoError(t, err)
+
+	database.DB = db
+	t.Cleanup(func() { database.DB = nil })
 
 	const orgID = "1234567"
 	const recID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

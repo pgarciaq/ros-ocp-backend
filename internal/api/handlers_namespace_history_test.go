@@ -26,10 +26,18 @@ func TestNamespaceRecommendationHistory_APIEndpoint(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'ns-hist-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
 	testutil.SeedNamespaceDigestSeries(t, pool, "ns-api-hist", 7, 200, 10, 524288, 1024)
 	end := testutil.BaseDate.AddDate(0, 0, 6)
 	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, results))
 	require.NoError(t, engine.WriteNamespaceRecommendationHistory(ctx, pool, results))
 
 	namespaceID := model.NativeNamespaceID(testutil.TestClusterUUID, "ns-api-hist")
