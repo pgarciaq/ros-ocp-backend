@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADRs 0208-0257: Comprehensive coverage for settings architecture, business hours reship, notifications model, staleness semantics, tag sync, effective rates, snapshots, reship concurrency, migration strategy, configuration catalog, plugin system details, API contract decisions, quota/PVC algorithms
 - ADRs 0172-0207: Comprehensive architecture decision coverage for idle detection, savings methodology, list query performance, threshold recalculation, node/VM/GPU algorithms, API design patterns, Kafka tuning, RBAC semantics, and retention mechanics
 - ADR-0166: Per-file report_file_status tracking with manifest completeness gating
 - ADR-0167: Cost-management entitlement middleware (defense-in-depth)
@@ -19,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Corrected ADRs 0084, 0161 with status updates reflecting actual implementation scope
 - Updated ADRs 0011, 0013, 0038, 0043, 0132 with status updates cross-referencing new ADRs
 - Expanded ADRs 0088, 0102, 0112, 0133, 0136, 0139, 0140, 0145, 0151, 0163 with implementation details
 - Fixed ADR-0133 logrus/zerolog drift

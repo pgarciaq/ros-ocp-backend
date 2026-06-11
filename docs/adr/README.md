@@ -216,3 +216,53 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0205](0205-rbac-filter-intersection-semantics.md) | RBAC filter intersection semantics | Security | Accepted |
 | [0206](0206-explain-audit-query-harness-list-performance.md) | Explain-audit query harness for list performance | Testing | Accepted |
 | [0207](0207-stdlib-json-encoding-api-responses.md) | Stdlib JSON encoding for API responses (not jsoniter/sonic) | API Design | Accepted |
+| [0208](0208-settings-scope-org-wide-only-except-business-hours.md) | Settings scope is org-wide only (not hierarchical) except business hours | API Design | Accepted |
+| [0209](0209-dual-idle-threshold-surfaces-container-vs-idle-detection.md) | Dual idle-threshold surfaces (container sizing vs idle_detection) | Engine / Algorithm | Accepted |
+| [0210](0210-per-feature-opt-out-under-global-ros-settings-locked.md) | Per-feature opt-out under global ROS_SETTINGS_LOCKED | Configuration | Accepted |
+| [0211](0211-parallel-settings-domains-domain-specific-storage-shapes.md) | Parallel settings domains with domain-specific storage shapes | API Design | Accepted |
+| [0212](0212-threshold-validation-allowlist-cross-field-rules.md) | Threshold validation via allowlist and cross-field rules | API Design | Accepted |
+| [0213](0213-init-threshold-defaults-env-into-package-defaults-at-startup.md) | InitThresholdDefaults copies env into process-wide defaults at startup | Configuration | Accepted |
+| [0214](0214-idle-settings-put-fans-out-async-recalc-five-types.md) | Idle settings PUT fans out async recalc to five recommendation types | API Design | Accepted |
+| [0215](0215-delete-settings-restores-compiled-defaults.md) | DELETE settings restores compiled defaults (not empty/disabled) | API Design | Accepted |
+| [0216](0216-business-hours-pending-marker-stub-rows.md) | Business hours pending-marker stub rows (not customer schedules) | Reship / Business Hours | Accepted |
+| [0217](0217-disabled-cluster-override-blocks-org-bh-inheritance.md) | Disabled cluster override blocks org BH inheritance for digests | Reship / Business Hours | Accepted |
+| [0218](0218-org-level-reship-single-flight-trailing-batch-coalescing.md) | Org-level reship single-flight with trailing batch coalescing | Reship / Business Hours | Accepted |
+| [0219](0219-reship-background-poller-retries-pending-clusters.md) | Reship background poller retries pending clusters | Reship / Business Hours | Accepted |
+| [0220](0220-bh-put-triggers-reship-threshold-put-triggers-recalc.md) | BH PUT triggers reship; threshold PUT triggers recalc (not reship) | Reship / Business Hours | Accepted |
+| [0221](0221-notifications-recomputed-each-produce-run-not-dismissable.md) | Notifications recomputed each produce run (not dismissable entities) | Engine / Algorithm | Accepted |
+| [0222](0222-notification-dual-source-db-seed-and-go-definitions.md) | Notification dual source — DB seed and Go definitions map | API Design | Accepted |
+| [0223](0223-plugin-filtered-notification-catalog-subsets.md) | Plugin-filtered notification catalog subsets | API Design | Accepted |
+| [0224](0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md) | Stale marking precedence — last_reported_at overrides digest age | Engine / Algorithm | Accepted |
+| [0225](0225-filter-stale-tri-state-semantics.md) | filter[stale] tri-state semantics | API Design | Accepted |
+| [0226](0226-tag-sync-full-replace-per-org.md) | Tag sync is full-replace per org (not incremental) | Tags | Accepted |
+| [0227](0227-ros-tags-enabled-master-gate-silently-disables-tag-filters.md) | ROS_TAGS_ENABLED master gate silently disables tag filters | Tags | Accepted |
+| [0228](0228-effective-rates-cache-key-org-cluster-only.md) | Effective rates cache key is org+cluster only (date range excluded) | Cost / Savings | Accepted |
+| [0229](0229-container-savings-effective-rates-from-namespace-aggregates.md) | Container savings derive effective rates from namespace aggregates | Cost / Savings | Accepted |
+| [0230](0230-snapshot-inventory-append-only-freshness-window.md) | Snapshot inventory append-only with freshness window for classification | Engine / Algorithm | Accepted |
+| [0231](0231-snapshot-cost-static-rate-per-gib-month.md) | Snapshot cost uses static $/GiB/month (not Koku effective rates) | Cost / Savings | Accepted |
+| [0232](0232-managed-backup-detection-label-prefix-map.md) | Managed backup detection via label prefix map | Engine / Algorithm | Accepted |
+| [0233](0233-cluster-upsert-on-every-kafka-payload.md) | Cluster upsert on every Kafka payload before file processing | Ingestion | Accepted |
+| [0234](0234-no-soft-delete-cluster-state.md) | No soft-delete cluster state — cleanup via Sources destroy events | Data Model | Accepted |
+| [0235](0235-two-layer-reship-concurrency.md) | Two-layer reship concurrency — org coalescing plus per-cluster advisory lock | Reship / Business Hours | Accepted |
+| [0236](0236-large-table-index-strategy-concurrently-pre-step.md) | Large-table index strategy — manual CONCURRENTLY pre-step for production | Deployment / Ops | Accepted |
+| [0237](0237-runtime-partition-pre-creation-current-next-month.md) | Runtime partition pre-creation (current + next month) | Deployment / Ops | Accepted |
+| [0238](0238-environment-variable-catalog-by-subsystem.md) | Environment variable catalog organized by subsystem | Configuration | Accepted |
+| [0239](0239-feature-toggles-vs-plugin-toggles.md) | Feature toggles vs plugin toggles distinction | Configuration | Accepted |
+| [0240](0240-connection-pool-timeout-tuning-surface.md) | Connection pool and timeout tuning surface | Deployment / Ops | Accepted |
+| [0241](0241-deprecated-alias-env-vars-backward-compat.md) | Deprecated alias env vars maintained for backward compatibility | Configuration | Accepted |
+| [0242](0242-rosocp-prometheus-metric-naming-convention.md) | rosocp_ Prometheus metric naming convention | Deployment / Ops | Accepted |
+| [0243](0243-high-cardinality-analytics-incomplete-labels.md) | High-cardinality labels on analytics_incomplete metric | Deployment / Ops | Accepted |
+| [0244](0244-request-correlation-echo-request-id.md) | Request correlation via Echo request_id (no OpenTelemetry) | Deployment / Ops | Accepted |
+| [0245](0245-plugin-init-registration-order-undefined.md) | Plugin init() registration order intentionally undefined | Plugins | Accepted |
+| [0246](0246-boot-fatal-csv-type-collision.md) | Boot fatal on CSV type collision between plugins | Plugins | Accepted |
+| [0247](0247-apiproviders-bypass-kruize-exclusivity.md) | APIProviders() bypasses Kruize exclusivity for namespace routes | Plugins | Accepted |
+| [0248](0248-v1-only-api-no-v2-migration-policy.md) | v1-only API namespace with no v2 migration policy | API Design | Accepted |
+| [0249](0249-advisory-openapi-changelog-ci-non-blocking.md) | Advisory OpenAPI changelog CI is non-blocking | Testing | Accepted |
+| [0250](0250-pagination-meta-contract.md) | Pagination meta contract — count, limit, offset, has_next, next link | API Design | Accepted |
+| [0251](0251-quota-max-used-container-rec-sum.md) | Quota recommendations use max(quota_used, container_rec_sum) utilization signal | Engine / Algorithm | Accepted |
+| [0252](0252-storage-pods-object-count-quotas-used-only.md) | Storage/pods/object-count quotas use used metrics only (not container sums) | Engine / Algorithm | Accepted |
+| [0253](0253-pvc-four-way-classification-healthy-orphaned.md) | PVC four-way classification including healthy and orphaned | Engine / Algorithm | Accepted |
+| [0254](0254-pvc-growth-projection-decay-weighted-slope.md) | PVC growth projection via decay-weighted slope | Engine / Algorithm | Accepted |
+| [0255](0255-org-container-keys-refresh-deletes-stale.md) | org_container_keys refresh deletes stale keys on ingest | Data Model | Accepted |
+| [0256](0256-dual-tag-filter-syntax-legacy-koku.md) | Dual tag filter syntax (legacy and Koku-style) | Tags | Accepted |
+| [0257](0257-stale-tag-sync-warning-on-list-responses.md) | Stale tag sync warning on list responses | Tags | Accepted |
