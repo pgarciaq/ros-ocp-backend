@@ -1924,13 +1924,13 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 
 ## Priority Remediation Order
 
-| Priority | Finding(s) | Rationale |
-|----------|------------|-----------|
-| 1 | **#65, #66, #69** | Fleet cache correctness/ops — small diffs, align with #52 intent |
-| 2 | **#67, #68** | Config validation + savings-summary cache — **resolved** |
-| 3 | **#70–#72, #74** | Governance polish — non-blocking |
-| — | **#61–#63** | Resolved (#61 quiet period; #62 latest-params coalescing; #63 audit + optional allowlist) |
-| — | **#73, #75, #76** | Accepted with documented rationale |
+| Priority | Finding(s) | Status | Rationale |
+|----------|------------|--------|-----------|
+| 1 | **#65, #66, #69** | ✅ Resolved | Fleet cache correctness/ops |
+| 2 | **#67, #68** | ✅ Resolved | Config validation + savings-summary cache |
+| 3 | **#70–#72, #74** | ✅ Resolved | Governance polish |
+| — | **#61–#64** | ✅ Resolved | Quiet period; latest-params coalescing; audit + allowlist; IPv6 SSRF |
+| — | **#73, #75, #76** | Accepted | Documented rationale |
 
 ## Hardening Regression Assessment
 
@@ -1967,17 +1967,17 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 
 ## Current State
 
-**Last updated:** 2026-06-11 (v3.0)
+**Last updated:** 2026-06-11 (v3.0 — all findings resolved)
 
 | Review | Findings | Resolved | Mitigated | Accepted | Open |
 |--------|----------|----------|-----------|----------|------|
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
-| v3.0 (#61–#76) | 16 | 4 | 0 | 3 | 9 |
-| **Combined (#1–#76)** | **76** | **29** | **24** | **11** | **12** |
+| v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
+| **Combined (#1–#76)** | **76** | **41** | **24** | **11** | **0** |
 
-**Conclusion:** v2.0 hardening holds up under fresh review with no High-severity regressions. v3.0 Medium findings **#61–#63** are resolved (or mitigated for #63). Remaining open items are fleet cache gaps (#65–#66, #69), config validation (#67), governance polish (#70–#72, #74), and accepted risks (#73, #75, #76). Kruize legacy (#33, #39, #44, #55) and unauthenticated metrics (#41) remain documented accepted risk.
+**Conclusion:** All 76 adversarial review findings across three reviews (v1.6, v2.0, v3.0) are closed — zero open findings remain. Accepted risks (#33, #39, #44, #55 Kruize legacy; #41 unauthenticated metrics; #73 reference routes; #75 SSRF TOCTOU; #76 cache timing) have documented rationale. The hardening phase is complete.
 
 ---
 
-*Document version: 3.0 — 2026-06-11. Post-hardening review; findings #61–#76.*
+*Document version: 3.0 — 2026-06-11. Post-hardening review; findings #61–#76. All resolved.*
