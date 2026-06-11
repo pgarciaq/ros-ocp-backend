@@ -15,7 +15,21 @@ var (
 	cancelShutdown context.CancelFunc
 	wg             sync.WaitGroup
 	initOnce       sync.Once
+
+	shutdownHooks []func()
+	hooksMu       sync.Mutex
 )
+
+// RegisterShutdownHook runs fn when the API server lifecycle context is cancelled,
+// before waiting for in-flight async jobs to finish.
+func RegisterShutdownHook(fn func()) {
+	if fn == nil {
+		return
+	}
+	hooksMu.Lock()
+	shutdownHooks = append(shutdownHooks, fn)
+	hooksMu.Unlock()
+}
 
 // Init wires async job cancellation to the API server lifecycle. ADR-0162 pattern: graceful shutdown with drain grace.
 // When parent is cancelled (SIGTERM), in-flight jobs receive cancellation on shutdownCtx. Init
@@ -32,6 +46,13 @@ func Init(parent context.Context, grace time.Duration) {
 		log := logging.GetLogger()
 		log.Info("API shutdown: cancelling in-flight async jobs")
 		cancelShutdown()
+
+		hooksMu.Lock()
+		hooks := append([]func(){}, shutdownHooks...)
+		hooksMu.Unlock()
+		for _, fn := range hooks {
+			fn()
+		}
 
 		done := make(chan struct{})
 		go func() {
@@ -75,4 +96,5 @@ func ResetForTest() {
 	cancelShutdown = nil
 	wg = sync.WaitGroup{}
 	initOnce = sync.Once{}
+	shutdownHooks = nil
 }

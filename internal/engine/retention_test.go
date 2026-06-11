@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -224,6 +227,42 @@ func TestRunRetentionSweep_PurgesStaleRecommendations(t *testing.T) {
 	).Scan(&countRecent)
 	require.NoError(t, err)
 	assert.Equal(t, 1, countRecent, "recent stale recommendation should be kept")
+}
+
+func TestRunRetentionSweep_InvalidatesFleetCacheForPurgedOrgs(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	fleetsummary.ResetForTest()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-stale-cache"
+	staleClusterUUID := "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+
+	fleetsummary.Put(orgID, false, nil, fleetsummary.CachedSummary{
+		TotalContainers:     99,
+		Currency:            "USD",
+		TotalMonthlySavings: money.FormatUSDToAmount(0, "USD"),
+	})
+	_, ok := fleetsummary.Get(orgID, false, nil)
+	require.True(t, ok)
+
+	oldDate := time.Now().UTC().AddDate(0, 0, -45)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		orgID, staleClusterUUID, "ns-test", "deploy-test", "Deployment",
+		"container-cache", "medium", "cost", true, oldDate,
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	_, ok = fleetsummary.Get(orgID, false, nil)
+	assert.False(t, ok, "retention purge should invalidate fleet summary cache for affected org")
 }
 
 func TestExtractYearMonth(t *testing.T) {

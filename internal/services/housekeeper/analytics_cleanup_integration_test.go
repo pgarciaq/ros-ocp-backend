@@ -14,6 +14,10 @@ import (
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
@@ -307,4 +311,29 @@ func TestCleanupClusterAnalytics_EmptyCluster_NoError(t *testing.T) {
 	defer cleanup()
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, "4242424", uuid.New().String()))
+}
+
+func TestCleanupClusterAnalytics_InvalidatesFleetCache(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	fleetsummary.ResetForTest()
+
+	gdb, cleanup := setupAnalyticsCleanupPG(t)
+	defer cleanup()
+
+	org := "1234567"
+	cluster := uuid.New().String()
+	fleetsummary.Put(org, false, nil, fleetsummary.CachedSummary{
+		TotalContainers:     42,
+		Currency:            "USD",
+		TotalMonthlySavings: money.FormatUSDToAmount(0, "USD"),
+	})
+	_, ok := fleetsummary.Get(org, false, nil)
+	require.True(t, ok)
+
+	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
+
+	_, ok = fleetsummary.Get(org, false, nil)
+	assert.False(t, ok, "sources cleanup should invalidate fleet summary cache for the org")
 }

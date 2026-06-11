@@ -94,6 +94,7 @@ var processorCmd = &cobra.Command{
 		} else {
 			utils.Setup_kruize_performance_profile()
 		}
+		services.InitSynthManifestDebouncer(ctx)
 		kafka.StartConsumer(ctx, cfg.UploadTopic, services.ProcessReport)
 	},
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -143,16 +144,13 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		staleCleanupDays = 30
 	}
 	staleCutoff := time.Now().UTC().AddDate(0, 0, -staleCleanupDays)
-	tag, err := pool.Exec(ctx,
-		"DELETE FROM recommendation_sets WHERE stale = true AND updated_at < $1",
-		staleCutoff,
-	)
-	if err != nil {
-		logging.GetLogger().Warnf("retention: purging stale recommendations: %v", err)
-		errs = append(errs, fmt.Errorf("purge stale recommendations: %w", err))
-	} else if tag.RowsAffected() > 0 {
-		retentionDropped.Add(float64(tag.RowsAffected()))
-		logging.GetLogger().Infof("retention: purged %d stale recommendations (older than %s)", tag.RowsAffected(), staleCutoff.Format("2006-01-02"))
+	purgedStale, invalidateErr := purgeStaleRecommendations(ctx, pool, staleCutoff)
+	if invalidateErr != nil {
+		logging.GetLogger().Warnf("retention: purging stale recommendations: %v", invalidateErr)
+		errs = append(errs, fmt.Errorf("purge stale recommendations: %w", invalidateErr))
+	} else if purgedStale > 0 {
+		retentionDropped.Add(float64(purgedStale))
+		logging.GetLogger().Infof("retention: purged %d stale recommendations (older than %s)", purgedStale, staleCutoff.Format("2006-01-02"))
 	}
 
 	// Snapshot inventory retention: purge raw rows older than configured hours (default 48h).
@@ -169,6 +167,37 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		logging.GetLogger().Infof("retention: purged %d snapshot_inventory rows (older than %dh)", purged, snapRetentionH)
 	}
 	return errors.Join(errs...)
+}
+
+func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCutoff time.Time) (int64, error) {
+	rows, err := pool.Query(ctx,
+		"DELETE FROM recommendation_sets WHERE stale = true AND updated_at < $1 RETURNING org_id",
+		staleCutoff,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	affectedOrgs := make(map[string]struct{})
+	var purged int64
+	for rows.Next() {
+		var orgID string
+		if err := rows.Scan(&orgID); err != nil {
+			return purged, err
+		}
+		purged++
+		if orgID != "" {
+			affectedOrgs[orgID] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return purged, err
+	}
+	for orgID := range affectedOrgs {
+		fleetsummary.InvalidateOrg(orgID)
+	}
+	return purged, nil
 }
 
 // SweepPartitionedTables drops monthly partitions older than cutoffYM (YYYYMM) for each parent table.

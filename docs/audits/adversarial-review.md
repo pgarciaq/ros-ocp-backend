@@ -1985,10 +1985,10 @@ The codebase remains production-grade for standard SaaS and on-prem postures. Op
 
 | Dimension | Grade | Trend | v4.0 Notes |
 |-----------|-------|-------|------------|
-| **Security** | A− | → | No new auth gaps; debouncer runs post-shutdown with Background context (#79) is operational not auth |
-| **Correctness** | B+ | ↓ | Cache invalidation incomplete on retention/sources (#77); debouncer timer race (#80) |
+| **Security** | A− | → | No new auth gaps |
+| **Correctness** | A− | ↑ | Retention/sources cache invalidation (#77) and debouncer timer race (#80) resolved |
 | **Auditability** | A | → | Internal endpoint audit metrics verified; savings cache metrics partial (#81) |
-| **Operational Robustness** | A− | → | Debouncer lacks shutdown integration (#79); config misconfig warn-only (#85 accepted) |
+| **Operational Robustness** | A− | ↑ | Debouncer shutdown integration (#79) resolved; config misconfig warn-only (#85 accepted) |
 | **Performance** | A− | ↑ | Savings summary cache added (#68 verified); group_by paths correctly uncached |
 | **Design Quality** | A− | → | Latest-params coalescing verified; debouncer design sound with lifecycle edge cases |
 | **Maintainability** | A− | → | ADR comments added (#74) but new files lack cross-refs (#84) |
@@ -2003,8 +2003,9 @@ The codebase remains production-grade for standard SaaS and on-prem postures. Op
 | **Severity** | Low |
 | **Dimension** | Correctness |
 | **Location** | `internal/engine/retention.go:139-156`, `internal/services/housekeeper/sourcesCleaner.go` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Related** | v3.0 #65 (partially resolved) |
+| **Resolved by** | `purgeStaleRecommendations` invalidates per-org via `DELETE … RETURNING org_id`; `cleanupClusterAnalytics` calls `fleetsummary.InvalidateOrg` |
 
 **Description**
 
@@ -2056,8 +2057,9 @@ Move invalidation to **after** successful recalc completion inside the coalesced
 | **Severity** | Low |
 | **Dimension** | Operational robustness |
 | **Location** | `internal/services/manifest_recommendation_debouncer.go:71-89`, `internal/asyncjobs/shutdown.go` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Introduced by** | v3.0 #61 fix |
+| **Resolved by** | `InitSynthManifestDebouncer` + `ShutdownSynthManifestDebouncers` wired to processor lifecycle and `asyncjobs.RegisterShutdownHook`; deferred runs use cancellable context |
 
 **Description**
 
@@ -2082,8 +2084,9 @@ Register debouncer cleanup in shutdown path (`resetSynthManifestDebouncersForTes
 | **Severity** | Low |
 | **Dimension** | Correctness |
 | **Location** | `internal/services/manifest_recommendation_debouncer.go:64-73`, `109-113` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Introduced by** | v3.0 #61 fix |
+| **Resolved by** | Generation counter in `scheduleSynthManifestTimer` — superseded callbacks no-op even when `timer.Stop()` returns false |
 
 **Description**
 
@@ -2235,21 +2238,19 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 
 | Priority | Finding(s) | Severity | Rationale |
 |----------|------------|----------|-----------|
-| 1 | **#77** | Low | Inflated counts after retention/sources cleanup |
-| 2 | **#80** | Low | Duplicate engine runs under bursty ingest |
-| 3 | **#79** | Low | Clean shutdown for debouncer timers |
-| 4 | **#81–#84** | Info | Observability and governance polish |
+| 1 | **#81–#84** | Info | Observability and governance polish |
+| — | **#77, #79, #80** | Resolved | Cache invalidation on retention/sources cleanup; debouncer shutdown and generation guard |
 | — | **#85** | Accepted | Warn-only config by design |
 
 ### Hardening Regression Assessment (v3.0 → v4.0)
 
 | v3.0 Fix | v4.0 Verdict | Notes |
 |----------|--------------|-------|
-| #61 Manifest quiet period | ✅ Verified | Debouncer tests cover deferral and reset; lifecycle gaps (#79, #80) |
+| #61 Manifest quiet period | ✅ Verified | Debouncer tests cover deferral, reset, shutdown, and generation guard (#79, #80 resolved) |
 | #62 Latest-params coalescing | ✅ Verified | Mutex protects reads and writes; tests assert latest cluster/recTypes |
 | #63 Internal endpoint audit | ✅ Verified | Audit logging + optional org allowlist unchanged |
 | #64 IPv6 SSRF deny | ✅ Verified | `IsPrivate()`/`IsLoopback()` path in `csv_security.go` |
-| #65 Fleet cache invalidation | ⚠️ Partial | Ingest/recalc/settings wired; retention/sources missing (#77) |
+| #65 Fleet cache invalidation | ✅ Verified | Ingest/recalc/settings/retention/sources cleanup all call `InvalidateOrg` |
 | #66 Fleet cache metrics | ✅ Verified | Configurable capacity, full Prometheus suite |
 | #67 Config validation | ✅ Verified | Warnings emitted; warn-only accepted (#85) |
 | #68 Savings cache | ⚠️ Partial | Cache works; post-recalc invalidation fixed (#78 resolved); metrics gap (#81) |
@@ -2258,7 +2259,7 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 
 **Coalescing + cache interaction:** Latest-params coalescing correctly updates parameters under mutex before trailing iteration. Post-recalc `InvalidateOrg` in guard loops (#78 resolved) clears caches repopulated during the recalc window; pre-trigger invalidation retained for pessimistic double-invalidation.
 
-**Debouncer + ingestion interaction:** Quiet period correctly prevents premature recommendations on synthesized manifests. `notifySynthManifestFileActivity` resets timer on file registration — verified in tests. Timer lifecycle issues (#79, #80) are edge cases under rapid ingest or shutdown.
+**Debouncer + ingestion interaction:** Quiet period correctly prevents premature recommendations on synthesized manifests. `notifySynthManifestFileActivity` resets timer on file registration — verified in tests. Shutdown integration (#79) and generation guard (#80) prevent post-SIGTERM runs and double-fire under bursty ingest.
 
 ### Positive Observations (v4.0)
 
@@ -2280,10 +2281,10 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
 | v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
-| v4.0 (#77–#85) | 9 | 1 | 0 | 1 | 7 |
+| v4.0 (#77–#85) | 9 | 4 | 0 | 1 | 4 |
 | **Combined (#1–#85)** | **85** | **42** | **24** | **12** | **7** |
 
-**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Seven open findings (#77, #79–#84) and one accepted item (#85) remain. Highest priority: cache invalidation on retention/sources cleanup (#77).
+**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Four open findings (#81–#84) and one accepted item (#85) remain. Findings #77, #79, and #80 are resolved.
 
 ---
 
