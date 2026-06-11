@@ -184,7 +184,7 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 			return
 		}
 		if consumer != nil {
-			if _, err := consumer.CommitMessage(msg); err != nil {
+			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 				log.Errorf("kafka: unable to commit after DLQ: %v", err)
 			}
 		}
@@ -199,7 +199,7 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 		return
 	}
 	if consumer != nil {
-		if _, err := consumer.CommitMessage(msg); err != nil {
+		if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 			log.Errorf("kafka: unable to commit after retry produce: %v", err)
 		}
 	}

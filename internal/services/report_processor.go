@@ -78,7 +78,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	commitOnPermanentFailure := func(reason string) {
 		logPoisonMessage(log, msg, reason, nil)
 		if consumer != nil {
-			if _, err := consumer.CommitMessage(msg); err != nil {
+			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 				log.Errorf("unable to commit poison message: %v", err)
 			}
 		}
@@ -553,7 +553,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	if consumer != nil && !appCfg.KafkaAutoCommit {
 		if kafkaTransientErr != nil {
 			handleKafkaTransientError(consumer, kafkaProducerForRetry(), msg, kafkaTransientErr)
-		} else if _, err := consumer.CommitMessage(msg); err != nil {
+		} else if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
 		} else {
 			metrics.KafkaMessagesProcessed.Inc()
