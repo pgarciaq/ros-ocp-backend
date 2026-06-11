@@ -11,8 +11,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -87,9 +89,9 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 	if savingsRecalcHook != nil {
 		savingsRecalcHook(orgID, types)
 	}
-	go func() {
-		triggerSavingsRecalcCoalesced(pool, orgID, clusterUUID, types)
-	}()
+	asyncjobs.Go(func(ctx context.Context) {
+		triggerSavingsRecalcCoalesced(ctx, pool, orgID, clusterUUID, types)
+	})
 }
 
 // RecalculateSavingsForOrg recomputes estimated_savings_cents for persisted recommendations
@@ -169,6 +171,8 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 	if containsSavingsRecType(types, savingsRecTypeContainer) {
 		if err := model.RefreshOrgRecommendationStats(ctx, pool, orgID); err != nil {
 			log.Warnf("savings recalc: refresh org recommendation stats failed: %v", err)
+		} else {
+			fleetsummary.InvalidateOrg(orgID)
 		}
 	}
 

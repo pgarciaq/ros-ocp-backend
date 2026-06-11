@@ -23,7 +23,7 @@ func resetSavingsRecalcFlightsForTest() {
 	savingsRecalcFlights = sync.Map{}
 }
 
-func triggerSavingsRecalcCoalesced(pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
+func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
 	key := orgID
 	flightIface, _ := savingsRecalcFlights.LoadOrStore(key, &recalcFlight{})
 	flight := flightIface.(*recalcFlight)
@@ -39,7 +39,6 @@ func triggerSavingsRecalcCoalesced(pool *pgxpool.Pool, orgID, clusterUUID string
 	flight.mu.Unlock()
 
 	for {
-		ctx := context.Background()
 		RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, recTypes)
 
 		flight.mu.Lock()

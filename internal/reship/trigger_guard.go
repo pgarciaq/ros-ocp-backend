@@ -29,7 +29,7 @@ func resetReshipFlightsForTest() {
 	reshipFlights = sync.Map{}
 }
 
-func triggerReshipCoalesced(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
+func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	key := orgID
 	flightIface, _ := reshipFlights.LoadOrStore(key, &reshipFlight{})
 	flight := flightIface.(*reshipFlight)
@@ -45,7 +45,7 @@ func triggerReshipCoalesced(trigger Triggerer, orgID string, clusterUUIDs []uuid
 	flight.mu.Unlock()
 
 	for {
-		runReshipBatch(trigger, orgID, clusterUUIDs)
+		runReshipBatch(ctx, trigger, orgID, clusterUUIDs)
 
 		flight.mu.Lock()
 		if flight.pending {
@@ -59,8 +59,7 @@ func triggerReshipCoalesced(trigger Triggerer, orgID string, clusterUUIDs []uuid
 	}
 }
 
-func runReshipBatch(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
-	ctx := context.Background()
+func runReshipBatch(ctx context.Context, trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	sem := make(chan struct{}, orgMaxConcurrent())
 	var wg sync.WaitGroup
 	for _, id := range clusterUUIDs {

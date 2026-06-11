@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
@@ -43,7 +44,7 @@ func TriggerAsync(trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	if trigger == nil || len(clusterUUIDs) == 0 {
 		return
 	}
-	go func() {
-		triggerReshipCoalesced(trigger, orgID, clusterUUIDs)
-	}()
+	asyncjobs.Go(func(ctx context.Context) {
+		triggerReshipCoalesced(ctx, trigger, orgID, clusterUUIDs)
+	})
 }

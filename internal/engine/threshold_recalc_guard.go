@@ -34,7 +34,7 @@ func resetThresholdRecalcFlightsForTest() {
 	thresholdRecalcFlights = sync.Map{}
 }
 
-func triggerThresholdRecalcCoalesced(pool *pgxpool.Pool, orgID, recType string) {
+func triggerThresholdRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgID, recType string) {
 	key := thresholdRecalcFlightKey(orgID, recType)
 	flightIface, _ := thresholdRecalcFlights.LoadOrStore(key, &recalcFlight{})
 	flight := flightIface.(*recalcFlight)
@@ -50,7 +50,6 @@ func triggerThresholdRecalcCoalesced(pool *pgxpool.Pool, orgID, recType string) 
 	flight.mu.Unlock()
 
 	for {
-		ctx := context.Background()
 		RecalculateThresholdsForOrg(ctx, pool, orgID, recType)
 
 		flight.mu.Lock()

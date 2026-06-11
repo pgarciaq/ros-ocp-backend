@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -86,9 +87,9 @@ func TriggerThresholdRecalculationAsync(pool *pgxpool.Pool, orgID, recType strin
 	if thresholdRecalcHook != nil {
 		thresholdRecalcHook(orgID, recType)
 	}
-	go func() {
-		triggerThresholdRecalcCoalesced(pool, orgID, recType)
-	}()
+	asyncjobs.Go(func(ctx context.Context) {
+		triggerThresholdRecalcCoalesced(ctx, pool, orgID, recType)
+	})
 }
 
 // RecalculateThresholdsForOrg re-runs the recommendation engine for all clusters in an org.
