@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -120,6 +121,20 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+	rbacScoped := fleetSummaryNeedsClusterFilter(userPerms)
+
+	if !queryparams.GroupByIdleState(c) && !(queryparams.GroupByTagKey(c) != "" && config.TagsFeatureEnabled()) {
+		if cached, ok := fleetsummary.GetSavings(orgID, rbacScoped, userPerms, engineProfile, termProfile); ok {
+			resp := fleetSavingsSummaryFromCache(cached)
+			setRecommendationNoStore(c)
+			if responseFormat == listoptions.ResponseFormatCSV {
+				return streamCSV(c, csvFilename("savings-summary"), func(ctx context.Context, w io.Writer) error {
+					return generateFleetSavingsSummaryCSV(ctx, w, resp)
+				})
+			}
+			return c.JSON(http.StatusOK, resp)
+		}
+	}
 
 	var clusterUUIDs []string
 	if fleetSummaryNeedsClusterFilter(userPerms) {
@@ -230,6 +245,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 
 	summary.GPUSavingsNote = gpuSavingsFleetSummaryNote
+	fleetsummary.PutSavings(orgID, rbacScoped, userPerms, engineProfile, termProfile, fleetSavingsSummaryToCache(summary))
 	setRecommendationNoStore(c)
 	if responseFormat == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("savings-summary"), func(ctx context.Context, w io.Writer) error {
@@ -237,6 +253,58 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, summary)
+}
+
+func fleetSavingsSummaryToCache(summary FleetSavingsSummaryResponse) fleetsummary.CachedSavingsSummary {
+	byCluster := make([]fleetsummary.CachedClusterSavings, 0, len(summary.ByCluster))
+	for _, row := range summary.ByCluster {
+		byCluster = append(byCluster, fleetsummary.CachedClusterSavings{
+			ClusterUUID:             row.ClusterUUID,
+			ClusterAlias:            row.ClusterAlias,
+			EstimatedMonthlySavings: row.EstimatedMonthlySavings,
+			HasCostData:             row.HasCostData,
+		})
+	}
+	return fleetsummary.CachedSavingsSummary{
+		Currency:                summary.Currency,
+		EstimatedMonthlySavings: summary.EstimatedMonthlySavings,
+		ByCluster:               byCluster,
+		ByPlugin: fleetsummary.CachedSavingsByPlugin{
+			Container: summary.ByPlugin.Container,
+			GPU:       summary.ByPlugin.GPU,
+			Node:      summary.ByPlugin.Node,
+			PVC:       summary.ByPlugin.PVC,
+			Snapshot:  summary.ByPlugin.Snapshot,
+			VM:        summary.ByPlugin.VM,
+		},
+		GPUSavingsNote: summary.GPUSavingsNote,
+	}
+}
+
+func fleetSavingsSummaryFromCache(cached fleetsummary.CachedSavingsSummary) FleetSavingsSummaryResponse {
+	byCluster := make([]FleetClusterSavings, 0, len(cached.ByCluster))
+	for _, row := range cached.ByCluster {
+		byCluster = append(byCluster, FleetClusterSavings{
+			ClusterUUID:             row.ClusterUUID,
+			ClusterAlias:            row.ClusterAlias,
+			EstimatedMonthlySavings: row.EstimatedMonthlySavings,
+			HasCostData:             row.HasCostData,
+		})
+	}
+	return FleetSavingsSummaryResponse{
+		Currency:                cached.Currency,
+		EstimatedMonthlySavings: cached.EstimatedMonthlySavings,
+		ByCluster:               byCluster,
+		ByPlugin: FleetSavingsByPlugin{
+			Container: cached.ByPlugin.Container,
+			GPU:       cached.ByPlugin.GPU,
+			Node:      cached.ByPlugin.Node,
+			PVC:       cached.ByPlugin.PVC,
+			Snapshot:  cached.ByPlugin.Snapshot,
+			VM:        cached.ByPlugin.VM,
+		},
+		GPUSavingsNote: cached.GPUSavingsNote,
+	}
 }
 
 func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsSummaryResponse, error) {

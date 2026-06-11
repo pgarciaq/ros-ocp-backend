@@ -23,6 +23,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -82,6 +83,7 @@ func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*e
 	})
 	api.ResetGPUCostProviderForTest()
 	costdata.ClearCostDataCacheForTest()
+	fleetsummary.ResetForTest()
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

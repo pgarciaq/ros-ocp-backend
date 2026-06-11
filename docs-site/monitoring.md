@@ -233,16 +233,18 @@ Observable effects:
 
 ### Fleet summary cache
 
-`GET /recommendations/openshift/fleet-summary` responses are cached in memory keyed by org and RBAC scope. TTL: `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity: `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**). The cache is invalidated on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+`GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses are cached in memory keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL: `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity: `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. The cache is invalidated on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
 
 | Metric | Type | What to watch |
 |--------|------|---------------|
 | `rosocp_fleet_summary_cache_size` | Gauge | Current cached fleet summary entries |
-| `rosocp_fleet_summary_cache_hits_total` | Counter | Successful cache lookups |
-| `rosocp_fleet_summary_cache_misses_total` | Counter | Misses and expired entries |
-| `rosocp_fleet_summary_cache_evictions_total` | Counter | LRU evictions when cache is full |
-| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org invalidations after data mutations |
-| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | TTL expiry removals on read |
+| `rosocp_fleet_summary_cache_hits_total` | Counter | Successful fleet cache lookups |
+| `rosocp_fleet_summary_cache_misses_total` | Counter | Fleet cache misses and expired entries |
+| `rosocp_fleet_summary_cache_evictions_total` | Counter | LRU evictions when fleet cache is full |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org invalidations after data mutations (clears fleet and savings) |
+| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Fleet TTL expiry removals on read |
+| `rosocp_savings_summary_cache_hits_total` | Counter | Successful savings summary cache lookups |
+| `rosocp_savings_summary_cache_misses_total` | Counter | Savings summary cache misses and expired entries |
 
 ### Async job coalescing
 

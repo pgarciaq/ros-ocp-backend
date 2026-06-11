@@ -870,7 +870,7 @@ Tune in-memory caches and observe duplicate async-job suppression via Prometheus
 |---------------|-------------------|
 | `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` |
 | `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` |
-| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_evictions_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_fleet_summary_cache_lazy_expiry_total` |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_evictions_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_fleet_summary_cache_lazy_expiry_total`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total` |
 | Threshold recalc coalescing | `rosocp_threshold_recalc_coalesced_total` |
 | Savings recalc coalescing | `rosocp_savings_recalc_coalesced_total` |
 | Reship coalescing | `rosocp_reship_coalesced_total` |
@@ -925,7 +925,8 @@ Full catalog: [Notification codes](notification-codes.md).
 | `term` | `short`, `medium`, `long` | `medium` | Which recommendation term window to aggregate for fleet savings. |
 
 Also supports `engine` (`cost` / `performance`), `group_by[tag:key]`, `group_by[idle_state]`, and
-cluster filters. Implementation: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
+cluster filters. Default rollup responses (no `group_by`) are cached in memory with the same TTL and
+invalidation as fleet summary (`ROS_FLEET_SUMMARY_CACHE_TTL`). Implementation: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
 
 ---
 

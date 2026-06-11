@@ -1456,7 +1456,7 @@ Fresh adversarial review after completing all v2.0 remediation (findings #32–#
 
 The hardening sprint was substantial and mostly well-executed. Re-validation of v1.6/v2.0 fixes confirms entitlement middleware, internal tags auth, async shutdown context, Kafka commit mutex, SSRF DNS fail-closed, single-flight guards, fleet summary cache, and OpenAPI/governance CI are implemented as documented. **No High-severity regressions** were found in the hardening code itself.
 
-v3.0 identifies **1 Medium**, **5 Low**, and **7 Informational** open findings (#65–#76). Findings **#61–#63** are resolved (or mitigated for #63). The remaining actionable items are fleet cache gaps (#65–#66, #69), config validation (#67), and savings-summary caching (#68).
+v3.0 identifies **1 Medium**, **3 Low**, and **7 Informational** open findings (#65–#76). Findings **#61–#63**, **#67**, and **#68** are resolved (or mitigated for #63). The remaining actionable items are fleet cache gaps (#65–#66, #69 resolved), and governance polish (#70–#72, #74).
 
 The codebase remains production-grade for on-prem (Envoy + Keycloak + NetworkPolicy) and SaaS (3scale upstream) postures. Accepted Kruize legacy-path risk (#33, #39, #44, #55) and unauthenticated `/metrics` (#41) are unchanged.
 
@@ -1468,7 +1468,7 @@ The codebase remains production-grade for on-prem (Envoy + Keycloak + NetworkPol
 | **Correctness** | A− | → | Manifest synthesis + coalescing semantics create brief partial-data windows |
 | **Auditability** | A | → | Runbooks, metrics, ADR index strong; Go↔ADR linking absent |
 | **Operational Robustness** | A− | → | Shutdown context + commit mutex verified; fleet cache invalidation incomplete |
-| **Performance** | B+ | → | Fleet summary cached; savings-summary still hits DB every request |
+| **Performance** | B+ | → | Fleet and savings summary cached for default rollup; group_by paths uncached |
 | **Design Quality** | A− | ↑ | Single-flight coalescing uses latest parameters (#62 resolved); synthesized manifest quiet period (#61 resolved) |
 | **Maintainability** | A− | → | Fallback removal (#59) reduces paths; 163 ADRs not referenced from code |
 | **Governance** | A− | → | CI workflows exist but advisory-only; OpenAPI omits entitlement requirement |
@@ -1666,7 +1666,7 @@ Add `ROS_FLEET_SUMMARY_CACHE_MAX_ENTRIES`, `rosocp_fleet_summary_cache_size`, an
 | **Severity** | Low |
 | **Dimension** | Security / Governance |
 | **Location** | `internal/config/security.go`, `internal/tags/auth_config.go`, `internal/api/server.go:161-168` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 
 **Description**
 
@@ -1691,7 +1691,7 @@ Extend `ValidateSecurityConfig` to error when `!DEVELOPMENT && !InternalTagsAuth
 | **Severity** | Low |
 | **Dimension** | Performance |
 | **Location** | `internal/api/handlers_savings_summary.go`, `internal/api/handlers_fleet.go:64-66` |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Introduced by** | v2.0 #52 partial coverage |
 
 **Description**
@@ -1919,7 +1919,7 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 | Priority | Finding(s) | Rationale |
 |----------|------------|-----------|
 | 1 | **#65, #66, #69** | Fleet cache correctness/ops — small diffs, align with #52 intent |
-| 2 | **#67, #68** | Config validation + savings-summary cache — hardening completeness |
+| 2 | **#67, #68** | Config validation + savings-summary cache — **resolved** |
 | 3 | **#70–#72, #74** | Governance polish — non-blocking |
 | — | **#61–#63** | Resolved (#61 quiet period; #62 latest-params coalescing; #63 audit + optional allowlist) |
 | — | **#73, #75, #76** | Accepted with documented rationale |

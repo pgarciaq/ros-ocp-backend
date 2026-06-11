@@ -71,6 +71,41 @@ func TestCache_MetricsHitMissEvictionInvalidation(t *testing.T) {
 	assert.Equal(t, beforeInvalidations+1, counterValue(t, "rosocp_fleet_summary_cache_invalidations_total"))
 }
 
+func TestSavingsCache_GetPutInvalidateMetrics(t *testing.T) {
+	config.ResetForTest()
+	ResetForTest()
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	ResetForTest()
+
+	orgID := "org-savings-cache"
+	engine := "cost"
+	term := "medium"
+	summary := CachedSavingsSummary{
+		Currency:                "USD",
+		EstimatedMonthlySavings: money.FormatUSDToAmount(0, "USD"),
+		ByCluster:               []CachedClusterSavings{},
+		ByPlugin:                CachedSavingsByPlugin{Container: money.FormatUSDToAmount(0, "USD")},
+		GPUSavingsNote:          "note",
+	}
+
+	beforeHits := counterValue(t, "rosocp_savings_summary_cache_hits_total")
+	beforeMisses := counterValue(t, "rosocp_savings_summary_cache_misses_total")
+
+	_, ok := GetSavings(orgID, false, nil, engine, term)
+	assert.False(t, ok)
+	assert.Equal(t, beforeMisses+1, counterValue(t, "rosocp_savings_summary_cache_misses_total"))
+
+	PutSavings(orgID, false, nil, engine, term, summary)
+	got, ok := GetSavings(orgID, false, nil, engine, term)
+	assert.True(t, ok)
+	assert.Equal(t, "USD", got.Currency)
+	assert.Equal(t, beforeHits+1, counterValue(t, "rosocp_savings_summary_cache_hits_total"))
+
+	InvalidateOrg(orgID)
+	_, ok = GetSavings(orgID, false, nil, engine, term)
+	assert.False(t, ok)
+}
+
 func TestCache_LazyExpiryRemovesLRUOrder(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()

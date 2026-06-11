@@ -214,16 +214,18 @@ In-memory LRU cache for RBAC permission lookups keyed by `X-Rh-Identity`. TTL is
 
 ### Fleet summary cache
 
-In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` responses, keyed by org and RBAC scope. TTL is set by `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity is capped by `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**). Explicit invalidation runs on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses, keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL is set by `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity is capped by `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. Explicit invalidation runs on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
 
 | Metric | Type | What it measures |
 |--------|------|------------------|
 | `rosocp_fleet_summary_cache_size` | Gauge | Current number of cached fleet summary entries |
-| `rosocp_fleet_summary_cache_hits_total` | Counter | Cache lookups that returned a valid entry |
-| `rosocp_fleet_summary_cache_misses_total` | Counter | Cache lookups that missed or found an expired entry |
-| `rosocp_fleet_summary_cache_evictions_total` | Counter | Entries evicted because the cache reached max capacity |
-| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org-scoped invalidations (`InvalidateOrg`) |
-| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Entries removed on read because TTL expired |
+| `rosocp_fleet_summary_cache_hits_total` | Counter | Fleet cache lookups that returned a valid entry |
+| `rosocp_fleet_summary_cache_misses_total` | Counter | Fleet cache lookups that missed or found an expired entry |
+| `rosocp_fleet_summary_cache_evictions_total` | Counter | Fleet entries evicted because the cache reached max capacity |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org-scoped invalidations (`InvalidateOrg`; clears fleet and savings caches) |
+| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Fleet entries removed on read because TTL expired |
+| `rosocp_savings_summary_cache_hits_total` | Counter | Savings summary cache lookups that returned a valid entry |
+| `rosocp_savings_summary_cache_misses_total` | Counter | Savings summary cache lookups that missed or found an expired entry |
 
 **Source file:** `internal/fleetsummary/cache.go`
 

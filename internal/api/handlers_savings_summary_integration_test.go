@@ -15,12 +15,20 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
+
+func resetSavingsSummaryCacheForTest(t *testing.T) {
+	t.Helper()
+	fleetsummary.ResetForTest()
+	t.Cleanup(fleetsummary.ResetForTest)
+}
 
 const savingsSummaryCluster2 = "22222222-2222-2222-2222-222222222222"
 
 func TestGetFleetSavingsSummary_Integration(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -136,6 +144,7 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 }
 
 func TestSavingsSummary_IncludesPVCPlugin(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -170,6 +179,7 @@ func TestSavingsSummary_IncludesPVCPlugin(t *testing.T) {
 }
 
 func TestSavingsSummary_PVCRollup(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -213,6 +223,7 @@ func TestSavingsSummary_PVCRollup(t *testing.T) {
 }
 
 func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -272,6 +283,7 @@ func TestGetFleetSavingsSummary_BareClusterFilterIgnoredOnDefaultRollup(t *testi
 }
 
 func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -314,6 +326,7 @@ func TestGetFleetSavingsSummary_PerformanceEngine(t *testing.T) {
 }
 
 func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -377,6 +390,7 @@ func TestGetFleetSavingsSummary_TermDifferentiation(t *testing.T) {
 }
 
 func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -429,6 +443,7 @@ func TestGetFleetSavingsSummary_EngineFilterCostVsPerformance(t *testing.T) {
 }
 
 func TestFleetSavingsSummary_IncludesSnapshot(t *testing.T) {
+	resetSavingsSummaryCacheForTest(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 

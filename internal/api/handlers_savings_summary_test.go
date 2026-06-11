@@ -7,11 +7,13 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redhatinsights/platform-go-middlewares/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -28,6 +30,8 @@ func TestGetSavingsSummary_Unauthorized_Returns401(t *testing.T) {
 
 func setupSavingsSummaryHandler(t *testing.T, orgID string) *echo.Echo {
 	t.Helper()
+	fleetsummary.ResetForTest()
+	t.Cleanup(fleetsummary.ResetForTest)
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
@@ -128,6 +132,39 @@ func TestGetSavingsSummary_InvalidEngine_Returns400(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, "error", body["status"])
 	assert.Contains(t, body["message"], "invalid engine")
+}
+
+func TestGetSavingsSummary_CacheHitOnSecondRequest(t *testing.T) {
+	orgID := "org-savings-summary-cache-hit"
+	e := setupSavingsSummaryHandler(t, orgID)
+
+	beforeHits := savingsSummaryCacheHits(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary?engine=cost&term=medium", nil)
+	rec1 := httptest.NewRecorder()
+	e.ServeHTTP(rec1, req)
+	require.Equal(t, http.StatusOK, rec1.Code)
+
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req)
+	require.Equal(t, http.StatusOK, rec2.Code)
+
+	assert.Equal(t, beforeHits+1, savingsSummaryCacheHits(t))
+}
+
+func savingsSummaryCacheHits(t *testing.T) float64 {
+	t.Helper()
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		if mf.GetName() != "rosocp_savings_summary_cache_hits_total" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			return m.GetCounter().GetValue()
+		}
+	}
+	return 0
 }
 
 func TestGetSavingsSummary_EmptyFleet_ReturnsZeros(t *testing.T) {

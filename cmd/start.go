@@ -35,6 +35,9 @@ func runServiceStartup(ctx context.Context) {
 	if err := config.ValidateSecurityConfig(); err != nil {
 		startCmdLog.Fatal(err)
 	}
+	for _, msg := range config.ValidateConfig() {
+		startCmdLog.Warn(msg)
+	}
 	if err := tags.RunStartupHealthCheck(ctx); err != nil {
 		startCmdLog.Fatal(err)
 	}

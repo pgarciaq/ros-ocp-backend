@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Startup config validation warnings for internal tags auth without SA allowlist, permissive/empty CORS in production, and org allowlist with auth disabled (`ValidateConfig`; adversarial review finding #67 resolved).
+- Savings summary default rollup cached in memory with same TTL/invalidation as fleet summary; metrics `rosocp_savings_summary_cache_hits_total` and `rosocp_savings_summary_cache_misses_total` (adversarial review finding #68 resolved).
 - Fleet summary cache: configurable capacity (`ROS_FLEET_SUMMARY_CACHE_CAPACITY`), Prometheus metrics (hits/misses/evictions/invalidations/lazy expiry), LRU lazy-expiry cleanup via `container/list`, and invalidation on threshold settings, business-hours settings, and savings recalculation triggers (adversarial review findings #65, #66, #69 resolved).
 - Defer recommendation engines for synthesized manifest IDs (`synth-*`) until `ROS_SYNTH_MANIFEST_QUIET_PERIOD` (default 30s) expires with no new file registrations; metric `rosocp_manifest_recommendation_deferred_total` (adversarial review finding #61 resolved).
 - Single-flight coalescing for savings recalc, reship, and threshold recalc now uses the latest caller parameters on trailing runs (finding #62 resolved).
