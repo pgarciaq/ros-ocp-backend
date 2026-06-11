@@ -89,6 +89,7 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 	if savingsRecalcHook != nil {
 		savingsRecalcHook(orgID, types)
 	}
+	fleetsummary.InvalidateOrg(orgID)
 	asyncjobs.Go(func(ctx context.Context) {
 		triggerSavingsRecalcCoalesced(ctx, pool, orgID, clusterUUID, types)
 	})
@@ -171,8 +172,6 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 	if containsSavingsRecType(types, savingsRecTypeContainer) {
 		if err := model.RefreshOrgRecommendationStats(ctx, pool, orgID); err != nil {
 			log.Warnf("savings recalc: refresh org recommendation stats failed: %v", err)
-		} else {
-			fleetsummary.InvalidateOrg(orgID)
 		}
 	}
 

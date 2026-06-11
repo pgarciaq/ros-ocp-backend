@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
 
@@ -377,6 +378,8 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Historical re-ingestion (masu reship) triggered for %d cluster(s)", len(clusterIDs)))
 	}
 
+	fleetsummary.InvalidateOrg(orgID)
+
 	return c.JSON(http.StatusAccepted, resp)
 }
 
@@ -452,6 +455,8 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 		hlog.Warnf("business-hours settings delete triggered masu reship for org=%s clusters=%d", orgID, len(clusterIDs))
 		reship.TriggerAsync(h.Reship, orgID, clusterIDs)
 	}
+
+	fleetsummary.InvalidateOrg(orgID)
 
 	return c.NoContent(http.StatusNoContent)
 }

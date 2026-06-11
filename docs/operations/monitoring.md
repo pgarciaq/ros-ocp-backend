@@ -212,6 +212,21 @@ In-memory LRU cache for RBAC permission lookups keyed by `X-Rh-Identity`. TTL is
 
 **Source file:** `internal/api/middleware/rbac_cache.go`
 
+### Fleet summary cache
+
+In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` responses, keyed by org and RBAC scope. TTL is set by `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity is capped by `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**). Explicit invalidation runs on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+
+| Metric | Type | What it measures |
+|--------|------|------------------|
+| `rosocp_fleet_summary_cache_size` | Gauge | Current number of cached fleet summary entries |
+| `rosocp_fleet_summary_cache_hits_total` | Counter | Cache lookups that returned a valid entry |
+| `rosocp_fleet_summary_cache_misses_total` | Counter | Cache lookups that missed or found an expired entry |
+| `rosocp_fleet_summary_cache_evictions_total` | Counter | Entries evicted because the cache reached max capacity |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org-scoped invalidations (`InvalidateOrg`) |
+| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Entries removed on read because TTL expired |
+
+**Source file:** `internal/fleetsummary/cache.go`
+
 ### Async job coalescing
 
 Per-org single-flight guards prevent duplicate background work when settings or internal triggers fire in rapid succession.

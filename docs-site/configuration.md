@@ -452,6 +452,7 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 | `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `true` | `true` | Both | Bearer auth on `/internal/tags/*` regardless of tag source; set `false` for local dev |
 | `ROS_HISTORY_DEFAULT_DAYS` | `30` | `30` | Both | History endpoint default lookback when dates omitted |
 | `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | `300` | Both | Fleet summary in-memory cache TTL (seconds) |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | `256` | Both | Max fleet summary LRU cache entries |
 
 ### Koku environment variables (SaaS / `api` source only)
 

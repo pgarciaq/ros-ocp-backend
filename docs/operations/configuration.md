@@ -267,7 +267,8 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_INTERNAL_ALLOWED_ORGS` | (empty) | Optional comma-separated org IDs that internal endpoints may target. Empty allows all orgs (default for backward compatibility). |
 | `ROS_SYNTH_MANIFEST_QUIET_PERIOD` | `30` | Seconds to defer recommendation engines after synthesized manifest (`synth-*`) ingestion completes; timer resets on each new file registration for that manifest. |
 | `ROS_HISTORY_DEFAULT_DAYS` | `30` | Default lookback window for history endpoints when `start_date` and `end_date` are both omitted. |
-| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | In-memory fleet summary cache TTL in seconds (LRU, invalidated on recommendation ingest). |
+| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | In-memory fleet summary cache TTL in seconds (LRU). Invalidated on recommendation ingest, settings changes, and savings recalculation. |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max entries in the in-memory fleet summary LRU cache. Observable via `rosocp_fleet_summary_cache_size` and `rosocp_fleet_summary_cache_evictions_total`. |
 
 Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
 using `Authorization: Bearer <service-account-token>`. Sync freshness is available at

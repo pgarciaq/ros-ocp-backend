@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fleet summary cache: configurable capacity (`ROS_FLEET_SUMMARY_CACHE_CAPACITY`), Prometheus metrics (hits/misses/evictions/invalidations/lazy expiry), LRU lazy-expiry cleanup via `container/list`, and invalidation on threshold settings, business-hours settings, and savings recalculation triggers (adversarial review findings #65, #66, #69 resolved).
 - Defer recommendation engines for synthesized manifest IDs (`synth-*`) until `ROS_SYNTH_MANIFEST_QUIET_PERIOD` (default 30s) expires with no new file registrations; metric `rosocp_manifest_recommendation_deferred_total` (adversarial review finding #61 resolved).
 - Single-flight coalescing for savings recalc, reship, and threshold recalc now uses the latest caller parameters on trailing runs (finding #62 resolved).
 - Fix IPv6 private address bypass in CSV URL SSRF protection (adversarial review finding #64 resolved).

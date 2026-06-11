@@ -231,6 +231,19 @@ Observable effects:
 - Permission changes may take up to TTL seconds to propagate for cached identities.
 - Set `ROS_RBAC_CACHE_TTL=0` temporarily when debugging authorization issues.
 
+### Fleet summary cache
+
+`GET /recommendations/openshift/fleet-summary` responses are cached in memory keyed by org and RBAC scope. TTL: `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity: `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**). The cache is invalidated on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+
+| Metric | Type | What to watch |
+|--------|------|---------------|
+| `rosocp_fleet_summary_cache_size` | Gauge | Current cached fleet summary entries |
+| `rosocp_fleet_summary_cache_hits_total` | Counter | Successful cache lookups |
+| `rosocp_fleet_summary_cache_misses_total` | Counter | Misses and expired entries |
+| `rosocp_fleet_summary_cache_evictions_total` | Counter | LRU evictions when cache is full |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org invalidations after data mutations |
+| `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | TTL expiry removals on read |
+
 ### Async job coalescing
 
 Per-org single-flight guards deduplicate rapid savings recalc, reship, and threshold recalc triggers.

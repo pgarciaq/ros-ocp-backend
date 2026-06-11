@@ -1614,7 +1614,7 @@ Extend `isRestrictedIP` for IPv6 loopback, link-local, ULA (`fc00::/7`), and doc
 | **Severity** | Low |
 | **Dimension** | Correctness |
 | **Location** | `internal/fleetsummary/cache.go:123-144`, `internal/engine/recommend_all.go:434`, `internal/engine/retention.go` |
-| **Status** | Open |
+| **Status** | Resolved |
 | **Introduced by** | v2.0 #52 fix |
 
 **Description**
@@ -1640,7 +1640,7 @@ Call `fleetsummary.InvalidateOrg` from retention sweep and sources cleanup paths
 | **Severity** | Low |
 | **Dimension** | Operational robustness |
 | **Location** | `internal/fleetsummary/cache.go:39-49` |
-| **Status** | Open |
+| **Status** | Resolved |
 | **Introduced by** | v2.0 #52 fix |
 
 **Description**
@@ -1717,7 +1717,7 @@ Extend `internal/fleetsummary` cache (or separate keyed cache) to savings-summar
 | **Severity** | Low |
 | **Dimension** | Performance |
 | **Location** | `internal/fleetsummary/cache.go:84-88` |
-| **Status** | Open |
+| **Status** | Resolved |
 
 **Description**
 

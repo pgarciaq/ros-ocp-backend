@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -148,6 +149,31 @@ func TestTriggerThresholdRecalculationAsync_FiresHook(t *testing.T) {
 		defer mu.Unlock()
 		return hookedOrg == orgID && hookedType == "pvc"
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestTriggerThresholdRecalculationAsync_InvalidatesFleetSummaryCache(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-recalc-cache"
+
+	fleetsummary.Put(orgID, false, nil, fleetsummary.CachedSummary{
+		TotalContainers: 42,
+		Currency:        "USD",
+	})
+
+	restore := SetClusterRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID, recType string) error {
+		return nil
+	})
+	defer restore()
+
+	TriggerThresholdRecalculationAsync(pool, orgID, "container")
+
+	_, ok := fleetsummary.Get(orgID, false, nil)
+	assert.False(t, ok, "threshold settings recalc trigger should invalidate fleet summary cache immediately")
 }
 
 func TestRecalculateThresholdsForOrg_PassesDateRangeToContainerRecalc(t *testing.T) {
