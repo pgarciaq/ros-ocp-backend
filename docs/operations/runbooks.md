@@ -451,3 +451,31 @@ GROUP BY state;
 - Wait for the next ingestion cycle (container/node/PVC) or re-query GPU endpoints after Masu recovery.
 
 See [cost-integration.md](../architecture/cost-integration.md) for formulas, plugin matrix, and [upgrade-runbook.md](../upgrade-runbook.md) for migrations **000070**–**000072**.
+
+---
+
+## Runbook: CSV URL SSRF Protection
+
+Presigned CSV URLs in Kafka messages are validated in `internal/utils/csv_security.go` before the processor downloads them.
+
+### Controls
+
+| Control | Variable | Behavior |
+|---------|----------|----------|
+| Host allowlist | `ROS_CSV_ALLOWED_HOSTS` | Required in production; only listed hostnames may appear in CSV URLs. |
+| Private-network deny | `ROS_CSV_DENY_PRIVATE_NETWORKS` (default `true`) | Resolves the hostname and rejects loopback, RFC1918/private, and link-local addresses in **both IPv4 and IPv6** (including `::1`, ULA `fc00::/7`, link-local `fe80::/10`). |
+| DNS fail-closed | (implicit when `DEVELOPMENT=false`) | Unresolved hostnames block fetch in production. |
+
+### Diagnosis
+
+Processor logs or DLQ messages containing `restricted address` or `resolves to restricted address`:
+
+1. Confirm the URL hostname is in `ROS_CSV_ALLOWED_HOSTS`.
+2. Check whether DNS for that hostname resolves to a private or link-local address (IPv4 or IPv6).
+3. Verify `ROS_CSV_DENY_PRIVATE_NETWORKS` is not disabled in production.
+
+### Resolution
+
+- Use a public object-storage endpoint hostname that resolves to routable addresses.
+- For legitimate internal MinIO/NooBaa URLs, ensure the hostname resolves to addresses outside private/link-local ranges, or use development mode only for local testing.
+- See [configuration.md](configuration.md#csv-download-security-kafka-ingestion) and ADR-0145.

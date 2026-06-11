@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix IPv6 private address bypass in CSV URL SSRF protection (adversarial review finding #64 resolved).
+
 ### Added
 
 - Advisory CI workflow [`.github/workflows/openapi-changelog-check.yml`](.github/workflows/openapi-changelog-check.yml): warns when API-affecting paths (see [`.github/openapi-paths.txt`](.github/openapi-paths.txt)) change without `openapi.json` updates, or when Go files change without `CHANGELOG.md` updates (finding #53 resolved).

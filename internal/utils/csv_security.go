@@ -95,28 +95,5 @@ func isRestrictedIP(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}
-	if ip.IsLoopback() {
-		return true
-	}
-	ip4 := ip.To4()
-	if ip4 == nil {
-		return false
-	}
-	// 169.254.0.0/16 link-local
-	if ip4[0] == 169 && ip4[1] == 254 {
-		return true
-	}
-	// 10.0.0.0/8
-	if ip4[0] == 10 {
-		return true
-	}
-	// 172.16.0.0/12
-	if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
-		return true
-	}
-	// 192.168.0.0/16
-	if ip4[0] == 192 && ip4[1] == 168 {
-		return true
-	}
-	return false
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
 }

@@ -173,7 +173,7 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_CSV_ALLOWED_HOSTS` | (empty) | Hostname allowlist for presigned CSV URLs. Required when not in development mode. |
-| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Block private/link-local/loopback targets. |
+| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Block private/link-local/loopback targets (IPv4 and IPv6). |
 | `ROS_CSV_MAX_BODY_BYTES` | `104857600` (100 MiB) | Max CSV download size (bytes). Lower if processor memory is constrained. |
 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | `120` | CSV fetch timeout (seconds). |
 

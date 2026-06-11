@@ -291,7 +291,7 @@ Presigned CSV URLs in Kafka messages are validated before fetch.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_CSV_ALLOWED_HOSTS` | (empty) | Comma-separated hostname allowlist for CSV URLs. **Required in non-development mode** (startup fails if empty). |
-| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Deny RFC1918, link-local, loopback, and `localhost` targets even when allowlisted. Set `false` only for local httptest. |
+| `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Deny private, link-local, loopback, and `localhost` targets (IPv4 and IPv6) even when allowlisted. Set `false` only for local httptest. |
 | `ROS_CSV_MAX_BODY_BYTES` | `104857600` (100 MiB) | Max CSV download size (bytes). Lower if processor memory is constrained. |
 | `ROS_CORS_ALLOWED_ORIGINS` | (empty) | Comma-separated browser origins allowed for CORS. Empty + `DEVELOPMENT=true` allows `*`. Empty in production denies cross-origin requests. |
 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | `120` | CSV fetch timeout. |

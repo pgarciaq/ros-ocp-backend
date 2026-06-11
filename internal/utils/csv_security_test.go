@@ -80,6 +80,12 @@ func TestIsRestrictedIP(t *testing.T) {
 		{"169.254.169.254", true},
 		{"127.0.0.1", true},
 		{"8.8.8.8", false},
+		{"::1", true},
+		{"fc00::1", true},
+		{"fd12:3456:789a::1", true},
+		{"fe80::1", true},
+		{"2001:db8::1", false},
+		{"2607:f8b0:4004:800::200e", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.ip, func(t *testing.T) {

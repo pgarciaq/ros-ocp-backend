@@ -10,7 +10,7 @@ Malicious presigned URLs in Kafka messages could SSRF internal services.
 
 ## Decision
 
-Block RFC1918/loopback/link-local URLs in production; allow in development mode.
+Block RFC1918/loopback/link-local URLs in production (IPv4 and IPv6 via `net.IP.IsPrivate()`, `IsLoopback()`, and link-local checks); allow in development mode.
 
 ## Alternatives Considered
 

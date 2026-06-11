@@ -1464,7 +1464,7 @@ The codebase remains production-grade for on-prem (Envoy + Keycloak + NetworkPol
 
 | Dimension | Grade | Trend | v3.0 Notes |
 |-----------|-------|-------|------------|
-| **Security** | A− | → | Entitlement + internal tags auth solid; internal org_id scoping and IPv6 SSRF gaps remain |
+| **Security** | A− | → | Entitlement + internal tags auth solid; internal org_id scoping gap remains (#63); IPv6 SSRF deny resolved (#64) |
 | **Correctness** | A− | → | Manifest synthesis + coalescing semantics create brief partial-data windows |
 | **Auditability** | A | → | Runbooks, metrics, ADR index strong; Go↔ADR linking absent |
 | **Operational Robustness** | A− | → | Shutdown context + commit mutex verified; fleet cache invalidation incomplete |
@@ -1480,7 +1480,7 @@ The codebase remains production-grade for on-prem (Envoy + Keycloak + NetworkPol
 | 61 | Same-day synthesized manifest triggers premature recommendations | Medium | Open | Correctness |
 | 62 | Single-flight coalescing replays stale parameters | Medium | Open | Correctness / Ops |
 | 63 | Internal endpoints accept arbitrary org_id without tenant binding | Medium | Open | Security |
-| 64 | IPv6 addresses bypass private-network SSRF deny | Medium | Open | Security |
+| 64 | IPv6 addresses bypass private-network SSRF deny | Medium | Resolved | Security |
 | 65 | Fleet summary cache misses retention and non-ingest mutations | Low | Open | Correctness |
 | 66 | Fleet summary cache lacks metrics and configurable capacity | Low | Open | Operational |
 | 67 | Startup validation omits internal-tags auth and CORS in production | Low | Open | Security / Governance |
@@ -1584,9 +1584,9 @@ Bind internal `org_id` to caller scope: derive org from SA namespace/annotation,
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Security |
-| **Location** | `internal/utils/csv_security.go:94-122` |
-| **Status** | Open |
-| **Related** | v2.0 #34 (partial fix) |
+| **Location** | `internal/utils/csv_security.go` (`isRestrictedIP`) |
+| **Status** | Resolved |
+| **Related** | v2.0 #34 (completed by IPv6 deny list) |
 
 **Description**
 
@@ -1599,6 +1599,10 @@ Clusters with IPv6-enabled pod networks or dual-stack metadata services could fe
 **Recommendation**
 
 Extend `isRestrictedIP` for IPv6 loopback, link-local, ULA (`fc00::/7`), and documentation prefix (`2001:db8::/32` optional). Add unit tests mirroring IPv4 cases.
+
+**Resolution**
+
+`isRestrictedIP` now uses Go's `net.IP.IsPrivate()`, `IsLoopback()`, `IsLinkLocalUnicast()`, and `IsLinkLocalMulticast()` to block restricted IPv4 and IPv6 addresses before CSV fetch. Unit tests cover IPv6 loopback, ULA, link-local, and public addresses.
 
 **Effort** | S
 
@@ -1916,12 +1920,11 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 | Priority | Finding(s) | Rationale |
 |----------|------------|-----------|
 | 1 | **#63** | Cross-tenant internal API scope — highest blast radius when NetworkPolicy/auth misconfigured |
-| 2 | **#64** | SSRF IPv6 gap — straightforward fix, completes #34 |
-| 3 | **#62** | Coalescing stale params — incident-time recalc/reship correctness |
-| 4 | **#61** | Premature recommendations — legacy publisher partial-data window |
-| 5 | **#65, #66, #69** | Fleet cache correctness/ops — small diffs, align with #52 intent |
-| 6 | **#67, #68** | Config validation + savings-summary cache — hardening completeness |
-| 7 | **#70–#72, #74** | Governance polish — non-blocking |
+| 2 | **#62** | Coalescing stale params — incident-time recalc/reship correctness |
+| 3 | **#61** | Premature recommendations — legacy publisher partial-data window |
+| 4 | **#65, #66, #69** | Fleet cache correctness/ops — small diffs, align with #52 intent |
+| 5 | **#67, #68** | Config validation + savings-summary cache — hardening completeness |
+| 6 | **#70–#72, #74** | Governance polish — non-blocking |
 | — | **#73, #75, #76** | Accepted with documented rationale |
 
 ## Hardening Regression Assessment
@@ -1934,7 +1937,7 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 | #52 Fleet summary cache | ⚠️ Partial | Works for ingest path; invalidation/metrics gaps (#65–#66, #69) |
 | #57 Kafka commit mutex | ✅ Verified | Mutex when `KafkaParallel && KafkaWorkers > 1`; tests in `commit_test.go` |
 | #36/#46 Single-flight | ⚠️ Design limit | Coalescing works; stale params (#62) |
-| #34 SSRF fail-closed | ⚠️ Partial | IPv6 gap (#64); TOCTOU accepted (#75) |
+| #34 SSRF fail-closed | ✅ Verified | IPv6 private ranges blocked (#64 resolved); TOCTOU accepted (#75) |
 | #42 CORS restriction | ✅ No regression | Preflight handled by Echo CORS before v1 middleware; no entitlement bypass on API methods |
 | #59 Fallback removal | ✅ No regression | Detail uses `container_id` only; tests cover org scope |
 | #53–#54 CI workflows | ✅ Present | Advisory-only (#71) |
@@ -1965,10 +1968,10 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 |--------|----------|----------|-----------|----------|------|
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
-| v3.0 (#61–#76) | 16 | 0 | 0 | 3 | 13 |
-| **Combined (#1–#76)** | **76** | **28** | **24** | **11** | **13** |
+| v3.0 (#61–#76) | 16 | 1 | 0 | 3 | 12 |
+| **Combined (#1–#76)** | **76** | **29** | **24** | **11** | **12** |
 
-**Conclusion:** v2.0 hardening holds up under fresh review with no High-severity regressions. v3.0 open items are composition gaps and governance polish — prioritize #63–#64 for security, #62 and #61 for correctness. Kruize legacy (#33, #39, #44, #55), unauthenticated metrics (#41), and v3.0 accepted items (#73, #75, #76) remain documented accepted risk.
+**Conclusion:** v2.0 hardening holds up under fresh review with no High-severity regressions. v3.0 open items are composition gaps and governance polish — prioritize #63 for security, #62 and #61 for correctness. Kruize legacy (#33, #39, #44, #55), unauthenticated metrics (#41), and v3.0 accepted items (#73, #75, #76) remain documented accepted risk.
 
 ---
 
