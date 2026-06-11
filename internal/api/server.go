@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
+	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -140,6 +141,8 @@ func registerBusinessHoursRouteGuards(v1 *echo.Group) {
 // StartAPIServer runs the REST API and Prometheus metrics listener until ctx is cancelled,
 // then shuts both down gracefully.
 func StartAPIServer(ctx context.Context) {
+	asyncjobs.Init(ctx, 30*time.Second)
+
 	// JSON encoding uses Echo's default encoding/json serializer. Benchmarks on
 	// ~10–50KB list payloads showed <10% gain from jsoniter/sonic vs added
 	// dependency and compatibility risk — see internal/api/json_bench_test.go.
@@ -196,6 +199,7 @@ func StartAPIServer(ctx context.Context) {
 
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
+	v1.Use(ros_middleware.CostManagementEntitlement)
 	if cfg.RBACEnabled {
 		v1.Use(ros_middleware.Rbac)
 	}

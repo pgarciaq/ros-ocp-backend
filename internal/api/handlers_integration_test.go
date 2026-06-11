@@ -35,7 +35,11 @@ func makeIdentityHeader(orgID string) string {
 				"is_org_admin": true,
 			},
 		},
-		"entitlements": map[string]interface{}{},
+	"entitlements": map[string]interface{}{
+			"cost_management": map[string]interface{}{
+				"is_entitled": true,
+			},
+		},
 	}
 	b, _ := json.Marshal(id)
 	return base64.StdEncoding.EncodeToString(b)

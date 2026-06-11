@@ -136,6 +136,7 @@ func withTagsEnabled(t *testing.T) {
 	config.ResetTagsForTest()
 	t.Setenv("ROS_TAGS_ENABLED", "true")
 	t.Setenv("ROS_TAGS_SOURCE", "api")
+	t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
 	require.True(t, config.TagsFeatureEnabled())
 }
 
@@ -144,6 +145,7 @@ func withTagsDBEnabled(t *testing.T) {
 	config.ResetTagsForTest()
 	t.Setenv("ROS_TAGS_ENABLED", "true")
 	t.Setenv("ROS_TAGS_SOURCE", "db")
+	t.Setenv("ROS_TAGS_DEV_TOKEN", "dev-token")
 	require.True(t, config.TagsFeatureEnabled())
 	require.Equal(t, "db", config.TagsSource())
 }

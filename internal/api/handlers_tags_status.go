@@ -22,14 +22,8 @@ func GetTagsStatus(c echo.Context) error {
 		})
 	}
 
-	if config.TagsUsePushSync() {
-		bearerToken := tags.BearerTokenFromHeader(c.Request().Header.Get(echo.HeaderAuthorization))
-		if err := tags.ValidateBearerToken(c.Request().Context(), bearerToken); err != nil {
-			return c.JSON(http.StatusUnauthorized, echo.Map{
-				"status":  "unauthorized",
-				"message": "invalid or missing service account token",
-			})
-		}
+	if authErr := validateInternalTagsAuth(c); authErr != nil {
+		return authErr
 	}
 
 	orgID := strings.TrimSpace(c.QueryParam("org_id"))

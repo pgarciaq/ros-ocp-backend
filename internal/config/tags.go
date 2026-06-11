@@ -41,6 +41,12 @@ func TagsUsePushSync() bool {
 	return TagsSource() == "api"
 }
 
+// InternalTagsAuthRequired reports whether internal tag endpoints require bearer auth
+// regardless of ROS_TAGS_SOURCE. Defaults to true; set false for local dev without SA tokens.
+func InternalTagsAuthRequired() bool {
+	return GetConfig().InternalTagsAuthRequired
+}
+
 // ResetTagsForTest clears cached configuration so the next GetConfig() reloads tag env vars.
 func ResetTagsForTest() {
 	ResetTagsRuntimeForTest()

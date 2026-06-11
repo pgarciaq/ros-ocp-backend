@@ -340,6 +340,14 @@ type Config struct {
 	TagsDevToken               string `mapstructure:"ROS_TAGS_DEV_TOKEN"`
 	// TagsSyncMaxBodyMiB caps POST /internal/tags/sync request bodies in MiB (default 10).
 	TagsSyncMaxBodyMiB int64 `mapstructure:"ROS_TAGS_SYNC_MAX_BODY_MIB"`
+	// InternalTagsAuthRequired gates bearer auth on /internal/tags/* regardless of ROS_TAGS_SOURCE (default true).
+	InternalTagsAuthRequired bool `mapstructure:"ROS_INTERNAL_TAGS_AUTH_REQUIRED"`
+
+	// HistoryDefaultDays is the lookback window when start_date/end_date are omitted (default 30).
+	HistoryDefaultDays int `mapstructure:"ROS_HISTORY_DEFAULT_DAYS"`
+
+	// FleetSummaryCacheTTLSecs TTL for in-memory fleet summary cache (default 300 = 5m).
+	FleetSummaryCacheTTLSecs int `mapstructure:"ROS_FLEET_SUMMARY_CACHE_TTL"`
 
 	// Idle / zombie workload classification (inline engine helper; env tier of 3-tier config).
 	IdleDetectionEnabled     bool   `mapstructure:"ROS_IDLE_DETECTION_ENABLED"`
@@ -780,6 +788,9 @@ func initConfig() {
 	viper.SetDefault("ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS", 48)
 	viper.SetDefault("ROS_SNAPSHOT_STALE_GRACE_HOURS", 48)
 	viper.SetDefault("ROS_TAGS_ENABLED", true)
+	viper.SetDefault("ROS_INTERNAL_TAGS_AUTH_REQUIRED", true)
+	viper.SetDefault("ROS_HISTORY_DEFAULT_DAYS", 30)
+	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_TTL", 300)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
 	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_MIB", 10)
 	viper.SetDefault("ROS_ENABLED_PLUGINS", "")
