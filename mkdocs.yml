@@ -66,6 +66,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - What's New: whats-new.md
+      - Changelog: changelog.md
       - Quick Start Tutorial: quickstart.md
       - Contributing: contributing.md
       - Local Development: development.md
@@ -102,6 +103,7 @@ nav:
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
       - Local Mode: planned-features/local-mode.md
   - Architecture:
+      - Architecture Decision Records: architecture/adrs.md
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
