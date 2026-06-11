@@ -180,3 +180,39 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0169](0169-allowlisted-native-sql-query-fragments.md) | Allowlisted native SQL query fragments | Security | Accepted |
 | [0170](0170-machineset-tier1-aggregation.md) | MachineSet Tier-1 aggregation over node recommendations | API Design | Accepted |
 | [0171](0171-streaming-recommendation-batches.md) | Streaming recommendation batches for memory bounding | Engine / Algorithm | Accepted |
+| [0172](0172-dual-path-idle-classification.md) | Dual-path idle classification (authoritative vs legacy fallback) | Engine / Algorithm | Accepted |
+| [0173](0173-tenant-configurable-idle-detection.md) | Tenant-configurable idle detection supersedes fixed thresholds | Engine / Algorithm | Accepted |
+| [0174](0174-fleet-summary-idle-via-notification-codes.md) | Fleet summary counts idle via notification codes, not idle_state column | API Design | Accepted |
+| [0175](0175-idle-api-surfaces-waste-not-savings.md) | Idle API surfaces waste (not savings) with terminate guidance | API Design | Accepted |
+| [0176](0176-namespace-idle-aggregation-rules.md) | Namespace idle aggregation rules | Engine / Algorithm | Accepted |
+| [0177](0177-node-idle-separate-from-container.md) | Node idle classification is separate from container logic | Engine / Algorithm | Accepted |
+| [0178](0178-container-confidence-data-days-over-window.md) | Container confidence is dataDays/windowDays (unlike GPU tiers) | Engine / Algorithm | Accepted |
+| [0179](0179-recommendation-quality-stability-formula.md) | Recommendation quality stability formula | Engine / Algorithm | Accepted |
+| [0180](0180-analytics-write-ordering-strict-mode.md) | Analytics write ordering (recommendations-first vs strict mode) | Data Model | Accepted |
+| [0181](0181-adoption-detection-all-term-engine-rows.md) | Adoption detection marks all term/engine rows and emits code 6 | Engine / Algorithm | Accepted |
+| [0182](0182-monthly-savings-730-hours.md) | Monthly savings extrapolation uses 730 hours constant | Cost / Savings | Accepted |
+| [0183](0183-separate-estimated-waste-cents.md) | Separate estimated_waste_cents for idle workloads | Cost / Savings | Accepted |
+| [0184](0184-fleet-vs-savings-summary-endpoint-split.md) | Fleet-summary vs savings-summary endpoint split | API Design | Accepted |
+| [0185](0185-fleet-savings-lru-cache-rbac-keys.md) | Fleet/savings summary LRU cache with RBAC-scoped keys | Cost / Savings | Accepted |
+| [0186](0186-per-cluster-threshold-hash-skip.md) | Per-cluster threshold hash skip for recalculation efficiency | API Design | Accepted |
+| [0187](0187-savings-only-recalc-vs-full-threshold-recalc.md) | Savings-only recalc vs full threshold recalc | Cost / Savings | Accepted |
+| [0188](0188-list-query-keys-pagination-refilter-detail.md) | List query splits identity on keys table, re-filters on recommendation_sets | Data Model | Accepted |
+| [0189](0189-precomputed-org-recommendation-stats.md) | Pre-computed org_recommendation_stats for list counts | Data Model | Accepted |
+| [0190](0190-keyset-cursor-tie-breaker-tuples-per-resource-type.md) | Keyset cursor tie-breaker tuples per resource type | API Design | Accepted |
+| [0191](0191-filter-modes-include-exact-exclude.md) | Filter modes — include (ILIKE), exact, and exclude with different SQL semantics | Security | Accepted |
+| [0192](0192-echo-route-registration-order-middleware-layering.md) | Echo route registration order and middleware layering | API Design | Accepted |
+| [0193](0193-no-public-api-rate-limiting-body-limits-internal-sync.md) | No public API rate limiting; body limits on internal sync only | Security | Accepted |
+| [0194](0194-node-consolidation-precedence-pod-scheduling-gate.md) | Node consolidation precedence and pod-scheduling gate | Engine / Algorithm | Accepted |
+| [0195](0195-pg-advisory-xact-lock-node-recommendation-writes.md) | pg_advisory_xact_lock for node recommendation writes | Deployment / Ops | Accepted |
+| [0196](0196-mig-profile-selection-full-gpu-escape-hatch.md) | MIG profile selection full_gpu escape hatch | Engine / Algorithm | Accepted |
+| [0197](0197-vm-sub-features-guest-agent-power-schedule-storage-tiering.md) | VM sub-features — guest-agent confidence, power schedule, storage tiering | Engine / Algorithm | Accepted |
+| [0198](0198-gpu-time-slicing-notification-code-36-savings-formula.md) | GPU time-slicing notification code 36 and savings formula | Engine / Algorithm | Accepted |
+| [0199](0199-synthesized-manifest-id-namespace-uuid-scope-key.md) | Synthesized manifest ID namespace UUID and scope key derivation | Ingestion | Accepted |
+| [0200](0200-kafka-consumer-session-tuning-slow-csv-processing.md) | Kafka consumer session tuning for slow CSV processing | Kafka | Accepted |
+| [0201](0201-cluster-ingest-hooks-failed-degradation-flag.md) | Cluster ingest_hooks_failed degradation flag | Ingestion | Accepted |
+| [0202](0202-ros-partitioned-parent-registry-extensible-retention-ddl.md) | ros_partitioned_parent_registry for extensible retention DDL | Deployment / Ops | Accepted |
+| [0203](0203-retention-side-effects-beyond-partition-drop.md) | Retention side effects beyond partition drop | Deployment / Ops | Accepted |
+| [0204](0204-continuous-hour-decay-vs-calendar-day-windows.md) | Continuous-hour decay vs calendar-day windows | Engine / Algorithm | Accepted |
+| [0205](0205-rbac-filter-intersection-semantics.md) | RBAC filter intersection semantics | Security | Accepted |
+| [0206](0206-explain-audit-query-harness-list-performance.md) | Explain-audit query harness for list performance | Testing | Accepted |
+| [0207](0207-stdlib-json-encoding-api-responses.md) | Stdlib JSON encoding for API responses (not jsoniter/sonic) | API Design | Accepted |

@@ -32,3 +32,7 @@ Single pass. Guaranteed ordering. Can't disable idle detection independently of 
 ## References
 
 - [internal/engine/recommend_all.go](internal/engine/recommend_all.go)
+
+## Status Update (2026-06)
+
+Abandoned detection is now subsumed by zombie classification in the authoritative idle path ([ADR-0172](0172-dual-path-idle-classification.md)). When `idleClassificationAuthoritative()` is true, zombie (code 8) replaces abandoned. The legacy `DetectAbandoned()` function remains for the non-authoritative fallback path.

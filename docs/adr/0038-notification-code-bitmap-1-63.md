@@ -27,3 +27,7 @@ Fast merge. Limited to 63 distinct codes. Sufficient for foreseeable taxonomy.
 ## References
 
 - [internal/engine/notifications_bitmap.go](internal/engine/notifications_bitmap.go)
+
+## Status Update (2026-06)
+
+Notification codes are no longer a contiguous 1–N range. Codes 36 (GPU time-sharing, [ADR-0198](0198-gpu-time-slicing-notification-code-36-savings-formula.md)), 64 (VM power schedule), 67–69 (VM storage tiering), 74 (GPU MIG downsizing), and 76 (node fleet consolidation, [ADR-0194](0194-node-consolidation-precedence-pod-scheduling-gate.md)) extend beyond the original 1–35 range. Plugin filters must handle non-contiguous code sets.
