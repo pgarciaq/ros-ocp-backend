@@ -47,7 +47,7 @@ type CachedSavingsByPlugin struct {
 }
 
 // CachedSavingsSummary is the JSON payload cached for GET /recommendations/openshift/savings-summary
-// (default rollup only — not group_by variants).
+// (default rollup only — not group_by variants). ADR-0112: bounded LRU+TTL in-memory cache for API hot paths.
 type CachedSavingsSummary struct {
 	Currency                string                  `json:"currency"`
 	EstimatedMonthlySavings money.MoneyAmount       `json:"estimated_monthly_savings"`
@@ -114,6 +114,26 @@ var (
 	savingsCacheMisses = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "rosocp_savings_summary_cache_misses_total",
 		Help: "Savings summary cache lookups that missed or found an expired entry",
+	})
+
+	savingsCacheSize = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "rosocp_savings_summary_cache_size",
+		Help: "Current number of entries in the savings summary LRU cache",
+	})
+
+	savingsCacheEvictions = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_savings_summary_cache_evictions_total",
+		Help: "Savings summary cache entries evicted due to LRU capacity",
+	})
+
+	savingsCacheInvalidations = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_savings_summary_cache_invalidations_total",
+		Help: "Explicit savings summary cache invalidations (InvalidateOrg)",
+	})
+
+	savingsCacheLazyExpiry = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_savings_summary_cache_lazy_expiry_total",
+		Help: "Savings summary cache entries removed on read because TTL expired",
 	})
 )
 
@@ -278,7 +298,9 @@ func GetSavings(orgID string, rbacScoped bool, userPerms map[string][]string, en
 	entry := elem.Value.(*savingsCacheEntry)
 	if time.Now().After(entry.expiresAt) {
 		c.removeElement(elem)
+		savingsCacheLazyExpiry.Inc()
 		savingsCacheMisses.Inc()
+		savingsCacheSize.Set(float64(len(c.items)))
 		return CachedSavingsSummary{}, false
 	}
 	c.order.MoveToFront(elem)
@@ -300,6 +322,7 @@ func PutSavings(orgID string, rbacScoped bool, userPerms map[string][]string, en
 		entry.data = summary
 		entry.expiresAt = time.Now().Add(ttl)
 		c.order.MoveToFront(elem)
+		savingsCacheSize.Set(float64(len(c.items)))
 		return
 	}
 
@@ -314,6 +337,7 @@ func PutSavings(orgID string, rbacScoped bool, userPerms map[string][]string, en
 	for len(c.items) > c.maxSize {
 		c.evictOldest()
 	}
+	savingsCacheSize.Set(float64(len(c.items)))
 }
 
 // InvalidateOrg drops cached fleet and savings summaries for an org (e.g. after recommendation ingest or settings change).
@@ -339,9 +363,11 @@ func InvalidateOrg(orgID string) {
 			savings.removeElement(elem)
 		}
 	}
+	savingsCacheSize.Set(float64(len(savings.items)))
 	savings.mu.Unlock()
 
 	fleetCacheInvalidations.Inc()
+	savingsCacheInvalidations.Inc()
 }
 
 // ResetForTest clears the fleet and savings summary caches between tests.
@@ -351,6 +377,7 @@ func ResetForTest() {
 	fleetCache = nil
 	savingsCache = nil
 	fleetCacheSize.Set(0)
+	savingsCacheSize.Set(0)
 }
 
 func (c *boundedFleetCache) removeElement(elem *list.Element) {
@@ -380,6 +407,7 @@ func (c *boundedSavingsCache) evictOldest() {
 		return
 	}
 	c.removeElement(elem)
+	savingsCacheEvictions.Inc()
 }
 
 // orderLenForTest exposes LRU list length for unit tests in this package.

@@ -1,5 +1,6 @@
 package engine
 
+// ADR-0125: Single-flight coalescing with trailing run using latest caller parameters.
 import (
 	"context"
 	"sync"

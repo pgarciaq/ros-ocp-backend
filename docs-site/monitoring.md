@@ -241,10 +241,14 @@ Observable effects:
 | `rosocp_fleet_summary_cache_hits_total` | Counter | Successful fleet cache lookups |
 | `rosocp_fleet_summary_cache_misses_total` | Counter | Fleet cache misses and expired entries |
 | `rosocp_fleet_summary_cache_evictions_total` | Counter | LRU evictions when fleet cache is full |
-| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org invalidations after data mutations (clears fleet and savings) |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org invalidations for fleet cache after data mutations |
 | `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Fleet TTL expiry removals on read |
+| `rosocp_savings_summary_cache_size` | Gauge | Current cached savings summary entries |
 | `rosocp_savings_summary_cache_hits_total` | Counter | Successful savings summary cache lookups |
 | `rosocp_savings_summary_cache_misses_total` | Counter | Savings summary cache misses and expired entries |
+| `rosocp_savings_summary_cache_evictions_total` | Counter | LRU evictions when savings cache is full |
+| `rosocp_savings_summary_cache_invalidations_total` | Counter | Explicit org invalidations for savings cache after data mutations |
+| `rosocp_savings_summary_cache_lazy_expiry_total` | Counter | Savings TTL expiry removals on read |
 
 ### Async job coalescing
 

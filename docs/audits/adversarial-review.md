@@ -2111,7 +2111,7 @@ Use a generation counter or `time.AfterFunc` with mutex-protected "armed" flag; 
 | **Severity** | Informational |
 | **Dimension** | Operational robustness |
 | **Location** | `internal/fleetsummary/cache.go:109-117`, `289-317` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Introduced by** | v3.0 #68 fix |
 
 **Description**
@@ -2137,7 +2137,7 @@ Add `rosocp_savings_summary_cache_*` metrics mirroring fleet cache, or share a u
 | **Severity** | Informational |
 | **Dimension** | Governance |
 | **Location** | `.github/openapi-paths.txt`, `.github/architectural-paths.txt`, `.github/workflows/openapi-changelog-check.yml`, `.github/workflows/adr-reminder.yml` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Related** | v3.0 #71 (partially resolved) |
 
 **Description**
@@ -2163,7 +2163,7 @@ Generate workflow filters from path files via a small script in CI, or add missi
 | **Severity** | Informational |
 | **Dimension** | Governance |
 | **Location** | `openapi.json` (82 `403` entries vs 55 `ForbiddenEntitlement` refs) |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Related** | v3.0 #70 (partially resolved) |
 
 **Description**
@@ -2189,7 +2189,7 @@ Extend `ForbiddenEntitlement` with `oneOf` descriptions for RBAC/settings varian
 | **Severity** | Informational |
 | **Dimension** | Maintainability |
 | **Location** | `internal/services/manifest_recommendation_debouncer.go`, `internal/config/config_validation.go`, `internal/api/handlers_savings_summary.go` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Related** | v3.0 #74 (partially resolved) |
 
 **Description**

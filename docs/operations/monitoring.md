@@ -222,10 +222,14 @@ In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` and defau
 | `rosocp_fleet_summary_cache_hits_total` | Counter | Fleet cache lookups that returned a valid entry |
 | `rosocp_fleet_summary_cache_misses_total` | Counter | Fleet cache lookups that missed or found an expired entry |
 | `rosocp_fleet_summary_cache_evictions_total` | Counter | Fleet entries evicted because the cache reached max capacity |
-| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org-scoped invalidations (`InvalidateOrg`; clears fleet and savings caches) |
+| `rosocp_fleet_summary_cache_invalidations_total` | Counter | Explicit org-scoped fleet cache invalidations (`InvalidateOrg`) |
 | `rosocp_fleet_summary_cache_lazy_expiry_total` | Counter | Fleet entries removed on read because TTL expired |
+| `rosocp_savings_summary_cache_size` | Gauge | Current number of cached savings summary entries |
 | `rosocp_savings_summary_cache_hits_total` | Counter | Savings summary cache lookups that returned a valid entry |
 | `rosocp_savings_summary_cache_misses_total` | Counter | Savings summary cache lookups that missed or found an expired entry |
+| `rosocp_savings_summary_cache_evictions_total` | Counter | Savings entries evicted because the cache reached max capacity |
+| `rosocp_savings_summary_cache_invalidations_total` | Counter | Explicit org-scoped savings cache invalidations (`InvalidateOrg`) |
+| `rosocp_savings_summary_cache_lazy_expiry_total` | Counter | Savings entries removed on read because TTL expired |
 
 **Source file:** `internal/fleetsummary/cache.go`
 

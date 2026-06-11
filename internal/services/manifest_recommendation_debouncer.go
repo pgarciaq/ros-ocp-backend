@@ -1,5 +1,6 @@
 package services
 
+// ADR-0050: Defer recommendation engines for synthesized manifest IDs until quiet period expires.
 import (
 	"context"
 	"strings"

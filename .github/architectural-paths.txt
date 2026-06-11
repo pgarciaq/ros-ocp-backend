@@ -9,5 +9,10 @@ internal/api/middleware/**
 internal/fleetsummary/**
 internal/asyncjobs/**
 internal/reship/**
+internal/reship/trigger_guard.go
 internal/services/report_file_tracker.go
+internal/services/manifest_recommendation_debouncer.go
+internal/config/config_validation.go
 internal/engine/**
+internal/engine/savings_recalc_guard.go
+internal/engine/threshold_recalc_guard.go

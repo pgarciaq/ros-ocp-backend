@@ -8,10 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Adversarial due diligence review v4.0 (`docs/audits/adversarial-review.md`): post-completion validation of v3.0 hardening (#61–#76); findings #77–#85 (8 open, 1 accepted).
+- Savings summary cache observability metrics (`rosocp_savings_summary_cache_size`, evictions, invalidations, lazy expiry) matching fleet cache parity (adversarial review finding #81 resolved).
+- OpenAPI reusable `ForbiddenEntitlementOrRBAC` and `ForbiddenEntitlementOrSettingsLocked` response components; all v1 paths now reference shared 403 components (adversarial review finding #83 resolved).
+- ADR cross-reference comments on manifest debouncer, config validation, savings/threshold recalc guards, and savings cache (adversarial review finding #84 resolved).
 
 ### Fixed
 
+- CI architectural path manifest expanded with debouncer, config validation, and recalc guard files; workflow filters synced (adversarial review finding #82 resolved).
 - Startup config validation warnings for internal tags auth without SA allowlist, permissive/empty CORS in production, and org allowlist with auth disabled (`ValidateConfig`; adversarial review finding #67 resolved).
 - Savings summary default rollup cached in memory with same TTL/invalidation as fleet summary; metrics `rosocp_savings_summary_cache_hits_total` and `rosocp_savings_summary_cache_misses_total` (adversarial review finding #68 resolved).
 - Fleet summary cache: configurable capacity (`ROS_FLEET_SUMMARY_CACHE_CAPACITY`), Prometheus metrics (hits/misses/evictions/invalidations/lazy expiry), LRU lazy-expiry cleanup via `container/list`, and invalidation on threshold settings, business-hours settings, and savings recalculation triggers (adversarial review findings #65, #66, #69 resolved).

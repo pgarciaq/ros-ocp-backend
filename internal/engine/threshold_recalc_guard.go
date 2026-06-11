@@ -1,5 +1,6 @@
 package engine
 
+// ADR-0086: Single-flight coalescing per (org_id, recommendation_type) on threshold recalc.
 import (
 	"context"
 	"sync"

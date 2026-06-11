@@ -1,5 +1,6 @@
 package config
 
+// ADR-0135: Non-fatal startup warnings for misconfiguration (centralized config validation).
 import (
 	"strings"
 )
