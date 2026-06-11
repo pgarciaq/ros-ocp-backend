@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Savings summary cache observability metrics (`rosocp_savings_summary_cache_size`, evictions, invalidations, lazy expiry) matching fleet cache parity (adversarial review finding #81 resolved).
+- Adversarial due diligence review v5.0: cumulative integration validation of #77–#84 fixes; zero new findings; all 85 review items closed. (`rosocp_savings_summary_cache_size`, evictions, invalidations, lazy expiry) matching fleet cache parity (adversarial review finding #81 resolved).
 - OpenAPI reusable `ForbiddenEntitlementOrRBAC` and `ForbiddenEntitlementOrSettingsLocked` response components; all v1 paths now reference shared 403 components (adversarial review finding #83 resolved).
 - ADR cross-reference comments on manifest debouncer, config validation, savings/threshold recalc guards, and savings cache (adversarial review finding #84 resolved).
 

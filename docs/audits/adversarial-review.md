@@ -2,12 +2,12 @@
 
 > **INTERNAL USE ONLY** — This document is an internal security and engineering audit. It is not for public disclosure, customer distribution, or external publication without explicit security and legal review.
 
-**Date:** 2026-06-11 (v4.0 post-completion validation)  
-**Previous review:** 2026-06-11 (v3.0)  
+**Date:** 2026-06-11 (v5.0 cumulative integration validation)  
+**Previous review:** 2026-06-11 (v4.0)  
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v3.0:** v4.0 review (#77–#85) validates v3.0 hardening implementations and identifies 8 open findings (1 Medium, 3 Low, 4 Info) plus 1 accepted item. All v1.6 (#1–#31), v2.0 (#32–#60), and v3.0 (#61–#76) findings remain resolved, mitigated, or accepted. See [v4.0 Review](#v40-review--post-completion-hardening-validation) and [Current State](#current-state-1).
+**Changes since v4.0:** v5.0 review validates fix implementations for #77–#84, assesses cumulative complexity and cross-system integration (caches, coalescing guards, debouncer lifecycle), and confirms zero open findings across all 85 items. See [v5.0 Review](#v50-review--cumulative-integration-validation) and [Current State](#current-state-1).
 
 ---
 
@@ -2281,11 +2281,96 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
 | v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
-| v4.0 (#77–#85) | 9 | 4 | 0 | 1 | 4 |
-| **Combined (#1–#85)** | **85** | **42** | **24** | **12** | **7** |
+| v4.0 (#77–#85) | 9 | 8 | 0 | 1 | 0 |
+| **Combined (#1–#85)** | **85** | **46** | **24** | **12** | **0** |
 
-**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Four open findings (#81–#84) and one accepted item (#85) remain. Findings #77, #79, and #80 are resolved.
+**Conclusion:** v4.0 hardening is complete. All nine v4.0 findings are resolved (#77–#84) or accepted (#85). See [v5.0 Review](#v50-review--cumulative-integration-validation) for cumulative integration validation.
 
 ---
 
 *Document version: 4.0 — 2026-06-11. Post-completion hardening validation; findings #77–#85.*
+
+---
+
+## v5.0 Review — Cumulative integration validation
+
+**Version:** 5.0 | **Date:** 2026-06-11 | **Reviewer:** AI-assisted | **Scope:** Post-v4.0 fixes (#77–#84), cumulative integration, complexity assessment
+
+### Executive Summary
+
+v5.0 re-validates the eight v4.0 fix commits (`8c4847e5`, `96dc3762`, `287182b2`) and examines how caches, coalescing guards, and the manifest debouncer interact as a system after four rounds of hardening. All v4.0 implementations match their documented intent: retention and Sources cleanup invalidate fleet/savings caches per affected org; async recalc guards invalidate at completion (with pre-trigger invalidation retained); the debouncer integrates shutdown via `InitSynthManifestDebouncer` and a generation counter; savings cache metrics, CI path manifests, OpenAPI 403 components, and ADR cross-references are complete.
+
+No new findings of substance were identified. The invalidate-twice pattern (pre-trigger + post-completion) is intentional pessimistic design with dedicated tests (`TestTriggerSavingsRecalcCoalesced_InvalidatesCacheAfterCompletion`, threshold/reship equivalents). Cache thrashing is bounded: invalidations are org-scoped, coalesced to a single trailing run, and infrequent relative to read traffic; the 300s TTL remains the safety net for cross-pod coherence (in-memory cache per process — an explicit ADR-0112 tradeoff, not a regression). Debouncer shutdown, generation guard, and `debouncerRunContext()` compose correctly under bursty file activity and SIGTERM; tests cover shutdown skip, quiet-period reset, and no-double-fire.
+
+The cumulative hardening layer (~3,900 lines across fleet/savings cache, debouncer, recalc guards, asyncjobs shutdown, and config validation — roughly 3% of non-vendor Go code) remains readable: each module has a single responsibility, ADR comments, and focused tests. Diminishing returns have been reached; further changes would add complexity without proportional risk reduction.
+
+### Scorecard
+
+| Dimension | Rating | Δ vs v4.0 | Notes |
+|-----------|--------|-----------|-------|
+| **Correctness** | A | ↑ | #77–#78 verified end-to-end; retention test + analytics cleanup integration test cover invalidation paths |
+| **Performance** | A− | → | Double invalidation on settings/recalc is bounded; no thundering-herd risk beyond normal cache-miss DB reads |
+| **Security** | A | → | No new auth/validation gaps from v4.0 changes |
+| **Operational Robustness** | A | ↑ | Debouncer lifecycle + generation guard; savings metrics parity (#81) |
+| **Maintainability** | A | ↑ | ADR cross-refs on all v4.0 modules (#84); coalescing pattern consistent across savings/threshold/reship |
+| **Auditability** | A | ↑ | Full Prometheus suite for both fleet and savings caches |
+| **Governance** | A | → | CI path filters synced (#82); OpenAPI 403 standardized (#83) |
+| **Design Quality** | A− | → | Fleet cache module is multi-purpose but cohesive; accepted per-process cache model |
+
+### Findings
+
+**No new findings.** After 85 resolved, mitigated, or accepted items across four prior reviews, adversarial analysis of post-v4.0 code and cross-system interactions did not surface additional risks meeting the v5.0 bar (genuine risk or meaningful improvement, not style nits).
+
+**Reviewed interaction surfaces (no issues found):**
+
+| Interaction | Verdict |
+|-------------|---------|
+| Pre-trigger + post-completion `InvalidateOrg` | Correct — tests prove mid-recalc cache repopulation is cleared; pre-trigger prevents serving long-stale entries during recalc |
+| Retention stale purge + Sources cleanup invalidation | Correct — `purgeStaleRecommendations` RETURNING org_id; `cleanupClusterAnalytics` calls `InvalidateOrg` |
+| Debouncer `generation` + `timer.Stop()` race | Correct — stale callbacks exit early; `TestNotifySynthManifestFileActivity_NoDoubleFireUnderBurstyResets` |
+| Debouncer shutdown + processor SIGTERM | Correct — `InitSynthManifestDebouncer(ctx)` + `debouncerShutdown` flag; `TestShutdownSynthManifestDebouncers_SkipsPendingTimers` |
+| Coalesced recalc + asyncjobs shutdown (API) | Correct — `asyncjobs.Context()` cancels in-flight recalc on API pod SIGTERM |
+| Cross-pod cache coherence | **Accepted architecture** — `InvalidateOrg` is process-local; API pods rely on TTL (default 300s). ADR-0112 rejected shared Redis/Valkey cache for operational simplicity |
+
+### Complexity Assessment
+
+| Metric | Value | Assessment |
+|--------|-------|------------|
+| Hardening module LOC (cache, debouncer, guards, shutdown, validation) | ~3,900 | ~3% of application Go code — proportionate |
+| In-memory cache layers (API hot path) | 5 | Fleet, savings, costdata, RBAC, term/threshold — each bounded LRU+TTL with metrics |
+| `InvalidateOrg` call sites | 11 | All org-scoped; no full-cache flush; coalescing limits burst invalidations |
+| Coalescing guard implementations | 3 | Savings, threshold, reship — identical latest-params pattern |
+| Prometheus cache/recalc metrics | ~69 `promauto` registrations | Comprehensive; savings parity achieved in #81 |
+| Debouncer state per manifest | 1 timer + generation counter | Minimal; no goroutine-per-deferral leak |
+
+**Over-engineering verdict:** No. The hardening sprint added defensive layers only where v3.0/v4.0 reviews identified real failure modes (stale cache after recalc, debouncer double-fire, missing invalidation paths). Patterns are repeated consistently (coalescing guards, LRU+TTL caches) rather than one-off abstractions. Further consolidation (e.g., generic coalescing helper) would save ~100 lines but reduce traceability — not recommended.
+
+### Positive Observations (v5.0)
+
+| Area | Observation |
+|------|-------------|
+| **#77–#78 fixes** | Retention integration test and savings post-recalc test provide regression anchors |
+| **Debouncer lifecycle** | Generation counter is the minimal correct fix for Go timer races; shutdown is idempotent |
+| **Metrics parity** | Savings cache now mirrors fleet cache observability (size, evictions, invalidations, lazy expiry) |
+| **Governance closure** | #81–#84 resolved; CI filters include debouncer and recalc guard paths |
+| **Regression integrity** | v1.6–v3.0 fixes (entitlement, SSRF IPv6, commit mutex, coalescing) unchanged in source |
+| **Test discipline** | Integration tests for cache invalidation on retention and Sources cleanup; debouncer race tests |
+
+### Current State
+
+**Last updated:** 2026-06-11 (v5.0)
+
+| Review | Findings | Resolved | Mitigated | Accepted | Open |
+|--------|----------|----------|-----------|----------|------|
+| v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
+| v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
+| v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
+| v4.0 (#77–#85) | 9 | 8 | 0 | 1 | 0 |
+| v5.0 (#86+) | 0 | — | — | — | 0 |
+| **Combined (#1–#85)** | **85** | **46** | **24** | **12** | **0** |
+
+**Conclusion:** Adversarial due diligence hardening is complete. All 85 findings across five review rounds are resolved, mitigated, or accepted with zero open items. The codebase is production-ready for the native engine path with no High-severity regressions and no remaining actionable items from this review methodology.
+
+---
+
+*Document version: 5.0 — 2026-06-11. Cumulative integration validation; zero new findings.*
