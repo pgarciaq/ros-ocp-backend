@@ -44,33 +44,44 @@ func checkHistoryFilterCardinality(param string, values []string) error {
 // MapHistoryQueryParameters parses query params for the history endpoint.
 // Uses the same date/filter pattern as MapNativeQueryParameters but with
 // recommendation_history column aliases.
+// When start_date and end_date are both omitted, defaults to the last ROS_HISTORY_DEFAULT_DAYS
+// (default 30) ending at the current UTC time.
 // Keys added below must stay in sync with internal/model/native_query_allowlist.go (nativeRecFixedQueryKeys / ApplyQueryParams).
 func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams := make(map[string]interface{})
 
 	now := time.Now().UTC()
-	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	defaultDays := config.GetConfig().HistoryDefaultDays
+	if defaultDays <= 0 {
+		defaultDays = 30
+	}
+	defaultStart := now.AddDate(0, 0, -defaultDays)
 
 	startDateStr := c.QueryParam("start_date")
-	if startDateStr == "" {
-		queryParams["h.recorded_at >= ?"] = firstOfMonth
-	} else {
-		t, err := time.Parse(timeLayout, startDateStr)
-		if err != nil {
-			return queryParams, fmt.Errorf("invalid start_date: %w", err)
-		}
-		queryParams["h.recorded_at >= ?"] = t
-	}
-
 	endDateStr := c.QueryParam("end_date")
-	if endDateStr == "" {
+	if startDateStr == "" && endDateStr == "" {
+		queryParams["h.recorded_at >= ?"] = defaultStart
 		queryParams["h.recorded_at < ?"] = now.Add(time.Second)
 	} else {
-		t, err := time.Parse(timeLayout, endDateStr)
-		if err != nil {
-			return queryParams, fmt.Errorf("invalid end_date: %w", err)
+		if startDateStr == "" {
+			queryParams["h.recorded_at >= ?"] = defaultStart
+		} else {
+			t, err := time.Parse(timeLayout, startDateStr)
+			if err != nil {
+				return queryParams, fmt.Errorf("invalid start_date: %w", err)
+			}
+			queryParams["h.recorded_at >= ?"] = t
 		}
-		queryParams["h.recorded_at < ?"] = t.Add(24 * time.Hour)
+
+		if endDateStr == "" {
+			queryParams["h.recorded_at < ?"] = now.Add(time.Second)
+		} else {
+			t, err := time.Parse(timeLayout, endDateStr)
+			if err != nil {
+				return queryParams, fmt.Errorf("invalid end_date: %w", err)
+			}
+			queryParams["h.recorded_at < ?"] = t.Add(24 * time.Hour)
+		}
 	}
 
 	if clusters := queryparams.IncludeValues(c, "cluster"); len(clusters) > 0 {
@@ -134,6 +145,11 @@ func GetRecommendationHistory(c echo.Context) error {
 	queryParams, err := MapHistoryQueryParameters(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	if opts.Format == listoptions.ResponseFormatCSV {
+		opts.Limit = config.GetConfig().RecordLimitCSV
+		opts.Offset = 0
 	}
 
 	rows, count, queryErr := model.GetRecommendationHistory(orgID, opts, queryParams, userPerms)
