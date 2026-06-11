@@ -636,9 +636,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	c.ingest_hooks_failed, c.ingest_hooks_failed_at`
 
 // GetNativeRecommendationByID fetches a single container's recommendations
-// by its deterministic UUID. Primary path uses the indexed container_id column
-// (O(1)). If that yields no rows — e.g. pre-migration data where container_id
-// is NULL — falls back to a bounded composite-key scan.
+// by its deterministic UUID using the indexed container_id column (O(1)).
 func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
 	db := database.GetDB()
 
@@ -649,16 +647,15 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 		return nil, err
 	}
 
-	if len(rows) > 0 {
-		results := assembleNativeResults(rows, "")
-		if len(results) > 0 {
-			return &results[0], nil
-		}
+	if len(rows) == 0 {
+		return nil, nil
 	}
 
-	// Fallback for pre-migration rows where container_id is NULL.
-	// TODO: remove getNativeRecommendationByIDFallback after container_id backfill verified in production.
-	return getNativeRecommendationByIDFallback(db, orgID, id, userPerms)
+	results := assembleNativeResults(rows, "")
+	if len(results) == 0 {
+		return nil, nil
+	}
+	return &results[0], nil
 }
 
 // nativeContainerDetailQuery builds the primary detail lookup for a container recommendation.
@@ -672,72 +669,6 @@ func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 		Where("rs.container_id = ?", id).
 		Where("rs.stale = false")
 	return ApplyNativeRBAC(query, userPerms)
-}
-
-// getNativeRecommendationByIDFallback scans up to 500 distinct container keys
-// for the org, computes the UUID v5 for each, and fetches the matching container.
-// This path is only hit for rows written before migration 028 populated
-// container_id. Once all data is reprocessed, this code path becomes dead.
-func getNativeRecommendationByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
-	log.Warnf("container_id miss for %s in org %s — using fallback scan (pre-migration data)", id, orgID)
-
-	type containerKey struct {
-		ClusterUUID   string `gorm:"column:cluster_uuid"`
-		Namespace     string `gorm:"column:namespace"`
-		Workload      string `gorm:"column:workload"`
-		WorkloadType  string `gorm:"column:workload_type"`
-		ContainerName string `gorm:"column:container_name"`
-	}
-
-	keysQuery := db.Table("recommendation_sets rs").
-		Select("DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name").
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
-		Where("rs.stale = false").
-		Limit(500)
-	keysQuery = ApplyNativeRBAC(keysQuery, userPerms)
-
-	var keys []containerKey
-	if err := keysQuery.Find(&keys).Error; err != nil {
-		return nil, err
-	}
-
-	var matched *containerKey
-	for i := range keys {
-		if NativeContainerID(keys[i].ClusterUUID, keys[i].Namespace, keys[i].Workload, keys[i].WorkloadType, keys[i].ContainerName) == id {
-			matched = &keys[i]
-			break
-		}
-	}
-	if matched == nil {
-		return nil, nil
-	}
-
-	var rows []NativeRecommendationRow
-	err := db.Table("recommendation_sets rs").
-		Select(nativeDetailSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Where("rs.org_id = ?", orgID).
-		Where("rs.cluster_uuid = ?", matched.ClusterUUID).
-		Where("rs.namespace = ?", matched.Namespace).
-		Where("rs.workload = ?", matched.Workload).
-		Where("rs.container_name = ?", matched.ContainerName).
-		Where("rs.stale = false").
-		Order("rs.term, rs.engine").
-		Find(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-
-	results := assembleNativeResults(rows, "")
-	if len(results) == 0 {
-		return nil, nil
-	}
-	return &results[0], nil
 }
 
 // assembleNativeResults groups flat rows into nested NativeContainerResult structs.
