@@ -38,6 +38,8 @@ theme:
 plugins:
   - search
   - section-index
+  - macros:
+      module_name: macros
   - git-revision-date-localized:
       enable_creation_date: false
       type: custom

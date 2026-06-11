@@ -44,7 +44,7 @@ jobs:
         run: go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
       - name: Install mkdocs-material
-        run: pip install mkdocs-material mkdocs-section-index mkdocs-git-revision-date-localized-plugin
+        run: pip install mkdocs-material mkdocs-section-index mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
       - name: Generate API reference from source
         run: ./scripts/generate-docs.sh
