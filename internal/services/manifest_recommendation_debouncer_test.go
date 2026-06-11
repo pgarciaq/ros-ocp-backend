@@ -147,21 +147,24 @@ func TestNotifySynthManifestFileActivity_NoDoubleFireUnderBurstyResets(t *testin
 	manifestID := synthesizeManifestID(msg)
 
 	var runCount atomic.Int32
+	fired := make(chan struct{})
+	var firedOnce sync.Once
 	restore := setRunManifestRecommendationsHookForTest(func(context.Context, *pgxpool.Pool, types.KafkaMsg) error {
 		runCount.Add(1)
+		firedOnce.Do(func() { close(fired) })
 		return nil
 	})
 	t.Cleanup(restore)
 
 	deferSynthManifestRecommendations(pool, msg, manifestID)
-	deadline := time.Now().Add(1200 * time.Millisecond)
-	for time.Now().Before(deadline) {
+	for i := 0; i < 240; i++ {
 		notifySynthManifestFileActivity(manifestID)
-		time.Sleep(5 * time.Millisecond)
 	}
 
-	require.Eventually(t, func() bool {
-		return runCount.Load() == 1
-	}, 3*time.Second, 20*time.Millisecond)
+	select {
+	case <-fired:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for debounced manifest recommendations to fire")
+	}
 	assert.Equal(t, int32(1), runCount.Load(), "generation guard should allow only one deferred run")
 }

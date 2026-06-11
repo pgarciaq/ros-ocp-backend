@@ -17,6 +17,7 @@ type countingTriggerer struct {
 	calls   []uuid.UUID
 	delay   time.Duration
 	started chan struct{}
+	proceed chan struct{} // optional gate: block until signaled (nil = no gate)
 }
 
 func (c *countingTriggerer) TriggerReship(_ context.Context, _ string, clusterUUID uuid.UUID) error {
@@ -25,6 +26,9 @@ func (c *countingTriggerer) TriggerReship(_ context.Context, _ string, clusterUU
 		case c.started <- struct{}{}:
 		default:
 		}
+	}
+	if c.proceed != nil {
+		<-c.proceed
 	}
 	if c.delay > 0 {
 		time.Sleep(c.delay)
@@ -102,7 +106,8 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 	}
 	defer func() { reshipBatchHook = nil }()
 
-	trigger := &countingTriggerer{delay: 150 * time.Millisecond, started: make(chan struct{}, 1)}
+	proceed := make(chan struct{})
+	trigger := &countingTriggerer{started: make(chan struct{}, 1), proceed: proceed}
 	ctx := context.Background()
 
 	done := make(chan struct{})
@@ -113,15 +118,13 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 	<-trigger.started
 	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterB})
 	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterC})
+	close(proceed)
 	<-done
 
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		if len(batches) < 2 {
-			return false
-		}
-		last := batches[len(batches)-1]
-		return len(last) == 1 && last[0] == clusterC
-	}, 2*time.Second, 10*time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(batches), 2, "expected initial run plus one coalesced follow-up")
+	last := batches[len(batches)-1]
+	require.Len(t, last, 1)
+	assert.Equal(t, clusterC, last[0], "coalesced follow-up should use latest cluster list")
 }
