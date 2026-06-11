@@ -7,7 +7,7 @@
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** Implemented adversarial review findings **#12–#16, #19, #20, #23, #25–#27, #29, #35, #37, #47, #50–#54, #57, #59, #60** — CSV SSRF hardening, ILIKE wildcard escaping, offset cap, tag auth startup validation, housekeeper graceful shutdown, poison-message log redaction, panic-to-error for embedded catalogs, history filter cardinality limits, integer money formatting, deterministic-ID org scope verification, bounded effective-rates LRU cache, OpenAPI/CHANGELOG advisory CI, ADR review reminder CI, govulncheck CI. Prior: Finding #18 mitigation — Kafka retry-count headers, DLQ escalation after 5 transient retries, and `rosocp_kafka_dlq_messages_total` / `rosocp_kafka_retries_total` metrics (`internal/services/kafka_retry.go`).
+**Changes since v1.3:** All v1.6 findings (#1–#31) and v2.0 findings (#32–#60) are **resolved, mitigated, or accepted** with documented rationale. See [v2.0 Findings Status Summary](#v20-findings-status-summary) and [Current State](#current-state).
 
 ---
 
@@ -21,7 +21,7 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 | **On-prem chart (default)** | Envoy gateway validates JWT via JWKS, injects X-Rh-Identity | Enabled (`rbac.enabled: true`) | `db` (direct PG join) | NetworkPolicy restricted to gateway/UI |
 | **SNO/dev overrides** | No gateway; direct API access | Disabled (`rbac.enabled: false`) | `db` | Unrestricted |
 
-**Review scope:** This audit was conducted against the **SNO/dev posture**. Findings #3, #4, and #5 are mitigated or eliminated in the default production postures (SaaS and on-prem chart). Findings #6 and #16 reflect accepted platform architecture with optional hardening levers, not production gaps when compensating controls are in place.
+**Review scope:** This audit was conducted against the **SNO/dev posture**. Findings #3 and #5 are mitigated or eliminated in the default production postures (SaaS and on-prem chart). Finding #4 is resolved (#37). Findings #6 and #16 reflect accepted platform architecture with optional hardening levers, not production gaps when compensating controls are in place.
 
 ---
 
@@ -36,6 +36,8 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 7. [What Held Up Well](#what-held-up-well)
 8. [Cross-Cutting Failure Scenario Matrix](#cross-cutting-failure-scenario-matrix)
 9. [Tracking](#tracking)
+10. [Adversarial Due Diligence Review v2.0](#adversarial-due-diligence-review-v20)
+11. [Current State](#current-state)
 
 ---
 
@@ -43,18 +45,18 @@ ros-ocp-backend runs in three distinct deployment postures. Several findings in 
 
 | Area | Verdict | Summary |
 |------|---------|---------|
-| **Data integrity (Kafka ingestion)** | 🟠 High (mitigated) | Per-file tracking and error surfacing implemented in native path (`90e5ed52`); gaps remain for empty `manifest_id` and legacy Kruize path |
+| **Data integrity (Kafka ingestion)** | 🟢 Low (mitigated) | Per-file tracking and error surfacing in native path (`90e5ed52`); empty `manifest_id` synthesized (#32); legacy Kruize path accepted for deprecation (#33) |
 | **Authentication** | 🟢 Delegated to gateway | Accepted architecture; weak only if gateway bypassed (SNO/dev posture) |
 | **Authorization** | 🟢 Strong when chart defaults used | `rbac.enabled: true` in production; weak only in SNO/dev overrides |
 | **API security** | 🟢 Low (mitigated) | ILIKE wildcard injection, unbounded offset, SSRF when allowlist unset, history filter cardinality — mitigated (#12–#14, #25); pagination filter bypass (#31) fixed |
 | **Database & connections** | 🟢 Low (mitigated) | Unified pgxpool for GORM and pgx paths; pool metrics exported |
-| **Memory & performance** | 🟠 Medium | Streaming ingest holds full grouped map; node GPU endpoints paginate in memory |
+| **Memory & performance** | 🟢 Low (mitigated) | Incremental digest flush (#8); GPU MIG/time-slicing and node endpoints use SQL pagination (#22, #48, #49) |
 | **Operational resilience** | 🟢 Low (mitigated) | Readiness probe shallow; Kafka transient errors retry/DLQ (#18); housekeeper graceful shutdown (#19 mitigated) |
 | **Pipeline correctness** | 🟢 Low (mitigated) | Strict analytics mode + staleness signaling for history/quality gaps |
-| **Engineering governance** | 🟡 Low–Medium | CHANGELOG exists; no ADR index; 140 migrations without CONCURRENTLY automation |
+| **Engineering governance** | 🟢 Low (mitigated) | CHANGELOG exists (#10); 162 ADRs indexed (#30); migration CONCURRENTLY lint (#24); OpenAPI/ADR advisory CI and govulncheck (#53, #54, #60) |
 | **Positive controls** | 🟢 Strong | Plugin architecture, parameterized SQL, service-account auth patterns (when enabled), structured metrics, ingestion unit tests |
 
-**Overall assessment:** The native engine and API surface are functionally mature. **Findings #1 and #2 are mitigated** for the native ingestion path via per-file `report_file_status` tracking (migration `000140`), surfaced ingestion errors, recommendation gating (`runManifestRecommendations`), and `ros_ingestion_file_failures_total` — matching Koku's `CostUsageReportStatus` pattern. Residual risk: operators must run `reship_ros` for stuck manifests; runbook for `report_file_status` recovery is not yet documented. **Finding #31** (workload_type filter bypass in keyset pagination) was discovered and fixed in `f66feaf7`. Auth findings (#3, #5, #6) remain deployment-specific shortcuts mitigated by gateway JWT validation, RBAC defaults, and NetworkPolicy in standard deployments.
+**Overall assessment:** The native engine and API surface are production-grade for the common case. **Findings #1 and #2 are mitigated** for the native ingestion path via per-file `report_file_status` tracking (migration `000140`), surfaced ingestion errors, recommendation gating (`runManifestRecommendations`), and `ros_ingestion_file_failures_total`. Empty `manifest_id` is synthesized (#32); operator recovery is documented in `docs/operations/runbooks.md` (#58). **Finding #31** (workload_type filter bypass) was fixed in `f66feaf7`. **Finding #4** (internal tags auth) was resolved in v2.0 as **#37**. Auth findings (#3, #5, #6) remain accepted deployment-specific architecture mitigated by gateway JWT validation, RBAC defaults, and NetworkPolicy in standard deployments.
 
 ---
 
@@ -64,22 +66,22 @@ Remediation is ordered by **compound risk** (findings that amplify each other) a
 
 | # | Finding(s) | Rationale |
 |---|------------|-----------|
-| 1 | **#1, #2** (High — mitigated) | Per-file tracking, error propagation, recommendation gating, and alerting implemented. Residual: empty `manifest_id`, legacy Kruize path, manual `reship_ros` for failed files. |
+| 1 | **#1, #2** (High — mitigated) | Per-file tracking, error propagation, recommendation gating, and alerting implemented. Empty `manifest_id` synthesized (#32); legacy Kruize path accepted (#33); manual `reship_ros` documented (#58). |
 | 2 | **#8, #21** (Medium — ingestion scale) | Memory accumulation and statement timeout both manifest under large-cluster ingestion; fix together to avoid OOM ↔ retry loops. |
-| 3 | **#9** (High — mitigated) | Strict analytics mode, `rosocp_analytics_incomplete_total`, and API `analytics_incomplete` cluster flag. Default remains degraded-compatible. |
+| 3 | **#9, #45** (High — mitigated) | Strict analytics mode default `true` (#45); degraded mode opt-in via `ROS_INGEST_STRICT_ANALYTICS=false`; `rosocp_analytics_incomplete_total` and API `analytics_incomplete` flag. |
 | 4 | **#11, #28** (Medium — recalc storms) | Concurrency capped at 3 per job but overlapping async jobs still possible after settings changes. |
 | 5 | **#12, #13, #14** (Medium — API hardening) | **Mitigated** — SSRF allowlist + private-network deny, ILIKE escape, offset cap. |
 | 6 | **#15, #16** (Medium — tag auth config) | **Mitigated** — startup validation; dev token blocked outside `DEVELOPMENT=true`. |
-| 7 | **#17, #19, #20** (Medium — ops) | **Partially mitigated** — housekeeper SIGTERM (#19), poison log redaction (#20); readiness depth (#17) open. |
-| 8 | **#22, #23** (Medium — memory/panic) | **Partially mitigated** — panic-to-error for catalogs (#23); node GPU in-memory pagination (#22) open. |
-| 9 | **#24** (Medium — migrations) | CONCURRENTLY automation — plan for next large-table index. |
+| 7 | **#17, #19, #20** (Medium — ops) | **Mitigated** — opt-in deep readiness (#17), housekeeper SIGTERM (#19), poison log redaction (#20). |
+| 8 | **#22, #23** (Medium — memory/panic) | **Mitigated** — SQL GPU/node pagination (#22, #48, #49); panic-to-error for catalogs (#23). |
+| 9 | **#24** (Medium — migrations) | **Resolved** — `lint-migrations.sh`, K8s Job template, runbook. |
 | 10 | **#30** (Info — governance) | **Resolved** — 162 ADRs indexed at [`docs/adr/README.md`](../adr/README.md). |
 | — | **#7** (Mitigated) | GORM uses `stdlib.OpenDBFromPool`; `ROS_DB_MAX_CONNS` governs all connections; pool metrics on scrape. |
 | — | **#18** (Mitigated) | Retry-count headers + DLQ after 5 attempts; `rosocp_kafka_dlq_messages_total` for alerting. |
-| — | **#10** (Resolved) | `CHANGELOG.md` exists at repo root. Optional: enforce OpenAPI diff in CI. |
+| — | **#10, #53** (Resolved) | `CHANGELOG.md` exists; advisory OpenAPI/CHANGELOG CI (`99296701`). |
 | — | **#31** (Resolved) | Pagination filter bypass fixed in `f66feaf7`. |
 | — | **#3** (Info — architecture) | Gateway enforcement in SaaS and on-prem chart. |
-| — | **#4** (Medium — hardening) | Authenticate `/internal/*` in db mode — NetworkPolicy mitigates in default on-prem chart. |
+| — | **#4 → #37** (Medium — resolved) | Bearer auth on `/internal/tags/*` via `ROS_INTERNAL_TAGS_AUTH_REQUIRED` (default `true`). |
 | — | **#5, #6** (Low/Info — deployment-specific) | RBAC disabled and cross-tenant SA scope are SNO/dev overrides or accepted platform architecture. |
 
 ---
@@ -93,7 +95,7 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #1 Kafka commit | ✓ | ✓ | ✓ |
 | #2 Error swallowed | ✓ | ✓ | ✓ |
 | #3 Identity header | ✗ (gateway) | ✗ (gateway) | ✓ |
-| #4 Tags unauth | ✗ (api mode) | ⚠ (db mode, NetworkPolicy) | ✓ |
+| #4 Tags unauth | ✗ (resolved #37) | ✗ (resolved #37) | ⚠ (if auth disabled) |
 | #5 No RBAC | ✗ (enabled) | ✗ (enabled) | ✓ |
 | #6 SA any org | ✗ (by design) | ✗ (by design) | ✗ (by design) |
 | #7 Dual pools | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
@@ -106,14 +108,14 @@ Which findings apply to each deployment posture. ✓ = applies; ✗ = mitigated 
 | #14 Deep pagination | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #15 Dev token | ✗ (blocked prod) | ✗ (blocked prod) | ⚠ (if configured + DEVELOPMENT) |
 | #16 Empty SA allowlist | ✗ (blocked api mode) | ✗ (blocked api mode) | ⚠ (dev warning) |
-| #17 Readiness shallow | ✓ | ✓ | ✓ |
+| #17 Readiness shallow | ⚠ (opt-in deep checks) | ⚠ (opt-in deep checks) | ⚠ (opt-in deep checks) |
 | #18 Kafka stall | ⚠ (mitigated) | ⚠ (mitigated) | ⚠ (mitigated) |
 | #19 Housekeeper shutdown | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #20 PII in logs | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #21 Statement timeout | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
-| #22 Node GPU memory | ✓ | ✓ | ✓ |
+| #22 Node GPU memory | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #23 panic() parse | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
-| #24 Migrations CONCURRENTLY | ✓ | ✓ | ✓ |
+| #24 Migrations CONCURRENTLY | ✗ (mitigated) | ✗ (mitigated) | ✗ (mitigated) |
 | #25–#30 Low/Info | ⚠ (#25 mitigated) | ⚠ (#25 mitigated) | ⚠ (#25 mitigated) |
 | #31 Pagination filter bypass | ✗ (fixed) | ✗ (fixed) | ✗ (fixed) |
 
@@ -153,7 +155,7 @@ Not attacker-driven. Any permanent S3/MinIO glitch, corrupt CSV, or missing obje
 - **Empty `manifest_id`:** **Resolved (#32).** When omitted, the processor synthesizes a deterministic `synth-*` manifest ID from `(org_id, cluster_uuid, date|payload fingerprint)` so per-file tracking and recommendation gating still apply. Legacy Kruize path (#33) remains untracked.
 - **Legacy Kruize path:** Files processed via `ReadCSVFromUrl` + dataframe (when Kruize plugin enabled) do not use `report_file_status`; fetch/parse failures `continue` without permanent classification.
 - Operators must manually intervene via Koku's `reship_ros` API to re-deliver failed files. Offset commit behavior is unchanged — the queue does not stall on partial failure.
-- Operator runbook for querying `report_file_status` and triggering recovery is not yet in `docs/operations/runbooks.md`.
+- Operator runbook for querying `report_file_status` and triggering recovery: `docs/operations/runbooks.md` (#58).
 
 ---
 
@@ -184,8 +186,8 @@ Compounded Finding #1: permanent fetch/parse failures appeared successful, preve
 
 **Residual risk**
 
-- Same gaps as Finding #1: empty `manifest_id` and legacy Kruize path still swallow or misclassify failures.
-- Recovery requires targeted `reship_ros` after investigating `report_file_status` and Prometheus alerts.
+- Legacy Kruize path (#33) still bypasses per-file tracking when the plugin is enabled; accepted for deprecation (ADR-0163).
+- Recovery for native-path failures uses targeted `reship_ros` after investigating `report_file_status` and Prometheus alerts.
 
 ---
 
@@ -267,11 +269,9 @@ Container recommendations are persisted and Kafka offsets committed even when hi
 
 **Description**
 
-The API versioning policy documents breaking-change procedures referencing `CHANGELOG.md`. The v1.2 audit reported the file missing; **`CHANGELOG.md` now exists** at repo root (added in `ec4fdfe3`, updated in `d20e262f`) with Keep a Changelog format and an `[Unreleased]` section.
+**Resolution**
 
-**Residual gap**
-
-No CI enforcement of OpenAPI spec diff against changelog entries on breaking changes. Recommended as follow-up hardening.
+`CHANGELOG.md` exists at repo root (added in `ec4fdfe3`, updated in `d20e262f`) with Keep a Changelog format and an `[Unreleased]` section. Advisory OpenAPI/CHANGELOG CI added in v2.0 Finding #53 (`99296701`).
 
 ---
 
@@ -284,7 +284,7 @@ No CI enforcement of OpenAPI spec diff against changelog entries on breaking cha
 | **Severity** | Medium (on-prem db-mode only) |
 | **Category** | Authorization / multi-tenancy |
 | **Location** | `internal/api/handlers_tags_status.go` (lines 17–44), `internal/api/server.go` |
-| **Status** | **Open** (verified 2026-06-10) |
+| **Status** | **Resolved** (v2.0 Finding #37; verified 2026-06-11) |
 | **Effort** | S |
 
 **Description**
@@ -302,6 +302,10 @@ Only affects `ROS_TAGS_SOURCE=db` (on-prem). In SaaS (`api` mode), bearer auth i
 **Recommended fix**
 
 Always require service-account bearer auth on `/internal/*` routes regardless of tag source mode. Bind `org_id` to the authenticated caller's namespace or explicit SA allowlist.
+
+**Resolution (v2.0 #37)**
+
+Implemented via `validateInternalTagsAuth` and `ROS_INTERNAL_TAGS_AUTH_REQUIRED` (default `true`). See Finding #37 below.
 
 ---
 
@@ -546,7 +550,7 @@ API connections keep `ROS_DB_STATEMENT_TIMEOUT` (default 25s). Ingestion batch t
 
 **Residual risk**
 
-GPU list fallback path (unsupported `order_by` columns) still loads all cluster data before paginating in Go.
+None for supported sort keys. Unsupported `order_by` values return HTTP 400 (#49).
 
 ---
 
@@ -827,7 +831,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | **NetworkPolicy missing (#3, #4)** | N/A | Internal routes exposed *(SNO/dev)* | Tag enum cross-tenant *(db mode)* | N/A | N/A | None without network audit |
 | **workload_type filter + pagination (#31)** | N/A | **Fixed** — filter honored on all pages | N/A | N/A | N/A | N/A |
 
-**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall). Per-file tracking (#1+#2) materially improves the partial-failure case for native ingestion when `manifest_id` is present. Auth findings (#3–#6) are largely mitigated in SaaS and default on-prem chart deployments. Analytics degradation (#9) is now observable via metrics and API flags; strict mode available for environments requiring history/quality parity.
+**Key takeaway:** The worst production outcomes cluster around **Kafka commit semantics** (silent loss vs. infinite stall). Per-file tracking (#1+#2) and manifest ID synthesis (#32) materially improve the partial-failure case for native ingestion. Auth findings (#3–#6) are largely mitigated in SaaS and default on-prem chart deployments. Analytics strict mode is the default (#45); degraded mode is opt-in with metrics and API flags.
 
 ---
 
@@ -835,10 +839,10 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 | Finding # | Title | Jira | Status | Target / Notes |
 |-----------|-------|------|--------|----------------|
-| 1 | Kafka offset committed after partial file failure | TBD | Mitigated | `90e5ed52`; gaps: empty manifest_id, Kruize path |
+| 1 | Kafka offset committed after partial file failure | TBD | Mitigated | `90e5ed52`; empty `manifest_id` synthesized (#32); Kruize path accepted (#33) |
 | 2 | Native ingestion errors swallowed (return nil) | TBD | Mitigated | Native path only; `TestConsumer_PresignedDownload403` |
 | 3 | Identity header trusted without JWT verification | TBD | Accepted (architecture) | — |
-| 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | Open | db-mode hardening |
+| 4 | `/internal/tags/status` unauthenticated in on-prem | TBD | **Resolved** (#37) | `ROS_INTERNAL_TAGS_AUTH_REQUIRED` default `true` (`8ff82f5e`) |
 | 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
 | 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
 | 7 | Dual DB connection pools (GORM + pgxpool) | TBD | **Mitigated** | GORM shares pgxpool via `OpenDBFromPool`; `rosocp_db_pool_*` metrics |
@@ -881,7 +885,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 
 ---
 
-*Document version: 1.6 — 2026-06-10. Mitigated Finding #9 (analytics strict mode + staleness signaling).*
+*Document version: 1.6 — 2026-06-10. Historical baseline; all findings resolved, mitigated, or accepted. See v2.0 and [Current State](#current-state).*
 
 ---
 
@@ -890,28 +894,62 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 **Date:** 2026-06-11  
 **Reviewer:** AI Adversarial Auditor  
 **Scope:** Full codebase as of commit `5c257248cafb30076be1d7d005e985c849d0cb2a`  
-**Previous version:** v1.6 (31 findings, all resolved/mitigated/accepted except #4)
+**Previous version:** v1.6 (31 findings, all resolved/mitigated/accepted)
+
+## v2.0 Findings Status Summary
+
+| # | Title | Severity | Status | Resolution |
+|---|-------|----------|--------|------------|
+| 32 | Empty `manifest_id` bypasses tracking/gating | High | Resolved | `e035d8a5` — deterministic `synth-*` manifest ID |
+| 33 | Kruize path lacks `report_file_status` | High | Accepted | ADR-0163 (`c7fa06a4`); plugin slated for removal |
+| 34 | SSRF DNS fail-open | Medium | Resolved | `08e84b3c` — fail closed on DNS errors (non-dev) |
+| 35 | No cost-management entitlement validation | Medium | Resolved | `8ff82f5e` — `CostManagementEntitlement` middleware |
+| 36 | No rate limit on async internal triggers | Medium | Resolved | `08e84b3c` — single-flight coalescing for savings/reship |
+| 37 | `/internal/tags/status` unauthenticated (was #4) | Medium | Resolved | `8ff82f5e` — `ROS_INTERNAL_TAGS_AUTH_REQUIRED` default `true` |
+| 38 | Kafka debug payload logging | Low | Resolved | `08e84b3c` — metadata-only logging |
+| 39 | Kruize debug payload logging | Low | Accepted | ADR-0163; no legacy path changes |
+| 40 | RBAC cache unbounded | Low | Resolved | `08e84b3c` — bounded LRU (`ROS_RBAC_CACHE_MAX_ENTRIES`) |
+| 41 | Unauthenticated `/metrics` | Info | Accepted | NetworkPolicy restricts scrape to Prometheus |
+| 42 | CORS allow-all origins | Low | Resolved | `11f0ee77` — `ROS_CORS_ALLOWED_ORIGINS` |
+| 43 | Plugin ingest hooks non-fatal | Medium | Resolved | `11f0ee77` — `ingest_hooks_failed` surfaced on cluster/API |
+| 44 | Kruize fetch errors misclassified transient | Medium | Accepted | ADR-0163; no legacy path changes |
+| 45 | Strict analytics default false | Medium | Resolved | `08e84b3c` — default `ROS_INGEST_STRICT_ANALYTICS=true` |
+| 46 | Org BH PUT triggers fleet reship | Medium | Resolved | `11f0ee77` — reship coalescing + WARN log |
+| 47 | Async jobs ignore shutdown context | Low | Resolved | `765aad42` — `asyncjobs` shutdown-aware context |
+| 48 | GPU MIG in-memory fleet load | Medium | Resolved | `11f0ee77` — SQL pagination (`ListGPUMIGKeysPage`) |
+| 49 | GPU time-slicing fallback in-memory | Medium | Resolved | `11f0ee77` — in-memory fallback removed |
+| 50 | History CSV wrong row limit | Low | Resolved | `231059b3` — `RECORD_LIMIT_CSV` override for CSV |
+| 51 | History wide default date window | Low | Resolved | `231059b3` — `ROS_HISTORY_DEFAULT_DAYS` default |
+| 52 | Fleet summary uncached aggregation | Low | Resolved | `75711b6b` — in-memory LRU fleet summary cache |
+| 53 | No OpenAPI/CHANGELOG CI | Info | Resolved | `99296701` — advisory `openapi-changelog-check.yml` |
+| 54 | ADR drift detection absent | Info | Resolved | `99296701` — advisory `adr-reminder.yml` |
+| 55 | Kruize shared HTTP timeout | Medium | Accepted | ADR-0163; no legacy path changes |
+| 56 | CSV max body default too large | Medium | Resolved | `11f0ee77` — default 100 MiB (`104857600`) |
+| 57 | Parallel Kafka shared committer | Low | Resolved | `f9dd8588` — commit mutex in parallel mode |
+| 58 | `report_file_status` runbook absent | Low | Resolved | `11f0ee77` — runbook section in `runbooks.md` |
+| 59 | Recommendation detail fallback debt | Low | Resolved | `f8dd05b1` — fallback path removed |
+| 60 | `aws-sdk-go` v1 dependency | Info | Resolved | `99296701` — govulncheck CI + v2 migration plan |
 
 ## Prior Review Status
 
-All v1.6 findings (#1–#31) were re-validated against current source. **Thirty are resolved or mitigated** as documented in v1.6. **Finding #4** (`/internal/tags/status` unauthenticated in db mode) remains open and is carried forward as **Finding #37** below with unchanged severity. Residual gaps called out in v1.6 (#1 empty `manifest_id`, Kruize legacy path, GPU fallback pagination, strict-analytics default) are escalated to new numbered findings where they still represent material risk.
+All v1.6 findings (#1–#31) were re-validated against current source. **All are resolved, mitigated, or accepted** as documented in v1.6. **Finding #4** (`/internal/tags/status` unauthenticated in db mode) was carried forward as **Finding #37** and is **resolved**. Residual Kruize legacy-path gaps (#33, #39, #44, #55) are **accepted** pending plugin removal (ADR-0163).
 
 ## Executive Summary
 
-The v1.6 remediation sprint materially improved ingestion resilience, API hardening, operational observability, and governance (ADR index, CHANGELOG, DLQ runbook). The native engine path is production-grade for the common case when `manifest_id` is present and Kruize is disabled. **Remaining risk concentrates in three areas:** (1) **legacy and edge-case ingestion paths** that bypass per-file tracking, (2) **unbounded or in-memory API hot paths** for GPU MIG/time-slicing at fleet scale, and (3) **missing abuse controls** (rate limits, entitlement checks, RBAC cache bounds) that assume gateway and NetworkPolicy compensating controls. No Critical-severity regressions were introduced by v1.6 fixes, but several mitigations are opt-in or dev-posture-dependent.
+The v1.6 and v2.0 remediation sprints materially improved ingestion resilience, API hardening, operational observability, and governance (ADR index, CHANGELOG, DLQ and `report_file_status` runbooks). The native engine path is production-grade for the common case. **Remaining accepted risk is limited to the deprecated Kruize plugin** (#33, #39, #44, #55) and **unauthenticated `/metrics` with NetworkPolicy compensation** (#41). All other v2.0 findings are resolved.
 
 ## Executive Scorecard
 
 | Dimension | Grade | Trend | Notes |
 |-----------|-------|-------|-------|
-| Security | B | ↑ | SSRF DNS fail-closed, RBAC cache bounds; entitlement check and internal rate limits still missing |
-| Correctness | B− | ↑ | Per-file tracking + manifest gating for native path; Kruize path bypass (#33) |
-| Auditability | B+ | ↑ | DLQ runbook, metrics, ADR index; `report_file_status` operator runbook still absent |
-| Operational Robustness | B | ↑ | DLQ, housekeeper shutdown, opt-in deep readiness; async jobs ignore API shutdown |
-| Performance | C+ | → | Incremental ingest flush helps; GPU MIG/time-slicing still O(clusters×containers) in memory |
-| Design Quality | B | → | Plugin architecture clean; hook non-fatal semantics and dual Kruize/native paths add complexity |
-| Maintainability | B | ↑ | 162 ADRs, CHANGELOG; no ADR/OpenAPI drift CI; Kruize TODOs persist |
-| Governance | B+ | ↑ | ADR index + migration lint; no automated vuln scan in CI |
+| Security | A− | ↑ | SSRF fail-closed, entitlement check, internal tags auth, RBAC cache bounds, CORS lockdown |
+| Correctness | A− | ↑ | Per-file tracking, manifest ID synthesis, strict analytics default, hook failure surfacing |
+| Auditability | A | ↑ | DLQ + `report_file_status` runbooks, metrics, ADR index |
+| Operational Robustness | A− | ↑ | DLQ, housekeeper shutdown, deep readiness opt-in, async job shutdown, reship coalescing |
+| Performance | B+ | ↑ | Incremental ingest flush, SQL GPU/MIG pagination, fleet summary cache |
+| Design Quality | B+ | → | Plugin architecture clean; Kruize dual path accepted for deprecation |
+| Maintainability | A− | ↑ | 162 ADRs, CHANGELOG, OpenAPI/ADR advisory CI, detail fallback removed |
+| Governance | A | ↑ | ADR index, migration lint, govulncheck CI |
 
 ## Findings
 
@@ -1045,6 +1083,7 @@ Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, defaul
 ### Finding #41: Prometheus `/metrics` exposed without authentication
 
 - **Severity:** Informational
+- **Status:** Accepted — NetworkPolicy restricts scrape to Prometheus in production deployments.
 - **Dimension:** Security
 - **Location:** `internal/api/server.go:141-149`
 - **Description:** Metrics listener on `PROMETHEUS_PORT` serves `/metrics` without auth. Labels include `org_id` on several counters.
@@ -1244,13 +1283,13 @@ Added advisory workflow [`.github/workflows/adr-reminder.yml`](../../.github/wor
 - **Recommendation:** Dedicated Kruize client with 120s+ timeout for bulk endpoints; expose `rosocp_kruize_api_duration_seconds` histogram.
 - **Effort:** S
 
-### Finding #56: CSV download default max body 512 MiB per file
+### Finding #56: CSV download default max body too large (was 512 MiB)
 
 - **Severity:** Medium
 - **Status:** **Resolved** (2026-06-11)
 - **Dimension:** Performance / Availability
 - **Location:** `internal/utils/utils.go:33-38`
-- **Description:** `ROS_CSV_MAX_BODY_BYTES` defaults to 512 MiB. Processor reads entire CSV into memory before streaming parse (legacy path loads full dataframe).
+- **Description:** `ROS_CSV_MAX_BODY_BYTES` previously defaulted to 512 MiB (500 MiB in some docs). Processor reads entire CSV into memory before streaming parse (legacy path loads full dataframe).
 - **Risk:** Multi-file Kafka payloads with large CSVs can exhaust processor memory despite incremental digest flush (Finding #8 mitigated grouping, not raw CSV size).
 - **Recommendation:** Lower default to 128 MiB; stream-parse without full buffering; reject oversized files as permanent failures with metric.
 - **Effort:** M
@@ -1317,17 +1356,15 @@ Added [`.github/workflows/govulncheck.yml`](../../.github/workflows/govulncheck.
 
 ## Priority Remediation Order
 
-Ordered by **compound risk × effort**. Findings that amplify each other are grouped.
+All v2.0 findings are **resolved or accepted**. Historical priority order (for audit trail):
 
-1. **#33, #44** — Ingestion tracking gaps (Kruize path + hook failures) undermine the v1.6 data-integrity fixes; ~~**#32**~~ resolved
-2. ~~**#34**~~ — SSRF DNS fail-open **resolved**
-3. **#48, #49** — GPU API memory paths block fleet-scale adoption (1000+ clusters)
-4. ~~**#36**~~ coalescing **resolved**; **#46** — fleet reship scope remains
-5. **#35, #37** — AuthZ hardening for non-gateway postures; ~~**#40**~~ RBAC cache bounds **resolved**
-6. ~~**#45**~~ — Strict analytics default **resolved**
-7. **#55, #56, #57** — Kruize/CSV/Kafka edge cases under load
-8. **#47, #58** — Operational polish (shutdown, runbooks)
-9. ~~**#50–#54, #59, #60**~~ — Governance items **#50–#54, #59, #60 resolved**; remaining UX debt in #48/#49
+1. ~~**#32**~~ — Empty `manifest_id` **resolved** (`e035d8a5`)
+2. ~~**#34–#37, #40, #45**~~ — Security/ops hardening **resolved** (`08e84b3c`, `8ff82f5e`)
+3. ~~**#48, #49**~~ — GPU API pagination **resolved** (`11f0ee77`)
+4. ~~**#36, #46**~~ — Async job coalescing **resolved** (`08e84b3c`, `11f0ee77`)
+5. ~~**#43, #47, #50–#54, #56–#60**~~ — Correctness, performance, governance **resolved**
+6. **#33, #39, #44, #55** — Kruize legacy paths **accepted** (ADR-0163)
+7. **#41** — Unauthenticated `/metrics` **accepted** (NetworkPolicy)
 
 ## Positive Observations
 
@@ -1350,35 +1387,55 @@ Improvements since v1.6 worth acknowledging:
 | Finding # | Title | Severity | Status |
 |-----------|-------|----------|--------|
 | 32 | Empty manifest_id bypasses tracking/gating | High | **Resolved** |
-| 33 | Kruize path lacks report_file_status | High | Accepted |
+| 33 | Kruize path lacks report_file_status | High | **Accepted** |
 | 34 | SSRF DNS fail-open | Medium | **Resolved** |
 | 35 | No entitlement validation | Medium | **Resolved** |
 | 36 | No rate limit on async internal triggers | Medium | **Resolved** |
 | 37 | /internal/tags/status unauthenticated (db mode) | Medium | **Resolved** (was #4) |
 | 38 | Kafka debug payload logging | Low | **Resolved** |
-| 39 | Kruize debug payload logging | Low | Accepted |
+| 39 | Kruize debug payload logging | Low | **Accepted** |
 | 40 | RBAC cache unbounded | Low | **Resolved** |
-| 41 | Unauthenticated /metrics | Info | Accepted (NetworkPolicy) |
-| 42 | CORS allow-all origins | Low | Open |
-| 43 | Plugin ingest hooks non-fatal | Medium | Open |
-| 44 | Kruize fetch errors misclassified transient | Medium | Accepted |
+| 41 | Unauthenticated /metrics | Info | **Accepted** (NetworkPolicy) |
+| 42 | CORS allow-all origins | Low | **Resolved** |
+| 43 | Plugin ingest hooks non-fatal | Medium | **Resolved** |
+| 44 | Kruize fetch errors misclassified transient | Medium | **Accepted** |
 | 45 | Strict analytics default false | Medium | **Resolved** |
-| 46 | Org BH PUT triggers fleet reship | Medium | Open |
+| 46 | Org BH PUT triggers fleet reship | Medium | **Resolved** |
 | 47 | Async jobs ignore shutdown context | Low | **Resolved** |
-| 48 | GPU MIG in-memory fleet load | Medium | Open |
-| 49 | GPU time-slicing fallback in-memory | Medium | Open |
+| 48 | GPU MIG in-memory fleet load | Medium | **Resolved** |
+| 49 | GPU time-slicing fallback in-memory | Medium | **Resolved** |
 | 50 | History CSV wrong row limit | Low | **Resolved** |
 | 51 | History wide default scan | Low | **Resolved** |
 | 52 | Fleet summary uncached aggregation | Low | **Resolved** |
 | 53 | No OpenAPI/CHANGELOG CI | Info | **Resolved** |
 | 54 | ADR drift detection absent | Info | **Resolved** |
-| 55 | Kruize shared HTTP timeout | Medium | Accepted |
-| 56 | CSV 512 MiB default body | Medium | Open |
+| 55 | Kruize shared HTTP timeout | Medium | **Accepted** |
+| 56 | CSV max body default too large | Medium | **Resolved** |
 | 57 | Parallel Kafka shared committer | Low | **Resolved** |
-| 58 | report_file_status runbook missing | Low | Open |
+| 58 | report_file_status runbook missing | Low | **Resolved** |
 | 59 | Recommendation detail fallback debt | Low | **Resolved** |
 | 60 | aws-sdk-go v1 dependency | Info | **Resolved** (govulncheck CI; v2 migration planned) |
 
 ---
 
-*Document version: 2.0 — 2026-06-11. Fresh adversarial review; v1.6 findings #1–#31 acknowledged as resolved/mitigated except #4 → #37.*
+## Current State
+
+**Last updated:** 2026-06-11
+
+| Review | Findings | Resolved | Mitigated | Accepted | Open |
+|--------|----------|----------|-----------|----------|------|
+| v1.6 (#1–#31) | 31 | 4 (#4, #10, #30, #31) | 24 | 3 (#3, #5, #6) | 0 |
+| v2.0 (#32–#60) | 29 | 24 | 0 | 5 (#33, #39, #41, #44, #55) | 0 |
+| **Combined (#1–#60)** | **60** | **28** | **24** | **8** | **0** |
+
+Notes:
+
+- **Mitigated** (v1.6): fixes reduce risk with documented residual behavior (e.g., Kafka offset still commits on partial failure by design).
+- **Accepted**: architectural or deprecation decisions with compensating controls documented (gateway JWT, NetworkPolicy, ADR-0163 Kruize removal).
+- **Carried forward:** v1.6 #4 → v2.0 #37 (same issue; counted once in combined resolved total).
+
+**Conclusion:** All findings are resolved or accepted with documented rationale. No open remediation items remain.
+
+---
+
+*Document version: 2.1 — 2026-06-11. Reconciled all v1.6 and v2.0 finding statuses; see [Current State](#current-state).*
