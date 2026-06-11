@@ -1439,3 +1439,537 @@ Notes:
 ---
 
 *Document version: 2.1 — 2026-06-11. Reconciled all v1.6 and v2.0 finding statuses; see [Current State](#current-state).*
+
+---
+
+# v3.0 — Post-Hardening Review
+
+## Version & Date
+
+Version: 3.0 | Date: 2026-06-11 | Reviewer: AI-assisted
+
+## Scope
+
+Fresh adversarial review after completing all v2.0 remediation (findings #32–#60). Codebase snapshot: commit `8d0124555981279fb8aec9fba04fb0f4cb1e28ba`. Focus on regression risks from hardening code, interaction/composition safety between fixes, and issues missed by prior reviews. Methodology unchanged from v2.0 (static review, STRIDE-lite, failure-mode analysis, test coverage assessment).
+
+## Executive Summary
+
+The hardening sprint was substantial and mostly well-executed. Re-validation of v1.6/v2.0 fixes confirms entitlement middleware, internal tags auth, async shutdown context, Kafka commit mutex, SSRF DNS fail-closed, single-flight guards, fleet summary cache, and OpenAPI/governance CI are implemented as documented. **No High-severity regressions** were found in the hardening code itself.
+
+v3.0 identifies **4 Medium**, **5 Low**, and **7 Informational** new findings (#61–#76). The most actionable items are: (1) residual correctness risk from intentional same-day synthesized manifest grouping (#61), (2) single-flight coalescing that replays stale parameters instead of the latest request (#62), (3) internal endpoints that authenticate service accounts but do not bind `org_id` to caller scope (#63), and (4) IPv6 private-network bypass in CSV SSRF checks (#64). None of these undermine the v2.0 remediation; they are composition gaps, residual edge cases, or governance improvements.
+
+The codebase remains production-grade for on-prem (Envoy + Keycloak + NetworkPolicy) and SaaS (3scale upstream) postures. Accepted Kruize legacy-path risk (#33, #39, #44, #55) and unauthenticated `/metrics` (#41) are unchanged.
+
+## Scorecard
+
+| Dimension | Grade | Trend | v3.0 Notes |
+|-----------|-------|-------|------------|
+| **Security** | A− | → | Entitlement + internal tags auth solid; internal org_id scoping and IPv6 SSRF gaps remain |
+| **Correctness** | A− | → | Manifest synthesis + coalescing semantics create brief partial-data windows |
+| **Auditability** | A | → | Runbooks, metrics, ADR index strong; Go↔ADR linking absent |
+| **Operational Robustness** | A− | → | Shutdown context + commit mutex verified; fleet cache invalidation incomplete |
+| **Performance** | B+ | → | Fleet summary cached; savings-summary still hits DB every request |
+| **Design Quality** | B+ | → | Single-flight pattern consistent but parameter-blind by design |
+| **Maintainability** | A− | → | Fallback removal (#59) reduces paths; 163 ADRs not referenced from code |
+| **Governance** | A− | → | CI workflows exist but advisory-only; OpenAPI omits entitlement requirement |
+
+## v3.0 Findings Status Summary
+
+| # | Title | Severity | Status | Category |
+|---|-------|----------|--------|----------|
+| 61 | Same-day synthesized manifest triggers premature recommendations | Medium | Open | Correctness |
+| 62 | Single-flight coalescing replays stale parameters | Medium | Open | Correctness / Ops |
+| 63 | Internal endpoints accept arbitrary org_id without tenant binding | Medium | Open | Security |
+| 64 | IPv6 addresses bypass private-network SSRF deny | Medium | Open | Security |
+| 65 | Fleet summary cache misses retention and non-ingest mutations | Low | Open | Correctness |
+| 66 | Fleet summary cache lacks metrics and configurable capacity | Low | Open | Operational |
+| 67 | Startup validation omits internal-tags auth and CORS in production | Low | Open | Security / Governance |
+| 68 | savings-summary endpoint uncached despite fleet-summary cache | Low | Open | Performance |
+| 69 | Fleet cache LRU order slice leaks on lazy expiry | Low | Open | Performance |
+| 70 | OpenAPI spec omits entitlement requirement | Info | Open | Governance |
+| 71 | CI governance workflows advisory-only with path-file drift | Info | Open | Governance |
+| 72 | govulncheck uses unpinned @latest | Info | Open | Governance |
+| 73 | Reference routes bypass identity/entitlement | Info | Accepted | Security |
+| 74 | No ADR cross-references in Go source | Info | Open | Maintainability |
+| 75 | SSRF DNS validation TOCTOU residual | Info | Accepted | Security |
+| 76 | Fleet cache timing side channel | Info | Accepted | Security |
+
+## Findings Detail
+
+### Finding #61: Same-day synthesized manifest triggers premature recommendations
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Dimension** | Correctness / Data integrity |
+| **Location** | `internal/services/report_file_tracker.go:63-72`, `internal/services/report_processor.go:543-549`, `internal/services/manifest_recommendations.go:20-30` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #32 fix (intentional design) |
+
+**Description**
+
+Finding #32 resolved empty `manifest_id` by synthesizing deterministic `synth-*` IDs. When `date=YYYY-MM-DD` appears in object keys, `manifestScopeKey` uses the date alone — distinct Kafka messages on the same cluster/day share one manifest ID (`TestSynthesizeManifestID_SameDaySameClusterGroupsLegacyMessages` documents this as intentional).
+
+`runManifestRecommendations` is invoked at the end of **each** Kafka message handler pass. When message A completes its files and no other files are yet registered for that manifest, `IsManifestIngestionComplete` returns true and recommendation engines run. If message B arrives later the same day (different file set, same synthesized manifest), recommendations already ran on partial data; engines re-run only after B completes.
+
+**Risk**
+
+Legacy publishers (or malformed messages) that split daily ROS files across multiple Kafka deliveries produce a window — potentially hours — where recommendations reflect a subset of the day's files. Operators see non-stale recommendations that omit later file types (e.g., namespace CSV arrives after container CSV). This is not silent data loss (later re-run corrects), but violates the strict analytics expectation (#45) during the gap.
+
+**Recommendation**
+
+Include payload fingerprint in `manifestScopeKey` even when `date=` is present (e.g., hash of sorted expected filenames), or defer `runManifestRecommendations` until a quiet period with no new pending files for the manifest. Alternatively, require Koku to always populate `metadata.manifest_id` (preferred long-term).
+
+**Effort** | M
+
+---
+
+### Finding #62: Single-flight coalescing replays stale parameters
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Dimension** | Correctness / Operational robustness |
+| **Location** | `internal/engine/savings_recalc_guard.go:26-54`, `internal/reship/trigger_guard.go:32-59`, `internal/engine/threshold_recalc_guard.go:37-64` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #36, #46 fixes |
+
+**Description**
+
+Single-flight guards coalesce overlapping triggers per org (or per org+recType for thresholds) using a `pending` boolean. When a second trigger arrives while `running=true`, it sets `pending=true` and returns. The trailing iteration re-executes with the **original** parameters captured at flight start — not the latest caller's `clusterUUID`, `recTypes`, or `clusterUUIDs` slice.
+
+Example: savings recalc triggered for cluster A; while running, a full-org recalc is coalesced; the trailing run still processes cluster A only. Reship: org-level PUT resolves all clusters; a concurrent cluster-scoped reship coalesces into the org-wide list from the first caller.
+
+**Risk**
+
+Rapid settings changes or overlapping masu triggers during incidents may leave some clusters un-recalculated or un-reshipt until a manual re-trigger. Tests (`TestTriggerSavingsRecalculationAsync_CoalescesOverlappingJobs`, `TestTriggerAsync_CoalescesOverlappingJobs`) validate coalescing count, not parameter freshness.
+
+**Recommendation**
+
+Store the union of cluster UUIDs / superset of recTypes in the flight struct when coalescing, or replace `pending bool` with a queue of latest parameters. ADR-0086/0125 document coalescing intent; amend ADR if parameter-blind trailing run is accepted residual.
+
+**Effort** | M
+
+---
+
+### Finding #63: Internal endpoints accept arbitrary org_id without tenant binding
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Dimension** | Security / Multi-tenancy |
+| **Location** | `internal/api/handlers_tags_status.go:29-38`, `internal/api/handlers_tags_sync.go:33-48`, `internal/api/handlers_savings_recalculate.go:61-78` |
+| **Status** | Open |
+| **Related** | v2.0 #37 (partial fix) |
+
+**Description**
+
+Finding #37 resolved unauthenticated internal tag routes by requiring bearer TokenReview auth. However, authenticated callers can supply **any** `org_id` (query param or JSON body). `ValidateBearerToken` checks SA identity against an allowlist but does not map the caller to permitted org IDs.
+
+**Risk**
+
+In SNO/dev postures where `ROS_INTERNAL_TAGS_AUTH_REQUIRED=false`, or if NetworkPolicy is misconfigured, or if a platform SA is compromised, an attacker can read tag catalogs (`GET /internal/tags/status?org_id=…`), push tag data (`POST /internal/tags/sync`), or trigger savings recalc (`POST /internal/recalculate-savings`) for arbitrary tenants. On-prem chart defaults mitigate via NetworkPolicy + auth required, but defense-in-depth is weaker than v1 API routes (identity header org binding).
+
+**Recommendation**
+
+Bind internal `org_id` to caller scope: derive org from SA namespace/annotation, JWT claims in forwarded identity, or explicit allowlist map. Reject mismatched org_id with 403. Document in `docs/operations/tag-sync-auth.md`.
+
+**Effort** | M
+
+---
+
+### Finding #64: IPv6 addresses bypass private-network SSRF deny
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Dimension** | Security |
+| **Location** | `internal/utils/csv_security.go:94-122` |
+| **Status** | Open |
+| **Related** | v2.0 #34 (partial fix) |
+
+**Description**
+
+Finding #34 fail-closed DNS lookup in production. `isRestrictedIP` converts to IPv4 via `To4()` and returns `false` for non-IPv4 (including IPv6 ULA `fd00::/8`, link-local `fe80::/10`). An allowlisted hostname resolving to IPv6 private space passes `denyRestrictedHost`.
+
+**Risk**
+
+Clusters with IPv6-enabled pod networks or dual-stack metadata services could fetch internal CSV URLs via IPv6 when `ROS_CSV_DENY_PRIVATE_NETWORKS=true`. Practical exploit requires attacker-controlled allowlisted hostname + IPv6 DNS record; lower probability than v1.6 SSRF but real on modern OpenShift.
+
+**Recommendation**
+
+Extend `isRestrictedIP` for IPv6 loopback, link-local, ULA (`fc00::/7`), and documentation prefix (`2001:db8::/32` optional). Add unit tests mirroring IPv4 cases.
+
+**Effort** | S
+
+---
+
+### Finding #65: Fleet summary cache misses retention and non-ingest mutations
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Correctness |
+| **Location** | `internal/fleetsummary/cache.go:123-144`, `internal/engine/recommend_all.go:434`, `internal/engine/retention.go` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #52 fix |
+
+**Description**
+
+Fleet summary cache invalidates on `WriteRecommendations` and savings recalc (`fleetsummary.InvalidateOrg`). It does **not** invalidate on retention sweeps (`engine/retention.go` deletes stale rows), sources-destroy cleanup, or manual DB operations. Cached aggregates may over-count containers for up to `ROS_FLEET_SUMMARY_CACHE_TTL` (default 300s).
+
+**Risk**
+
+Dashboard fleet-summary briefly shows inflated counts after retention deletes recommendations. Low user impact; self-corrects on TTL expiry or next ingest.
+
+**Recommendation**
+
+Call `fleetsummary.InvalidateOrg` from retention sweep and sources cleanup paths, or reduce TTL when retention runs.
+
+**Effort** | S
+
+---
+
+### Finding #66: Fleet summary cache lacks metrics and configurable capacity
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Operational robustness |
+| **Location** | `internal/fleetsummary/cache.go:39-49` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #52 fix |
+
+**Description**
+
+RBAC and cost caches expose `rosocp_*_cache_size` and `rosocp_*_cache_evictions_total` with env-configurable max entries (`ROS_RBAC_CACHE_MAX_ENTRIES`, `ROS_COST_CACHE_MAX_ENTRIES`). Fleet summary cache uses hardcoded `maxSize=256` with no metrics.
+
+**Risk**
+
+Multi-tenant SaaS API pods with many RBAC-scoped users may evict fleet entries silently; operators cannot alert on cache pressure. Inconsistent observability vs other LRU caches from the same hardening sprint.
+
+**Recommendation**
+
+Add `ROS_FLEET_SUMMARY_CACHE_MAX_ENTRIES`, `rosocp_fleet_summary_cache_size`, and `rosocp_fleet_summary_cache_evictions_total`.
+
+**Effort** | S
+
+---
+
+### Finding #67: Startup validation omits internal-tags auth and CORS in production
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Security / Governance |
+| **Location** | `internal/config/security.go`, `internal/tags/auth_config.go`, `internal/api/server.go:161-168` |
+| **Status** | Open |
+
+**Description**
+
+`ValidateSecurityConfig` enforces CSV allowlist in non-dev mode. `ValidateTagAuthConfig` blocks dev token and empty SA allowlist in api mode. Neither validates `ROS_INTERNAL_TAGS_AUTH_REQUIRED=false` or empty `ROS_CORS_ALLOWED_ORIGINS` in production — both are permitted if env vars are mis-set.
+
+**Risk**
+
+Misconfigured Helm values or manual env overrides can deploy with internal tags auth disabled and CORS deny-all (breaking UI) or, if someone sets `DEVELOPMENT=true` in prod, entitlement bypass + open CORS. Fail-fast startup would catch operator errors earlier.
+
+**Recommendation**
+
+Extend `ValidateSecurityConfig` to error when `!DEVELOPMENT && !InternalTagsAuthRequired`, and warn when CORS origins empty in production (distinct from deny-all default in `server.go`).
+
+**Effort** | S
+
+---
+
+### Finding #68: savings-summary endpoint uncached despite fleet-summary cache
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Performance |
+| **Location** | `internal/api/handlers_savings_summary.go`, `internal/api/handlers_fleet.go:64-66` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #52 partial coverage |
+
+**Description**
+
+Finding #52 added LRU cache for `GET /recommendations/openshift/fleet-summary` only. `GET /recommendations/openshift/savings-summary` performs full-org aggregation (with optional group_by) on every request — a heavier query path used by the overview dashboard.
+
+**Risk**
+
+Repeated dashboard polling hammers PostgreSQL on savings-summary while fleet-summary is cached. Asymmetric hardening under load.
+
+**Recommendation**
+
+Extend `internal/fleetsummary` cache (or separate keyed cache) to savings-summary default rollup; document cache behavior in OpenAPI.
+
+**Effort** | M
+
+---
+
+### Finding #69: Fleet cache LRU order slice leaks on lazy expiry
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Performance |
+| **Location** | `internal/fleetsummary/cache.go:84-88` |
+| **Status** | Open |
+
+**Description**
+
+On cache `Get`, expired entries are deleted from `items` but not removed from `order`. Over time, `order` accumulates stale keys; eviction loop still works but scans longer slices under lock.
+
+**Risk**
+
+Slow memory creep in long-lived API pods under churn of RBAC-scoped keys. Bounded by access patterns, not as severe as pre-#29 unbounded caches.
+
+**Recommendation**
+
+Remove expired keys from `order` in `Get`, mirroring `boundedRBACCache`/`boundedCostCache` patterns.
+
+**Effort** | S
+
+---
+
+### Finding #70: OpenAPI spec omits entitlement requirement
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Governance |
+| **Location** | `openapi.json`, `internal/api/middleware/entitlement.go` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #35 fix |
+
+**Description**
+
+`CostManagementEntitlement` middleware enforces `entitlements.cost_management.is_entitled=true` on all v1 routes (except `DEVELOPMENT=true`). OpenAPI documents `x-rh-identity` security scheme but does not describe entitlement requirements. `openapi_contract_test.go` validates response shapes, not auth semantics.
+
+**Risk**
+
+External integrators and IQE authors may omit entitlement from test identities until runtime 403. OpenAPI "comprehensive sync" from hardening phase incomplete for auth contract.
+
+**Recommendation**
+
+Add `x-entitlements` extension or document in description/security section; extend contract tests.
+
+**Effort** | S
+
+---
+
+### Finding #71: CI governance workflows advisory-only with path-file drift
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Governance |
+| **Location** | `.github/workflows/openapi-changelog-check.yml`, `.github/workflows/adr-reminder.yml`, `.github/openapi-paths.txt`, `.github/architectural-paths.txt` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #53, #54 fixes |
+
+**Description**
+
+Workflows use `continue-on-error: true` and exit 1 only to emit warnings — they do not block merge. Path filters are hardcoded in YAML; `openapi-paths.txt` and `architectural-paths.txt` are referenced in comments/messages but not consumed by `dorny/paths-filter`. CHANGELOG check triggers on **any** Go change, producing false positives for processor-only changes.
+
+**Risk**
+
+Documentation drift can merge silently; developers may ignore advisory noise. v2.0 resolved "no CI" but not "enforceable CI."
+
+**Recommendation**
+
+Wire path files into workflows via script; narrow CHANGELOG trigger to API-facing paths; consider required check for OpenAPI diff on labeled PRs.
+
+**Effort** | M
+
+---
+
+### Finding #72: govulncheck uses unpinned @latest
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Governance |
+| **Location** | `.github/workflows/govulncheck.yml:26` |
+| **Status** | Open |
+| **Introduced by** | v2.0 #60 fix |
+
+**Description**
+
+CI installs `govulncheck@latest` on each run. Tool version drift can cause non-reproducible pass/fail across weeks.
+
+**Risk**
+
+Flaky CI or surprise failures when govulncheck changes behavior. Minor for advisory scanning.
+
+**Recommendation**
+
+Pin govulncheck version in workflow or `tools.go`; record in CHANGELOG when bumped.
+
+**Effort** | S
+
+---
+
+### Finding #73: Reference routes bypass identity/entitlement
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Status** | **Accepted** |
+| **Dimension** | Security |
+| **Location** | `internal/api/server.go:173-176` |
+
+**Description**
+
+`GET /recommendations/openshift/notification-codes` and `GET .../openapi.json` register before v1 identity/entitlement middleware — no auth required.
+
+**Risk**
+
+Notification code catalog is static reference data; OpenAPI is filtered public API surface. Acceptable for UI bootstrap and Bruno collections when gateway does not expose these paths publicly.
+
+**Recommendation**
+
+Document in deployment guide that gateway should restrict or cache these paths if exposed externally.
+
+**Effort** | S
+
+---
+
+### Finding #74: No ADR cross-references in Go source
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Maintainability |
+| **Location** | `docs/adr/` (163 ADRs), all `internal/**/*.go` |
+| **Status** | Open |
+
+**Description**
+
+ADR index (`docs/adr/README.md`) documents 163 decisions with enrichment. Go source contains zero `ADR-` references or links to ADR files. Architectural-path CI reminds on PR but does not verify code↔ADR consistency.
+
+**Risk**
+
+ADRs drift from implementation within one release; auditors rely on index accuracy without compile-time or lint coupling.
+
+**Recommendation**
+
+Add optional `// ADR-NNNN` comments at decision points (manifest synthesis, coalescing, entitlement skip); extend ADR reminder workflow to grep for ADR mentions in changed files.
+
+**Effort** | M
+
+---
+
+### Finding #75: SSRF DNS validation TOCTOU residual
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Status** | **Accepted** |
+| **Dimension** | Security |
+| **Location** | `internal/utils/csv_security.go:76-91`, CSV fetch path |
+| **Related** | v2.0 #34 fix |
+
+**Description**
+
+Finding #34 fail-closed DNS at URL validation time. Actual HTTP fetch occurs later; DNS rebinding between validation and connection could still reach private IPs unless connect-time pinning is used.
+
+**Risk**
+
+Theoretical on controlled allowlists; fail-closed DNS materially reduced v1.6 risk. Full mitigation requires custom `DialContext` with pinned IPs.
+
+**Recommendation**
+
+Accepted residual; document in security config. Consider pinned dial for high-threat deployments.
+
+**Effort** | L
+
+---
+
+### Finding #76: Fleet cache timing side channel
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Status** | **Accepted** |
+| **Dimension** | Security |
+| **Location** | `internal/api/handlers_fleet.go:64-66`, `internal/fleetsummary/cache.go:75-90` |
+
+**Description**
+
+Cache hit returns immediately; miss runs aggregate SQL. Response latency correlates with cache state, potentially revealing recent ingest/recalc timing to a authenticated caller polling fleet-summary.
+
+**Risk**
+
+Low practical impact — caller is already entitled and org-scoped; infers operational timing not foreign tenant data. No cache key oracle across orgs.
+
+**Recommendation**
+
+Accepted; optional constant-time padding not warranted. Monitor if threat model changes.
+
+**Effort** | —
+
+---
+
+## Priority Remediation Order
+
+| Priority | Finding(s) | Rationale |
+|----------|------------|-----------|
+| 1 | **#63** | Cross-tenant internal API scope — highest blast radius when NetworkPolicy/auth misconfigured |
+| 2 | **#64** | SSRF IPv6 gap — straightforward fix, completes #34 |
+| 3 | **#62** | Coalescing stale params — incident-time recalc/reship correctness |
+| 4 | **#61** | Premature recommendations — legacy publisher partial-data window |
+| 5 | **#65, #66, #69** | Fleet cache correctness/ops — small diffs, align with #52 intent |
+| 6 | **#67, #68** | Config validation + savings-summary cache — hardening completeness |
+| 7 | **#70–#72, #74** | Governance polish — non-blocking |
+| — | **#73, #75, #76** | Accepted with documented rationale |
+
+## Hardening Regression Assessment
+
+| v2.0 Fix | v3.0 Verdict | Notes |
+|----------|--------------|-------|
+| #35 Entitlement middleware | ✅ No regression | Correctly skips in DEVELOPMENT; duplicate identity parse is harmless |
+| #37 Internal tags auth | ⚠️ Partial | Auth on by default; org_id binding still missing (#63) |
+| #47 Async shutdown context | ✅ Verified | `asyncjobs.Init` + `Go` propagate cancellation; tests meaningful |
+| #52 Fleet summary cache | ⚠️ Partial | Works for ingest path; invalidation/metrics gaps (#65–#66, #69) |
+| #57 Kafka commit mutex | ✅ Verified | Mutex when `KafkaParallel && KafkaWorkers > 1`; tests in `commit_test.go` |
+| #36/#46 Single-flight | ⚠️ Design limit | Coalescing works; stale params (#62) |
+| #34 SSRF fail-closed | ⚠️ Partial | IPv6 gap (#64); TOCTOU accepted (#75) |
+| #42 CORS restriction | ✅ No regression | Preflight handled by Echo CORS before v1 middleware; no entitlement bypass on API methods |
+| #59 Fallback removal | ✅ No regression | Detail uses `container_id` only; tests cover org scope |
+| #53–#54 CI workflows | ✅ Present | Advisory-only (#71) |
+| #32 Manifest synthesis | ⚠️ Residual | Same-day grouping by design; premature rec (#61) |
+
+**CORS + entitlement interaction:** Browser cross-origin requests with credentials require allowed origin; API auth remains header-based. OPTIONS preflight succeeds or fails at CORS layer without reaching entitlement — expected. Non-browser clients must send `X-Rh-Identity` with entitlement regardless of CORS.
+
+**Shutdown + single-flight interaction:** When shutdown cancels `asyncjobs.Context()`, in-flight coalesced loops exit on next `ctx` check inside recalc/reship workers. Pending flag may schedule one trailing iteration that immediately observes cancelled ctx — no goroutine leak verified in `shutdown_test.go`.
+
+## Positive Observations (v3.0)
+
+| Area | Observation |
+|------|-------------|
+| **Entitlement** | Clean middleware; unit tests cover dev skip, reject, accept paths |
+| **Internal auth** | TokenReview + allowlist pattern reused across tags and savings recalc |
+| **Async lifecycle** | `asyncjobs` package is minimal, testable, wired from `StartAPIServer` |
+| **Kafka commits** | Centralized `CommitMessage` helper prevents parallel commit races |
+| **OpenAPI tests** | Large `openapi_contract_test.go` suite validates schemas, params, plugin gates |
+| **Coalescing tests** | Coalescing behavior has dedicated tests with Prometheus metric assertions — not ceremony |
+| **ADR corpus** | 163 ADRs with README index — exceptional for project maturity |
+| **Documentation** | CHANGELOG, runbooks, tag-sync-auth, configuration reference aligned with hardening |
+
+## Current State
+
+**Last updated:** 2026-06-11 (v3.0)
+
+| Review | Findings | Resolved | Mitigated | Accepted | Open |
+|--------|----------|----------|-----------|----------|------|
+| v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
+| v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
+| v3.0 (#61–#76) | 16 | 0 | 0 | 3 | 13 |
+| **Combined (#1–#76)** | **76** | **28** | **24** | **11** | **13** |
+
+**Conclusion:** v2.0 hardening holds up under fresh review with no High-severity regressions. v3.0 open items are composition gaps and governance polish — prioritize #63–#64 for security, #62 and #61 for correctness. Kruize legacy (#33, #39, #44, #55), unauthenticated metrics (#41), and v3.0 accepted items (#73, #75, #76) remain documented accepted risk.
+
+---
+
+*Document version: 3.0 — 2026-06-11. Post-hardening review; findings #61–#76.*
