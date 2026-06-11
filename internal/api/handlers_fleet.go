@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
@@ -58,6 +59,11 @@ func GetFleetSummary(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+	rbacScoped := fleetSummaryNeedsClusterFilter(userPerms)
+
+	if cached, ok := fleetsummary.Get(orgID, rbacScoped, userPerms); ok {
+		return c.JSON(http.StatusOK, cached)
+	}
 
 	var summary FleetSummaryResponse
 	var totalSavingsUSD float64
@@ -132,5 +138,6 @@ func GetFleetSummary(c echo.Context) error {
 	}
 	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, summary.Currency)
 
+	fleetsummary.Put(orgID, rbacScoped, userPerms, fleetsummary.CachedSummary(summary))
 	return c.JSON(http.StatusOK, summary)
 }

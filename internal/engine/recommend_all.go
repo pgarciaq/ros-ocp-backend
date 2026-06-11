@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -430,6 +431,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit recommendations tx: %w", err)
 	}
+	fleetsummary.InvalidateOrg(orgID)
 	return nil
 }
 
