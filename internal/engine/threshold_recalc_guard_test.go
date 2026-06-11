@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -85,4 +86,38 @@ func TestTriggerThresholdRecalculationAsync_CoalescedMetricIncrements(t *testing
 	}, 2*time.Second, 10*time.Millisecond)
 
 	assert.InDelta(t, 2, promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues(orgID, "gpu"))-before, 0)
+}
+
+func TestTriggerThresholdRecalcCoalesced_InvalidatesCacheAfterCompletion(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_THRESHOLD_RECALCULATION_ENABLED", "true")
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	resetThresholdRecalcFlightsForTest()
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-recalc-post-cache"
+	ctx := context.Background()
+
+	recalcDone := make(chan struct{})
+	SetThresholdRecalcRunHookForTest(func(oid, rt string) {
+		// Simulate an API read repopulating cache during the recalc window.
+		fleetsummary.Put(orgID, false, nil, fleetsummary.CachedSummary{
+			TotalContainers: 99,
+			Currency:        "USD",
+		})
+		close(recalcDone)
+	})
+	defer ClearThresholdRecalcRunHookForTest()
+
+	restore := SetClusterRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID, recType string) error {
+		return nil
+	})
+	defer restore()
+
+	triggerThresholdRecalcCoalesced(ctx, pool, orgID, "container")
+	<-recalcDone
+
+	_, ok := fleetsummary.Get(orgID, false, nil)
+	assert.False(t, ok, "post-recalc invalidation should clear cache repopulated during recalc")
 }

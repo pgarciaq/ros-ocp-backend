@@ -173,7 +173,7 @@ func TestTriggerThresholdRecalculationAsync_InvalidatesFleetSummaryCache(t *test
 	TriggerThresholdRecalculationAsync(pool, orgID, "container")
 
 	_, ok := fleetsummary.Get(orgID, false, nil)
-	assert.False(t, ok, "threshold settings recalc trigger should invalidate fleet summary cache immediately")
+	assert.False(t, ok, "threshold settings recalc trigger should invalidate fleet summary cache immediately (pre-recalc)")
 }
 
 func TestRecalculateThresholdsForOrg_PassesDateRangeToContainerRecalc(t *testing.T) {

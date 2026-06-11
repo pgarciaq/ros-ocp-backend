@@ -1986,7 +1986,7 @@ The codebase remains production-grade for standard SaaS and on-prem postures. Op
 | Dimension | Grade | Trend | v4.0 Notes |
 |-----------|-------|-------|------------|
 | **Security** | A− | → | No new auth gaps; debouncer runs post-shutdown with Background context (#79) is operational not auth |
-| **Correctness** | B+ | ↓ | Cache invalidation incomplete on retention/sources (#77); recalc race (#78); debouncer timer race (#80) |
+| **Correctness** | B+ | ↓ | Cache invalidation incomplete on retention/sources (#77); debouncer timer race (#80) |
 | **Auditability** | A | → | Internal endpoint audit metrics verified; savings cache metrics partial (#81) |
 | **Operational Robustness** | A− | → | Debouncer lacks shutdown integration (#79); config misconfig warn-only (#85 accepted) |
 | **Performance** | A− | ↑ | Savings summary cache added (#68 verified); group_by paths correctly uncached |
@@ -2029,8 +2029,9 @@ Call `fleetsummary.InvalidateOrg(orgID)` after retention deletes that affect rec
 | **Severity** | Medium |
 | **Dimension** | Correctness |
 | **Location** | `internal/engine/savings_recalculate.go:92-95`, `internal/engine/threshold_recalculate.go:91-94`, `internal/fleetsummary/cache.go:319-345` |
-| **Status** | **Open** |
+| **Status** | **Resolved** |
 | **Introduced by** | v3.0 #65/#68 cache wiring |
+| **Resolved by** | Post-completion `InvalidateOrg` in coalesced guard loops (`savings_recalc_guard.go`, `threshold_recalc_guard.go`, `reship/trigger_guard.go`); pre-trigger invalidation retained for pessimistic double-invalidation |
 
 **Description**
 
@@ -2234,11 +2235,10 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 
 | Priority | Finding(s) | Severity | Rationale |
 |----------|------------|----------|-----------|
-| 1 | **#78** | Medium | User-visible stale dashboard savings after cost-model recalc |
-| 2 | **#77** | Low | Inflated counts after retention/sources cleanup |
-| 3 | **#80** | Low | Duplicate engine runs under bursty ingest |
-| 4 | **#79** | Low | Clean shutdown for debouncer timers |
-| 5 | **#81–#84** | Info | Observability and governance polish |
+| 1 | **#77** | Low | Inflated counts after retention/sources cleanup |
+| 2 | **#80** | Low | Duplicate engine runs under bursty ingest |
+| 3 | **#79** | Low | Clean shutdown for debouncer timers |
+| 4 | **#81–#84** | Info | Observability and governance polish |
 | — | **#85** | Accepted | Warn-only config by design |
 
 ### Hardening Regression Assessment (v3.0 → v4.0)
@@ -2252,11 +2252,11 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 | #65 Fleet cache invalidation | ⚠️ Partial | Ingest/recalc/settings wired; retention/sources missing (#77) |
 | #66 Fleet cache metrics | ✅ Verified | Configurable capacity, full Prometheus suite |
 | #67 Config validation | ✅ Verified | Warnings emitted; warn-only accepted (#85) |
-| #68 Savings cache | ⚠️ Partial | Cache works; recalc race (#78), metrics gap (#81) |
+| #68 Savings cache | ⚠️ Partial | Cache works; post-recalc invalidation fixed (#78 resolved); metrics gap (#81) |
 | #69 LRU lazy expiry | ✅ Verified | `removeElement` cleans both map and list; tests assert order length |
 | #70–#72, #74 Governance | ⚠️ Partial | Improvements landed; drift remains (#82, #83, #84) |
 
-**Coalescing + cache interaction:** Latest-params coalescing correctly updates parameters under mutex before trailing iteration. Combined with start-only cache invalidation (#78), the trailing run completes with latest params but API may serve cached pre-recalc data until TTL.
+**Coalescing + cache interaction:** Latest-params coalescing correctly updates parameters under mutex before trailing iteration. Post-recalc `InvalidateOrg` in guard loops (#78 resolved) clears caches repopulated during the recalc window; pre-trigger invalidation retained for pessimistic double-invalidation.
 
 **Debouncer + ingestion interaction:** Quiet period correctly prevents premature recommendations on synthesized manifests. `notifySynthManifestFileActivity` resets timer on file registration — verified in tests. Timer lifecycle issues (#79, #80) are edge cases under rapid ingest or shutdown.
 
@@ -2280,10 +2280,10 @@ Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fata
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
 | v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
-| v4.0 (#77–#85) | 9 | 0 | 0 | 1 | 8 |
-| **Combined (#1–#85)** | **85** | **41** | **24** | **12** | **8** |
+| v4.0 (#77–#85) | 9 | 1 | 0 | 1 | 7 |
+| **Combined (#1–#85)** | **85** | **42** | **24** | **12** | **7** |
 
-**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Eight open findings (#77–#84) and one accepted item (#85) remain. Highest priority: cache invalidation after async recalc completion (#78).
+**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Seven open findings (#77, #79–#84) and one accepted item (#85) remain. Highest priority: cache invalidation on retention/sources cleanup (#77).
 
 ---
 

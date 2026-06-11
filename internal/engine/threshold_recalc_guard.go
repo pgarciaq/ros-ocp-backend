@@ -7,6 +7,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
 var thresholdRecalcCoalescedTotal = promauto.NewCounterVec(
@@ -52,6 +54,7 @@ func triggerThresholdRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, or
 
 	for {
 		RecalculateThresholdsForOrg(ctx, pool, orgID, recType)
+		fleetsummary.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {

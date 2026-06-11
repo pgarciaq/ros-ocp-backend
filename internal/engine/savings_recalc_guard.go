@@ -7,6 +7,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
 var savingsRecalcCoalescedTotal = promauto.NewCounterVec(
@@ -53,6 +55,7 @@ func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgI
 		flight.mu.Unlock()
 
 		RecalculateSavingsForOrg(ctx, pool, orgID, params.clusterUUID, params.recTypes)
+		fleetsummary.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {

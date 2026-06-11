@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -136,4 +137,39 @@ func TestTriggerSavingsRecalcCoalesced_UsesLatestParameters(t *testing.T) {
 		defer mu.Unlock()
 		return lastCluster == "cluster-C" && len(lastRecTypes) == 1 && lastRecTypes[0] == "node"
 	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestTriggerSavingsRecalcCoalesced_InvalidatesCacheAfterCompletion(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
+	t.Setenv("ROS_SAVINGS_RECALCULATION_ENABLED", "true")
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	resetSavingsRecalcFlightsForTest()
+
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-savings-recalc-post-cache"
+	ctx := context.Background()
+
+	recalcDone := make(chan struct{})
+	SetSavingsRecalcRunHookForTest(func(oid string, recTypes []string) {
+		// Simulate an API read repopulating cache during the recalc window.
+		fleetsummary.Put(orgID, false, nil, fleetsummary.CachedSummary{
+			TotalContainers: 99,
+			Currency:        "USD",
+		})
+		close(recalcDone)
+	})
+	defer ClearSavingsRecalcRunHookForTest()
+
+	restore := SetClusterSavingsRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID string, recTypes []string) error {
+		return nil
+	})
+	defer restore()
+
+	triggerSavingsRecalcCoalesced(ctx, pool, orgID, "", []string{"container"})
+	<-recalcDone
+
+	_, ok := fleetsummary.Get(orgID, false, nil)
+	assert.False(t, ok, "post-recalc invalidation should clear cache repopulated during recalc")
 }

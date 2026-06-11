@@ -7,6 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
 var reshipCoalescedTotal = promauto.NewCounterVec(
@@ -64,6 +66,7 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 		flight.mu.Unlock()
 
 		runReshipBatch(ctx, trigger, orgID, clusters)
+		fleetsummary.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {
