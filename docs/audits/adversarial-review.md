@@ -2,12 +2,12 @@
 
 > **INTERNAL USE ONLY** — This document is an internal security and engineering audit. It is not for public disclosure, customer distribution, or external publication without explicit security and legal review.
 
-**Date:** 2026-06-10 (re-validation pass)  
-**Previous review:** 2026-06-08 (v1.2)  
+**Date:** 2026-06-11 (v4.0 post-completion validation)  
+**Previous review:** 2026-06-11 (v3.0)  
 **Scope:** `ros-ocp-backend` — Kafka ingestion pipeline, native recommendation engine, REST API, database layer, authentication/authorization, operational readiness, and engineering governance  
 **Methodology:** Adversarial due diligence combining static code review, architecture analysis, threat modeling (STRIDE-lite), and operational failure-mode analysis. Reviewers assumed the **SNO/dev deployment posture** (`ROS_TAGS_SOURCE=db`, `RBAC_ENABLE=false`, no gateway) with network access to the API port unless otherwise noted. Findings were validated against source locations and cross-referenced for compound failure chains.
 
-**Changes since v1.3:** All v1.6 findings (#1–#31) and v2.0 findings (#32–#60) are **resolved, mitigated, or accepted** with documented rationale. See [v2.0 Findings Status Summary](#v20-findings-status-summary) and [Current State](#current-state).
+**Changes since v3.0:** v4.0 review (#77–#85) validates v3.0 hardening implementations and identifies 8 open findings (1 Medium, 3 Low, 4 Info) plus 1 accepted item. All v1.6 (#1–#31), v2.0 (#32–#60), and v3.0 (#61–#76) findings remain resolved, mitigated, or accepted. See [v4.0 Review](#v40-review--post-completion-hardening-validation) and [Current State](#current-state-1).
 
 ---
 
@@ -1965,19 +1965,326 @@ Accepted; optional constant-time padding not warranted. Monitor if threat model 
 | **ADR corpus** | 163 ADRs with README index — exceptional for project maturity |
 | **Documentation** | CHANGELOG, runbooks, tag-sync-auth, configuration reference aligned with hardening |
 
-## Current State
+---
 
-**Last updated:** 2026-06-11 (v3.0 — all findings resolved)
+## v4.0 Review — Post-completion hardening validation
+
+**Version:** 4.0 | **Date:** 2026-06-11 | **Reviewer:** AI-assisted | **Scope:** Code added during v3.0 finding resolution (#61–#76 implementations)
+
+### Executive Summary
+
+This review re-examines the codebase after the v3.0 remediation sprint (commits `1cad345c` through `cee71f83`). Static analysis focused on the new manifest debouncer, latest-params coalescing guards, fleet/savings LRU caches, config validation warnings, internal endpoint audit logging, OpenAPI entitlement documentation, and CI governance workflows.
+
+**No High-severity regressions** were found in v3.0 fixes. Entitlement middleware, internal tags auth, Kafka commit mutex, IPv6 SSRF deny, latest-params coalescing, and synthesized-manifest quiet period all behave as documented. Unit tests for coalescing (`savings_recalc_guard_test.go`, `trigger_guard_test.go`) and debouncer quiet-period reset (`manifest_recommendation_debouncer_test.go`) are meaningful, not ceremonial.
+
+v4.0 surfaces **interaction gaps** between the new caches and background jobs: async recalc invalidates caches at job **start** but not **completion**, creating a window where concurrent API reads can repopulate caches with pre-recalc data. Retention sweeps and Sources destroy cleanup — called out in v3.0 #65 — still do not call `InvalidateOrg`. The manifest debouncer correctly defers recommendations but uses `context.Background()` with no shutdown hook and has a classic Go `time.Timer.Stop()` race that can double-fire under rapid file activity.
+
+The codebase remains production-grade for standard SaaS and on-prem postures. Open findings are Low/Medium correctness and governance polish, not auth bypass or data-loss vectors.
+
+### Scorecard
+
+| Dimension | Grade | Trend | v4.0 Notes |
+|-----------|-------|-------|------------|
+| **Security** | A− | → | No new auth gaps; debouncer runs post-shutdown with Background context (#79) is operational not auth |
+| **Correctness** | B+ | ↓ | Cache invalidation incomplete on retention/sources (#77); recalc race (#78); debouncer timer race (#80) |
+| **Auditability** | A | → | Internal endpoint audit metrics verified; savings cache metrics partial (#81) |
+| **Operational Robustness** | A− | → | Debouncer lacks shutdown integration (#79); config misconfig warn-only (#85 accepted) |
+| **Performance** | A− | ↑ | Savings summary cache added (#68 verified); group_by paths correctly uncached |
+| **Design Quality** | A− | → | Latest-params coalescing verified; debouncer design sound with lifecycle edge cases |
+| **Maintainability** | A− | → | ADR comments added (#74) but new files lack cross-refs (#84) |
+| **Governance** | A− | → | OpenAPI entitlement mostly documented; path-file drift persists (#82, #83) |
+
+### Findings
+
+#### Finding #77: Retention and Sources cleanup omit fleet/savings cache invalidation
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Correctness |
+| **Location** | `internal/engine/retention.go:139-156`, `internal/services/housekeeper/sourcesCleaner.go` |
+| **Status** | **Open** |
+| **Related** | v3.0 #65 (partially resolved) |
+
+**Description**
+
+v3.0 #65 recommended calling `fleetsummary.InvalidateOrg` from retention sweeps and sources cleanup. Commit `97d8ac75` wired invalidation into threshold recalc, savings recalc, and business-hours settings — but **not** into `RunRetentionSweep` (which deletes stale `recommendation_sets` rows) or `sourcesCleaner` (which deletes cluster analytics on Sources destroy events).
+
+**Risk**
+
+Dashboard fleet-summary and savings-summary may show inflated container counts or savings for up to `ROS_FLEET_SUMMARY_CACHE_TTL` (default 300s) after retention purge or cluster removal.
+
+**Recommendation**
+
+Call `fleetsummary.InvalidateOrg(orgID)` after retention deletes that affect recommendation tables (per-org when identifiable, or full cache flush if org-scoped). Add invalidation to sources cleanup completion path.
+
+**Effort** | S
+
+---
+
+#### Finding #78: Async recalc invalidates cache at job start, not completion
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Dimension** | Correctness |
+| **Location** | `internal/engine/savings_recalculate.go:92-95`, `internal/engine/threshold_recalculate.go:91-94`, `internal/fleetsummary/cache.go:319-345` |
+| **Status** | **Open** |
+| **Introduced by** | v3.0 #65/#68 cache wiring |
+
+**Description**
+
+`TriggerSavingsRecalculationAsync` and `TriggerThresholdRecalculationAsync` call `fleetsummary.InvalidateOrg(orgID)` **before** launching the coalesced background job. During the recalc window (seconds to minutes for large orgs), concurrent API requests hit a cache miss, query PostgreSQL (partially updated mid-recalc), and `Put`/`PutSavings` fresh entries. When recalc completes, no second invalidation runs — cached responses serve pre-recalc or partially-updated aggregates until TTL expiry.
+
+**Risk**
+
+Cost-model or threshold settings changes can leave fleet-summary and savings-summary stale for up to 5 minutes despite recalc completing successfully. User-visible incorrect savings totals on the overview dashboard.
+
+**Recommendation**
+
+Move invalidation to **after** successful recalc completion inside the coalesced loop (or invalidate both at start and end). Alternatively, use a generation counter in cache keys incremented per recalc.
+
+**Effort** | S
+
+---
+
+#### Finding #79: Manifest debouncer lacks shutdown integration
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Operational robustness |
+| **Location** | `internal/services/manifest_recommendation_debouncer.go:71-89`, `internal/asyncjobs/shutdown.go` |
+| **Status** | **Open** |
+| **Introduced by** | v3.0 #61 fix |
+
+**Description**
+
+`fireSynthManifestRecommendations` runs deferred engines with `context.Background()`, bypassing Kafka consumer and API shutdown contexts. `asyncjobs.Init` cancels threshold/savings recalc on SIGTERM, but debouncer timers are not stopped. On pod termination, a pending quiet-period timer can fire after the DB pool begins draining.
+
+**Risk**
+
+Benign errors logged during shutdown; rare duplicate or failed recommendation runs at process boundary. Not a data-loss vector (recommendations are idempotent upserts).
+
+**Recommendation**
+
+Register debouncer cleanup in shutdown path (`resetSynthManifestDebouncersForTest` pattern for production). Pass cancellable context from Kafka handler into `fireSynthManifestRecommendations`.
+
+**Effort** | S
+
+---
+
+#### Finding #80: Debouncer timer Stop() race can double-fire recommendations
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Dimension** | Correctness |
+| **Location** | `internal/services/manifest_recommendation_debouncer.go:64-73`, `109-113` |
+| **Status** | **Open** |
+| **Introduced by** | v3.0 #61 fix |
+
+**Description**
+
+When resetting the quiet-period timer, `entry.timer.Stop()` is called without checking the return value. Per Go semantics, if the timer already expired, `Stop()` returns `false` and the callback may still execute. A new `time.AfterFunc` is scheduled simultaneously — both callbacks can invoke `fireSynthManifestRecommendations` for the same manifest ID.
+
+**Risk**
+
+Duplicate recommendation engine runs under bursty same-day file arrivals (multiple Kafka messages within the quiet period). Wasted CPU; idempotent writes prevent corruption but may cause transient metric spikes.
+
+**Recommendation**
+
+Use a generation counter or `time.AfterFunc` with mutex-protected "armed" flag; drain expired callbacks before rescheduling (pattern: check `Stop()` return, use channel drain for `time.Timer`).
+
+**Effort** | S
+
+---
+
+#### Finding #81: Savings cache observability asymmetry
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Operational robustness |
+| **Location** | `internal/fleetsummary/cache.go:109-117`, `289-317` |
+| **Status** | **Open** |
+| **Introduced by** | v3.0 #68 fix |
+
+**Description**
+
+Fleet summary cache exposes `rosocp_fleet_summary_cache_size`, evictions, lazy expiry, and invalidation counters. Savings summary cache exposes only hits and misses — no size gauge, evictions, lazy expiry, or invalidation metrics. Both caches share `InvalidateOrg` but only fleet invalidations increment `rosocp_fleet_summary_cache_invalidations_total`.
+
+**Risk**
+
+Operators cannot alert on savings cache pressure or distinguish savings vs fleet invalidation rates. Asymmetric observability after the #66 metrics sprint.
+
+**Recommendation**
+
+Add `rosocp_savings_summary_cache_*` metrics mirroring fleet cache, or share a unified cache metrics namespace with a `cache_type` label.
+
+**Effort** | S
+
+---
+
+#### Finding #82: CI path manifest files not consumed by workflows
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Governance |
+| **Location** | `.github/openapi-paths.txt`, `.github/architectural-paths.txt`, `.github/workflows/openapi-changelog-check.yml`, `.github/workflows/adr-reminder.yml` |
+| **Status** | **Open** |
+| **Related** | v3.0 #71 (partially resolved) |
+
+**Description**
+
+v3.0 #71 synced workflow YAML filters with path-file comments, but workflows still hardcode globs in `dorny/paths-filter` — the `.txt` files are documentation-only. `manifest_recommendation_debouncer.go` and `config_validation.go` are architectural changes not listed in `architectural-paths.txt` (only `report_file_tracker.go` from `internal/services/` is listed).
+
+**Risk**
+
+Path filter drift when one file is updated without the other; ADR reminder misses debouncer/config changes.
+
+**Recommendation**
+
+Generate workflow filters from path files via a small script in CI, or add missing paths (`internal/services/manifest_recommendation_debouncer.go`, `internal/config/config_validation.go`).
+
+**Effort** | M
+
+---
+
+#### Finding #83: OpenAPI 403 responses inconsistently reference ForbiddenEntitlement
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Governance |
+| **Location** | `openapi.json` (82 `403` entries vs 55 `ForbiddenEntitlement` refs) |
+| **Status** | **Open** |
+| **Related** | v3.0 #70 (partially resolved) |
+
+**Description**
+
+v3.0 #70 added the reusable `ForbiddenEntitlement` component and referenced it on most v1 paths. ~27 paths retain inline 403 descriptions (settings lock/RBAC variants, node GPU endpoints). Functionally accurate but inconsistent for codegen and IQE contract tests.
+
+**Risk**
+
+Integrators may miss entitlement requirements on paths with inline-only 403 docs. Low impact — runtime middleware enforces entitlement regardless.
+
+**Recommendation**
+
+Extend `ForbiddenEntitlement` with `oneOf` descriptions for RBAC/settings variants, or add a second reusable component `ForbiddenEntitlementOrRBAC`.
+
+**Effort** | S
+
+---
+
+#### Finding #84: ADR cross-references missing on new hardening modules
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Maintainability |
+| **Location** | `internal/services/manifest_recommendation_debouncer.go`, `internal/config/config_validation.go`, `internal/api/handlers_savings_summary.go` |
+| **Status** | **Open** |
+| **Related** | v3.0 #74 (partially resolved) |
+
+**Description**
+
+v3.0 #74 added `// ADR-NNNN` comments across db, kafka, middleware, reship, asyncjobs, and fleetsummary. New modules from the #61–#68 sprint lack cross-references: manifest debouncer (quiet-period deferral), config validation warnings, savings-summary cache wiring.
+
+**Risk**
+
+ADR corpus drifts from implementation within one release cycle for the newest code paths.
+
+**Recommendation**
+
+Add ADR comments referencing ADR-0050 (manifest synthesis), ADR-0112 (fleet cache), ADR-0125 (coalescing pattern) at decision points in new files.
+
+**Effort** | S
+
+---
+
+#### Finding #85: Production config misconfiguration remains warn-only
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Informational |
+| **Dimension** | Security / Governance |
+| **Location** | `internal/config/config_validation.go:13-28`, `cmd/start.go:38-40` |
+| **Status** | **Accepted** |
+| **Related** | v3.0 #67 (resolved with warnings) |
+
+**Description**
+
+v3.0 #67 added startup warnings for internal-tags auth without allowlist, permissive CORS, and org allowlist with auth disabled. `ValidateSecurityConfig` still fatals only on CSV allowlist issues; config validation warnings do not block startup in production.
+
+**Risk**
+
+Misconfigured Helm values can deploy with internal auth disabled — mitigated by NetworkPolicy and SA allowlist in standard postures. Accepted as operator-flexibility trade-off.
+
+**Recommendation**
+
+Accepted. Consider optional `ROS_STRICT_CONFIG=true` to promote warnings to fatals for hardened deployments.
+
+**Effort** | S
+
+---
+
+### Priority Remediation Order
+
+| Priority | Finding(s) | Severity | Rationale |
+|----------|------------|----------|-----------|
+| 1 | **#78** | Medium | User-visible stale dashboard savings after cost-model recalc |
+| 2 | **#77** | Low | Inflated counts after retention/sources cleanup |
+| 3 | **#80** | Low | Duplicate engine runs under bursty ingest |
+| 4 | **#79** | Low | Clean shutdown for debouncer timers |
+| 5 | **#81–#84** | Info | Observability and governance polish |
+| — | **#85** | Accepted | Warn-only config by design |
+
+### Hardening Regression Assessment (v3.0 → v4.0)
+
+| v3.0 Fix | v4.0 Verdict | Notes |
+|----------|--------------|-------|
+| #61 Manifest quiet period | ✅ Verified | Debouncer tests cover deferral and reset; lifecycle gaps (#79, #80) |
+| #62 Latest-params coalescing | ✅ Verified | Mutex protects reads and writes; tests assert latest cluster/recTypes |
+| #63 Internal endpoint audit | ✅ Verified | Audit logging + optional org allowlist unchanged |
+| #64 IPv6 SSRF deny | ✅ Verified | `IsPrivate()`/`IsLoopback()` path in `csv_security.go` |
+| #65 Fleet cache invalidation | ⚠️ Partial | Ingest/recalc/settings wired; retention/sources missing (#77) |
+| #66 Fleet cache metrics | ✅ Verified | Configurable capacity, full Prometheus suite |
+| #67 Config validation | ✅ Verified | Warnings emitted; warn-only accepted (#85) |
+| #68 Savings cache | ⚠️ Partial | Cache works; recalc race (#78), metrics gap (#81) |
+| #69 LRU lazy expiry | ✅ Verified | `removeElement` cleans both map and list; tests assert order length |
+| #70–#72, #74 Governance | ⚠️ Partial | Improvements landed; drift remains (#82, #83, #84) |
+
+**Coalescing + cache interaction:** Latest-params coalescing correctly updates parameters under mutex before trailing iteration. Combined with start-only cache invalidation (#78), the trailing run completes with latest params but API may serve cached pre-recalc data until TTL.
+
+**Debouncer + ingestion interaction:** Quiet period correctly prevents premature recommendations on synthesized manifests. `notifySynthManifestFileActivity` resets timer on file registration — verified in tests. Timer lifecycle issues (#79, #80) are edge cases under rapid ingest or shutdown.
+
+### Positive Observations (v4.0)
+
+| Area | Observation |
+|------|-------------|
+| **Coalescing guards** | Latest-params pattern correctly mutex-protects both writes and reads; dedicated tests for savings, reship, and threshold paths |
+| **Fleet/savings cache** | Unified `InvalidateOrg` clears both caches; RBAC-scoped keys with SHA-256 permission hashing prevent cross-scope leakage |
+| **Debouncer tests** | Quiet-period reset test proves timer extension on file activity — not just happy-path deferral |
+| **Config validation** | Non-fatal warnings cover the three misconfiguration combos identified in v3.0 #67 |
+| **Savings cache scope** | Correctly bypassed for `group_by[idle_state]` and `group_by[tag]` variants |
+| **Regression suite** | v3.0 fixes for entitlement, commit mutex, SSRF, and coalescing remain intact in source |
+
+### Current State
+
+**Last updated:** 2026-06-11 (v4.0)
 
 | Review | Findings | Resolved | Mitigated | Accepted | Open |
 |--------|----------|----------|-----------|----------|------|
 | v1.6 (#1–#31) | 31 | 4 | 24 | 3 | 0 |
 | v2.0 (#32–#60) | 29 | 24 | 0 | 5 | 0 |
 | v3.0 (#61–#76) | 16 | 13 | 0 | 3 | 0 |
-| **Combined (#1–#76)** | **76** | **41** | **24** | **11** | **0** |
+| v4.0 (#77–#85) | 9 | 0 | 0 | 1 | 8 |
+| **Combined (#1–#85)** | **85** | **41** | **24** | **12** | **8** |
 
-**Conclusion:** All 76 adversarial review findings across three reviews (v1.6, v2.0, v3.0) are closed — zero open findings remain. Accepted risks (#33, #39, #44, #55 Kruize legacy; #41 unauthenticated metrics; #73 reference routes; #75 SSRF TOCTOU; #76 cache timing) have documented rationale. The hardening phase is complete.
+**Conclusion:** v3.0 hardening is substantially complete with no High-severity regressions. Eight open findings (#77–#84) and one accepted item (#85) remain. Highest priority: cache invalidation after async recalc completion (#78).
 
 ---
 
-*Document version: 3.0 — 2026-06-11. Post-hardening review; findings #61–#76. All resolved.*
+*Document version: 4.0 — 2026-06-11. Post-completion hardening validation; findings #77–#85.*

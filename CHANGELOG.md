@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Adversarial due diligence review v4.0 (`docs/audits/adversarial-review.md`): post-completion validation of v3.0 hardening (#61–#76); findings #77–#85 (8 open, 1 accepted).
+
 ### Fixed
 
 - Startup config validation warnings for internal tags auth without SA allowlist, permissive/empty CORS in production, and org allowlist with auth disabled (`ValidateConfig`; adversarial review finding #67 resolved).
