@@ -19,7 +19,7 @@ type costManagementEntitlement struct {
 }
 
 // CostManagementEntitlement rejects requests without cost-management entitlement.
-// ADR-0149 pattern: fail-closed when DEVELOPMENT=false (defense-in-depth without gateway).
+// ADR-0167: defense-in-depth cost_management entitlement check on v1 routes.
 // Skipped when DEVELOPMENT=true (local/dev deployments without gateway enforcement).
 func CostManagementEntitlement(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {

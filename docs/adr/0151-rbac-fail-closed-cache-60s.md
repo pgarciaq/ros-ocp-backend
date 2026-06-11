@@ -27,6 +27,21 @@ Extended TTL reduces RBAC load further, but permission revocations (removed clus
 
 Fast pagination. Brief stale permissions (60s). Deny-by-default on failure.
 
+## Implementation Details
+
+### Bounded LRU cache
+
+RBAC permission results are stored in a bounded LRU cache keyed by hashed `X-Rh-Identity` (`internal/api/middleware/rbac_cache.go`).
+
+- **`ROS_RBAC_CACHE_MAX_ENTRIES`** (default **500**) caps memory; oldest entries evict when full.
+- TTL-on-access preserved at 60 seconds (`ROS_RBAC_CACHE_TTL`).
+- Prometheus metrics: `rosocp_rbac_cache_size` (gauge), `rosocp_rbac_cache_evictions_total` (counter).
+
+### Pagination cap (DoS mitigation)
+
+RBAC ACL enumeration uses iterative pagination with **`maxRBACPages = 50`** in `internal/api/middleware/rbac.go`. This prevents a malicious or misconfigured RBAC service from forcing unbounded permission enumeration per API request (full-org permission list DoS).
+
 ## References
 
-- [internal/api/middleware/rbac_cache.go](internal/api/middleware/rbac_cache.go)
+- [internal/api/middleware/rbac_cache.go](../../internal/api/middleware/rbac_cache.go)
+- [internal/api/middleware/rbac.go](../../internal/api/middleware/rbac.go)

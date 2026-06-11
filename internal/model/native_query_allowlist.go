@@ -2,6 +2,7 @@ package model
 
 import "strings"
 
+// ADR-0169: compile-time allowlist for ApplyQueryParams SQL fragment keys.
 // Keys produced by MapNativeQueryParameters (handlers.go) for recommendation_sets / rs alias queries,
 // plus quality (q.*) and history (h.*) date-range and filter keys that also pass through ApplyQueryParams.
 var nativeRecFixedQueryKeys = map[string]struct{}{

@@ -36,6 +36,16 @@ The same LRU+TTL pattern is applied to fleet summary and savings summary API res
 - **Dual LRU instances** — one for fleet summary, one for savings summary (default rollup only; `group_by` variants are not cached).
 - **Cache keys** — keyed by `org_id` plus RBAC permission hash so scoped responses do not leak across users.
 
+## RBAC-Scoped Cache Key Construction
+
+`CacheKey()` and `SavingsCacheKey()` in `internal/fleetsummary/cache.go` prevent cross-user cache leakage:
+
+- Unscoped requests: `{org_id}:all`
+- RBAC-scoped requests: `{org_id}:rbac:{sha256_prefix}` where the hash is computed over a JSON serialization of the sorted RBAC permissions map
+- `SavingsCacheKey()` appends `:savings:{engineProfile}:{termProfile}` to the base key
+
+Users with different RBAC scopes never share cached fleet or savings summary results even within the same org.
+
 ## Invalidation Contract
 
 `fleetsummary.InvalidateOrg(orgID)` drops both fleet and savings entries for one org (not a global flush). Eleven call-site categories:

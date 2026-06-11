@@ -54,6 +54,12 @@ The Kruize plugin is formally deprecated. It will be removed in a future release
 | **Phase 2** | Remove Kruize plugin package, legacy CSV path in `report_processor.go`, `internal/utils/kruize/`, `internal/types/kruizePayload/`, Kruize API constants, and `plugin.EnabledFor(KruizePluginName)` branches | Planned |
 | **Phase 3** | Remove Kruize-related Helm chart values, `recommendation-poller` deployment, Kruize container images, `kruize-clowdapp.yaml`, and CI workflows (`test-ros-kruize-rm.yml`) | Planned |
 
+## Phase Progress Update
+
+**Native engine is sole recommendation source for queries.** Commit `f8dd05b1` removed `getNativeRecommendationByIDFallback()` from `internal/model/recommendation_set_native.go`. Detail lookup now uses indexed `container_id` only; composite-key fallback scans are no longer exercised.
+
+Kruize plugin code remains for backward-compatible ingestion routing and mutual-exclusivity checks, but is **not** used for recommendation queries. Operators on native engine mode never hit Kruize HTTP endpoints for list/detail APIs.
+
 ## References
 
 - [docs/audits/adversarial-review.md](../audits/adversarial-review.md) — Findings #33, #39, #44, #55

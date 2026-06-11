@@ -174,3 +174,9 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0163](0163-deprecate-kruize-plugin.md) | Deprecate and remove the Kruize plugin | Plugins | Accepted |
 | [0164](0164-sparse-data-notification-orthogonal-to-low-confidence.md) | Add SPARSE_DATA notification orthogonal to LOW_CONFIDENCE | Engine / Algorithm | Accepted |
 | [0165](0165-defer-recommendations-for-synthesized-manifests.md) | Defer recommendations for synthesized manifests until quiet period expires | Ingestion | Accepted |
+| [0166](0166-report-file-status-manifest-gating.md) | Per-file report_file_status tracking with manifest completeness gating | Ingestion | Accepted |
+| [0167](0167-cost-management-entitlement-middleware.md) | Cost-management entitlement middleware (defense-in-depth) | Security | Accepted |
+| [0168](0168-disabled-plugin-route-guards.md) | Disabled plugin route guards before Echo catch-all | API Design | Accepted |
+| [0169](0169-allowlisted-native-sql-query-fragments.md) | Allowlisted native SQL query fragments | Security | Accepted |
+| [0170](0170-machineset-tier1-aggregation.md) | MachineSet Tier-1 aggregation over node recommendations | API Design | Accepted |
+| [0171](0171-streaming-recommendation-batches.md) | Streaming recommendation batches for memory bounding | Engine / Algorithm | Accepted |

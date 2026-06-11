@@ -18,7 +18,7 @@ import (
 var runManifestRecommendationsHook func(context.Context, *pgxpool.Pool, types.KafkaMsg) error
 
 // runManifestRecommendations executes recommendation engines after all expected
-// manifest files have been ingested successfully.
+// manifest files have been ingested successfully (ADR-0166).
 func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMsg types.KafkaMsg) error {
 	if runManifestRecommendationsHook != nil {
 		return runManifestRecommendationsHook(ctx, pool, kafkaMsg)

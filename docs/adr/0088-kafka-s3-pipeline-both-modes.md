@@ -27,7 +27,21 @@ Running Kafka consumer only in SaaS and a nightly cron for on-prem would reduce 
 
 Single code path. On-prem requires Kafka+S3 infrastructure. No HTTP upload API.
 
+## Manifest completeness gating (ADR-0166)
+
+Recommendation engines run only after manifest ingestion is complete. Two paths converge on `runManifestRecommendations()`:
+
+### Real manifest IDs (publisher-supplied)
+
+`IsManifestIngestionComplete` checks `report_file_status` against manifest metadata expected file count. Engines defer until all files reach `done` status. See [ADR-0166](0166-report-file-status-manifest-gating.md).
+
+### Synthesized manifest IDs (`synth-*` prefix)
+
+When Kafka messages omit `metadata.manifest_id`, UUID v5 synthesis ([ADR-0050](0050-uuid-v5-deterministic-recommendation-ids.md)) produces deterministic `synth-*` IDs. Completeness uses the quiet-period debouncer ([ADR-0165](0165-defer-recommendations-for-synthesized-manifests.md)) before invoking the same gating and engine path.
+
 ## References
 
-- [docs/archive/requirements.md](docs/archive/requirements.md)
-- [internal/services/report_processor.go](internal/services/report_processor.go)
+- [docs/archive/requirements.md](../archive/requirements.md)
+- [internal/services/report_processor.go](../../internal/services/report_processor.go)
+- [internal/services/manifest_recommendations.go](../../internal/services/manifest_recommendations.go)
+- [internal/services/report_file_tracker.go](../../internal/services/report_file_tracker.go)

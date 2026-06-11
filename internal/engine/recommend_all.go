@@ -37,7 +37,7 @@ type OOMConfig struct {
 	MaxBump  float64
 }
 
-// streamBatchSize is the number of containers accumulated before emitting a batch.
+// streamBatchSize is the number of containers accumulated before emitting a batch (ADR-0171).
 const streamBatchSize = 500
 
 // RecommendWorkloadsStreaming reads digests row-by-row from the database, groups

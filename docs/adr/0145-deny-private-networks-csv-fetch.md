@@ -27,6 +27,17 @@ A sidecar proxy with fixed egress rules would centralize SSRF defense, but adds 
 
 SSRF mitigated. Dev mode unrestricted for local testing. Allowlist for legitimate internal URLs.
 
+## IPv6 Coverage (commit `18beb896`)
+
+Initial implementation blocked IPv4 RFC1918, loopback, and link-local ranges. Commit `18beb896` extended checks to IPv6 using standard library helpers in `denyRestrictedHost`:
+
+- `net.IP.IsPrivate()` — blocks IPv6 ULA (`fc00::/7`) in addition to IPv4 private ranges
+- `net.IP.IsLoopback()` — blocks `::1` and IPv4 loopback
+- `net.IP.IsLinkLocalUnicast()` — blocks IPv6 link-local (`fe80::/10`)
+- `net.IP.IsLinkLocalMulticast()` — blocks link-local multicast
+
+DNS resolution is performed before fetch; restricted IPs block the request even when the URL hostname appears public (rebinding defense).
+
 ## References
 
-- [internal/utils/csv_security.go](internal/utils/csv_security.go)
+- [internal/utils/csv_security.go](../../internal/utils/csv_security.go)

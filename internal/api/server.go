@@ -74,7 +74,7 @@ func disabledPluginRoute404(pluginName string) echo.HandlerFunc {
 
 // registerDisabledPluginRouteGuards installs 404 handlers for plugin URL prefixes when the plugin
 // does not register real routes, so requests do not fall through to /recommendations/openshift/:recommendation-id
-// (which treats e.g. "gpu" as a UUID and returns 400).
+// (which treats e.g. "gpu" as a UUID and returns 400). ADR-0168.
 func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 	if !pluginRecommendationRoutesActive("gpu") {
 		v1.GET("/recommendations/openshift/gpu", disabledPluginRoute404("gpu"))

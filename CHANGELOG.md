@@ -8,10 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADR-0166: Per-file report_file_status tracking with manifest completeness gating
+- ADR-0167: Cost-management entitlement middleware (defense-in-depth)
+- ADR-0168: Disabled plugin route guards before Echo catch-all
+- ADR-0169: Allowlisted native SQL query fragments
+- ADR-0170: MachineSet Tier-1 aggregation over node recommendations
+- ADR-0171: Streaming recommendation batches for memory bounding
 - ADR-0165: Defer recommendations for synthesized manifests (quiet-period debouncer)
 
 ### Changed
 
+- Expanded ADRs 0088, 0102, 0112, 0133, 0136, 0139, 0140, 0145, 0151, 0163 with implementation details
+- Fixed ADR-0133 logrus/zerolog drift
+- Fixed entitlement middleware code comment (ADR-0149 → ADR-0167)
+- Added ADR code comments in 5 key architectural files
 - Expanded ADRs 0050, 0086, 0112, 0118, 0125, 0135, 0136, 0162 with post-v4.0 hardening context
 - Fixed ADR-0086 implementation reference (custom recalcFlight, not x/sync/singleflight)
 - Fixed code comment in manifest debouncer to cite ADR-0165 instead of ADR-0050
