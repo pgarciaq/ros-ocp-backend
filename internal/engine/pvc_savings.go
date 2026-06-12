@@ -1,13 +1,8 @@
 package engine
 
 import (
-	"math"
-
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
-
-const bytesPerGiB = 1024.0 * 1024.0 * 1024.0
 
 // ApplyPVCSavings computes EstimatedMonthlySavingsCents for each PVC recommendation
 // using configured storage rates from Koku. If costData is nil, savings remain 0
@@ -20,16 +15,16 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	storageRate := StorageRequestPerMonth(costData)
+	storageRate := RateMicroCentsPerGiBMonth(StorageRequestPerMonth(costData))
 
 	for i := range recs {
-		savings := computePVCSavings(&recs[i], storageRate)
-		recs[i].EstimatedMonthlySavingsCents = money.USDToCents(savings)
+		savingsMicroCents := computePVCSavingsMicroCents(&recs[i], storageRate)
+		recs[i].EstimatedMonthlySavingsCents = MicroCentsToCents(savingsMicroCents)
 	}
 }
 
-func computePVCSavings(rec *PVCRec, storageRatePerMonth float64) float64 {
-	if storageRatePerMonth == 0 {
+func computePVCSavingsMicroCents(rec *PVCRec, storageRateMicroCentsPerGiBMonth int64) int64 {
+	if storageRateMicroCentsPerGiBMonth == 0 {
 		return 0
 	}
 
@@ -41,21 +36,15 @@ func computePVCSavings(rec *PVCRec, storageRatePerMonth float64) float64 {
 		return 0
 	}
 
-	currentGiB := float64(currentBytes) / bytesPerGiB
-
 	// Full monthly storage cost is recoverable when deleting an orphaned PVC.
 	if rec.RecommendationType == PVCRecTypeOrphaned {
-		total := currentGiB * storageRatePerMonth
-		return math.Round(total*100) / 100
+		return StorageSavingsMicroCentsFromBytes(currentBytes, storageRateMicroCentsPerGiBMonth)
 	}
 
 	if rec.RecommendedBytes == nil {
 		return 0
 	}
 
-	recommendedGiB := float64(*rec.RecommendedBytes) / bytesPerGiB
-	deltaGiB := currentGiB - recommendedGiB
-
-	total := deltaGiB * storageRatePerMonth
-	return math.Round(total*100) / 100
+	deltaBytes := currentBytes - *rec.RecommendedBytes
+	return StorageSavingsMicroCentsFromBytes(deltaBytes, storageRateMicroCentsPerGiBMonth)
 }

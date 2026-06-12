@@ -1,23 +1,15 @@
 package engine
 
 import (
-	"math"
-
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
-
-const hoursPerMonth = 730.0
 
 // replicaCountForSavings returns the best available replica count for savings
 // multiplication. Prefers authoritative desired_replicas from kube-state-metrics
 // when available, falling back to pod_count_avg (derived from workload_pod_count
 // or distinct pod names).
 func replicaCountForSavings(rec *ContainerRec) float64 {
-	if rec.DesiredReplicas > 0 {
-		return float64(rec.DesiredReplicas)
-	}
-	return float64(rec.PodCountAvg)
+	return float64(replicaCountInt(rec))
 }
 
 // ApplySavingsEstimates computes EstimatedSavingsCents for each recommendation
@@ -51,80 +43,65 @@ func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostDa
 		// Only explicit idle/zombie state counts — zero-value IdleState must not trigger this path.
 		if recs[i].IsIdle || recs[i].IsAbandoned ||
 			recs[i].IdleState == IdleStateIdle || recs[i].IdleState == IdleStateZombie {
-			idleUSD := computeIdleSavings(&recs[i], &ns, distType)
-			recs[i].EstimatedSavingsCents = money.USDToCents(idleUSD)
+			idleMicroCents := computeIdleSavingsMicroCents(&recs[i], &ns, distType)
+			recs[i].EstimatedSavingsCents = MicroCentsToCents(idleMicroCents)
 			if recs[i].IdleState == IdleStateIdle || recs[i].IdleState == IdleStateZombie {
 				recs[i].EstimatedWasteCents = recs[i].EstimatedSavingsCents
 			}
 			continue
 		}
 
-		savings := computeSavings(&recs[i], &ns, distType)
-		recs[i].EstimatedSavingsCents = money.USDToCents(savings)
+		savingsMicroCents := computeSavingsMicroCents(&recs[i], &ns, distType)
+		recs[i].EstimatedSavingsCents = MicroCentsToCents(savingsMicroCents)
 	}
 }
 
-func computeSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType string) float64 {
-	// Resource deltas: current - recommended (positive = saving, workload over-provisioned)
-	cpuDeltaCores := float64(rec.CurrentCPURequestMC-rec.RecCPURequestMC) / 1000.0
-	memDeltaGiB := float64(rec.CurrentMemRequestKiB-rec.RecMemRequestKiB) / (1024.0 * 1024.0)
+func computeSavingsMicroCents(rec *ContainerRec, ns *costdata.NamespaceCosts, distType string) int64 {
+	cpuDeltaMC := rec.CurrentCPURequestMC - rec.RecCPURequestMC
+	memDeltaKiB := rec.CurrentMemRequestKiB - rec.RecMemRequestKiB
+	replicas := replicaCountForSavingsApply(rec)
 
-	podCountAvg := replicaCountForSavings(rec)
-	if podCountAvg < 1.0 {
-		podCountAvg = 1.0
-	}
+	modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
+	modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
 
-	// Cost model savings: derive effective per-unit rate from summary aggregates.
-	// Rates are clamped to non-negative to guard against corrupted upstream cost data.
-	modelCPURate := math.Max(0, safeDiv(ns.CostModelCPUCost, ns.CPURequestHours))
-	modelMemRate := math.Max(0, safeDiv(ns.CostModelMemCost, ns.MemRequestHours))
+	modelSavings := CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, HoursPerMonthInt, replicas) +
+		MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, HoursPerMonthInt, replicas)
 
-	modelSavings := (cpuDeltaCores*modelCPURate + memDeltaGiB*modelMemRate) * hoursPerMonth * podCountAvg
-
-	// Infrastructure + distributed overhead savings: apportion by distribution type
-	totalInfra := math.Max(0, ns.InfraCost+ns.DistributedCost)
-	var infraSavings float64
+	totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
+	var infraSavings int64
 	if distType == "memory" {
-		infraRate := safeDiv(totalInfra, ns.MemRequestHours)
-		infraSavings = memDeltaGiB * infraRate * hoursPerMonth * podCountAvg
+		infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
+		infraSavings = MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, HoursPerMonthInt, replicas)
 	} else {
-		infraRate := safeDiv(totalInfra, ns.CPURequestHours)
-		infraSavings = cpuDeltaCores * infraRate * hoursPerMonth * podCountAvg
+		infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
+		infraSavings = CPUSavingsMicroCents(cpuDeltaMC, infraRate, HoursPerMonthInt, replicas)
 	}
 
-	total := modelSavings + infraSavings
-
-	// Round to 2 decimal places
-	return math.Round(total*100) / 100
+	return modelSavings + infraSavings
 }
 
-// computeIdleSavings estimates the full cost of an idle/abandoned workload's
+// computeIdleSavingsMicroCents estimates the full cost of an idle/abandoned workload's
 // current resource allocation, since 100% is recoverable by scaling down.
-func computeIdleSavings(rec *ContainerRec, ns *costdata.NamespaceCosts, distType string) float64 {
-	cpuCores := float64(rec.CurrentCPURequestMC) / 1000.0
-	memGiB := float64(rec.CurrentMemRequestKiB) / (1024.0 * 1024.0)
+func computeIdleSavingsMicroCents(rec *ContainerRec, ns *costdata.NamespaceCosts, distType string) int64 {
+	replicas := replicaCountForSavingsApply(rec)
 
-	podCountAvg := replicaCountForSavings(rec)
-	if podCountAvg < 1.0 {
-		podCountAvg = 1.0
-	}
+	modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
+	modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
 
-	modelCPURate := math.Max(0, safeDiv(ns.CostModelCPUCost, ns.CPURequestHours))
-	modelMemRate := math.Max(0, safeDiv(ns.CostModelMemCost, ns.MemRequestHours))
-	modelCost := (cpuCores*modelCPURate + memGiB*modelMemRate) * hoursPerMonth * podCountAvg
+	modelCost := CPUSavingsMicroCents(rec.CurrentCPURequestMC, modelCPURate, HoursPerMonthInt, replicas) +
+		MemSavingsMicroCentsFromKiB(rec.CurrentMemRequestKiB, modelMemRate, HoursPerMonthInt, replicas)
 
-	totalInfra := math.Max(0, ns.InfraCost+ns.DistributedCost)
-	var infraCost float64
+	totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
+	var infraCost int64
 	if distType == "memory" {
-		infraRate := safeDiv(totalInfra, ns.MemRequestHours)
-		infraCost = memGiB * infraRate * hoursPerMonth * podCountAvg
+		infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
+		infraCost = MemSavingsMicroCentsFromKiB(rec.CurrentMemRequestKiB, infraRate, HoursPerMonthInt, replicas)
 	} else {
-		infraRate := safeDiv(totalInfra, ns.CPURequestHours)
-		infraCost = cpuCores * infraRate * hoursPerMonth * podCountAvg
+		infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
+		infraCost = CPUSavingsMicroCents(rec.CurrentCPURequestMC, infraRate, HoursPerMonthInt, replicas)
 	}
 
-	total := modelCost + infraCost
-	return math.Round(total*100) / 100
+	return modelCost + infraCost
 }
 
 func safeDiv(numerator, denominator float64) float64 {

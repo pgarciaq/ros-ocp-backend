@@ -3,13 +3,11 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // ClusterQuotaSnapshot is the latest hard/used per ClusterResourceQuota from digests.
@@ -256,22 +254,22 @@ func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.Cluster
 	if costData == nil {
 		return
 	}
-	cpuRate := CPUCoreHourlyRate(costData)
-	memRate := MemoryGBHourlyRate(costData)
-	storageRate := StorageRequestPerMonth(costData)
+	cpuRate := RateMicroCentsPerMCHour(CPUCoreHourlyRate(costData))
+	memRate := RateMicroCentsPerGiBHour(MemoryGBHourlyRate(costData))
+	storageRate := RateMicroCentsPerGiBMonth(StorageRequestPerMonth(costData))
 
 	for i := range recs {
 		if recs[i].RecommendationType != QuotaRecTypeTighten {
 			continue
 		}
-		cpuDelta := float64(recs[i].CapacityFreed.CPUMillicores) / 1000.0
-		memDelta := float64(recs[i].CapacityFreed.MemoryBytes) / (1024.0 * 1024.0 * 1024.0)
-		storageGiB := float64(recs[i].CapacityFreed.StorageBytes) / (1024.0 * 1024.0 * 1024.0)
-		savings := cpuDelta*cpuRate*hoursPerMonth + memDelta*memRate*hoursPerMonth + storageGiB*storageRate
-		if savings < 0 {
-			savings = 0
-		}
-		recs[i].EstimatedSavingsCents = money.USDToCents(math.Round(savings*100) / 100)
+		cpuDeltaMC := recs[i].CapacityFreed.CPUMillicores
+		memDeltaBytes := recs[i].CapacityFreed.MemoryBytes
+		storageDeltaBytes := recs[i].CapacityFreed.StorageBytes
+
+		savingsMicroCents := QuotaTightenSavingsMicroCents(
+			cpuDeltaMC, memDeltaBytes, storageDeltaBytes, cpuRate, memRate, storageRate,
+		)
+		recs[i].EstimatedSavingsCents = MicroCentsToCents(savingsMicroCents)
 	}
 }
 

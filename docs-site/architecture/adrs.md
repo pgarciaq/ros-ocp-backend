@@ -49,6 +49,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0288-decay-weight-lookup-tables.md) | Precomputed decay weight lookup tables | Eliminates per-row `math.Exp` in digest hot path |
 | [0289](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0289-defer-org-metadata-refresh-end-of-reconcile.md) | Defer org metadata refresh to end of reconcile | Cuts redundant full-org scans during streaming ingest (M1) |
 | [0290](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0290-max-daily-p95-for-idle-classification.md) | Max-of-daily-P95 for idle classification | O(N) idle check; conservative vs exact window P95 (Q4) |
+| [0291](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0291-integer-micro-cents-savings-computation.md) | Integer micro-cents savings computation | Unified fixed-point savings math; eliminates float64 hot path (P1-1) |
 
 ## Domains covered
 

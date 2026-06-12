@@ -8,7 +8,6 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // GPUClassification represents the utilization classification of a GPU workload.
@@ -394,30 +393,28 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	gpuRate := GPUMonthlyRate(costData)
-	if gpuRate == 0 {
+	gpuRateMicroCents := RateMicroCentsPerDollarMonth(GPUMonthlyRate(costData))
+	if gpuRateMicroCents == 0 {
 		return
 	}
 
-	var savings float64
+	var savingsMicroCents int64
 
 	switch rec.Classification {
 	case GPUClassIdle:
-		savings = gpuRate
+		savingsMicroCents = gpuRateMicroCents
 	case GPUClassUnderutilized, GPUClassComputeBoundUnderutil, GPUClassMemoryBound:
 		if rec.RecommendedGPUProfile != "" && rec.RecommendedGPUProfile != "full_gpu" {
 			spec := MatchGPUModel(rec.GPUModelName)
 			if spec != nil {
-				totalSlices := migTotalSlices(spec)
-				recSlices := migProfileSlices(spec, rec.RecommendedGPUProfile)
-				if totalSlices > 0 && recSlices > 0 {
-					savings = (1.0 - float64(recSlices)/float64(totalSlices)) * gpuRate
-				}
+				totalSlices := int64(migTotalSlices(spec))
+				recSlices := int64(migProfileSlices(spec, rec.RecommendedGPUProfile))
+				savingsMicroCents = MIGFractionSavingsMicroCents(gpuRateMicroCents, totalSlices, recSlices)
 			}
 		}
 	}
 
-	cents := money.USDToCents(math.Round(savings*100) / 100)
+	cents := MicroCentsToCents(savingsMicroCents)
 	rec.EstimatedGPUSavingsCents = &cents
 }
 

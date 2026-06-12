@@ -1,10 +1,7 @@
 package engine
 
 import (
-	"math"
-
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // ApplyNodeSavings computes EstimatedMonthlySavingsCents for each node recommendation
@@ -19,24 +16,31 @@ func ApplyNodeSavings(recs []NodeRec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	cpuRate := CPUCoreHourlyRate(costData)
-	memRate := MemoryGBHourlyRate(costData)
-	nodeRate := NodeCostPerMonth(costData)
+	cpuRate := RateMicroCentsPerMCHour(CPUCoreHourlyRate(costData))
+	memRate := RateMicroCentsPerGiBHour(MemoryGBHourlyRate(costData))
+	nodeRate := RateMicroCentsPerDollarMonth(NodeCostPerMonth(costData))
 
 	for i := range recs {
-		savings := computeNodeSavings(&recs[i], cpuRate, memRate, nodeRate)
-		recs[i].EstimatedMonthlySavingsCents = money.USDToCents(savings)
+		savingsMicroCents := computeNodeSavingsMicroCents(&recs[i], cpuRate, memRate, nodeRate)
+		recs[i].EstimatedMonthlySavingsCents = MicroCentsToCents(savingsMicroCents)
 	}
 }
 
+func computeNodeSavingsMicroCents(rec *NodeRec, cpuRate, memRate, nodeRate int64) int64 {
+	cpuDelta := rec.CurrentCPUMC - rec.RecommendedCPUMC
+	memDelta := rec.CurrentMemKiB - rec.RecommendedMemKiB
+
+	cpuSavings := CPUSavingsMicroCents(cpuDelta, cpuRate, HoursPerMonthInt, 1)
+	memSavings := MemSavingsMicroCentsFromKiB(memDelta, memRate, HoursPerMonthInt, 1)
+	nodeSavings := MonthlyFlatSavingsMicroCents(int64(rec.NodeCountReduction), nodeRate)
+
+	return cpuSavings + memSavings + nodeSavings
+}
+
+// computeNodeSavings returns monthly savings in USD for tests and backward compatibility.
 func computeNodeSavings(rec *NodeRec, cpuRate, memRate, nodeRate float64) float64 {
-	cpuDelta := float64(rec.CurrentCPUMC-rec.RecommendedCPUMC) / 1000.0
-	memDelta := float64(rec.CurrentMemKiB-rec.RecommendedMemKiB) / (1024.0 * 1024.0)
-
-	cpuSavings := cpuDelta * cpuRate * hoursPerMonth
-	memSavings := memDelta * memRate * hoursPerMonth
-	nodeSavings := float64(rec.NodeCountReduction) * nodeRate
-
-	total := cpuSavings + memSavings + nodeSavings
-	return math.Round(total*100) / 100
+	cpuRateMC := RateMicroCentsPerMCHour(cpuRate)
+	memRateGiB := RateMicroCentsPerGiBHour(memRate)
+	nodeRateMonthly := RateMicroCentsPerDollarMonth(nodeRate)
+	return MicroCentsToDollars(computeNodeSavingsMicroCents(rec, cpuRateMC, memRateGiB, nodeRateMonthly))
 }

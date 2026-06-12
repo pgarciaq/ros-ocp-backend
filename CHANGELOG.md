@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- ADR-0289: Defer org metadata refresh to end of reconcile cycle — single `RefreshOrgMetadata` after streaming batches instead of per-batch full-org scans of `org_container_keys` and `org_recommendation_stats`
+- ADR-0291: Integer micro-cents savings computation — unified `savings_int.go` helpers replace per-module float64 billing math
 - ADR-0288: Precomputed decay weight lookup tables — lazy `sync.Map` tables keyed by integer half-life hours replace per-row `math.Exp` in the digest hot path; documents auto-derive (`window_days × 12`) and ~0.2% quantization accuracy
 - Public docs: `docs-site/architecture/decay-weights.md` with decay curve charts under `docs-site/architecture/charts/`
 - ADRs 0258-0287: Historical phase decisions — Kruize elimination, per-container granularity, three-term architecture, shadow mode rejection, operator CSV contract, framework/language inheritance, phase deferrals, migration strategy, governance process
@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - CSV ingest: digest group buffers store slim `metricSample` values (~120B) instead of full `MetricRow` structs (~456B+heap strings) between incremental flushes, reducing peak in-memory digest grouping by ~5–10× (performance audit B-1)
 - Default `ROS_DB_MAX_CONNS` lowered from 10 to 5 to reduce on-prem connection pressure against bundled PostgreSQL (`max_connections=100`); `DB_POOL_SIZE` retained as a deprecated alias
 - Recommendation engine: adaptive margin uses integer-only `ComputeAdaptiveMarginScaledDirect` instead of float CV detour per container rec (performance audit M5)
+- Savings estimation: unified integer micro-cents computation in `savings_int.go` replaces duplicated float64 math across container, node, PVC, VM, GPU, and quota engines; rates convert once at load, cents written at output (ADR-0291, performance audit P1-1)
 - Query performance: remove redundant `rh_accounts` joins for org scoping on `recommendation_quality`, native/legacy container detail, and native namespace detail queries — filter denormalized `org_id` directly (performance audit P1-4)
 - CSV ingest: remove per-row Prometheus gauge update for in-memory digest groups; gauge updates only at flush boundaries (performance audit B-4)
 - Notification catalog: `GET /recommendations/openshift/notification-codes` returns `Cache-Control: public, max-age=86400` for static in-memory catalog responses (performance audit A-6)
