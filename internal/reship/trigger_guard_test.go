@@ -74,7 +74,7 @@ func TestTriggerAsync_CoalescedMetricIncrements(t *testing.T) {
 	started := make(chan struct{}, 1)
 	trigger := &countingTriggerer{delay: 150 * time.Millisecond, started: started}
 
-	before := promtest.ToFloat64(reshipCoalescedTotal.WithLabelValues(orgID))
+	before := promtest.ToFloat64(reshipCoalescedTotal)
 
 	TriggerAsync(trigger, orgID, []uuid.UUID{cluster})
 	<-started
@@ -82,11 +82,11 @@ func TestTriggerAsync_CoalescedMetricIncrements(t *testing.T) {
 	TriggerAsync(trigger, orgID, []uuid.UUID{cluster})
 
 	require.Eventually(t, func() bool {
-		after := promtest.ToFloat64(reshipCoalescedTotal.WithLabelValues(orgID))
+		after := promtest.ToFloat64(reshipCoalescedTotal)
 		return after-before >= 2
 	}, 2*time.Second, 10*time.Millisecond)
 
-	assert.InDelta(t, 2, promtest.ToFloat64(reshipCoalescedTotal.WithLabelValues(orgID))-before, 0)
+	assert.InDelta(t, 2, promtest.ToFloat64(reshipCoalescedTotal)-before, 0)
 }
 
 func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {

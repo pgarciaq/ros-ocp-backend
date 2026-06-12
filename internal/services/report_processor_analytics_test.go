@@ -79,7 +79,7 @@ func TestRunContainerRecommendations_DegradedMode_PersistsRecsOnHistoryFailure(t
 	})
 	t.Cleanup(func() { engine.SetAnalyticsWriteHooksForTest(nil) })
 
-	before := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, "history"))
+	before := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues("history"))
 
 	kafkaMsg := types.KafkaMsg{}
 	kafkaMsg.Metadata.Org_id = orgID
@@ -106,7 +106,7 @@ func TestRunContainerRecommendations_DegradedMode_PersistsRecsOnHistoryFailure(t
 	assert.True(t, incomplete)
 	require.NotNil(t, incompleteAt)
 
-	after := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, "history"))
+	after := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues("history"))
 	assert.Equal(t, before+1, after)
 }
 
@@ -164,7 +164,7 @@ func TestRunContainerRecommendations_DegradedMode_IncrementsQualityMetric(t *tes
 	})
 	t.Cleanup(func() { engine.SetAnalyticsWriteHooksForTest(nil) })
 
-	before := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, "quality"))
+	before := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues("quality"))
 
 	kafkaMsg := types.KafkaMsg{}
 	kafkaMsg.Metadata.Org_id = orgID
@@ -180,6 +180,6 @@ func TestRunContainerRecommendations_DegradedMode_IncrementsQualityMetric(t *tes
 		orgID, clusterUUID).Scan(&recCount))
 	assert.Greater(t, recCount, 0)
 
-	after := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, "quality"))
+	after := promtest.ToFloat64(metrics.AnalyticsIncompleteTotal.WithLabelValues("quality"))
 	assert.Equal(t, before+1, after)
 }

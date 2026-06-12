@@ -73,7 +73,7 @@ func TestTriggerThresholdRecalculationAsync_CoalescedMetricIncrements(t *testing
 	})
 	defer restore()
 
-	before := promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues(orgID, "gpu"))
+	before := promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues("gpu"))
 
 	TriggerThresholdRecalculationAsync(pool, orgID, "gpu")
 	<-started
@@ -81,11 +81,11 @@ func TestTriggerThresholdRecalculationAsync_CoalescedMetricIncrements(t *testing
 	TriggerThresholdRecalculationAsync(pool, orgID, "gpu")
 
 	require.Eventually(t, func() bool {
-		after := promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues(orgID, "gpu"))
+		after := promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues("gpu"))
 		return after-before >= 2
 	}, 2*time.Second, 10*time.Millisecond)
 
-	assert.InDelta(t, 2, promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues(orgID, "gpu"))-before, 0)
+	assert.InDelta(t, 2, promtest.ToFloat64(thresholdRecalcCoalescedTotal.WithLabelValues("gpu"))-before, 0)
 }
 
 func TestTriggerThresholdRecalcCoalesced_InvalidatesCacheAfterCompletion(t *testing.T) {

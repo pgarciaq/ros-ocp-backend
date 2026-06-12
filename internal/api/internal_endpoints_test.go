@@ -37,11 +37,11 @@ func TestAuditInternalEndpoint_IncrementsMetric(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	before := promtest.ToFloat64(internalEndpointCallsTotal.WithLabelValues(
-		"GET /internal/tags/status", "1234567", "test-sa",
+		"GET /internal/tags/status", "test-sa",
 	))
 	auditInternalEndpoint(c, "GET /internal/tags/status", "1234567", "test-sa", "read_tag_status")
 	after := promtest.ToFloat64(internalEndpointCallsTotal.WithLabelValues(
-		"GET /internal/tags/status", "1234567", "test-sa",
+		"GET /internal/tags/status", "test-sa",
 	))
 	assert.InDelta(t, 1, after-before, 0)
 }

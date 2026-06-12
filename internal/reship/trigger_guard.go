@@ -11,12 +11,11 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
-var reshipCoalescedTotal = promauto.NewCounterVec(
+var reshipCoalescedTotal = promauto.NewCounter(
 	prometheus.CounterOpts{
 		Name: "rosocp_reship_coalesced_total",
 		Help: "Business-hours reship triggers coalesced because a job was already in-flight for the same org",
 	},
-	[]string{"org_id"},
 )
 
 type reshipFlight struct {
@@ -54,7 +53,7 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
-		reshipCoalescedTotal.WithLabelValues(orgID).Inc()
+		reshipCoalescedTotal.Inc()
 		return
 	}
 	flight.running = true

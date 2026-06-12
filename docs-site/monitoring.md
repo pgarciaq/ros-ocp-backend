@@ -135,8 +135,8 @@ GORM and direct pgxpool access share one pool per process. Metrics reflect `pool
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Time spent in each incremental flush |
 | `rosocp_ingest_manifest_id_synthesized_total` | Counter | — | Legacy Kafka messages without `metadata.manifest_id` that received a synthesized `synth-*` manifest ID for per-file tracking |
 | `rosocp_manifest_recommendation_deferred_total` | Counter | — | Recommendation runs deferred for synthesized manifest IDs pending the quiet period |
-| `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `org_id`, `sa_name` | Internal platform endpoint invocations for cross-tenant audit |
-| `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Analytics write failures during container ingestion. `error_type`: `history` or `quality`. Increments in degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`); strict mode retries instead. |
+| `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `sa_name` | Internal platform endpoint invocations. Target `org_id` is logged per call. |
+| `rosocp_analytics_incomplete_total` | Counter | `error_type` | Analytics write failures during container ingestion. `error_type`: `history` or `quality`. Per-org/cluster context in structured logs. Increments in degraded mode (`ROS_INGEST_STRICT_ANALYTICS=false`); strict mode retries instead. |
 
 ### Koku effective-rates cache
 
@@ -163,20 +163,20 @@ When business-hours optimization is enabled, the API runs a background reship po
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `ros_reship_in_progress` | Gauge | `org_id`, `cluster_uuid` | Should return to 0 after each reship |
-| `ros_reship_files_processed` | Counter | `org_id` | Files successfully republished |
-| `ros_reship_duration_seconds` | Histogram | `org_id` | Masu HTTP call duration |
-| `ros_reship_failures_total` | Counter | `org_id` | Retry budget exhausted |
-| `ros_reship_provider_resolution_failures_total` | Counter | `org_id`, `reason` | Cannot map cluster to provider |
-| `ros_reship_fallback_forward_only_total` | Counter | `org_id` | Fell back to forward-only recommendations |
+| `ros_reship_in_progress` | Gauge | — | Concurrent masu reship calls in flight (fleet-wide). Should return to 0 when idle. |
+| `ros_reship_files_processed` | Counter | — | Files successfully republished |
+| `ros_reship_duration_seconds` | Histogram | — | Masu HTTP call duration |
+| `ros_reship_failures_total` | Counter | — | Retry budget exhausted |
+| `ros_reship_provider_resolution_failures_total` | Counter | `reason` | Cannot map cluster to provider |
+| `ros_reship_fallback_forward_only_total` | Counter | — | Fell back to forward-only recommendations |
 
 **Reship stuck?**
 
 ```promql
-ros_reship_in_progress == 1
+ros_reship_in_progress > 0
 ```
 
-(Alert if any gauge stays at 1 for more than 30 minutes.)
+(Alert if the gauge stays above 0 for more than 30 minutes.)
 
 ### Threshold recalculation
 
@@ -184,7 +184,7 @@ When tenants change recommendation thresholds via the Settings API:
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `ros_threshold_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | `success`, `error`, or **`skipped`** (cluster hash unchanged) |
+| `ros_threshold_recalculation_total` | Counter | `recommendation_type`, `status` | `success`, `error`, or **`skipped`** (cluster hash unchanged) |
 | `ros_threshold_cache_entries` | Gauge | — | In-memory threshold resolution cache size |
 
 **Skip behavior:** After a Settings PUT, ROS compares each cluster's stored
@@ -256,19 +256,19 @@ Per-org single-flight guards deduplicate rapid savings recalc, reship, and thres
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `rosocp_threshold_recalc_coalesced_total` | Counter | `org_id`, `recommendation_type` | Settings churn coalesced into follow-up recalc |
-| `rosocp_savings_recalc_coalesced_total` | Counter | `org_id` | Duplicate savings recalc triggers while in-flight |
-| `rosocp_reship_coalesced_total` | Counter | `org_id` | Duplicate business-hours reship triggers while in-flight |
+| `rosocp_threshold_recalc_coalesced_total` | Counter | `recommendation_type` | Settings churn coalesced into follow-up recalc |
+| `rosocp_savings_recalc_coalesced_total` | Counter | — | Duplicate savings recalc triggers while in-flight |
+| `rosocp_reship_coalesced_total` | Counter | — | Duplicate business-hours reship triggers while in-flight |
 
 ### Recommendation quality (processor)
 
-Updated after each container ingestion quality write. Label `cluster_id` is the cluster UUID.
+Updated after each container ingestion quality write. Per-org/cluster aggregates are logged structurally.
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `ros_recommendation_oom_rate` | Gauge | `org_id`, `cluster_id` | Mean OOM events per quality row in the last batch |
-| `ros_recommendation_stability` | Gauge | `org_id`, `cluster_id` | Mean stability (0–100 on gauge; API uses 0.0–1.0) |
-| `ros_recommendation_adoption_rate` | Gauge | `org_id`, `cluster_id` | Percent of batch rows with adoption detected |
+| `ros_recommendation_oom_rate` | Histogram | — | Mean OOM events per quality batch |
+| `ros_recommendation_stability` | Histogram | — | Mean stability per batch (0–100; API uses 0.0–1.0) |
+| `ros_recommendation_adoption_rate` | Histogram | — | Mean adoption rate per batch (0–100) |
 
 ### Retention
 
@@ -288,8 +288,8 @@ Some counters predate the `rosocp_` naming convention and retain their original 
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `ros_ingestion_file_failures_total` | Counter | `org_id`, `cluster_id`, `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
-| `ros_savings_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations (`success`, `error`) |
+| `ros_ingestion_file_failures_total` | Counter | `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
+| `ros_savings_recalculation_total` | Counter | `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations (`success`, `error`) |
 
 ---
 
@@ -394,7 +394,7 @@ topk(10, histogram_quantile(0.95, sum by (url, le) (rate(rosocp_request_duration
 **Reship in progress (stat — should be 0)**
 
 ```promql
-sum(ros_reship_in_progress)
+ros_reship_in_progress
 ```
 
 ---
@@ -421,7 +421,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 ### Symptom: Business-hours reship not completing
 
-1. `ros_reship_in_progress == 1` for extended period → stuck HTTP call to Masu.
+1. `ros_reship_in_progress > 0` for extended period → stuck HTTP call to Masu.
 2. `ros_reship_provider_resolution_failures_total` → cluster not mapped to a Koku provider or no cost model.
 3. `ros_reship_failures_total` increasing → retries exhausted; check `ros_reship_fallback_forward_only_total`.
 

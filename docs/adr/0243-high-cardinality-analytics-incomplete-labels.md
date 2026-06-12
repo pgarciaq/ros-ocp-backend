@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [CHANGELOG](../CHANGELOG.md) (Unreleased) — fleet-wide Prometheus cardinality audit (C-3)
 
 ## Context
 
@@ -10,43 +10,25 @@ Accepted
 
 Prometheus best practice avoids `org_id` and `cluster_uuid` labels on high-frequency metrics — cardinality explodes with fleet scale ([ADR-0242](0242-rosocp-prometheus-metric-naming-convention.md)).
 
-## Decision
+## Decision (original)
 
-`rosocp_analytics_incomplete_total` includes labels:
+`rosocp_analytics_incomplete_total` included labels:
 
 - `org_id`
 - `cluster_uuid`
 - `error_type`
 
-This is an **exception** to the general rule of no org/cluster labels on ROS metrics.
+This was an **exception** to the general rule of no org/cluster labels on ROS metrics.
 
-Rationale:
+## Superseded decision (2026)
 
-1. The counter increments only on analytics failures (rare compared to ingest volume).
-2. Cardinality is bounded by active org × cluster pairs that experienced failure, not every request.
-3. Support triage requires dimensional breakdown without log correlation for every ticket.
+The exception was removed. `rosocp_analytics_incomplete_total` now carries only `error_type`. Per-org/cluster context is logged structurally at increment sites (`internal/engine/analytics_pipeline.go`). The same cardinality reduction applies to all other fleet metrics that previously carried tenant labels — see CHANGELOG Unreleased.
 
-All other metrics avoid org/cluster labels; use aggregated counters or logs with request_id ([ADR-0244](0244-request-correlation-echo-request-id.md)).
+Rationale for reversal:
 
-## Alternatives Considered
-
-### Log-only failure detail
-
-Slow support workflow; no alertable time series per error class.
-
-### org_id label only, no cluster
-
-Insufficient when one cluster in an org repeatedly fails quality writes.
-
-### Low-cardinality error_type only
-
-Cannot pinpoint cluster for remediation runbooks.
-
-## Consequences
-
-- Alert rules should use `increase()` over windows, not raw counter rate, to limit series churn after recovery.
-- New high-cardinality labels require ADR amendment — do not copy this pattern casually.
-- Dashboards may top-N by cluster for open incidents.
+1. At SaaS scale (1000+ orgs × 5+ clusters), even low-frequency failure metrics create thousands of persistent time series.
+2. Structured logging with `org_id` and `cluster_uuid` fields already exists at call sites.
+3. Alerting on `increase(rosocp_analytics_incomplete_total{error_type="quality"}[1h])` remains valid without per-tenant series.
 
 ## Related Decisions
 
@@ -56,5 +38,5 @@ Cannot pinpoint cluster for remediation runbooks.
 
 ## References
 
-- [internal/metrics/analytics.go](../../internal/metrics/analytics.go)
-- [internal/processor/analytics.go](../../internal/processor/analytics.go)
+- [internal/metrics/metrics.go](../../internal/metrics/metrics.go)
+- [internal/engine/analytics_pipeline.go](../../internal/engine/analytics_pipeline.go)

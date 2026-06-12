@@ -34,9 +34,9 @@ var (
 	thresholdRecalculationTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ros_threshold_recalculation_total",
-			Help: "Threshold-triggered recommendation recalculations per org, type, and outcome",
+			Help: "Threshold-triggered recommendation recalculations per recommendation type and outcome",
 		},
-		[]string{"org_id", "recommendation_type", "status"},
+		[]string{"recommendation_type", "status"},
 	)
 
 	// clusterRecalcFunc runs recommendation logic for one cluster; tests may replace it.
@@ -109,7 +109,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 			"recommendation_type": recType,
 			"error":               err.Error(),
 		}).Error("unable to list clusters")
-		thresholdRecalculationTotal.WithLabelValues(orgID, recType, "error").Inc()
+		thresholdRecalculationTotal.WithLabelValues(recType, "error").Inc()
 		return
 	}
 
@@ -126,7 +126,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 			"clusters_processed":  0,
 			"duration_ms":         time.Since(started).Milliseconds(),
 		}).Info("threshold recalculation completed")
-		thresholdRecalculationTotal.WithLabelValues(orgID, recType, "success").Inc()
+		thresholdRecalculationTotal.WithLabelValues(recType, "success").Inc()
 		return
 	}
 
@@ -158,7 +158,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 					mu.Lock()
 					skipped++
 					mu.Unlock()
-					thresholdRecalculationTotal.WithLabelValues(orgID, recType, "skipped").Inc()
+					thresholdRecalculationTotal.WithLabelValues(recType, "skipped").Inc()
 					return
 				}
 			}
@@ -172,7 +172,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 					"recommendation_type": recType,
 					"error":               err.Error(),
 				}).Warn("threshold recalculation cluster failed")
-				thresholdRecalculationTotal.WithLabelValues(orgID, recType, "error").Inc()
+				thresholdRecalculationTotal.WithLabelValues(recType, "error").Inc()
 				return
 			}
 			mu.Lock()
@@ -183,7 +183,7 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 					logging.ForOrg(orgID, clusterID).Warnf("threshold recalc hash persist failed: %v", err)
 				}
 			}
-			thresholdRecalculationTotal.WithLabelValues(orgID, recType, "success").Inc()
+			thresholdRecalculationTotal.WithLabelValues(recType, "success").Inc()
 		}(clusterUUID)
 	}
 	wg.Wait()

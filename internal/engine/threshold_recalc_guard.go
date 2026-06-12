@@ -17,7 +17,7 @@ var thresholdRecalcCoalescedTotal = promauto.NewCounterVec(
 		Name: "rosocp_threshold_recalc_coalesced_total",
 		Help: "Threshold recalculation triggers coalesced because a job was already in-flight for the same org and recommendation type",
 	},
-	[]string{"org_id", "recommendation_type"},
+	[]string{"recommendation_type"},
 )
 
 type recalcFlight struct {
@@ -47,7 +47,7 @@ func triggerThresholdRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, or
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
-		thresholdRecalcCoalescedTotal.WithLabelValues(orgID, recType).Inc()
+		thresholdRecalcCoalescedTotal.WithLabelValues(recType).Inc()
 		return
 	}
 	flight.running = true

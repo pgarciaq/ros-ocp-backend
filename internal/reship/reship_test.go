@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	promtest "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -210,7 +211,7 @@ func TestReshipPoller_MaxRetries_FallbackEnabled_TransitionsForwardOnly(t *testi
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3, ForwardOnlyFallback: true})
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
-	before := counterValue(t, "ros_reship_fallback_forward_only_total", orgID)
+	before := counterValue(t, "ros_reship_fallback_forward_only_total")
 	for i := 0; i < 3; i++ {
 		require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
 	}
@@ -224,7 +225,7 @@ func TestReshipPoller_MaxRetries_FallbackEnabled_TransitionsForwardOnly(t *testi
 	assert.Equal(t, ReshipStatusForwardOnly, status.Status)
 	require.NotNil(t, status.Since)
 
-	after := counterValue(t, "ros_reship_fallback_forward_only_total", orgID)
+	after := counterValue(t, "ros_reship_fallback_forward_only_total")
 	assert.Equal(t, before+1, after)
 }
 
@@ -302,17 +303,17 @@ func TestReshipPoller_MaxRetries_IncrementsMetric(t *testing.T) {
 	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 3})
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
-	before := counterValue(t, "ros_reship_failures_total", orgID)
+	before := counterValue(t, "ros_reship_failures_total")
 	for i := 0; i < 3; i++ {
 		require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
 	}
 	assert.Equal(t, int32(3), calls.Load())
-	after := counterValue(t, "ros_reship_failures_total", orgID)
+	after := counterValue(t, "ros_reship_failures_total")
 	assert.Equal(t, before+1, after, "failure counter increments once when max retries exhausted")
 
 	err := svc.RetryPending(context.Background(), orgID, clusterID)
 	require.Error(t, err)
-	assert.Equal(t, after, counterValue(t, "ros_reship_failures_total", orgID), "no duplicate increment on early return")
+	assert.Equal(t, after, counterValue(t, "ros_reship_failures_total"), "no duplicate increment on early return")
 	assert.Equal(t, int32(3), calls.Load(), "fourth poller attempt must not call masu")
 }
 
@@ -613,9 +614,9 @@ func TestReshipMetrics_InProgress(t *testing.T) {
 		_ = svc.TriggerReship(context.Background(), orgID, clusterID)
 	}()
 	<-started
-	assert.Equal(t, float64(1), gaugeValue(t, orgID, clusterID.String()))
+	assert.Equal(t, float64(1), gaugeValue(t))
 	<-done
-	assert.Equal(t, float64(0), gaugeValue(t, orgID, clusterID.String()))
+	assert.Equal(t, float64(0), gaugeValue(t))
 }
 
 func TestReshipPoller_ConfigurableInterval(t *testing.T) {
@@ -658,18 +659,18 @@ func TestReshipPoller_MaxRetriesDefault10(t *testing.T) {
 	require.Equal(t, 10, svc.maxRetries)
 	require.NoError(t, MarkReshipPending(context.Background(), pool, orgID, clusterID))
 
-	before := counterValue(t, "ros_reship_failures_total", orgID)
+	before := counterValue(t, "ros_reship_failures_total")
 	for i := 0; i < 10; i++ {
 		require.Error(t, svc.RetryPending(context.Background(), orgID, clusterID))
 	}
 	assert.Equal(t, int32(10), calls.Load())
-	after := counterValue(t, "ros_reship_failures_total", orgID)
+	after := counterValue(t, "ros_reship_failures_total")
 	assert.Equal(t, before+1, after)
 
 	err := svc.RetryPending(context.Background(), orgID, clusterID)
 	require.Error(t, err)
 	assert.Equal(t, int32(10), calls.Load(), "11th attempt must not call masu")
-	assert.Equal(t, after, counterValue(t, "ros_reship_failures_total", orgID))
+	assert.Equal(t, after, counterValue(t, "ros_reship_failures_total"))
 }
 
 func TestReshipClient_400_SetsPending(t *testing.T) {
@@ -796,33 +797,12 @@ func cleanupReshipSchedules(t *testing.T, pool *pgxpool.Pool, orgID string) {
 	require.NoError(t, err)
 }
 
-func gaugeValue(t *testing.T, orgID, clusterUUID string) float64 {
+func gaugeValue(t *testing.T) float64 {
 	t.Helper()
-	mfs, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, mf := range mfs {
-		if mf.GetName() != "ros_reship_in_progress" {
-			continue
-		}
-		for _, m := range mf.GetMetric() {
-			var o, c string
-			for _, lp := range m.GetLabel() {
-				switch lp.GetName() {
-				case "org_id":
-					o = lp.GetValue()
-				case "cluster_uuid":
-					c = lp.GetValue()
-				}
-			}
-			if o == orgID && c == clusterUUID {
-				return m.GetGauge().GetValue()
-			}
-		}
-	}
-	return 0
+	return promtest.ToFloat64(ReshipInProgress)
 }
 
-func counterValue(t *testing.T, name, orgID string) float64 {
+func counterValue(t *testing.T, name string) float64 {
 	t.Helper()
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
@@ -831,10 +811,8 @@ func counterValue(t *testing.T, name, orgID string) float64 {
 			continue
 		}
 		for _, m := range mf.GetMetric() {
-			for _, lp := range m.GetLabel() {
-				if lp.GetName() == "org_id" && lp.GetValue() == orgID {
-					return m.GetCounter().GetValue()
-				}
+			if m.GetCounter() != nil {
+				return m.GetCounter().GetValue()
 			}
 		}
 	}

@@ -18,7 +18,7 @@ var internalEndpointCallsTotal = promauto.NewCounterVec(
 		Name: "rosocp_internal_endpoint_calls_total",
 		Help: "Internal platform endpoint invocations for cross-tenant audit and anomaly detection",
 	},
-	[]string{"endpoint", "org_id", "sa_name"},
+	[]string{"endpoint", "sa_name"},
 )
 
 // Internal endpoints authenticate platform service accounts via TokenReview but do not
@@ -62,5 +62,5 @@ func auditInternalEndpoint(c echo.Context, endpoint, orgID, saName, action strin
 		"action":            action,
 	})
 	log.Info("internal endpoint call")
-	internalEndpointCallsTotal.WithLabelValues(endpoint, orgID, saName).Inc()
+	internalEndpointCallsTotal.WithLabelValues(endpoint, saName).Inc()
 }

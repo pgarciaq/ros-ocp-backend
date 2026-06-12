@@ -116,7 +116,7 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `ros_threshold_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | Async recalculations triggered by Settings API threshold changes. `status`: `success`, `error` |
+| `ros_threshold_recalculation_total` | Counter | `recommendation_type`, `status` | Async recalculations triggered by Settings API threshold changes. `status`: `success`, `error`, `skipped`. Per-org context in structured logs. |
 | `ros_threshold_cache_entries` | Gauge | — | In-memory threshold resolution cache size (per org × recommendation type) |
 
 **Source files:** `internal/engine/threshold_recalculate.go`, `internal/engine/threshold_metrics.go`
@@ -127,12 +127,12 @@ Threshold recalculation is gated by `ROS_THRESHOLD_RECALCULATION_ENABLED` (defau
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `ros_reship_in_progress` | Gauge | `org_id`, `cluster_uuid` | `1` while a masu `reship_ros` call is in flight, `0` otherwise |
-| `ros_reship_files_processed` | Counter | `org_id` | ROS files published to Kafka by successful reships |
-| `ros_reship_duration_seconds` | Histogram | `org_id` | HTTP duration of masu `reship_ros` calls |
-| `ros_reship_failures_total` | Counter | `org_id` | Reship attempts that exhausted the consecutive retry budget |
-| `ros_reship_provider_resolution_failures_total` | Counter | `org_id`, `reason` | Failures resolving `cluster_uuid` → `provider_uuid`. `reason`: `no_cost_model`, `masu_unavailable`, `not_found`, `timeout` |
-| `ros_reship_fallback_forward_only_total` | Counter | `org_id` | Clusters transitioned to forward-only BH recommendations after retry exhaustion |
+| `ros_reship_in_progress` | Gauge | — | Number of masu `reship_ros` calls currently in flight (fleet-wide). Per-org/cluster context in structured logs. |
+| `ros_reship_files_processed` | Counter | — | ROS files published to Kafka by successful reships |
+| `ros_reship_duration_seconds` | Histogram | — | HTTP duration of masu `reship_ros` calls |
+| `ros_reship_failures_total` | Counter | — | Reship attempts that exhausted the consecutive retry budget |
+| `ros_reship_provider_resolution_failures_total` | Counter | `reason` | Failures resolving `cluster_uuid` → `provider_uuid`. `reason`: `no_cost_model`, `masu_unavailable`, `not_found`, `timeout` |
+| `ros_reship_fallback_forward_only_total` | Counter | — | Clusters transitioned to forward-only BH recommendations after retry exhaustion |
 
 **Source file:** `internal/reship/metrics.go`
 
@@ -185,8 +185,8 @@ rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns > 0.9
 | `rosocp_ingest_flush_duration_seconds` | Histogram | — | Duration of incremental digest-group flush operations |
 | `rosocp_ingest_manifest_id_synthesized_total` | Counter | — | Kafka messages that omitted `metadata.manifest_id` and received a deterministic synthesized manifest ID (`synth-` prefix) for per-file tracking |
 | `rosocp_manifest_recommendation_deferred_total` | Counter | — | Recommendation runs deferred for synthesized manifest IDs pending the quiet period (`ROS_SYNTH_MANIFEST_QUIET_PERIOD`) |
-| `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `org_id`, `sa_name` | Internal platform endpoint invocations (tag sync/status, savings recalc) for cross-tenant audit |
-| `rosocp_analytics_incomplete_total` | Counter | `org_id`, `cluster_uuid`, `error_type` | Container ingestion batches where history or quality analytics writes failed in degraded mode. `error_type`: `history` or `quality`. Not incremented in strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`) because the message is retried instead. |
+| `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `sa_name` | Internal platform endpoint invocations (tag sync/status, savings recalc). Target `org_id` is logged per call. |
+| `rosocp_analytics_incomplete_total` | Counter | `error_type` | Container ingestion batches where history or quality analytics writes failed in degraded mode. `error_type`: `history` or `quality`. Per-org/cluster context in structured logs. Not incremented in strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`) because the message is retried instead. |
 
 Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `1000`).
 
@@ -239,9 +239,9 @@ Per-org single-flight guards prevent duplicate background work when settings or 
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `rosocp_threshold_recalc_coalesced_total` | Counter | `org_id`, `recommendation_type` | Threshold recalc triggers coalesced while a job was in-flight |
-| `rosocp_savings_recalc_coalesced_total` | Counter | `org_id` | Savings recalc triggers coalesced while a job was in-flight |
-| `rosocp_reship_coalesced_total` | Counter | `org_id` | Business-hours reship triggers coalesced while a job was in-flight |
+| `rosocp_threshold_recalc_coalesced_total` | Counter | `recommendation_type` | Threshold recalc triggers coalesced while a job was in-flight |
+| `rosocp_savings_recalc_coalesced_total` | Counter | — | Savings recalc triggers coalesced while a job was in-flight |
+| `rosocp_reship_coalesced_total` | Counter | — | Business-hours reship triggers coalesced while a job was in-flight |
 
 **Source files:** `internal/engine/threshold_recalc_guard.go`, `internal/engine/savings_recalc_guard.go`, `internal/reship/trigger_guard.go`
 
@@ -255,13 +255,13 @@ GPU recommendation duration is recorded under `rosocp_recommendation_duration_se
 
 ### Recommendation quality (processor)
 
-Emitted after each successful `WriteRecommendationQuality` batch during container ingestion. Label `cluster_id` is the cluster UUID.
+Emitted after each successful `WriteRecommendationQuality` batch during container ingestion. Per-org/cluster aggregates are logged structurally; Prometheus captures fleet-wide distributions.
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `ros_recommendation_oom_rate` | Gauge | `org_id`, `cluster_id` | Mean `oom_events_after_rec` per quality row written in the batch |
-| `ros_recommendation_stability` | Gauge | `org_id`, `cluster_id` | Mean recommendation stability (0–100; 100 = no change vs prior cycle) |
-| `ros_recommendation_adoption_rate` | Gauge | `org_id`, `cluster_id` | Percentage of quality rows in the batch with `adoption_detected` |
+| `ros_recommendation_oom_rate` | Histogram | — | Mean `oom_events_after_rec` per quality batch |
+| `ros_recommendation_stability` | Histogram | — | Mean recommendation stability per batch (0–100; 100 = no change vs prior cycle) |
+| `ros_recommendation_adoption_rate` | Histogram | — | Mean adoption rate per batch (0–100) |
 
 **Source file:** `internal/engine/quality.go`
 
@@ -281,8 +281,8 @@ Some counters predate the `rosocp_` naming convention and retain their original 
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `ros_ingestion_file_failures_total` | Counter | `org_id`, `cluster_id`, `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
-| `ros_savings_recalculation_total` | Counter | `org_id`, `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations. `status`: `success`, `error` |
+| `ros_ingestion_file_failures_total` | Counter | `report_type`, `error_class` | Permanent per-file ingestion failures recorded in `report_file_status` |
+| `ros_savings_recalculation_total` | Counter | `recommendation_type`, `status` | Cost-model-triggered savings-only recalculations. `status`: `success`, `error` |
 
 **Source files:** `internal/services/metrics.go`, `internal/engine/savings_recalculate.go`
 
@@ -433,23 +433,23 @@ sum(rate(rosocp_requests_total[5m]))
 
 ### Is business-hours reship stuck?
 
-In-flight reships (should return to 0):
+In-flight reships (should return to 0 when idle):
 
 ```promql
-sum(ros_reship_in_progress)
+ros_reship_in_progress
 ```
 
-Stuck reships (>30 minutes):
+Stuck reships (non-zero for >30 minutes):
 
 ```promql
-ros_reship_in_progress == 1
+ros_reship_in_progress > 0
 ```
 
 Failures and fallbacks:
 
 ```promql
-sum by (org_id) (increase(ros_reship_failures_total[24h]))
-sum by (org_id) (increase(ros_reship_fallback_forward_only_total[24h]))
+increase(ros_reship_failures_total[24h])
+increase(ros_reship_fallback_forward_only_total[24h])
 ```
 
 Provider resolution issues:
@@ -531,7 +531,7 @@ groups:
           summary: Missing PostgreSQL partition blocking writes
 
       - alert: ROSReshipStuck
-        expr: ros_reship_in_progress == 1
+        expr: ros_reship_in_progress > 0
         for: 30m
         labels:
           severity: warning

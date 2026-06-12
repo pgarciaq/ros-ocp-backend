@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	promtest "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,6 +41,8 @@ func TestEmitQualityGaugeMetrics(t *testing.T) {
 	orgID := "org123"
 	clusterUUID := "cluster-uuid-1"
 
+	before := histogramSampleCount(t, "ros_recommendation_stability")
+
 	emitQualityGaugeMetrics(map[qualityClusterAggKey]*qualityClusterAgg{
 		{orgID: orgID, clusterUUID: clusterUUID}: {
 			stabilitySum: 1.5,
@@ -50,9 +52,24 @@ func TestEmitQualityGaugeMetrics(t *testing.T) {
 		},
 	})
 
-	assert.InDelta(t, 75.0, promtest.ToFloat64(QualityStability.WithLabelValues(orgID, clusterUUID)), 0.01)
-	assert.InDelta(t, 50.0, promtest.ToFloat64(QualityAdoptionRate.WithLabelValues(orgID, clusterUUID)), 0.01)
-	assert.InDelta(t, 2.0, promtest.ToFloat64(QualityOOMRate.WithLabelValues(orgID, clusterUUID)), 0.01)
+	assert.Equal(t, before+1, histogramSampleCount(t, "ros_recommendation_stability"))
+	assert.Equal(t, before+1, histogramSampleCount(t, "ros_recommendation_adoption_rate"))
+	assert.Equal(t, before+1, histogramSampleCount(t, "ros_recommendation_oom_rate"))
+}
+
+func histogramSampleCount(t *testing.T, name string) uint64 {
+	t.Helper()
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			return m.GetHistogram().GetSampleCount()
+		}
+	}
+	return 0
 }
 
 func TestAdoptionDetection(t *testing.T) {

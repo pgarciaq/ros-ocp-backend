@@ -12,12 +12,11 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
-var savingsRecalcCoalescedTotal = promauto.NewCounterVec(
+var savingsRecalcCoalescedTotal = promauto.NewCounter(
 	prometheus.CounterOpts{
 		Name: "rosocp_savings_recalc_coalesced_total",
 		Help: "Savings recalculation triggers coalesced because a job was already in-flight for the same org",
 	},
-	[]string{"org_id"},
 )
 
 type savingsRecalcParams struct {
@@ -44,7 +43,7 @@ func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgI
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
-		savingsRecalcCoalescedTotal.WithLabelValues(orgID).Inc()
+		savingsRecalcCoalescedTotal.Inc()
 		return
 	}
 	flight.running = true

@@ -75,7 +75,7 @@ func TestTriggerSavingsRecalculationAsync_CoalescedMetricIncrements(t *testing.T
 	})
 	defer restore()
 
-	before := promtest.ToFloat64(savingsRecalcCoalescedTotal.WithLabelValues(orgID))
+	before := promtest.ToFloat64(savingsRecalcCoalescedTotal)
 
 	TriggerSavingsRecalculationAsync(pool, orgID, "", nil)
 	<-started
@@ -83,11 +83,11 @@ func TestTriggerSavingsRecalculationAsync_CoalescedMetricIncrements(t *testing.T
 	TriggerSavingsRecalculationAsync(pool, orgID, "", nil)
 
 	require.Eventually(t, func() bool {
-		after := promtest.ToFloat64(savingsRecalcCoalescedTotal.WithLabelValues(orgID))
+		after := promtest.ToFloat64(savingsRecalcCoalescedTotal)
 		return after-before >= 2
 	}, 2*time.Second, 10*time.Millisecond)
 
-	assert.InDelta(t, 2, promtest.ToFloat64(savingsRecalcCoalescedTotal.WithLabelValues(orgID))-before, 0)
+	assert.InDelta(t, 2, promtest.ToFloat64(savingsRecalcCoalescedTotal)-before, 0)
 }
 
 func TestTriggerSavingsRecalcCoalesced_UsesLatestParameters(t *testing.T) {

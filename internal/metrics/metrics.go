@@ -91,9 +91,9 @@ var (
 	AnalyticsIncompleteTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "rosocp_analytics_incomplete_total",
-			Help: "Container ingestion batches where history or quality analytics writes failed (degraded mode) or would have failed (strict mode path logs only on success)",
+			Help: "Container ingestion batches where history or quality analytics writes failed (degraded mode). Per-org/cluster context is logged structurally.",
 		},
-		[]string{"org_id", "cluster_uuid", "error_type"},
+		[]string{"error_type"},
 	)
 
 	CSVRowsSkipped = promauto.NewCounterVec(
@@ -141,9 +141,12 @@ func IncIngestFlushTotal() {
 }
 
 // IncAnalyticsIncomplete increments the analytics-incomplete counter for a cluster batch failure.
-// errorType must be "history" or "quality".
+// errorType must be "history" or "quality". orgID and clusterUUID are accepted for call-site
+// compatibility; tenant context must be logged at the call site.
 func IncAnalyticsIncomplete(orgID, clusterUUID, errorType string) {
-	AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, errorType).Inc()
+	_ = orgID
+	_ = clusterUUID
+	AnalyticsIncompleteTotal.WithLabelValues(errorType).Inc()
 }
 
 // IncCSVRowsSkipped increments the skipped-row counter for a report type (e.g. container, vm).

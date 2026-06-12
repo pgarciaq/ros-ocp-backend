@@ -142,7 +142,7 @@ func recordFileFailure(
 	log *logrus.Entry,
 	orgID, clusterID, reportType, errorClass string,
 ) {
-	IngestionFileFailures.WithLabelValues(orgID, clusterID, reportType, errorClass).Inc()
+	IngestionFileFailures.WithLabelValues(reportType, errorClass).Inc()
 	log.WithFields(logrus.Fields{
 		"org_id":       orgID,
 		"cluster_uuid": clusterID,

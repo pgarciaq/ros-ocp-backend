@@ -31,9 +31,9 @@ var (
 	savingsRecalculationTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ros_savings_recalculation_total",
-			Help: "Cost-model-triggered savings-only recalculations per org, type, and outcome",
+			Help: "Cost-model-triggered savings-only recalculations per recommendation type and outcome",
 		},
-		[]string{"org_id", "recommendation_type", "status"},
+		[]string{"recommendation_type", "status"},
 	)
 
 	// clusterSavingsRecalcFunc runs savings-only recalculation for one cluster (tests may replace).
@@ -114,7 +114,7 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 			"error": err.Error(),
 		}).Error("unable to list clusters")
 		for _, rt := range types {
-			savingsRecalculationTotal.WithLabelValues(orgID, rt, "error").Inc()
+			savingsRecalculationTotal.WithLabelValues(rt, "error").Inc()
 		}
 		return
 	}
@@ -132,7 +132,7 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 			"duration_ms": time.Since(started).Milliseconds(),
 		}).Info("savings recalculation completed")
 		for _, rt := range types {
-			savingsRecalculationTotal.WithLabelValues(orgID, rt, "success").Inc()
+			savingsRecalculationTotal.WithLabelValues(rt, "success").Inc()
 		}
 		return
 	}
@@ -155,7 +155,7 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 					"error": err.Error(),
 				}).Warn("savings recalculation cluster failed")
 				for _, rt := range types {
-					savingsRecalculationTotal.WithLabelValues(orgID, rt, "error").Inc()
+					savingsRecalculationTotal.WithLabelValues(rt, "error").Inc()
 				}
 				return
 			}
@@ -163,7 +163,7 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 			processed++
 			mu.Unlock()
 			for _, rt := range types {
-				savingsRecalculationTotal.WithLabelValues(orgID, rt, "success").Inc()
+				savingsRecalculationTotal.WithLabelValues(rt, "success").Inc()
 			}
 		}(cu)
 	}

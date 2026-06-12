@@ -15,8 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Breaking (Prometheus):** Removed high-cardinality `org_id`, `cluster_uuid`, `cluster_id`, and `source_id` labels from fleet metrics. Tenant context is now emitted via structured logs at metric call sites. Affected metrics: `rosocp_analytics_incomplete_total` (`error_type` only), `ros_recommendation_stability` / `ros_recommendation_adoption_rate` / `ros_recommendation_oom_rate` (gauges → unlabeled histograms), `ros_reship_in_progress` (per-org/cluster gauge → fleet-wide concurrent gauge), `ros_reship_*` counters/histograms (unlabeled except `reason` on provider resolution failures), `ros_threshold_recalculation_total` / `ros_savings_recalculation_total` (`recommendation_type`, `status` only), coalescing counters (`rosocp_*_coalesced_total`), `ros_ingestion_file_failures_total` (`report_type`, `error_class` only), `rosocp_internal_endpoint_calls_total` (`endpoint`, `sa_name` only). Update Grafana dashboards and alert rules that filter by org/cluster labels.
 - Container list API: paginate `org_container_keys` directly for identity/cluster-metadata sorts instead of `DISTINCT ON` over `recommendation_sets` (~1000× faster page selection at 200k+ containers; performance audit M2)
-- VM ingest: defer `RunVMRecommendations` to post-manifest `runManifestRecommendations` instead of running inline in the VM plugin ingest path (performance audit M6)
 - VM CSV parse errors: per-row logs downgraded to debug; one summary warn per file when rows are skipped
 
 - Container recommendation list API: use slim list DTO (`BuildListResponse`) instead of full detail assembly; preserves list UI fields while omitting plots and duplicate notification nesting (performance audit A-1)

@@ -190,15 +190,15 @@ func TestPostReship_ResolutionFailureIncrementsMetric(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	before := resolutionFailureCounter(t, orgID, ReasonNoCostModel)
+	before := resolutionFailureCounter(t, ReasonNoCostModel)
 	client := NewHTTPClient(masu.URL, &http.Client{Timeout: 2 * time.Second})
 	_, err := client.PostReship(WithReshipAttempt(context.Background(), 3), orgID, clusterID)
 	require.Error(t, err)
-	after := resolutionFailureCounter(t, orgID, ReasonNoCostModel)
+	after := resolutionFailureCounter(t, ReasonNoCostModel)
 	assert.Equal(t, before+1, after)
 }
 
-func resolutionFailureCounter(t *testing.T, orgID, reason string) float64 {
+func resolutionFailureCounter(t *testing.T, reason string) float64 {
 	t.Helper()
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
@@ -207,16 +207,13 @@ func resolutionFailureCounter(t *testing.T, orgID, reason string) float64 {
 			continue
 		}
 		for _, m := range mf.GetMetric() {
-			var gotOrg, gotReason string
+			gotReason := ""
 			for _, lp := range m.GetLabel() {
-				switch lp.GetName() {
-				case "org_id":
-					gotOrg = lp.GetValue()
-				case "reason":
+				if lp.GetName() == "reason" {
 					gotReason = lp.GetValue()
 				}
 			}
-			if gotOrg == orgID && gotReason == reason {
+			if gotReason == reason {
 				return m.GetCounter().GetValue()
 			}
 		}

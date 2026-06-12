@@ -21,26 +21,26 @@ var qualityPartitionMissing = promauto.NewCounter(prometheus.CounterOpts{
 })
 
 var (
-	QualityOOMRate = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "ros_recommendation_oom_rate",
-			Help: "Rate of OOM events after recommendation, per org/cluster",
+	QualityOOMRate = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "ros_recommendation_oom_rate",
+			Help:    "Mean OOM events after recommendation per quality write batch (0+); per-org/cluster detail in structured logs",
+			Buckets: []float64{0, 1, 2, 5, 10, 25, 50, 100},
 		},
-		[]string{"org_id", "cluster_id"},
 	)
-	QualityStability = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "ros_recommendation_stability",
-			Help: "Average recommendation stability percentage, per org/cluster",
+	QualityStability = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "ros_recommendation_stability",
+			Help:    "Mean recommendation stability percentage per quality write batch (0-100); per-org/cluster detail in structured logs",
+			Buckets: []float64{0, 25, 50, 75, 90, 95, 99, 100},
 		},
-		[]string{"org_id", "cluster_id"},
 	)
-	QualityAdoptionRate = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "ros_recommendation_adoption_rate",
-			Help: "Percentage of recommendations where adoption was detected, per org/cluster",
+	QualityAdoptionRate = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "ros_recommendation_adoption_rate",
+			Help:    "Mean adoption rate percentage per quality write batch (0-100); per-org/cluster detail in structured logs",
+			Buckets: []float64{0, 25, 50, 75, 90, 95, 99, 100},
 		},
-		[]string{"org_id", "cluster_id"},
 	)
 )
 
@@ -321,17 +321,30 @@ type qualityClusterAgg struct {
 	n            int
 }
 
-// emitQualityGaugeMetrics publishes per-cluster aggregates after a successful quality write batch.
-// DB/API stability_pct is 0.0–1.0; Prometheus stability and adoption gauges use 0–100 per metric help.
+// emitQualityGaugeMetrics publishes fleet-wide quality aggregates after a successful quality write batch.
+// DB/API stability_pct is 0.0–1.0; Prometheus stability and adoption histograms use 0–100.
 func emitQualityGaugeMetrics(clusterAggs map[qualityClusterAggKey]*qualityClusterAgg) {
+	log := logging.GetLogger()
 	for key, agg := range clusterAggs {
 		if agg == nil || agg.n == 0 {
 			continue
 		}
 		n := float64(agg.n)
-		QualityStability.WithLabelValues(key.orgID, key.clusterUUID).Set(agg.stabilitySum / n * 100)
-		QualityAdoptionRate.WithLabelValues(key.orgID, key.clusterUUID).Set(float64(agg.adopted) / n * 100)
-		QualityOOMRate.WithLabelValues(key.orgID, key.clusterUUID).Set(agg.oomSum / n)
+		stabilityPct := agg.stabilitySum / n * 100
+		adoptionPct := float64(agg.adopted) / n * 100
+		oomRate := agg.oomSum / n
+		QualityStability.Observe(stabilityPct)
+		QualityAdoptionRate.Observe(adoptionPct)
+		QualityOOMRate.Observe(oomRate)
+		log.WithFields(map[string]interface{}{
+			"msg":              "recommendation quality batch aggregate",
+			"org_id":           key.orgID,
+			"cluster_uuid":     key.clusterUUID,
+			"stability_pct":    stabilityPct,
+			"adoption_rate_pct": adoptionPct,
+			"oom_rate":         oomRate,
+			"quality_rows":     agg.n,
+		}).Info("recommendation quality batch aggregate")
 	}
 }
 
