@@ -133,7 +133,7 @@ func initPool() {
 
 	maxConns := int32(cfg.DBMaxConns)
 	if maxConns <= 0 {
-		maxConns = 10
+		maxConns = 5
 	}
 	poolCfg.MaxConns = maxConns
 	minConns := int32(cfg.DBMinConns)

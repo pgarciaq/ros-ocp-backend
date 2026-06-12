@@ -14,6 +14,10 @@ import (
 	clowder "github.com/redhatinsights/app-common-go/pkg/api/v1"
 )
 
+// defaultDBMaxConns is the pgxpool max per process when ROS_DB_MAX_CONNS is unset.
+// Coordinate replica count × this value against PostgreSQL max_connections.
+const defaultDBMaxConns = 5
+
 type Config struct {
 	// Application config
 	ServiceName                     string `mapstructure:"SERVICE_NAME"`
@@ -64,8 +68,8 @@ type Config struct {
 	DBCACert   string
 
 	// pgxpool tuning (shared by pgxpool and GORM via stdlib.OpenDBFromPool).
-	// ROS_DB_MAX_CONNS defaults to 10; ROS_DB_ACQUIRE_TIMEOUT_SECS sets
-	// ContextWithAcquireTimeout (0 = no limit).
+	// ROS_DB_MAX_CONNS defaults to defaultDBMaxConns; ROS_DB_ACQUIRE_TIMEOUT_SECS sets
+	// ContextWithAcquireTimeout (0 = no limit). Legacy alias: DB_POOL_SIZE.
 	DBMaxConns            int    `mapstructure:"ROS_DB_MAX_CONNS"`
 	DBMinConns            int    `mapstructure:"ROS_DB_MIN_CONNS"`
 	DBMaxConnLifetimeMins int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
@@ -618,6 +622,7 @@ func initConfig() {
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)
 	viper.SetDefault("ROS_DB_MAX_CONNS", 10)
+	viper.SetDefault("ROS_DB_MAX_CONNS", defaultDBMaxConns)
 	viper.SetDefault("ROS_DB_MIN_CONNS", 2)
 	viper.SetDefault("ROS_DB_MAX_CONN_LIFETIME", 30)
 	viper.SetDefault("ROS_DB_MAX_CONN_IDLE_TIME", 5)
@@ -861,6 +866,8 @@ func initConfig() {
 	_ = viper.BindEnv("ROS_STALENESS_THRESHOLD_HOURS", "ROS_STALENESS_THRESHOLD_HOURS", "ROS_STALE_DATA_THRESHOLD_HOURS")
 	// Deprecated: ROS_STALE_ARCHIVE_DAYS renamed to ROS_STALE_CLEANUP_DAYS (behavior is delete, not archive).
 	_ = viper.BindEnv("ROS_STALE_CLEANUP_DAYS", "ROS_STALE_CLEANUP_DAYS", "ROS_STALE_ARCHIVE_DAYS")
+	// Deprecated: DB_POOL_SIZE was a legacy Helm/Clowder name; prefer ROS_DB_MAX_CONNS.
+	_ = viper.BindEnv("ROS_DB_MAX_CONNS", "ROS_DB_MAX_CONNS", "DB_POOL_SIZE")
 
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf("config: cannot unmarshal configuration: %v", err)
@@ -889,8 +896,8 @@ func validateLoadedConfig(c *Config) {
 		c.StaleCleanupDays = 30
 	}
 	if c.DBMaxConns <= 0 {
-		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using 10", c.DBMaxConns)
-		c.DBMaxConns = 10
+		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using %d", c.DBMaxConns, defaultDBMaxConns)
+		c.DBMaxConns = defaultDBMaxConns
 	}
 	if c.DBMinConns < 0 {
 		log.Printf("config: ROS_DB_MIN_CONNS (%d) is invalid; using 2", c.DBMinConns)

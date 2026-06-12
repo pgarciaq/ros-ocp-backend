@@ -317,7 +317,7 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | PostgreSQL password <br><em>DB password; rotate with rolling restart of API + processor.</em> | `postgres` | `DB_PASSWORD` | — | — | No |
 | PostgreSQL SSL mode <br><em>`disable` local only; use `verify-full` + CA on OpenShift.</em> | `disable` | `DB_SSL` | — | — | No |
 | PostgreSQL CA cert path <br><em>CA bundle path for TLS verify; empty uses system trust.</em> | (empty) | `DB_CA_CERT` | — | — | No |
-| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 10 | `ROS_DB_MAX_CONNS` | — | — | No |
+| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 5 | `ROS_DB_MAX_CONNS` | — | — | No |
 | pgxpool min connections <br><em>Warm idle connections; lowers cold-start latency, uses DB slots.</em> | 2 | `ROS_DB_MIN_CONNS` | — | — | No |
 | Connection max lifetime (minutes) <br><em>Recycle connections for failover/PgBouncer; 30m typical.</em> | 30 | `ROS_DB_MAX_CONN_LIFETIME` | — | — | No |
 | Connection max idle (minutes) <br><em>Close idle pool connections after N minutes; frees DB slots.</em> | 5 | `ROS_DB_MAX_CONN_IDLE_TIME` | — | — | No |
