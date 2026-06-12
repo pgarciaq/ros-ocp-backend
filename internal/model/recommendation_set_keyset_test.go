@@ -53,7 +53,7 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
 	opts := listoptions.ListOptions{
@@ -108,7 +108,7 @@ func TestGetNativeRecommendations_UsesOrgContainerKeys(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	var keyCount int
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, testutil.TestOrgID).Scan(&keyCount)
@@ -174,7 +174,7 @@ func TestGetNativeRecommendations_RBACClusterFilter(t *testing.T) {
 		recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, spec.clusterUUID, start, end, engine.OOMConfig{})
 		require.NoError(t, err)
 		require.NotEmpty(t, recs)
-		require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+		require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 	}
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
@@ -257,7 +257,7 @@ func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	queryParams := map[string]interface{}{
 		"rs.stale = ?":  false,
@@ -287,7 +287,7 @@ func TestRefreshOrgRecommendationStats(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	count, ok, err := model.GetOrgContainerCount(testutil.TestOrgID)
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	svc := tags.NewSyncService(pool)
 	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
@@ -374,7 +374,7 @@ func TestGetNativeRecommendations_TagFilterIgnoredWhenDisabled(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	_, err = pool.Exec(ctx, `
 		UPDATE org_container_keys SET resolved_tags = '{"environment":"production"}'::jsonb

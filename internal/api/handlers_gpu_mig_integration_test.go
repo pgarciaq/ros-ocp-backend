@@ -554,7 +554,7 @@ func TestGPUMIGRecommendations_NotificationCodes(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
 		ns, wl, cn, node string

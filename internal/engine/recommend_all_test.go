@@ -534,6 +534,42 @@ func TestRecommendAllWorkloads_PopulatesNotificationCodes(t *testing.T) {
 	assert.True(t, oomFound, "at least one recommendation should have OOM notification code")
 }
 
+func TestWriteRecommendations_DeferredOrgMetadataRefresh(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	rec := func(container string, cpu int64) ContainerRec {
+		return ContainerRec{
+			OrgID:            testutil.TestOrgID,
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        testutil.TestNamespace,
+			Workload:         testutil.TestWorkload,
+			WorkloadType:     testutil.TestWorkloadType,
+			ContainerName:    container,
+			Term:             "short",
+			Engine:           "cost",
+			RecCPURequestMC:  cpu,
+			RecCPULimitMC:    cpu + 10,
+			RecMemRequestKiB: 51200,
+			RecMemLimitKiB:   53760,
+		}
+	}
+
+	require.NoError(t, WriteRecommendations(ctx, pool, []ContainerRec{rec("main", 100)}))
+	require.NoError(t, WriteRecommendations(ctx, pool, []ContainerRec{rec("sidecar", 200)}))
+
+	var keyCount int
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, testutil.TestOrgID).Scan(&keyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, keyCount, "WriteRecommendations must not refresh org metadata per batch")
+
+	require.NoError(t, RefreshOrgMetadata(ctx, pool, testutil.TestOrgID))
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, testutil.TestOrgID).Scan(&keyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 2, keyCount, "single RefreshOrgMetadata should populate all container keys")
+}
+
 func TestWriteRecommendations_PersistsNotificationCodes(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

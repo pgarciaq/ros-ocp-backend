@@ -261,7 +261,7 @@ func runTier(ctx context.Context, pool *pgxpool.Pool, nContainers int) tierResul
 
 	// Write.
 	t0 = time.Now()
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ERROR write: %v\n", err)
 	}

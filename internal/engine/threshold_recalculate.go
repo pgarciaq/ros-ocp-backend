@@ -320,6 +320,9 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	}
 	if totalWritten > 0 {
 		metrics.IncRecommendationsWritten("container", totalWritten)
+		if err := RefreshOrgMetadata(ctx, pool, orgID); err != nil {
+			return fmt.Errorf("refresh org metadata: %w", err)
+		}
 	}
 	return nil
 }

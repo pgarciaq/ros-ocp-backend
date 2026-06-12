@@ -41,7 +41,7 @@ func setupHistoryTest(t *testing.T) (*echo.Echo, string) {
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	engine.EnsureHistoryPartitions(ctx, pool)

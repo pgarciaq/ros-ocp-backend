@@ -113,7 +113,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		}
 
 		// Write to DB and verify persistence
-		err = engine.WriteRecommendations(ctx, pool, recs)
+		err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 		require.NoError(t, err)
 
 		// Read back and verify savings persisted

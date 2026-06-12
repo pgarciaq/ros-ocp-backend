@@ -81,7 +81,7 @@ func TestGETRecommendation_PrecomputedBH_P99Latency(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")

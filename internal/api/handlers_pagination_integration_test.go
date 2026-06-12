@@ -56,7 +56,7 @@ func seedNativeRecommendationsForPagination(t *testing.T, pool *pgxpool.Pool) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 }
 
 func TestGetNativeRecommendationSetList_CursorPagination(t *testing.T) {

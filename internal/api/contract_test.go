@@ -45,7 +45,7 @@ func setupContractTestApp(t *testing.T) (*echo.Echo, string, context.Context) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	engine.EnsureHistoryPartitions(ctx, pool)
 	require.NoError(t, engine.WriteRecommendationHistory(ctx, pool, recs, ""))

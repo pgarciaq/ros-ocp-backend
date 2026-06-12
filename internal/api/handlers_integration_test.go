@@ -67,7 +67,7 @@ func TestGetNativeRecommendationSetList_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	// Set up Echo with identity middleware + native handler
@@ -148,7 +148,7 @@ func TestGetNativeRecommendationSetList_PaginationCount(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -196,7 +196,7 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -291,7 +291,7 @@ func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -367,7 +367,7 @@ func TestContainerDetail_EngineValuesDiverge(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -554,8 +554,8 @@ func TestGetNativeRecommendationSetList_OrgIsolation(t *testing.T) {
 	recsB, err := engine.RecommendAllWorkloads(ctx, pool, orgB, clusterB, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recsB)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recsA))
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recsB))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recsA))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recsB))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -670,8 +670,8 @@ func TestGetNativeRecommendationSetList_FilterByCluster(t *testing.T) {
 	require.NoError(t, err)
 	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs1))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs2))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -740,7 +740,7 @@ func TestGetNativeRecommendationSetList_FilterByNamespace(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -815,8 +815,8 @@ func TestGetNativeRecommendationSetList_RBAC_FiltersByCluster(t *testing.T) {
 	require.NoError(t, err)
 	recs2, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, cluster2, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs1))
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs2))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs1))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs2))
 
 	// Enable RBAC temporarily
 	cfg := config.GetConfig()
@@ -901,7 +901,7 @@ func TestGetNativeRecommendationSetList_RBAC_MetaCountZeroWhenNoAccessibleCluste
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, clusterWithData, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	cfg := config.GetConfig()
 	origRBAC := cfg.RBACEnabled
@@ -994,7 +994,7 @@ func TestGetNativeRecommendationSet_NotificationsInResponse(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, recentStart, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	app := echo.New()
@@ -1078,7 +1078,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	// Seed GPU digests for the same container — idle GPU with profiling data
@@ -1301,7 +1301,7 @@ func TestGetNativeRecommendationSetList_PaginationLinks(t *testing.T) {
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -1429,7 +1429,7 @@ func TestGetNativeRecommendationSetList_BracketFilterSyntax(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -1513,7 +1513,7 @@ func TestGetContainerList_FilterTerm(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -1655,7 +1655,7 @@ func TestGetNativeRecommendationSetList_OrderByVariationFields(t *testing.T) {
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -1727,7 +1727,7 @@ func TestGetNativeRecommendationSetList_OrderByNonVariationFields(t *testing.T) 
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
 	require.NoError(t, err)
-	require.NoError(t, engine.WriteRecommendations(ctx, pool, recs))
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")

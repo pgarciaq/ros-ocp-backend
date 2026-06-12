@@ -45,7 +45,7 @@ func setupQualityTest(t *testing.T) (*echo.Echo, string) {
 	oldRecs, err := engine.ReadClusterOldRecommendationsByEngine(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	err = engine.WriteRecommendations(ctx, pool, recs)
+	err = engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs)
 	require.NoError(t, err)
 
 	engine.EnsureQualityPartitions(ctx, pool)

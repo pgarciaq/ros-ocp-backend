@@ -673,6 +673,11 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 	metrics.IncRecommendationsWritten("container", totalWritten)
 	log.Infof("native engine: wrote %d recommendations", totalWritten)
 
+	if refreshErr := engine.RefreshOrgMetadata(ctx, pool, orgID); refreshErr != nil {
+		log.Errorf("native engine: org metadata refresh failed: %v", refreshErr)
+		return fmt.Errorf("refresh org metadata: %w", refreshErr)
+	}
+
 	if oldRecs == nil {
 		log.Warn("native engine: skipping quality metrics (old recs unavailable)")
 		batchState.Degraded = true

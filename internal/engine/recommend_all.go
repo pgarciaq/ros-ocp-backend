@@ -420,16 +420,36 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 		}
 	}
 
-	orgID := recs[0].OrgID
-	if err := model.RefreshOrgContainerKeysTx(ctx, tx, orgID); err != nil {
-		return err
-	}
-	if err := model.RefreshOrgRecommendationStatsTx(ctx, tx, orgID); err != nil {
-		return err
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit recommendations tx: %w", err)
+	}
+	return nil
+}
+
+// WriteRecommendationsAndRefreshOrg persists recommendations and refreshes org metadata.
+// Use for single-batch writes (tests, tooling). Streaming reconcile cycles should call
+// WriteRecommendations per batch and RefreshOrgMetadata once at the end.
+func WriteRecommendationsAndRefreshOrg(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
+	if err := WriteRecommendations(ctx, pool, recs); err != nil {
+		return err
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+	return RefreshOrgMetadata(ctx, pool, recs[0].OrgID)
+}
+
+// RefreshOrgMetadata updates org_container_keys and org_recommendation_stats for an org.
+// Call once at the end of a reconcile cycle instead of after every write batch.
+func RefreshOrgMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string) error {
+	if orgID == "" {
+		return nil
+	}
+	if err := model.RefreshOrgContainerKeys(ctx, pool, orgID); err != nil {
+		return err
+	}
+	if err := model.RefreshOrgRecommendationStats(ctx, pool, orgID); err != nil {
+		return err
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	return nil

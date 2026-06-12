@@ -257,7 +257,7 @@ func runContainerRecommendations(
 	if len(recs) == 0 {
 		return nil, fmt.Errorf("no container recommendations produced")
 	}
-	if err := engine.WriteRecommendations(ctx, pool, recs); err != nil {
+	if err := engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs); err != nil {
 		return nil, err
 	}
 	return recs, nil
