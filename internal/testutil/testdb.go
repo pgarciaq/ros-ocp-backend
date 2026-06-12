@@ -22,6 +22,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
@@ -53,17 +54,26 @@ func SetupTestDB(tb testing.TB) *pgxpool.Pool {
 		tb.Fatalf("shared test database: %v", sharedTestDBErr)
 	}
 	sharedTestDBMu.Lock()
-	// Registered first so it runs last: restore shared pool after per-test cleanups
-	// that assign database.Pool = nil.
+	// Registered first so it runs last: drain async work and restore shared pool
+	// after per-test cleanups that assign database.Pool = nil.
 	tb.Cleanup(func() {
+		waitForAsyncJobsBeforeTruncate(tb)
 		database.SetForceTestPool(sharedTestDB)
 		database.DB = OpenTestGORM(sharedTestDB)
 	})
 	tb.Cleanup(sharedTestDBMu.Unlock)
+	waitForAsyncJobsBeforeTruncate(tb)
 	truncatePublicTables(tb, sharedTestDB)
 	database.SetForceTestPool(sharedTestDB)
 	database.DB = OpenTestGORM(sharedTestDB)
 	return sharedTestDB
+}
+
+func waitForAsyncJobsBeforeTruncate(tb testing.TB) {
+	tb.Helper()
+	if err := asyncjobs.WaitForTest(0); err != nil {
+		tb.Fatalf("wait for async jobs before truncate: %v", err)
+	}
 }
 
 func truncatePublicTables(tb testing.TB, pool *pgxpool.Pool) {

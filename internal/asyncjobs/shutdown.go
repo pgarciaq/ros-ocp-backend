@@ -2,6 +2,7 @@ package asyncjobs
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -85,6 +86,28 @@ func Go(fn func(ctx context.Context)) {
 		defer wg.Done()
 		fn(Context())
 	}()
+}
+
+const defaultTestDrainTimeout = 30 * time.Second
+
+// WaitForTest blocks until all tracked async jobs finish or timeout expires.
+// Integration tests call this before TRUNCATE so background work from a prior
+// test cannot deadlock with table-level locks.
+func WaitForTest(timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = defaultTestDrainTimeout
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("async jobs did not complete within %s", timeout)
+	}
 }
 
 // ResetForTest clears shutdown state between tests.

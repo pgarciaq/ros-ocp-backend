@@ -10,6 +10,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestWaitForTest_DrainsTrackedJobs(t *testing.T) {
+	ResetForTest()
+
+	done := make(chan struct{})
+	Go(func(ctx context.Context) {
+		close(done)
+	})
+
+	require.NoError(t, WaitForTest(time.Second))
+	select {
+	case <-done:
+	default:
+		t.Fatal("expected async job to complete before WaitForTest returned")
+	}
+}
+
+func TestWaitForTest_TimesOutWhenJobBlocks(t *testing.T) {
+	ResetForTest()
+
+	block := make(chan struct{})
+	Go(func(ctx context.Context) {
+		<-block
+	})
+
+	err := WaitForTest(50 * time.Millisecond)
+	require.Error(t, err)
+	close(block)
+	require.NoError(t, WaitForTest(time.Second))
+}
+
 func TestInit_CancelsInFlightJobs(t *testing.T) {
 	ResetForTest()
 	parent, cancel := context.WithCancel(context.Background())
