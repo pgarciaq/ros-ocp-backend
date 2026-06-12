@@ -25,7 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - CSV ingest: remove per-row Prometheus gauge update for in-memory digest groups; gauge updates only at flush boundaries (performance audit B-4)
-- Logging: enable `ReportCaller` only when `LOG_LEVEL` is `DEBUG` or `TRACE` to avoid call-stack walks on every log line in production (performance audit C-5)
 - Notification catalog: `GET /recommendations/openshift/notification-codes` returns `Cache-Control: public, max-age=86400` for static in-memory catalog responses (performance audit A-6)
 - GPU classification persistence: `StoreGPUClassifications` uses chunked `pgx.Batch` updates (500 per round-trip) instead of per-container `Exec` (performance audit Q6)
 - Idle classification: replace window P95 sort with max-of-daily-P95 for container and GPU idle checks — O(N) scan, no sort allocations; conservative bound may classify fewer workloads as idle when single-day spikes exist (ADR-0290, performance audit Q4)

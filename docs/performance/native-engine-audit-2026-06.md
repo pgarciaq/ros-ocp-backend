@@ -355,13 +355,15 @@ On SIGTERM, the Kafka consumer loop exits but running `ProcessReport` handlers (
 
 **Fix:** Pass lifecycle `context.Context` into `ProcessReport`; on shutdown, stop accepting new messages, `WaitGroup` for in-flight handlers.
 
-### C-5. `ReportCaller: true` in production logging (P2) — **Open**
+### C-5. `ReportCaller: true` in production logging (P2) — **Declined**
 
 **Location:** `internal/logging/logging.go`
 
 Every log line walks the call stack. Minor but unnecessary overhead in production.
 
 **Fix:** Disable `ReportCaller` when `LOG_LEVEL >= INFO`.
+
+**Status:** Reverted — negligible performance gain (~200-500ns/line) does not justify loss of file:line in production logs for support/debugging.
 
 ### C-6. No `make test-short` for fast local iteration (P2) — **Open**
 
@@ -613,7 +615,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | G-2 | Scale | Add HPA for API pods | Open |
 | P2-1-5 | Math/DB | GPU BP config, node BP, batch PVC/GPU writes, VM decouple, idle sort | Open |
 | B-3,5,6 | Ingest | String interning, narrow single-tx, GOMEMLIMIT/PGO | Open |
-| C-5,6 | Ops | Disable ReportCaller, add make test-short | Open |
+| C-6 | Ops | Add make test-short | Open |
 | I-1 | Deps | Binary slimming (release ldflags, SDK audit) | Open |
 
 ### Strategic

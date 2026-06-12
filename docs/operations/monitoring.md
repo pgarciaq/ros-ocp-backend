@@ -295,7 +295,7 @@ Some counters predate the `rosocp_` naming convention and retain their original 
 - **Library:** [logrus](https://github.com/sirupsen/logrus) via `internal/logging/logging.go`
 - **Production format:** JSON (`logrus.JSONFormatter`) — default when `LogFormater` is not `text`
 - **Development format:** Text (`LogFormater=text` in `.env`)
-- **Caller reporting:** Enabled only at `LOG_LEVEL=DEBUG` or `TRACE` (`ReportCaller=true`) — log entries then include `func` and `file` fields; omitted at `INFO` and above to reduce per-line overhead (C-5)
+- **Caller reporting:** Enabled (`ReportCaller=true`) — log entries include `func` and `file` fields
 - **CloudWatch:** Optional batching hook when `CwAccessKey` is set (Clowder-managed in SaaS)
 
 Every log line includes `service` from `SERVICE_NAME` (e.g. `rosocp-processor`, `ros-api`).

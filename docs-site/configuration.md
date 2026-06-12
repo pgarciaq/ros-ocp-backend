@@ -303,26 +303,6 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 | `SERVICE_NAME` | `rosocp` | Service name in log `service` field. |
 | `CW_LOG_STREAM_NAME` | `rosocp` | CloudWatch log stream (SaaS). |
 
-### Caller location in log lines (C-5)
-
-As of this change, logrus `ReportCaller` is enabled only when `LOG_LEVEL` is `DEBUG` or
-`TRACE`. At `INFO`, `WARN`, `ERROR`, and `FATAL`, log lines no longer include source
-location fields (`file` and `func` in JSON output). This reduces per-line overhead in
-production but means operators debugging production issues may want to temporarily set
-`LOG_LEVEL=DEBUG` to see source locations.
-
-Example JSON at `LOG_LEVEL=INFO` (default):
-
-```json
-{"level":"info","msg":"flush complete","service":"rosocp-processor","time":"2026-06-12T13:50:00Z"}
-```
-
-Example JSON at `LOG_LEVEL=DEBUG`:
-
-```json
-{"file":"internal/ingestion/pipeline_stream.go:245","func":"github.com/redhatinsights/ros-ocp-backend/internal/ingestion.(*Pipeline).flush","level":"debug","msg":"processing row","service":"rosocp-processor","time":"2026-06-12T13:50:00Z"}
-```
-
 See [Monitoring](monitoring.md) for metrics tied to these settings.
 
 ---

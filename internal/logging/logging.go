@@ -23,14 +23,11 @@ func initLogger() {
 	cfg := config.GetConfig()
 	var logLevel logrus.Level
 
-	reportCaller := false
 	switch cfg.LogLevel {
 	case "TRACE":
 		logLevel = logrus.TraceLevel
-		reportCaller = true
 	case "DEBUG":
 		logLevel = logrus.DebugLevel
-		reportCaller = true
 	case "ERROR":
 		logLevel = logrus.ErrorLevel
 	default:
@@ -45,7 +42,7 @@ func initLogger() {
 
 	logger.Level = logLevel
 	logger.Out = os.Stdout
-	logger.ReportCaller = reportCaller
+	logger.ReportCaller = true
 
 	if cfg.CwAccessKey != "" {
 		// CloudWatch hook uses AWS SDK v1 via platform-go-middlewares; pass nil config
