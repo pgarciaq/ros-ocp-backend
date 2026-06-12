@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. However, **float64 persists in three critical hot paths** (decay weighting, savings estimation, adaptive margin), and **database write amplification** on org metadata refresh is the single largest scalability bottleneck.
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **Most P0/P1 hot-path items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes). **Remaining gaps:** float64 in savings estimation, list API `DISTINCT ON` pagination (P0-4), and on-prem PostgreSQL tuning (D-1).
 
 ---
 
@@ -22,8 +22,10 @@
 - `sync.Pool` for digest computation buffers at ingest
 - `pgx.Batch` for container/namespace recommendation writes (chunk 500)
 - Cost data cached in LRU with TTL per cluster
-- `filterByWindow` uses binary search for window boundaries
+- `windowBounds` uses binary search for zero-copy window slicing
+- `RecommendCPUAndMemory` fuses CPU + memory weighted passes in one decay loop
 - `MultiWeightedPercentileWithExtras` fuses 5 extractors + idle + trend in one pass
+- `pgx.Batch` for container, namespace, PVC, and GPU recommendation writes
 
 ---
 
@@ -43,13 +45,14 @@ For every digest row in every window, the code called `math.Exp(-ageHours * math
 
 **ADR:** [ADR-0288](../adr/0288-decay-weight-lookup-tables.md)
 
-### P0-2. Duplicate CPU + memory weighted passes per term x engine — **Open**
+### P0-2. Duplicate CPU + memory weighted passes per term x engine — **Implemented**
 
-**Location:** `internal/engine/recommend_cpu.go`, `internal/engine/recommend_memory.go`
+**Location:** `internal/engine/recommend_cpu_and_memory.go` — `RecommendCPUAndMemory`
 
-`RecommendCPU` and `RecommendMemory` each call `MultiWeightedPercentileWithExtras` separately with their own extractors, recomputing decay weights for the same rows. That's **12 passes** per container (3 terms x 2 engines x 2 resources) when it could be **6** (fused CPU+memory in one pass with 10 extractors).
+`RecommendCPU` and `RecommendMemory` each called `MultiWeightedPercentileWithExtras` separately with their own extractors, recomputing decay weights for the same rows. That's **12 passes** per container (3 terms x 2 engines x 2 resources) when it could be **6** (fused CPU+memory in one pass with 10 extractors).
 
-**Fix:** Merge into a single `RecommendCPUAndMemory` that calls `MultiWeightedPercentileWithExtras` once with all 10 extractors.
+**Fix implemented (2026-06):**
+- Merged into `RecommendCPUAndMemory` in `recommend_cpu_and_memory.go`, which calls `MultiWeightedPercentileWithExtras` once with all 10 extractors per term x engine.
 
 **Impact:** ~40-50% reduction in recommend-phase CPU per container.
 
@@ -90,33 +93,36 @@ Per recommendation row: millicore -> cores (`/1000.0`), KiB -> GiB (`/1024/1024`
 
 **Impact:** Moderate-significant depending on cluster size; also reduces code duplication.
 
-### P1-2. Adaptive margin float CV detour — **Open**
+### P1-2. Adaptive margin float CV detour — **Implemented**
 
-**Location:** `internal/engine/margin.go`
+**Location:** `internal/engine/margin.go` — `ComputeAdaptiveMarginScaledDirect`
 
-`ComputeAdaptiveMargin` computes `cv = float64(p95-p50) / float64(mean)` then scales back to `MarginScale`. The integer equivalent is `cvScaled = (p95-p50) * MarginScale / mean` -- pure integer division.
+`ComputeAdaptiveMargin` computed `cv = float64(p95-p50) / float64(mean)` then scaled back to `MarginScale`. The integer equivalent is `cvScaled = (p95-p50) * MarginScale / mean` -- pure integer division.
 
-**Fix:** Replace `ComputeAdaptiveMargin` with integer-only `ComputeAdaptiveMarginScaledDirect`.
+**Fix implemented (2026-06):**
+- Replaced float CV path with integer-only `ComputeAdaptiveMarginScaledDirect` using scaled integer division.
 
 **Impact:** Moderate -- one float division per rec eliminated; aligns with existing `ApplyScaledMargin` pattern.
 
-### P1-3. `filterByWindow` allocates per term per container — **Open**
+### P1-3. `filterByWindow` allocates per term per container — **Implemented**
 
-**Location:** `internal/engine/recommend_all.go`
+**Location:** `internal/engine/window_bounds.go` — `windowBounds`
 
-Each term creates a new `[]DigestRow` copy. With 3 terms + idle window = 4 allocations per container.
+Each term created a new `[]DigestRow` copy. With 3 terms + idle window = 4 allocations per container.
 
-**Fix:** Return `(lo, hi)` indices into the shared backing slice. Process windows sequentially (already the case).
+**Fix implemented (2026-06):**
+- `windowBounds` returns `(lo, hi)` index ranges into the shared backing slice instead of copying rows. Windows are processed sequentially over the same slice.
 
 **Impact:** 15-25% less allocation/GC during recommend on large clusters.
 
-### P1-4. `rh_accounts` join anti-pattern — **Open**
+### P1-4. `rh_accounts` join anti-pattern — **Implemented**
 
 **Location:** `GetRecommendationQuality`, `nativeContainerDetailQuery`, `loadClusterLastReportedAt`
 
-Tables that have `org_id` columns still join `rh_accounts` for org filtering instead of filtering directly on `org_id`.
+Tables that have `org_id` columns joined `rh_accounts` for org filtering instead of filtering directly on `org_id`.
 
-**Fix:** Use `WHERE org_id = $1` directly.
+**Fix implemented (2026-06):**
+- All affected queries now use direct `WHERE org_id = ?` filtering instead of joining `rh_accounts`.
 
 **Impact:** 10-5000x on affected query plans per internal EXPLAIN audit.
 
@@ -138,13 +144,16 @@ Tables that have `org_id` columns still join `rh_accounts` for org filtering ins
 
 `cpuUtil50 := float64(d.CPUUsageP50MC) / float64(allocCPU)` -- could be `usage * 10000 / alloc` (basis points).
 
-### P2-3. PVC and GPU writes not batched — **Open**
+### P2-3. PVC and GPU writes not batched — **Implemented**
 
-**Location:** `WritePVCRecommendations` (per-rec `Exec`), `StoreGPUClassifications` (per-rec UPDATE)
+**Location:** `internal/engine/pvc_recommend.go`, `internal/engine/gpu_recommender.go`
 
-Container/namespace use `pgx.Batch`; PVC and GPU do not.
+Container/namespace used `pgx.Batch`; PVC and GPU did not.
 
-**Fix:** Switch to `pgx.Batch` or single SQL `UPDATE FROM` with values list.
+**Fix implemented (2026-06):**
+- `WritePVCRecommendations` and `StoreGPUClassifications` now use `pgx.Batch` for batched writes.
+
+**Impact:** Reduced DB round-trips for PVC and GPU recommendation persistence.
 
 ### P2-4. VM recommendations run synchronously on ingest — **Open**
 
@@ -154,11 +163,16 @@ Container/namespace use `pgx.Batch`; PVC and GPU do not.
 
 **Fix:** Queue like container recs (post-CSV phase).
 
-### P2-5. Idle classification sorts when max/weighted-max would suffice — **Open**
+### P2-5. Idle classification sorts when max/weighted-max would suffice — **Implemented**
 
-**Location:** `internal/engine/idle_classification.go`
+**Location:** `internal/engine/idle_classification.go` — `maxDailyCPUUsageP95`, `maxDailyMemUsageP95`
 
-`percentile95Int64` creates a copy and sorts for exact P95 across ~15 daily values. Max of daily P95s is cheaper and semantically close enough for idle detection.
+`percentile95Int64` created a copy and sorted for exact P95 across ~15 daily values. Max of daily P95s is cheaper and semantically close enough for idle detection.
+
+**Fix implemented (2026-06):**
+- Replaced idle P95 sort with `maxDailyCPUUsageP95` / `maxDailyMemUsageP95` (max of per-day P95 values).
+
+**Impact:** Eliminates 2 sorts per container during idle classification.
 
 ---
 
@@ -171,7 +185,7 @@ Container/namespace use `pgx.Batch`; PVC and GPU do not.
 | Quota/CRQ headroom | int BP via `applyHeadroom` | None |
 | VM power-off idle ratio | int32 BP | None |
 | Margin application | `MarginScale` + `ApplyScaledMargin` | None |
-| **Margin computation** | **float64 CV** | Could be integer |
+| Margin computation | int BP via `ComputeAdaptiveMarginScaledDirect` | None |
 | **GPU thresholds** | **float64 in config** | Convert to BP at load |
 | **Node utilization** | **float64 ratio** | Could be BP |
 | **PVC usage ratio** | **float64** | Could be BP |
@@ -185,18 +199,18 @@ Container/namespace use `pgx.Batch`; PVC and GPU do not.
 ```
 RecommendWorkloadsStreaming
   per container (stream batch 500)
-    ClassifyIdleState .............. 2 sorts on ~15 values (could be max)
+    ClassifyIdleState .............. max-of-daily-P95 (no sort)     [P2-5 done]
     per term (short/medium/long)
-      filterByWindow ............... binary search + COPY (could be zero-copy)
+      windowBounds ................. binary search, zero-copy indices [Q2 done]
       per engine (cost/performance)
-        RecommendCPU ............... decay loop O(W), math.Exp per row
-        RecommendMemory ............ DUPLICATE decay loop O(W)     <-- fuse with CPU
+        RecommendCPUAndMemory ...... single fused decay loop O(W)   [Q1 done]
+          decay weight ............. lookup table (no math.Exp)     [P0-1 done]
         computeVariation x4 ....... float round (could be integer)
         EvaluateNotifications ...... integer comparisons (good)
   ApplySavingsEstimates (batch) .... float64 cost math per rec    <-- could be int cents
 ```
 
-**Total inner loop iterations per container:** 3 terms x 2 engines x 2 (CPU+mem) x ~7-15 digest rows = **84-180 decay weight computations**. After fusing CPU+mem: **42-90**.
+**Total inner loop iterations per container:** 3 terms x 2 engines x 1 (fused CPU+mem) x ~7-15 digest rows = **42-90 decay weight computations** (down from 84-180 before Q1).
 
 ---
 
@@ -206,12 +220,12 @@ RecommendWorkloadsStreaming
 
 | ID | Change | Impact | Risk | Status |
 |----|--------|--------|------|--------|
-| Q1 | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Low | Open |
-| Q2 | Zero-copy window slicing | ~15-25% less alloc/GC | Low | Open |
+| Q1 | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Low | Implemented |
+| Q2 | Zero-copy window slicing | ~15-25% less alloc/GC | Low | Implemented |
 | Q3 | Reuse decay weights across engines within a term | ~15% recommend CPU | Low | Declined (negligible after P0-1; ~2ns lookup) |
-| Q4 | Replace idle P95 sort with max-of-daily-P95 | Eliminates 2 sorts x N containers | Medium (behavior) | Open |
-| Q5 | Batch PVC writes via pgx.Batch | High DB latency improvement | Low | Open |
-| Q6 | Batch GPU classification UPDATEs | Significant for GPU clusters | Low | Open |
+| Q4 | Replace idle P95 sort with max-of-daily-P95 | Eliminates 2 sorts x N containers | Medium (behavior) | Implemented |
+| Q5 | Batch PVC writes via pgx.Batch | High DB latency improvement | Low | Implemented |
+| Q6 | Batch GPU classification UPDATEs | Significant for GPU clusters | Low | Implemented |
 
 ### Medium Effort (3-5 days each)
 
@@ -221,7 +235,7 @@ RecommendWorkloadsStreaming
 | M2 | Migrate list API pagination to org_container_keys | ~1000x on page query | Medium | Open |
 | M3 | Integer savings in micro-cents | Eliminates float in savings | Medium | Open |
 | M4 | Decay weight lookup table | Eliminates math.Exp | Low | Implemented |
-| M5 | Integer adaptive margin (remove float CV) | Completes BP migration | Low | Open |
+| M5 | Integer adaptive margin (remove float CV) | Completes BP migration | Low | Implemented |
 | M6 | Decouple VM recommend from ingest | Large ingest latency win | Medium | Open |
 
 ### Strategic (1-2 weeks each)
@@ -236,13 +250,14 @@ RecommendWorkloadsStreaming
 
 ## Theme A: API Response Assembly and Serialization
 
-### A-1. Double assembly per container in list API (P0) — **Open**
+### A-1. Double assembly per container in list API (P0) — **Implemented**
 
-**Location:** `internal/api/handlers.go:629`
+**Location:** `internal/api/list_response.go` — `BuildListResponse`
 
-Each page row is assembled twice: `assembleNativeResults` builds `NativeContainerResult` with `MapToKruizeFormat`, then `BuildDetailResponse` rebuilds the full Kruize-shaped nested JSON. This costs ~10-30ms CPU per 100-item page on top of DB/enrichment time.
+Each page row was assembled twice: `assembleNativeResults` built `NativeContainerResult` with `MapToKruizeFormat`, then `BuildDetailResponse` rebuilt the full Kruize-shaped nested JSON. This cost ~10-30ms CPU per 100-item page on top of DB/enrichment time.
 
-**Fix:** Introduce a slim list DTO (table columns + codes only); reserve `BuildDetailResponse` for detail-by-ID.
+**Fix implemented (2026-06):**
+- Introduced slim list DTO via `BuildListResponse` (table columns + codes only). List APIs skip `BuildDetailResponse`; detail-by-ID still uses full assembly.
 
 ### A-2. Notification triplication in JSON (P0) — **Open**
 
@@ -260,13 +275,14 @@ Every list item is heap-allocated and interface-boxed. Blocks compile-time JSON 
 
 **Fix:** Use `[]*DetailResponse` or `[]json.RawMessage`.
 
-### A-4. Double identity parsing per request (P1) — **Open**
+### A-4. Double identity parsing per request (P1) — **Implemented**
 
 **Location:** `internal/api/middleware/identity.go`, `entitlement.go`
 
-The `x-rh-identity` header is base64-decoded and JSON-unmarshaled twice (identity middleware + entitlement middleware). ~0.2-0.8ms per request.
+The `x-rh-identity` header was base64-decoded and JSON-unmarshaled twice (identity middleware + entitlement middleware). ~0.2-0.8ms per request.
 
-**Fix:** Parse once; store entitlement flag on context.
+**Fix implemented (2026-06):**
+- Identity middleware parses `x-rh-identity` once and stores parsed identity on `echo.Context`. Entitlement middleware reads from context instead of re-parsing.
 
 ### A-5. Legacy Kruize path: `map[string]interface{}` (P1) — **Open**
 
@@ -274,21 +290,27 @@ The `x-rh-identity` header is base64-decoded and JSON-unmarshaled twice (identit
 
 Legacy list/detail unmarshals JSONB into generic maps, mutates in place, then marshals again. Worst path for allocator churn and reflection. Impact only when Kruize fallback is active.
 
-### A-6. Cache headers on notification catalog (P2) — **Open**
+### A-6. Cache headers on notification catalog (P2) — **Implemented**
 
-`GetNotificationCodes` is static in-memory, but returns no cache headers. Could add `Cache-Control: public, max-age=86400`.
+`GetNotificationCodes` is static in-memory.
+
+**Fix implemented (2026-06):**
+- `GetNotificationCodes` now returns `Cache-Control: public, max-age=86400`.
 
 ---
 
 ## Theme B: Ingestion Pipeline and Memory
 
-### B-1. Digest groups retain full MetricRow structs (P0) — **Open**
+### B-1. Digest groups retain full MetricRow structs (P0) — **Implemented**
 
-**Location:** `internal/ingestion/pipeline_stream.go:181`
+**Location:** `internal/ingestion/pipeline_stream.go` — `metricSample`
 
-Between flushes, `groupedAll` and `groupedBH` store full `MetricRow` (~456 bytes + heap strings) per sample. For 1000 container-days x 96 samples/day = ~96,000 copies = **50-120 MB**.
+Between flushes, `groupedAll` and `groupedBH` stored full `MetricRow` (~456 bytes + heap strings) per sample. For 1000 container-days x 96 samples/day = ~96,000 copies = **50-120 MB**.
 
-**Fix:** Store a slim `metricSample` (6x int64 + time.Time = ~72 bytes) instead. Convert from `MetricRow` once at append time. 5-10x RAM reduction.
+**Fix implemented (2026-06):**
+- Replaced `MetricRow` storage with slim `metricSample` struct (6x int64 + time.Time = ~72 bytes). Convert from `MetricRow` once at append time.
+
+**Impact:** ~5-10x RAM reduction during ingest grouping.
 
 ### B-2. Namespace CSV not streaming (P1) — **Open**
 
@@ -302,13 +324,14 @@ Namespace CSV is fully materialized into `[]NamespaceMetricRow` before grouping,
 
 `DigestKey` copies `Namespace`, `Workload`, `ContainerName` from every row. These repeat heavily across rows. An intern table could reduce heap pressure on large clusters.
 
-### B-4. Per-row Prometheus gauge update during CSV ingest (P1) — **Open**
+### B-4. Per-row Prometheus gauge update during CSV ingest (P1) — **Implemented**
 
-**Location:** `internal/ingestion/pipeline_stream.go:240`
+**Location:** `internal/ingestion/pipeline_stream.go`
 
-`SetIngestGroupsInMemory(groupCount)` is called on **every CSV row** in the streaming loop. On a 500k-row manifest, that's 500k Prometheus gauge updates with mutex + label lookup.
+`SetIngestGroupsInMemory(groupCount)` was called on **every CSV row** in the streaming loop. On a 500k-row manifest, that's 500k Prometheus gauge updates with mutex + label lookup.
 
-**Fix:** Update only on flush boundaries (already done at flush end; remove the per-row one).
+**Fix implemented (2026-06):**
+- Removed per-row gauge update from the streaming loop. Gauge is updated only on flush boundaries.
 
 ### B-5. Single-tx fast path holds all deferred samples in RAM (P2) — **Open**
 
@@ -402,11 +425,15 @@ SaaS: Not applicable -- RDS instance class and parameter groups are managed sepa
 - `max_connections`: 200 (or add PgBouncer)
 - Expose a `database.server.postgresqlConfiguration` in chart values or document mandatory external DB specs for production
 
-### D-2. Connection budget exceeds max_connections (CRITICAL -- on-prem; MEDIUM -- SaaS) — **Open**
+### D-2. Connection budget exceeds max_connections (CRITICAL -- on-prem; MEDIUM -- SaaS) — **Implemented**
 
-With default `ROS_DB_MAX_CONNS=10` per process across ~6 ROS pods + Koku + RBAC + Kruize, total connections can reach **85-150** against PostgreSQL's default `max_connections=100`. Chart sets legacy `DB_POOL_SIZE` that ros-ocp-backend does not read.
+With default `ROS_DB_MAX_CONNS=10` per process across ~6 ROS pods + Koku + RBAC + Kruize, total connections could reach **85-150** against PostgreSQL's default `max_connections=100`. Chart set legacy `DB_POOL_SIZE` that ros-ocp-backend did not read.
 
-SaaS: RDS instances typically have higher `max_connections` (e.g., db.r6g.xlarge allows ~5000), but the dead `DB_POOL_SIZE` env var and missing `ROS_DB_MAX_CONNS` exposure in Helm still apply.
+**Fix implemented (2026-06):**
+- `ROS_DB_MAX_CONNS` default lowered to **5** per process to fit within connection budget.
+- `DB_POOL_SIZE` retained as a deprecated alias that maps to `ROS_DB_MAX_CONNS` for backward compatibility.
+
+SaaS: RDS instances typically have higher `max_connections`; the lower per-process default still reduces pool pressure on shared clusters.
 
 ### D-3. UPDATE-heavy tables need autovacuum tuning (HIGH -- on-prem; MEDIUM -- SaaS) — **Open**
 
@@ -416,13 +443,19 @@ SaaS: RDS autovacuum is managed but uses instance-level defaults. Per-table `ALT
 
 On-prem: Stock autovacuum with 512Mi RAM can fall behind on large UPSERT tables, leading to table bloat and degraded query plans.
 
-### D-4. `node_recommendations` retention gap (HIGH -- both modes) — **Open**
+### D-4. `node_recommendations` retention gap (HIGH -- both modes) — **Implemented**
 
-Listed in retention plugin but **not partitioned** -- sweep is a no-op. Rows only removed on Sources destroy, not by age. This is an application-level bug that affects both SaaS and on-prem.
+Listed in retention plugin but was **not partitioned** -- sweep was a no-op. Rows were only removed on Sources destroy, not by age.
 
-### D-5. `namespace_recommendation_sets` and `pvc_recommendation_sets` lack age-based retention (HIGH -- both modes) — **Open**
+**Fix implemented (2026-06):**
+- Added `node_recommendations` to `dateRetainedTables` in `retention.go` for age-based cleanup.
 
-No periodic cleanup; only removed on Sources destroy. Application-level gap in both deployment modes.
+### D-5. `namespace_recommendation_sets` and `pvc_recommendation_sets` lack age-based retention (HIGH -- both modes) — **Implemented**
+
+No periodic cleanup; only removed on Sources destroy.
+
+**Fix implemented (2026-06):**
+- Added `namespace_recommendation_sets` and `pvc_recommendation_sets` to `dateRetainedTables` in `retention.go` for age-based cleanup.
 
 ---
 
@@ -517,15 +550,19 @@ Samples are needed for boxplot drill-down but not for recommendations (which use
 
 **This may be the single highest-ROI optimization area.**
 
-### H-1. Badge/summary fetch 100-row list for a count (P0) — **Open**
+### H-1. Badge/summary fetch 100-row list for a count (P0) — **Implemented**
 
-`OptimizationsBadge` and `OptimizationsSummary` call the list API with default `limit=100` but only read `meta.count`. Each call materializes up to 100 full recommendation objects with all enrichment.
+`OptimizationsBadge` and `OptimizationsSummary` called the list API with default `limit=100` but only read `meta.count`. Each call materialized up to 100 full recommendation objects with all enrichment.
 
-**Fix (5 minutes):** Pass `limit=1` from the UI. Better: use fleet-summary endpoint.
+**Fix implemented (2026-06):**
+- `optimizationsBadge.tsx` and `optimizationsSummary.tsx` now pass `limit=1` to the list API (count still available via `meta.count`).
 
-### H-2. Projects table fetches then overwrites with mocks (P0) — **Open**
+### H-2. Projects table fetches then overwrites with mocks (P0) — **Implemented**
 
-`optimizationsProjectsTable.tsx` makes a full list API call then replaces the response with hardcoded mock data (`// Todo: Testing`). Wasted network + backend work on every mount.
+`optimizationsProjectsTable.tsx` made a full list API call then replaced the response with hardcoded mock data (`// Todo: Testing`). Wasted network + backend work on every mount.
+
+**Fix implemented (2026-06):**
+- Removed mock override in `optimizationsProjectsTable.tsx`; table now renders live API response.
 
 ### H-3. OCP breakdown fires duplicate list calls (P1) — **Open**
 
@@ -573,17 +610,17 @@ Loaded once at startup via `sync.Once`. No action needed.
 
 | ID | Theme | Change | Est. Impact | Status |
 |----|-------|--------|-------------|--------|
-| H-1 | UI | Badge/summary: pass `limit=1` | Eliminates 99% of wasted list work | Open |
-| H-2 | UI | Remove projects table mock override | Eliminates wasted API calls | Open |
+| H-1 | UI | Badge/summary: pass `limit=1` | Eliminates 99% of wasted list work | Implemented |
+| H-2 | UI | Remove projects table mock override | Eliminates wasted API calls | Implemented |
 | D-1 | DB Config | Add PostgreSQL tuning to Helm chart (on-prem) | Production correctness | Open |
-| D-2 | DB Config | Fix connection budget (expose ROS_DB_MAX_CONNS, remove dead DB_POOL_SIZE) -- both modes | Prevents pool exhaustion | Open |
+| D-2 | DB Config | Fix connection budget (expose ROS_DB_MAX_CONNS, remove dead DB_POOL_SIZE) -- both modes | Prevents pool exhaustion | Implemented |
 | P0-1 | Math | Decay weight lookup table or fixed-point | Eliminates math.Exp from hot path | Implemented |
-| P0-2 | Math | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Open |
+| P0-2 | Math | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Implemented |
 | P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Implemented |
 | P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query | Open |
-| A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Open |
+| A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Implemented |
 | A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |
-| B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Open |
+| B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Implemented |
 | C-1 | Ops | Fix readiness probe to use /readyz | Correctness | Resolved |
 
 ### P1 -- High Priority
@@ -594,14 +631,16 @@ Loaded once at startup via `sync.Once`. No action needed.
 | H-4 | API | List field projection (term/engine/fields) | Open |
 | H-5 | UI | Adopt cursor pagination | Open |
 | P1-1 | Math | Integer savings in micro-cents | Open |
-| P1-2 | Math | Integer adaptive margin | Open |
-| P1-3 | Math | Zero-copy window slicing | Open |
-| P1-4 | DB | Fix rh_accounts join anti-pattern | Open |
+| P1-2 | Math | Integer adaptive margin | Implemented |
+| P1-3 | Math | Zero-copy window slicing | Implemented |
+| P1-4 | DB | Fix rh_accounts join anti-pattern | Implemented |
+| A-4 | API | Parse x-rh-identity once (identity middleware) | Implemented |
+| A-6 | API | Cache-Control on notification catalog | Implemented |
 | D-3 | DB Config | Per-table autovacuum tuning (migration for both modes; chart tuning for on-prem) | Open |
-| D-4 | DB Config | Fix node_recommendations retention (both modes -- app bug) | Open |
-| D-5 | DB Config | Add namespace/PVC retention (both modes -- app bug) | Open |
+| D-4 | DB Config | Fix node_recommendations retention (both modes -- app bug) | Implemented |
+| D-5 | DB Config | Add namespace/PVC retention (both modes -- app bug) | Implemented |
 | B-2 | Ingest | Stream namespace CSV | Open |
-| B-4 | Ingest | Remove per-row Prometheus gauge | Open |
+| B-4 | Ingest | Remove per-row Prometheus gauge | Implemented |
 | C-2 | Ops | VM CSV logs: Debug + counter | Open |
 | C-3 | Ops | Audit high-cardinality Prometheus labels | Open |
 | C-4 | Ops | Drain in-flight Kafka handlers on shutdown | Open |
@@ -613,7 +652,11 @@ Loaded once at startup via `sync.Once`. No action needed.
 | E-2 | Lifecycle | Separate sample vs digest retention | Open |
 | G-1 | Scale | Increase Kafka partitions (3 -> 12) | Open |
 | G-2 | Scale | Add HPA for API pods | Open |
-| P2-1-5 | Math/DB | GPU BP config, node BP, batch PVC/GPU writes, VM decouple, idle sort | Open |
+| P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Open |
+| P2-2 | Math | Node utilization as basis points | Open |
+| P2-3 | DB | Batch PVC/GPU writes via pgx.Batch | Implemented |
+| P2-4 | Ingest | Decouple VM recommend from ingest | Open |
+| P2-5 | Math | Replace idle P95 sort with max-of-daily-P95 | Implemented |
 | B-3,5,6 | Ingest | String interning, narrow single-tx, GOMEMLIMIT/PGO | Open |
 | C-6 | Ops | Add make test-short | Open |
 | I-1 | Deps | Binary slimming (release ldflags, SDK audit) | Open |
