@@ -111,9 +111,32 @@ func TestComputeIdleDuration(t *testing.T) {
 	assert.Equal(t, 0, computeIdleDuration(nil))
 }
 
-func TestPercentile95Int64(t *testing.T) {
-	vals := []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 100}
-	assert.Equal(t, int64(19), percentile95Int64(vals))
+func TestMaxDailyCPUUsageP95_ReturnsMaxNotWindowP95(t *testing.T) {
+	rows := make([]DigestRow, 20)
+	for i := range rows {
+		rows[i] = digestDay(i+1, 50, 60, 2048, 4096)
+	}
+	rows[0] = digestDay(1, 800, 900, 2048, 4096)
+	assert.Equal(t, int64(800), maxDailyCPUUsageP95(rows))
+}
+
+func TestMaxDailyMemUsageP95_ReturnsMaxAcrossDays(t *testing.T) {
+	rows := []DigestRow{
+		digestDay(1, 50, 60, 100, 120),
+		digestDay(2, 50, 60, 500, 520),
+	}
+	assert.Equal(t, int64(500), maxDailyMemUsageP95(rows))
+}
+
+func TestMaxDailyCPUUsageP95_ConservativeUpperBoundForIdle(t *testing.T) {
+	cfg := DefaultIdleConfig()
+	rows := make([]DigestRow, 20)
+	for i := range rows {
+		rows[i] = digestDay(i+1, 0, 5, 0, 0)
+	}
+	rows[0] = digestDay(1, 500, 600, 2048, 4096)
+	result := ClassifyIdleState(rows, 1000, 8192, "Deployment", "app", cfg)
+	assert.Equal(t, IdleStateActive, result.State, "early spike raises max daily P95 above zombie threshold")
 }
 
 func TestFindIdleSince_ConsecutiveTail(t *testing.T) {

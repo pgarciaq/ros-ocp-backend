@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Idle classification: replace window P95 sort with max-of-daily-P95 for container and GPU idle checks — O(N) scan, no sort allocations; conservative bound may classify fewer workloads as idle when single-day spikes exist (ADR-0290, performance audit Q4)
 - PVC recommendation persistence: `WritePVCRecommendations` uses chunked `pgx.Batch` upserts (500 per round-trip) instead of per-PVC `Exec`, reducing database latency for large clusters
 - Recommendation engine: fuse CPU and memory weighted-percentile passes into a single `RecommendCPUAndMemory` call (~40–50% fewer digest row walks per container-term-engine)
 - Recommendation engine: `windowBounds` returns index ranges for zero-copy term window slicing instead of copying `DigestRow` structs

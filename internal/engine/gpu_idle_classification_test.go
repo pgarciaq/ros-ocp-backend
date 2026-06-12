@@ -90,7 +90,7 @@ func TestClassifyGPUIdleFromDigests_SetsIdleSince(t *testing.T) {
 	assert.Greater(t, result.DurationDays, 0)
 }
 
-func TestClassifyGPUIdleFromDigests_P95IgnoresEarlySpike(t *testing.T) {
+func TestClassifyGPUIdleFromDigests_MaxDailyP95TreatsEarlySpikeAsActive(t *testing.T) {
 	cfg := gpuIdleConfig()
 	rows := make([]GPUDigestRow, 20)
 	for i := range rows {
@@ -101,9 +101,8 @@ func TestClassifyGPUIdleFromDigests_P95IgnoresEarlySpike(t *testing.T) {
 		rows[i] = gpuDigestDay(i+1, sm, dram)
 	}
 	result := ClassifyGPUIdleFromDigests(rows, cfg)
-	assert.Equal(t, IdleStateZombie, result.State)
-	require.NotNil(t, result.IdleSince)
-	assert.Equal(t, 2, result.IdleSince.Day())
+	assert.Equal(t, IdleStateActive, result.State, "max daily P95 includes early spike; conservative for idle detection")
+	assert.Nil(t, result.IdleSince)
 }
 
 func TestApplyGPUIdleWasteCents_FullGPURate(t *testing.T) {

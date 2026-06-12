@@ -479,8 +479,8 @@ for each container with digest rows in window:
         idle_state = "active"  // insufficient data
         continue
 
-    cpu_p95 = percentile95(digest.cpu_usage)
-    mem_p95 = percentile95(digest.mem_usage)
+    cpu_p95 = max(digest.cpu_usage_p95)  // max-of-daily-P95; see ADR-0290
+    mem_p95 = max(digest.mem_usage_p95)
     cpu_peak = max(digest.cpu_usage)
     mem_peak = max(digest.mem_usage)
     cpu_request = current_cpu_request_millicores

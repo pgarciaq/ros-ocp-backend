@@ -18,7 +18,7 @@ ROS classifies workloads that consume resources without meaningful utilization s
 4. **Zombie** — P95 CPU < `zombie_cpu_millicores` **and** peak CPU < `zombie_peak_millicores` (defaults 1 mc / 10 mc; configurable via settings).
 5. **Idle** — Otherwise, if CPU utilization < `cpu_utilization_percent`% of request **or** memory utilization < `memory_utilization_percent`% of request.
 
-Peak and P95 come from daily container digests. `idle_since` is the first day the predicate held; `idle_duration_days` is days since then at classification time.
+Peak and P95 come from daily container digests. Window P95 is the **maximum** daily P95 across the observation period (conservative upper bound — a single high-utilization day prevents idle/zombie classification). `idle_since` is the first day the predicate held; `idle_duration_days` is days since then at classification time.
 
 ## Namespace idle
 
@@ -36,8 +36,8 @@ Filter: `filter[idle_state]` on `GET /recommendations/openshift/nodes`.
 
 GPU classification uses DCGM basis points (0–10000 = 0–100%):
 
-- **Zombie** — P95 SM active and P95 DRAM active both below zombie basis points (admin default 100 = 1%).
-- **Idle** — P95 SM and P95 DRAM below `gpu_sm_active_basis_points` and `gpu_dram_active_basis_points` (default 500 = 5%).
+- **Zombie** — Max daily SM active and max daily DRAM active both below zombie basis points (admin default 100 = 1%).
+- **Idle** — Max daily SM and max daily DRAM below `gpu_sm_active_basis_points` and `gpu_dram_active_basis_points` (default 500 = 5%).
 
 Persisted on `recommendation_sets` as `gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`, `estimated_monthly_gpu_waste`. Exposed on the container `gpu` map in list/detail responses.
 

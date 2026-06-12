@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
@@ -107,8 +106,8 @@ func ClassifyIdleState(
 		return result
 	}
 
-	cpuP95MC := percentile95CPU(rows)
-	memP95KiB := percentile95Mem(rows)
+	cpuP95MC := maxDailyCPUUsageP95(rows)
+	memP95KiB := maxDailyMemUsageP95(rows)
 	peakCPUMC := maxCPU(rows)
 	peakMemBytes := maxMemBytes(rows)
 
@@ -148,36 +147,29 @@ func ClassifyIdleState(
 	return result
 }
 
-func percentile95CPU(rows []DigestRow) int64 {
-	vals := make([]int64, len(rows))
-	for i, r := range rows {
-		vals[i] = r.CPUUsageP95MC
+// maxDailyCPUUsageP95 returns the maximum daily CPU P95 across the observation window.
+// Conservative upper bound for window P95: max(daily P95) >= P95(daily P95). Safe for idle
+// detection because max < threshold implies the true window P95 is also below threshold.
+func maxDailyCPUUsageP95(rows []DigestRow) int64 {
+	var max int64
+	for _, r := range rows {
+		if r.CPUUsageP95MC > max {
+			max = r.CPUUsageP95MC
+		}
 	}
-	return percentile95Int64(vals)
+	return max
 }
 
-func percentile95Mem(rows []DigestRow) int64 {
-	vals := make([]int64, len(rows))
-	for i, r := range rows {
-		vals[i] = r.MemUsageP95KiB
+// maxDailyMemUsageP95 returns the maximum daily memory P95 across the observation window.
+// See maxDailyCPUUsageP95 for the conservative idle-detection rationale.
+func maxDailyMemUsageP95(rows []DigestRow) int64 {
+	var max int64
+	for _, r := range rows {
+		if r.MemUsageP95KiB > max {
+			max = r.MemUsageP95KiB
+		}
 	}
-	return percentile95Int64(vals)
-}
-
-func percentile95Int64(vals []int64) int64 {
-	if len(vals) == 0 {
-		return 0
-	}
-	sorted := append([]int64(nil), vals...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-	idx := (len(sorted)*95 + 99) / 100
-	if idx < 1 {
-		idx = 1
-	}
-	if idx > len(sorted) {
-		idx = len(sorted)
-	}
-	return sorted[idx-1]
+	return max
 }
 
 func maxCPU(rows []DigestRow) int64 {

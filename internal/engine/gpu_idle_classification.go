@@ -49,8 +49,8 @@ func LoadGPUIdleConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) GP
 	return gpuIdleConfigFromSettings(settings)
 }
 
-// ClassifyGPUIdleState determines if a GPU is zombie, idle, or active from P95
-// sm_active and dram_active basis points over the observation window.
+// ClassifyGPUIdleState determines if a GPU is zombie, idle, or active from the
+// max daily sm_active and dram_active basis points over the observation window.
 func ClassifyGPUIdleState(
 	smActiveP95BP int64,
 	dramActiveP95BP int64,
@@ -85,8 +85,8 @@ func ClassifyGPUIdleFromDigests(digests []GPUDigestRow, cfg GPUIdleConfig) IdleR
 	if len(digests) == 0 {
 		return IdleResult{State: IdleStateActive}
 	}
-	smP95 := percentile95GPUField(digests, func(d GPUDigestRow) int64 { return int64(d.SMActiveAvg) })
-	dramP95 := percentile95GPUField(digests, func(d GPUDigestRow) int64 { return int64(d.DRAMActiveAvg) })
+	smP95 := maxDailyGPUField(digests, func(d GPUDigestRow) int64 { return int64(d.SMActiveAvg) })
+	dramP95 := maxDailyGPUField(digests, func(d GPUDigestRow) int64 { return int64(d.DRAMActiveAvg) })
 	result := ClassifyGPUIdleState(smP95, dramP95, len(digests), cfg)
 	if result.State == IdleStateActive {
 		return result
@@ -103,12 +103,16 @@ func ClassifyGPUIdleFromDigests(digests []GPUDigestRow, cfg GPUIdleConfig) IdleR
 	return result
 }
 
-func percentile95GPUField(rows []GPUDigestRow, pick func(GPUDigestRow) int64) int64 {
-	vals := make([]int64, len(rows))
-	for i, r := range rows {
-		vals[i] = pick(r)
+// maxDailyGPUField returns the maximum daily GPU utilization metric across the window.
+// Conservative upper bound for window P95; see maxDailyCPUUsageP95.
+func maxDailyGPUField(rows []GPUDigestRow, pick func(GPUDigestRow) int64) int64 {
+	var max int64
+	for _, r := range rows {
+		if v := pick(r); v > max {
+			max = v
+		}
 	}
-	return percentile95Int64(vals)
+	return max
 }
 
 func findGPUIdleSince(rows []GPUDigestRow, predicate func(GPUDigestRow) bool) *time.Time {
