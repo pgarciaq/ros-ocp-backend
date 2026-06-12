@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Recommendation engine: adaptive margin uses integer-only `ComputeAdaptiveMarginScaledDirect` instead of float CV detour per container rec (performance audit M5)
 - Query performance: remove redundant `rh_accounts` joins for org scoping on `recommendation_quality`, native/legacy container detail, and native namespace detail queries — filter denormalized `org_id` directly (performance audit P1-4)
 - CSV ingest: remove per-row Prometheus gauge update for in-memory digest groups; gauge updates only at flush boundaries (performance audit B-4)
 - Notification catalog: `GET /recommendations/openshift/notification-codes` returns `Cache-Control: public, max-age=86400` for static in-memory catalog responses (performance audit A-6)

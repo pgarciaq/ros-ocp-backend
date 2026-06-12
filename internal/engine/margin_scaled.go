@@ -10,9 +10,29 @@ func ScaleMargin(m float64) int64 {
 	return int64(math.Round(m * float64(MarginScale)))
 }
 
+// ComputeAdaptiveMarginScaledDirect calculates adaptive margin entirely in scaled integer
+// arithmetic: marginScaled = MarginScale + (p95-p50)*MarginScale/mean, clamped to
+// [minMargin, maxMargin]. Returns minMargin scaled when mean <= 0.
+func ComputeAdaptiveMarginScaledDirect(p95, p50, mean int64, minMargin, maxMargin float64) int64 {
+	minScaled := ScaleMargin(minMargin)
+	maxScaled := ScaleMargin(maxMargin)
+	if mean <= 0 {
+		return minScaled
+	}
+	cvScaled := (p95 - p50) * MarginScale / mean
+	marginScaled := MarginScale + cvScaled
+	if marginScaled < minScaled {
+		return minScaled
+	}
+	if marginScaled > maxScaled {
+		return maxScaled
+	}
+	return marginScaled
+}
+
 // ComputeAdaptiveMarginScaled returns margin scaled by MarginScale.
 func ComputeAdaptiveMarginScaled(p95, p50, mean int64, minMargin, maxMargin float64) int64 {
-	return ScaleMargin(ComputeAdaptiveMargin(p95, p50, mean, minMargin, maxMargin))
+	return ComputeAdaptiveMarginScaledDirect(p95, p50, mean, minMargin, maxMargin)
 }
 
 // ApplyScaledMargin multiplies value by scaled margin with rounding: (value*marginScaled + MarginScale/2) / MarginScale.
