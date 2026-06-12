@@ -22,6 +22,7 @@ func TestGetNotificationCodes_ReturnsAllCodesSorted(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.Equal(t, "public, max-age=86400", rec.Header().Get("Cache-Control"))
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))

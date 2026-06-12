@@ -14,5 +14,6 @@ import (
 func GetNotificationCodes(c echo.Context) error {
 	pluginFilter := c.QueryParam("filter[plugin]")
 	resp := notifications.BuildCatalog(pluginFilter)
+	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 	return c.JSON(http.StatusOK, resp)
 }

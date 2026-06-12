@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -233,6 +234,55 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	return nil
 }
 
+const gpuClassificationUpdateSQL = `
+	UPDATE recommendation_sets
+	SET gpu_classification = $6,
+	    gpu_idle_state = $8,
+	    gpu_idle_since = $9,
+	    gpu_idle_duration_days = $10,
+	    gpu_estimated_waste_cents = $11,
+	    estimated_gpu_savings_cents = $12
+	WHERE org_id = $1
+	  AND cluster_uuid = $2
+	  AND namespace = $3
+	  AND workload = $4
+	  AND container_name = $5
+	  AND term = $7`
+
+type gpuClassificationWrite struct {
+	orgID, clusterUUID, namespace, workload, containerName string
+	term, classification, idleState                        string
+	idleSince                                              *time.Time
+	idleDurationDays                                       int
+	wasteCents                   int64
+	gpuSavingsCents              *int64
+}
+
+func queueGPUClassificationUpdate(batch *pgx.Batch, w gpuClassificationWrite) {
+	batch.Queue(gpuClassificationUpdateSQL,
+		w.orgID, w.clusterUUID, w.namespace, w.workload, w.containerName,
+		w.classification, w.term,
+		w.idleState, w.idleSince, w.idleDurationDays, w.wasteCents, w.gpuSavingsCents,
+	)
+}
+
+func flushGPUClassificationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, chunk []gpuClassificationWrite) error {
+	if len(chunk) == 0 {
+		return nil
+	}
+	br := sender.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for i := range chunk {
+		w := chunk[i]
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("store GPU classification for %s/%s/%s term=%s: %w",
+				w.namespace, w.workload, w.containerName, w.term, err)
+		}
+	}
+	return nil
+}
+
 // StoreGPUClassifications computes GPU classifications and idle/zombie state for all
 // GPU containers in a cluster and stores them on recommendation_sets. This runs after
 // MarkContainersWithGPU so has_gpu and gpu_model_name are set.
@@ -248,14 +298,8 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		return nil
 	}
 
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx for GPU classifications: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
 	gpuMonthlyRate := GPUMonthlyRate(costData)
-
+	writes := make([]gpuClassificationWrite, 0, len(gpuRecs)*len(terms))
 	for key, recs := range gpuRecs {
 		parts := strings.SplitN(key, "/", 3)
 		if len(parts) != 3 {
@@ -272,27 +316,41 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			if rec.GPUIdleState != IdleStateActive && gpuMonthlyRate > 0 {
 				wasteCents = money.USDToCents(gpuMonthlyRate)
 			}
-			gpuSavingsCents := ComputeGPUSavingsCents(rec, costData)
-			idleState := idleStateForWrite(rec.GPUIdleState)
-			_, err := tx.Exec(ctx, `
-				UPDATE recommendation_sets
-				SET gpu_classification = $6,
-				    gpu_idle_state = $8,
-				    gpu_idle_since = $9,
-				    gpu_idle_duration_days = $10,
-				    gpu_estimated_waste_cents = $11,
-				    estimated_gpu_savings_cents = $12
-				WHERE org_id = $1
-				  AND cluster_uuid = $2
-				  AND namespace = $3
-				  AND workload = $4
-				  AND container_name = $5
-				  AND term = $7`,
-				orgID, clusterUUID, ns, wl, cn, classification, rec.Term,
-				idleState, rec.GPUIdleSince, rec.GPUIdleDurationDays, wasteCents, gpuSavingsCents)
-			if err != nil {
-				return fmt.Errorf("store GPU classification for %s term=%s: %w", key, rec.Term, err)
-			}
+			writes = append(writes, gpuClassificationWrite{
+				orgID:            orgID,
+				clusterUUID:      clusterUUID,
+				namespace:        ns,
+				workload:         wl,
+				containerName:    cn,
+				term:             rec.Term,
+				classification:   classification,
+				idleState:        idleStateForWrite(rec.GPUIdleState),
+				idleSince:        rec.GPUIdleSince,
+				idleDurationDays: rec.GPUIdleDurationDays,
+				wasteCents:       wasteCents,
+				gpuSavingsCents:  ComputeGPUSavingsCents(rec, costData),
+			})
+		}
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx for GPU classifications: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(writes); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(writes) {
+			chunkEnd = len(writes)
+		}
+		chunk := writes[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, w := range chunk {
+			queueGPUClassificationUpdate(batch, w)
+		}
+		if err := flushGPUClassificationBatch(ctx, tx, batch, chunk); err != nil {
+			return err
 		}
 	}
 

@@ -238,7 +238,6 @@ func parseAndDigestCSVStream(
 		appendBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 
 		groupCount := digestGroupCount(groupedAll, groupedBH)
-		metrics.SetIngestGroupsInMemory(groupCount)
 		if groupCount >= flushBatchSize {
 			if err := flushDigestGroupBatch(ctx, pool, groupedAll, groupedBH, scheduleCache, orgID, clusterUUID); err != nil {
 				return fmt.Errorf("incremental digest flush: %w", err)
