@@ -31,7 +31,7 @@
 //
 //   - [plugin.IngestHook] — extracts node data after "container" CSV processing
 //   - [plugin.APIProvider] — node utilization recommendation endpoints
-//   - [plugin.RetentionProvider] — sweeps daily_node_digests, node_recommendations
+//   - [plugin.RetentionProvider] — sweeps daily_node_digests (node_recommendations uses date-based DELETE in engine retention)
 //   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days)
 package node
 
@@ -83,7 +83,7 @@ func (p *NodePlugin) RegisterRoutes(g *echo.Group) {
 }
 
 func (p *NodePlugin) RetentionTables() []string {
-	return []string{"daily_node_digests", "node_recommendations"}
+	return []string{"daily_node_digests"}
 }
 
 func (p *NodePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {

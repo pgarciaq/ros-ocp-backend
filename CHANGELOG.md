@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Retention sweep now deletes aged rows from non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) using `ROS_RETENTION_MONTHS`; fleet summary cache is invalidated for affected orgs
+
 ### Added
 
 - ADR-0289: Defer org metadata refresh to end of reconcile cycle — single `RefreshOrgMetadata` after streaming batches instead of per-batch full-org scans of `org_container_keys` and `org_recommendation_stats`

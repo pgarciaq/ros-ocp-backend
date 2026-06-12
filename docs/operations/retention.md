@@ -32,7 +32,6 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 | `daily_node_digests` | Daily aggregated node utilization |
 | `gpu_container_digests` | Daily GPU profiling metrics |
 | `namespace_usage_samples` | Raw namespace-level samples |
-| `node_recommendations` | Node utilization recommendations |
 
 ### History tables (monthly partitions, retained by `ROS_HISTORY_RETENTION_DAYS`)
 
@@ -46,6 +45,11 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 | Table | Column | Retention |
 |-------|--------|-----------|
 | `historical_namespace_recommendation_sets` | `created_at` | `ROS_RETENTION_MONTHS` |
+| `node_recommendations` | `updated_at` | `ROS_RETENTION_MONTHS` |
+| `namespace_recommendation_sets` | `updated_at` | `ROS_RETENTION_MONTHS` |
+| `pvc_recommendation_sets` | `updated_at` | `ROS_RETENTION_MONTHS` |
+
+Rows deleted from recommendation tables invalidate the per-org fleet summary cache for affected tenants.
 
 ## Partition Naming Convention
 

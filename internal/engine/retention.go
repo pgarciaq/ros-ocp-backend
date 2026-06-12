@@ -46,7 +46,6 @@ var retainedTables = []string{
 	"daily_node_digests",
 	"gpu_container_digests",
 	"namespace_usage_samples",
-	"node_recommendations",
 }
 
 // Tables retained by the separate ROS_HISTORY_RETENTION_DAYS setting
@@ -60,12 +59,17 @@ var historyRetainedTables = []string{
 // date-based DELETE retention. Both Table and DateColumn are hard-coded identifiers
 // (never from user input) — the fmt.Sprintf interpolation is safe by construction.
 type RetentionTable struct {
-	Table      string
-	DateColumn string
+	Table                string
+	DateColumn           string
+	InvalidateFleetCache bool
 }
 
 var dateRetainedTables = []RetentionTable{
-	{"historical_namespace_recommendation_sets", "created_at"},
+	{"historical_namespace_recommendation_sets", "created_at", false},
+	// node_recommendations is not partitioned; plugin partition sweeps are a no-op for it.
+	{"node_recommendations", "updated_at", true},
+	{"namespace_recommendation_sets", "updated_at", true},
+	{"pvc_recommendation_sets", "updated_at", true},
 }
 
 // RunRetentionSweep drops monthly partitions older than retentionMonths for
@@ -126,14 +130,13 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 
 	for _, dt := range dateRetainedTables {
-		sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
-		tag, err := pool.Exec(ctx, sql, cutoff)
+		purged, err := purgeDateRetainedTable(ctx, pool, dt, cutoff)
 		if err != nil {
 			logging.GetLogger().Warnf("retention: purging %s: %v", dt.Table, err)
 			errs = append(errs, fmt.Errorf("purge %s: %w", dt.Table, err))
-		} else if tag.RowsAffected() > 0 {
-			retentionDropped.Add(float64(tag.RowsAffected()))
-			logging.GetLogger().Infof("retention: purged %d rows from %s (older than %s)", tag.RowsAffected(), dt.Table, cutoff.Format("2006-01-02"))
+		} else if purged > 0 {
+			retentionDropped.Add(float64(purged))
+			logging.GetLogger().Infof("retention: purged %d rows from %s (older than %s)", purged, dt.Table, cutoff.Format("2006-01-02"))
 		}
 	}
 
@@ -167,6 +170,46 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		logging.GetLogger().Infof("retention: purged %d snapshot_inventory rows (older than %dh)", purged, snapRetentionH)
 	}
 	return errors.Join(errs...)
+}
+
+func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt RetentionTable, cutoff time.Time) (int64, error) {
+	if dt.InvalidateFleetCache {
+		rows, err := pool.Query(ctx,
+			fmt.Sprintf("DELETE FROM %s WHERE %s < $1 RETURNING org_id", dt.Table, dt.DateColumn),
+			cutoff,
+		)
+		if err != nil {
+			return 0, err
+		}
+		defer rows.Close()
+
+		affectedOrgs := make(map[string]struct{})
+		var purged int64
+		for rows.Next() {
+			var orgID string
+			if err := rows.Scan(&orgID); err != nil {
+				return purged, err
+			}
+			purged++
+			if orgID != "" {
+				affectedOrgs[orgID] = struct{}{}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return purged, err
+		}
+		for orgID := range affectedOrgs {
+			fleetsummary.InvalidateOrg(orgID)
+		}
+		return purged, nil
+	}
+
+	sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
+	tag, err := pool.Exec(ctx, sql, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCutoff time.Time) (int64, error) {

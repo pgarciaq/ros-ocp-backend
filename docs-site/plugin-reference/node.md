@@ -12,7 +12,7 @@ Package: [`internal/plugins/node`](../../internal/plugins/node/)
 | Phase | 1 (Produce) |
 | Priority | 30 |
 | CSV types | (none — `IngestHook` after `container`) |
-| Retention tables | `daily_node_digests`, `node_recommendations` |
+| Retention tables | `daily_node_digests` (partitions); `node_recommendations` (date-based DELETE on `updated_at`) |
 
 ## Traits
 

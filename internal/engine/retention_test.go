@@ -265,6 +265,160 @@ func TestRunRetentionSweep_InvalidatesFleetCacheForPurgedOrgs(t *testing.T) {
 	assert.False(t, ok, "retention purge should invalidate fleet summary cache for affected org")
 }
 
+func TestRunRetentionSweep_PurgesOldNodeRecommendations(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	oldDate := time.Now().UTC().AddDate(0, -8, 0)
+	recentDate := time.Now().UTC().AddDate(0, 0, -5)
+	clusterUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, updated_at)
+		VALUES ($1, $2::uuid, 'old-node', 'medium', 'cost', $3),
+		       ($1, $2::uuid, 'recent-node', 'medium', 'cost', $4)`,
+		"org-node-retention", clusterUUID, oldDate, recentDate,
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	var countOld int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND node = 'old-node'",
+		"org-node-retention",
+	).Scan(&countOld)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countOld, "old node recommendation should be purged")
+
+	var countRecent int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND node = 'recent-node'",
+		"org-node-retention",
+	).Scan(&countRecent)
+	require.NoError(t, err)
+	assert.Equal(t, 1, countRecent, "recent node recommendation should be kept")
+}
+
+func TestRunRetentionSweep_PurgesOldNamespaceRecommendationSets(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	oldDate := time.Now().UTC().AddDate(0, -8, 0)
+	recentDate := time.Now().UTC().AddDate(0, 0, -5)
+	clusterUUID := "dddddddd-eeee-ffff-0000-111111111111"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO namespace_recommendation_sets (
+			org_id, cluster_uuid, namespace_name, term, engine, schedule_type,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib,
+			current_cpu_request_millicores, current_cpu_limit_millicores,
+			current_memory_request_kib, current_memory_limit_kib,
+			variation_cpu_request_pct, variation_cpu_limit_pct,
+			variation_memory_request_pct, variation_memory_limit_pct,
+			confidence_level, notification_codes,
+			monitoring_start_time, monitoring_end_time, updated_at
+		) VALUES
+			('org-ns-retention', $1::uuid, 'old-ns', 'medium', 'cost', 'all_hours',
+			 1000, 2000, 1048576, 2097152, 1000, 2000, 1048576, 2097152,
+			 0, 0, 0, 0, 0.9, '{}', $2, $2, $2),
+			('org-ns-retention', $1::uuid, 'recent-ns', 'medium', 'cost', 'all_hours',
+			 1000, 2000, 1048576, 2097152, 1000, 2000, 1048576, 2097152,
+			 0, 0, 0, 0, 0.9, '{}', $3, $3, $3)`,
+		clusterUUID, oldDate, recentDate,
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	var countOld int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM namespace_recommendation_sets WHERE org_id = $1 AND namespace_name = 'old-ns'",
+		"org-ns-retention",
+	).Scan(&countOld)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countOld, "old namespace recommendation set should be purged")
+
+	var countRecent int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM namespace_recommendation_sets WHERE org_id = $1 AND namespace_name = 'recent-ns'",
+		"org-ns-retention",
+	).Scan(&countRecent)
+	require.NoError(t, err)
+	assert.Equal(t, 1, countRecent, "recent namespace recommendation set should be kept")
+}
+
+func TestRunRetentionSweep_PurgesOldPVCRecommendationSets(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	oldDate := time.Now().UTC().AddDate(0, -8, 0)
+	recentDate := time.Now().UTC().AddDate(0, 0, -5)
+	clusterUUID := "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, updated_at
+		) VALUES
+			('org-pvc-retention', $1::uuid, 'ns', 'old-pvc', $2),
+			('org-pvc-retention', $1::uuid, 'ns', 'recent-pvc', $3)`,
+		clusterUUID, oldDate, recentDate,
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	var countOld int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1 AND persistentvolumeclaim = 'old-pvc'",
+		"org-pvc-retention",
+	).Scan(&countOld)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countOld, "old PVC recommendation set should be purged")
+
+	var countRecent int
+	err = pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1 AND persistentvolumeclaim = 'recent-pvc'",
+		"org-pvc-retention",
+	).Scan(&countRecent)
+	require.NoError(t, err)
+	assert.Equal(t, 1, countRecent, "recent PVC recommendation set should be kept")
+}
+
+func TestRunRetentionSweep_InvalidatesFleetCacheForPurgedNodeRecommendations(t *testing.T) {
+	config.ResetForTest()
+	fleetsummary.ResetForTest()
+	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "3600")
+	fleetsummary.ResetForTest()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-node-cache"
+	clusterUUID := "cccccccc-dddd-eeee-ffff-000000000001"
+	oldDate := time.Now().UTC().AddDate(0, -8, 0)
+
+	fleetsummary.Put(orgID, false, nil, fleetsummary.CachedSummary{
+		TotalContainers:     42,
+		Currency:            "USD",
+		TotalMonthlySavings: money.FormatUSDToAmount(0, "USD"),
+	})
+	_, ok := fleetsummary.Get(orgID, false, nil)
+	require.True(t, ok)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, updated_at)
+		VALUES ($1, $2::uuid, 'cache-node', 'medium', 'cost', $3)`,
+		orgID, clusterUUID, oldDate,
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	_, ok = fleetsummary.Get(orgID, false, nil)
+	assert.False(t, ok, "node recommendation purge should invalidate fleet summary cache for affected org")
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string

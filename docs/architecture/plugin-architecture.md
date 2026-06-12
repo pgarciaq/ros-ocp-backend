@@ -69,7 +69,7 @@ This document describes **compile-time, in-process plugins** behind small Go int
 - When `RetentionProvider` plugins are registered, they take priority — each plugin sweeps its own tables via `SweepRetention`.
 - If **no** retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the `retainedTables` slice.
 - The fallback list covers the **original pre-plugin set**: container samples/digests, `daily_namespace_digests`, `namespace_usage_samples`, and `gpu_container_digests`.
-- **Node and PVC partitions are not in the fallback** — `daily_node_digests`, `node_recommendations`, and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`.
+- **Node and PVC partitions are not in the fallback** — `daily_node_digests` and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in [retention.go](../../internal/engine/retention.go) (`ROS_RETENTION_MONTHS` on `updated_at`).
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -435,7 +435,7 @@ Sorted by execution order (Phase → Priority → Name):
 | Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
 | Legacy Kruize | `kruize` | 1 | 10 | — | — | — (core handlers) | — | — | — | — |
 | GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
-| Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
+| Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests` (+ `node_recommendations` via date DELETE) | — | ✅ (max 90d) |
 | PVC | `pvc` | 1 | 30 | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
 | ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets` | — | — |
 | ClusterResourceQuota | `cluster-quota` | 1 | 36 | ✅ CRQ CSV | — | ✅ `/cluster-quota` + settings | — | ✅ `cluster_quota_recommendation_sets`, `daily_cluster_quota_digests` | — | — |
