@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"gorm.io/gorm"
@@ -16,6 +17,32 @@ func nativeContainerPageSortExpr(orderByDBCol string) (sortExpr string, rsFilter
 func nativeContainerDistinctOnOrder(sortExpr, orderHow string) string {
 	return fmt.Sprintf(
 		"rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, %s %s, rs.term ASC, rs.engine ASC",
+		sortExpr, orderHow,
+	)
+}
+
+// remapSortExprToOrgKeys translates rs.* sort columns to org_container_keys (ock) aliases.
+func remapSortExprToOrgKeys(sortExpr string) string {
+	s := sortExpr
+	s = strings.ReplaceAll(s, "rs.namespace", "ock.namespace")
+	s = strings.ReplaceAll(s, "rs.workload", "ock.workload")
+	s = strings.ReplaceAll(s, "rs.workload_type", "ock.workload_type")
+	s = strings.ReplaceAll(s, "rs.container_name", "ock.container_name")
+	return s
+}
+
+// nativeContainerKeysDistinctOnOrder is DISTINCT ON order when paging ock joined to rs for rs-only sorts.
+func nativeContainerKeysDistinctOnOrder(sortExpr, orderHow string) string {
+	return fmt.Sprintf(
+		"ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, %s %s, rs.term ASC, rs.engine ASC",
+		sortExpr, orderHow,
+	)
+}
+
+// nativeContainerKeysPageOrder orders org_container_keys page selection (must match keyset seek).
+func nativeContainerKeysPageOrder(sortExpr, orderHow string) string {
+	return fmt.Sprintf(
+		"%s %s, ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name",
 		sortExpr, orderHow,
 	)
 }
@@ -69,6 +96,41 @@ func applyNativeContainerPageSeek(query *gorm.DB, opts listoptions.ListOptions, 
 		return query.Where(clause, args...)
 	}
 	clause, args := nativeContainerSeekAfterLegacy(opts.AfterNamespace, opts.AfterWorkload, opts.AfterWorkloadType, opts.AfterContainer)
+	return query.Where(clause, args...)
+}
+
+// nativeContainerKeysSeekAfter returns keyset seek predicates for org_container_keys pagination.
+func nativeContainerKeysSeekAfter(sortExpr, orderHow string, sortValue interface{}, clusterUUID, namespace, workload, workloadType, container string) (string, []interface{}) {
+	tie := "(ock.namespace, ock.workload, ock.workload_type, ock.container_name, ock.cluster_uuid)"
+	if orderHow == listoptions.OrderDesc {
+		return fmt.Sprintf(
+			"((%s) < ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+			sortExpr, sortExpr, tie,
+		), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+	}
+	return fmt.Sprintf(
+		"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+		sortExpr, sortExpr, tie,
+	), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+}
+
+func nativeContainerKeysSeekAfterLegacy(namespace, workload, workloadType, container string) (string, []interface{}) {
+	return "(ock.namespace, ock.workload, ock.workload_type, ock.container_name) > (?, ?, ?, ?)",
+		[]interface{}{namespace, workload, workloadType, container}
+}
+
+func applyNativeContainerKeysPageSeek(query *gorm.DB, opts listoptions.ListOptions, sortExpr string) *gorm.DB {
+	if !opts.HasCursor {
+		return query
+	}
+	if opts.AfterContainerSortPresent {
+		clause, args := nativeContainerKeysSeekAfter(
+			sortExpr, opts.OrderHow, opts.AfterContainerSortValue,
+			opts.AfterContainerClusterUUID, opts.AfterNamespace, opts.AfterWorkload, opts.AfterWorkloadType, opts.AfterContainer,
+		)
+		return query.Where(clause, args...)
+	}
+	clause, args := nativeContainerKeysSeekAfterLegacy(opts.AfterNamespace, opts.AfterWorkload, opts.AfterWorkloadType, opts.AfterContainer)
 	return query.Where(clause, args...)
 }
 

@@ -81,6 +81,67 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	assert.NotEqual(t, page1.Results[0].ID, page2.Results[0].ID)
 }
 
+func TestGetNativeRecommendations_OffsetPaginationCountConsistent(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	const pageNamespace = "offset-page-ns"
+	start := testutil.RecentStart()
+	for i, name := range []string{"container-a", "container-b", "container-c"} {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate:       start,
+			OrgID:            testutil.TestOrgID,
+			ClusterUUID:      testutil.TestClusterUUID,
+			Namespace:        pageNamespace,
+			Workload:         "workload-page",
+			WorkloadType:     testutil.TestWorkloadType,
+			ContainerName:    name,
+			CPURequestP50MC:  int64(180 + i*10),
+			CPURequestP95MC:  int64(210 + i*10),
+			CPUUsageP50MC:    int64(170 + i*10),
+			CPUUsageP95MC:    int64(200 + i*10),
+			MemRequestP50KiB: 512000,
+			MemRequestP95KiB: 524288,
+			MemUsageP50KiB:   500000,
+			MemUsageP95KiB:   520000,
+		})
+	}
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":     false,
+		"rs.namespace = ?": pageNamespace,
+	}
+	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{
+		Limit:  2,
+		Offset: 0,
+	}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page1.Results, 2)
+	assert.Equal(t, 3, page1.Count)
+	assert.True(t, page1.HasNext)
+
+	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{
+		Limit:  2,
+		Offset: 2,
+	}, queryParams, map[string][]string{"*": {}})
+	require.NoError(t, err)
+	require.Len(t, page2.Results, 1)
+	assert.Equal(t, page1.Count, page2.Count)
+	assert.False(t, page2.HasNext)
+
+	seen := map[string]struct{}{}
+	for _, r := range append(page1.Results, page2.Results...) {
+		seen[r.Container] = struct{}{}
+	}
+	assert.Len(t, seen, 3)
+}
+
 func setupNativeListGormDB(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	database.DB = testutil.OpenTestGORM(pool)

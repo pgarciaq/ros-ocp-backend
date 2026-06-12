@@ -340,6 +340,65 @@ type EngineRecommendation struct {
 	BusinessHours          *BusinessHoursRecommendation               `json:"business_hours,omitempty"`
 }
 
+const nativeContainerRSJoin = `JOIN recommendation_sets rs ON rs.org_id = ock.org_id
+		AND rs.cluster_uuid = ock.cluster_uuid
+		AND rs.namespace = ock.namespace
+		AND rs.workload = ock.workload
+		AND rs.workload_type = ock.workload_type
+		AND rs.container_name = ock.container_name
+		AND rs.stale = false`
+
+// buildNativeContainerKeysPageQuery selects one page of container keys from org_container_keys.
+// Identity and cluster-metadata sorts paginate the key table directly; recommendation_sets
+// columns join rs only for the sort expression (DISTINCT ON when multiple term/engine rows).
+func buildNativeContainerKeysPageQuery(
+	db *gorm.DB,
+	orgID string,
+	opts listoptions.ListOptions,
+	keysParams map[string]interface{},
+	queryParams map[string]interface{},
+	userPerms map[string][]string,
+	sortExpr, sortFilter, orderHow string,
+) *gorm.DB {
+	pageKeys := db.Table("org_container_keys ock").
+		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
+		Where("ock.org_id = ?", orgID)
+	pageKeys = ApplyNativeRBAC(pageKeys, userPerms, "ock.namespace")
+	pageKeys = ApplyQueryParamsToKeys(pageKeys, keysParams)
+	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
+		pageKeys = ApplyTagFiltersToKeys(pageKeys, orgID, tagFilters)
+	}
+
+	keysOnlySort := nativeContainerSortUsesOrgKeysOnly(sortExpr)
+	pageSortExpr := sortExpr
+	if keysOnlySort {
+		pageSortExpr = remapSortExprToOrgKeys(sortExpr)
+	} else {
+		pageKeys = pageKeys.Joins(nativeContainerRSJoin)
+		if sortFilter != "" {
+			pageKeys = pageKeys.Where(sortFilter)
+		}
+	}
+
+	selectPrefix := ""
+	if !keysOnlySort && sortFilter == "" {
+		selectPrefix = "DISTINCT ON (ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name) "
+	}
+	pageKeys = pageKeys.Select(fmt.Sprintf(
+		"%sock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, (%s)::text AS ros_container_page_sort",
+		selectPrefix, pageSortExpr,
+	))
+
+	if keysOnlySort || sortFilter != "" {
+		pageKeys = pageKeys.Order(nativeContainerKeysPageOrder(pageSortExpr, orderHow))
+		pageKeys = applyNativeContainerKeysPageSeek(pageKeys, opts, pageSortExpr)
+	} else {
+		pageKeys = pageKeys.Order(nativeContainerKeysDistinctOnOrder(sortExpr, orderHow))
+		pageKeys = applyNativeContainerPageSeek(pageKeys, opts, sortExpr)
+	}
+	return pageKeys
+}
+
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
 	// Tag filters require org_container_keys (resolved_tags / Koku tag joins). The legacy DISTINCT
@@ -363,37 +422,6 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	sortExpr, sortFilter := nativeContainerPageSortExpr(opts.OrderBy)
 	orderHow := nativeContainerOrderHow(opts.OrderHow)
 
-	ockExists := db.Table("org_container_keys ock").
-		Select("1").
-		Where("ock.org_id = ?", orgID).
-		Where("ock.cluster_uuid = rs.cluster_uuid").
-		Where("ock.namespace = rs.namespace").
-		Where("ock.workload = rs.workload").
-		Where("ock.workload_type = rs.workload_type").
-		Where("ock.container_name = rs.container_name")
-	ockExists = ApplyNativeRBAC(ockExists, userPerms, "ock.namespace")
-	ockExists = ApplyQueryParamsToKeys(ockExists, keysParams)
-	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
-		ockExists = ApplyTagFiltersToKeys(ockExists, orgID, tagFilters)
-	}
-
-	distinctSubquery := db.Table("recommendation_sets rs").
-		Select(fmt.Sprintf(
-			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, (%s)::text AS ros_container_page_sort",
-			sortExpr,
-		)).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Where("rs.org_id = ?", orgID).
-		Where("rs.stale = false").
-		Where("EXISTS (?)", ockExists)
-	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
-	distinctSubquery = ApplyQueryParams(distinctSubquery, detailParams)
-	if sortFilter != "" {
-		distinctSubquery = distinctSubquery.Where(sortFilter)
-	}
-	distinctSubquery = distinctSubquery.Order(nativeContainerDistinctOnOrder(sortExpr, orderHow))
-	distinctSubquery = applyNativeContainerPageSeek(distinctSubquery, opts, sortExpr)
-
 	countQuery := db.Table("org_container_keys ock").
 		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name").
 		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
@@ -404,7 +432,9 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 		countQuery = ApplyTagFiltersToKeys(countQuery, orgID, tagFilters)
 	}
 
-	pageSubquery := db.Table("(?) AS page", distinctSubquery).
+	pageKeysQuery := buildNativeContainerKeysPageQuery(db, orgID, opts, keysParams, queryParams, userPerms, sortExpr, sortFilter, orderHow)
+
+	pageSubquery := db.Table("(?) AS page", pageKeysQuery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
 		Order(nativeContainerPageOrder("page", orderHow))
 	if !opts.HasCursor {
