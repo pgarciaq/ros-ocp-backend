@@ -2,7 +2,7 @@
 
 Operational guide for ROS-OCP Backend metrics, logging, and alerting. Complements the runbooks in [runbooks.md](runbooks.md) with a complete metric catalog and scrape configuration.
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-13
 
 ---
 
@@ -357,6 +357,139 @@ Environment variables that affect observability:
 
 ---
 
+## Grafana Dashboard
+
+The **ROSOCP** Grafana dashboard (`dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml`) provides a single-pane view of pipeline health, engine performance, caches, and infrastructure. It is the primary operational dashboard for on-call and incident response.
+
+### Dashboard overview
+
+| Property | Value |
+|----------|-------|
+| **ConfigMap name** | `grafana-dashboard-insights-rosocp-general` |
+| **Dashboard UID** | `ofxxAX0nk` |
+| **Title** | ROSOCP |
+| **Auto-import label** | `grafana_dashboard: "true"` |
+| **Grafana folder** | `/grafana-dashboard-definitions/Insights` (annotation) |
+
+The dashboard JSON lives under the `ROSOCP.json` key in the ConfigMap. Grafana's **sidecar container** watches for ConfigMaps with the `grafana_dashboard: "true"` label and auto-imports them — no manual JSON upload is required when the chart or platform deploys the ConfigMap.
+
+**Template variables:**
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `datasource` | Prometheus datasource | Application metrics (`rosocp_*`, `ros_*`) scraped from ROS API, processor, and poller pods |
+| `DatasourceRDS` | Prometheus datasource | AWS RDS exporter metrics (SaaS only) |
+| `namespace` | Custom (`rosocp-stage`, `rosocp-prod`, …) | Scopes Kubernetes infrastructure panels (OOM, restarts, memory) to the target deployment namespace |
+| `cloudwatch` | Prometheus datasource | AWS CloudWatch exporter — Kafka consumer lag for `hccm.ros.events` (SaaS only) |
+
+The top panel (`hccm.ros.events`) shows Kafka consumer lag via CloudWatch and is independent of the row sections below.
+
+### Row sections
+
+#### 1. Kafka & Ingestion
+
+Upstream data path health: Kafka consumer lag (CloudWatch), invalid container/namespace CSVs, CSV rows skipped, permanent ingestion file failures (`report_type` / `error_class`), DLQ messages, Kafka retries, messages processed, CSV fetch errors, ingestion errors by `stage`, and ingestion file failures broken down by `report_type`.
+
+#### 2. Recommendations
+
+Legacy Kruize poller throughput: recommendations saved and requested, container and namespace recommendation success ratios, namespace request/success counters, and invalid namespace recommendations.
+
+#### 3. Quality & Stability
+
+Recommendation quality signals: quality partition missing errors, analytics incomplete by `error_type` (`history` / `quality`), and histogram percentiles (p50 / p95) for recommendation stability, adoption rate, and OOM rate after recommendation.
+
+#### 4. Reship
+
+Business-hours backfill: in-progress gauge, files processed, failures, forward-only fallback, provider resolution failures by `reason`, coalesced triggers, and reship duration (p50 / p95).
+
+#### 5. Recalculation
+
+Settings- and cost-model-driven background work: threshold recalculation by `recommendation_type` / `status`, savings recalculation by `recommendation_type` / `status`, and coalesced counters for threshold and savings recalc.
+
+#### 6. Engine Performance
+
+Native engine timing and throughput: DB query latency p95 by `operation`, recommendation duration p95 by `type`, pipeline phase duration p95 by `phase`, and recommendations written by `type`.
+
+#### 7. Streaming Ingest
+
+In-memory digest buffering: groups in memory gauge, ingest flush rate, and ingest flush duration p95.
+
+#### 8. Caches
+
+API response caches: fleet and savings summary cache hit rates, combined cache sizes (fleet, savings, cost, RBAC, threshold), and eviction rates across caches.
+
+#### 9. Data Lifecycle
+
+Retention and manifest handling: retention partitions dropped, manifest recommendation deferred (debounced quiet-period deferrals), and manifest IDs synthesized for legacy Kafka messages.
+
+#### 10. GPU & Plugins
+
+Enrichment gaps: unrecognized GPU models by `model_name`, plugin hook errors by `plugin` / `hook_type`, and invalid data points from malformed CSV rows.
+
+#### 11. API HTTP
+
+REST API health: request latency p95 and request rate by HTTP status code.
+
+#### 12. Infrastructure
+
+Platform and pod health: RH accounts created, DB errors, partition missing errors, RDS free storage (SaaS), internal endpoint calls, OOMKilled containers, container restarts (processor / poller / api / housekeeper), and pod memory working set.
+
+### Key panels during incidents
+
+| Symptom | Panel to check | What to look for |
+|---------|----------------|------------------|
+| Slow API responses | Engine Performance → DB query latency p95 | Spikes above 1–2s indicate DB contention |
+| Slow API responses | Caches → Fleet/savings cache hit rate | Below 50% means cache is not helping |
+| Slow API responses | API HTTP → Request latency p95 | Overall p95 above 500ms needs investigation |
+| Missing recommendations | Recommendations → success ratio | Below 0.95 indicates failures |
+| High memory usage | Streaming Ingest → Groups in memory | Sustained high values indicate backpressure |
+| Pod OOMKilled | Infrastructure → OOMKilled + Pod memory | Compare working set to limits |
+| Ingestion errors | Kafka & Ingestion → file failures | Check `report_type` and `error_class` for patterns |
+| GPU enrichment gaps | GPU & Plugins → Unrecognized GPU models | New GPU models need catalog updates |
+
+### Recommended alert rules
+
+These complement the [general alerting rules](#alerting-recommendations) below and map directly to dashboard panels:
+
+```yaml
+# DB query latency too high
+- alert: ROSOCPDBQueryLatencyHigh
+  expr: histogram_quantile(0.95, sum(rate(rosocp_db_query_duration_seconds_bucket[5m])) by (le, operation)) > 2
+  for: 10m
+  labels:
+    severity: warning
+
+# Recommendation success rate dropping
+- alert: ROSOCPRecommendationSuccessLow
+  expr: sum(rate(rosocp_recommendation_success_total[5m])) / clamp_min(sum(rate(rosocp_recommendation_request_total[5m])), 1e-9) < 0.9
+  for: 15m
+  labels:
+    severity: warning
+
+# Cache hit rate too low
+- alert: ROSOCPCacheHitRateLow
+  expr: sum(rate(rosocp_fleet_summary_cache_hits_total[5m])) / clamp_min(sum(rate(rosocp_fleet_summary_cache_hits_total[5m])) + sum(rate(rosocp_fleet_summary_cache_misses_total[5m])), 1e-9) < 0.5
+  for: 30m
+  labels:
+    severity: warning
+
+# Ingest memory pressure
+- alert: ROSOCPIngestMemoryPressure
+  expr: rosocp_ingest_groups_in_memory > 10000
+  for: 5m
+  labels:
+    severity: warning
+
+# Reship stuck
+- alert: ROSOCPReshipStuck
+  expr: ros_reship_in_progress > 0
+  for: 30m
+  labels:
+    severity: warning
+```
+
+---
+
 ## Quick Monitoring Checklist
 
 Copy-paste PromQL for common operational questions.
@@ -571,6 +704,7 @@ Combine with external alerts on Kafka consumer lag, PostgreSQL connection count,
 
 ## Related Documentation
 
+- [Grafana dashboard ConfigMap](../../dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml) — dashboard JSON source
 - [Operational Runbooks](runbooks.md) — step-by-step incident response
 - [Retention Policy](retention.md) — data lifecycle and `rosocp_retention_partitions_dropped_total`
 - [GPU Catalog Maintenance](gpu-catalog.md) — resolving `rosocp_gpu_model_unrecognized_total`

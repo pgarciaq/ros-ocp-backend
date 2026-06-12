@@ -357,9 +357,67 @@ reference (database, Kafka, thresholds, plugins), see
 
 ---
 
-## Grafana Dashboard Queries
+## Grafana Dashboard
 
-Example panels for a ROS overview dashboard:
+The **ROSOCP** dashboard ships with the repository as a Kubernetes ConfigMap (`dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml`). When deployed via the cost-onprem Helm chart (or any environment with Grafana's dashboard sidecar), it is **auto-imported** — look for a dashboard titled **ROSOCP** (UID `ofxxAX0nk`) in Grafana.
+
+### Accessing the dashboard
+
+**Helm / OpenShift (recommended):** The chart applies the ConfigMap with label `grafana_dashboard: "true"`. Grafana's sidecar watches for this label and imports the dashboard automatically. No manual steps are required if your cluster runs the standard Grafana sidecar pattern.
+
+**Manual import:** Extract the JSON from the `ROSOCP.json` key in `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` and import it through Grafana → Dashboards → Import.
+
+**Prometheus datasource:** Point the `datasource` template variable at the Prometheus instance that scrapes ROS pods. Scrape targets:
+
+| Component | Path | Port |
+|-----------|------|------|
+| ROS API | `/metrics` | `PROMETHEUS_PORT` (typically `9000`) |
+| ROS processor | `/metrics` | `PROMETHEUS_PORT` |
+| ROS recommendation poller | `/metrics` | `PROMETHEUS_PORT` |
+
+The cost-onprem chart creates ServiceMonitor resources that scrape `/metrics` every 30 seconds (configurable via `monitoring.scrapeInterval`).
+
+!!! note "SaaS-only panels"
+    Panels that use **RDS free storage** (`DatasourceRDS`) or **Kafka consumer lag via CloudWatch** (`cloudwatch` variable) apply to Red Hat SaaS deployments only. On-prem operators can ignore these panels or leave the variables unset — the application-metric rows still work.
+
+!!! note "Kafka lag panels"
+    Kafka-related panels require Kafka metrics to be available in Prometheus. In SaaS this comes from the AWS CloudWatch exporter; on-prem, configure Strimzi/Kafka metrics or your cluster's Kafka exporter and point the relevant datasource variable accordingly.
+
+### Dashboard sections
+
+The dashboard is organized into row sections. Each row groups related panels:
+
+| Section | What it shows |
+|---------|---------------|
+| **Kafka & Ingestion** | Consumer lag, CSV validation errors, ingestion file failures by `report_type`/`error_class`, rows skipped, DLQ messages |
+| **Recommendations** | Container and namespace recommendation request/success rates and success ratios |
+| **Quality & Stability** | Analytics incomplete by `error_type`, recommendation stability/adoption/OOM histograms (p50/p95) |
+| **Reship** | In-progress gauge, duration, failures, fallback, provider resolution failures, coalesced |
+| **Recalculation** | Threshold/savings recalculation by `recommendation_type`/`status`, coalesced counters |
+| **Engine Performance** | DB query latency p95 by `operation`, recommendation duration p95 by `type`, pipeline phase duration p95 by `phase`, recommendations written by `type` |
+| **Streaming Ingest** | Groups in memory gauge, flush rate, flush duration p95 |
+| **Caches** | Fleet/savings cache hit rates, cache sizes (fleet, savings, cost, RBAC, threshold), eviction rates |
+| **Data Lifecycle** | Retention partitions dropped, manifest recommendation deferred (debounced), manifest IDs synthesized |
+| **GPU & Plugins** | Unrecognized GPU models by `model_name`, plugin hook errors, invalid data points |
+| **API HTTP** | Request latency p95, request rate by status code |
+| **Infrastructure** | RH accounts created, DB errors, partition errors, RDS free storage, internal endpoint calls, OOMKilled, container restarts, pod memory |
+
+### Key panels during incidents
+
+| Symptom | Panel to check | What to look for |
+|---------|----------------|------------------|
+| Slow API responses | Engine Performance → DB query latency p95 | Spikes above 1–2s indicate DB contention |
+| Slow API responses | Caches → Fleet/savings cache hit rate | Below 50% means cache is not helping |
+| Slow API responses | API HTTP → Request latency p95 | Overall p95 above 500ms needs investigation |
+| Missing recommendations | Recommendations → success ratio | Below 0.95 indicates failures |
+| High memory usage | Streaming Ingest → Groups in memory | Sustained high values indicate backpressure |
+| Pod OOMKilled | Infrastructure → OOMKilled + Pod memory | Compare working set to limits |
+| Ingestion errors | Kafka & Ingestion → file failures | Check `report_type` and `error_class` for patterns |
+| GPU enrichment gaps | GPU & Plugins → Unrecognized GPU models | New GPU models need catalog updates |
+
+### Example PromQL (custom panels)
+
+If you build your own panels instead of using the shipped dashboard:
 
 **Ingestion throughput (time series)**
 
@@ -367,22 +425,10 @@ Example panels for a ROS overview dashboard:
 rate(rosocp_kafka_messages_processed_total[5m])
 ```
 
-**Ingestion errors by stage (stacked bar)**
-
-```promql
-sum by (stage) (increase(rosocp_ingestion_errors_total[1h]))
-```
-
-**Recommendation latency P95 (heatmap or multi-line)**
+**Recommendation latency P95 (multi-line)**
 
 ```promql
 histogram_quantile(0.95, sum by (type, le) (rate(rosocp_recommendation_duration_seconds_bucket[5m])))
-```
-
-**Recommendations written (stat panel)**
-
-```promql
-sum(increase(rosocp_recommendations_written_total[24h]))
 ```
 
 **API latency P95 top routes (table)**
@@ -401,14 +447,41 @@ ros_reship_in_progress
 
 ## Troubleshooting via Metrics
 
-### Symptom: No new recommendations
+Use the **ROSOCP** Grafana dashboard sections above as your starting point. The scenarios below map common symptoms to the relevant dashboard rows.
+
+### Symptom: Recommendations all zero
+
+1. Open **Kafka & Ingestion** — check ingestion file failures, errors by stage, and DLQ messages.
+2. Verify `rate(rosocp_kafka_messages_processed_total[5m])` is non-zero.
+3. Check external Kafka consumer lag if available.
+4. Verify `/readyz` returns 200 (database connectivity).
+
+### Symptom: API slow
+
+1. Open **Engine Performance** — DB query latency p95 and recommendation duration p95.
+2. Open **Caches** — fleet and savings cache hit rates (below 50% means repeated DB work).
+3. Open **API HTTP** — request latency p95 and error rate by status code.
+
+### Symptom: Pods restarting
+
+1. Open **Infrastructure** — OOMKilled containers and pod memory working set.
+2. Compare memory working set to pod limits; check container restart rate by component.
+3. If OOM-related, also check **Streaming Ingest → Groups in memory** for ingest backpressure.
+
+### Symptom: Costs not updating
+
+1. Open **Reship** — in-progress gauge, failures, provider resolution failures.
+2. Open **Recalculation** — savings recalculation by type and status.
+3. Look for log lines `cost data fetch failed` if dollar fields are zero (savings estimates depend on Koku Masu).
+
+### Symptom: No new recommendations (detailed)
 
 1. Check `rate(rosocp_kafka_messages_processed_total[5m])` — zero means the processor is not consuming.
 2. Check Kafka consumer lag externally (not exported by ROS).
 3. Check `rosocp_ingestion_errors_total` by stage for parse/digest/write failures.
 4. Verify `/readyz` returns 200 (database connectivity).
 
-### Symptom: High latency
+### Symptom: High latency (detailed)
 
 1. Compare P95 across `rosocp_recommendation_duration_seconds` types to find the slow domain.
 2. Check `rosocp_pipeline_phase_duration_seconds` for slow digest or GPU enrichment.
@@ -445,6 +518,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 ## Related Documentation
 
+- [Grafana dashboard source](../dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml) — ConfigMap JSON for manual import
 - [Configuration Reference](configuration.md)
 - [Upgrade Runbook](operations/upgrade-runbook.md)
 - [Known Issues](known-issues.md)
