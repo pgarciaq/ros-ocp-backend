@@ -52,6 +52,9 @@ Same structure as CPU with memory-specific percentiles and OOM feedback:
 
 ## Decay Weighting
 
+For visual charts, edge-weight tables, configuration examples, and performance
+notes on lookup tables, see [Decay Weights](decay-weights.md).
+
 Decay weighting gives more importance to recent data:
 
 ```

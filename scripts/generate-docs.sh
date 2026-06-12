@@ -68,6 +68,20 @@ for f in "$ROOT_DIR/docs/architecture/"*.md; do
     fi
 done
 
+# Decay weight charts: canonical PNGs live in docs/performance/charts/
+mkdir -p "$DOCS_DIR/architecture/charts"
+if compgen -G "$ROOT_DIR/docs/performance/charts/decay-weights-*.png" > /dev/null; then
+    cp "$ROOT_DIR/docs/performance/charts"/decay-weights-*.png "$DOCS_DIR/architecture/charts/"
+fi
+if [ -f "$DOCS_DIR/architecture/decay-weights.md" ]; then
+    sed -i \
+        -e 's|](../performance/charts/|](charts/|g' \
+        -e 's|](../adr/|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/|g' \
+        -e 's|](../performance/native-engine-audit|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/native-engine-audit|g' \
+        "$DOCS_DIR/architecture/decay-weights.md"
+    rewrite_github_links "$DOCS_DIR/architecture/decay-weights.md"
+fi
+
 # Operations docs
 mkdir -p "$DOCS_DIR/operations"
 [ -f "$ROOT_DIR/docs/upgrade-runbook.md" ] && cp "$ROOT_DIR/docs/upgrade-runbook.md" "$DOCS_DIR/operations/upgrade-runbook.md"

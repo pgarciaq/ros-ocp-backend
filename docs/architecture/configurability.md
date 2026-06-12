@@ -3,7 +3,8 @@
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
 
-For algorithm behavior (decay weighting, adaptive margin, trend detection), see
+For decay weighting — formula, visual examples, edge-weight table, and tuning guidance —
+see [Decay Weights](decay-weights.md). For adaptive margin and trend detection, see
 [Recommendation Math](recommendation-math.md). For how thresholds affect each plugin's
 output, see [Recommendation Engines](recommendation-engines.md).
 
@@ -388,7 +389,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 - **`window_days`** — how many calendar days of digest history to query.
 - **`min_data_days`** — minimum days with real reports inside that window (avoids single-spike recommendations).
 - **`decay_halflife_hours`** — exponential recency weighting; `0` = uniform weight across the window.
-  When a tenant overrides `window_days` via the Settings API but omits `decay_halflife_hours` (NULL in DB), the engine auto-derives **`window_days × 12`** hours (half the window in hours). Explicit values and admin env-var overrides take precedence. Plugin defaults apply only when no DB row exists for that term.
+  When a tenant overrides `window_days` via the Settings API but omits `decay_halflife_hours` (NULL in DB), the engine auto-derives **`window_days × 12`** hours (half the window in hours). Explicit values and admin env-var overrides take precedence. Plugin defaults apply only when no DB row exists for that term. See [Decay Weights](decay-weights.md) for formula, charts, and edge-weight reference.
 
 Short terms react quickly; long terms capture drift. PVC and VM defaults use **longer** windows than container because storage and guests change slowly.
 

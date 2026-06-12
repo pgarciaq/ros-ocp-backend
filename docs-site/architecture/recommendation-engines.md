@@ -8,14 +8,15 @@ configuration parameters across all native-engine plugins.
 For the full environment variable catalog, Settings API routes, precedence model,
 and tuning guidance, see [Configurability Reference](configurability.md).
 
-For algorithm details (decay weighting, adaptive margin formula, trend detection),
-see [Recommendation Math](recommendation-math.md). For dollar estimates and savings
+For algorithm details (adaptive margin formula, trend detection), see
+[Recommendation Math](recommendation-math.md). For dollar estimates and savings
 formulas, see [Cost Integration](cost-integration.md).
 
-Decay weights use precomputed lookup tables keyed by integer half-life hours
-(lazy-built on first use) instead of per-row `math.Exp`. When a tenant customizes
-`window_days` without setting `decay_halflife_hours`, half-life auto-derives as
-`window_days × 12` — see [Configurability Reference](configurability.md).
+For decay weighting — formula, visual charts, edge-weight tables, and configuration —
+see the dedicated [Decay Weights](decay-weights.md) page. Decay weights use
+precomputed lookup tables keyed by integer half-life hours (lazy-built on first use)
+instead of per-row `math.Exp`. When a tenant customizes `window_days` without
+setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
 ---
 
@@ -509,7 +510,8 @@ Admin guide: [Business Hours](../features/business-hours.md).
 
 | Document | Scope |
 |----------|-------|
-| [Recommendation Math](recommendation-math.md) | Decay weighting, adaptive margin, trend detection algorithms |
+| [Decay Weights](decay-weights.md) | Exponential decay formula, charts, edge weights, configuration |
+| [Recommendation Math](recommendation-math.md) | Adaptive margin, trend detection algorithms |
 | [GPU Classification](gpu-classification.md) | GPU decision tree, MIG, confidence scoring, two-tier support |
 | [Cost Integration](cost-integration.md) | Savings formulas, kill-switch, fleet summary, plugin savings matrix |
 | [Plugin Architecture](plugin-architecture.md) | Plugin traits, term provider, registry |

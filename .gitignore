@@ -47,6 +47,11 @@ docs-site/architecture/*
 !docs-site/architecture/plugin-architecture.md
 !docs-site/architecture/gpu-classification.md
 !docs-site/architecture/adrs.md
+!docs-site/architecture/decay-weights.md
+!docs-site/architecture/charts/
+!docs-site/architecture/charts/decay-weights-30d-hl10d.png
+!docs-site/architecture/charts/decay-weights-30d-hl15d.png
+!docs-site/architecture/charts/decay-weights-30d-hl20d.png
 docs-site/operations/
 docs-site/features/
 !docs-site/features/virtual-machines.md
