@@ -32,7 +32,8 @@ data:
       "panels": [
         {
           "datasource": {
-            "uid": "${cloudwatch}"
+            "type": "prometheus",
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -115,7 +116,8 @@ data:
           "targets": [
             {
               "datasource": {
-                "uid": "${cloudwatch}"
+                "type": "prometheus",
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "sum(aws_kafka_sum_offset_lag_sum{topic=~\".*hccm.ros.events\", consumer_group=\"ros-ocp\"})",
@@ -150,30 +152,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -229,30 +218,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -308,30 +284,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -387,30 +350,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -466,30 +416,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -545,30 +482,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -624,30 +548,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -703,30 +614,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -995,30 +893,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1074,30 +959,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1255,30 +1127,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1334,30 +1193,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1515,30 +1361,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1607,30 +1440,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2132,30 +1952,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2211,30 +2018,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2290,30 +2084,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2369,30 +2150,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2448,30 +2216,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2527,30 +2282,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -2930,30 +2672,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -3009,30 +2738,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -4301,30 +4017,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -4379,30 +4082,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -4457,30 +4147,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -4647,30 +4324,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -4725,30 +4389,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -5028,30 +4679,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -5107,30 +4745,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -5186,30 +4811,17 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 0
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -5258,7 +4870,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DatasourceRDS}"
+            "uid": "${datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -5266,17 +4878,7 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "N/A"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -5293,13 +4895,14 @@ data:
                   }
                 ]
               },
-              "unit": "none"
+              "unit": "none",
+              "noValue": "0"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 5,
-            "w": 6,
+            "h": 0,
+            "w": 0,
             "x": 18,
             "y": 157
           },
@@ -5327,7 +4930,8 @@ data:
           "targets": [
             {
               "datasource": {
-                "uid": "${DatasourceRDS}"
+                "type": "prometheus",
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "aws_rds_free_storage_space_average{job=~\"cloudwatch-exporter.*\",dbinstance_identifier=\"$namespace\"} / 1000 /1000 /1000",
@@ -5336,8 +4940,9 @@ data:
               "refId": "A"
             }
           ],
-          "title": "RDS free storage space (GB)",
-          "type": "stat"
+          "title": "RDS free storage space (GB) (SaaS only)",
+          "type": "stat",
+          "transparent": true
         },
         {
           "datasource": {
@@ -5444,7 +5049,7 @@ data:
             "uid": "${datasource}",
             "type": "prometheus"
           },
-          "description": "Scoped to dashboard namespace variable and ros-ocp-backend-* pods.",
+          "description": "Scoped to dashboard namespace variable and ((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-* pods.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -5530,7 +5135,7 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum by (pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\",namespace=\"$namespace\",pod=~\"ros-ocp-backend-.*\"})",
+              "expr": "sum by (pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\",namespace=\"$namespace\",pod=~\"(cost-onprem-ros-|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-).*\"})",
               "legendFormat": "{{pod}} / {{container}}",
               "range": true,
               "refId": "A"
@@ -5630,7 +5235,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"ros-ocp-backend-processor.*\"}[$__rate_interval]))",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"(cost-onprem-ros-processor|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-processor).*\"}[$__rate_interval]))",
               "legendFormat": "processor {{pod}}",
               "range": true,
               "refId": "A"
@@ -5641,7 +5246,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"ros-ocp-backend-recommendation-poller.*\"}[$__rate_interval]))",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"(cost-onprem-ros-rec-poller|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-recommendation-poller).*\"}[$__rate_interval]))",
               "legendFormat": "poller {{pod}}",
               "range": true,
               "refId": "B"
@@ -5652,7 +5257,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"ros-ocp-backend-api.*\"}[$__rate_interval]))",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"(cost-onprem-ros-api|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-api).*\"}[$__rate_interval]))",
               "legendFormat": "api {{pod}}",
               "range": true,
               "refId": "C"
@@ -5663,7 +5268,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"ros-ocp-backend-housekeeper.*\"}[$__rate_interval]))",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"(cost-onprem-ros-housekeeper|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-housekeeper).*\"}[$__rate_interval]))",
               "legendFormat": "housekeeper {{pod}}",
               "range": true,
               "refId": "D"
@@ -5677,7 +5282,7 @@ data:
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "description": "Working set memory for ros-ocp-backend pods (cAdvisor).",
+          "description": "Working set memory for ((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros) pods (cAdvisor).",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -5763,7 +5368,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (pod, container) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"ros-ocp-backend-.*\", container!=\"\"})",
+              "expr": "sum by (pod, container) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"(cost-onprem-ros-|((ros-ocp-backend|cost-onprem-ros)|cost-onprem-ros)-).*\", container!=\"\"})",
               "legendFormat": "{{pod}} / {{container}}",
               "range": true,
               "refId": "A"
@@ -5781,78 +5386,41 @@ data:
         "list": [
           {
             "current": {
-              "text": "crcp01ue1-prometheus",
-              "value": "PC1EAC84DCBBF0697"
+              "selected": true,
+              "text": "Prometheus",
+              "value": "Prometheus"
             },
             "includeAll": false,
             "label": "datasource",
             "name": "datasource",
-            "options": [],
             "query": "prometheus",
             "refresh": 1,
-            "regex": "/.*crc(p|s).*ue1-prometheus/",
+            "regex": "",
             "type": "datasource"
           },
           {
             "current": {
-              "text": "appsrep11ue1-prometheus",
-              "value": "P677746A44F299DAF"
-            },
-            "includeAll": false,
-            "label": "DatasourceRDS",
-            "name": "DatasourceRDS",
-            "options": [],
-            "query": "prometheus",
-            "refresh": 1,
-            "regex": "(appsrep11ue1|appsres11ue1)-prometheus",
-            "type": "datasource"
-          },
-          {
-            "current": {
-              "text": "rosocp-prod",
-              "value": "rosocp-prod"
+              "text": "cost-onprem",
+              "value": "cost-onprem",
+              "selected": true
             },
             "includeAll": false,
             "label": "namespace",
             "name": "namespace",
             "options": [
               {
-                "selected": false,
-                "text": "rosocp-stage",
-                "value": "rosocp-stage"
-              },
-              {
-                "selected": true,
                 "text": "rosocp-prod",
-                "value": "rosocp-prod"
+                "value": "rosocp-prod",
+                "selected": false
               },
               {
-                "selected": false,
-                "text": "kruize-stage",
-                "value": "kruize-stage"
-              },
-              {
-                "selected": false,
-                "text": "kruize-prod",
-                "value": "kruize-prod"
+                "text": "cost-onprem",
+                "value": "cost-onprem",
+                "selected": true
               }
             ],
-            "query": "rosocp-stage,rosocp-prod,kruize-stage,kruize-prod",
+            "query": "rosocp-prod,cost-onprem",
             "type": "custom"
-          },
-          {
-            "current": {
-              "text": "aws-resources-exporter-production",
-              "value": "PCEFB875D6FD018FC"
-            },
-            "includeAll": false,
-            "label": "aws-cloudwatch",
-            "name": "cloudwatch",
-            "options": [],
-            "query": "prometheus",
-            "refresh": 1,
-            "regex": "/aws-resources-exporter-(production|stage)/",
-            "type": "datasource"
           }
         ]
       },
@@ -5874,4 +5442,3 @@ metadata:
     grafana_dashboard: "true"
   annotations:
     grafana-folder: /grafana-dashboard-definitions/Insights
-
