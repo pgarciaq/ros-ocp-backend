@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-12
 
 ---
 
@@ -57,6 +57,25 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
+
+### Go runtime memory (`GOMEMLIMIT`)
+
+Go 1.19+ reads `GOMEMLIMIT` automatically (no application code required). It sets a
+**soft** heap ceiling so the garbage collector becomes more aggressive before the
+Linux cgroup OOM killer terminates the process.
+
+| Variable | Default (local) | Purpose |
+|----------|-----------------|---------|
+| `GOMEMLIMIT` | (unset) | Soft memory limit for the Go runtime. Use Go's unit format: `"922MiB"` or byte count — **not** Kubernetes `Mi`/`Gi` syntax. |
+
+**Helm (cost-onprem):** `ros.goMemLimit` in `values.yaml` injects `GOMEMLIMIT` into
+each ROS Deployment/CronJob. Defaults are ~90% of `resources.application.limits.memory`
+(`922MiB` for the 1 Gi application limit) and `ros.housekeeper.partitionCleaner.resources`
+(`461MiB` for 512 Mi). When you raise a component's memory limit, update the matching
+`ros.goMemLimit` value to ~90% of the new limit.
+
+**Local development:** Optional in `.env` when running under a memory cgroup or to
+reproduce production GC behavior. Leave unset for unlimited local runs.
 
 ---
 

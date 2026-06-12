@@ -90,6 +90,18 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), block recommendation persistence and Kafka commit if history or quality writes fail (message retried). Set `false` for degraded mode: write recommendations and surface gaps via `rosocp_analytics_incomplete_total` and `analytics_incomplete` on container list responses. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel masu reship calls per org. |
 
+### Go runtime memory (`GOMEMLIMIT`)
+
+Go 1.19+ reads `GOMEMLIMIT` automatically. It sets a soft heap ceiling so the garbage
+collector runs more aggressively before the cgroup OOM killer terminates the process.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GOMEMLIMIT` | (unset locally) | Soft memory limit for the Go runtime. Use Go unit format (`922MiB`), not Kubernetes `Mi`/`Gi`. |
+
+The cost-onprem Helm chart sets this via `ros.goMemLimit` (~90% of each component's
+container memory limit). Update those values when you change ROS memory limits.
+
 !!! tip "Tuning order"
     Increase Kafka workers first if CPU is idle and ingestion lag is high. Then
     adjust `ROS_DB_MAX_CONNS` if you see pool timeouts. Raise reship concurrency
