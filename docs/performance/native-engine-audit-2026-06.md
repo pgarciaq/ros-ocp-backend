@@ -53,13 +53,16 @@ For every digest row in every window, the code called `math.Exp(-ageHours * math
 
 **Impact:** ~40-50% reduction in recommend-phase CPU per container.
 
-### P0-3. Org-wide metadata refresh on every write batch — **In Progress** (see M1)
+### P0-3. Org-wide metadata refresh on every write batch — **Implemented**
 
-**Location:** `internal/engine/recommend_all.go:423` -- `WriteRecommendations`
+**Location:** `internal/engine/recommend_all.go` — `WriteRecommendations`, `RefreshOrgMetadata`; `internal/services/report_processor.go` — `runContainerRecommendations`
 
-Every streaming batch (500 containers) triggers `RefreshOrgContainerKeys` + `RefreshOrgRecommendationStats`, each doing a full `DISTINCT ON` scan of `recommendation_sets` for the entire org. For a 10k-container org, that's ~20 full-org scans per reconciliation cycle.
+Every streaming batch (500 containers) triggered `RefreshOrgContainerKeys` + `RefreshOrgRecommendationStats`, each doing a full `DISTINCT ON` scan of `recommendation_sets` for the entire org. For a 10k-container org, that's ~20 full-org scans per reconciliation cycle.
 
-**Fix:** Defer refresh to end of `runContainerRecommendations` (single pass), or maintain `org_container_keys` incrementally from the batch's container tuples.
+**Fix implemented (2026-06):**
+- Removed per-batch refresh from `WriteRecommendations`.
+- Added `RefreshOrgMetadata` called once at end of `runContainerRecommendations` and `recalculateContainerCluster`.
+- Tests/tooling use `WriteRecommendationsAndRefreshOrg` for single-batch writes.
 
 **Impact:** 50-90% reduction in recommendation write time for 10k+ container orgs.
 
