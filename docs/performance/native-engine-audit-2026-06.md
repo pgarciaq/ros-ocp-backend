@@ -41,6 +41,8 @@ For every digest row in every window, the code called `math.Exp(-ageHours * math
 
 **Impact:** Eliminates `math.Exp` from the hot path for standard integer half-lives.
 
+**ADR:** [ADR-0288](../adr/0288-decay-weight-lookup-tables.md)
+
 ### P0-2. Duplicate CPU + memory weighted passes per term x engine
 
 **Location:** `internal/engine/recommend_cpu.go`, `internal/engine/recommend_memory.go`

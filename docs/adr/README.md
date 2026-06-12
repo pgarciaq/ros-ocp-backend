@@ -287,3 +287,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0283](0283-synchronous-rest-api-no-websocket-sse-recommendation-updates.md) | Synchronous REST API — no WebSocket/SSE for recommendation updates | API Design | Pre-0 through 12 | Accepted |
 | [0285](0285-phase-branch-merge-order-migration-renumbering.md) | Phase branch merge order and migration renumbering | Deployment / Ops | 4–6 | Accepted |
 | [0287](0287-operator-14-day-prometheus-lookback-integration-boundary.md) | Operator 14-day Prometheus lookback as integration boundary | Ingestion | Cross-repo (koku-metrics-operator) | Accepted |
+| [0288](0288-decay-weight-lookup-tables.md) | Precomputed decay weight lookup tables | Engine / Algorithm | Performance | Accepted |

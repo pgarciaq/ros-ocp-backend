@@ -8,6 +8,11 @@ import (
 // DecayWeight computes exponential decay: exp(-ageHours * ln(2) / halfLifeHours).
 // Returns 1.0 if halfLifeHours is 0 or negative (no decay).
 //
+// Performance (ADR-0288): when halfLifeHours is a positive integer, age is
+// rounded to whole hours and the weight is looked up from a lazily built table in
+// decay_table.go — avoiding math.Exp on every digest row. Non-integer half-lives
+// fall back to direct math.Exp. Quantization error is at most ~0.2%.
+//
 // NOTE: This uses continuous hour-based age, NOT calendar days. DST transitions
 // or month boundaries may cause up to ~1h skew relative to calendar-day counting.
 // This is intentional: continuous decay avoids jumps at midnight boundaries and

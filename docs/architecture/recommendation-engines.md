@@ -12,7 +12,8 @@ formulas, see [Cost Integration](cost-integration.md).
 
 For decay weighting — formula, visual charts, edge-weight tables, and configuration —
 see the dedicated [Decay Weights](decay-weights.md) page. Decay weights use
-precomputed lookup tables keyed by integer half-life hours (lazy-built on first use)
+precomputed lookup tables keyed by integer half-life hours (lazy-built on first use;
+see [ADR-0288](../adr/0288-decay-weight-lookup-tables.md))
 instead of per-row `math.Exp`. When a tenant customizes `window_days` without
 setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 

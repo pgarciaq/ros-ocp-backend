@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADR-0288: Precomputed decay weight lookup tables — lazy `sync.Map` tables keyed by integer half-life hours replace per-row `math.Exp` in the digest hot path; documents auto-derive (`window_days × 12`) and ~0.2% quantization accuracy
+- Public docs: `docs-site/architecture/decay-weights.md` with decay curve charts under `docs-site/architecture/charts/`
 - ADRs 0258-0287: Historical phase decisions — Kruize elimination, per-container granularity, three-term architecture, shadow mode rejection, operator CSV contract, framework/language inheritance, phase deferrals, migration strategy, governance process
 - ADRs 0208-0257: Comprehensive coverage for settings architecture, business hours reship, notifications model, staleness semantics, tag sync, effective rates, snapshots, reship concurrency, migration strategy, configuration catalog, plugin system details, API contract decisions, quota/PVC algorithms
 - ADRs 0172-0207: Comprehensive architecture decision coverage for idle detection, savings methodology, list query performance, threshold recalculation, node/VM/GPU algorithms, API design patterns, Kafka tuning, RBAC semantics, and retention mechanics
@@ -21,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Decay weighting: `DecayWeight()` uses precomputed lookup tables for integer half-lives (plugin defaults and auto-derived `window_days × 12`); non-integer half-lives still use `math.Exp`. When a tenant overrides `window_days` but leaves `decay_halflife_hours` NULL, half-life auto-derives as `window_days × 12` hours
 - Corrected ADRs 0084, 0161 with status updates reflecting actual implementation scope
 - Updated ADRs 0011, 0013, 0038, 0043, 0132 with status updates cross-referencing new ADRs
 - Expanded ADRs 0088, 0102, 0112, 0133, 0136, 0139, 0140, 0145, 0151, 0163 with implementation details

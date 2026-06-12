@@ -230,7 +230,8 @@ and looks up precomputed values from lazily built tables in
 This keeps the fused digest walk in `MultiWeightedPercentileWithExtras` free of
 per-row transcendental math for standard tenant configurations.
 
-See also: [Native engine performance audit](../performance/native-engine-audit-2026-06.md).
+See also: [Native engine performance audit](../performance/native-engine-audit-2026-06.md) (P0-1),
+[ADR-0288](../adr/0288-decay-weight-lookup-tables.md).
 
 ---
 
@@ -243,3 +244,4 @@ See also: [Native engine performance audit](../performance/native-engine-audit-2
 | [Configurability Reference](configurability.md#term-windows-all-plugins) | All term env vars and API routes |
 | [ADR-0005](../adr/0005-decay-weighted-average-half-life.md) | Original decay design decision |
 | [ADR-0204](../adr/0204-continuous-hour-decay-vs-calendar-day-windows.md) | Hour-based vs calendar-day age |
+| [ADR-0288](../adr/0288-decay-weight-lookup-tables.md) | Precomputed lookup table optimization |

@@ -7,11 +7,12 @@ recommendations more than older data within the same term window. Without decay,
 a single spike from two weeks ago counts the same as yesterday's usage — which can
 produce oversized or sluggish recommendations when workloads change.
 
-Decay is applied when computing weighted percentiles for CPU, memory, node
-utilization, and business-hours aggregates. For how decay fits into the full sizing
-pipeline, see [Recommendation Math](recommendation-math.md#decay-weighting). For
-term defaults and env overrides, see
-[Configurability Reference](configurability.md#term-windows-all-plugins).
+Decay is applied when computing CPU, memory, node utilization, and business-hours
+aggregates across all recommendation plugins that use weighted percentiles.
+
+For how decay fits into the full sizing pipeline, see
+[Recommendation Math](recommendation-math.md). For term defaults and env overrides,
+see [Configurability Reference](configurability.md#term-windows-all-plugins).
 
 ---
 
@@ -37,14 +38,10 @@ weight = 2^(-daysAgo / halfLifeDays)
 | 2 half-lives ago | 0.25 (25%) |
 | n half-lives ago | 2^(-n) |
 
-The engine measures age in **continuous hours** from each digest row's
-`BucketDate` to the recommendation timestamp — not calendar-day boundaries.
-This avoids jumps at midnight and keeps weights smooth across DST transitions.
+The engine measures age in **continuous hours** from each digest row's timestamp
+to the recommendation time — not calendar-day boundaries. This avoids jumps at
+midnight and keeps weights smooth across DST transitions.
 See [ADR-0204](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0204-continuous-hour-decay-vs-calendar-day-windows.md).
-
-Implementation:
-[`DecayWeight()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay.go),
-[`decay_table.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay_table.go).
 
 ---
 
@@ -71,23 +68,15 @@ That is half the window expressed in hours (`window_days × 0.5 × 24`). A 30-da
 window therefore defaults to a 360-hour (15-day) half-life unless explicitly
 overridden.
 
-```go
-// internal/engine/decay_table.go
-func DeriveDecayHalfLifeHours(windowDays int) float64 {
-    return float64(windowDays * 12)
-}
-```
-
-Plugin compiled defaults (when no tenant row exists) are defined in
-[`term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go) — for example container
-medium term: 7-day window, 168-hour half-life.
+Plugin compiled defaults (when no tenant row exists) are fixed per plugin — for
+example container medium term: 7-day window, 168-hour half-life.
 
 ### Short term: no decay
 
 The **short** term defaults to `decay_halflife_hours = 0`. When half-life is zero
-or negative, `DecayWeight()` returns **1.0** for every row — all observations in
-the (typically 1-day) window are weighted equally. This is intentional: the short
-window is already narrow, so recency bias adds little value.
+or negative, every row receives **weight 1.0** — all observations in the
+(typically 1-day) window are weighted equally. The short window is already narrow,
+so recency bias adds little value.
 
 ---
 
@@ -118,12 +107,6 @@ Longer half-life → more uniform weighting across the window. Edge weight is
 **35.4%** (`2^(-1.5) ≈ 0.354`).
 
 ![Decay weights: 30-day window, 20-day half-life](charts/decay-weights-30d-hl20d.png)
-
-Regenerate these assets with:
-
-```bash
-python scripts/generate-decay-charts.py
-```
 
 ---
 
@@ -179,11 +162,7 @@ PUT /api/ros-ocp/v1/recommendations/openshift/settings/terms?recommendation_type
 `decay_halflife_hours` accepts `0` (no decay) through `8760` (one year). Negative
 values and values above 8760 are rejected with `422 Unprocessable Entity`.
 
-Handler:
-[`PutTermSettings()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_terms.go).
-VM terms use
-[`PUT /settings/vm/terms`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_settings.go)
-with the same field.
+VM terms use `PUT /settings/vm/terms` with the same field.
 
 ### Admin environment variables
 
@@ -202,15 +181,14 @@ Examples:
 | `ROS_TERMS_PVC_MEDIUM_DECAY_HALFLIFE_HOURS` | 0 | PVC medium (no decay) |
 
 When an admin env var is set, tenant PUTs for that field return `422` with
-`locked_terms`. See
-[Configurability Reference](configurability.md#term-windows-all-plugins).
+`locked_terms`. See [Configurability Reference](configurability.md#term-windows-all-plugins).
 
 ### Auto-derive behavior
 
 If a tenant sets `window_days` but omits `decay_halflife_hours` (NULL):
 
 1. Engine loads the term row from `org_recommendation_terms`
-2. `decay_halflife_hours` is NULL → `DeriveDecayHalfLifeHours(window_days)` applies
+2. `decay_halflife_hours` is NULL → `window_days × 12` applies
 3. Explicit `decay_halflife_hours` in the PUT body always wins over auto-derive
 4. Admin env var overrides both tenant DB values and auto-derive on read
 
@@ -219,16 +197,18 @@ If a tenant sets `window_days` but omits `decay_halflife_hours` (NULL):
 ## Performance: Precomputed Lookup Tables
 
 Decay weights are **not** computed with `math.Exp` on every digest row at runtime
-for the common case. `DecayWeight()` quantizes age and half-life to integer hours
-and looks up precomputed values from lazily built tables in
-[`decay_table.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay_table.go):
+for the common case. The engine quantizes age and half-life to integer hours and
+looks up precomputed values from lazily built tables:
 
 - Tables keyed by integer `halfLifeHours` (e.g. `168`, `360` from `window_days × 12`)
-- Built once per distinct half-life via `sync.Map` (microseconds, 2–3 tables typical)
-- Non-integer half-lives (e.g. `167.3`) fall back to `math.Exp` directly
+- Built once per distinct half-life via in-process cache (microseconds, 2–3 tables typical per batch)
+- Non-integer half-lives (e.g. `167.3`) fall back to direct `math.Exp`
 
-This keeps the fused digest walk in `MultiWeightedPercentileWithExtras` free of
-per-row transcendental math for standard tenant configurations.
+Integer-hour quantization introduces at most **~0.2%** weight error vs continuous
+hours — negligible compared to adaptive margin (15–50%) and percentile selection.
+
+See [ADR-0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0288-decay-weight-lookup-tables.md)
+for the full design rationale.
 
 ---
 
@@ -240,4 +220,4 @@ per-row transcendental math for standard tenant configurations.
 | [Recommendation Engines](recommendation-engines.md) | Per-plugin term defaults and thresholds |
 | [Configurability Reference](configurability.md#term-windows-all-plugins) | All term env vars and API routes |
 | [ADR-0005](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0005-decay-weighted-average-half-life.md) | Original decay design decision |
-| [ADR-0204](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0204-continuous-hour-decay-vs-calendar-day-windows.md) | Hour-based vs calendar-day age |
+| [ADR-0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0288-decay-weight-lookup-tables.md) | Lookup table optimization |

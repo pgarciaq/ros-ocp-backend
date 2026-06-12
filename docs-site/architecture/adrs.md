@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **287 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **288 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -46,6 +46,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0259](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0259-synchronous-ingest-time-engine-replaces-kruize-experiment-lifecycle.md) | Synchronous ingest-time engine | Replaces Kruize experiment lifecycle with ingest-time compute |
 | [0262](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0262-shadow-mode-native-engine-explicitly-rejected.md) | Shadow-mode native engine rejected | Explicit rejection of dual-run validation approach |
 | [0287](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0287-operator-14-day-prometheus-lookback-integration-boundary.md) | Operator 14-day Prometheus lookback | Integration boundary with koku-metrics-operator |
+| [0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0288-decay-weight-lookup-tables.md) | Precomputed decay weight lookup tables | Eliminates per-row `math.Exp` in digest hot path |
 
 ## Domains covered
 
