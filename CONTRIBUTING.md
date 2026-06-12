@@ -665,6 +665,17 @@ func FuzzParseCSVRows(f *testing.F) {
 }
 ```
 
+#### Fast local iteration
+
+For sub-5-minute unit-only runs (no Docker/testcontainers):
+
+```bash
+make test-short
+```
+
+This runs `go test -short ./...`, which skips integration tests guarded by `testing.Short()`.
+Use `make test` for the full suite before opening a PR.
+
 #### Integration Tests
 
 Tests requiring PostgreSQL or external containers use `testing.Short()` guard:

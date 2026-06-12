@@ -85,6 +85,10 @@ test:
 	# -timeout=30m covers the full integration suite (~25m serial on typical CI runners).
 	go test -v -race -count=1 -timeout=30m -p=1 ./...
 
+.PHONY: test-short
+test-short: ## Run unit tests only (skips Docker/testcontainers integration tests)
+	go test -short ./... -count=1
+
 MCCILINT := $(LOCALBIN)/mc
 .PHONY: archive-to-minio
 archive-to-minio:
