@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, and Medium Effort roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, and operational quick wins). **Remaining gaps:** on-prem PostgreSQL server tuning in the Helm chart (D-1), strategic items (S1–S3), and assorted P2/UI/observability items.
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, and Medium Effort roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, and operational quick wins). **Remaining gaps:** on-prem PostgreSQL server tuning in the Helm chart (D-1), strategic items (S1–S4), UI contract efficiency (H-3–H-6), ingest streaming for namespace CSV (B-2), sample/digest retention split (E-2), horizontal scaling (G-1–G-3), and assorted P2 observability/API items.
 
 ---
 
@@ -29,6 +29,12 @@
 - Integer micro-cents savings (`savings_int.go`, `MicroCentsPerDollar = 100_000_000`) — rate conversion once at boundary
 - Graceful processor shutdown drain (`sync.WaitGroup`, `ROS_SHUTDOWN_TIMEOUT_SECONDS`, `ctx.Done()` between phases)
 - VM recommendations deferred to post-manifest phase (matching container recommendation pattern)
+- GPU classification thresholds precomputed as basis points at load time (`normalizeGPUThresholds`)
+- Node utilization classification uses `UtilizationBasisPoints` (integer BP, no float ratios)
+- Fleet Prometheus metrics use bounded labels only; tenant context via structured logs (ADR-0243)
+- `GOMEMLIMIT` injected into all ROS deployments via cost-onprem Helm chart (`ros.goMemLimit`)
+- `/healthz` deep liveness endpoint (goroutine count, GC pause, scheduler deadlock canary)
+- Grafana dashboard modernized for on-prem + SaaS (pod patterns, null→N/A mappings, static validation tests)
 
 ---
 
@@ -137,19 +143,27 @@ Tables that have `org_id` columns joined `rh_accounts` for org filtering instead
 
 ## P2 -- Medium Priority
 
-### P2-1. GPU threshold conversion at every classify call — **Open**
+### P2-1. GPU threshold conversion at every classify call — **Implemented**
 
-**Location:** `internal/engine/gpu_recommender.go`
+**Location:** `internal/engine/gpu_recommender.go` — `normalizeGPUThresholds`, `GPUThresholds`
 
-`GPUThresholds` stores six `float64` thresholds, converted to basis points via `ThresholdToBasisPoints` at each classify call. Could store as BP in settings JSON directly.
+`GPUThresholds` stored six `float64` thresholds, converted to basis points via `ThresholdToBasisPoints` at each classify call.
 
-**Fix:** Store thresholds as int32 BP in config; remove per-classify conversion.
+**Fix implemented (2026-06):**
+- `normalizeGPUThresholds` precomputes all six classification thresholds as `int32` basis points at load time (`GPUThresholdsFromConfig`, `DefaultGPUThresholds`). `Classify` and `SelectMIGProfile` use precomputed BP fields directly.
 
-### P2-2. Node utilization as float ratios instead of basis points — **Open**
+**Impact:** Eliminates per-classify float→BP conversion on GPU-heavy clusters.
 
-**Location:** `internal/engine/recommend_nodes.go`
+### P2-2. Node utilization as float ratios instead of basis points — **Implemented**
 
-`cpuUtil50 := float64(d.CPUUsageP50MC) / float64(allocCPU)` -- could be `usage * 10000 / alloc` (basis points).
+**Location:** `internal/engine/recommend_nodes.go` — `UtilizationBasisPoints`
+
+`cpuUtil50 := float64(d.CPUUsageP50MC) / float64(allocCPU)` computed float ratios at classification time.
+
+**Fix implemented (2026-06):**
+- Replaced float ratio comparisons with `UtilizationBasisPoints(usage, alloc)` integer math. `NodeRecommendationConfig` stores `UnderutilThresholdBP` and `OvercommitThresholdBP` as precomputed basis points.
+
+**Impact:** Completes basis-point migration for node classification; removes float division from hot path.
 
 ### P2-3. PVC and GPU writes not batched — **Implemented**
 
@@ -196,11 +210,11 @@ Container/namespace used `pgx.Batch`; PVC and GPU did not.
 | VM power-off idle ratio | int32 BP | None |
 | Margin application | `MarginScale` + `ApplyScaledMargin` | None |
 | Margin computation | int BP via `ComputeAdaptiveMarginScaledDirect` | None |
-| **GPU thresholds** | **float64 in config** | Convert to BP at load |
-| **Node utilization** | **float64 ratio** | Could be BP |
-| **PVC usage ratio** | **float64** | Could be BP |
-| **Savings rates** | **int64 micro-cents** | None |
-| **VM sizing margins** | **float64** | Mirror container `ApplyScaledMargin` |
+| GPU thresholds | int32 BP (precomputed at load) | None |
+| Node utilization | int32 BP via `UtilizationBasisPoints` | None |
+| PVC usage ratio | **float64** | Could be BP |
+| Savings rates | int64 micro-cents | None |
+| VM sizing margins | **float64** | Mirror container `ApplyScaledMargin` |
 
 ---
 
@@ -349,12 +363,16 @@ When `rowCount <= 50,000` and no incremental flushes have occurred, the single-t
 
 **Fix:** Lower threshold or require both row count AND group count below threshold.
 
-### B-6. No PGO or GOMEMLIMIT in deployment (P2) — **Open**
+### B-6. No PGO or GOMEMLIMIT in deployment (P2) — **Partially Implemented**
 
-- No Profile-Guided Optimization (`-pgo`) in the Docker build
-- `GOMEMLIMIT` not set in the container (documented but not enforced)
+- No Profile-Guided Optimization (`-pgo`) in the Docker build — **still open**
+- `GOMEMLIMIT` not set in the container — **resolved**
 
-**Fix:** Set `GOMEMLIMIT` to ~90% of container memory limit in Helm values. Consider PGO build after collecting production CPU profiles.
+**Fix implemented (2026-06) for GOMEMLIMIT:**
+- cost-onprem Helm chart injects `GOMEMLIMIT` via `ros.goMemLimit` template (~90% of container memory limit) into API, processor, housekeeper, recommendation-poller, and partition-cleaner deployments.
+- Documented in `docs/operations/configuration.md` and validated by `tests/suites/helm/test_chart_lint.py`.
+
+**Remaining:** Consider PGO build after collecting production CPU profiles.
 
 ---
 
@@ -366,7 +384,7 @@ When `rowCount <= 50,000` and no incremental flushes have occurred, the single-t
 
 The Helm chart wired readiness to `/status` (static JSON, no dependency checks) instead of `/readyz` (which pings the database). Pods were marked ready while DB was down.
 
-**Fix:** Point `readinessProbe` at `/readyz`; keep `livenessProbe` on `/status`. Implemented in cost-onprem-chart (`ros.api.readinessProbe.path` defaults to `/readyz`).
+**Fix:** Point `readinessProbe` at `/readyz`; keep `livenessProbe` on `/healthz` (deep runtime checks). Implemented in cost-onprem-chart (`ros.api.readinessProbe.path` defaults to `/readyz`; `livenessProbe.path` defaults to `/healthz`).
 
 ### C-2. VM CSV warn-log storms (P1) — **Implemented**
 
@@ -379,11 +397,17 @@ Every bad VM CSV row logged `Warnf`. A noisy file could generate thousands of lo
 - New `rosocp_csv_rows_skipped_total{report_type="vm"}` counter.
 - Summary `Warnf` at end when skips > 0.
 
-### C-3. High-cardinality Prometheus labels (P1) — **Open**
+### C-3. High-cardinality Prometheus labels (P1) — **Implemented**
 
-Several metrics use `org_id` and `cluster_uuid` as labels: `rosocp_analytics_incomplete_total`, `ros_recommendation_stability`, `ros_reship_in_progress`, etc. This creates unbounded cardinality.
+Several metrics used `org_id` and `cluster_uuid` as labels: `rosocp_analytics_incomplete_total`, `ros_recommendation_stability`, `ros_reship_in_progress`, etc. This created unbounded cardinality.
 
-**Fix:** Use bounded labels (`error_type`, `stage`); log tenant context via structured logging instead.
+**Fix implemented (2026-06):** [ADR-0243](../adr/0243-high-cardinality-analytics-incomplete-labels.md)
+- Removed tenant labels from fleet metrics; bounded labels only (`error_type`, `recommendation_type`, `status`, etc.).
+- Gauges converted to unlabeled histograms where appropriate (`ros_recommendation_stability`, `ros_recommendation_adoption_rate`, `ros_recommendation_oom_rate`).
+- Per-org/cluster context emitted via structured logs at metric call sites.
+- Grafana dashboard queries updated to match new label schema.
+
+**Impact:** Prevents Prometheus memory blow-up at fleet scale; breaking change for dashboards filtering by org/cluster (mitigated by dashboard modernization).
 
 ### C-4. Processor shutdown doesn't drain in-flight work (P1) — **Implemented**
 
@@ -412,6 +436,41 @@ Full test suite requires Docker and takes ~25 minutes serial. No documented fast
 **Fix implemented (2026-06):**
 - New Makefile target `make test-short` runs `go test -short ./... -count=1`, completes in ~15 seconds.
 - Documented in `CONTRIBUTING.md`.
+
+### C-7. No deep liveness endpoint (P1) — **Implemented**
+
+**Location:** `internal/health/healthz.go`, `internal/api/handlers_healthz.go`, cost-onprem `livenessProbe`
+
+Only `/status` (static 200) existed. No goroutine leak, GC pause, or deadlock detection for Kubernetes liveness.
+
+**Fix implemented (2026-06):**
+- New `GET /healthz` endpoint checks goroutine count (`ROS_HEALTHZ_MAX_GOROUTINES`), last GC pause (`ROS_HEALTHZ_MAX_GC_PAUSE_MS`), and scheduler responsiveness (deadlock canary).
+- cost-onprem chart wires `livenessProbe` to `/healthz` for API, processor, and recommendation-poller.
+- Readiness remains on `/readyz` (DB connectivity).
+
+**Impact:** Pods with goroutine leaks or GC stalls are restarted automatically instead of serving degraded traffic indefinitely.
+
+### C-8. Grafana dashboard stale for native engine and on-prem (P1) — **Implemented**
+
+**Location:** `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml`
+
+Dashboard retained SaaS-specific variables (RDS, Kafka lag by topic), missing native-engine panels, and null-value mappings that rendered as "null" in Grafana.
+
+**Fix implemented (2026-06):**
+- Removed SaaS-only template variables; added on-prem pod label patterns (`app.kubernetes.io/component`).
+- Added engine performance, cache, ingest, and lifecycle panels.
+- Fixed null→N/A value mappings across stat panels.
+- Updated PromQL to match C-3 label schema changes.
+
+### C-9. No static validation for Grafana dashboard (P2) — **Implemented**
+
+**Location:** `internal/dashboard/dashboard_test.go`
+
+Dashboard JSON was hand-edited with no CI guard against broken PromQL, missing metrics, or stale metric names.
+
+**Fix implemented (2026-06):**
+- Static validation tests parse the ConfigMap YAML, extract dashboard JSON, and verify: all PromQL metric references exist in `internal/metrics/` or documented externals; no removed high-cardinality label filters; panel structure integrity.
+- Runs in `make test-short` (~15s).
 
 ---
 
@@ -640,7 +699,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Implemented |
 | A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |
 | B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Implemented |
-| C-1 | Ops | Fix readiness probe to use /readyz | Correctness | Resolved |
+| C-1 | Ops | Fix readiness probe to use /readyz; liveness on /healthz | Correctness | Resolved |
 
 ### P1 -- High Priority
 
@@ -661,8 +720,11 @@ Loaded once at startup via `sync.Once`. No action needed.
 | B-2 | Ingest | Stream namespace CSV | Open |
 | B-4 | Ingest | Remove per-row Prometheus gauge | Implemented |
 | C-2 | Ops | VM CSV logs: Debug + counter | Implemented |
-| C-3 | Ops | Audit high-cardinality Prometheus labels | Open |
+| C-3 | Ops | Audit high-cardinality Prometheus labels | Implemented |
 | C-4 | Ops | Drain in-flight Kafka handlers on shutdown | Implemented |
+| C-7 | Ops | `/healthz` deep liveness endpoint | Implemented |
+| C-8 | Ops | Grafana dashboard modernization | Implemented |
+| C-9 | Ops | Dashboard static validation tests | Implemented |
 
 ### P2 -- Medium Priority
 
@@ -671,12 +733,13 @@ Loaded once at startup via `sync.Once`. No action needed.
 | E-2 | Lifecycle | Separate sample vs digest retention | Open |
 | G-1 | Scale | Increase Kafka partitions (3 -> 12) | Open |
 | G-2 | Scale | Add HPA for API pods | Open |
-| P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Open |
-| P2-2 | Math | Node utilization as basis points | Open |
+| P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Implemented |
+| P2-2 | Math | Node utilization as basis points | Implemented |
 | P2-3 | DB | Batch PVC/GPU writes via pgx.Batch | Implemented |
 | P2-4 | Ingest | Decouple VM recommend from ingest | Implemented |
 | P2-5 | Math | Replace idle P95 sort with max-of-daily-P95 | Implemented |
-| B-3,5,6 | Ingest | String interning, narrow single-tx, GOMEMLIMIT/PGO | Open |
+| B-3,5 | Ingest | String interning, narrow single-tx threshold | Open |
+| B-6 | Ingest | GOMEMLIMIT in Helm (PGO still open) | Partially Implemented |
 | C-6 | Ops | Add make test-short | Implemented |
 | I-1 | Deps | Binary slimming (release ldflags, SDK audit) | Open |
 
@@ -690,3 +753,61 @@ Loaded once at startup via `sync.Once`. No action needed.
 | S4 | API | Slim list contract with UI team | Open |
 | F-1 | Observability | Add per-phase pipeline histograms + OpenTelemetry | Open |
 | G-3 | Scale | Distributed debouncer (DB/Redis) for multi-pod processors | Open |
+
+---
+
+## Remaining Items — ROI Analysis (June 2026)
+
+Prioritized by **impact × feasibility / risk**. Effort estimates assume a single engineer familiar with the codebase.
+
+### Tier 1 — Do Next (high ROI, low–medium effort)
+
+| Rank | ID | Effort | Impact | Risk | Rationale |
+|------|----|--------|--------|------|-----------|
+| 1 | **D-1** | 2–3 days | **Critical** (on-prem prod) | Low | Stock 512Mi PostgreSQL cannot sustain 10k-container fleets. Exposing `postgresql.conf` tuning (or mandating external DB) is the #1 production correctness gap. No code changes in ros-ocp-backend — Helm chart + docs. |
+| 2 | **G-1** | 0.5–1 day | **High** (ingest throughput) | Low–Med | 3 Kafka partitions hard-cap parallel ingest; 4th processor pod sits idle. Increasing to 12 partitions is config-only and unlocks linear ingest scaling to ~12 concurrent manifests. Prerequisite before adding processor replicas. |
+| 3 | **H-3** | 1 day | **High** (API load) | Low | OCP breakdown page fires two overlapping list API calls. Single shared fetch (React context or lifted state) eliminates ~50% of breakdown-page API traffic with zero backend changes. |
+| 4 | **E-2** | 3–5 days | **Very high** (disk) | Med | `container_usage_samples` drives 90%+ of storage. 30-day sample retention + 6-month digest retention could cut disk 60–80% at 10k containers. Requires product sign-off on boxplot lookback window. |
+| 5 | **B-2** | 2–3 days | **Med–High** (ingest RAM) | Low | Namespace CSV fully materializes before grouping; container path already streams. Mirror `forEachCSVRow` + incremental flush pattern. Reduces peak RAM on large namespace manifests. |
+
+### Tier 2 — Worth Doing Soon (good ROI, moderate effort)
+
+| Rank | ID | Effort | Impact | Risk | Rationale |
+|------|----|--------|--------|------|-----------|
+| 6 | **H-4** | 3–5 days | **Med–High** (API CPU/payload) | Med | A-1 slimmed list DTO but rows still carry all 3 terms × 2 engines. `?term=short&engine=cost` or `?fields=summary` would cut JSON 60–80% for table views. Requires API + UI coordination (ties to S4). |
+| 7 | **A-2** | 2–3 days | **Med** (payload size) | Low–Med | Notification codes triplicated at 3 JSON levels. Emit once at engine level or return codes-only in list. 30–50% JSON reduction per container row. |
+| 8 | **G-2** | 1–2 days | **Med** (API availability) | Low | No HPA on API pods. Add CPU-based HPA in Helm chart once baseline metrics exist. Stateless API scales freely (watch D-2 connection budget). |
+| 9 | **H-5** | 2–3 days | **Med** (large-tenant UX) | Low | UI uses offset pagination; backend supports keyset cursor. Offset degrades linearly past page 10 on 100k-container orgs. UI-only change. |
+| 10 | **F-1** | 3–5 days | **Med** (observability) | Low | Pipeline phases not separately histogrammed; no OpenTelemetry. Per-phase histograms (`recommend`, `write`, `quality`) enable data-driven optimization of remaining bottlenecks (ingest I/O dominates today). |
+| 11 | **B-5** | 1 day | **Med** (ingest RAM edge) | Low | Single-tx fast path holds all deferred samples when `rowCount ≤ 50,000`. Lower threshold or add group-count guard. Quick fix for large single-file manifests. |
+
+### Tier 3 — Lower Priority or Higher Risk (defer unless profiling demands)
+
+| Rank | ID | Effort | Impact | Risk | Rationale |
+|------|----|--------|--------|------|-----------|
+| 12 | **H-6** | 2–3 days | **Med** (UI API calls) | Low | Redux cache keyed by exact query string; badge/summary/table don't share. Normalized cache key or shared query layer reduces duplicate fetches. |
+| 13 | **G-3** | 5–8 days | **Med** (multi-pod correctness) | High | Synth manifest debouncer is process-local; duplicate rec runs across pods. DB/Redis-backed debouncer needed only when processor replicas > 1 and G-1 is done. |
+| 14 | **B-3** | 3–5 days | **Low–Med** (ingest GC) | Med | String interning for repeated namespace/workload/container keys. Marginal after B-1 slim samples; profile before investing. |
+| 15 | **A-3** | 2–3 days | **Low** (API alloc) | Low | `Collection.Data []interface{}` forces boxing. Only matters if JSON assembly becomes hot path again post A-1/H-4. |
+| 16 | **A-5** | N/A | **Low** (legacy path) | Low | Kruize `map[string]interface{}` path only active on fallback. Native engine is default; deprioritize. |
+| 17 | **I-1** | 3–5 days | **Low** (startup/deploy) | Low | 58MB binary from CGO Kafka + dual AWS SDK. `-ldflags="-s -w"` and SDK audit reduce image size but not runtime performance. |
+| 18 | **B-6 (PGO)** | 5+ days | **Low–Med** (CPU) | Med | Requires production CPU profiles and CI pipeline changes. GOMEMLIMIT already done. |
+
+### Tier 4 — Strategic (1–2 weeks each, coordinate with product)
+
+| Rank | ID | Effort | Impact | Risk | Rationale |
+|------|----|--------|--------|------|-----------|
+| 19 | **S4** | 1–2 weeks | **High** (API+UI contract) | Med | Slim list contract with UI team. Unblocks H-4, A-2, H-5 holistically. Do after Tier 1 quick wins prove value. |
+| 20 | **S1** | 1–2 weeks | **Med** (code maintainability) | High | Unified windowed digest recommender framework. 30–50% less duplication but touches all recommendation types. |
+| 21 | **S2** | 1–2 weeks | **High** (CPU at scale) | High | Parallel container recommend by namespace partition. Linear multi-core speedup but requires careful DB write ordering. |
+| 22 | **S3** | 1–2 weeks | **High** (compute savings) | High (product) | Namespace recs from container rollups eliminates duplicate engine run. Product decision on rollup semantics. |
+
+### Recommended Next Sprint (2 weeks)
+
+1. **D-1** — PostgreSQL tuning in Helm chart (on-prem production blocker)
+2. **G-1** — Kafka partitions 3→12 (unblocks ingest scaling)
+3. **H-3** — Deduplicate OCP breakdown list calls (immediate API load reduction)
+4. **B-2** — Stream namespace CSV (ingest memory win, follows proven pattern)
+5. **F-1** — Per-phase pipeline histograms (enables data-driven prioritization of Tier 2+)
+
+This sequence addresses the three scaling ceilings (DB resources, Kafka parallelism, API waste) before investing in contract changes (S4/H-4) that require cross-team coordination.
