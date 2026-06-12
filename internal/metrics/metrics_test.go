@@ -23,6 +23,7 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	SetIngestGroupsInMemory(1)
 	IncIngestFlushTotal()
 	ObserveIngestFlush(time.Now())
+	IncCSVRowsSkipped("metric_test", 1)
 
 	names := []string{
 		"rosocp_db_query_duration_seconds",
@@ -33,6 +34,7 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 		"rosocp_ingest_groups_in_memory",
 		"rosocp_ingest_flush_total",
 		"rosocp_ingest_flush_duration_seconds",
+		"rosocp_csv_rows_skipped_total",
 	}
 
 	mfs, err := prometheus.DefaultGatherer.Gather()

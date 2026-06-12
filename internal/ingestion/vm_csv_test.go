@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,6 +69,7 @@ func TestVMParseCSVRows_EmptyCSV(t *testing.T) {
 }
 
 func TestVMParseCSVRows_MalformedRowSkipped(t *testing.T) {
+	before := csvRowsSkippedTotal("vm")
 	csv := vmCSVHeader() + `
 not-a-timestamp,2026-05-01T12:15:00Z,bad-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,
 2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,good-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,
@@ -76,6 +78,27 @@ not-a-timestamp,2026-05-01T12:15:00Z,bad-vm,ns,node,linux,100,200,300,1024,2048,
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "good-vm", rows[0].VMName)
+	assert.Equal(t, before+1, csvRowsSkippedTotal("vm"))
+}
+
+func csvRowsSkippedTotal(reportType string) float64 {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return 0
+	}
+	for _, mf := range mfs {
+		if mf.GetName() != "rosocp_csv_rows_skipped_total" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "report_type" && lp.GetValue() == reportType {
+					return m.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func TestVMParseCSVRows_OldFormatWithoutRestartCount(t *testing.T) {

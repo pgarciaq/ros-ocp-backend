@@ -95,6 +95,14 @@ var (
 		},
 		[]string{"org_id", "cluster_uuid", "error_type"},
 	)
+
+	CSVRowsSkipped = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rosocp_csv_rows_skipped_total",
+			Help: "CSV rows skipped during parse/validation, labeled by report type",
+		},
+		[]string{"report_type"},
+	)
 )
 
 // ObserveDB records elapsed time for a labeled DB operation.
@@ -136,4 +144,12 @@ func IncIngestFlushTotal() {
 // errorType must be "history" or "quality".
 func IncAnalyticsIncomplete(orgID, clusterUUID, errorType string) {
 	AnalyticsIncompleteTotal.WithLabelValues(orgID, clusterUUID, errorType).Inc()
+}
+
+// IncCSVRowsSkipped increments the skipped-row counter for a report type (e.g. container, vm).
+func IncCSVRowsSkipped(reportType string, count int) {
+	if count <= 0 {
+		return
+	}
+	CSVRowsSkipped.WithLabelValues(reportType).Add(float64(count))
 }

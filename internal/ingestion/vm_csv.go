@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 // vmCSVExpectedColumns is the canonical header for ros-openshift-vm-usage CSV rows.
@@ -280,6 +281,7 @@ func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 
 	log := logging.GetLogger()
 	var rows []VMRow
+	var skipped int
 	lineNum := 1
 	for {
 		record, err := reader.Read()
@@ -293,14 +295,20 @@ func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 
 		row, parseErr := parseVMRecord(record, idx)
 		if parseErr != nil {
-			log.Warnf("ParseVMCSVRows: skipping line %d: %v", lineNum, parseErr)
+			log.Debugf("ParseVMCSVRows: skipping line %d: %v", lineNum, parseErr)
+			skipped++
 			continue
 		}
 		if row.VMName == "" || row.Namespace == "" {
-			log.Warnf("ParseVMCSVRows: skipping line %d: empty vm_name or namespace", lineNum)
+			log.Debugf("ParseVMCSVRows: skipping line %d: empty vm_name or namespace", lineNum)
+			skipped++
 			continue
 		}
 		rows = append(rows, row)
+	}
+	if skipped > 0 {
+		metrics.IncCSVRowsSkipped("vm", skipped)
+		log.Warnf("ParseVMCSVRows: skipped %d malformed or invalid rows", skipped)
 	}
 	return rows, nil
 }
