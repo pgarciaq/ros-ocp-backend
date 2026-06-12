@@ -235,6 +235,7 @@ func TestClassify_IdleThresholdOverride(t *testing.T) {
 		MemBoundTensor:      defaults.MemBoundTensor,
 		FBHeadroomFactor:    defaults.FBHeadroomFactor,
 	}
+	normalizeGPUThresholds(&raised)
 	cls2, hasProf2 := raised.Classify(digests)
 	assert.True(t, hasProf2)
 	assert.Equal(t, GPUClassIdle, cls2, "0.03 SM should be idle with raised threshold 0.05")
@@ -257,6 +258,7 @@ func TestClassify_MemBoundThresholdOverride(t *testing.T) {
 		MemBoundTensor:      defaults.MemBoundTensor,
 		FBHeadroomFactor:    defaults.FBHeadroomFactor,
 	}
+	normalizeGPUThresholds(&lowered)
 	cls2, _ := lowered.Classify(digests)
 	assert.Equal(t, GPUClassMemoryBound, cls2, "should be memory_bound with lowered DRAM threshold 0.50")
 }

@@ -70,7 +70,8 @@ type GPURec struct {
 }
 
 // GPUThresholds holds the configurable thresholds for GPU workload classification
-// and MIG profile selection. Construct via NewGPUThresholds or GPUThresholdsFromConfig.
+// and MIG profile selection. Construct via DefaultGPUThresholds or GPUThresholdsFromConfig.
+// Float fields are serialized to JSON; basis-point fields are precomputed at construction.
 // Methods on GPUThresholds are safe to call concurrently from parallel tests without
 // global state mutation.
 type GPUThresholds struct {
@@ -80,11 +81,17 @@ type GPUThresholds struct {
 	MemBoundDRAM        float64 `json:"membound_dram_threshold"`
 	MemBoundTensor      float64 `json:"membound_tensor_threshold"`
 	FBHeadroomFactor    float64 `json:"fb_headroom_factor"`
+
+	IdleThresholdBP       int32 `json:"-"`
+	UnderutilizedSMBP       int32 `json:"-"`
+	UnderutilizedTensorBP   int32 `json:"-"`
+	MemBoundDRAMBP          int32 `json:"-"`
+	MemBoundTensorBP        int32 `json:"-"`
 }
 
 // DefaultGPUThresholds returns the built-in defaults (matching viper defaults in config).
 func DefaultGPUThresholds() GPUThresholds {
-	return GPUThresholds{
+	th := GPUThresholds{
 		IdleThreshold:       0.02,
 		UnderutilizedSM:     0.25,
 		UnderutilizedTensor: 0.15,
@@ -92,6 +99,8 @@ func DefaultGPUThresholds() GPUThresholds {
 		MemBoundTensor:      0.15,
 		FBHeadroomFactor:    1.20,
 	}
+	normalizeGPUThresholds(&th)
+	return th
 }
 
 // GPUThresholdsFromConfig constructs GPUThresholds from the application Config.
@@ -99,7 +108,7 @@ func GPUThresholdsFromConfig(cfg *config.Config) GPUThresholds {
 	if cfg == nil {
 		return DefaultGPUThresholds()
 	}
-	return GPUThresholds{
+	th := GPUThresholds{
 		IdleThreshold:       cfg.GPUIdleThreshold,
 		UnderutilizedSM:     cfg.GPUUnderutilizedSMThreshold,
 		UnderutilizedTensor: cfg.GPUUnderutilizedTensorThreshold,
@@ -107,6 +116,20 @@ func GPUThresholdsFromConfig(cfg *config.Config) GPUThresholds {
 		MemBoundTensor:      cfg.GPUMemBoundTensorThreshold,
 		FBHeadroomFactor:    cfg.GPUFBHeadroomFactor,
 	}
+	normalizeGPUThresholds(&th)
+	return th
+}
+
+// normalizeGPUThresholds precomputes basis-point classification thresholds from float settings.
+func normalizeGPUThresholds(th *GPUThresholds) {
+	if th == nil {
+		return
+	}
+	th.IdleThresholdBP = ThresholdToBasisPoints(th.IdleThreshold)
+	th.UnderutilizedSMBP = ThresholdToBasisPoints(th.UnderutilizedSM)
+	th.UnderutilizedTensorBP = ThresholdToBasisPoints(th.UnderutilizedTensor)
+	th.MemBoundDRAMBP = ThresholdToBasisPoints(th.MemBoundDRAM)
+	th.MemBoundTensorBP = ThresholdToBasisPoints(th.MemBoundTensor)
 }
 
 // defaultThresholds is the process-wide instance used by top-level convenience
@@ -144,22 +167,15 @@ func gpuHasProfilingData(digests []GPUDigestRow) bool {
 	return false
 }
 
-func classifyFromAverages(avgTensor, avgDRAM, avgSM int32, th GPUThresholds, computeBoundDRAM float64) GPUClassification {
-	idleBP := ThresholdToBasisPoints(th.IdleThreshold)
-	memBoundDRAMBP := ThresholdToBasisPoints(th.MemBoundDRAM)
-	memBoundTensorBP := ThresholdToBasisPoints(th.MemBoundTensor)
-	underTensorBP := ThresholdToBasisPoints(th.UnderutilizedTensor)
-	underSMBP := ThresholdToBasisPoints(th.UnderutilizedSM)
-	computeBoundDRAMBP := ThresholdToBasisPoints(computeBoundDRAM)
-
+func classifyFromAverages(avgTensor, avgDRAM, avgSM int32, th GPUThresholds, computeBoundDRAMBP int32) GPUClassification {
 	switch {
-	case avgSM < idleBP:
+	case avgSM < th.IdleThresholdBP:
 		return GPUClassIdle
-	case avgDRAM > memBoundDRAMBP && avgTensor < memBoundTensorBP:
+	case avgDRAM > th.MemBoundDRAMBP && avgTensor < th.MemBoundTensorBP:
 		return GPUClassMemoryBound
-	case avgTensor < underTensorBP && avgSM < underSMBP:
+	case avgTensor < th.UnderutilizedTensorBP && avgSM < th.UnderutilizedSMBP:
 		return GPUClassUnderutilized
-	case avgTensor < underSMBP && avgDRAM < computeBoundDRAMBP:
+	case avgTensor < th.UnderutilizedSMBP && avgDRAM < computeBoundDRAMBP:
 		return GPUClassComputeBoundUnderutil
 	default:
 		return GPUClassWellUtilized
@@ -175,7 +191,7 @@ func (th *GPUThresholds) Classify(digests []GPUDigestRow) (GPUClassification, bo
 	avgTensor := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.TensorPipeActiveAvg })
 	avgDRAM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.DRAMActiveAvg })
 	avgSM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.SMActiveAvg })
-	return classifyFromAverages(avgTensor, avgDRAM, avgSM, *th, 0.30), true
+	return classifyFromAverages(avgTensor, avgDRAM, avgSM, *th, ThresholdToBasisPoints(0.30)), true
 }
 
 // SelectMIGProfile recommends the smallest MIG profile that fits the workload's
@@ -205,7 +221,7 @@ func (s GPUThresholdSettings) ClassifyWithSettings(digests []GPUDigestRow) (GPUC
 	avgTensor := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.TensorPipeActiveAvg })
 	avgDRAM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.DRAMActiveAvg })
 	avgSM := avgGPUBasisPoints(digests, func(d GPUDigestRow) int32 { return d.SMActiveAvg })
-	return classifyFromAverages(avgTensor, avgDRAM, avgSM, s.GPUThresholds, s.ComputeBoundDRAMThreshold), true
+	return classifyFromAverages(avgTensor, avgDRAM, avgSM, s.GPUThresholds, s.ComputeBoundDRAMThresholdBP), true
 }
 
 // SelectMIGProfileWithSettings recommends a MIG profile using extended settings.

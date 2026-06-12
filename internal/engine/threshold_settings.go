@@ -202,6 +202,7 @@ type NodeThresholdSettingsUpdate struct {
 type GPUThresholdSettings struct {
 	GPUThresholds
 	ComputeBoundDRAMThreshold    float64 `json:"compute_bound_dram_threshold"`
+	ComputeBoundDRAMThresholdBP  int32   `json:"-"`
 	MIGFBPercentile              float64 `json:"mig_fb_percentile"`
 	ConfidenceDaysTier1          int     `json:"confidence_days_tier1"`
 	ConfidenceDaysTier2          int     `json:"confidence_days_tier2"`
@@ -326,7 +327,7 @@ func DefaultNodeThresholdSettings() NodeThresholdSettings {
 
 // DefaultGPUThresholdSettings returns compiled defaults for GPU recommendations.
 func DefaultGPUThresholdSettings() GPUThresholdSettings {
-	return GPUThresholdSettings{
+	s := GPUThresholdSettings{
 		GPUThresholds:                DefaultGPUThresholds(),
 		ComputeBoundDRAMThreshold:    0.30,
 		MIGFBPercentile:              0.98,
@@ -343,6 +344,17 @@ func DefaultGPUThresholdSettings() GPUThresholdSettings {
 		TimeslicingImpactedWeight:    0.30,
 		NodeFreshnessDays:            7,
 	}
+	normalizeGPUThresholdSettings(&s)
+	return s
+}
+
+// normalizeGPUThresholdSettings precomputes basis-point fields for GPU classification.
+func normalizeGPUThresholdSettings(s *GPUThresholdSettings) {
+	if s == nil {
+		return
+	}
+	normalizeGPUThresholds(&s.GPUThresholds)
+	s.ComputeBoundDRAMThresholdBP = ThresholdToBasisPoints(s.ComputeBoundDRAMThreshold)
 }
 
 // DefaultPVCThresholdSettings returns compiled defaults for PVC recommendations.
@@ -593,6 +605,7 @@ func applyGPUEnvLocks(base GPUThresholdSettings, cfg *config.Config) GPUThreshol
 	if _, ok := os.LookupEnv("ROS_GPU_NODE_FRESHNESS_DAYS"); ok {
 		base.NodeFreshnessDays = cfg.GPUNodeFreshnessDays
 	}
+	normalizeGPUThresholdSettings(&base)
 	return base
 }
 
@@ -668,6 +681,7 @@ func resolveGPUThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool
 	}
 	cfg := config.GetConfig()
 	result = applyGPUEnvLocks(result, cfg)
+	normalizeGPUThresholdSettings(&result)
 	return result, nil
 }
 
