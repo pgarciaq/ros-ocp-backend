@@ -7,8 +7,10 @@ import (
 	"math"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 const (
@@ -365,67 +367,106 @@ func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) flo
 	return (sumW*sumWXY - sumWX*sumWY) / denom
 }
 
-// WritePVCRecommendations upserts PVC recommendations to the database and
-// removes rows for terms no longer in the active configuration.
-func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec, validTerms []string) error {
+const pvcRecommendationUpsertSQL = `
+	INSERT INTO pvc_recommendation_sets (
+		org_id, cluster_uuid, namespace, persistentvolumeclaim,
+		last_seen_pod, vm_name, persistentvolume, storageclass, capacity_bytes,
+		usage_bytes_max, usage_ratio, recommendation_type,
+		recommended_bytes, days_to_full, growth_bytes_per_day,
+		notification_codes, data_days, term,
+		estimated_savings_cents,
+		idle_since, idle_duration_days,
+		updated_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+	ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
+	DO UPDATE SET
+		last_seen_pod = CASE
+			WHEN EXCLUDED.last_seen_pod != '' THEN EXCLUDED.last_seen_pod
+			ELSE pvc_recommendation_sets.last_seen_pod
+		END,
+		vm_name = CASE
+			WHEN EXCLUDED.vm_name != '' THEN EXCLUDED.vm_name
+			ELSE pvc_recommendation_sets.vm_name
+		END,
+		persistentvolume = EXCLUDED.persistentvolume,
+		storageclass = EXCLUDED.storageclass,
+		capacity_bytes = EXCLUDED.capacity_bytes,
+		usage_bytes_max = EXCLUDED.usage_bytes_max,
+		usage_ratio = EXCLUDED.usage_ratio,
+		recommendation_type = EXCLUDED.recommendation_type,
+		recommended_bytes = EXCLUDED.recommended_bytes,
+		days_to_full = EXCLUDED.days_to_full,
+		growth_bytes_per_day = EXCLUDED.growth_bytes_per_day,
+		notification_codes = EXCLUDED.notification_codes,
+		data_days = EXCLUDED.data_days,
+		estimated_savings_cents = EXCLUDED.estimated_savings_cents,
+		idle_since = EXCLUDED.idle_since,
+		idle_duration_days = EXCLUDED.idle_duration_days,
+		updated_at = NOW()`
+
+func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
+	notificationCodes := rec.NotificationCodes
+	if notificationCodes == nil {
+		notificationCodes = []int16{}
+	}
+	batch.Queue(pvcRecommendationUpsertSQL,
+		rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.PVC,
+		rec.LastSeenPod, rec.VMName, rec.PV, rec.StorageClass, rec.CapacityBytes,
+		rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
+		rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
+		notificationCodes, rec.DataDays, rec.Term,
+		rec.EstimatedMonthlySavingsCents,
+		rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
+	)
+}
+
+func flushPVCRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, chunk []PVCRec) []error {
+	if len(chunk) == 0 {
+		return nil
+	}
+	br := sender.SendBatch(ctx, batch)
+	defer br.Close()
+
 	var errs []error
-	for _, rec := range recs {
-		notificationCodes := rec.NotificationCodes
-		if notificationCodes == nil {
-			notificationCodes = []int16{}
-		}
-		_, err := pool.Exec(ctx, `
-			INSERT INTO pvc_recommendation_sets (
-				org_id, cluster_uuid, namespace, persistentvolumeclaim,
-				last_seen_pod, vm_name, persistentvolume, storageclass, capacity_bytes,
-				usage_bytes_max, usage_ratio, recommendation_type,
-				recommended_bytes, days_to_full, growth_bytes_per_day,
-				notification_codes, data_days, term,
-				estimated_savings_cents,
-				idle_since, idle_duration_days,
-				updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
-			ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
-			DO UPDATE SET
-				last_seen_pod = CASE
-					WHEN EXCLUDED.last_seen_pod != '' THEN EXCLUDED.last_seen_pod
-					ELSE pvc_recommendation_sets.last_seen_pod
-				END,
-				vm_name = CASE
-					WHEN EXCLUDED.vm_name != '' THEN EXCLUDED.vm_name
-					ELSE pvc_recommendation_sets.vm_name
-				END,
-				persistentvolume = EXCLUDED.persistentvolume,
-				storageclass = EXCLUDED.storageclass,
-				capacity_bytes = EXCLUDED.capacity_bytes,
-				usage_bytes_max = EXCLUDED.usage_bytes_max,
-				usage_ratio = EXCLUDED.usage_ratio,
-				recommendation_type = EXCLUDED.recommendation_type,
-				recommended_bytes = EXCLUDED.recommended_bytes,
-				days_to_full = EXCLUDED.days_to_full,
-				growth_bytes_per_day = EXCLUDED.growth_bytes_per_day,
-				notification_codes = EXCLUDED.notification_codes,
-				data_days = EXCLUDED.data_days,
-				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
-				idle_since = EXCLUDED.idle_since,
-				idle_duration_days = EXCLUDED.idle_duration_days,
-				updated_at = NOW()`,
-			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.PVC,
-			rec.LastSeenPod, rec.VMName, rec.PV, rec.StorageClass, rec.CapacityBytes,
-			rec.UsageBytesMax, rec.UsageRatio, rec.RecommendationType,
-			rec.RecommendedBytes, rec.DaysToFull, rec.GrowthBytesPerDay,
-			notificationCodes, rec.DataDays, rec.Term,
-			rec.EstimatedMonthlySavingsCents,
-			rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
-		)
-		if err != nil {
-			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf("WritePVCRecommendations: upsert failed for %s/%s [%s]: %v", rec.Namespace, rec.PVC, rec.Term, err)
+	for i := range chunk {
+		rec := chunk[i]
+		if _, err := br.Exec(); err != nil {
+			logging.ForOrg(rec.OrgID, rec.ClusterUUID).Warnf(
+				"WritePVCRecommendations: upsert failed for %s/%s [%s]: %v",
+				rec.Namespace, rec.PVC, rec.Term, err,
+			)
 			errs = append(errs, fmt.Errorf("%s/%s [%s]: %w", rec.Namespace, rec.PVC, rec.Term, err))
 		}
 	}
+	return errs
+}
+
+// WritePVCRecommendations upserts PVC recommendations to the database and
+// removes rows for terms no longer in the active configuration.
+func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec, validTerms []string) error {
+	if len(recs) == 0 {
+		return nil
+	}
+
+	t0 := time.Now()
+	defer func() { metrics.ObserveDB("write_pvc_recommendations", t0) }()
+
+	var errs []error
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, rec := range chunk {
+			queuePVCRecommendationUpsert(batch, rec)
+		}
+		errs = append(errs, flushPVCRecommendationBatch(ctx, pool, batch, chunk)...)
+	}
 
 	// Clean up stale terms for the org+cluster combinations we just wrote.
-	if len(validTerms) > 0 && len(recs) > 0 {
+	if len(validTerms) > 0 {
 		orgID := recs[0].OrgID
 		clusterUUID := recs[0].ClusterUUID
 		_, err := pool.Exec(ctx,

@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- PVC recommendation persistence: `WritePVCRecommendations` uses chunked `pgx.Batch` upserts (500 per round-trip) instead of per-PVC `Exec`, reducing database latency for large clusters
 - Recommendation engine: fuse CPU and memory weighted-percentile passes into a single `RecommendCPUAndMemory` call (~40–50% fewer digest row walks per container-term-engine)
 - Recommendation engine: `windowBounds` returns index ranges for zero-copy term window slicing instead of copying `DigestRow` structs
 - Org metadata refresh (`org_container_keys`, `org_recommendation_stats`, fleet summary cache invalidation) deferred to once per reconcile cycle via `RefreshOrgMetadata` instead of after every 500-container write batch — 50–90% reduction in recommendation write time for large orgs (ADR-0289)
