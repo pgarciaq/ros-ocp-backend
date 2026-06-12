@@ -132,7 +132,8 @@ func RecommendWorkloadsStreaming(
 
 		idleRows := digests
 		if maxIdleWindowDays > 0 {
-			idleRows = filterByWindow(digests, latest.BucketDate, maxIdleWindowDays)
+			idleLo, idleHi := windowBounds(digests, latest.BucketDate, maxIdleWindowDays)
+			idleRows = digests[idleLo:idleHi]
 		}
 		idleResult := ClassifyIdleState(
 			idleRows, currentCPUReqMC, currentMemReqKiB,
@@ -143,7 +144,8 @@ func RecommendWorkloadsStreaming(
 		)
 
 		for _, tc := range terms {
-			windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
+			winLo, winHi := windowBounds(digests, latest.BucketDate, tc.WindowDays)
+			windowRows := digests[winLo:winHi]
 			if len(windowRows) < tc.MinDataDays {
 				continue
 			}
@@ -454,13 +456,17 @@ func RefreshOrgMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string) e
 	return nil
 }
 
-// filterByWindow returns rows within the last windowDays from endDate (inclusive).
-// Rows are assumed sorted by BucketDate (ascending) from the DB query.
-func filterByWindow(rows []DigestRow, endDate time.Time, windowDays int) []DigestRow {
+// windowBounds returns start (inclusive) and end (exclusive) indices into rows
+// for the last windowDays from endDate. Rows must be sorted by BucketDate
+// (ascending) from the DB query. The caller slices rows[start:end] for a
+// zero-copy view of the window.
+func windowBounds(rows []DigestRow, endDate time.Time, windowDays int) (start, end int) {
+	if len(rows) == 0 {
+		return 0, 0
+	}
 	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
 	endDay := endDate.Truncate(24 * time.Hour)
 
-	// Binary search for the first row >= cutoff (rows are sorted by bucket_date).
 	lo := 0
 	hi := len(rows)
 	for lo < hi {
@@ -472,15 +478,12 @@ func filterByWindow(rows []DigestRow, endDate time.Time, windowDays int) []Diges
 		}
 	}
 
-	result := make([]DigestRow, 0, len(rows)-lo)
 	for i := lo; i < len(rows); i++ {
-		d := rows[i].BucketDate
-		if d.After(endDay) {
-			break
+		if rows[i].BucketDate.After(endDay) {
+			return lo, i
 		}
-		result = append(result, rows[i])
 	}
-	return result
+	return lo, len(rows)
 }
 
 // computeConfidence returns a 0.0-1.0 score based on data availability.

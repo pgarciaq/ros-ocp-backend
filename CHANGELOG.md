@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Recommendation engine: fuse CPU and memory weighted-percentile passes into a single `RecommendCPUAndMemory` call (~40–50% fewer digest row walks per container-term-engine)
+- Recommendation engine: `windowBounds` returns index ranges for zero-copy term window slicing instead of copying `DigestRow` structs
 - Org metadata refresh (`org_container_keys`, `org_recommendation_stats`, fleet summary cache invalidation) deferred to once per reconcile cycle via `RefreshOrgMetadata` instead of after every 500-container write batch — 50–90% reduction in recommendation write time for large orgs (ADR-0289)
 - Decay weighting: `DecayWeight()` uses precomputed lookup tables for integer half-lives (plugin defaults and auto-derived `window_days × 12`); non-integer half-lives still use `math.Exp`. When a tenant overrides `window_days` but leaves `decay_halflife_hours` NULL, half-life auto-derives as `window_days × 12` hours
 - Corrected ADRs 0084, 0161 with status updates reflecting actual implementation scope

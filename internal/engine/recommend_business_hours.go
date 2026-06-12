@@ -233,7 +233,8 @@ func recommendContainerStream(
 	out := make(map[string]map[string]BusinessHoursEngineResult)
 
 	for _, tc := range terms {
-		windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
+		winLo, winHi := windowBounds(digests, latest.BucketDate, tc.WindowDays)
+		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
 		for _, profile := range []string{"cost", "performance"} {
@@ -684,7 +685,8 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThr
 	out := make(map[string]map[string]BusinessHoursEngineResult)
 
 	for _, tc := range terms {
-		windowRows := filterByWindow(digests, latest.BucketDate, tc.WindowDays)
+		winLo, winHi := windowBounds(digests, latest.BucketDate, tc.WindowDays)
+		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
 		for _, profile := range []string{"cost", "performance"} {

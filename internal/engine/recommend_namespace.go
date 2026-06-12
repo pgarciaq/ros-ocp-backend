@@ -133,7 +133,8 @@ func recommendNamespaces(
 		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
 
 		for _, tc := range terms {
-			windowRows := filterByWindow(digestRows, latest.BucketDate, tc.WindowDays)
+			winLo, winHi := windowBounds(digestRows, latest.BucketDate, tc.WindowDays)
+			windowRows := digestRows[winLo:winHi]
 			if len(windowRows) < tc.MinDataDays {
 				continue
 			}
