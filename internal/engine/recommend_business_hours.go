@@ -258,8 +258,7 @@ func recommendContainerStream(
 				memCfg.OOMMaxBump = 1.0
 			}
 
-			cpuRec := RecommendCPU(windowRows, cpuCfg)
-			memRec := RecommendMemory(windowRows, memCfg)
+			cpuRec, memRec := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 
 			var recCPUReq, recCPULim, recMemReq, recMemLim int64
 			if profile == "performance" {
@@ -704,8 +703,7 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThr
 
 			cpuCfg := cpuConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds)
 			memCfg := memConfigForProfile(profile, now, tc.DecayHalfLifeHours, sizingThresholds, OOMConfig{})
-			cpuRec := RecommendCPU(windowRows, cpuCfg)
-			memRec := RecommendMemory(windowRows, memCfg)
+			cpuRec, memRec := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 
 			var recCPUReq, recCPULim, recMemReq, recMemLim int64
 			if profile == "performance" {

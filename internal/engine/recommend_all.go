@@ -164,8 +164,7 @@ func RecommendWorkloadsStreaming(
 					memCfg.OOMMaxBump = 1.0
 				}
 
-				cpuRec := RecommendCPU(windowRows, cpuCfg)
-				memRec := RecommendMemory(windowRows, memCfg)
+				cpuRec, memRec := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 
 				var isIdle, isAbandoned bool
 				if idleClassified {

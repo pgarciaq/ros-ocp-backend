@@ -146,8 +146,7 @@ func recommendNamespaces(
 				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
 				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, profile)
 
-				cpuRec := RecommendCPU(windowRows, cpuCfg)
-				memRec := RecommendMemory(windowRows, memCfg)
+				cpuRec, memRec := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 
 				var recCPUReq, recCPULim, recMemReq, recMemLim int64
 				if profile == "performance" {

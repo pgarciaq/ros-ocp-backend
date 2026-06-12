@@ -51,6 +51,7 @@ func WeightedPercentile(rows []DigestRow, now time.Time, halfLifeHours float64, 
 // same pass as MultiWeightedPercentile.
 type WindowExtraOpts struct {
 	TrendMetric      func(DigestRow) int64
+	MemTrendMetric   func(DigestRow) int64
 	IdleThresholdMC  int64
 	IdleThresholdMem int64
 	DetectIdle       bool
@@ -58,8 +59,9 @@ type WindowExtraOpts struct {
 
 // WindowExtras holds side computations from a fused digest window pass.
 type WindowExtras struct {
-	TrendSlope float64
-	IsIdle     bool
+	TrendSlope    float64
+	MemTrendSlope float64
+	IsIdle        bool
 }
 
 // MultiWeightedPercentile computes several decay-weighted averages in one pass
@@ -91,7 +93,9 @@ func MultiWeightedPercentileWithExtras(
 	weightedSums := make([]float64, nOut)
 	var totalWeight float64
 	var sumX, sumY, sumXY, sumX2 float64
+	var sumYMem, sumXYMem float64
 	trackTrend := opts != nil && opts.TrendMetric != nil
+	trackMemTrend := opts != nil && opts.MemTrendMetric != nil
 	n := len(rows)
 
 	for i, row := range rows {
@@ -100,13 +104,20 @@ func MultiWeightedPercentileWithExtras(
 				extras.IsIdle = false
 			}
 		}
-		if trackTrend {
+		if trackTrend || trackMemTrend {
 			x := float64(i)
-			y := float64(opts.TrendMetric(row))
 			sumX += x
-			sumY += y
-			sumXY += x * y
 			sumX2 += x * x
+			if trackTrend {
+				y := float64(opts.TrendMetric(row))
+				sumY += y
+				sumXY += x * y
+			}
+			if trackMemTrend {
+				yMem := float64(opts.MemTrendMetric(row))
+				sumYMem += yMem
+				sumXYMem += x * yMem
+			}
 		}
 
 		ageHours := now.Sub(row.BucketDate).Hours()
@@ -123,11 +134,16 @@ func MultiWeightedPercentileWithExtras(
 		}
 	}
 
-	if trackTrend && n >= 2 {
+	if n >= 2 {
 		nf := float64(n)
 		denom := nf*sumX2 - sumX*sumX
 		if denom != 0 {
-			extras.TrendSlope = (nf*sumXY - sumX*sumY) / denom
+			if trackTrend {
+				extras.TrendSlope = (nf*sumXY - sumX*sumY) / denom
+			}
+			if trackMemTrend {
+				extras.MemTrendSlope = (nf*sumXYMem - sumX*sumYMem) / denom
+			}
 		}
 	}
 
