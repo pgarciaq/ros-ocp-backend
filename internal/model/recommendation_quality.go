@@ -38,8 +38,7 @@ func GetRecommendationQuality(
 			q.stability_pct, q.adoption_detected,
 			q.oom_events_after_rec, q.recommendation_age_hours`).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
+		Where("q.org_id = ?", orgID)
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "q.namespace")
 	baseQuery = ApplyQueryParams(baseQuery, queryParams)
@@ -48,8 +47,7 @@ func GetRecommendationQuality(
 	countQuery := db.Table("recommendation_quality q").
 		Select("COUNT(*)").
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID)
+		Where("q.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "q.namespace")
 	countQuery = ApplyQueryParams(countQuery, queryParams)
 

@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Query performance: remove redundant `rh_accounts` joins for org scoping on `recommendation_quality`, native/legacy container detail, and native namespace detail queries — filter denormalized `org_id` directly (performance audit P1-4)
 - CSV ingest: remove per-row Prometheus gauge update for in-memory digest groups; gauge updates only at flush boundaries (performance audit B-4)
 - Notification catalog: `GET /recommendations/openshift/notification-codes` returns `Cache-Control: public, max-age=86400` for static in-memory catalog responses (performance audit A-6)
 - GPU classification persistence: `StoreGPUClassifications` uses chunked `pgx.Batch` updates (500 per round-trip) instead of per-container `Exec` (performance audit Q6)

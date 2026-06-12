@@ -30,6 +30,7 @@ func TestDetailQueries_ScopeByOrgID(t *testing.T) {
 			})
 		assert.Contains(t, strings.ToLower(sql), "org_id")
 		assert.Contains(t, sql, orgID)
+		assert.NotContains(t, strings.ToLower(sql), "rh_accounts")
 	})
 
 	t.Run("legacy namespace detail", func(t *testing.T) {
@@ -50,6 +51,7 @@ func TestDetailQueries_ScopeByOrgID(t *testing.T) {
 		assert.Contains(t, strings.ToLower(sql), "org_id")
 		assert.Contains(t, sql, orgID)
 		assert.Contains(t, sql, recID)
+		assert.NotContains(t, strings.ToLower(sql), "rh_accounts")
 	})
 
 	t.Run("native namespace detail", func(t *testing.T) {
@@ -60,5 +62,6 @@ func TestDetailQueries_ScopeByOrgID(t *testing.T) {
 		assert.Contains(t, strings.ToLower(sql), "org_id")
 		assert.Contains(t, sql, orgID)
 		assert.Contains(t, sql, recID)
+		assert.NotContains(t, strings.ToLower(sql), "rh_accounts")
 	})
 }

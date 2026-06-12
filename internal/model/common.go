@@ -51,9 +51,8 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 		Joins(`
 			LEFT JOIN workloads ON recommendation_sets.workload_id = workloads.id
 			LEFT JOIN clusters ON workloads.cluster_id = clusters.id
-			LEFT JOIN rh_accounts ON clusters.tenant_id = rh_accounts.id
 		`).Model(&RecommendationSetResult{}).
-		Where("COALESCE(rh_accounts.org_id, recommendation_sets.org_id) = ?", orgID)
+		Where("recommendation_sets.org_id = ?", orgID)
 	return query
 }
 

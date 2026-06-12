@@ -28,14 +28,14 @@ Therefore every detail or single-record query **must** constrain results to the 
 
 | Endpoint | Model / handler | org_id filter |
 |----------|-----------------|---------------|
-| `GET /recommendations/openshift/{id}` (native) | `GetNativeRecommendationByID` → `nativeContainerDetailQuery` | `ra.org_id = ?` |
-| `GET /recommendations/openshift/{id}` (legacy fallback) | `GetRecommendationSetByID` → `getRecommendationQuery` | `COALESCE(rh_accounts.org_id, recommendation_sets.org_id) = ?` |
-| `GET /recommendations/openshift/namespaces/{id}` (native) | `GetNativeNamespaceRecommendationByID` → `nativeNamespaceDetailQuery` | `ra.org_id = ?` |
+| `GET /recommendations/openshift/{id}` (native) | `GetNativeRecommendationByID` → `nativeContainerDetailQuery` | `rs.org_id = ?` |
+| `GET /recommendations/openshift/{id}` (legacy fallback) | `GetRecommendationSetByID` → `getRecommendationQuery` | `recommendation_sets.org_id = ?` |
+| `GET /recommendations/openshift/namespaces/{id}` (native) | `GetNativeNamespaceRecommendationByID` → `nativeNamespaceDetailQuery` | `ns.org_id = ?` |
 | `GET /recommendations/openshift/namespaces/{id}` (legacy) | `GetNamespaceRecommendationSetByID` → `getNamespaceRecommendationQuery` | `namespace_recommendation_sets.org_id = ?` |
 | `GET /recommendations/openshift/pvcs/detail` | `GetPVCRecommendationDetail` | SQL `WHERE org_id = $1` (composite key, not UUID) |
 | `GET /recommendations/openshift/namespaces/{id}/history` | Resolves ID via native/legacy namespace detail above | Same org_id path |
 
-List endpoints apply the same org boundary via `org_id` / `rh_accounts` joins plus optional RBAC cluster filters.
+List endpoints apply the same org boundary via denormalized `org_id` filters plus optional RBAC cluster filters.
 
 ### Regression guard
 
@@ -46,7 +46,7 @@ List endpoints apply the same org boundary via `org_id` / `rh_accounts` joins pl
 ## When adding new detail endpoints
 
 1. Never query recommendation tables by UUID (or composite surrogate ID) without an `org_id` predicate tied to the authenticated tenant.
-2. Prefer joining `rh_accounts` or filtering `recommendation_sets.org_id` / `namespace_recommendation_sets.org_id` explicitly.
+2. Prefer filtering `recommendation_sets.org_id` / `namespace_recommendation_sets.org_id` directly; join `rh_accounts` only when the table has no `org_id` column (e.g. `clusters`).
 3. Add a dry-run SQL test alongside existing detail query tests if you introduce a new query builder.
 
 See also: adversarial review finding #27 in [`docs/audits/adversarial-review.md`](../audits/adversarial-review.md).

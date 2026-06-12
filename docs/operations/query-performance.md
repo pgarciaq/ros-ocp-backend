@@ -113,14 +113,16 @@ term/engine detail. The `clusters` join is used only for RBAC (`ApplyNativeRBAC`
 
 ### Remaining offenders to fix
 
-These paths still join through `rh_accounts` for org scoping and should be migrated
-to direct `org_id` filters where the column exists:
+These paths still join through `rh_accounts` for org scoping because the target table
+has no `org_id` column:
 
 | File | Function / query |
 |------|------------------|
-| [`internal/model/recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` |
-| [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) (namespace list SQL in audit) | Namespace list subqueries |
-| History list queries in audit | `recommendation_history` (index added; query rewrite pending) |
+| [`internal/engine/recommend_all.go`](../../internal/engine/recommend_all.go) | `loadClusterLastReportedAt` (`clusters` has no `org_id`) |
+| [`internal/api/handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go) | `clusterExistsForOrg`, `listClusterUUIDsForOrg` |
+| [`internal/engine/threshold_recalculate.go`](../../internal/engine/threshold_recalculate.go) | `ListClustersForOrg` |
+| [`internal/api/handlers_node_recs.go`](../../internal/api/handlers_node_recs.go) | `getClustersForOrg` |
+
 **Fixed in this audit:**
 
 | File | Change |
@@ -129,6 +131,11 @@ to direct `org_id` filters where the column exists:
 | [`node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
 | [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | BH enrichment uses `QueryContainerDigestsByScheduleTypeForContainers` — page keys only |
 | [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | Container list paginates `org_container_keys`; term/engine filters on detail join |
+| [`recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` filters `q.org_id` directly |
+| [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | `nativeContainerDetailQuery` filters `rs.org_id` directly |
+| [`namespace_recommendation_set_native.go`](../../internal/model/namespace_recommendation_set_native.go) | Native namespace detail/fallback filter `ns.org_id` directly |
+| [`common.go`](../../internal/model/common.go) | Legacy container detail filters `recommendation_sets.org_id` directly |
+| [`recommendation_history.go`](../../internal/model/recommendation_history.go) | History list filters `h.org_id` directly |
 
 ---
 

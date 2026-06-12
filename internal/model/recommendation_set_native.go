@@ -101,7 +101,7 @@ var log *logrus.Entry = logging.GetLogger()
 // Deterministic IDs enable idempotent upserts: the same cluster/namespace/workload/container
 // always maps to the same recommendation UUID across ingest runs. The UUID does NOT encode
 // org_id — it is derived only from cluster and workload identity. Every detail lookup MUST
-// filter by org_id (via rh_accounts or recommendation_sets.org_id) so one tenant cannot
+// filter by org_id (recommendation_sets.org_id) so one tenant cannot
 // read another tenant's data by guessing a UUID. See docs/architecture/recommendation-ids.md.
 var nativeIDNamespace = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 
@@ -664,8 +664,7 @@ func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 	query := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
+		Where("rs.org_id = ?", orgID).
 		Where("rs.container_id = ?", id).
 		Where("rs.stale = false")
 	return ApplyNativeRBAC(query, userPerms)

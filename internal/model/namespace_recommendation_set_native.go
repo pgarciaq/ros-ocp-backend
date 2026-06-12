@@ -249,8 +249,7 @@ func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
+		Where("ns.org_id = ?", orgID).
 		Where("ns.namespace_id = ?", id).
 		Where("ns.term IS NOT NULL").
 		Where("ns.schedule_type = 'all_hours'").
@@ -269,8 +268,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 	keysQuery := db.Table("namespace_recommendation_sets ns").
 		Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Joins(`JOIN rh_accounts ra ON ra.id = c.tenant_id`).
-		Where("ra.org_id = ?", orgID).
+		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
 		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false").
