@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **Most P0/P1 hot-path items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes). **Remaining gaps:** float64 in savings estimation, list API `DISTINCT ON` pagination (P0-4), and on-prem PostgreSQL tuning (D-1).
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, and Medium Effort roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, and operational quick wins). **Remaining gaps:** on-prem PostgreSQL server tuning in the Helm chart (D-1), strategic items (S1–S3), and assorted P2/UI/observability items.
 
 ---
 
@@ -26,6 +26,9 @@
 - `RecommendCPUAndMemory` fuses CPU + memory weighted passes in one decay loop
 - `MultiWeightedPercentileWithExtras` fuses 5 extractors + idle + trend in one pass
 - `pgx.Batch` for container, namespace, PVC, and GPU recommendation writes
+- Integer micro-cents savings (`savings_int.go`, `MicroCentsPerDollar = 100_000_000`) — rate conversion once at boundary
+- Graceful processor shutdown drain (`sync.WaitGroup`, `ROS_SHUTDOWN_TIMEOUT_SECONDS`, `ctx.Done()` between phases)
+- VM recommendations deferred to post-manifest phase (matching container recommendation pattern)
 
 ---
 
@@ -69,13 +72,15 @@ Every streaming batch (500 containers) triggered `RefreshOrgContainerKeys` + `Re
 
 **Impact:** 50-90% reduction in recommendation write time for 10k+ container orgs.
 
-### P0-4. List API still paginates via `DISTINCT ON recommendation_sets` — **Open**
+### P0-4. List API still paginates via `DISTINCT ON recommendation_sets` — **Implemented**
 
-**Location:** `internal/model/recommendation_set_native.go:380`
+**Location:** `internal/model/container_recommendation_pagination.go`, `internal/model/recommendation_set_native.go`
 
-Despite `org_container_keys` existing for fast counts, page selection still runs `DISTINCT ON` over `recommendation_sets`. Documented internally as ~1.3s vs ~0.3ms for key-table pagination at 200k containers.
+Despite `org_container_keys` existing for fast counts, page selection still ran `DISTINCT ON` over `recommendation_sets`. Documented internally as ~1.3s vs ~0.3ms for key-table pagination at 200k containers.
 
-**Fix:** Paginate `org_container_keys` directly (join `recommendation_sets` only for detail after page is selected).
+**Fix implemented (2026-06):**
+- Page selection now goes through `org_container_keys` with indexed lookup; `recommendation_sets` is joined only for selected page rows.
+- New helpers in `container_recommendation_pagination.go`.
 
 **Impact:** ~1000x on pagination subquery for large tenants.
 
@@ -83,13 +88,15 @@ Despite `org_container_keys` existing for fast counts, page selection still runs
 
 ## P1 -- High Priority
 
-### P1-1. Savings estimation is entirely float64 — **Open**
+### P1-1. Savings estimation is entirely float64 — **Implemented**
 
-**Location:** `internal/engine/savings.go` and duplicated in `gpu_recommender.go`, `vm_savings.go`, `node_savings.go`, `pvc_savings.go`
+**Location:** `internal/engine/savings_int.go`, `savings.go`, `gpu_recommender.go`, `vm_savings.go`, `node_savings.go`, `pvc_savings.go`, `recommend_cluster_quota.go`, `recommend_quota.go`
 
 Per recommendation row: millicore -> cores (`/1000.0`), KiB -> GiB (`/1024/1024`), multiply by `float64` rates, multiply by `730.0` hours/month, then `math.Round(total*100)/100`.
 
-**Fix:** Compute in integer micro-cents using millicore-hours and byte-hours directly. Rates in micro-cents per millicore-hour. Convert to cents once at the end. Unify the six duplicated savings modules.
+**Fix implemented (2026-06):** [ADR-0291](../adr/0291-integer-micro-cents-savings-computation.md)
+- New `savings_int.go` with `MicroCentsPerDollar = 100_000_000`. Seven modules migrated from `float64` to integer math.
+- Rate conversion happens once at boundary; cents returned at API boundary.
 
 **Impact:** Moderate-significant depending on cluster size; also reduces code duplication.
 
@@ -155,13 +162,16 @@ Container/namespace used `pgx.Batch`; PVC and GPU did not.
 
 **Impact:** Reduced DB round-trips for PVC and GPU recommendation persistence.
 
-### P2-4. VM recommendations run synchronously on ingest — **Open**
+### P2-4. VM recommendations run synchronously on ingest — **Implemented**
 
 **Location:** `internal/services/report_processor.go`
 
-`RunVMRecommendations` runs inline after VM digest upsert, blocking the ingest pipeline.
+`RunVMRecommendations` ran inline after VM digest upsert, blocking the ingest pipeline.
 
-**Fix:** Queue like container recs (post-CSV phase).
+**Fix implemented (2026-06):**
+- VM recommendations moved from inline during CSV ingest to deferred post-manifest phase (matching container recommendation pattern).
+
+**Impact:** Reduced ingest latency; VM recs no longer block CSV processing.
 
 ### P2-5. Idle classification sorts when max/weighted-max would suffice — **Implemented**
 
@@ -189,7 +199,7 @@ Container/namespace used `pgx.Batch`; PVC and GPU did not.
 | **GPU thresholds** | **float64 in config** | Convert to BP at load |
 | **Node utilization** | **float64 ratio** | Could be BP |
 | **PVC usage ratio** | **float64** | Could be BP |
-| **Savings rates** | **float64 USD** | Could be micro-cents |
+| **Savings rates** | **int64 micro-cents** | None |
 | **VM sizing margins** | **float64** | Mirror container `ApplyScaledMargin` |
 
 ---
@@ -207,7 +217,7 @@ RecommendWorkloadsStreaming
           decay weight ............. lookup table (no math.Exp)     [P0-1 done]
         computeVariation x4 ....... float round (could be integer)
         EvaluateNotifications ...... integer comparisons (good)
-  ApplySavingsEstimates (batch) .... float64 cost math per rec    <-- could be int cents
+  ApplySavingsEstimates (batch) .... integer micro-cents per rec  [P1-1 done]
 ```
 
 **Total inner loop iterations per container:** 3 terms x 2 engines x 1 (fused CPU+mem) x ~7-15 digest rows = **42-90 decay weight computations** (down from 84-180 before Q1).
@@ -232,11 +242,11 @@ RecommendWorkloadsStreaming
 | ID | Change | Impact | Risk | Status |
 |----|--------|--------|------|--------|
 | M1 | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Medium | Implemented |
-| M2 | Migrate list API pagination to org_container_keys | ~1000x on page query | Medium | Open |
-| M3 | Integer savings in micro-cents | Eliminates float in savings | Medium | Open |
+| M2 | Migrate list API pagination to org_container_keys | ~1000x on page query | Medium | Implemented |
+| M3 | Integer savings in micro-cents | Eliminates float in savings | Medium | Implemented |
 | M4 | Decay weight lookup table | Eliminates math.Exp | Low | Implemented |
 | M5 | Integer adaptive margin (remove float CV) | Completes BP migration | Low | Implemented |
-| M6 | Decouple VM recommend from ingest | Large ingest latency win | Medium | Open |
+| M6 | Decouple VM recommend from ingest | Large ingest latency win | Medium | Implemented |
 
 ### Strategic (1-2 weeks each)
 
@@ -358,13 +368,16 @@ The Helm chart wired readiness to `/status` (static JSON, no dependency checks) 
 
 **Fix:** Point `readinessProbe` at `/readyz`; keep `livenessProbe` on `/status`. Implemented in cost-onprem-chart (`ros.api.readinessProbe.path` defaults to `/readyz`).
 
-### C-2. VM CSV warn-log storms (P1) — **Open**
+### C-2. VM CSV warn-log storms (P1) — **Implemented**
 
 **Location:** `internal/ingestion/vm_csv.go:294`
 
-Every bad VM CSV row logs `Warnf`. A noisy file can generate thousands of log lines per manifest. Container CSV correctly uses `Debugf`.
+Every bad VM CSV row logged `Warnf`. A noisy file could generate thousands of log lines per manifest. Container CSV correctly uses `Debugf`.
 
-**Fix:** Downgrade to Debug + increment `rosocp_csv_rows_skipped_total{report_type=vm}`.
+**Fix implemented (2026-06):**
+- Per-row `Warnf` downgraded to `Debugf`.
+- New `rosocp_csv_rows_skipped_total{report_type="vm"}` counter.
+- Summary `Warnf` at end when skips > 0.
 
 ### C-3. High-cardinality Prometheus labels (P1) — **Open**
 
@@ -372,11 +385,15 @@ Several metrics use `org_id` and `cluster_uuid` as labels: `rosocp_analytics_inc
 
 **Fix:** Use bounded labels (`error_type`, `stage`); log tenant context via structured logging instead.
 
-### C-4. Processor shutdown doesn't drain in-flight work (P1) — **Open**
+### C-4. Processor shutdown doesn't drain in-flight work (P1) — **Implemented**
 
-On SIGTERM, the Kafka consumer loop exits but running `ProcessReport` handlers (which may be mid-CSV or mid-recommendation) are not awaited. Risk: partial processing, duplicate work on retry.
+On SIGTERM, the Kafka consumer loop exited but running `ProcessReport` handlers (which may be mid-CSV or mid-recommendation) were not awaited. Risk: partial processing, duplicate work on retry.
 
-**Fix:** Pass lifecycle `context.Context` into `ProcessReport`; on shutdown, stop accepting new messages, `WaitGroup` for in-flight handlers.
+**Fix implemented (2026-06):**
+- `sync.WaitGroup` for in-flight Kafka handlers.
+- Configurable `ROS_SHUTDOWN_TIMEOUT_SECONDS` (default 30).
+- `ProcessReport` checks `ctx.Done()` between phases.
+- Interrupted processing treats `context.Canceled` as transient for safe redelivery.
 
 ### C-5. `ReportCaller: true` in production logging (P2) — **Declined**
 
@@ -388,11 +405,13 @@ Every log line walks the call stack. Minor but unnecessary overhead in productio
 
 **Status:** Reverted — negligible performance gain (~200-500ns/line) does not justify loss of file:line in production logs for support/debugging.
 
-### C-6. No `make test-short` for fast local iteration (P2) — **Open**
+### C-6. No `make test-short` for fast local iteration (P2) — **Implemented**
 
 Full test suite requires Docker and takes ~25 minutes serial. No documented fast-path for unit-only runs.
 
-**Fix:** Add `make test-short` -> `go test -short ./...` for sub-5-minute local runs.
+**Fix implemented (2026-06):**
+- New Makefile target `make test-short` runs `go test -short ./... -count=1`, completes in ~15 seconds.
+- Documented in `CONTRIBUTING.md`.
 
 ---
 
@@ -435,13 +454,13 @@ With default `ROS_DB_MAX_CONNS=10` per process across ~6 ROS pods + Koku + RBAC 
 
 SaaS: RDS instances typically have higher `max_connections`; the lower per-process default still reduces pool pressure on shared clusters.
 
-### D-3. UPDATE-heavy tables need autovacuum tuning (HIGH -- on-prem; MEDIUM -- SaaS) — **Open**
+### D-3. UPDATE-heavy tables need autovacuum tuning (HIGH -- on-prem; MEDIUM -- SaaS) — **Implemented**
 
-`recommendation_sets` and `container_usage_samples` get frequent UPSERTs creating dead tuples. No `fillfactor` or per-table autovacuum tuning exists.
+`recommendation_sets` and `container_usage_samples` get frequent UPSERTs creating dead tuples. No `fillfactor` or per-table autovacuum tuning existed.
 
-SaaS: RDS autovacuum is managed but uses instance-level defaults. Per-table `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = ...)` would still be beneficial and is supported in RDS -- this should be applied via a migration.
-
-On-prem: Stock autovacuum with 512Mi RAM can fall behind on large UPSERT tables, leading to table bloat and degraded query plans.
+**Fix implemented (2026-06):**
+- Migration 000144 sets `autovacuum_vacuum_scale_factor=0.05`, `autovacuum_analyze_scale_factor=0.02`, `fillfactor=85` on `recommendation_sets` and `container_usage_samples` partitions.
+- New partitions inherit reloptions. Works on both RDS and on-prem.
 
 ### D-4. `node_recommendations` retention gap (HIGH -- both modes) — **Implemented**
 
@@ -526,7 +545,7 @@ Samples are needed for boxplot drill-down but not for recommendations (which use
 |------------|-----------|------------|
 | 1k | None | -- |
 | 10k | Ingest throughput | 3 Kafka partitions cap parallel ingest |
-| 50k | DB connections | N pods x 10 conns > max_connections |
+| 50k | DB connections | ~~N pods x 10 conns > max_connections~~ **Resolved (D-2):** default `ROS_DB_MAX_CONNS=5` fits within budget |
 | 100k | DB write throughput | `recommendation_sets` UPSERT contention |
 | 100k+ per org | API aggregation | Fleet/savings summary cache misses |
 
@@ -617,7 +636,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | P0-1 | Math | Decay weight lookup table or fixed-point | Eliminates math.Exp from hot path | Implemented |
 | P0-2 | Math | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Implemented |
 | P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Implemented |
-| P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query | Open |
+| P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query | Implemented |
 | A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Implemented |
 | A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |
 | B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Implemented |
@@ -630,20 +649,20 @@ Loaded once at startup via `sync.Once`. No action needed.
 | H-3 | UI | Single fetch on OCP breakdown | Open |
 | H-4 | API | List field projection (term/engine/fields) | Open |
 | H-5 | UI | Adopt cursor pagination | Open |
-| P1-1 | Math | Integer savings in micro-cents | Open |
+| P1-1 | Math | Integer savings in micro-cents | Implemented |
 | P1-2 | Math | Integer adaptive margin | Implemented |
 | P1-3 | Math | Zero-copy window slicing | Implemented |
 | P1-4 | DB | Fix rh_accounts join anti-pattern | Implemented |
 | A-4 | API | Parse x-rh-identity once (identity middleware) | Implemented |
 | A-6 | API | Cache-Control on notification catalog | Implemented |
-| D-3 | DB Config | Per-table autovacuum tuning (migration for both modes; chart tuning for on-prem) | Open |
+| D-3 | DB Config | Per-table autovacuum tuning (migration for both modes; chart tuning for on-prem) | Implemented |
 | D-4 | DB Config | Fix node_recommendations retention (both modes -- app bug) | Implemented |
 | D-5 | DB Config | Add namespace/PVC retention (both modes -- app bug) | Implemented |
 | B-2 | Ingest | Stream namespace CSV | Open |
 | B-4 | Ingest | Remove per-row Prometheus gauge | Implemented |
-| C-2 | Ops | VM CSV logs: Debug + counter | Open |
+| C-2 | Ops | VM CSV logs: Debug + counter | Implemented |
 | C-3 | Ops | Audit high-cardinality Prometheus labels | Open |
-| C-4 | Ops | Drain in-flight Kafka handlers on shutdown | Open |
+| C-4 | Ops | Drain in-flight Kafka handlers on shutdown | Implemented |
 
 ### P2 -- Medium Priority
 
@@ -655,10 +674,10 @@ Loaded once at startup via `sync.Once`. No action needed.
 | P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Open |
 | P2-2 | Math | Node utilization as basis points | Open |
 | P2-3 | DB | Batch PVC/GPU writes via pgx.Batch | Implemented |
-| P2-4 | Ingest | Decouple VM recommend from ingest | Open |
+| P2-4 | Ingest | Decouple VM recommend from ingest | Implemented |
 | P2-5 | Math | Replace idle P95 sort with max-of-daily-P95 | Implemented |
 | B-3,5,6 | Ingest | String interning, narrow single-tx, GOMEMLIMIT/PGO | Open |
-| C-6 | Ops | Add make test-short | Open |
+| C-6 | Ops | Add make test-short | Implemented |
 | I-1 | Deps | Binary slimming (release ldflags, SDK audit) | Open |
 
 ### Strategic
