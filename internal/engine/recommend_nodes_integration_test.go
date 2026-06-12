@@ -64,8 +64,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := engine.NodeRecConfig{
-			UnderutilThreshold:  0.30,
-			OvercommitThreshold: 1.0,
+			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
+			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
 			AllocatableFactor:   0.90,
 		}
 		terms := []engine.TermConfig{
@@ -111,8 +111,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := engine.NodeRecConfig{
-			UnderutilThreshold:  0.30,
-			OvercommitThreshold: 1.0,
+			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
+			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
 			AllocatableFactor:   0.90,
 		}
 		terms := []engine.TermConfig{
@@ -194,8 +194,8 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, start.AddDate(0, 0, 5))
 		require.NoError(t, err)
 		recs := engine.RecommendNodes(digests, engine.NodeRecConfig{
-			UnderutilThreshold:  0.30,
-			OvercommitThreshold: 1.0,
+			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
+			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
 			AllocatableFactor:   0.90,
 		}, engine.DefaultNodeThresholdSettings(), []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},

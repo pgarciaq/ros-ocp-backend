@@ -45,12 +45,13 @@ type NodeDigestRow struct {
 }
 
 // NodeRecConfig holds configuration parameters for the node recommendation engine.
+// Ratio thresholds are stored as basis points (MarginScale = 10000 = 100%).
 type NodeRecConfig struct {
-	UnderutilThreshold         float64
-	OvercommitThreshold        float64
-	AllocatableFactor          float64
-	StrandedImbalanceThreshold float64
-	EMAAlpha                   float64
+	UnderutilThresholdBP         int32
+	OvercommitThresholdBP        int32
+	AllocatableFactor            float64
+	StrandedImbalanceThresholdBP int32
+	EMAAlpha                     float64
 }
 
 // NodeRec holds the computed recommendation for a single node within a single term and engine.
@@ -248,11 +249,11 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 	class := nodeClassification{Node: node}
 
 	var (
-		cpuUtilWeighted50 float64
-		cpuUtilWeighted95 float64
-		memUtilWeighted50 float64
-		memUtilWeighted95 float64
-		totalWeight       float64
+		cpuUtilWeighted50BP float64
+		cpuUtilWeighted95BP float64
+		memUtilWeighted50BP float64
+		memUtilWeighted95BP float64
+		totalWeight         float64
 		maxRequests       int64
 		maxMemReqs        int64
 		maxPodCount       int64
@@ -268,10 +269,10 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 		allocMem := resolveAllocatableMem(d.MaxMemAllocKiB, d.MaxMemRequestsKiB, cfg.AllocatableFactor)
 
 		if allocCPU > 0 && allocMem > 0 {
-			cpuUtil50 := float64(d.CPUUsageP50MC) / float64(allocCPU)
-			cpuUtil95 := float64(d.CPUUsageP95MC) / float64(allocCPU)
-			memUtil50 := float64(d.MemUsageP50KiB) / float64(allocMem)
-			memUtil95 := float64(d.MemUsageP95KiB) / float64(allocMem)
+			cpuUtil50BP := UtilizationBasisPoints(d.CPUUsageP50MC, allocCPU)
+			cpuUtil95BP := UtilizationBasisPoints(d.CPUUsageP95MC, allocCPU)
+			memUtil50BP := UtilizationBasisPoints(d.MemUsageP50KiB, allocMem)
+			memUtil95BP := UtilizationBasisPoints(d.MemUsageP95KiB, allocMem)
 
 			ageHours := endDate.Sub(d.BucketDate).Hours()
 			if ageHours < 0 {
@@ -279,25 +280,26 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 			}
 			w := DecayWeight(ageHours, halfLifeHours)
 			if w > 0 {
-				cpuUtilWeighted50 += cpuUtil50 * w
-				cpuUtilWeighted95 += cpuUtil95 * w
-				memUtilWeighted50 += memUtil50 * w
-				memUtilWeighted95 += memUtil95 * w
+				cpuUtilWeighted50BP += float64(cpuUtil50BP) * w
+				cpuUtilWeighted95BP += float64(cpuUtil95BP) * w
+				memUtilWeighted50BP += float64(memUtil50BP) * w
+				memUtilWeighted95BP += float64(memUtil95BP) * w
 				totalWeight += w
 			}
 
-			cpuMeans = append(cpuMeans, cpuUtil50)
+			cpuMeans = append(cpuMeans, BasisPointsToFloat(cpuUtil50BP))
 
-			high := cpuUtil95
-			if memUtil95 > high {
-				high = memUtil95
+			highBP := cpuUtil95BP
+			if memUtil95BP > highBP {
+				highBP = memUtil95BP
 			}
-			if high > 1e-9 {
-				diff := cpuUtil95 - memUtil95
-				if diff < 0 {
-					diff = -diff
+			if highBP > 0 {
+				diffBP := cpuUtil95BP - memUtil95BP
+				if diffBP < 0 {
+					diffBP = -diffBP
 				}
-				imbalances = append(imbalances, diff/high)
+				imbalanceBP := int32(int64(diffBP) * int64(BasisPointsScale) / int64(highBP))
+				imbalances = append(imbalances, float64(imbalanceBP))
 			} else {
 				imbalances = append(imbalances, 0)
 			}
@@ -328,13 +330,15 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 
 	class.PodCount = maxPodCount
 	class.PodCapacity = maxPodCapacity
+	var headroomBP int32
 	if maxPodCapacity > 0 {
-		class.PodSchedulingHeadroom = float32(maxPodCapacity-maxPodCount) / float32(maxPodCapacity)
+		headroomBP = UtilizationBasisPoints(maxPodCapacity-maxPodCount, maxPodCapacity)
+		class.PodSchedulingHeadroom = BasisPointsToFloat32(headroomBP)
 	} else {
 		class.PodSchedulingHeadroom = -1
 	}
-	notificationTh := float32(nodeSettings.PodHeadroomNotificationThreshold)
-	if class.PodSchedulingHeadroom >= 0 && class.PodSchedulingHeadroom < notificationTh {
+	notificationThBP := ThresholdToBasisPoints(nodeSettings.PodHeadroomNotificationThreshold)
+	if class.PodSchedulingHeadroom >= 0 && headroomBP < notificationThBP {
 		class.NotificationCodes = append(class.NotificationCodes, NotifNodePodSchedulingLimit)
 	}
 	class.maxCPUUsageP95MC = maxCPUUsageP95MC
@@ -347,17 +351,17 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 		return class
 	}
 
-	avgCPU50 := cpuUtilWeighted50 / totalWeight
-	avgCPU95 := cpuUtilWeighted95 / totalWeight
-	avgMem50 := memUtilWeighted50 / totalWeight
-	avgMem95 := memUtilWeighted95 / totalWeight
+	avgCPU50BP := int32(cpuUtilWeighted50BP / totalWeight)
+	avgCPU95BP := int32(cpuUtilWeighted95BP / totalWeight)
+	avgMem50BP := int32(memUtilWeighted50BP / totalWeight)
+	avgMem95BP := int32(memUtilWeighted95BP / totalWeight)
 
-	class.CPUUtilP50 = float32(avgCPU50)
-	class.CPUUtilP95 = float32(avgCPU95)
-	class.MemUtilP50 = float32(avgMem50)
-	class.MemUtilP95 = float32(avgMem95)
+	class.CPUUtilP50 = BasisPointsToFloat32(avgCPU50BP)
+	class.CPUUtilP95 = BasisPointsToFloat32(avgCPU95BP)
+	class.MemUtilP50 = BasisPointsToFloat32(avgMem50BP)
+	class.MemUtilP95 = BasisPointsToFloat32(avgMem95BP)
 
-	if avgCPU95 < cfg.UnderutilThreshold && avgMem95 < cfg.UnderutilThreshold {
+	if avgCPU95BP < cfg.UnderutilThresholdBP && avgMem95BP < cfg.UnderutilThresholdBP {
 		class.IsUnderutilized = true
 		class.NotificationCodes = append(class.NotificationCodes, NotifNodeUnderutilized)
 	}
@@ -373,27 +377,27 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 	}
 
 	if allocCPU > 0 && maxRequests > 0 {
-		ratio := float64(maxRequests) / float64(allocCPU)
-		class.CPUOvercommitRatio = float32(ratio)
-		if ratio > cfg.OvercommitThreshold {
+		ratioBP := UtilizationBasisPoints(maxRequests, allocCPU)
+		class.CPUOvercommitRatio = BasisPointsToFloat32(ratioBP)
+		if ratioBP > cfg.OvercommitThresholdBP {
 			class.IsOvercommitted = true
 			class.NotificationCodes = append(class.NotificationCodes, NotifNodeOvercommitted)
 		}
 	}
 
 	if len(imbalances) >= 2 {
-		imbalanceThresh := cfg.StrandedImbalanceThreshold
-		if imbalanceThresh == 0 {
-			imbalanceThresh = 0.6
+		imbalanceThreshBP := cfg.StrandedImbalanceThresholdBP
+		if imbalanceThreshBP == 0 {
+			imbalanceThreshBP = ThresholdToBasisPoints(0.6)
 		}
 		alpha := cfg.EMAAlpha
 		if alpha == 0 {
 			alpha = 0.3
 		}
 		smoothed := emaSmooth(imbalances, alpha)
-		finalImbalance := smoothed[len(smoothed)-1]
-		if finalImbalance > imbalanceThresh {
-			if avgCPU95 > avgMem95 {
+		finalImbalanceBP := int32(smoothed[len(smoothed)-1])
+		if finalImbalanceBP > imbalanceThreshBP {
+			if avgCPU95BP > avgMem95BP {
 				s := "memory"
 				class.StrandedResource = &s
 			} else {

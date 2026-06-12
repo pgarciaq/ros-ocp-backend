@@ -31,7 +31,7 @@ func underutilizedNodeDigests(node, instanceType string, days int, cpuP95, memP9
 
 func relaxedUnderutilConfig() NodeRecConfig {
 	cfg := defaultNodeRecConfig()
-	cfg.UnderutilThreshold = 0.40
+	cfg.UnderutilThresholdBP = ThresholdToBasisPoints(0.40)
 	return cfg
 }
 

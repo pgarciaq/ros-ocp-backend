@@ -1147,11 +1147,11 @@ func lockedPVCFieldsInUpdate(update PVCThresholdSettingsUpdate) []string {
 // NodeRecConfigFromThresholds converts resolved node threshold settings to NodeRecConfig.
 func NodeRecConfigFromThresholds(th NodeThresholdSettings) NodeRecConfig {
 	return NodeRecConfig{
-		UnderutilThreshold:         th.UnderutilThreshold,
-		OvercommitThreshold:        th.OvercommitThreshold,
-		AllocatableFactor:          th.AllocatableFactor,
-		StrandedImbalanceThreshold: th.StrandedImbalanceThreshold,
-		EMAAlpha:                   th.EMAAlpha,
+		UnderutilThresholdBP:         ThresholdToBasisPoints(th.UnderutilThreshold),
+		OvercommitThresholdBP:        RatioToBasisPoints(th.OvercommitThreshold),
+		AllocatableFactor:            th.AllocatableFactor,
+		StrandedImbalanceThresholdBP: ThresholdToBasisPoints(th.StrandedImbalanceThreshold),
+		EMAAlpha:                     th.EMAAlpha,
 	}
 }
 

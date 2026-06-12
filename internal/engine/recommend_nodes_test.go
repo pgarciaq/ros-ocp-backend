@@ -11,11 +11,11 @@ import (
 
 func defaultNodeRecConfig() NodeRecConfig {
 	return NodeRecConfig{
-		UnderutilThreshold:         0.30,
-		OvercommitThreshold:        1.50,
-		AllocatableFactor:          0.93,
-		StrandedImbalanceThreshold: 0.6,
-		EMAAlpha:                   0.3,
+		UnderutilThresholdBP:         ThresholdToBasisPoints(0.30),
+		OvercommitThresholdBP:        RatioToBasisPoints(1.50),
+		AllocatableFactor:            0.93,
+		StrandedImbalanceThresholdBP: ThresholdToBasisPoints(0.6),
+		EMAAlpha:                     0.3,
 	}
 }
 
@@ -349,7 +349,7 @@ func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
 
 	// Lowered threshold (0.4): now detects stranded memory (cpu > mem)
 	cfgLowered := defaultNodeRecConfig()
-	cfgLowered.StrandedImbalanceThreshold = 0.4
+	cfgLowered.StrandedImbalanceThresholdBP = ThresholdToBasisPoints(0.4)
 	results = RecommendNodes(digests, cfgLowered, defaultNodeThresholdSettings, singleMediumTerm())
 	require.Len(t, results, 2)
 	stranded := recsByNodeEngine(results)["node-x/cost"].StrandedResource
