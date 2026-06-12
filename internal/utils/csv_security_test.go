@@ -32,40 +32,55 @@ func TestValidateCSVDownloadURL_AllowsWhenDevelopmentUnsetAllowlist(t *testing.T
 	}
 }
 
-func TestValidateCSVDownloadURL_DeniesPrivateIP(t *testing.T) {
+func TestValidateCSVDownloadURL_DeniesPrivateIPWhenNotAllowlisted(t *testing.T) {
 	config.ResetForTest()
 	t.Setenv("DEVELOPMENT", "true")
-	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "10.0.0.1")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "true")
 	_ = config.GetConfig()
 
 	_, err := validateCSVDownloadURL("https://10.0.0.1/object.csv")
 	if err == nil || !strings.Contains(err.Error(), "restricted") {
-		t.Fatalf("expected private IP denial, got %v", err)
+		t.Fatalf("expected private IP denial for non-allowlisted host, got %v", err)
 	}
 }
 
-func TestValidateCSVDownloadURL_DeniesLoopback(t *testing.T) {
+func TestValidateCSVDownloadURL_AllowsAllowlistedPrivateIP(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("DEVELOPMENT", "false")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "10.0.0.1")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "true")
+	_ = config.GetConfig()
+
+	_, err := validateCSVDownloadURL("https://10.0.0.1/object.csv")
+	if err != nil {
+		t.Fatalf("expected allowlisted private IP to be allowed, got %v", err)
+	}
+}
+
+func TestValidateCSVDownloadURL_DeniesLoopbackWhenNotAllowlisted(t *testing.T) {
 	config.ResetForTest()
 	t.Setenv("DEVELOPMENT", "true")
-	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "127.0.0.1")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "true")
 	_ = config.GetConfig()
 
 	_, err := validateCSVDownloadURL("https://127.0.0.1/object.csv")
 	if err == nil || !strings.Contains(err.Error(), "restricted") {
-		t.Fatalf("expected loopback denial, got %v", err)
+		t.Fatalf("expected loopback denial for non-allowlisted host, got %v", err)
 	}
 }
 
-func TestValidateCSVDownloadURL_DeniesLocalhostHostname(t *testing.T) {
+func TestValidateCSVDownloadURL_DeniesLocalhostHostnameWhenNotAllowlisted(t *testing.T) {
 	config.ResetForTest()
 	t.Setenv("DEVELOPMENT", "true")
-	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "localhost")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "true")
 	_ = config.GetConfig()
 
 	_, err := validateCSVDownloadURL("https://localhost/object.csv")
 	if err == nil || !strings.Contains(err.Error(), "restricted") {
-		t.Fatalf("expected localhost denial, got %v", err)
+		t.Fatalf("expected localhost denial for non-allowlisted host, got %v", err)
 	}
 }
 

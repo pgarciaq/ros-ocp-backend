@@ -27,6 +27,8 @@ Broad domain wildcards reduce configuration toil, but permit presigned URLs poin
 
 Only known S3 endpoints allowed. Must configure allowlist per deployment.
 
+Hosts matching the allowlist bypass the private-network deny check (ADR-0145). This lets operators explicitly trust in-cluster endpoints such as MinIO on a private ClusterIP without disabling SSRF protection for untrusted hosts.
+
 ## References
 
 - [internal/utils/csv_security.go](internal/utils/csv_security.go)

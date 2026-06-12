@@ -38,6 +38,10 @@ Initial implementation blocked IPv4 RFC1918, loopback, and link-local ranges. Co
 
 DNS resolution is performed before fetch; restricted IPs block the request even when the URL hostname appears public (rebinding defense).
 
+## Allowlist precedence
+
+Hosts matching the explicit allowlist (`ROS_CSV_ALLOWED_HOSTS`) bypass the private-network deny check. This allows on-prem deployments to use in-cluster storage services (e.g., MinIO) that resolve to private ClusterIPs. The allowlist is an intentional trust decision; untrusted hosts still receive full SSRF protection including DNS re-resolution.
+
 ## References
 
 - [internal/utils/csv_security.go](../../internal/utils/csv_security.go)

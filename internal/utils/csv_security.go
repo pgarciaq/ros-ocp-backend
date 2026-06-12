@@ -53,7 +53,11 @@ func validateCSVDownloadURL(rawURL string) (*url.URL, error) {
 		}
 	}
 
-	if cfg.CSVDenyPrivateNetworks {
+	// Only apply private-network deny for hosts NOT on the explicit allowlist.
+	// If the host matched the allowlist, the operator explicitly trusts it
+	// regardless of what IP it resolves to (e.g., in-cluster MinIO on a private ClusterIP).
+	allowlistMatched := allowed != ""
+	if cfg.CSVDenyPrivateNetworks && !allowlistMatched {
 		if err := denyRestrictedHost(host); err != nil {
 			return nil, err
 		}
