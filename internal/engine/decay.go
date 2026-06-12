@@ -17,6 +17,16 @@ func DecayWeight(ageHours, halfLifeHours float64) float64 {
 	if halfLifeHours <= 0 {
 		return 1.0
 	}
+	// Quantize to integer hours for O(1) lookup from precomputed tables.
+	ageInt := int(math.Round(ageHours))
+	hlInt := int(math.Round(halfLifeHours))
+	if hlInt <= 0 {
+		return 1.0
+	}
+	// Integer half-lives (e.g. window_days*12) use the lookup table; others fall back.
+	if float64(hlInt) == halfLifeHours {
+		return decayTableLookup(ageInt, hlInt)
+	}
 	return math.Exp(-ageHours * math.Ln2 / halfLifeHours)
 }
 

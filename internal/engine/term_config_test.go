@@ -235,6 +235,35 @@ func TestPluginMaxWindowDays(t *testing.T) {
 	}
 }
 
+func TestLoadTermConfig_AutoDerivesDecayHalfLife_WhenNull(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Tenant changes window_days but leaves decay_halflife_hours NULL.
+	_, err := pool.Exec(ctx,
+		`INSERT INTO org_recommendation_terms (org_id, recommendation_type, term_ord, window_days, min_data_days, decay_halflife_hours)
+		 VALUES ('org-auto-decay', 'container', 2, 30, 15, NULL)`)
+	require.NoError(t, err)
+
+	terms, err := LoadTermConfig(ctx, pool, "org-auto-decay", "container")
+	require.NoError(t, err)
+	require.Len(t, terms, 3)
+
+	// Medium term: window_days=30, NULL decay → 30*12 = 360h.
+	assert.Equal(t, "medium", terms[1].Name)
+	assert.Equal(t, 30, terms[1].WindowDays)
+	assert.InDelta(t, 360.0, terms[1].DecayHalfLifeHours, 0.001)
+
+	// Short and long terms still use plugin defaults (no DB row).
+	assert.Equal(t, 1, terms[0].WindowDays)
+	assert.InDelta(t, 0.0, terms[0].DecayHalfLifeHours, 0.001)
+	assert.Equal(t, 15, terms[2].WindowDays)
+	assert.InDelta(t, 360.0, terms[2].DecayHalfLifeHours, 0.001)
+}
+
 func TestInvalidateTermCache(t *testing.T) {
 	// Populate cache manually then invalidate.
 	key := "test-org-invalidate"

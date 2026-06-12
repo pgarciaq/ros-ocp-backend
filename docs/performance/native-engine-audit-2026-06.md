@@ -29,18 +29,17 @@
 
 ## P0 -- Critical Findings
 
-### P0-1. `math.Exp` in decay weighting (per container x term x engine x row)
+### P0-1. `math.Exp` in decay weighting (per container x term x engine x row) — **IMPLEMENTED**
 
-**Location:** `internal/engine/decay.go` -- `DecayWeight`, `MultiWeightedPercentileWithExtras`
+**Location:** `internal/engine/decay.go`, `internal/engine/decay_table.go` — `DecayWeight`, `MultiWeightedPercentileWithExtras`
 
-For every digest row in every window, the code calls `math.Exp(-ageHours * math.Ln2 / halfLifeHours)` and accumulates `float64` weighted sums. On a 500-container cluster with medium+long terms: ~28k-60k `math.Exp` calls per recommendation cycle. This is the densest float hot path.
+For every digest row in every window, the code called `math.Exp(-ageHours * math.Ln2 / halfLifeHours)` and accumulated `float64` weighted sums. On a 500-container cluster with medium+long terms: ~28k-60k `math.Exp` calls per recommendation cycle. This was the densest float hot path.
 
-**Fix options (pick one):**
-- **Lookup table:** Precompute decay weights for age buckets (0-360 days, 1-day granularity) per half-life preset. O(1) lookup replaces O(1) `math.Exp`.
-- **Fixed-point weights:** Accumulate in `int64` with weights scaled to 1/65536 units. Eliminates all float in the inner loop.
-- **Rational approximation:** `math.Exp` -> Pade approximant or `1/(1 + age/halfLife)^2`. Cheaper, still float.
+**Fix implemented (2026-06):**
+- **Lookup table:** `DecayWeight` quantizes age and half-life to integer hours and looks up precomputed weights from `decay_table.go`. Tables are built lazily on first use via `sync.Map` (typically 2–3 tables per invocation, microseconds total). Non-integer half-lives still fall back to `math.Exp`.
+- **Auto-derive half-life:** When a tenant DB override sets `window_days` but leaves `decay_halflife_hours` NULL, `term_config.go` derives `window_days × 12` instead of retaining the plugin default.
 
-**Impact:** Significant -- this is the #1 CPU consumer in the recommend phase.
+**Impact:** Eliminates `math.Exp` from the hot path for standard integer half-lives.
 
 ### P0-2. Duplicate CPU + memory weighted passes per term x engine
 
@@ -571,7 +570,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | H-2 | UI | Remove projects table mock override | Eliminates wasted API calls |
 | D-1 | DB Config | Add PostgreSQL tuning to Helm chart (on-prem) | Production correctness |
 | D-2 | DB Config | Fix connection budget (expose ROS_DB_MAX_CONNS, remove dead DB_POOL_SIZE) -- both modes | Prevents pool exhaustion |
-| P0-1 | Math | Decay weight lookup table or fixed-point | Largest CPU consumer in recommend |
+| P0-1 | Math | Decay weight lookup table or fixed-point | **Done** — lookup tables in `decay_table.go` |
 | P0-2 | Math | Fuse CPU + memory weighted passes | ~40-50% recommend CPU |
 | P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs |
 | P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query |

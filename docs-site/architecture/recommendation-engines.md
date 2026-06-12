@@ -12,6 +12,11 @@ For algorithm details (decay weighting, adaptive margin formula, trend detection
 see [Recommendation Math](recommendation-math.md). For dollar estimates and savings
 formulas, see [Cost Integration](cost-integration.md).
 
+Decay weights use precomputed lookup tables keyed by integer half-life hours
+(lazy-built on first use) instead of per-row `math.Exp`. When a tenant customizes
+`window_days` without setting `decay_halflife_hours`, half-life auto-derives as
+`window_days × 12` — see [Configurability Reference](configurability.md).
+
 ---
 
 ## Summary Matrix

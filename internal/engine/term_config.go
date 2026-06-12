@@ -154,6 +154,10 @@ func loadDBTerms(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationT
 		}
 		if decayHL.Valid {
 			tc.DecayHalfLifeHours = decayHL.Float64
+		} else {
+			// Tenant customized the window but left decay_halflife_hours NULL:
+			// scale decay shape with the window instead of plugin defaults.
+			tc.DecayHalfLifeHours = DeriveDecayHalfLifeHours(windowDays)
 		}
 		result[ord-1] = tc
 	}
