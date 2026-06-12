@@ -206,9 +206,12 @@ adds one row per active container. List queries use a **2-step pattern**:
 2. **Fetch detail** — `JOIN recommendation_sets` for containers on the page only;
    apply `term` / `engine` filters here (6 rows × page limit).
 
-Refresh: [`RefreshOrgContainerKeys()`](../../internal/model/org_container_keys.go) runs after
-[`WriteRecommendations`](../../internal/engine/recommend_all.go) and after
-[`MarkAdopted`](../../internal/engine/adoption.go).
+Refresh: [`RefreshOrgMetadata()`](../../internal/engine/recommend_all.go) runs once at the
+end of each streaming reconcile cycle (ingest and threshold recalc), updating both
+[`org_container_keys`](../../internal/model/org_container_keys.go) and
+[`org_recommendation_stats`](../../internal/model/org_recommendation_stats.go).
+[`MarkAdopted`](../../internal/engine/adoption.go) still refreshes keys immediately.
+See [ADR-0289](../adr/0289-defer-org-metadata-refresh-end-of-reconcile.md).
 
 ### Measured impact (org-large, post-fix)
 
@@ -397,7 +400,8 @@ stable surface for future tag-based list filters.
 
 | Event | Function |
 |-------|----------|
-| After recommendation write (ingestion) | [`RefreshOrgContainerKeysTx`](../../internal/model/org_container_keys.go) in [`WriteRecommendations`](../../internal/engine/recommend_all.go) |
+| End of streaming reconcile (ingest, threshold recalc) | [`RefreshOrgMetadata`](../../internal/engine/recommend_all.go) — keys + stats + fleet cache invalidation |
+| Single-batch writes (tests, tooling) | [`WriteRecommendationsAndRefreshOrg`](../../internal/engine/recommend_all.go) |
 | After adoption mark | [`RefreshOrgContainerKeys`](../../internal/model/org_container_keys.go) in [`MarkAdopted`](../../internal/engine/adoption.go) |
 
 Refresh upserts active keys from `recommendation_sets WHERE stale = false` and deletes

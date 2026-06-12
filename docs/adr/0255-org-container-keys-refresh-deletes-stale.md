@@ -12,7 +12,8 @@ Retention purges stale recommendation rows on a schedule ([ADR-0203](0203-retent
 
 ## Decision
 
-`RefreshOrgContainerKeys` on ingest:
+`RefreshOrgContainerKeys` on ingest (via end-of-cycle `RefreshOrgMetadata`; see
+[ADR-0289](0289-defer-org-metadata-refresh-end-of-reconcile.md)):
 
 1. **Upserts** keys for containers present in non-stale `recommendation_sets` for the org/cluster scope being refreshed.
 2. **DELETEs** keys no longer present in that active set.

@@ -93,8 +93,11 @@ The container list API uses a **2-step query** instead of `SELECT DISTINCT` over
 2. **Fetch detail** — Join `recommendation_sets` for containers on the page only;
    apply `term`, `engine`, and other detail filters here (at most 6 rows × page limit).
 
-The `org_container_keys` table is refreshed after recommendation writes and after
-adoption marks, keeping pagination keys in sync with active containers.
+The `org_container_keys` table and `org_recommendation_stats` counts are refreshed
+once at the end of each recommendation reconcile cycle (not per 500-container write
+batch), and immediately after adoption marks. Keys and counts may be briefly stale
+while a multi-batch ingest is in progress; they are current before the next API
+query after reconciliation completes.
 
 ### Why this matters
 

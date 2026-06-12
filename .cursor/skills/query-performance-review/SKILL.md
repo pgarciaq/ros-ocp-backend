@@ -95,7 +95,8 @@ Tables to check when adding list features:
 - `recommendation_sets` — term/engine detail for page containers only
 - `org_recommendation_stats` — pre-computed container counts
 
-Refresh: `RefreshOrgContainerKeys` runs after `WriteRecommendations` and `MarkAdopted`.
+Refresh: `RefreshOrgMetadata` runs once at end of streaming reconcile cycles
+(ingest, threshold recalc); `MarkAdopted` still calls `RefreshOrgContainerKeys` immediately.
 
 ### 4. Enrichment queries (BH, GPU, etc.)
 

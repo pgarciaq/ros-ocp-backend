@@ -45,6 +45,7 @@ Over-engineering for a batch job tied to ingest completion.
 
 ## Related Decisions
 
+- [ADR-0289](0289-defer-org-metadata-refresh-end-of-reconcile.md): Defer org metadata refresh to end of streaming cycle.
 - [ADR-0003](0003-read-once-compute-n-terms.md): Read-once SQL scan strategy.
 - [ADR-0001](0001-native-engine-over-kruize.md): Native engine architecture.
 

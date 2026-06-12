@@ -120,7 +120,7 @@ pagination metadata.
 ### Phase 3 (Alternative): Denormalized Count Column
 
 Add an `active_container_count` column to `rh_accounts` or `clusters`, updated
-by `WriteRecommendations` at the end of each batch. The list query reads a
+by `RefreshOrgMetadata` at the end of each reconcile cycle. The list query reads a
 single integer instead of scanning 600K rows.
 
 **Effort:** Medium (migration + write-path change).

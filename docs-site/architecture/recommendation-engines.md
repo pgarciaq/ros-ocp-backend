@@ -18,6 +18,11 @@ precomputed lookup tables keyed by integer half-life hours (lazy-built on first 
 instead of per-row `math.Exp`. When a tenant customizes `window_days` without
 setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
+Container recommendations are computed in streaming batches (500 containers) and
+written incrementally. List pagination keys (`org_container_keys`) and pre-computed
+counts (`org_recommendation_stats`) refresh **once** when the reconcile cycle
+completes, not after each batch — see [Query Performance](../query-performance.md#pagination-architecture-org_container_keys).
+
 ---
 
 ## Summary Matrix

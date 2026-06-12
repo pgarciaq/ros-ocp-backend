@@ -288,3 +288,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0285](0285-phase-branch-merge-order-migration-renumbering.md) | Phase branch merge order and migration renumbering | Deployment / Ops | 4–6 | Accepted |
 | [0287](0287-operator-14-day-prometheus-lookback-integration-boundary.md) | Operator 14-day Prometheus lookback as integration boundary | Ingestion | Cross-repo (koku-metrics-operator) | Accepted |
 | [0288](0288-decay-weight-lookup-tables.md) | Precomputed decay weight lookup tables | Engine / Algorithm | Performance | Accepted |
+| [0289](0289-defer-org-metadata-refresh-end-of-reconcile.md) | Defer org metadata refresh to end of reconcile cycle | Performance / Ingestion | Performance | Accepted |

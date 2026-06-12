@@ -10,7 +10,8 @@ Accepted
 
 ## Decision
 
-Maintain `org_recommendation_stats` with pre-computed counts per org, refreshed after ingest completion.
+Maintain `org_recommendation_stats` with pre-computed counts per org, refreshed once at
+the end of each reconcile cycle via `RefreshOrgMetadata` ([ADR-0289](0289-defer-org-metadata-refresh-end-of-reconcile.md)).
 
 - List requests read counts from this table instead of computing them live
 - Counts include breakdowns by stale/non-stale and plugin type

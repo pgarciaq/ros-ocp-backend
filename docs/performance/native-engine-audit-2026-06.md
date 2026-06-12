@@ -59,7 +59,7 @@ For every digest row in every window, the code called `math.Exp(-ageHours * math
 
 Every streaming batch (500 containers) triggered `RefreshOrgContainerKeys` + `RefreshOrgRecommendationStats`, each doing a full `DISTINCT ON` scan of `recommendation_sets` for the entire org. For a 10k-container org, that's ~20 full-org scans per reconciliation cycle.
 
-**Fix implemented (2026-06):**
+**Fix implemented (2026-06):** [ADR-0289](../adr/0289-defer-org-metadata-refresh-end-of-reconcile.md)
 - Removed per-batch refresh from `WriteRecommendations`.
 - Added `RefreshOrgMetadata` called once at end of `runContainerRecommendations` and `recalculateContainerCluster`.
 - Tests/tooling use `WriteRecommendationsAndRefreshOrg` for single-batch writes.
@@ -217,7 +217,7 @@ RecommendWorkloadsStreaming
 
 | ID | Change | Impact | Risk | Status |
 |----|--------|--------|------|--------|
-| M1 | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Medium | In Progress |
+| M1 | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Medium | Implemented |
 | M2 | Migrate list API pagination to org_container_keys | ~1000x on page query | Medium | Open |
 | M3 | Integer savings in micro-cents | Eliminates float in savings | Medium | Open |
 | M4 | Decay weight lookup table | Eliminates math.Exp | Low | Implemented |
@@ -577,7 +577,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | D-2 | DB Config | Fix connection budget (expose ROS_DB_MAX_CONNS, remove dead DB_POOL_SIZE) -- both modes | Prevents pool exhaustion | Open |
 | P0-1 | Math | Decay weight lookup table or fixed-point | Eliminates math.Exp from hot path | Implemented |
 | P0-2 | Math | Fuse CPU + memory weighted passes | ~40-50% recommend CPU | Open |
-| P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | In Progress |
+| P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Implemented |
 | P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query | Open |
 | A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Open |
 | A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |

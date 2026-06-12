@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADR-0289: Defer org metadata refresh to end of reconcile cycle — single `RefreshOrgMetadata` after streaming batches instead of per-batch full-org scans of `org_container_keys` and `org_recommendation_stats`
 - ADR-0288: Precomputed decay weight lookup tables — lazy `sync.Map` tables keyed by integer half-life hours replace per-row `math.Exp` in the digest hot path; documents auto-derive (`window_days × 12`) and ~0.2% quantization accuracy
 - Public docs: `docs-site/architecture/decay-weights.md` with decay curve charts under `docs-site/architecture/charts/`
 - ADRs 0258-0287: Historical phase decisions — Kruize elimination, per-container granularity, three-term architecture, shadow mode rejection, operator CSV contract, framework/language inheritance, phase deferrals, migration strategy, governance process
@@ -23,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Org metadata refresh (`org_container_keys`, `org_recommendation_stats`, fleet summary cache invalidation) deferred to once per reconcile cycle via `RefreshOrgMetadata` instead of after every 500-container write batch — 50–90% reduction in recommendation write time for large orgs (ADR-0289)
 - Decay weighting: `DecayWeight()` uses precomputed lookup tables for integer half-lives (plugin defaults and auto-derived `window_days × 12`); non-integer half-lives still use `math.Exp`. When a tenant overrides `window_days` but leaves `decay_halflife_hours` NULL, half-life auto-derives as `window_days × 12` hours
 - Corrected ADRs 0084, 0161 with status updates reflecting actual implementation scope
 - Updated ADRs 0011, 0013, 0038, 0043, 0132 with status updates cross-referencing new ADRs
