@@ -19,6 +19,9 @@ const kafkaMessageSampleInterval = 100
 // ConsumerCloseGracePeriod is the maximum time to wait for consumer.Close() during shutdown.
 const ConsumerCloseGracePeriod = 30 * time.Second
 
+// MessageHandler processes a single Kafka message. ctx is cancelled on processor shutdown (SIGTERM).
+type MessageHandler func(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer)
+
 // kafkaReader matches *kafka.Consumer.ReadMessage for tests.
 type kafkaReader interface {
 	ReadMessage(timeout time.Duration) (*kafka.Message, error)
@@ -26,6 +29,37 @@ type kafkaReader interface {
 
 func partitionLockKey(tp kafka.TopicPartition) string {
 	return fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)
+}
+
+func wrapHandlerWithInFlight(ctx context.Context, handler MessageHandler, inFlight *sync.WaitGroup) func(*kafka.Message, *kafka.Consumer) {
+	return func(msg *kafka.Message, consumer *kafka.Consumer) {
+		inFlight.Add(1)
+		defer inFlight.Done()
+		handler(ctx, msg, consumer)
+	}
+}
+
+// drainInFlightHandlers waits for handlers to finish after the consumer loop stops accepting messages.
+func drainInFlightHandlers(log *logrus.Entry, inFlight *sync.WaitGroup) {
+	drainInFlightHandlersWithTimeout(log, inFlight, time.Duration(config.GetConfig().ShutdownTimeoutSecs)*time.Second)
+}
+
+func drainInFlightHandlersWithTimeout(log *logrus.Entry, inFlight *sync.WaitGroup, timeout time.Duration) {
+	drainCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		inFlight.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Info("Kafka consumer: all in-flight message handlers completed")
+	case <-drainCtx.Done():
+		log.Warnf("Kafka consumer: shutdown drain exceeded %v; exiting with handlers still running", timeout)
+	}
 }
 
 // consumeMessagesUntilCancelled polls until ctx is cancelled. reader is typically the same *kafka.Consumer
@@ -131,8 +165,8 @@ func consumeMessagesParallelUntilCancelled(
 	wg.Wait()
 }
 
-// StartConsumer polls kafka_topic until ctx is cancelled, then closes the consumer with a deadline.
-func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), auto_commit_option ...bool) {
+// StartConsumer polls kafka_topic until ctx is cancelled, drains in-flight handlers, then closes the consumer.
+func StartConsumer(ctx context.Context, kafka_topic string, handler MessageHandler, auto_commit_option ...bool) {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
 
@@ -182,6 +216,9 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 		log.Fatalf("Failed to subscribe to topic %s: %s", kafka_topic, err)
 	}
 
+	var inFlight sync.WaitGroup
+	wrappedHandler := wrapHandlerWithInFlight(ctx, handler, &inFlight)
+
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.Background(), ConsumerCloseGracePeriod)
 		defer cancel()
@@ -197,7 +234,8 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler func(msg *ka
 		}
 	}()
 
-	consumeMessagesUntilCancelled(ctx, consumer, consumer, handler, log)
+	consumeMessagesUntilCancelled(ctx, consumer, consumer, wrappedHandler, log)
+	drainInFlightHandlers(log, &inFlight)
 }
 
 func logKafkaMessageReceived(log *logrus.Entry, msgCount *uint64, batchStart *time.Time, msg *kafka.Message) {

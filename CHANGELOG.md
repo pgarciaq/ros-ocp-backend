@@ -6,7 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `make test-short` for fast local unit tests (`go test -short ./...`, skips Docker/testcontainers)
+- Prometheus counter `rosocp_csv_rows_skipped_total{report_type}` for skipped CSV parse rows
+- Migration 000144: per-table autovacuum tuning (`fillfactor=85`) for `recommendation_sets` and `container_usage_samples`
+- Processor shutdown drain: Kafka consumer waits for in-flight handlers on SIGTERM (`ROS_SHUTDOWN_TIMEOUT_SECONDS`, default 30s)
+
 ### Changed
+
+- VM CSV parse errors: per-row logs downgraded to debug; one summary warn per file when rows are skipped
 
 - Container recommendation list API: use slim list DTO (`BuildListResponse`) instead of full detail assembly; preserves list UI fields while omitting plots and duplicate notification nesting (performance audit A-1)
 - API middleware: parse `x-rh-identity` once in identity middleware and reuse the cost-management entitlement flag in entitlement middleware (performance audit A-4)

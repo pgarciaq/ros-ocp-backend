@@ -70,7 +70,7 @@ func processContainerDigestFallback(ctx context.Context, pool *pgxpool.Pool, r i
 	return err
 }
 
-func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
+func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer) {
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
 	validate := validator.New()
@@ -109,6 +109,11 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 			kafkaTransientErr = err
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		log.Warnf("ProcessReport interrupted during shutdown: %v", err)
+		recordKafkaTransient(err)
+		return
+	}
 
 	// Create RHAccount and Cluster once before the file loop so both native
 	// and legacy paths have valid rows for JOINs in the API read path.
@@ -139,7 +144,6 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
 
-	ctx := context.Background()
 	pool := db.GetPool()
 	manifestID := resolveManifestID(&kafkaMsg, log)
 	if err := ensureManifestExpectations(ctx, pool, kafkaMsg); err != nil {
@@ -149,6 +153,11 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 	}
 
 	for fileIdx, file := range kafkaMsg.Files {
+		if err := ctx.Err(); err != nil {
+			log.Warnf("ProcessReport interrupted during shutdown before file %d: %v", fileIdx, err)
+			recordKafkaTransient(err)
+			return
+		}
 		filename := filenameForFileIndex(kafkaMsg, file, fileIdx)
 		if shouldSkipProcessedFile(ctx, pool, manifestID, filename) {
 			log.Infof("skipping already-processed file %s for manifest %s", filename, manifestID)
@@ -157,7 +166,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		if useNativeCSVIngest && config.GetConfig().EnableVMRecs && engine.IsClusterInstanceTypesFile(file) {
 			reportType := "cluster_instance_types"
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processClusterInstanceTypesIngest(file, kafkaMsg); err != nil {
+			if err := processClusterInstanceTypesIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -173,7 +182,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		reportType := string(csvType)
 		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processContainerCSVIngest(file, kafkaMsg); err != nil {
+			if err := processContainerCSVIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -186,7 +195,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		}
 		if useNativeCSVIngest && csvType == types.PayloadTypeNamespace {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processNamespaceCSVIngest(file, kafkaMsg); err != nil {
+			if err := processNamespaceCSVIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -199,7 +208,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		}
 		if useNativeCSVIngest && csvType == types.PayloadTypeStorage {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processStorageCSVIngest(file, kafkaMsg); err != nil {
+			if err := processStorageCSVIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -212,7 +221,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		}
 		if useNativeCSVIngest && csvType == types.PayloadTypeSnapshot {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processSnapshotCSVIngest(file, kafkaMsg); err != nil {
+			if err := processSnapshotCSVIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -225,7 +234,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		}
 		if useNativeCSVIngest && csvType == types.PayloadTypeClusterQuota {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-			if err := processClusterQuotaCSVIngest(file, kafkaMsg); err != nil {
+			if err := processClusterQuotaCSVIngest(ctx, file, kafkaMsg); err != nil {
 				if isTransientKafkaProcessingError(err) {
 					recordKafkaTransient(err)
 					return
@@ -239,7 +248,7 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 		if useNativeCSVIngest && (csvType == types.PayloadTypeVM || csvType == types.PayloadTypeVMGPU) {
 			if config.GetConfig().EnableVMRecs {
 				markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
-				if err := processVMCsvIngest(file, kafkaMsg, csvType); err != nil {
+				if err := processVMCsvIngest(ctx, file, kafkaMsg, csvType); err != nil {
 					if isTransientKafkaProcessingError(err) {
 						recordKafkaTransient(err)
 						return
@@ -565,14 +574,17 @@ func ProcessReport(msg *kafka.Message, consumer *kafka.Consumer) {
 
 // processContainerCSVNative runs ingest and recommendations (used by unit tests).
 func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processContainerCSVIngest(fileURL, kafkaMsg); err != nil {
+	if err := processContainerCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
 	return runContainerRecommendations(kafkaMsg)
 }
 
 // processContainerCSVIngest downloads a container CSV and upserts daily digests.
-func processContainerCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processContainerCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -585,7 +597,6 @@ func processContainerCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	tDigest := time.Now()
@@ -742,7 +753,7 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 }
 
 func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processNamespaceCSVIngest(fileURL, kafkaMsg); err != nil {
+	if err := processNamespaceCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
 	return runNamespaceRecommendations(kafkaMsg)
@@ -799,7 +810,10 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	return nil
 }
 
-func processNamespaceCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processNamespaceCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -812,7 +826,6 @@ func processNamespaceCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "namespace")
@@ -904,13 +917,16 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 }
 
 func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processClusterQuotaCSVIngest(fileURL, kafkaMsg); err != nil {
+	if err := processClusterQuotaCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
 	return runClusterQuotaRecommendations(kafkaMsg)
 }
 
-func processClusterQuotaCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processClusterQuotaCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -923,7 +939,6 @@ func processClusterQuotaCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeClusterQuota))
@@ -940,7 +955,10 @@ func processClusterQuotaCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error
 	return nil
 }
 
-func processClusterInstanceTypesIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -953,7 +971,6 @@ func processClusterInstanceTypesIngest(fileURL string, kafkaMsg types.KafkaMsg) 
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 	if err := engine.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID); err != nil {
 		log.Errorf("native VM engine: cluster instance types ingest failed: %v", err)
@@ -964,13 +981,16 @@ func processClusterInstanceTypesIngest(fileURL string, kafkaMsg types.KafkaMsg) 
 }
 
 func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
-	if err := processVMCsvIngest(fileURL, kafkaMsg, csvType); err != nil {
+	if err := processVMCsvIngest(context.Background(), fileURL, kafkaMsg, csvType); err != nil {
 		return err
 	}
 	return runVMRecommendations(kafkaMsg)
 }
 
-func processVMCsvIngest(fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
+func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -983,7 +1003,6 @@ func processVMCsvIngest(fileURL string, kafkaMsg types.KafkaMsg, csvType types.P
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(csvType))
@@ -1001,13 +1020,16 @@ func processVMCsvIngest(fileURL string, kafkaMsg types.KafkaMsg, csvType types.P
 }
 
 func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processStorageCSVIngest(fileURL, kafkaMsg); err != nil {
+	if err := processStorageCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
 	return runStorageRecommendations(kafkaMsg)
 }
 
-func processStorageCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -1020,7 +1042,6 @@ func processStorageCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeStorage))
@@ -1093,13 +1114,16 @@ func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
 }
 
 func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processSnapshotCSVIngest(fileURL, kafkaMsg); err != nil {
+	if err := processSnapshotCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
 	return runSnapshotRecommendations(kafkaMsg)
 }
 
-func processSnapshotCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
+func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -1112,7 +1136,6 @@ func processSnapshotCSVIngest(fileURL string, kafkaMsg types.KafkaMsg) error {
 	}
 	defer body.Close()
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeSnapshot))

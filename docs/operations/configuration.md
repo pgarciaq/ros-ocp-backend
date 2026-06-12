@@ -310,6 +310,7 @@ Startup validation: `ValidateSecurityConfig()` in `internal/config/security.go` 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | `30` | Grace period (seconds) when housekeeper receives SIGTERM/SIGINT mid-cleanup. |
+| `ROS_SHUTDOWN_TIMEOUT_SECONDS` | `30` | Maximum seconds to wait for in-flight Kafka message handlers (e.g. `ProcessReport`) after the consumer loop stops on SIGTERM. |
 | `ROS_LOG_POISON_PAYLOAD` | `false` | When `true`, log first 256 bytes of permanently failed Kafka payloads (debug only). Default logs metadata only; full payload is on the DLQ topic. |
 
 ---

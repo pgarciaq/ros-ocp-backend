@@ -128,7 +128,7 @@ func waitHousekeeperShutdownGrace(secs int) {
 	time.Sleep(time.Duration(secs) * time.Second)
 }
 
-func sourcesListener(msg *k.Message, _ *k.Consumer) {
+func sourcesListener(_ context.Context, msg *k.Message, _ *k.Consumer) {
 	db := database.GetDB()
 	log := logging.GetLogger()
 	headers := msg.Headers

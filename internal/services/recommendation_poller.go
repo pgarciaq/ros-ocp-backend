@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -336,7 +337,11 @@ func requestAndSaveRecommendation(kafkaMsg types.RecommendationKafkaMsg, recomme
 	return poll_cycle_complete
 }
 
-func PollForRecommendations(msg *kafka.Message, consumer_object *kafka.Consumer) {
+func PollForRecommendations(ctx context.Context, msg *kafka.Message, consumer_object *kafka.Consumer) {
+	if err := ctx.Err(); err != nil {
+		logging.GetLogger().Warnf("PollForRecommendations interrupted during shutdown: %v", err)
+		return
+	}
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
 	validate := validator.New()

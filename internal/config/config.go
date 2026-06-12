@@ -405,6 +405,8 @@ type Config struct {
 	CSVDenyPrivateNetworks bool   `mapstructure:"ROS_CSV_DENY_PRIVATE_NETWORKS"`
 	LogPoisonPayload       bool   `mapstructure:"ROS_LOG_POISON_PAYLOAD"`
 	HousekeeperShutdownGraceSecs int `mapstructure:"ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS"`
+	// ShutdownTimeoutSecs is how long the Kafka consumer waits for in-flight handlers after SIGTERM.
+	ShutdownTimeoutSecs int `mapstructure:"ROS_SHUTDOWN_TIMEOUT_SECONDS"`
 
 	// Readiness probe depth (opt-in; default shallow DB-only probe for API-only pods).
 	ReadinessCheckKafka bool   `mapstructure:"ROS_READINESS_CHECK_KAFKA"`
@@ -820,6 +822,7 @@ func initConfig() {
 	viper.SetDefault("ROS_CSV_DENY_PRIVATE_NETWORKS", true)
 	viper.SetDefault("ROS_LOG_POISON_PAYLOAD", false)
 	viper.SetDefault("ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS", 30)
+	viper.SetDefault("ROS_SHUTDOWN_TIMEOUT_SECONDS", 30)
 	viper.SetDefault("ROS_SETTINGS_LOCKED", false)
 	viper.SetDefault("ROS_SETTINGS_LOCKED_CONTAINER", true)
 	viper.SetDefault("ROS_SETTINGS_LOCKED_GPU", true)
@@ -954,6 +957,9 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.HousekeeperShutdownGraceSecs <= 0 {
 		c.HousekeeperShutdownGraceSecs = 30
+	}
+	if c.ShutdownTimeoutSecs <= 0 {
+		c.ShutdownTimeoutSecs = 30
 	}
 }
 

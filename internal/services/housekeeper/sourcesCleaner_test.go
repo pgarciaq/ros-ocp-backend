@@ -1,6 +1,7 @@
 package housekeeper
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestSourcesListener_DBLookupError_ReturnsEarly(t *testing.T) {
 
 	// sourcesListener should handle the DB error gracefully (log + return),
 	// not panic or proceed with a zero-value Cluster.
-	sourcesListener(msg, nil)
+	sourcesListener(context.Background(), msg, nil)
 }
 
 func TestSourcesListener_InvalidJSON_ReturnsEarly(t *testing.T) {
@@ -72,7 +73,7 @@ func TestSourcesListener_InvalidJSON_ReturnsEarly(t *testing.T) {
 		TopicPartition: k.TopicPartition{Partition: 0},
 	}
 
-	sourcesListener(msg, nil)
+	sourcesListener(context.Background(), msg, nil)
 }
 
 func TestSourcesListener_NonMatchingEventType_NoOp(t *testing.T) {
@@ -87,5 +88,5 @@ func TestSourcesListener_NonMatchingEventType_NoOp(t *testing.T) {
 		TopicPartition: k.TopicPartition{Partition: 0},
 	}
 
-	sourcesListener(msg, nil)
+	sourcesListener(context.Background(), msg, nil)
 }

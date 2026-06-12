@@ -30,7 +30,7 @@ func TestProcessReport_InvalidJSON_ReturnsEarly(t *testing.T) {
 		Value:          []byte("{not valid json!!!"),
 		TopicPartition: kafka.TopicPartition{Partition: 0},
 	}
-	ProcessReport(msg, nil)
+	ProcessReport(context.Background(), msg, nil)
 }
 
 func TestProcessReport_UnmarshalError_ReturnsEarly(t *testing.T) {
@@ -38,7 +38,7 @@ func TestProcessReport_UnmarshalError_ReturnsEarly(t *testing.T) {
 		Value:          []byte(`{"unexpected_field": 42}`),
 		TopicPartition: kafka.TopicPartition{Partition: 0},
 	}
-	ProcessReport(msg, nil)
+	ProcessReport(context.Background(), msg, nil)
 }
 
 func TestProcessReport_ValidationError_ReturnsEarly(t *testing.T) {
@@ -46,7 +46,18 @@ func TestProcessReport_ValidationError_ReturnsEarly(t *testing.T) {
 		Value:          []byte(`{"request_id":"","b64_identity":"","metadata":{},"files":[]}`),
 		TopicPartition: kafka.TopicPartition{Partition: 0},
 	}
-	ProcessReport(msg, nil)
+	ProcessReport(context.Background(), msg, nil)
+}
+
+func TestProcessReport_CancelledContext_ReturnsBeforeProcessing(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	msg := &kafka.Message{
+		Value: []byte(`{"request_id":"req-1","b64_identity":"dGVzdA==","metadata":{"org_id":"123","source_id":"1","cluster_uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cluster_alias":"c"},"files":["http://example.com/file.csv"]}`),
+		TopicPartition: kafka.TopicPartition{Partition: 0},
+	}
+	ProcessReport(ctx, msg, nil)
 }
 
 func TestProcessContainerCSVNative_EndToEnd(t *testing.T) {
