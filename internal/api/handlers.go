@@ -478,9 +478,10 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
+		listOpts := listResponseOptions(c)
 		interfaceSlice := make([]any, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, time.Time{})
+			interfaceSlice[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
 		}
 		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
 		response.Data = interfaceSlice
@@ -626,9 +627,10 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
+		listOpts := listResponseOptions(c)
 		interfaceSlice := make([]any, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildDetailResponse(&results[i], nil, results[i].MonitoringEndTime)
+			interfaceSlice[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
 		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {

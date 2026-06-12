@@ -36,8 +36,11 @@ performance engines.
 }
 ```
 
-List items use the same detail schema as the single-resource endpoint
-([`BuildDetailResponse`](../../internal/model/detail_response.go)).
+List items use a slim list DTO ([`BuildListResponse`](../../internal/model/list_response.go))
+that preserves the fields the UI table reads (`current`, `short_term` cost
+`variation`, top-level `notifications`) while omitting plots and duplicate
+notification nesting. The detail endpoint still uses
+[`BuildDetailResponse`](../../internal/model/detail_response.go).
 
 ### Pagination
 

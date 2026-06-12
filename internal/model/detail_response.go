@@ -279,10 +279,15 @@ func toDetailEngine(eng *EngineRecommendation) *DetailEngine {
 		}
 	}
 
+	notifs := eng.Notifications
+	if notifs == nil && len(eng.NotificationCodes) > 0 {
+		notifs = notifications.MapToKruizeFormat(eng.NotificationCodes)
+	}
+
 	de := &DetailEngine{
 		Config:        config,
 		Variation:     variation,
-		Notifications: eng.Notifications,
+		Notifications: notifs,
 	}
 	if eng.BusinessHours != nil {
 		de.BusinessHours = businessHoursToDetail(eng.BusinessHours)

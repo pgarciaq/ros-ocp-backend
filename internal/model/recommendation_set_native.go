@@ -766,7 +766,6 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 			if codes == nil {
 				codes = SmallintArray{}
 			}
-			notifMap := notifications.MapToKruizeFormat(r.NotificationCodes)
 
 			eng := &EngineRecommendation{
 				CPURequestMillicores:   r.RecCPURequestMC,
@@ -783,7 +782,6 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 				VariationMemLimitPct:   r.VariationMemLimitPct,
 				ConfidenceLevel:        r.ConfidenceLevel,
 				NotificationCodes:      codes,
-				Notifications:          notifMap,
 			}
 
 			switch r.Engine {

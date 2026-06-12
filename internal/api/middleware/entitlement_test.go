@@ -19,6 +19,7 @@ func TestCostManagementEntitlement_DevelopmentSkipsCheck(t *testing.T) {
 	t.Setenv("DEVELOPMENT", "true")
 
 	e := echo.New()
+	e.Use(Identity)
 	e.Use(CostManagementEntitlement)
 	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 
@@ -33,6 +34,7 @@ func TestCostManagementEntitlement_RejectsMissingEntitlement(t *testing.T) {
 	t.Setenv("DEVELOPMENT", "false")
 
 	e := echo.New()
+	e.Use(Identity)
 	e.Use(CostManagementEntitlement)
 	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 
@@ -47,6 +49,7 @@ func TestCostManagementEntitlement_AcceptsEntitled(t *testing.T) {
 	t.Setenv("DEVELOPMENT", "false")
 
 	e := echo.New()
+	e.Use(Identity)
 	e.Use(CostManagementEntitlement)
 	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 
