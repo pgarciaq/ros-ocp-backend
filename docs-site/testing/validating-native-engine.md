@@ -1660,11 +1660,11 @@ The tool uses [testcontainers-go](https://golang.testcontainers.org/) to spin up
 ```mermaid
 flowchart TD
     nise["nise report ocp --ros-ocp-info"] --> rosCSV["ROS CSV (operator format)"]
-    rosCSV --> transformer["Column Transformer"]
-    transformer --> nativeCSV["Native-format CSV"]
+    rosCSV --> filter["Column Filter (subset selection)"]
+    filter --> filteredCSV["Filtered CSV (operator column names)"]
     rosCSV --> kruizeAdapter["Kruize Payload Builder"]
 
-    nativeCSV --> nativeEngine["Native Go Engine"]
+    filteredCSV --> nativeEngine["Native Go Engine"]
     kruizeAdapter --> kruizeAPI["Kruize HTTP API"]
 
     subgraph testcontainers [Testcontainers]
@@ -1752,26 +1752,36 @@ go run ./cmd/compare/ \
 
 **Output:** `comparison.csv` in the current directory, plus a console summary with sample recommendations from each engine.
 
-#### Column mapping (nise → native engine)
+#### Column selection (no renaming)
 
-| Nise CSV column | Native CSV column | Notes |
-|-----------------|-------------------|-------|
-| `interval_start` | `interval_start` | Same |
-| `interval_end` | `interval_end` | Same |
-| `namespace` | `namespace` | Same |
-| `workload` | `workload_name` | Renamed |
-| `workload_type` | `workload_type` | Same |
-| `container_name` | `container_name` | Same |
-| `cpu_request_container_avg` | `cpu_request` | Cores (float) |
-| `cpu_limit_container_avg` | `cpu_limit` | Cores (float) |
-| `cpu_usage_container_avg` | `cpu_usage` | Cores (float) |
-| `cpu_throttle_container_avg` | `cpu_throttle` | Cores (float) |
-| `memory_request_container_avg` | `mem_request` | Bytes (float) |
-| `memory_limit_container_avg` | `mem_limit` | Bytes (float) |
-| `memory_usage_container_avg` | `mem_usage` | Bytes (float) |
-| `memory_rss_usage_container_avg` | `mem_rss` | Bytes (float) |
+Since Phase 4, the native engine's CSV parser accepts operator/nise column names
+directly — no renaming is needed. The compare tool's `transformNiseCSV` function
+selects a subset of columns from the nise CSV and passes them through unchanged
+(see [`cmd/compare/main.go`](../../cmd/compare/main.go)).
 
-CPU values are fractional cores; memory values are bytes. The native engine converts internally to millicores and KiB.
+**Required columns** (validated by [`buildColumnIndex`](../../internal/ingestion/csvparser.go)):
+
+| Column | Notes |
+|--------|-------|
+| `interval_start` | ISO timestamp |
+| `interval_end` | ISO timestamp |
+| `namespace` | |
+| `workload` | Owner workload name |
+| `workload_type` | Deployment, StatefulSet, etc. |
+| `container_name` | |
+| `pod` | |
+| `cpu_request_container_avg` | Cores (float) |
+| `cpu_usage_container_avg` | Cores (float) |
+| `memory_request_container_avg` | Bytes (float) |
+| `memory_usage_container_avg` | Bytes (float) |
+
+**Optional columns** (included by the compare tool when present in the source CSV):
+`cpu_limit_container_avg`, `memory_limit_container_avg`, `cpu_throttle_container_avg`,
+`memory_rss_usage_container_avg`, `oom_count`, plus GPU and replica columns supported
+by the native parser.
+
+CPU values are fractional cores; memory values are bytes. The native engine converts
+internally to millicores and KiB via `CoreToMillicores` and `BytesToKiB`.
 
 #### Output format (`comparison.csv`)
 

@@ -9,11 +9,11 @@ spreadsheet showing how their recommendations differ.
 ```mermaid
 flowchart TD
     nise["nise report ocp --ros-ocp-info"] --> rosCSV["ROS CSV (operator format)"]
-    rosCSV --> transformer["Column Transformer"]
-    transformer --> nativeCSV["Native-format CSV"]
+    rosCSV --> filter["Column Filter (subset selection)"]
+    filter --> filteredCSV["Filtered CSV (operator column names)"]
     rosCSV --> kruizeAdapter["Kruize Payload Builder"]
 
-    nativeCSV --> nativeEngine["Native Go Engine"]
+    filteredCSV --> nativeEngine["Native Go Engine"]
     kruizeAdapter --> kruizeAPI["Kruize HTTP API"]
 
     subgraph testcontainers [Testcontainers]
@@ -112,7 +112,9 @@ go run ./cmd/compare/ \
 
 ## What the tool does (7 steps)
 
-1. **Transform CSV** — Renames nise operator-format columns to native engine format
+1. **Filter CSV columns** — Selects the subset of nise operator-format columns
+   required by the native engine's CSV parser (no renaming; Phase 4 aligned the
+   native parser with operator column names)
 2. **Start native PostgreSQL** — Testcontainer with migrations and partition creation
 3. **Run native engine** — `ProcessCSVToDigests` → `RecommendAllWorkloads`
 4. **Start Kruize** — Dedicated PostgreSQL + Kruize container on a shared Docker network,
@@ -125,24 +127,33 @@ go run ./cmd/compare/ \
 
 Total runtime: ~2 minutes (dominated by Kruize's Java startup and the metric upload phase).
 
-## Column Mapping (nise → native engine)
+## Column Selection (no renaming)
 
-| Nise CSV Column | Native CSV Column | Notes |
-|---|---|---|
-| `interval_start` | `interval_start` | Same |
-| `interval_end` | `interval_end` | Same |
-| `namespace` | `namespace` | Same |
-| `workload` | `workload_name` | **Renamed** |
-| `workload_type` | `workload_type` | Same |
-| `container_name` | `container_name` | Same |
-| `cpu_request_container_avg` | `cpu_request` | Both in cores (float) |
-| `cpu_limit_container_avg` | `cpu_limit` | Both in cores (float) |
-| `cpu_usage_container_avg` | `cpu_usage` | Both in cores (float) |
-| `cpu_throttle_container_avg` | `cpu_throttle` | Both in cores (float) |
-| `memory_request_container_avg` | `mem_request` | Both in bytes (float) |
-| `memory_limit_container_avg` | `mem_limit` | Both in bytes (float) |
-| `memory_usage_container_avg` | `mem_usage` | Both in bytes (float) |
-| `memory_rss_usage_container_avg` | `mem_rss` | Both in bytes (float) |
+Since Phase 4, the native engine's CSV parser accepts operator/nise column names
+directly — no renaming is needed. The compare tool's `transformNiseCSV` function
+selects a subset of columns from the nise CSV and passes them through unchanged
+(see [`cmd/compare/main.go`](../cmd/compare/main.go)).
+
+**Required columns** (validated by [`buildColumnIndex`](../internal/ingestion/csvparser.go)):
+
+| Column | Notes |
+|---|---|
+| `interval_start` | ISO timestamp |
+| `interval_end` | ISO timestamp |
+| `namespace` | |
+| `workload` | Owner workload name |
+| `workload_type` | Deployment, StatefulSet, etc. |
+| `container_name` | |
+| `pod` | |
+| `cpu_request_container_avg` | Cores (float) |
+| `cpu_usage_container_avg` | Cores (float) |
+| `memory_request_container_avg` | Bytes (float) |
+| `memory_usage_container_avg` | Bytes (float) |
+
+**Optional columns** (included by the compare tool when present in the source CSV):
+`cpu_limit_container_avg`, `memory_limit_container_avg`, `cpu_throttle_container_avg`,
+`memory_rss_usage_container_avg`, `oom_count`, plus GPU and replica columns supported
+by the native parser.
 
 Units are compatible: CPU as fractional cores, memory as bytes. The native
 engine's `CoreToMillicores` and `BytesToKiB` handle conversion internally.
