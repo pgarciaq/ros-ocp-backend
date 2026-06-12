@@ -62,6 +62,9 @@ func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []Metr
 		if _, err := pool.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("EnsureSamplePartitions %s: %w", partName, err)
 		}
+		if err := applyContainerUsageSamplePartitionTuning(ctx, pool, partName); err != nil {
+			return err
+		}
 	}
 	return nil
 }

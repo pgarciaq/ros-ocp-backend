@@ -39,6 +39,16 @@ func EnsureIngestPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
+const containerUsageSamplePartitionRelopts = `(autovacuum_vacuum_scale_factor = 0.05, autovacuum_analyze_scale_factor = 0.02, fillfactor = 85)`
+
+func applyContainerUsageSamplePartitionTuning(ctx context.Context, pool *pgxpool.Pool, partName string) error {
+	_, err := pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s SET %s", partName, containerUsageSamplePartitionRelopts))
+	if err != nil {
+		return fmt.Errorf("applyContainerUsageSamplePartitionTuning %s: %w", partName, err)
+	}
+	return nil
+}
+
 // EnsureSamplePartitionMonth creates a container_usage_samples partition for one month.
 func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
 	monthEnd := monthStart.AddDate(0, 1, 0)
@@ -52,7 +62,7 @@ func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthSt
 	if _, err := pool.Exec(ctx, sql); err != nil {
 		return fmt.Errorf("EnsureSamplePartitionMonth %s: %w", partName, err)
 	}
-	return nil
+	return applyContainerUsageSamplePartitionTuning(ctx, pool, partName)
 }
 
 // EnsureDigestPartitionMonth creates a daily_container_digests partition for one month.
