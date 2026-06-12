@@ -327,13 +327,13 @@ When `rowCount <= 50,000` and no incremental flushes have occurred, the single-t
 
 ## Theme C: Observability and Operational Overhead
 
-### C-1. ROS API readiness probe points at /status, not /readyz (P0) — **Open**
+### C-1. ROS API readiness probe points at /status, not /readyz (P0) — **Resolved**
 
-**Location:** `cost-onprem/templates/ros/api/deployment.yaml:108`
+**Location:** `cost-onprem/templates/ros/api/deployment.yaml`
 
-The Helm chart wires readiness to `/status` (static JSON, no dependency checks) instead of `/readyz` (which pings the database). Pods are marked ready while DB is down.
+The Helm chart wired readiness to `/status` (static JSON, no dependency checks) instead of `/readyz` (which pings the database). Pods were marked ready while DB was down.
 
-**Fix:** Point `readinessProbe` at `/readyz`; keep `livenessProbe` on `/status`.
+**Fix:** Point `readinessProbe` at `/readyz`; keep `livenessProbe` on `/status`. Implemented in cost-onprem-chart (`ros.api.readinessProbe.path` defaults to `/readyz`).
 
 ### C-2. VM CSV warn-log storms (P1) — **Open**
 
@@ -584,7 +584,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Open |
 | A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |
 | B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Open |
-| C-1 | Ops | Fix readiness probe to use /readyz | Correctness | Open |
+| C-1 | Ops | Fix readiness probe to use /readyz | Correctness | Resolved |
 
 ### P1 -- High Priority
 
