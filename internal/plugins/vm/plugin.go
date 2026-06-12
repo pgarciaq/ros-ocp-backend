@@ -1,8 +1,8 @@
 // Package vm implements OpenShift Virtualization VM recommendation ingestion.
 //
 // The plugin ingests ros-openshift-vm-usage CSV reports (15-minute samples),
-// aggregates them into daily_vm_digests, runs engine.RunVMRecommendations on
-// every ingest, and exposes results via HTTP APIs when ROS_ENABLE_VM_RECS is true.
+// aggregates them into daily_vm_digests. VM recommendations run after manifest
+// ingest completes (see services.runManifestRecommendations), not inline here.
 //
 // # Traits Implemented
 //
@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
@@ -91,19 +90,6 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d VM digests", len(digests))
-
-	clusterID, parseErr := uuid.Parse(clusterUUID)
-	if parseErr != nil {
-		return nil, fmt.Errorf("parse cluster UUID: %w", parseErr)
-	}
-	vmCfg, cfgErr := engine.ResolveVMRecConfig(ctx, pool, orgID)
-	if cfgErr != nil {
-		return nil, fmt.Errorf("resolve VM config: %w", cfgErr)
-	}
-	if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, vmCfg); recErr != nil {
-		return nil, fmt.Errorf("run VM recommendations: %w", recErr)
-	}
-
 	return nil, nil
 }
 

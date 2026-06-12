@@ -980,11 +980,10 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 	return nil
 }
 
+// processVMCsvNative runs ingest only (used by unit tests). VM recommendations are
+// deferred to runManifestRecommendations after all manifest files complete.
 func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
-	if err := processVMCsvIngest(context.Background(), fileURL, kafkaMsg, csvType); err != nil {
-		return err
-	}
-	return runVMRecommendations(kafkaMsg)
+	return processVMCsvIngest(context.Background(), fileURL, kafkaMsg, csvType)
 }
 
 func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {

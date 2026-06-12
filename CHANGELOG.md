@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Container list API: paginate `org_container_keys` directly for identity/cluster-metadata sorts instead of `DISTINCT ON` over `recommendation_sets` (~1000× faster page selection at 200k+ containers; performance audit M2)
+- VM ingest: defer `RunVMRecommendations` to post-manifest `runManifestRecommendations` instead of running inline in the VM plugin ingest path (performance audit M6)
 - VM CSV parse errors: per-row logs downgraded to debug; one summary warn per file when rows are skipped
 
 - Container recommendation list API: use slim list DTO (`BuildListResponse`) instead of full detail assembly; preserves list UI fields while omitting plots and duplicate notification nesting (performance audit A-1)

@@ -15,7 +15,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
-var runManifestRecommendationsHook func(context.Context, *pgxpool.Pool, types.KafkaMsg) error
+var (
+	runManifestRecommendationsHook func(context.Context, *pgxpool.Pool, types.KafkaMsg) error
+	runVMRecommendationsHook       func(types.KafkaMsg) error
+)
 
 // runManifestRecommendations executes recommendation engines after all expected
 // manifest files have been ingested successfully (ADR-0166).
@@ -95,6 +98,9 @@ func runClusterQuotaRecommendations(kafkaMsg types.KafkaMsg) error {
 }
 
 func runVMRecommendations(kafkaMsg types.KafkaMsg) error {
+	if runVMRecommendationsHook != nil {
+		return runVMRecommendationsHook(kafkaMsg)
+	}
 	ctx := context.Background()
 	pool := db.GetPool()
 	orgID := kafkaMsg.Metadata.Org_id
