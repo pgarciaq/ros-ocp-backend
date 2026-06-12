@@ -27,7 +27,8 @@ Each process registers Prometheus collectors via `promauto` at startup. Standard
 The API runs **two HTTP listeners**:
 
 1. **Application server** (`API_PORT`) — REST routes, probes, and Echo middleware metrics
-   - `GET /status` — liveness (returns `{"api-server":"working"}`)
+   - `GET /status` — trivial liveness (returns `{"api-server":"working"}`)
+   - `GET /healthz` — deep liveness (goroutine count, GC pause, scheduler responsiveness)
    - `GET /readyz` — readiness (PostgreSQL pool ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled)
    - `GET /api/cost-management/v1/...` — recommendation API
 
@@ -43,7 +44,8 @@ A single HTTP server on `PROMETHEUS_PORT` (`internal/utils/utils.go` → `Start_
 | Path | Purpose |
 |------|---------|
 | `GET /metrics` | Prometheus scrape target |
-| `GET /status` | Liveness (`{"status":"ok"}`) |
+| `GET /status` | Trivial liveness (`{"status":"ok"}`) |
+| `GET /healthz` | Deep liveness (goroutines, GC, scheduler) |
 | `GET /readyz` | Readiness (DB ping; optional Kafka/S3) |
 
 Clowder and cost-onprem set `PROMETHEUS_PORT=9000` and use port `9000` for probes on processor/poller. The API deployment must set `PROMETHEUS_PORT` to match the exposed metrics Service port (typically `9000`).
@@ -345,7 +347,7 @@ Environment variables that affect observability:
 | `LogFormater` | `text` (local), JSON (Clowder) | Log output format |
 | `SERVICE_NAME` | `rosocp` | `service` field on all log lines |
 | `PROMETHEUS_PORT` | `5005` (local), `9000` (Clowder) | Metrics (+ probes for processor/poller) |
-| `API_PORT` | `8000` | API listener; `/status` and `/readyz` for API probes |
+| `API_PORT` | `8000` | API listener; `/status`, `/healthz`, and `/readyz` for API probes |
 | `CW_LOG_STREAM_NAME` | `rosocp` | CloudWatch log stream (when CW credentials configured) |
 | `ROS_DB_MAX_CONNS` | `10` | Connection pool size (affects DB latency under load) |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool acquire timeout; `0` = unlimited |
@@ -599,11 +601,51 @@ increase(rosocp_retention_partitions_dropped_total[24h])
 
 ---
 
+## Health Endpoints
+
+ROS-OCP Backend exposes three probe endpoints with distinct purposes:
+
+| Endpoint | HTTP codes | Purpose | When to use |
+|----------|------------|---------|-------------|
+| `GET /status` | 200 | Trivial liveness — confirms the HTTP server is responding | Legacy/simple probes; no runtime diagnostics |
+| `GET /healthz` | 200, 503 | Deep liveness — goroutine count, GC pause pressure, scheduler responsiveness | **Kubernetes liveness probes** (default in cost-onprem chart) |
+| `GET /readyz` | 200, 503 | Readiness — PostgreSQL ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled | **Kubernetes readiness probes** |
+
+### `/healthz` response shape
+
+```json
+{
+  "ok": true,
+  "checks": {
+    "goroutines": "42",
+    "goroutines_status": "ok",
+    "heap_alloc_mb": "18",
+    "heap_sys_mb": "32",
+    "gc_cycles": "15",
+    "last_gc_pause_ms": "0.42",
+    "gc_status": "ok",
+    "scheduler": "ok"
+  }
+}
+```
+
+When `ok` is `false`, the endpoint returns HTTP 503. Kubernetes liveness probes will restart the pod.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_HEALTHZ_MAX_GOROUTINES` | `5000` | Fail `/healthz` when `runtime.NumGoroutine()` exceeds this threshold |
+| `ROS_HEALTHZ_MAX_GC_PAUSE_MS` | `100` | Fail `/healthz` when the last GC pause exceeds this many milliseconds |
+
+Tune thresholds for your deployment size. Small dev environments may need higher goroutine limits; latency-sensitive production pods may need lower GC pause limits.
+
+---
+
 ## Known Gaps
 
 | Gap | Impact | Workaround |
 |-----|--------|------------|
-| **No `/healthz`** | Liveness probes use `/status`, which does not detect deadlocks or goroutine leaks | Monitor process restarts; consider external watchdog |
 | **Shallow readiness by default** | `/readyz` pings PostgreSQL only unless `ROS_READINESS_CHECK_KAFKA` / `ROS_READINESS_CHECK_S3` are enabled | Enable deep checks on processor/ingestion pods; monitor Kafka lag externally on API pods |
 | `rosocp_threshold_recalc_coalesced_total` | Threshold settings PUT coalesced into follow-up recalc | Alert if rate is sustained high (settings churn) |
 | **Snapshot write counter missing** | `rosocp_recommendations_written_total{type="snapshot"}` is never incremented despite duration being tracked | Use logs (`native snapshot engine: wrote N`) or DB row counts |

@@ -392,6 +392,21 @@ func Start_prometheus_server() error {
 		body, _ := json.Marshal(map[string]interface{}{"status": "ok", "checks": result.Checks})
 		_, _ = w.Write(body)
 	})
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		result := health.RunHealthzChecks(ctx)
+		if !result.OK {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			body, _ := json.Marshal(result)
+			_, _ = w.Write(body)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		body, _ := json.Marshal(result)
+		_, _ = w.Write(body)
+	})
 	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("ListenAndServe prometheus: %w", err)
 	}

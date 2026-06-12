@@ -346,6 +346,7 @@ func registerContractTestRoutes(e *echo.Echo) {
 	api.RegisterTestReferenceRoutes(e)
 	api.RegisterTestInternalRoutes(e)
 	e.GET("/status", api.GetAppStatus)
+	e.GET("/healthz", api.GetHealthz)
 	e.GET("/readyz", api.GetReadyz)
 }
 
@@ -390,7 +391,7 @@ func normalizeRoutePattern(path string) string {
 func collectRegisteredRoutePatterns(e *echo.Echo) map[string]struct{} {
 	out := make(map[string]struct{})
 	for _, route := range e.Routes() {
-		if !strings.HasPrefix(route.Path, apiV1Prefix) && route.Path != "/status" && route.Path != "/readyz" {
+		if !strings.HasPrefix(route.Path, apiV1Prefix) && route.Path != "/status" && route.Path != "/healthz" && route.Path != "/readyz" {
 			continue
 		}
 		if route.Method == http.MethodHead {

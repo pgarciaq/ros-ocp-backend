@@ -101,6 +101,8 @@ reproduce production GC behavior. Leave unset for unlimited local runs.
 | `ROS_READINESS_S3_ACCESS_KEY` | (empty) | S3 access key for readiness HEAD request. |
 | `ROS_READINESS_S3_SECRET_KEY` | (empty) | S3 secret key for readiness HEAD request. |
 | `ROS_READINESS_S3_REGION` | `us-east-1` | AWS region for S3 client. |
+| `ROS_HEALTHZ_MAX_GOROUTINES` | `5000` | Fail `/healthz` when goroutine count exceeds this threshold. |
+| `ROS_HEALTHZ_MAX_GC_PAUSE_MS` | `100` | Fail `/healthz` when the last GC pause exceeds this many milliseconds. |
 | `DEVELOPMENT` | `false` | When `true`, relaxes certain security checks for local dev (empty CSV allowlist, tag dev token). **Never set in production.** |
 | `GLOBAL_HTTP_CLIENT_TIMEOUT_SECS` | `30` | Default timeout for outbound HTTP clients (RBAC, masu, sources). |
 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | `24` | Legacy Kruize poller interval (hours). |

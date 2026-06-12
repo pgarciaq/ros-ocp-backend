@@ -417,6 +417,10 @@ type Config struct {
 	ReadinessS3SecretKey string `mapstructure:"ROS_READINESS_S3_SECRET_KEY"`
 	ReadinessS3Region    string `mapstructure:"ROS_READINESS_S3_REGION"`
 
+	// Healthz probe thresholds for runtime degradation detection.
+	HealthzMaxGoroutines int `mapstructure:"ROS_HEALTHZ_MAX_GOROUTINES"`
+	HealthzMaxGCPauseMs  int `mapstructure:"ROS_HEALTHZ_MAX_GC_PAUSE_MS"`
+
 	// APIMaxNodeResults caps rows returned by node utilization and GPU time-slicing list endpoints.
 	APIMaxNodeResults int `mapstructure:"ROS_API_MAX_NODE_RESULTS"`
 
@@ -620,6 +624,8 @@ func initConfig() {
 	viper.SetDefault("ROS_READINESS_CHECK_KAFKA", false)
 	viper.SetDefault("ROS_READINESS_CHECK_S3", false)
 	viper.SetDefault("ROS_READINESS_S3_REGION", "us-east-1")
+	viper.SetDefault("ROS_HEALTHZ_MAX_GOROUTINES", 5000)
+	viper.SetDefault("ROS_HEALTHZ_MAX_GC_PAUSE_MS", 100)
 	viper.SetDefault("DEVELOPMENT", false)
 	viper.SetDefault("GLOBAL_HTTP_CLIENT_TIMEOUT_SECS", 30)
 	viper.SetDefault("UPDATE_KRUIZE_PERF_PROFILE", true)

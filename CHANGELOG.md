@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `GET /healthz` endpoint with runtime degradation checks (goroutine count, GC pause pressure, scheduler responsiveness); configurable via `ROS_HEALTHZ_MAX_GOROUTINES` and `ROS_HEALTHZ_MAX_GC_PAUSE_MS`
 - `make test-short` for fast local unit tests (`go test -short ./...`, skips Docker/testcontainers)
 - Prometheus counter `rosocp_csv_rows_skipped_total{report_type}` for skipped CSV parse rows
 - Migration 000144: per-table autovacuum tuning (`fillfactor=85`) for `recommendation_sets` and `container_usage_samples`

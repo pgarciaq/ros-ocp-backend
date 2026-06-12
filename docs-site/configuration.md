@@ -160,6 +160,8 @@ Parallel processing: `ROS_KAFKA_PARALLEL`, `ROS_KAFKA_WORKERS` (see Performance 
 | `ROS_API_MAX_NODE_RESULTS` | `1000` | Max rows per node utilization / GPU time-slicing list request. |
 | `ROS_READINESS_CHECK_KAFKA` | `false` | Opt-in Kafka broker check on `/readyz`. |
 | `ROS_READINESS_CHECK_S3` | `false` | Opt-in S3 bucket HEAD check on `/readyz`. |
+| `ROS_HEALTHZ_MAX_GOROUTINES` | `5000` | Fail `/healthz` when goroutine count exceeds this threshold. |
+| `ROS_HEALTHZ_MAX_GC_PAUSE_MS` | `100` | Fail `/healthz` when the last GC pause exceeds this many milliseconds. |
 | `DEVELOPMENT` | `false` | Local dev only — relaxes CSV allowlist and tag dev-token checks. Never enable in production. |
 | `RECORD_LIMIT_CSV` | `1000` | CSV export row limit per batch. |
 | `CSV_STREAM_INTERVAL` | `100` | CSV streaming flush interval (rows). |

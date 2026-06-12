@@ -176,6 +176,55 @@ def main() -> None:
         }
     }
 
+    # /healthz endpoint
+    spec["paths"]["/healthz"] = {
+        "get": {
+            "tags": ["Health"],
+            "summary": "Runtime health check",
+            "description": "Detects runtime degradation: goroutine count, GC pause pressure, and scheduler responsiveness. Not prefixed with `/api/cost-management/v1`.",
+            "operationId": "getHealthz",
+            "servers": [{"url": "/"}],
+            "responses": {
+                "200": {
+                    "description": "All runtime health checks passed",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ok": {"type": "boolean", "example": True},
+                                    "checks": {
+                                        "type": "object",
+                                        "additionalProperties": {"type": "string"},
+                                    },
+                                },
+                                "required": ["ok", "checks"],
+                            }
+                        }
+                    },
+                },
+                "503": {
+                    "description": "One or more runtime health checks failed",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ok": {"type": "boolean", "example": False},
+                                    "checks": {
+                                        "type": "object",
+                                        "additionalProperties": {"type": "string"},
+                                    },
+                                },
+                                "required": ["ok", "checks"],
+                            }
+                        }
+                    },
+                },
+            },
+        }
+    }
+
     # NotificationEntry.suggested_direction
     schemas["NotificationEntry"]["properties"]["suggested_direction"] = {
         "type": "string",
@@ -337,7 +386,7 @@ def main() -> None:
 
     # Authenticated v1 routes: add 401 via shared component
     for path, methods in spec["paths"].items():
-        if path in ("/status", "/readyz"):
+        if path in ("/status", "/healthz", "/readyz"):
             continue
         if path.startswith("/internal/"):
             continue

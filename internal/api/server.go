@@ -184,6 +184,7 @@ func StartAPIServer(ctx context.Context) {
 	app.Use(middleware.CORSWithConfig(corsCfg))
 
 	app.GET("/status", GetAppStatus)
+	app.GET("/healthz", GetHealthz)
 	app.GET("/readyz", GetReadyz)
 	app.GET("/api/cost-management/v1/recommendations/openshift/openapi.json", ServeFilteredOpenAPI)
 

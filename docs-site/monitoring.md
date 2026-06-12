@@ -22,16 +22,16 @@ Set `PROMETHEUS_PORT` to match the container metrics port exposed by your Servic
 
 | Endpoint | Port | Component | Purpose |
 |----------|------|-----------|---------|
-| `/status` | API port (`8000`) or metrics port | All | Liveness — process is running |
+| `/status` | API port (`8000`) or metrics port | All | Trivial liveness — HTTP server is responding |
+| `/healthz` | API port or metrics port | All | Deep liveness — goroutine count, GC pause, scheduler responsiveness |
 | `/readyz` | API port or metrics port | All | Readiness — PostgreSQL ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled |
 | `/metrics` | `PROMETHEUS_PORT` | All | Prometheus scrape |
 
-!!! note "No `/healthz` endpoint"
-    Kubernetes liveness probes should target `/status`. There is no dedicated `/healthz` endpoint with deadlock or goroutine checks.
+Kubernetes liveness probes should target `/healthz` (default in the cost-onprem chart). Use `/status` only when you need a trivial always-200 probe with no runtime diagnostics.
 
-The API runs **two listeners**: the main API port serves REST traffic and `/readyz`; a separate metrics listener on `PROMETHEUS_PORT` serves `/metrics` (including API latency histograms).
+The API runs **two listeners**: the main API port serves REST traffic, `/healthz`, and `/readyz`; a separate metrics listener on `PROMETHEUS_PORT` serves `/metrics` (including API latency histograms).
 
-Processor and poller serve `/metrics`, `/status`, and `/readyz` on a single metrics port.
+Processor and poller serve `/metrics`, `/status`, `/healthz`, and `/readyz` on a single metrics port.
 
 ---
 
@@ -509,7 +509,6 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 | Limitation | Operator impact |
 |------------|-----------------|
-| No `/healthz` | Use `/status` for liveness; no deadlock detection |
 | Readiness is shallow by default | Enable `ROS_READINESS_CHECK_KAFKA` / `ROS_READINESS_CHECK_S3` on processor pods |
 | No distributed tracing | Correlate with `request_id` in logs |
 | Snapshot write counter missing | Use logs or DB queries for snapshot output volume |

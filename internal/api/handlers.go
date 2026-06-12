@@ -958,6 +958,17 @@ func GetAppStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, status)
 }
 
+// GetHealthz reports runtime health (goroutines, GC pressure, scheduler responsiveness).
+func GetHealthz(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
+	defer cancel()
+	result := health.RunHealthzChecks(ctx)
+	if !result.OK {
+		return c.JSON(http.StatusServiceUnavailable, result)
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
 // GetReadyz reports readiness by pinging the primary DB pool and optional dependencies.
 func GetReadyz(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
