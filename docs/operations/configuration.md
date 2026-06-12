@@ -65,7 +65,7 @@ Related database pool settings (pre-existing, often tuned together):
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SERVICE_NAME` | `rosocp` | Service identifier in structured logs (`service` field). |
-| `LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `ERROR`. |
+| `LOG_LEVEL` | `INFO` | Log verbosity: `TRACE`, `DEBUG`, `INFO`, `ERROR`. |
 | `LogFormater` | `text` (local), JSON (Clowder) | Log output format. |
 | `API_PORT` | `8000` | REST API listener port. |
 | `PROMETHEUS_PORT` | `5005` (local), `9000` (Clowder) | Metrics and probe port (processor/poller); API also runs a separate metrics listener on this port. |
@@ -311,6 +311,31 @@ Startup validation: `ValidateSecurityConfig()` in `internal/config/security.go` 
 |----------|---------|---------|
 | `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | `30` | Grace period (seconds) when housekeeper receives SIGTERM/SIGINT mid-cleanup. |
 | `ROS_LOG_POISON_PAYLOAD` | `false` | When `true`, log first 256 bytes of permanently failed Kafka payloads (debug only). Default logs metadata only; full payload is on the DLQ topic. |
+
+### Caller location in log lines (C-5)
+
+As of this change, logrus `ReportCaller` is enabled only when `LOG_LEVEL` is `DEBUG` or
+`TRACE`. At `INFO`, `WARN`, `ERROR`, and `FATAL`, log lines no longer include source
+location fields (`file` and `func` in JSON output). This avoids a call-stack walk on every
+log line in production and reduces per-line overhead.
+
+When debugging production issues that require source locations, temporarily set
+`LOG_LEVEL=DEBUG` (or `TRACE`) and restart the affected deployment. Revert to `INFO` after
+troubleshooting to restore the lower-overhead format.
+
+Example JSON at `LOG_LEVEL=INFO` (default):
+
+```json
+{"level":"info","msg":"flush complete","service":"rosocp-processor","time":"2026-06-12T13:50:00Z"}
+```
+
+Example JSON at `LOG_LEVEL=DEBUG`:
+
+```json
+{"file":"internal/ingestion/pipeline_stream.go:245","func":"github.com/redhatinsights/ros-ocp-backend/internal/ingestion.(*Pipeline).flush","level":"debug","msg":"processing row","service":"rosocp-processor","time":"2026-06-12T13:50:00Z"}
+```
+
+Implementation: [`internal/logging/logging.go`](../../internal/logging/logging.go).
 
 ---
 
