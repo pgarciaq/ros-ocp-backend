@@ -3,6 +3,9 @@ scripts/_minio-data/
 .vscode/
 bin
 tmp
+/ros-ocp-backend
+/rosocp
+__pycache__/
 coverage.txt
 output.csv
 comparison.csv

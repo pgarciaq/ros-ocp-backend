@@ -15,7 +15,7 @@ If you are validating the native engine for the first time:
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
 6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
 
-**Branches:** `pgarciaq-rosocp-superpowers-phase12` on `ros-ocp-backend`, `koku`, and `koku-metrics-operator` for full native coverage (all plugins + savings). Stock `main` on koku/operator is enough for container + namespace Kruize comparison only.
+**Branches:** `pgarciaq-rosocp-superpowers-phase13` on `ros-ocp-backend`, `koku`, and `koku-metrics-operator` for full native coverage (all plugins + savings). Stock `main` on koku/operator is enough for container + namespace Kruize comparison only.
 
 ---
 
@@ -198,9 +198,9 @@ Deploy **phase12** on all three core repos. PVC, VM, GPU (rich), node (rich), Re
 
 | Repository | Branch | Remote |
 |---|---|---|
-| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
-| `koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
-| `koku` | `pgarciaq-rosocp-superpowers-phase12` | `pgarciaq` |
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase13` | `pgarciaq` |
+| `koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase13` | `pgarciaq` |
+| `koku` | `pgarciaq-rosocp-superpowers-phase13` | `pgarciaq` |
 
 #### Kruize comparison (container + namespace only)
 
@@ -208,7 +208,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 
 | Repository | Branch | Notes |
 |---|---|---|
-| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase12` | Native engine |
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase13` | Native engine |
 | `koku-metrics-operator` | `main` (upstream) | Stock operator — provides all data needed for container/namespace recs |
 | `koku` | `main` (upstream) | Stock koku — no integration changes needed |
 
@@ -223,7 +223,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 
 On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase12-only CSV columns.
 
-**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase12` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
+**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase13` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
 
 ```bash
 # Example clone and checkout (pgarciaq remote for phase12 repos)
@@ -236,15 +236,15 @@ git clone git@github.com:RedHatInsights/cost-onprem-chart.git cost-onprem-chart
 git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 
 # Full native engine — all three on phase12
-git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase12
-git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase12
-git -C koku checkout pgarciaq-rosocp-superpowers-phase12
+git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase13
+git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase13
+git -C koku checkout pgarciaq-rosocp-superpowers-phase13
 git -C nise checkout main
 
 # Kruize comparison (container + namespace) — stock koku + operator
 # git -C koku-metrics-operator checkout main
 # git -C koku checkout main
-# (ros-ocp-backend stays on pgarciaq-rosocp-superpowers-phase12)
+# (ros-ocp-backend stays on pgarciaq-rosocp-superpowers-phase13)
 ```
 
 ### Build order
@@ -2603,7 +2603,7 @@ export IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"12345
 export CLUSTER_UUID="<replace-with-ocp-provider-uuid>"
 
 # ROS branch (use your team's native-engine branch)
-cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase12
+cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase13
 
 # Native ROS processes
 go run rosocp.go db migrate up
