@@ -16,7 +16,7 @@ func commitIngestInSingleTx(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	samples []MetricRow,
-	grouped map[DigestKey][]MetricRow,
+	grouped map[DigestKey][]metricSample,
 	gpuAccum *gpuStreamAccumulator,
 	nodeAccum map[NodeDayKey]*NodeDayAccumulator,
 	scheduleCache *bhschedule.Cache,

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -134,7 +135,7 @@ func TestComputePodCounts_WithWorkloadPodCount(t *testing.T) {
 		rows := []MetricRow{
 			{IntervalStart: base, WorkloadPodCount: 3},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(3), pcMin)
 		assert.Equal(t, int64(3), pcMax)
 		assert.Equal(t, int64(3), pcAvg)
@@ -146,7 +147,7 @@ func TestComputePodCounts_WithWorkloadPodCount(t *testing.T) {
 			{IntervalStart: base.Add(5 * time.Minute), WorkloadPodCount: 5},
 			{IntervalStart: base.Add(10 * time.Minute), WorkloadPodCount: 3},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(5), pcMin)
 		assert.Equal(t, int64(5), pcMax)
 		assert.Equal(t, int64(5), pcAvg)
@@ -157,7 +158,7 @@ func TestComputePodCounts_WithWorkloadPodCount(t *testing.T) {
 			{IntervalStart: base, WorkloadPodCount: 2},
 			{IntervalStart: base.Add(time.Hour), WorkloadPodCount: 6},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(2), pcMin)
 		assert.Equal(t, int64(6), pcMax)
 		assert.Equal(t, int64(4), pcAvg)
@@ -169,7 +170,7 @@ func TestComputePodCounts_WithWorkloadPodCount(t *testing.T) {
 			{IntervalStart: base.Add(time.Hour), WorkloadPodCount: 2},
 			{IntervalStart: base.Add(2 * time.Hour), WorkloadPodCount: 3},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(1), pcMin)
 		assert.Equal(t, int64(3), pcMax)
 		assert.Equal(t, int64(2), pcAvg)
@@ -192,7 +193,7 @@ func TestComputePodCounts_FallbackDistinctPods(t *testing.T) {
 			{IntervalStart: base.Add(5 * time.Minute), Pod: "pod-b"},
 			{IntervalStart: base.Add(10 * time.Minute), Pod: "pod-a"},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(2), pcMin)
 		assert.Equal(t, int64(2), pcMax)
 		assert.Equal(t, int64(2), pcAvg)
@@ -205,7 +206,7 @@ func TestComputePodCounts_FallbackDistinctPods(t *testing.T) {
 			{IntervalStart: base, Pod: "pod-c"},
 			{IntervalStart: base.Add(time.Hour), Pod: "pod-a"},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(1), pcMin)
 		assert.Equal(t, int64(3), pcMax)
 		assert.Equal(t, int64(2), pcAvg)
@@ -215,7 +216,7 @@ func TestComputePodCounts_FallbackDistinctPods(t *testing.T) {
 		rows := []MetricRow{
 			{IntervalStart: base},
 		}
-		pcMin, pcMax, pcAvg := computePodCounts(rows)
+		pcMin, pcMax, pcAvg := computePodCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(0), pcMin)
 		assert.Equal(t, int64(0), pcMax)
 		assert.Equal(t, int64(0), pcAvg)
@@ -230,7 +231,7 @@ func TestComputeReplicaCounts(t *testing.T) {
 			{IntervalStart: base, DesiredReplicas: 3, AvailableReplicas: 3},
 			{IntervalStart: base.Add(time.Hour), DesiredReplicas: 5, AvailableReplicas: 4},
 		}
-		desired, available := computeReplicaCounts(rows)
+		desired, available := computeReplicaCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(5), desired)
 		assert.Equal(t, int64(4), available)
 	})
@@ -240,7 +241,7 @@ func TestComputeReplicaCounts(t *testing.T) {
 			{IntervalStart: base, DesiredReplicas: 2, AvailableReplicas: 1},
 			{IntervalStart: base.Add(5 * time.Minute), DesiredReplicas: 4, AvailableReplicas: 3},
 		}
-		desired, available := computeReplicaCounts(rows)
+		desired, available := computeReplicaCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(4), desired)
 		assert.Equal(t, int64(3), available)
 	})
@@ -255,7 +256,7 @@ func TestComputeReplicaCounts(t *testing.T) {
 		rows := []MetricRow{
 			{IntervalStart: base, DesiredReplicas: 0, AvailableReplicas: 0},
 		}
-		desired, available := computeReplicaCounts(rows)
+		desired, available := computeReplicaCounts(metricSamplesFromRows(rows))
 		assert.Equal(t, int64(0), desired)
 		assert.Equal(t, int64(0), available)
 	})
@@ -586,8 +587,14 @@ func TestAllHoursStream_IdenticalToPreFeature(t *testing.T) {
 		ScheduleType: ScheduleTypeAllHours,
 	}
 	legacy := ComputeContainerDigest(key, rows)
-	current := ComputeContainerDigestWeighted(key, rows, nil)
+	current := ComputeContainerDigestWeighted(key, metricSamplesFromRows(rows), nil)
 	assert.Equal(t, legacy, current)
+}
+
+func TestMetricSampleSmallerThanMetricRow(t *testing.T) {
+	const maxMetricSampleBytes = 128
+	assert.Less(t, unsafe.Sizeof(metricSample{}), unsafe.Sizeof(MetricRow{}))
+	assert.LessOrEqual(t, unsafe.Sizeof(metricSample{}), uintptr(maxMetricSampleBytes))
 }
 
 func TestOffHoursWeight0_NoSortOverhead(t *testing.T) {

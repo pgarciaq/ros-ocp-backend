@@ -144,9 +144,10 @@ func benchmarkDigestDual(rows []MetricRow, sched bhschedule.Schedule) {
 	}
 	keyBH := keyAll
 	keyBH.ScheduleType = ScheduleTypeBusinessHours
-	weightFn := BusinessHoursRowWeightFn(sched)
+	samples := metricSamplesFromRows(rows)
+	weightFn := BusinessHoursSampleWeightFn(sched)
 	_ = ComputeContainerDigest(keyAll, rows)
-	_ = ComputeContainerDigestWeighted(keyBH, rows, weightFn)
+	_ = ComputeContainerDigestWeighted(keyBH, samples, weightFn)
 }
 
 // BenchmarkDualDigestIngestion_Overhead compares single-stream vs dual-stream digest computation.
@@ -185,7 +186,8 @@ func BenchmarkIngestBHWeightZero(b *testing.B) {
 	}
 	sched := benchWeekdaySchedule()
 	sched.OffHoursWeight = 0
-	weightFn := BusinessHoursRowWeightFn(sched)
+	samples := metricSamplesFromRows(rows)
+	weightFn := BusinessHoursSampleWeightFn(sched)
 
 	b.Run("unweighted", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -196,7 +198,7 @@ func BenchmarkIngestBHWeightZero(b *testing.B) {
 		keyBH := key
 		keyBH.ScheduleType = ScheduleTypeBusinessHours
 		for i := 0; i < b.N; i++ {
-			_ = ComputeContainerDigestWeighted(keyBH, rows, weightFn)
+			_ = ComputeContainerDigestWeighted(keyBH, samples, weightFn)
 		}
 	})
 }

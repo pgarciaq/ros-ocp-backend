@@ -13,6 +13,9 @@ import (
 // RowWeightFunc returns the schedule weight for a CSV row (0 excludes the sample).
 type RowWeightFunc func(MetricRow) float64
 
+// SampleWeightFunc returns the schedule weight for a retained digest sample.
+type SampleWeightFunc func(metricSample) float64
+
 // ComputeDigest computes exact percentiles and aggregates from a sorted slice
 // of int64 values. Uses slices.Sort() for O(n log n) exact computation.
 // The input slice is sorted in place.
@@ -308,7 +311,7 @@ func weightedPercentileFromSorted(sorted []int64, weights []float64, pct float64
 }
 
 // GroupCSVRows groups parsed MetricRows by (container, day) for the all_hours stream.
-func GroupCSVRows(rows []MetricRow, orgID, clusterUUID string) map[DigestKey][]MetricRow {
+func GroupCSVRows(rows []MetricRow, orgID, clusterUUID string) map[DigestKey][]metricSample {
 	return GroupCSVRowsForStream(rows, orgID, clusterUUID, ScheduleTypeAllHours, nil)
 }
 
@@ -319,8 +322,8 @@ func GroupCSVRowsForStream(
 	orgID, clusterUUID string,
 	scheduleType ScheduleType,
 	weightFn RowWeightFunc,
-) map[DigestKey][]MetricRow {
-	groups := make(map[DigestKey][]MetricRow, len(rows)/24+1)
+) map[DigestKey][]metricSample {
+	groups := make(map[DigestKey][]metricSample, len(rows)/24+1)
 	for _, row := range rows {
 		if weightFn != nil {
 			if w := weightFn(row); w <= 0 {
@@ -341,7 +344,7 @@ func GroupCSVRowsForStream(
 			BucketDate:    bucketDate,
 			ScheduleType:  scheduleType,
 		}
-		groups[key] = append(groups[key], row)
+		groups[key] = append(groups[key], metricSampleFromRow(row))
 	}
 	return groups
 }
@@ -361,29 +364,44 @@ func BusinessHoursRowWeightFn(sched bhschedule.Schedule) RowWeightFunc {
 	}
 }
 
-// ComputeContainerDigest computes digest columns for a (container, day, schedule_type) group.
-func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResult {
-	return ComputeContainerDigestWeighted(key, rows, nil)
+// BusinessHoursSampleWeightFn builds a weight function for retained digest samples.
+func BusinessHoursSampleWeightFn(sched bhschedule.Schedule) SampleWeightFunc {
+	if !sched.Enabled {
+		return nil
+	}
+	skipZero := sched.OffHoursWeight == 0
+	return func(s metricSample) float64 {
+		w := bhschedule.ScheduleWeight(s.IntervalStart, sched)
+		if skipZero && w <= 0 {
+			return 0
+		}
+		return w
+	}
 }
 
-// ComputeContainerDigestWeighted computes digests with optional per-row weights.
-func ComputeContainerDigestWeighted(key DigestKey, rows []MetricRow, weightFn RowWeightFunc) ContainerDigestResult {
+// ComputeContainerDigest computes digest columns for a (container, day, schedule_type) group.
+func ComputeContainerDigest(key DigestKey, rows []MetricRow) ContainerDigestResult {
+	return ComputeContainerDigestWeighted(key, metricSamplesFromRows(rows), nil)
+}
+
+// ComputeContainerDigestWeighted computes digests with optional per-sample weights.
+func ComputeContainerDigestWeighted(key DigestKey, samples []metricSample, weightFn SampleWeightFunc) ContainerDigestResult {
 	var (
 		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest
 	)
 	if weightFn == nil {
-		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeUnweightedFieldDigests(rows)
+		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeUnweightedFieldDigests(samples)
 	} else {
-		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeAllWeightedFieldDigests(rows, weightFn)
+		cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD = computeAllWeightedFieldDigests(samples, weightFn)
 	}
 
 	var oomTotal int64
-	for _, r := range rows {
-		oomTotal += r.OOMCount
+	for _, s := range samples {
+		oomTotal += s.OOMCount
 	}
 
-	podCountMin, podCountMax, podCountAvg := computePodCounts(rows)
-	desiredReplicas, availableReplicas := computeReplicaCounts(rows)
+	podCountMin, podCountMax, podCountAvg := computePodCounts(samples)
+	desiredReplicas, availableReplicas := computeReplicaCounts(samples)
 
 	return ContainerDigestResult{
 		Key:               key,
@@ -487,14 +505,14 @@ func truncateToHour(t time.Time) hourKey {
 	return hourKey{t.Year(), t.Month(), t.Day(), t.Hour()}
 }
 
-func computePodCounts(rows []MetricRow) (pcMin, pcMax, pcAvg int64) {
-	if len(rows) == 0 {
+func computePodCounts(samples []metricSample) (pcMin, pcMax, pcAvg int64) {
+	if len(samples) == 0 {
 		return 0, 0, 0
 	}
 
 	hasWPC := false
-	for _, r := range rows {
-		if r.WorkloadPodCount > 0 {
+	for _, s := range samples {
+		if s.WorkloadPodCount > 0 {
 			hasWPC = true
 			break
 		}
@@ -502,25 +520,25 @@ func computePodCounts(rows []MetricRow) (pcMin, pcMax, pcAvg int64) {
 
 	if hasWPC {
 		maxPerHour := make(map[hourKey]int64)
-		for _, r := range rows {
-			h := truncateToHour(r.IntervalStart)
-			if r.WorkloadPodCount > maxPerHour[h] {
-				maxPerHour[h] = r.WorkloadPodCount
+		for _, s := range samples {
+			h := truncateToHour(s.IntervalStart)
+			if s.WorkloadPodCount > maxPerHour[h] {
+				maxPerHour[h] = s.WorkloadPodCount
 			}
 		}
 		return minMaxAvgOfMap(maxPerHour)
 	}
 
 	podsPerHour := make(map[hourKey]map[string]struct{})
-	for _, r := range rows {
-		if r.Pod == "" {
+	for _, s := range samples {
+		if s.Pod == "" {
 			continue
 		}
-		h := truncateToHour(r.IntervalStart)
+		h := truncateToHour(s.IntervalStart)
 		if podsPerHour[h] == nil {
 			podsPerHour[h] = make(map[string]struct{})
 		}
-		podsPerHour[h][r.Pod] = struct{}{}
+		podsPerHour[h][s.Pod] = struct{}{}
 	}
 	countPerHour := make(map[hourKey]int64, len(podsPerHour))
 	for h, pods := range podsPerHour {
@@ -555,21 +573,21 @@ func minMaxAvgOfMap(m map[hourKey]int64) (int64, int64, int64) {
 // available replicas. This gives an authoritative snapshot of the replica
 // spec state at the end of the digest window. Returns 0 if the column
 // was absent (all values zero).
-func computeReplicaCounts(rows []MetricRow) (desired, available int64) {
-	if len(rows) == 0 {
+func computeReplicaCounts(samples []metricSample) (desired, available int64) {
+	if len(samples) == 0 {
 		return 0, 0
 	}
 
 	// Group by hour and take max per hour.
 	desiredPerHour := make(map[hourKey]int64)
 	availPerHour := make(map[hourKey]int64)
-	for _, r := range rows {
-		h := truncateToHour(r.IntervalStart)
-		if r.DesiredReplicas > desiredPerHour[h] {
-			desiredPerHour[h] = r.DesiredReplicas
+	for _, s := range samples {
+		h := truncateToHour(s.IntervalStart)
+		if s.DesiredReplicas > desiredPerHour[h] {
+			desiredPerHour[h] = s.DesiredReplicas
 		}
-		if r.AvailableReplicas > availPerHour[h] {
-			availPerHour[h] = r.AvailableReplicas
+		if s.AvailableReplicas > availPerHour[h] {
+			availPerHour[h] = s.AvailableReplicas
 		}
 	}
 
@@ -613,16 +631,16 @@ func computeReplicaCounts(rows []MetricRow) (desired, available int64) {
 	return desired, available
 }
 
-func extractField(rows []MetricRow, fn func(MetricRow) int64) []int64 {
+func extractField(samples []metricSample, fn func(metricSample) int64) []int64 {
 	buf := fieldBufferPool.Get().([]int64)
 	buf = buf[:0]
-	if cap(buf) < len(rows) {
-		buf = make([]int64, len(rows))
+	if cap(buf) < len(samples) {
+		buf = make([]int64, len(samples))
 	} else {
-		buf = buf[:len(rows)]
+		buf = buf[:len(samples)]
 	}
-	for i, r := range rows {
-		buf[i] = fn(r)
+	for i, s := range samples {
+		buf[i] = fn(s)
 	}
 	return buf
 }
@@ -662,7 +680,7 @@ var fieldExtractPool = sync.Pool{
 	},
 }
 
-func computeUnweightedFieldDigests(rows []MetricRow) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
+func computeUnweightedFieldDigests(samples []metricSample) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
 	scratch := fieldExtractPool.Get().(*fieldExtractBuffers)
 	defer func() {
 		scratch.cpuReq = scratch.cpuReq[:0]
@@ -674,7 +692,7 @@ func computeUnweightedFieldDigests(rows []MetricRow) (cpuReqD, cpuUseD, cpuThrD,
 		fieldExtractPool.Put(scratch)
 	}()
 
-	n := len(rows)
+	n := len(samples)
 	scratch.cpuReq = appendSliceInt64(scratch.cpuReq, n)
 	scratch.cpuUse = appendSliceInt64(scratch.cpuUse, n)
 	scratch.cpuThr = appendSliceInt64(scratch.cpuThr, n)
@@ -682,13 +700,13 @@ func computeUnweightedFieldDigests(rows []MetricRow) (cpuReqD, cpuUseD, cpuThrD,
 	scratch.memUse = appendSliceInt64(scratch.memUse, n)
 	scratch.memRss = appendSliceInt64(scratch.memRss, n)
 
-	for i, r := range rows {
-		scratch.cpuReq[i] = r.CPURequestMC
-		scratch.cpuUse[i] = r.CPUUsageMC
-		scratch.cpuThr[i] = r.CPUThrottleMC
-		scratch.memReq[i] = r.MemRequestKiB
-		scratch.memUse[i] = r.MemUsageKiB
-		scratch.memRss[i] = r.MemRSSKiB
+	for i, s := range samples {
+		scratch.cpuReq[i] = s.CPURequestMC
+		scratch.cpuUse[i] = s.CPUUsageMC
+		scratch.cpuThr[i] = s.CPUThrottleMC
+		scratch.memReq[i] = s.MemRequestKiB
+		scratch.memUse[i] = s.MemUsageKiB
+		scratch.memRss[i] = s.MemRSSKiB
 	}
 
 	cpuReqD = ComputeDigest(scratch.cpuReq)
@@ -707,18 +725,18 @@ func appendSliceInt64(s []int64, n int) []int64 {
 	return make([]int64, n)
 }
 
-func computeWeightedFieldDigest(rows []MetricRow, weightFn RowWeightFunc, fieldFn func(MetricRow) int64) Digest {
+func computeWeightedFieldDigest(samples []metricSample, weightFn SampleWeightFunc, fieldFn func(metricSample) int64) Digest {
 	vals := fieldBufferPool.Get().([]int64)
 	vals = vals[:0]
 	weights := weightBufferPool.Get().([]float64)
 	weights = weights[:0]
 
-	for _, r := range rows {
-		w := weightFn(r)
+	for _, s := range samples {
+		w := weightFn(s)
 		if w <= 0 {
 			continue
 		}
-		vals = append(vals, fieldFn(r))
+		vals = append(vals, fieldFn(s))
 		weights = append(weights, w)
 	}
 	d := ComputeWeightedDigest(vals, weights)
@@ -737,54 +755,54 @@ type weightedMetricSample struct {
 	memRss int64
 }
 
-// computeAllWeightedFieldDigests evaluates row weights once and reuses them for all metric fields.
-func computeAllWeightedFieldDigests(rows []MetricRow, weightFn RowWeightFunc) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
-	samples := make([]weightedMetricSample, 0, len(rows))
-	for _, r := range rows {
-		w := weightFn(r)
+// computeAllWeightedFieldDigests evaluates sample weights once and reuses them for all metric fields.
+func computeAllWeightedFieldDigests(samples []metricSample, weightFn SampleWeightFunc) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
+	weighted := make([]weightedMetricSample, 0, len(samples))
+	for _, s := range samples {
+		w := weightFn(s)
 		if w <= 0 {
 			continue
 		}
-		samples = append(samples, weightedMetricSample{
+		weighted = append(weighted, weightedMetricSample{
 			weight: w,
-			cpuReq: r.CPURequestMC,
-			cpuUse: r.CPUUsageMC,
-			cpuThr: r.CPUThrottleMC,
-			memReq: r.MemRequestKiB,
-			memUse: r.MemUsageKiB,
-			memRss: r.MemRSSKiB,
+			cpuReq: s.CPURequestMC,
+			cpuUse: s.CPUUsageMC,
+			cpuThr: s.CPUThrottleMC,
+			memReq: s.MemRequestKiB,
+			memUse: s.MemUsageKiB,
+			memRss: s.MemRSSKiB,
 		})
 	}
-	if len(samples) == 0 {
+	if len(weighted) == 0 {
 		return Digest{}, Digest{}, Digest{}, Digest{}, Digest{}, Digest{}
 	}
-	weights := make([]float64, len(samples))
-	for i := range samples {
-		weights[i] = samples[i].weight
+	weights := make([]float64, len(weighted))
+	for i := range weighted {
+		weights[i] = weighted[i].weight
 	}
-	vals := make([]int64, len(samples))
-	for i := range samples {
-		vals[i] = samples[i].cpuReq
+	vals := make([]int64, len(weighted))
+	for i := range weighted {
+		vals[i] = weighted[i].cpuReq
 	}
 	cpuReqD = ComputeWeightedDigest(vals, weights)
-	for i := range samples {
-		vals[i] = samples[i].cpuUse
+	for i := range weighted {
+		vals[i] = weighted[i].cpuUse
 	}
 	cpuUseD = ComputeWeightedDigest(vals, weights)
-	for i := range samples {
-		vals[i] = samples[i].cpuThr
+	for i := range weighted {
+		vals[i] = weighted[i].cpuThr
 	}
 	cpuThrD = ComputeWeightedDigest(vals, weights)
-	for i := range samples {
-		vals[i] = samples[i].memReq
+	for i := range weighted {
+		vals[i] = weighted[i].memReq
 	}
 	memReqD = ComputeWeightedDigest(vals, weights)
-	for i := range samples {
-		vals[i] = samples[i].memUse
+	for i := range weighted {
+		vals[i] = weighted[i].memUse
 	}
 	memUseD = ComputeWeightedDigest(vals, weights)
-	for i := range samples {
-		vals[i] = samples[i].memRss
+	for i := range weighted {
+		vals[i] = weighted[i].memRss
 	}
 	memRssD = ComputeWeightedDigest(vals, weights)
 	return cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD

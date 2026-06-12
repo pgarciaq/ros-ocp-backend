@@ -16,11 +16,11 @@ func buildBusinessHoursGroups(
 	rows []MetricRow,
 	orgID, clusterUUID string,
 	cache *bhschedule.Cache,
-) map[DigestKey][]MetricRow {
+) map[DigestKey][]metricSample {
 	if cache == nil {
 		return nil
 	}
-	out := make(map[DigestKey][]MetricRow, len(rows)/24+1)
+	out := make(map[DigestKey][]metricSample, len(rows)/24+1)
 	for _, row := range rows {
 		sched := cache.Resolve(row.Namespace)
 		if !sched.Enabled {
@@ -44,13 +44,13 @@ func buildBusinessHoursGroups(
 			BucketDate:    bucketDate,
 			ScheduleType:  ScheduleTypeBusinessHours,
 		}
-		out[key] = append(out[key], row)
+		out[key] = append(out[key], metricSampleFromRow(row))
 	}
 	return out
 }
 
-func mergeDigestGroups(all, bh map[DigestKey][]MetricRow) map[DigestKey][]MetricRow {
-	merged := make(map[DigestKey][]MetricRow, len(all)+len(bh))
+func mergeDigestGroups(all, bh map[DigestKey][]metricSample) map[DigestKey][]metricSample {
+	merged := make(map[DigestKey][]metricSample, len(all)+len(bh))
 	for k, g := range all {
 		merged[k] = g
 	}
@@ -60,7 +60,7 @@ func mergeDigestGroups(all, bh map[DigestKey][]MetricRow) map[DigestKey][]Metric
 	return merged
 }
 
-func rowWeightFnForDigestKey(key DigestKey, cache *bhschedule.Cache) RowWeightFunc {
+func rowWeightFnForDigestKey(key DigestKey, cache *bhschedule.Cache) SampleWeightFunc {
 	if key.ScheduleType != ScheduleTypeBusinessHours || cache == nil {
 		return nil
 	}
@@ -68,7 +68,7 @@ func rowWeightFnForDigestKey(key DigestKey, cache *bhschedule.Cache) RowWeightFu
 	if !sched.Enabled {
 		return nil
 	}
-	return BusinessHoursRowWeightFn(sched)
+	return BusinessHoursSampleWeightFn(sched)
 }
 
 // pruneBusinessHoursDigests removes business_hours digest rows when no enabled schedule applies
@@ -80,7 +80,7 @@ func pruneBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, c
 func upsertContainerDigests(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	grouped map[DigestKey][]MetricRow,
+	grouped map[DigestKey][]metricSample,
 	scheduleCache *bhschedule.Cache,
 ) error {
 	txDigests, err := pool.Begin(ctx)
@@ -103,7 +103,7 @@ func upsertContainerDigests(
 func upsertContainerDigestsOnSender(
 	ctx context.Context,
 	sender pgxBatchSender,
-	grouped map[DigestKey][]MetricRow,
+	grouped map[DigestKey][]metricSample,
 	scheduleCache *bhschedule.Cache,
 ) error {
 	digestKeys := make([]DigestKey, 0, len(grouped))

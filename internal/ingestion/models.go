@@ -71,6 +71,48 @@ func (m *MetricRow) HasGPU() bool {
 	return m.AcceleratorModelName != ""
 }
 
+// metricSample holds per-sample measurements retained between digest group flushes.
+// Container/workload metadata lives in DigestKey; convert from MetricRow once at append.
+type metricSample struct {
+	IntervalStart    time.Time
+	Pod              string
+	CPURequestMC     int64
+	CPUUsageMC       int64
+	CPUThrottleMC    int64
+	MemRequestKiB    int64
+	MemUsageKiB      int64
+	MemRSSKiB        int64
+	OOMCount         int64
+	WorkloadPodCount int64
+	DesiredReplicas  int64
+	AvailableReplicas int64
+}
+
+func metricSampleFromRow(row MetricRow) metricSample {
+	return metricSample{
+		IntervalStart:     row.IntervalStart,
+		Pod:               row.Pod,
+		CPURequestMC:      row.CPURequestMC,
+		CPUUsageMC:        row.CPUUsageMC,
+		CPUThrottleMC:     row.CPUThrottleMC,
+		MemRequestKiB:     row.MemRequestKiB,
+		MemUsageKiB:       row.MemUsageKiB,
+		MemRSSKiB:         row.MemRSSKiB,
+		OOMCount:          row.OOMCount,
+		WorkloadPodCount:  row.WorkloadPodCount,
+		DesiredReplicas:   row.DesiredReplicas,
+		AvailableReplicas: row.AvailableReplicas,
+	}
+}
+
+func metricSamplesFromRows(rows []MetricRow) []metricSample {
+	samples := make([]metricSample, len(rows))
+	for i, row := range rows {
+		samples[i] = metricSampleFromRow(row)
+	}
+	return samples
+}
+
 // DigestKey uniquely identifies a container-day and schedule stream for aggregation.
 type DigestKey struct {
 	OrgID         string

@@ -71,7 +71,7 @@ func EnsureDigestPartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthSt
 	return nil
 }
 
-func ensureDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.Pool, grouped map[DigestKey][]MetricRow) error {
+func ensureDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.Pool, grouped map[DigestKey][]metricSample) error {
 	months := map[time.Time]struct{}{}
 	for k := range grouped {
 		monthStart := time.Date(k.BucketDate.Year(), k.BucketDate.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -86,7 +86,7 @@ func ensureDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.Pool, grou
 }
 
 func appendGroupedRow(
-	groups map[DigestKey][]MetricRow,
+	groups map[DigestKey][]metricSample,
 	row MetricRow,
 	orgID, clusterUUID string,
 	scheduleType ScheduleType,
@@ -107,11 +107,11 @@ func appendGroupedRow(
 		WorkloadType: row.WorkloadType, ContainerName: row.ContainerName,
 		BucketDate: bucketDate, ScheduleType: scheduleType,
 	}
-	groups[key] = append(groups[key], row)
+	groups[key] = append(groups[key], metricSampleFromRow(row))
 }
 
 func appendBusinessHoursRow(
-	groups map[DigestKey][]MetricRow,
+	groups map[DigestKey][]metricSample,
 	row MetricRow,
 	orgID, clusterUUID string,
 	cache *bhschedule.Cache,
@@ -126,7 +126,7 @@ func appendBusinessHoursRow(
 	appendGroupedRow(groups, row, orgID, clusterUUID, ScheduleTypeBusinessHours, BusinessHoursRowWeightFn(sched))
 }
 
-func digestGroupCount(all, bh map[DigestKey][]MetricRow) int {
+func digestGroupCount(all, bh map[DigestKey][]metricSample) int {
 	return len(all) + len(bh)
 }
 
@@ -141,7 +141,7 @@ func ingestFlushBatchSize() int {
 func flushDigestGroupBatch(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	groupedAll, groupedBH map[DigestKey][]MetricRow,
+	groupedAll, groupedBH map[DigestKey][]metricSample,
 	scheduleCache *bhschedule.Cache,
 	orgID, clusterUUID string,
 ) error {
@@ -178,8 +178,8 @@ func parseAndDigestCSVStream(
 	orgID, clusterUUID string,
 	opts ParseDigestOptions,
 ) (int, error) {
-	groupedAll := make(map[DigestKey][]MetricRow, 256)
-	groupedBH := make(map[DigestKey][]MetricRow)
+	groupedAll := make(map[DigestKey][]metricSample, 256)
+	groupedBH := make(map[DigestKey][]metricSample)
 	sampleBatch := make([]MetricRow, 0, streamSampleFlushRows)
 	var deferredSamples []MetricRow
 	useSingleIngestTx := false
