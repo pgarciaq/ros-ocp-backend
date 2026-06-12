@@ -233,24 +233,23 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 	return idx, nil
 }
 
-// ParseNamespaceCSVRows reads a namespace metrics CSV and converts numeric
-// columns to integer types (millicores, KiB). Malformed rows are skipped.
-func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
+// forEachNamespaceCSVRow parses namespace CSV rows one at a time without retaining a full-slice copy.
+func forEachNamespaceCSVRow(r io.Reader, fn func(NamespaceMetricRow) error) (int, error) {
 	reader := csv.NewReader(r)
 	header, err := reader.Read()
 	if err != nil {
 		if err == io.EOF {
-			return nil, nil
+			return 0, nil
 		}
-		return nil, fmt.Errorf("ParseNamespaceCSVRows: reading header: %w", err)
+		return 0, fmt.Errorf("ParseNamespaceCSVRows: reading header: %w", err)
 	}
 
 	idx, err := buildNSColumnIndex(header)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	var rows []NamespaceMetricRow
+	count := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
@@ -258,7 +257,7 @@ func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("ParseNamespaceCSVRows: reading line %d: %w", lineNum+1, err)
+			return count, fmt.Errorf("ParseNamespaceCSVRows: reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 
@@ -271,9 +270,23 @@ func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
 			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, valErr)
 			continue
 		}
-		rows = append(rows, row)
+		if err := fn(row); err != nil {
+			return count, err
+		}
+		count++
 	}
-	return rows, nil
+	return count, nil
+}
+
+// ParseNamespaceCSVRows reads a namespace metrics CSV and converts numeric
+// columns to integer types (millicores, KiB). Malformed rows are skipped.
+func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
+	var rows []NamespaceMetricRow
+	_, err := forEachNamespaceCSVRow(r, func(row NamespaceMetricRow) error {
+		rows = append(rows, row)
+		return nil
+	})
+	return rows, err
 }
 
 func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, error) {
@@ -834,9 +847,14 @@ func upsertNamespaceUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows [
 		return nil
 	}
 
-	batch := &pgx.Batch{}
-	for _, r := range rows {
-		batch.Queue(`
+	for start := 0; start < len(rows); start += maxPgxBatchQueue {
+		end := start + maxPgxBatchQueue
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := &pgx.Batch{}
+		for _, r := range rows[start:end] {
+			batch.Queue(`
 			INSERT INTO namespace_usage_samples (
 				sample_time, org_id, cluster_uuid, namespace,
 				cpu_usage_mc, mem_usage_kib
@@ -845,16 +863,11 @@ func upsertNamespaceUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows [
 			DO UPDATE SET
 				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
 				mem_usage_kib = EXCLUDED.mem_usage_kib`,
-			r.IntervalStart, orgID, clusterUUID, r.Namespace,
-			r.CPUUsageAvgMC, r.MemUsageAvgKiB,
-		)
-	}
-
-	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range rows {
-		if _, err := br.Exec(); err != nil {
+				r.IntervalStart, orgID, clusterUUID, r.Namespace,
+				r.CPUUsageAvgMC, r.MemUsageAvgKiB,
+			)
+		}
+		if err := flushQueuedBatch(ctx, pool, batch, end-start); err != nil {
 			return fmt.Errorf("upsert namespace usage sample: %w", err)
 		}
 	}
@@ -885,59 +898,11 @@ func EnsureNamespaceDigestPartitions(ctx context.Context, pool *pgxpool.Pool, ke
 }
 
 // ProcessNamespaceCSVToDigests is the namespace ingestion pipeline:
-// parse CSV -> group by namespace+day -> compute digests -> upsert to DB.
+// stream CSV rows -> group by namespace+day -> compute digests -> upsert to DB.
 func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseNamespaceCSVRows(r)
+	_, err := parseAndDigestNamespaceCSVStream(ctx, pool, r, orgID, clusterUUID)
 	if err != nil {
 		return fmt.Errorf("parse namespace CSV: %w", err)
 	}
-	if len(rows) == 0 {
-		logging.ForOrg(orgID, clusterUUID).Info("ProcessNamespaceCSVToDigests: no rows parsed")
-		return nil
-	}
-
-	// Persist raw samples for namespace boxplot computation at query time.
-	EnsureNamespaceSamplePartitions(ctx, pool, rows)
-	if err := upsertNamespaceUsageSamples(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("upsert namespace usage samples: %w", err)
-	}
-
-	usageRows := dedupeNamespaceRowsForUsageDigest(rows)
-	groupedAll := GroupNamespaceCSVRows(usageRows, orgID, clusterUUID)
-
-	var scheduleCache *bhschedule.Cache
-	if BusinessHoursAggregationEnabled() {
-		var loadErr error
-		scheduleCache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
-		if loadErr != nil {
-			return fmt.Errorf("load business hours schedules: %w", loadErr)
-		}
-		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
-			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
-				return err
-			}
-		}
-	}
-	groupedBH := buildNamespaceBusinessHoursGroups(usageRows, orgID, clusterUUID, scheduleCache)
-	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: %d rows -> %d all_hours groups, %d business_hours groups",
-		len(rows), len(groupedAll), len(groupedBH))
-
-	digestKeys := make([]NamespaceDigestKey, 0, len(grouped))
-	for k := range grouped {
-		digestKeys = append(digestKeys, k)
-	}
-	EnsureNamespaceDigestPartitions(ctx, pool, digestKeys)
-
-	if err := upsertNamespaceDigests(ctx, pool, grouped, scheduleCache); err != nil {
-		return err
-	}
-
-	if err := UpsertNamespaceQuotaDigestsFromRows(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("upsert namespace quota digests: %w", err)
-	}
-
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: upserted %d digests",
-		len(grouped))
 	return nil
 }

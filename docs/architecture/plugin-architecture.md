@@ -43,7 +43,8 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 **GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins):
 
-- `ParseAndDigestCSV` returns `[]MetricRow`.
+- Container and namespace CSV ingest use streaming parsers ([`pipeline_stream.go`](../../internal/ingestion/pipeline_stream.go), [`namespace_stream.go`](../../internal/ingestion/namespace_stream.go)) that flush usage samples and digest groups incrementally.
+- `ParseAndDigestCSV` returns `[]MetricRow` (nil on the streaming path).
 - **Plugin path:** `IngestHook` (`gpu`, `node`) runs `UpsertGPUDigests` / `UpsertNodeDigests`.
 - **Fallback path:** upserts run only when `plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`.
 - `ingestion.ProcessCSVToDigests` remains for CLI/tools/tests and **always** chains GPU + node upserts (no registry awareness).

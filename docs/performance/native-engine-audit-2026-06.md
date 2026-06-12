@@ -336,13 +336,16 @@ Between flushes, `groupedAll` and `groupedBH` stored full `MetricRow` (~456 byte
 
 **Impact:** ~5-10x RAM reduction during ingest grouping.
 
-### B-2. Namespace CSV not streaming (P1) — **Open**
+### B-2. Namespace CSV not streaming (P1) — **Implemented**
 
-**Location:** `internal/ingestion/` -- `ParseNamespaceCSVRows`
+**Location:** `internal/ingestion/namespace_stream.go` — `forEachNamespaceCSVRow`, `parseAndDigestNamespaceCSVStream`
 
-Namespace CSV is fully materialized into `[]NamespaceMetricRow` before grouping, unlike the container path which streams.
+Namespace CSV was fully materialized into `[]NamespaceMetricRow` before grouping, unlike the container path which streams.
 
-**Fix:** Mirror `forEachCSVRow` + incremental flush.
+**Fix implemented (2026-06):**
+- Added `forEachNamespaceCSVRow` + `parseAndDigestNamespaceCSVStream` mirroring container `forEachCSVRow` / `parseAndDigestCSVStream`.
+- Usage samples flush every 1000 rows; digest groups flush at `ROS_INGEST_FLUSH_BATCH_SIZE`.
+- Quota digests accumulate incrementally per row instead of requiring a full-row slice.
 
 ### B-3. No string interning for repeated keys (P2) — **Open**
 
@@ -717,7 +720,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | D-3 | DB Config | Per-table autovacuum tuning (migration for both modes; chart tuning for on-prem) | Implemented |
 | D-4 | DB Config | Fix node_recommendations retention (both modes -- app bug) | Implemented |
 | D-5 | DB Config | Add namespace/PVC retention (both modes -- app bug) | Implemented |
-| B-2 | Ingest | Stream namespace CSV | Open |
+| B-2 | Ingest | Stream namespace CSV | Implemented |
 | B-4 | Ingest | Remove per-row Prometheus gauge | Implemented |
 | C-2 | Ops | VM CSV logs: Debug + counter | Implemented |
 | C-3 | Ops | Audit high-cardinality Prometheus labels | Implemented |
