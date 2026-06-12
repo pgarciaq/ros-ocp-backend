@@ -62,6 +62,8 @@ mkdir -p "$DOCS_DIR/architecture"
 for f in "$ROOT_DIR/docs/architecture/"*.md; do
     # Operator-facing notification catalog is maintained in docs-site/ (not copied from docs/).
     [ "$(basename "$f")" = "notification-codes.md" ] && continue
+    # Public decay-weights page uses docs-site/ paths and {{ git_branch }} GitHub links.
+    [ "$(basename "$f")" = "decay-weights.md" ] && continue
     if [ -f "$f" ]; then
         cp "$f" "$DOCS_DIR/architecture/"
         rewrite_github_links "$DOCS_DIR/architecture/$(basename "$f")"
@@ -73,14 +75,7 @@ mkdir -p "$DOCS_DIR/architecture/charts"
 if compgen -G "$ROOT_DIR/docs/performance/charts/decay-weights-*.png" > /dev/null; then
     cp "$ROOT_DIR/docs/performance/charts"/decay-weights-*.png "$DOCS_DIR/architecture/charts/"
 fi
-if [ -f "$DOCS_DIR/architecture/decay-weights.md" ]; then
-    sed -i \
-        -e 's|](../performance/charts/|](charts/|g' \
-        -e 's|](../adr/|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/|g' \
-        -e 's|](../performance/native-engine-audit|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/native-engine-audit|g' \
-        "$DOCS_DIR/architecture/decay-weights.md"
-    rewrite_github_links "$DOCS_DIR/architecture/decay-weights.md"
-fi
+# decay-weights.md is maintained in docs-site/architecture/ (not copied from docs/).
 
 # Operations docs
 mkdir -p "$DOCS_DIR/operations"

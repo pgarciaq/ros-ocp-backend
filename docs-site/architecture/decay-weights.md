@@ -7,13 +7,11 @@ recommendations more than older data within the same term window. Without decay,
 a single spike from two weeks ago counts the same as yesterday's usage — which can
 produce oversized or sluggish recommendations when workloads change.
 
-Decay is applied in [`WeightedPercentile()`](../../internal/engine/decay.go) and
-[`MultiWeightedPercentileWithExtras()`](../../internal/engine/decay.go) when computing
-CPU, memory, node utilization, and business-hours aggregates.
-
-For how decay fits into the full sizing pipeline, see
-[Recommendation Math](recommendation-math.md). For term defaults and env overrides,
-see [Configurability Reference](configurability.md#term-windows-all-plugins).
+Decay is applied when computing weighted percentiles for CPU, memory, node
+utilization, and business-hours aggregates. For how decay fits into the full sizing
+pipeline, see [Recommendation Math](recommendation-math.md#decay-weighting). For
+term defaults and env overrides, see
+[Configurability Reference](configurability.md#term-windows-all-plugins).
 
 ---
 
@@ -44,8 +42,9 @@ The engine measures age in **continuous hours** from each digest row's
 This avoids jumps at midnight and keeps weights smooth across DST transitions.
 See [ADR-0204](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0204-continuous-hour-decay-vs-calendar-day-windows.md).
 
-Implementation: [`DecayWeight()`](../../internal/engine/decay.go),
-[`decay_table.go`](../../internal/engine/decay_table.go).
+Implementation:
+[`DecayWeight()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay.go),
+[`decay_table.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay_table.go).
 
 ---
 
@@ -80,7 +79,7 @@ func DeriveDecayHalfLifeHours(windowDays int) float64 {
 ```
 
 Plugin compiled defaults (when no tenant row exists) are defined in
-[`term_config.go`](../../internal/engine/term_config.go) — for example container
+[`term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go) — for example container
 medium term: 7-day window, 168-hour half-life.
 
 ### Short term: no decay
@@ -180,8 +179,10 @@ PUT /api/ros-ocp/v1/recommendations/openshift/settings/terms?recommendation_type
 `decay_halflife_hours` accepts `0` (no decay) through `8760` (one year). Negative
 values and values above 8760 are rejected with `422 Unprocessable Entity`.
 
-Handler: [`PutTermSettings()`](../../internal/api/handlers_terms.go).
-VM terms use [`PUT /settings/vm/terms`](../../internal/api/handlers_vm_settings.go)
+Handler:
+[`PutTermSettings()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_terms.go).
+VM terms use
+[`PUT /settings/vm/terms`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_settings.go)
 with the same field.
 
 ### Admin environment variables
@@ -201,7 +202,8 @@ Examples:
 | `ROS_TERMS_PVC_MEDIUM_DECAY_HALFLIFE_HOURS` | 0 | PVC medium (no decay) |
 
 When an admin env var is set, tenant PUTs for that field return `422` with
-`locked_terms`. See [Configurability Reference](configurability.md#term-windows-all-plugins).
+`locked_terms`. See
+[Configurability Reference](configurability.md#term-windows-all-plugins).
 
 ### Auto-derive behavior
 
@@ -212,8 +214,6 @@ If a tenant sets `window_days` but omits `decay_halflife_hours` (NULL):
 3. Explicit `decay_halflife_hours` in the PUT body always wins over auto-derive
 4. Admin env var overrides both tenant DB values and auto-derive on read
 
-Test coverage: [`TestLoadTermConfig_AutoDerivesDecayHalfLife_WhenNull`](../../internal/engine/term_config_test.go).
-
 ---
 
 ## Performance: Precomputed Lookup Tables
@@ -221,7 +221,7 @@ Test coverage: [`TestLoadTermConfig_AutoDerivesDecayHalfLife_WhenNull`](../../in
 Decay weights are **not** computed with `math.Exp` on every digest row at runtime
 for the common case. `DecayWeight()` quantizes age and half-life to integer hours
 and looks up precomputed values from lazily built tables in
-[`decay_table.go`](../../internal/engine/decay_table.go):
+[`decay_table.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay_table.go):
 
 - Tables keyed by integer `halfLifeHours` (e.g. `168`, `360` from `window_days × 12`)
 - Built once per distinct half-life via `sync.Map` (microseconds, 2–3 tables typical)
@@ -229,8 +229,6 @@ and looks up precomputed values from lazily built tables in
 
 This keeps the fused digest walk in `MultiWeightedPercentileWithExtras` free of
 per-row transcendental math for standard tenant configurations.
-
-See also: [Native engine performance audit](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/native-engine-audit-2026-06.md).
 
 ---
 
