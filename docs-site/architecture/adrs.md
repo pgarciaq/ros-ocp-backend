@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **289 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **290 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -51,6 +51,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0290](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0290-max-daily-p95-for-idle-classification.md) | Max-of-daily-P95 for idle classification | O(N) idle check; conservative vs exact window P95 (Q4) |
 | [0291](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0291-integer-micro-cents-savings-computation.md) | Integer micro-cents savings computation | Unified fixed-point savings math; eliminates float64 hot path (P1-1) |
 | [0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md) | Digest-based percentile-band plots | Replaces query-time sample boxplots; separate `ROS_SAMPLE_RETENTION_DAYS` (E-2) |
+| [0293](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0293-engine-only-notification-deduplication.md) | Engine-only notification emission | Detail: per-engine maps only; list: `notification_codes` array (A-2) |
 
 ## Domains covered
 

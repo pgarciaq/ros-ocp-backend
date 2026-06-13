@@ -4,13 +4,12 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
-	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // ListResponse is the slim Kruize-compatible list item. It preserves the JSON
-// fields the list UI reads (current config, short_term cost variation, top-level
-// notifications) while omitting plots, business_hours, duration_in_hours, and
-// per-term/engine notification duplication.
+// fields the list UI reads (current config, short_term cost variation,
+// notification_codes) while omitting plots, business_hours, duration_in_hours,
+// and per-engine notification maps.
 type ListResponse struct {
 	ID                      string                        `json:"id"`
 	ClusterAlias            string                        `json:"cluster_alias"`
@@ -39,12 +38,12 @@ type ListResponse struct {
 
 // ListRecommendations wraps list-level recommendation data.
 type ListRecommendations struct {
-	Current                 *DetailResourceConfig                      `json:"current,omitempty"`
-	Replicas                *ReplicaInfo                               `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
-	MonitoringEndTime       string                                     `json:"monitoring_end_time"`
-	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	RecommendationTerms     map[string]ListTerm                        `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig `json:"current,omitempty"`
+	Replicas                *ReplicaInfo        `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount  `json:"estimated_monthly_savings,omitempty"`
+	MonitoringEndTime       string              `json:"monitoring_end_time"`
+	NotificationCodes       []int16             `json:"notification_codes,omitempty"`
+	RecommendationTerms     map[string]ListTerm `json:"recommendation_terms"`
 }
 
 // ListTerm holds engine recommendations for a single term in list responses.
@@ -102,8 +101,8 @@ func BuildListResponse(native *NativeContainerResult, monitoringEndTime time.Tim
 		MonitoringEndTime:       metStr,
 		RecommendationTerms:     buildListRecommendationTerms(native.Recommendations, opts),
 	}
-	if notifs := notifications.MapToKruizeFormat(aggregateNotificationCodes(native.Recommendations)); len(notifs) > 0 {
-		recs.Notifications = notifs
+	if codes := aggregateNotificationCodes(native.Recommendations); len(codes) > 0 {
+		recs.NotificationCodes = codes
 	}
 
 	resp := &ListResponse{

@@ -257,8 +257,8 @@ Each engine object includes:
 | `current_*` | Current requests/limits |
 | `variation_*_pct` | Percent change vs current (negative = downsizing) |
 | `confidence_level` | 0.0–1.0 — see [Confidence](#confidence-score) |
-| `notifications` | Map keyed by code string — see [Notifications](#notifications) |
-| `notification_codes` | Raw int16 array (list view) |
+| `notifications` | Map keyed by code string on **detail** `recommendation_engines.<engine>` only — see [Notifications](#notifications) |
+| `notification_codes` | Deduplicated int16 array on **list** rows (`recommendations.notification_codes`) |
 
 ### Savings fields
 
@@ -277,17 +277,31 @@ savings fields may be absent.
 
 ### Notifications
 
-Notifications use a Kruize-compatible map:
+**Detail** responses emit notification maps only on each engine:
 
 ```json
-"notifications": {
-  "5": {
-    "type": "INFO",
-    "message": "Workload uses less than 1% of requested resources",
-    "code": 5
+"recommendation_engines": {
+  "cost": {
+    "notifications": {
+      "5": {
+        "type": "INFO",
+        "message": "Workload uses less than 1% of requested resources",
+        "code": 5
+      }
+    }
   }
 }
 ```
+
+**List** responses expose deduplicated codes for badges:
+
+```json
+"recommendations": {
+  "notification_codes": [1, 5, 7]
+}
+```
+
+Resolve messages via `GET .../notification-codes` or a cached catalog.
 
 See [Notification codes reference](architecture/notification-codes.md) for the complete catalog (codes 1–54).
 The table below is a summary; VM codes 37–54 and reserved codes are in the full reference.

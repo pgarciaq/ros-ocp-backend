@@ -283,13 +283,15 @@ Each page row was assembled twice: `assembleNativeResults` built `NativeContaine
 **Fix implemented (2026-06):**
 - Introduced slim list DTO via `BuildListResponse` (table columns + codes only). List APIs skip `BuildDetailResponse`; detail-by-ID still uses full assembly.
 
-### A-2. Notification triplication in JSON (P0) — **Open**
+### A-2. Notification triplication in JSON (P0) — **Implemented**
 
-**Location:** `internal/model/detail_response.go:164`
+**Location:** `internal/model/detail_response.go`
 
-The same notification codes are copied to three JSON levels: `recommendations.notifications`, `recommendation_terms.<term>.notifications`, and `recommendation_engines.<engine>.notifications`. This adds several KB per container redundantly.
+The same notification codes were copied to three JSON levels: `recommendations.notifications`, `recommendation_terms.<term>.notifications`, and `recommendation_engines.<engine>.notifications`. This added several KB per container redundantly.
 
-**Fix:** Emit notifications at one level only (engine); or return `notification_codes: [1,7]` in list and let the UI resolve via the catalog endpoint.
+**Fix implemented (2026-06):**
+- Detail: emit notifications at engine level only (ADR-0293).
+- List: `recommendations.notification_codes` integer array; UI resolves via catalog endpoint.
 
 ### A-3. `Collection.Data []interface{}` forces boxing (P1) — **Open**
 
@@ -709,7 +711,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | P0-3 | DB | Defer org metadata refresh to end of reconcile | 50-90% write time for large orgs | Implemented |
 | P0-4 | DB | Migrate list API pagination to org_container_keys | ~1000x on page query | Implemented |
 | A-1 | API | Slim list DTO (skip BuildDetailResponse) | 10-30ms CPU per page | Implemented |
-| A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Open |
+| A-2 | API | Notification deduplication in JSON | 30-50% JSON payload size | Implemented |
 | B-1 | Ingest | Slim digest group storage | 5-10x less peak RAM | Implemented |
 | C-1 | Ops | Fix readiness probe to use /readyz; liveness on /healthz | Correctness | Resolved |
 

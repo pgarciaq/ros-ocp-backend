@@ -141,13 +141,18 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 	require.NotNil(t, detail.Recommendations.Current.Limits.Memory)
 	assert.InDelta(t, 2.0, detail.Recommendations.Current.Limits.Memory.Amount, 0.001)
 
-	// Verify term-level notifications (aggregated from engines)
-	require.NotNil(t, shortTerm.Notifications)
-	assert.Contains(t, shortTerm.Notifications, "1")
-
-	// Verify top-level notifications (aggregated from all terms)
-	require.NotNil(t, detail.Recommendations.Notifications)
-	assert.Contains(t, detail.Recommendations.Notifications, "1")
+	// Term and top-level notification maps are omitted (engine-level only).
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+	recsRaw := raw["recommendations"].(map[string]interface{})
+	_, hasTopNotifs := recsRaw["notifications"]
+	assert.False(t, hasTopNotifs, "top-level notifications should be omitted")
+	termsRaw := recsRaw["recommendation_terms"].(map[string]interface{})
+	stRaw := termsRaw["short_term"].(map[string]interface{})
+	_, hasTermNotifs := stRaw["notifications"]
+	assert.False(t, hasTermNotifs, "term notifications should be omitted")
 }
 
 func TestBuildDetailResponse_JSONKeys(t *testing.T) {
@@ -387,9 +392,17 @@ func TestBuildDetailResponse_NoNotifications(t *testing.T) {
 	}
 
 	detail := BuildDetailResponse(native, nil, time.Time{})
-	assert.Nil(t, detail.Recommendations.Notifications, "top-level notifications should be nil when empty")
-	shortTerm := detail.Recommendations.RecommendationTerms["short_term"]
-	assert.Nil(t, shortTerm.Notifications, "term notifications should be nil when empty")
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+	recsRaw := raw["recommendations"].(map[string]interface{})
+	_, hasTopNotifs := recsRaw["notifications"]
+	assert.False(t, hasTopNotifs, "top-level notifications should be omitted")
+	termsRaw := recsRaw["recommendation_terms"].(map[string]interface{})
+	stRaw := termsRaw["short_term"].(map[string]interface{})
+	_, hasTermNotifs := stRaw["notifications"]
+	assert.False(t, hasTermNotifs, "term notifications should be omitted")
 }
 
 func TestBuildNamespaceDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
@@ -517,10 +530,17 @@ func TestBuildNamespaceDetailResponse_StructureMatchesKruizeShape(t *testing.T) 
 	require.NotNil(t, detail.Recommendations.Current.Limits.Memory)
 	assert.InDelta(t, 2.0, detail.Recommendations.Current.Limits.Memory.Amount, 0.001)
 
-	require.NotNil(t, shortTerm.Notifications)
-	assert.Contains(t, shortTerm.Notifications, "1")
-	require.NotNil(t, detail.Recommendations.Notifications)
-	assert.Contains(t, detail.Recommendations.Notifications, "1")
+	b, err := json.Marshal(detail)
+	require.NoError(t, err)
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+	recsRaw := raw["recommendations"].(map[string]interface{})
+	_, hasTopNotifs := recsRaw["notifications"]
+	assert.False(t, hasTopNotifs)
+	termsRaw := recsRaw["recommendation_terms"].(map[string]interface{})
+	stRaw := termsRaw["short_term"].(map[string]interface{})
+	_, hasTermNotifs := stRaw["notifications"]
+	assert.False(t, hasTermNotifs)
 }
 
 func TestBuildNamespaceDetailResponse_JSONKeys(t *testing.T) {

@@ -74,23 +74,21 @@ type ReplicaInfo struct {
 	Source    string `json:"source,omitempty"`
 }
 
-// DetailRecommendations wraps the term-level data with monitoring_end_time,
-// current resource config, and top-level notifications.
+// DetailRecommendations wraps the term-level data with monitoring_end_time
+// and current resource config. Notifications live on each engine only.
 type DetailRecommendations struct {
-	Current                 *DetailResourceConfig                      `json:"current,omitempty"`
-	Replicas                *ReplicaInfo                               `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
-	MonitoringEndTime       string                                     `json:"monitoring_end_time"`
-	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	RecommendationTerms     map[string]DetailTerm                      `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig `json:"current,omitempty"`
+	Replicas                *ReplicaInfo        `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount  `json:"estimated_monthly_savings,omitempty"`
+	MonitoringEndTime       string              `json:"monitoring_end_time"`
+	RecommendationTerms     map[string]DetailTerm `json:"recommendation_terms"`
 }
 
 // DetailTerm holds plots and engine recommendations for a single term.
 type DetailTerm struct {
-	DurationInHours       float64                                    `json:"duration_in_hours"`
-	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	Plots                 *NativePlot                                `json:"plots,omitempty"`
-	RecommendationEngines *DetailEngines                             `json:"recommendation_engines,omitempty"`
+	DurationInHours       float64         `json:"duration_in_hours"`
+	Plots                 *NativePlot     `json:"plots,omitempty"`
+	RecommendationEngines *DetailEngines  `json:"recommendation_engines,omitempty"`
 }
 
 // DetailEngines groups cost and performance engine recommendations in the
@@ -143,7 +141,7 @@ var termDurationHours = map[string]float64{
 
 // BuildDetailResponse maps a NativeContainerResult into the Kruize-compatible
 // DetailResponse structure, embedding boxplot data, monitoring_end_time,
-// current resource config, and aggregated notifications.
+// current resource config, and per-engine notifications.
 func BuildDetailResponse(
 	native *NativeContainerResult,
 	plots map[string]*NativePlot,
@@ -154,22 +152,11 @@ func BuildDetailResponse(
 		replicas = native.Replicas
 	}
 	terms := make(map[string]DetailTerm)
-	allNotifications := map[string]notifications.NotificationEntry{}
 	var current *DetailResourceConfig
 
 	for termKey, termRec := range native.Recommendations {
 		costEngine := toDetailEngine(termRec.Cost)
 		perfEngine := toDetailEngine(termRec.Performance)
-
-		// Aggregate term-level notifications from both engines.
-		termNotifs := map[string]notifications.NotificationEntry{}
-		mergeNotifications(termNotifs, costEngine)
-		mergeNotifications(termNotifs, perfEngine)
-
-		// Bubble up to top-level.
-		for k, v := range termNotifs {
-			allNotifications[k] = v
-		}
 
 		dt := DetailTerm{
 			DurationInHours: termDurationHours[termKey],
@@ -177,9 +164,6 @@ func BuildDetailResponse(
 				Cost:        costEngine,
 				Performance: perfEngine,
 			},
-		}
-		if len(termNotifs) > 0 {
-			dt.Notifications = termNotifs
 		}
 		if p, ok := plots[termKey]; ok {
 			dt.Plots = p
@@ -206,9 +190,6 @@ func BuildDetailResponse(
 		EstimatedMonthlySavings: native.EstimatedMonthlySavings,
 		MonitoringEndTime:       metStr,
 		RecommendationTerms:     terms,
-	}
-	if len(allNotifications) > 0 {
-		recs.Notifications = allNotifications
 	}
 
 	resp := &DetailResponse{
@@ -354,15 +335,6 @@ func pctToValue(pct *int32) *DetailResourceValue {
 	return &DetailResourceValue{Amount: float64(*pct), Format: "percent"}
 }
 
-func mergeNotifications(dst map[string]notifications.NotificationEntry, eng *DetailEngine) {
-	if eng == nil || eng.Notifications == nil {
-		return
-	}
-	for k, v := range eng.Notifications {
-		dst[k] = v
-	}
-}
-
 // NamespaceDetailResponse is the Kruize-compatible response for namespace
 // recommendations. It mirrors DetailResponse but without container-specific
 // fields (Container, Workload, WorkloadType, GPU).
@@ -385,7 +357,6 @@ func BuildNamespaceDetailResponse(
 	monitoringEndTime time.Time,
 ) *NamespaceDetailResponse {
 	terms := make(map[string]DetailTerm)
-	allNotifications := map[string]notifications.NotificationEntry{}
 	var current *DetailResourceConfig
 
 	for termKey, termVal := range native.Recommendations {
@@ -400,23 +371,12 @@ func BuildNamespaceDetailResponse(
 		costEngine := toDetailEngine(termRec.Cost)
 		perfEngine := toDetailEngine(termRec.Performance)
 
-		termNotifs := map[string]notifications.NotificationEntry{}
-		mergeNotifications(termNotifs, costEngine)
-		mergeNotifications(termNotifs, perfEngine)
-
-		for k, v := range termNotifs {
-			allNotifications[k] = v
-		}
-
 		dt := DetailTerm{
 			DurationInHours: termDurationHours[termKey],
 			RecommendationEngines: &DetailEngines{
 				Cost:        costEngine,
 				Performance: perfEngine,
 			},
-		}
-		if len(termNotifs) > 0 {
-			dt.Notifications = termNotifs
 		}
 		if p, ok := plots[termKey]; ok {
 			dt.Plots = p
@@ -440,9 +400,6 @@ func BuildNamespaceDetailResponse(
 		Current:             current,
 		MonitoringEndTime:   metStr,
 		RecommendationTerms: terms,
-	}
-	if len(allNotifications) > 0 {
-		recs.Notifications = allNotifications
 	}
 
 	return &NamespaceDetailResponse{

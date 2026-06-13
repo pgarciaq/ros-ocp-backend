@@ -53,10 +53,10 @@ func TestBuildListResponse_DefaultIncludesShortTermCostOnly(t *testing.T) {
 	assert.Nil(t, shortTerm.RecommendationEngines.Performance)
 	require.NotNil(t, shortTerm.RecommendationEngines.Cost.Variation)
 
-	require.NotNil(t, list.Recommendations.Notifications)
-	assert.Contains(t, list.Recommendations.Notifications, "1")
-	assert.Contains(t, list.Recommendations.Notifications, "5")
-	assert.Contains(t, list.Recommendations.Notifications, "7")
+	require.NotNil(t, list.Recommendations.NotificationCodes)
+	assert.Contains(t, list.Recommendations.NotificationCodes, int16(1))
+	assert.Contains(t, list.Recommendations.NotificationCodes, int16(5))
+	assert.Contains(t, list.Recommendations.NotificationCodes, int16(7))
 	assert.Nil(t, shortTerm.RecommendationEngines.Cost.Notifications)
 }
 
@@ -141,4 +141,5 @@ func TestBuildListResponse_JSONOmitsPlotsAndDuration(t *testing.T) {
 	assert.NotContains(t, body, "plots")
 	assert.NotContains(t, body, "duration_in_hours")
 	assert.NotContains(t, body, "business_hours")
+	assert.NotContains(t, body, `"notifications"`)
 }
