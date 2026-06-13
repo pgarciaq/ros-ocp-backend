@@ -72,10 +72,10 @@ var FilterModeClause = map[string]struct {
 	FilterModeExclude: {" != ?", false, " AND "},
 }
 
-type Collection struct {
-	Data  []interface{} `json:"data"`
-	Meta  Metadata      `json:"meta"`
-	Links Links         `json:"links"`
+type Collection[T any] struct {
+	Data  []T        `json:"data"`
+	Meta  Metadata   `json:"meta"`
+	Links Links      `json:"links"`
 }
 
 type Metadata struct {

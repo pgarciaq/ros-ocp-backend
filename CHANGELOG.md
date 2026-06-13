@@ -28,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Container recommendation list API: use slim list DTO (`BuildListResponse`) instead of full detail assembly; preserves list UI fields while omitting plots and duplicate notification nesting (performance audit A-1)
 - **Breaking (notifications):** Container/namespace detail responses emit `notifications` only on `recommendation_engines.<engine>`; top-level and term-level notification maps removed. List rows expose `recommendations.notification_codes` (integer array) instead of `recommendations.notifications`. Update UI to read engine-level maps on detail and codes on list (ADR-0293, performance audit A-2).
 - API middleware: parse `x-rh-identity` once in identity middleware and reuse the cost-management entitlement flag in entitlement middleware (performance audit A-4)
+- CSV ingest: single-transaction fast path now requires row count ≤ 25,000 and digest group count ≤ 5,000 (was row count ≤ 50,000 only); large single-file manifests fall through to incremental flush sooner (performance audit B-5)
+- List API `Collection` responses use generic `Collection[T]` with typed `data` slices instead of `[]interface{}`, avoiding per-item heap boxing (performance audit A-3)
+- Container image build strips debug symbols via `-ldflags="-s -w"` (~30% smaller binary; performance audit I-1)
 
 ### Fixed
 

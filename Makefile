@@ -72,8 +72,10 @@ run-api-server:
 	PROMETHEUS_PORT=5007 go run rosocp.go start api
 
 .PHONY: build
+LDFLAGS ?= -s -w
+
 build:
-	go build -o bin/rosocp rosocp.go
+	go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
 
 .PHONY: lint
 lint: golangci-lint

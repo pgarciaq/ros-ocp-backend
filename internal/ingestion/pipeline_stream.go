@@ -279,13 +279,12 @@ func parseAndDigestCSVStream(
 		return 0, nil
 	}
 
-	useSingleIngestTx = rowCount <= ingestSingleTxRowThreshold && digestBatchesFlushed == 0
-
 	if err := flushSamples(sampleBatch); err != nil {
 		return rowCount, err
 	}
 
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
+	useSingleIngestTx = singleIngestTxEligible(rowCount, len(grouped), digestBatchesFlushed)
 	metrics.SetIngestGroupsInMemory(len(grouped))
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
 		rowCount, len(grouped), digestBatchesFlushed)

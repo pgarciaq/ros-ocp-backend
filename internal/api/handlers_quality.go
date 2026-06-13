@@ -135,11 +135,7 @@ func GetRecommendationQuality(c echo.Context) error {
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
-		interfaceSlice := make([]any, len(rows))
-		for i := range rows {
-			interfaceSlice[i] = rows[i]
-		}
-		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		response := CollectionResponse(rows, c.Request(), count, opts.Limit, opts.Offset)
 		response.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 		return c.JSON(http.StatusOK, response)
 	}

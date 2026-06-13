@@ -36,7 +36,7 @@ func escapeILIKE(s string) string {
 	return s
 }
 
-func CollectionResponse(collection []interface{}, req *http.Request, count, limit, offset int) *Collection {
+func CollectionResponse[T any](collection []T, req *http.Request, count, limit, offset int) *Collection[T] {
 	var first, previous, next, last string
 	q := req.URL.Query()
 
@@ -73,7 +73,7 @@ func CollectionResponse(collection []interface{}, req *http.Request, count, limi
 		Last:     last,
 	}
 
-	return &Collection{
+	return &Collection[T]{
 		Data: collection,
 		Meta: Metadata{
 			Count:  count,
@@ -85,7 +85,7 @@ func CollectionResponse(collection []interface{}, req *http.Request, count, limi
 }
 
 // PaginatedCollectionResponse builds a list response with has_next and optional cursor metadata.
-func PaginatedCollectionResponse(collection []interface{}, req *http.Request, count, limit, offset int, hasNext bool, nextCursor string) *Collection {
+func PaginatedCollectionResponse[T any](collection []T, req *http.Request, count, limit, offset int, hasNext bool, nextCursor string) *Collection[T] {
 	resp := CollectionResponse(collection, req, count, limit, offset)
 	resp.Meta.HasNext = hasNext
 	if nextCursor != "" {

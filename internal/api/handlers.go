@@ -72,11 +72,7 @@ func GetRecommendationSetList(c echo.Context) error {
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatJSON:
-		interfaceSlice := make([]any, len(recommendationSets))
-		for i, v := range recommendationSets {
-			interfaceSlice[i] = v
-		}
-		results := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		results := CollectionResponse(recommendationSets, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, results)
 	case listoptions.ResponseFormatCSV:
@@ -199,11 +195,7 @@ func GetNamespaceRecommendationSetList(c echo.Context) error {
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatJSON:
-		interfaceSlice := make([]any, len(namespaceRecommendationSets))
-		for i, v := range namespaceRecommendationSets {
-			interfaceSlice[i] = v
-		}
-		results := CollectionResponse(interfaceSlice, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+		results := CollectionResponse(namespaceRecommendationSets, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, results)
 	case listoptions.ResponseFormatCSV:
@@ -479,12 +471,12 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		listOpts := listResponseOptions(c)
-		interfaceSlice := make([]any, len(results))
+		listData := make([]*model.ListResponse, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
+			listData[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
 		}
 		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
-		response.Data = interfaceSlice
+		response.Data = listData
 		attachTagWarningsToCollection(response, c, OrgID, len(results))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
@@ -628,16 +620,16 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		listOpts := listResponseOptions(c)
-		interfaceSlice := make([]any, len(results))
+		listData := make([]*model.ListResponse, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
+			listData[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
 		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
 			orgID = xrhid.Identity.OrgID
 		}
 		response := buildContainerListMeta(c, orgID, page, opts)
-		response.Data = interfaceSlice
+		response.Data = listData
 		if orgID != "" {
 			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}
@@ -703,11 +695,7 @@ func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions,
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
-		interfaceSlice := make([]any, len(recSets))
-		for i, v := range recSets {
-			interfaceSlice[i] = v
-		}
-		response := CollectionResponse(interfaceSlice, c.Request(), count, opts.Limit, opts.Offset)
+		response := CollectionResponse(recSets, c.Request(), count, opts.Limit, opts.Offset)
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -822,16 +810,16 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
-		interfaceSlice := make([]any, len(results))
+		listData := make([]*model.NamespaceDetailResponse, len(results))
 		for i := range results {
-			interfaceSlice[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
+			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
 		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
 			orgID = xrhid.Identity.OrgID
 		}
 		response := buildNamespaceListMeta(c, orgID, page, opts)
-		response.Data = interfaceSlice
+		response.Data = listData
 		if orgID != "" {
 			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}

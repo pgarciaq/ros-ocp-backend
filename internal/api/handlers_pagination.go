@@ -84,7 +84,7 @@ func namespaceNextCursor(page model.NativeNamespaceListPage) string {
 	})
 }
 
-func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListPage, opts listoptions.ListOptions) *Collection {
+func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListPage, opts listoptions.ListOptions) *Collection[*model.ListResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -95,12 +95,12 @@ func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListP
 		nextCursor = containerNextCursor(page)
 	}
 
-	resp := PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp := PaginatedCollectionResponse[*model.ListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
 	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 	return resp
 }
 
-func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection {
+func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection[*model.NamespaceDetailResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -111,7 +111,7 @@ func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNames
 		nextCursor = namespaceNextCursor(page)
 	}
 
-	resp := PaginatedCollectionResponse(nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp := PaginatedCollectionResponse[*model.NamespaceDetailResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
 	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 	return resp
 }

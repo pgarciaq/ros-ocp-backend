@@ -390,11 +390,13 @@ Namespace CSV was fully materialized into `[]NamespaceMetricRow` before grouping
 
 - Removed per-row gauge update from the streaming loop. Gauge is updated only on flush boundaries.
 
-### B-5. Single-tx fast path holds all deferred samples in RAM (P2) — **Open**
+### B-5. Single-tx fast path holds all deferred samples in RAM (P2) — **Implemented**
 
-When `rowCount <= 50,000` and no incremental flushes have occurred, the single-tx path holds all samples in memory before committing. Can spike to tens of MB.
+When `rowCount <= 50,000` and no incremental flushes have occurred, the single-tx path held all samples in memory before committing. Could spike to tens of MB on large single-file manifests.
 
-**Fix:** Lower threshold or require both row count AND group count below threshold.
+**Fix implemented (2026-06):**
+
+- Lowered row threshold to 25,000 and added digest group threshold of 5,000. Single-tx fast path requires both limits and zero incremental flushes (`singleIngestTxEligible` in `internal/ingestion/pipeline.go`).
 
 ### B-6. No PGO or GOMEMLIMIT in deployment (P2) — **Partially Implemented**
 
@@ -817,10 +819,11 @@ Loaded once at startup via `sync.Once`. No action needed.
 | P2-3  | DB        | Batch PVC/GPU writes via pgx.Batch           | Implemented           |
 | P2-4  | Ingest    | Decouple VM recommend from ingest            | Implemented           |
 | P2-5  | Math      | Replace idle P95 sort with max-of-daily-P95  | Implemented           |
-| B-3,5 | Ingest    | String interning, narrow single-tx threshold | Open                  |
+| B-3   | Ingest    | String interning                             | Open                  |
+| B-5   | Ingest    | Narrow single-tx threshold                   | Implemented           |
 | B-6   | Ingest    | GOMEMLIMIT in Helm (PGO still open)          | Partially Implemented |
 | C-6   | Ops       | Add make test-short                          | Implemented           |
-| I-1   | Deps      | Binary slimming (release ldflags, SDK audit) | Open                  |
+| I-1   | Deps      | Binary slimming (release ldflags, SDK audit) | Partially Implemented |
 
 
 ### Strategic
@@ -855,7 +858,7 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 | 8    | ~~**G-2**~~ | ~~1–2 days~~ | ~~**Med**~~ | — | **Implemented** | CPU-based HPA for ROS API pods in Helm chart. |
 | 9    | **H-5** | 2–3 days | **Med** (large-tenant UX) | Low | **Open** | UI uses offset pagination; backend supports keyset cursor. Offset degrades linearly past page 10 on 100k-container orgs. UI-only change. |
 | 10   | ~~**F-1**~~ | ~~3–5 days~~ | ~~**Med**~~ | — | **Implemented** | `rosocp_pipeline_phase_duration_seconds` histogram for 7 phases + total pipeline histogram. |
-| 11   | **B-5** | 1 day    | **Med** (ingest RAM edge)      | Low     | **Open** | Single-tx fast path holds all deferred samples when `rowCount ≤ 50,000`. Lower threshold or add group-count guard. Quick fix for large single-file manifests. |
+| 11   | ~~**B-5**~~ | ~~1 day~~ | ~~**Med**~~ | — | **Implemented** | Row threshold 25k + group threshold 5k guard on single-tx ingest fast path. |
 
 
 ### Tier 3 — Lower Priority or Higher Risk (defer unless profiling demands)

@@ -94,7 +94,7 @@ func TestBuildLinks(t *testing.T) {
 
 func TestCollectionResponse_Links(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/recommendations/openshift?limit=10&offset=10", nil)
-	coll := CollectionResponse([]interface{}{"a", "b"}, req, 25, 10, 10)
+	coll := CollectionResponse([]string{"a", "b"}, req, 25, 10, 10)
 
 	if coll.Links.First == "" {
 		t.Fatal("expected first link to be populated")

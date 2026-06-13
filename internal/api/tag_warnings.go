@@ -137,7 +137,7 @@ func requestedTagKeysFromContext(c echo.Context) []string {
 	return keys
 }
 
-func attachTagWarningsToCollection(resp *Collection, c echo.Context, orgID string, resultCount int) {
+func attachTagWarningsToCollection[T any](resp *Collection[T], c echo.Context, orgID string, resultCount int) {
 	if resp == nil {
 		return
 	}

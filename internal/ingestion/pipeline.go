@@ -20,8 +20,18 @@ import (
 // maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
 const maxPgxBatchQueue = 500
 
-// ingestSingleTxRowThreshold above this row count uses separate transactions per phase.
-const ingestSingleTxRowThreshold = 50000
+// ingestSingleTxRowThreshold: above this row count the ingest path uses separate transactions per phase.
+const ingestSingleTxRowThreshold = 25000
+
+// ingestSingleTxGroupThreshold: above this digest group count the ingest path uses separate transactions per phase.
+const ingestSingleTxGroupThreshold = 5000
+
+// singleIngestTxEligible reports whether EOF commit can use the single-transaction fast path.
+func singleIngestTxEligible(rowCount, groupCount, digestBatchesFlushed int) bool {
+	return rowCount <= ingestSingleTxRowThreshold &&
+		groupCount <= ingestSingleTxGroupThreshold &&
+		digestBatchesFlushed == 0
+}
 
 // pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch (chunked batches must run on one tx).
 type pgxBatchSender interface {
