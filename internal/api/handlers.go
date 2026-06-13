@@ -816,16 +816,29 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
-		listOpts := listResponseOptions(c)
-		listData := make([]*model.NamespaceListResponse, len(results))
-		for i := range results {
-			listData[i] = model.BuildNamespaceListResponse(&results[i], listOpts)
-		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
 			orgID = xrhid.Identity.OrgID
 		}
-		response := buildNamespaceListMeta(c, orgID, page, opts)
+		if hasListProjectionParams(c) {
+			listOpts := listResponseOptions(c)
+			listData := make([]*model.NamespaceListResponse, len(results))
+			for i := range results {
+				listData[i] = model.BuildNamespaceListResponse(&results[i], listOpts)
+			}
+			response := buildNamespaceSlimListMeta(c, orgID, page, opts)
+			response.Data = listData
+			if orgID != "" {
+				attachTagWarningsToCollection(response, c, orgID, len(results))
+			}
+			setRecommendationNoStore(c)
+			return c.JSON(http.StatusOK, response)
+		}
+		listData := make([]*model.NamespaceDetailResponse, len(results))
+		for i := range results {
+			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
+		}
+		response := buildNamespaceDetailListMeta(c, orgID, page, opts)
 		response.Data = listData
 		if orgID != "" {
 			attachTagWarningsToCollection(response, c, orgID, len(results))

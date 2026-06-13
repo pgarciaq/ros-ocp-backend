@@ -7,6 +7,16 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
+// hasListProjectionParams reports whether the caller opted into slim list projection
+// via explicit term and/or engine query parameters (flat or filter[...] syntax).
+func hasListProjectionParams(c echo.Context) bool {
+	if queryparams.FirstFilter(c, "term") != "" {
+		return true
+	}
+	engines, _ := collectEngineFilterValues(c)
+	return len(engines) > 0
+}
+
 func listResponseOptions(c echo.Context) model.ListResponseOptions {
 	var opts model.ListResponseOptions
 
