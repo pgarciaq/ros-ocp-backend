@@ -247,6 +247,7 @@ Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_RETENTION_MONTHS` | `6` | Monthly digest partition retention. |
+| `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (`container_usage_samples`, `namespace_usage_samples`). Shorter than digest retention to reduce disk use; digest-based detail plots do not require samples. |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Recommendation history snapshot retention (days). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours without cluster report before recommendations marked stale. |
 | `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations older than N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |

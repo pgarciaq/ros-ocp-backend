@@ -198,7 +198,14 @@ Detail endpoints transform flat native fields into the nested structure the exis
     "recommendation_terms": {
       "medium_term": {
         "duration_in_hours": 168,
-        "plots": { "plots_data": { /* boxplot quartiles */ } },
+        "plots": {
+          "plots_data": {
+            "2026-05-20T00:00:00Z": {
+              "cpuUsage": { "p50": 0.12, "p95": 0.45, "p99": 0.67, "max": 0.89, "format": "cores" },
+              "memoryUsage": { "p50": 256.0, "p95": 384.0, "p99": 420.0, "max": 512.0, "format": "MiB" }
+            }
+          }
+        },
         "recommendation_engines": {
           "cost": {
             "config": { "requests": { }, "limits": { } },
@@ -325,7 +332,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - Show a sortable PatternFly **Table** with columns: container, namespace, cluster, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), and estimated monthly savings.
 - Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.).
 - Color-code rows with **Badge** plus text labels (never color alone): red for abandoned (code 8), orange for idle (code 5), yellow for over-provisioned (negative variation), green for well-sized.
-- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for boxplots, term selection, and notification details.
+- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for usage plots (digest percentiles), term selection, and notification details.
 - Default to **cost** engine and **medium_term**; provide toggles for engine and term on list and detail views.
 - Show **confidence_level** as a badge or **Progress** bar; warn when below 0.5 or notification codes 1/7 are present.
 - Include a "Show stale" toggle wired to `?stale=only`; default excludes stale rows.

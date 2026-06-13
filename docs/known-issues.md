@@ -31,7 +31,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Container recs** | Replica count display (min/max/avg pod count) | **Shipping** |
 | **Container recs** | Recommendation history tracking | **Shipping** |
 | **Container recs** | Recommendation quality (stability %, adoption detection) | **Shipping** |
-| **Container recs** | Box plots (five-number summary from usage samples) | **Shipping** |
+| **Container recs** | Usage plots (p50/p95/p99/max from daily digests) | **Shipping** |
 | **Namespace recs** | Namespace-level CPU + memory recommendations | **Shipping (enabled by default)** |
 | **GPU** | GPU workload classification (idle/underutilized/memory-bound/compute-bound) | **Shipping** |
 | **GPU** | MIG profile selection (A100/A30/H100/H200/B100/B200) | **Shipping** |

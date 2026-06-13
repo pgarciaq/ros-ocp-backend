@@ -276,7 +276,7 @@ Updated after each container ingestion quality write. Per-org/cluster aggregates
 |--------|------|--------|---------------|
 | `rosocp_retention_partitions_dropped_total` | Counter | — | Partitions dropped by daily sweep |
 
-Controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, and related env vars.
+Controlled by `ROS_RETENTION_MONTHS`, `ROS_SAMPLE_RETENTION_DAYS`, `ROS_HISTORY_RETENTION_DAYS`, and related env vars.
 
 ### Legacy Kruize path
 

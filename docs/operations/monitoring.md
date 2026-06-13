@@ -275,7 +275,7 @@ The `/recommendations/openshift/quality` API returns `stability_pct` on a **0.0â
 |--------|------|--------|------------------|
 | `rosocp_retention_partitions_dropped_total` | Counter | â€” | Monthly partitions dropped by the retention sweep |
 
-Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_H`. See [retention.md](retention.md).
+Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_SAMPLE_RETENTION_DAYS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_H`. See [retention.md](retention.md).
 
 ### Legacy / non-prefixed metrics
 

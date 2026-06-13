@@ -12,7 +12,7 @@ Package: [`internal/plugins/namespace`](../../internal/plugins/namespace/)
 | Phase | 1 (Produce) |
 | Priority | 90 (runs after container at 10) |
 | CSV types | `namespace` (namespace ROS usage CSV) |
-| Retention tables | `daily_namespace_digests`, `namespace_usage_samples` |
+| Retention tables | `daily_namespace_digests` (6 months), `namespace_usage_samples` (45 days default) |
 
 ## Traits
 

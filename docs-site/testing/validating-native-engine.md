@@ -31,7 +31,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 |----------|------------------|------------------|
 | **Plugins (recommendation types)** | All nine native plugins produce correct rows and API responses | DB tables, list/detail APIs, processor logs |
 | **Cross-cutting** | Idle/zombie, business hours, fleet/savings summary, history/quality, terms, settings locks, dual engines | Filters, settings PUT, aggregate endpoints |
-| **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, box plots |
+| **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, usage plots |
 | **Data pipeline** | Kafka → S3 CSV download → digest → recommend | Listener + processor logs, `meta.count` |
 | **Performance** | Latency, memory, DB query time under load | Prometheus, `hey`/`k6`, processor duration logs |
 | **Regression** | Native vs Kruize where both can run (legacy env only) | [Comparison CLI](#kruize-vs-native-comparison-cli), side-by-side API diff, known diffs doc |
@@ -77,7 +77,7 @@ Use this order for a new native-engine QE cycle. **Containers and Kruize-compati
 | **P0** | Container list + detail + **Kruize JSON shape** | Primary UI surface; regression vs Kruize |
 | **P0** | koku-ui-onprem smoke on `/optimizations` | End-user validation |
 | **P1** | Settings API (thresholds, terms, locks) + dual engine | Tenant tuning and cost vs performance |
-| **P1** | Idle/zombie + notifications + box plots | High-visibility UX |
+| **P1** | Idle/zombie + notifications + usage plots | High-visibility UX |
 | **P1** | Namespace recommendations | Quota guidance in UI |
 | **P2** | GPU (MIG + time-slicing + summary) | Growing adoption |
 | **P2** | Node, PVC, quota, cluster-quota, snapshot | On-prem feature completeness |
@@ -1198,7 +1198,7 @@ The UI reads nested structures under `recommendations`, not flat millicore field
 | `recommendations.recommendation_terms.<term>.duration_in_hours` | `24` / `168` / `360` for short/medium/long |
 | `recommendations.recommendation_terms.<term>.recommendation_engines.cost` | `config`, optional `variation`, `notifications`, optional `business_hours` |
 | `recommendations.recommendation_terms.<term>.recommendation_engines.performance` | Same structure as cost |
-| `recommendations.recommendation_terms.<term>.plots.plots_data` | Box plot quartiles for CPU and memory |
+| `recommendations.recommendation_terms.<term>.plots.plots_data` | Digest-based usage percentiles (`p50`, `p95`, `p99`, `max`) for CPU and memory per time bucket |
 | `recommendations.recommendation_terms.<term>.notifications` | Map keyed by code string |
 
 Each resource value in **config** / **current** / **business_hours** must use:
@@ -1220,7 +1220,7 @@ Variation percentages use `format: "percent"` on `variation.requests.cpu` / `mem
 | 2 | Both engines present per term | jq `.recommendations.recommendation_terms.medium_term.recommendation_engines \| keys` → `["cost","performance"]` |
 | 3 | CPU format is `cores` | jq `...cost.config.requests.cpu.format` → `"cores"` |
 | 4 | Memory format is `MiB` | jq `...cost.config.requests.memory.format` → `"MiB"` |
-| 5 | Box plots non-empty for medium_term | jq `...medium_term.plots.plots_data` has CPU/memory series |
+| 5 | Usage plots non-empty for medium_term | jq `...medium_term.plots.plots_data` has `cpuUsage`/`memoryUsage` with `p50`, `p95`, `p99`, `max`, `format` |
 | 6 | Notifications map shape | Keys are strings; values have `type`, `message`, `code` |
 | 7 | List view still works | `GET .../recommendations/openshift?limit=5` → `meta.count` > 0 |
 | 8 | UI renders breakdown | Deploy koku-ui-onprem (see [End-to-end with koku-ui](#end-to-end-with-koku-ui)); open workload breakdown without JS errors |
@@ -1262,7 +1262,7 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 1 | Recommendations persisted | `SELECT count(*) FROM recommendation_sets WHERE org_id='1234567'` | > 0 after ingest |
 | 2 | All terms populated (when data allows) | Detail API `recommendation_terms` keys | `short_term`, `medium_term`, `long_term` |
 | 3 | Cost vs performance differ on spiky workloads | Compare `config.requests.cpu.amount` for same term | Performance ≥ cost on CPU for spike patterns |
-| 4 | Box plots populated | Detail `plots.plots_data` | Non-null CPU/memory quartiles |
+| 4 | Usage plots populated | Detail `plots.plots_data` | Non-null `cpuUsage`/`memoryUsage` with `p50`, `p95`, `p99`, `max` |
 | 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
 | 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
@@ -1845,7 +1845,7 @@ From a test run with 5 containers and 21 days of 15-minute data (10,080 rows):
 |--------|-----------------|--------|-----------|
 | Wait time | Up to `KRUIZE_WAIT_TIME` (hours) | Seconds–minutes inline | Native must not require poller |
 | Detail shape | Nested JSON in `recommendation_sets` | `DetailResponse` builder | Byte-compare key paths, not full blob |
-| Box plots | Pre-computed | On-the-fly from samples | Visual compare in UI |
+| Usage plots | Pre-computed | Digest percentiles at query time | Visual compare in UI |
 | GPU / node / PVC / quota / VM | Not available | Full plugins | New coverage only on native |
 | Notification codes | Smaller set | 54 codes | Expect new codes; UI must tolerate unknown codes |
 | Savings | Limited | Masu `effective_rates` | Enable `KOKU_MASU_URL` for parity tests |
