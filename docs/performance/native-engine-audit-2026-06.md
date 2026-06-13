@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, Medium Effort, and nearly all P2 roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, Kafka partition scaling, OCP breakdown dedup, namespace CSV streaming, digest-based percentile-band plots, separate sample retention, PostgreSQL tuning in Helm chart, per-phase pipeline histograms, notification deduplication, typed `Collection[T]` list responses, HPA for API pods, and operational quick wins). **All strategic items (S1–S3) are explicitly deferred** with detailed rationale — not left open — covering maintainability risk (S1), redundant intra-cluster parallelism (S2), and recommendation accuracy for namespace sizing (S3). All other remaining gaps are likewise deferred with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers) below). No performance roadmap items remain open.
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, Medium Effort, and nearly all P2 roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, Kafka partition scaling, OCP breakdown dedup, namespace CSV streaming, digest-based percentile-band plots, separate sample retention, PostgreSQL tuning in Helm chart, per-phase pipeline histograms, notification deduplication, typed `Collection[T]` list responses, HPA for API pods, slim list contract S4 with UI alignment, and operational quick wins). **Strategic items S1–S3 remain explicitly deferred** with detailed rationale. Remaining gaps are likewise deferred with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers) below). The only partially implemented item is I-1 (AWS SDK v1 audit).
 
 ---
 
@@ -286,9 +286,10 @@ RecommendWorkloadsStreaming
 
 | ID  | Change                                              | Impact                          | Risk           | Status   |
 | --- | --------------------------------------------------- | ------------------------------- | -------------- | -------- |
-| S1  | Unified windowed digest recommender framework       | 30-50% less code duplication    | High           | Deferred |
-| S2  | Parallel container recommend by namespace partition | Linear speedup on multi-core    | High           | Deferred |
-| S3  | Namespace recs from container rollups               | Eliminates duplicate engine run | High (product) | Deferred |
+| S1  | Unified windowed digest recommender framework       | 30-50% less code duplication    | High           | Deferred    |
+| S2  | Parallel container recommend by namespace partition | Linear speedup on multi-core    | High           | Deferred    |
+| S3  | Namespace recs from container rollups               | Eliminates duplicate engine run | High (product) | Deferred    |
+| S4  | Slim list contract with UI team                     | High (API+UI payload)           | Med            | Implemented |
 
 
 ---
@@ -351,6 +352,16 @@ Legacy list/detail unmarshals JSONB into generic maps, mutates in place, then ma
 **Fix implemented (2026-06):**
 
 - `GetNotificationCodes` now returns `Cache-Control: public, max-age=86400`.
+
+### S4. Slim list contract with UI team (Strategic) — **Implemented**
+
+**Location:** `internal/model/list_response.go`, `internal/api/handlers.go`, ADR-0294
+
+Namespace list responses previously assembled full `NamespaceDetailResponse` rows for every list item. Container list already used a slim DTO.
+
+**Fix implemented (2026-06):**
+
+- Slim list contract defined and implemented. Container list already had slim DTO (`BuildListResponse`). Namespace list now has `BuildNamespaceListResponse` (opt-in via `term`/`engine` params, full response by default for backward compatibility). ADR-0294 documents the contract.
 
 ---
 
@@ -728,25 +739,29 @@ The breakdown page rendered both `OptimizationsProjectsTable` and `Optimizations
 - Both tables now receive the shared report via props instead of making independent API calls.
 - Eliminates ~50% of breakdown-page API traffic.
 
-### H-4. List responses include full detail shape (P1) — **Deferred**
+### H-4. List responses include full detail shape (P1) — **Implemented**
 
 Backend builds `BuildDetailResponse` per list row (all 3 terms x 2 engines with config, variation, notifications). The table UI only displays one term+engine combination at a time.
 
-**Fix:** Add `?term=short&engine=cost` or `?fields=summary` to the API.
+**Fix implemented (2026-06):**
 
-**Deferred:** Requires API + UI contract coordination (ties to S4). The A-1 slim list DTO already reduced payload significantly. Revisit after S4 is done.
+- UI passes explicit `term=short_term&engine=cost` on list calls. Backend skips enrichment (GPU/business-hours/currency) for `limit<=1` count-only calls. Namespace list supports `term`/`filter[term]` param.
 
-### H-5. Offset pagination when keyset cursor available (P1) — **Deferred**
+### H-5. Offset pagination when keyset cursor available (P1) — **Implemented**
 
 UI uses `offset` while the backend supports `?after=<cursor>`. Offset degrades linearly with dataset size.
 
-**Deferred:** UI-only change. Backend already supports keyset cursor. Offset degradation only matters past page 10 on 100k+ container orgs. Revisit when large tenants report pagination slowness.
+**Fix implemented (2026-06):**
 
-### H-6. No cross-component cache sharing (P2) — **Deferred**
+- UI prefers keyset cursor (`after=next_cursor`) for forward pagination; offset fallback for backward/arbitrary page jumps. Backend already supported cursors.
+
+### H-6. No cross-component cache sharing (P2) — **Implemented**
 
 Redux cache is keyed by exact query string. Badge, summary, and table each produce different strings, so the same data is fetched multiple times.
 
-**Deferred:** UI-only Redux optimization. Revisit during next frontend performance sprint.
+**Fix implemented (2026-06):**
+
+- Redux `counts` cache updated by any list response. `useRosCount` hook lets badge/summary reuse table's count without separate API calls.
 
 ---
 
@@ -801,8 +816,8 @@ Release build uses `-ldflags="-s -w"` to strip debug symbols. **Remaining (defer
 | ID   | Theme     | Change                                                                           | Status      |
 | ---- | --------- | -------------------------------------------------------------------------------- | ----------- |
 | H-3  | UI        | Single fetch on OCP breakdown                                                    | Implemented |
-| H-4  | API       | List field projection (term/engine/fields)                                       | Deferred    |
-| H-5  | UI        | Adopt cursor pagination                                                          | Deferred    |
+| H-4  | API       | List field projection (term/engine/fields)                                       | Implemented |
+| H-5  | UI        | Adopt cursor pagination                                                          | Implemented |
 | P1-1 | Math      | Integer savings in micro-cents                                                   | Implemented |
 | P1-2 | Math      | Integer adaptive margin                                                          | Implemented |
 | P1-3 | Math      | Zero-copy window slicing                                                         | Implemented |
@@ -851,7 +866,7 @@ Release build uses `-ldflags="-s -w"` to strip debug symbols. **Remaining (defer
 | S1  | Algo          | Unified windowed digest recommender framework             | Deferred    |
 | S2  | Algo          | Parallel container recommend by partition                 | Deferred    |
 | S3  | Algo          | Namespace recs from container rollups                     | Deferred    |
-| S4  | API           | Slim list contract with UI team                           | Deferred    |
+| S4  | API           | Slim list contract with UI team                           | Implemented |
 | F-1 | Observability | Add per-phase pipeline histograms (OpenTelemetry deferred) | Implemented |
 | G-3 | Scale         | Distributed debouncer (DB/Redis) for multi-pod processors | Deferred    |
 
@@ -860,20 +875,20 @@ Release build uses `-ldflags="-s -w"` to strip debug symbols. **Remaining (defer
 
 ## Remaining Items — ROI Analysis (June 2026)
 
-All items below are **explicitly deferred** with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers)). Prioritized by **impact × feasibility / risk** for when each trigger fires. Effort estimates assume a single engineer familiar with the codebase.
+Most performance audit items are now implemented. The tables below record completed work and the **seven remaining deferred items** (S1–S3, G-3, B-3, B-6 PGO, A-5, I-1 partial) with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers)). Prioritized by **impact × feasibility / risk** for when each trigger fires.
 
 ### Tier 1 — Completed
 
 All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka partitions), H-3 (OCP breakdown dedup), E-2 (digest-based plots + sample retention), B-2 (namespace CSV streaming).
 
-### Tier 2 — Completed (deferred items moved to revisit triggers)
+### Tier 2 — Completed
 
 | Rank | ID      | Effort   | Impact                         | Risk    | Status | Rationale |
 | ---- | ------- | -------- | ------------------------------ | ------- | ------ | --------- |
-| 6    | **H-4** | 3–5 days | **Med–High** (API CPU/payload) | Med     | **Deferred** | A-1 slimmed list DTO but rows still carry all 3 terms × 2 engines. Requires API + UI coordination (ties to S4). Revisit after S4. |
+| 6    | ~~**H-4**~~ | ~~3–5 days~~ | ~~**Med–High**~~ | — | **Implemented** | UI passes explicit term/engine; backend skips count-only enrichment; namespace list supports term filter. |
 | 7    | ~~**A-2**~~ | ~~2–3 days~~ | ~~**Med**~~ | — | **Implemented** | Engine-only notifications + list `notification_codes` (ADR-0293). |
 | 8    | ~~**G-2**~~ | ~~1–2 days~~ | ~~**Med**~~ | — | **Implemented** | CPU-based HPA for ROS API pods in Helm chart. |
-| 9    | **H-5** | 2–3 days | **Med** (large-tenant UX) | Low | **Deferred** | UI-only change; backend supports keyset cursor. Revisit when large tenants report pagination slowness. |
+| 9    | ~~**H-5**~~ | ~~2–3 days~~ | ~~**Med**~~ | — | **Implemented** | UI prefers keyset cursor for forward pagination; offset fallback for backward jumps. |
 | 10   | ~~**F-1**~~ | ~~3–5 days~~ | ~~**Med**~~ | — | **Implemented** | `rosocp_pipeline_phase_duration_seconds` histogram for 7 phases + total pipeline histogram. |
 | 11   | ~~**B-5**~~ | ~~1 day~~ | ~~**Med**~~ | — | **Implemented** | Row threshold 25k + group threshold 5k guard on single-tx ingest fast path. |
 
@@ -883,7 +898,7 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 
 | Rank | ID            | Effort   | Impact                          | Risk | Status | Rationale                                                                                                                                                     |
 | ---- | ------------- | -------- | ------------------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 12   | **H-6**       | 2–3 days | **Med** (UI API calls)          | Low  | **Deferred** | UI-only Redux optimization. Revisit during next frontend performance sprint.                                                                                  |
+| 12   | ~~**H-6**~~   | ~~2–3 days~~ | ~~**Med**~~ | — | **Implemented** | Redux counts cache + `useRosCount` hook share count across badge/summary/table. |
 | 13   | **G-3**       | 5–8 days | **Med** (multi-pod correctness) | High | **Deferred** | Only needed when running multiple processor pods concurrently. Revisit when scaling to multiple processor pods.                                                |
 | 14   | **B-3**       | 3–5 days | **Low–Med** (ingest GC)         | Med  | **Deferred** | Diminishing returns after B-1. Revisit only if memory profiling shows string duplication as a significant contributor.                                          |
 | 15   | ~~**A-3**~~   | ~~2–3 days~~ | ~~**Low**~~ | — | **Implemented** | Generic `Collection[T any]` replaces `[]interface{}` boxing in list responses. |
@@ -897,7 +912,7 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 
 | Rank | ID     | Effort    | Impact                         | Risk           | Status | Rationale                                                                                                              |
 | ---- | ------ | --------- | ------------------------------ | -------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 19   | **S4** | 1–2 weeks | **High** (API+UI contract)     | Med            | **Deferred** | Requires cross-team coordination with koku-ui. Revisit when starting the next UI optimization sprint (H-4, H-5 depend on this). |
+| 19   | ~~**S4**~~ | ~~1–2 weeks~~ | ~~**High**~~ | — | **Implemented** | Slim list contract (ADR-0294); namespace list slim DTO opt-in via term/engine params. |
 | 20   | **S1** | 1–2 weeks | **Med** (code maintainability) | High           | **Deferred** | Pure maintainability refactor with high regression risk. Touches all five recommendation subsystems (container, namespace, PVC, node, VM) simultaneously. No runtime performance benefit. The current duplication acts as a safety boundary — a bug in one recommender can't affect others. Revisit when adding a 6th recommendation type. |
 | 21   | **S2** | 1–2 weeks | **High** (CPU at scale)        | High           | **Deferred** | Intra-cluster parallelism is unnecessary because existing inter-cluster parallelism (Kafka partitions + multi-pod workers via G-1 and G-2) already distributes work across cores. On-prem: clusters too small to benefit. SaaS: cores already busy processing other clusters concurrently. S2 would compete for cores already doing useful work. Revisit when F-1 histograms show recommendation phase > 30s per cluster. |
 | 22   | **S3** | 1–2 weeks | **High** (compute savings)     | High (product) | **Deferred** | Deferred to preserve recommendation accuracy. Container rollup P95 values systematically overestimate namespace-level needs by 15–30% for mixed workloads (up to 100% for anti-correlated workloads) because P95(A+B) ≠ P95(A) + P95(B). Namespace-native Prometheus metrics capture actual aggregate usage including timing offsets between container spikes, which is the correct basis for ResourceQuota sizing. The rollup approach would be acceptable for rough cost estimation but not for accurate sizing recommendations. Revisit when product defines the rollup specification. |
@@ -905,9 +920,9 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 
 ### Sprint Status
 
-**Completed:** D-1 (PostgreSQL tuning), F-1 (pipeline histograms), A-2 (notification dedup), A-3 (typed `Collection[T]`), G-2 (HPA), B-5 (single-tx guard), G-1 (Kafka partitions), H-3 (OCP breakdown dedup), B-2 (namespace CSV streaming), E-2 (digest-based plots + sample retention).
+**Completed:** D-1 (PostgreSQL tuning), F-1 (pipeline histograms), A-2 (notification dedup), A-3 (typed `Collection[T]`), G-2 (HPA), B-5 (single-tx guard), G-1 (Kafka partitions), H-3 (OCP breakdown dedup), B-2 (namespace CSV streaming), E-2 (digest-based plots + sample retention), S4 (slim list contract), H-4 (list field projection), H-5 (cursor pagination), H-6 (cross-component count cache).
 
-All Critical and High Priority production gaps are now closed. All remaining performance items — including strategic items S1–S3 — are explicitly deferred with detailed rationale and documented revisit triggers below.
+All Critical and High Priority production gaps are now closed. Remaining performance items — strategic items S1–S3 plus profiling-gated ingest/ops optimizations — are explicitly deferred with detailed rationale and documented revisit triggers below.
 
 ---
 
@@ -918,11 +933,7 @@ All Critical and High Priority production gaps are now closed. All remaining per
 | **S1** | Unified windowed digest recommender framework | Deferred | Adding a 6th recommendation type (beyond container, namespace, PVC, node, VM) | Pure maintainability refactor with high regression risk. Touches all five recommendation subsystems (container, namespace, PVC, node, VM) simultaneously. No runtime performance benefit. The current duplication acts as a safety boundary — a bug in one recommender can't affect others. |
 | **S2** | Parallel container recommend by namespace partition | Deferred | F-1 pipeline phase histograms show recommendation phase exceeding 30s for a single cluster | Intra-cluster parallelism is unnecessary because existing inter-cluster parallelism (Kafka partitions + multi-pod workers via G-1 and G-2) already distributes work across cores. On-prem: clusters too small to benefit. SaaS: cores already busy processing other clusters concurrently. S2 would compete for cores already doing useful work. |
 | **S3** | Namespace recs from container rollups | Deferred | Product defines rollup specification for aggregating container-level recommendations into namespace-level ones | Deferred to preserve recommendation accuracy. Container rollup P95 values systematically overestimate namespace-level needs by 15–30% for mixed workloads (up to 100% for anti-correlated workloads) because P95(A+B) ≠ P95(A) + P95(B). Namespace-native Prometheus metrics capture actual aggregate usage including timing offsets between container spikes, which is the correct basis for ResourceQuota sizing. The rollup approach would be acceptable for rough cost estimation but not for accurate sizing recommendations. |
-| **S4** | Slim list contract with UI team | Deferred | Starting the next UI optimization sprint (H-4, H-5 depend on this) | Requires cross-team coordination with koku-ui. |
 | **G-3** | Distributed debouncer (DB/Redis) for multi-pod processors | Deferred | Scaling to multiple processor pods concurrently | Only needed when running multiple processor pods concurrently. |
-| **H-4** | List responses include full detail shape | Deferred | After S4 slim list contract is agreed with koku-ui | A-1 slimmed list DTO but rows still carry all 3 terms × 2 engines. |
-| **H-5** | Offset pagination when keyset cursor available | Deferred | Large tenants report pagination slowness past page 10 | UI-only change; backend supports keyset cursor. |
-| **H-6** | No cross-component cache sharing | Deferred | Next frontend performance sprint | UI-only Redux optimization. |
 | **B-3** | No string interning for repeated keys | Deferred | Memory profiling shows string duplication as a significant contributor | Diminishing returns after B-1. |
 | **B-6 (PGO)** | Profile-guided optimization | Deferred | CI pipeline supports PGO build integration | Requires production CPU profiles and CI pipeline changes. GOMEMLIMIT already done. |
 | **A-5** | Legacy Kruize path: `map[string]interface{}` | Deferred | Legacy Kruize path is retained long-term | Legacy Kruize path is deprecated. |
