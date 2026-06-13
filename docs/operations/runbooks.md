@@ -9,7 +9,8 @@ All metrics use the `rosocp_` prefix.
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | End-to-end duration per recommendation type (`container`, `node`, `gpu`, `pvc`, `namespace`, `snapshot`) |
-| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase duration (`digest`, `gpu_enrichment`) |
+| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase duration (`download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, `metadata_refresh`) |
+| `rosocp_pipeline_total_duration_seconds` | Histogram | `status` | End-to-end manifest processing (`success` or `error`) |
 | `rosocp_db_query_duration_seconds` | Histogram | `operation` | Database query latency |
 
 ### Throughput
@@ -65,7 +66,7 @@ All metrics use the `rosocp_` prefix.
 
 - **csv_parse**: Verify operator is generating properly typed CSVs. Check `manifest.json` has correct file list.
 - **digest/write**: Check PostgreSQL health (`pg_stat_activity`, connection pool exhaustion). Verify partition auto-creation is working.
-- **recommend**: Check `rosocp_pipeline_phase_duration_seconds{phase="digest"}` for abnormally long durations indicating data volume spikes.
+- **recommend**: Check `rosocp_pipeline_phase_duration_seconds{phase="parse_digest"}` for abnormally long durations indicating data volume spikes.
 
 ---
 

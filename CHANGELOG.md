@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- `GET /healthz` endpoint with runtime degradation checks (goroutine count, GC pause pressure, scheduler responsiveness); configurable via `ROS_HEALTHZ_MAX_GOROUTINES` and `ROS_HEALTHZ_MAX_GC_PAUSE_MS`
+- Per-phase Prometheus pipeline histograms (`rosocp_pipeline_phase_duration_seconds`) for `download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, and `metadata_refresh`
+- End-to-end pipeline duration histogram (`rosocp_pipeline_total_duration_seconds` with `status=success|error`)
+- Grafana dashboard panels for total pipeline duration and per-phase heatmap
 - `make test-short` for fast local unit tests (`go test -short ./...`, skips Docker/testcontainers)
 - Prometheus counter `rosocp_csv_rows_skipped_total{report_type}` for skipped CSV parse rows
 - Migration 000144: per-table autovacuum tuning (`fillfactor=85`) for `recommendation_sets` and `container_usage_samples`
@@ -24,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - VM CSV parse errors: per-row logs downgraded to debug; one summary warn per file when rows are skipped
 
 - Container recommendation list API: use slim list DTO (`BuildListResponse`) instead of full detail assembly; preserves list UI fields while omitting plots and duplicate notification nesting (performance audit A-1)
+- **Breaking (notifications):** Container/namespace detail responses emit `notifications` only on `recommendation_engines.<engine>`; top-level and term-level notification maps removed. List rows expose `recommendations.notification_codes` (integer array) instead of `recommendations.notifications`. Update UI to read engine-level maps on detail and codes on list (ADR-0293, performance audit A-2).
 - API middleware: parse `x-rh-identity` once in identity middleware and reuse the cost-management entitlement flag in entitlement middleware (performance audit A-4)
 
 ### Fixed

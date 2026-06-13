@@ -9,6 +9,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Bounded pipeline phase label values (ADR-0243: no tenant-specific labels).
+const (
+	PhaseDownload             = "download"
+	PhaseParseDigest          = "parse_digest"
+	PhaseWriteDigests         = "write_digests"
+	PhaseRecommend            = "recommend"
+	PhaseWriteRecommendations = "write_recommendations"
+	PhasePostProcess          = "post_process"
+	PhaseMetadataRefresh      = "metadata_refresh"
+)
+
 var (
 	DBQueryDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -31,10 +42,19 @@ var (
 	PipelinePhaseDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "rosocp_pipeline_phase_duration_seconds",
-			Help:    "Duration of individual pipeline phases (digest, recommend, write, quality, history, gpu_enrichment)",
-			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+			Help:    "Duration of each pipeline phase in seconds (download, parse_digest, write_digests, recommend, write_recommendations, post_process, metadata_refresh)",
+			Buckets: prometheus.ExponentialBuckets(0.01, 3, 12),
 		},
 		[]string{"phase"},
+	)
+
+	PipelineTotalDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rosocp_pipeline_total_duration_seconds",
+			Help:    "End-to-end Kafka manifest processing duration in seconds",
+			Buckets: prometheus.ExponentialBuckets(0.01, 3, 12),
+		},
+		[]string{"status"},
 	)
 
 	RecommendationsWritten = promauto.NewCounterVec(
@@ -115,9 +135,23 @@ func ObserveRecommendation(typ string, start time.Time) {
 	RecommendationDuration.WithLabelValues(typ).Observe(time.Since(start).Seconds())
 }
 
-// ObservePipelinePhase records elapsed time for a pipeline phase (digest, recommend, write, etc.).
+// ObservePipelinePhase records elapsed time for a pipeline phase.
 func ObservePipelinePhase(phase string, start time.Time) {
 	PipelinePhaseDuration.WithLabelValues(phase).Observe(time.Since(start).Seconds())
+}
+
+// ObservePhase runs fn and records its wall-clock duration under phase.
+func ObservePhase(phase string, fn func() error) error {
+	start := time.Now()
+	err := fn()
+	PipelinePhaseDuration.WithLabelValues(phase).Observe(time.Since(start).Seconds())
+	return err
+}
+
+// ObservePipelineTotal records end-to-end manifest processing duration.
+// status must be "success" or "error".
+func ObservePipelineTotal(status string, start time.Time) {
+	PipelineTotalDuration.WithLabelValues(status).Observe(time.Since(start).Seconds())
 }
 
 // IncRecommendationsWritten increments the written counter for a recommendation type.

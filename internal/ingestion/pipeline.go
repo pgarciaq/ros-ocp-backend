@@ -76,6 +76,7 @@ func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRo
 	}
 
 	t0 := time.Now()
+	defer func() { metrics.ObservePipelinePhase(metrics.PhaseWriteDigests, t0) }()
 	defer func() { metrics.ObserveDB("upsert_usage_samples", t0) }()
 
 	tx, err := pool.Begin(ctx)

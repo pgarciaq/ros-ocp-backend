@@ -3042,7 +3042,7 @@ data:
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
-                  "mode": "none"
+                  "mode": "normal"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
@@ -3101,8 +3101,187 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Pipeline phase duration p95",
+          "title": "Pipeline phase duration p95 (stacked)",
           "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "${datasource}",
+            "type": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 60
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 109
+          },
+          "id": 126,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.3",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "${datasource}",
+                "type": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum(rate(rosocp_pipeline_total_duration_seconds_bucket[5m])) by (le, status))",
+              "legendFormat": "{{status}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Total pipeline duration p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "${datasource}",
+            "type": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 109
+          },
+          "id": 127,
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "color": {
+              "exponent": 0.5,
+              "fill": "dark-orange",
+              "mode": "scheme",
+              "reverse": false,
+              "scale": "exponential",
+              "scheme": "Oranges",
+              "steps": 64
+            },
+            "exemplars": {
+              "color": "rgba(255,0,255,0.7)"
+            },
+            "filterValues": {
+              "le": 1e-9
+            },
+            "legend": {
+              "show": true
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "tooltip": {
+              "mode": "single",
+              "showColorScale": false,
+              "yHistogram": false
+            },
+            "yAxis": {
+              "axisPlacement": "left",
+              "reverse": false,
+              "unit": "s"
+            }
+          },
+          "pluginVersion": "11.6.3",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "${datasource}",
+                "type": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(rosocp_pipeline_phase_duration_seconds_bucket[5m])) by (le, phase)",
+              "format": "heatmap",
+              "legendFormat": "{{phase}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Pipeline phase duration heatmap",
+          "type": "heatmap"
         },
         {
           "datasource": {
@@ -3209,7 +3388,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 109
+            "y": 117
           },
           "id": 106,
           "panels": [],
@@ -3281,7 +3460,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 110
+            "y": 118
           },
           "id": 107,
           "options": {
@@ -3380,7 +3559,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 110
+            "y": 118
           },
           "id": 108,
           "options": {
@@ -3479,7 +3658,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 110
+            "y": 118
           },
           "id": 109,
           "options": {
@@ -3519,7 +3698,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 117
+            "y": 125
           },
           "id": 110,
           "panels": [],
@@ -3589,7 +3768,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 118
+            "y": 126
           },
           "id": 111,
           "options": {
@@ -3686,7 +3865,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 118
+            "y": 126
           },
           "id": 112,
           "options": {
@@ -3785,7 +3964,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 118
+            "y": 126
           },
           "id": 113,
           "options": {

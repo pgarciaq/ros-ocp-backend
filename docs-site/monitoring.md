@@ -47,7 +47,8 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | `rosocp_kafka_retries_total` | Counter | — | Messages requeued for retry (precursor to DLQ routing) |
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations saved (`container`, `namespace`, `node`, `pvc`) |
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | How long each recommendation domain takes |
-| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Ingestion sub-phases (`digest`, `gpu_enrichment`) |
+| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase pipeline timing (`download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, `metadata_refresh`) |
+| `rosocp_pipeline_total_duration_seconds` | Histogram | `status` | End-to-end manifest processing (`success` or `error`) |
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
 
 **Is it processing?**
@@ -484,7 +485,7 @@ Use the **ROSOCP** Grafana dashboard sections above as your starting point. The 
 ### Symptom: High latency (detailed)
 
 1. Compare P95 across `rosocp_recommendation_duration_seconds` types to find the slow domain.
-2. Check `rosocp_pipeline_phase_duration_seconds` for slow digest or GPU enrichment.
+2. Check `rosocp_pipeline_phase_duration_seconds` for slow `download`, `parse_digest`, or `recommend` phases.
 3. Check `rosocp_db_query_duration_seconds` for database bottlenecks.
 4. Review API `rosocp_request_duration_seconds` if UI/API feels slow.
 

@@ -161,6 +161,7 @@ func flushDigestGroupBatch(
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
 	start := time.Now()
 	defer func() {
+		metrics.ObservePipelinePhase(metrics.PhaseWriteDigests, start)
 		metrics.ObserveIngestFlush(start)
 		metrics.IncIngestFlushTotal()
 	}()

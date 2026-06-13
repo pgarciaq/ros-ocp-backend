@@ -74,7 +74,8 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 | `rosocp_kafka_retries_total` | Counter | — | Kafka messages requeued with incremented retry count |
 | `rosocp_recommendations_written_total` | Counter | `type` | Recommendations persisted to PostgreSQL. `type`: `container`, `namespace`, `node`, `pvc`. **Note:** `snapshot` is observed for duration but not incremented on write (known gap) |
 | `rosocp_recommendation_duration_seconds` | Histogram | `type` | End-to-end recommendation computation time. `type`: `container`, `node`, `gpu`, `namespace`, `pvc`, `snapshot` |
-| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Sub-phase timing within ingestion. Observed phases: `digest`, `gpu_enrichment` |
+| `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase pipeline timing. Phases: `download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, `metadata_refresh` |
+| `rosocp_pipeline_total_duration_seconds` | Histogram | `status` | End-to-end Kafka manifest processing (`success` or `error`) |
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
 
 **Source files:** `internal/metrics/metrics.go`, `internal/services/report_processor.go`
@@ -528,6 +529,12 @@ Pipeline phases:
 
 ```promql
 histogram_quantile(0.95, sum by (phase, le) (rate(rosocp_pipeline_phase_duration_seconds_bucket[5m])))
+```
+
+Total pipeline duration:
+
+```promql
+histogram_quantile(0.95, sum by (status, le) (rate(rosocp_pipeline_total_duration_seconds_bucket[5m])))
 ```
 
 ### Is the database healthy?

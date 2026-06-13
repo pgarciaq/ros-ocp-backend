@@ -17,6 +17,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	// HistogramVec / Counter may not emit samples until touched at least once.
 	DBQueryDuration.WithLabelValues("metric_test").Observe(0)
 	RecommendationDuration.WithLabelValues("metric_test").Observe(0)
+	PipelinePhaseDuration.WithLabelValues(PhaseDownload).Observe(0)
+	PipelineTotalDuration.WithLabelValues("success").Observe(0)
 	KafkaMessagesProcessed.Inc()
 	KafkaDLQMessagesTotal.Inc()
 	KafkaRetriesTotal.Inc()
@@ -28,6 +30,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	names := []string{
 		"rosocp_db_query_duration_seconds",
 		"rosocp_recommendation_duration_seconds",
+		"rosocp_pipeline_phase_duration_seconds",
+		"rosocp_pipeline_total_duration_seconds",
 		"rosocp_kafka_messages_processed_total",
 		"rosocp_kafka_dlq_messages_total",
 		"rosocp_kafka_retries_total",
@@ -68,6 +72,16 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 
 	require.NotEmpty(t, prometheus.DefBuckets, "sanity: prometheus.DefBuckets must be non-empty")
 
+	phaseMF := index["rosocp_pipeline_phase_duration_seconds"]
+	gotPhaseBuckets := phaseMF.GetMetric()[0].GetHistogram().GetBucket()
+	expectedBuckets := prometheus.ExponentialBuckets(0.01, 3, 12)
+	require.Len(t, gotPhaseBuckets, len(expectedBuckets))
+	for i, b := range expectedBuckets {
+		require.NotNil(t, gotPhaseBuckets[i].UpperBound)
+		assert.InEpsilon(t, b, gotPhaseBuckets[i].GetUpperBound(), 1e-9,
+			"pipeline phase bucket %d upper_bound mismatch", i)
+	}
+
 	dbMF := index["rosocp_db_query_duration_seconds"]
 	gotBuckets := dbMF.GetMetric()[0].GetHistogram().GetBucket()
 	require.Len(t, gotBuckets, len(prometheus.DefBuckets))
@@ -102,4 +116,63 @@ func TestMetricsPromautoRepeatedObserveDoesNotPanic(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestObservePhaseRecordsHistogram(t *testing.T) {
+	t.Parallel()
+
+	const phase = PhaseParseDigest
+	err := ObservePhase(phase, func() error {
+		time.Sleep(2 * time.Millisecond)
+		return nil
+	})
+	require.NoError(t, err)
+
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+
+	var found bool
+	for _, mf := range mfs {
+		if mf.GetName() != "rosocp_pipeline_phase_duration_seconds" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "phase" && lp.GetValue() == phase {
+					h := m.GetHistogram()
+					require.NotNil(t, h)
+					assert.Greater(t, h.GetSampleCount(), uint64(0))
+					assert.Greater(t, h.GetSampleSum(), 0.0)
+					found = true
+				}
+			}
+		}
+	}
+	require.True(t, found, "expected histogram sample for phase %q", phase)
+}
+
+func TestObservePipelineTotalRecordsStatus(t *testing.T) {
+	t.Parallel()
+
+	ObservePipelineTotal("success", time.Now().Add(-10*time.Millisecond))
+	ObservePipelineTotal("error", time.Now().Add(-5*time.Millisecond))
+
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+
+	statuses := map[string]bool{}
+	for _, mf := range mfs {
+		if mf.GetName() != "rosocp_pipeline_total_duration_seconds" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "status" {
+					statuses[lp.GetValue()] = true
+				}
+			}
+		}
+	}
+	assert.True(t, statuses["success"])
+	assert.True(t, statuses["error"])
 }

@@ -34,6 +34,36 @@ import (
 
 var cfg *config.Config = config.GetConfig()
 
+// ingestCSVFromURL downloads a report payload and runs native plugin ingest or a fallback handler.
+func ingestCSVFromURL(
+	ctx context.Context,
+	fileURL, orgID, clusterUUID, csvType string,
+	fallback func(context.Context, *pgxpool.Pool, io.Reader, string, string) error,
+) error {
+	var body io.ReadCloser
+	if err := metrics.ObservePhase(metrics.PhaseDownload, func() error {
+		var err error
+		body, err = utils.ReadCSVBodyFromUrl(fileURL)
+		return err
+	}); err != nil {
+		csvFetchError.Inc()
+		return fmt.Errorf("fetch %s CSV: %w", csvType, err)
+	}
+	defer body.Close()
+
+	pool := db.GetPool()
+	return metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
+		handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, csvType)
+		if err != nil {
+			return err
+		}
+		if !handled && fallback != nil {
+			return fallback(ctx, pool, body, orgID, clusterUUID)
+		}
+		return nil
+	})
+}
+
 // nativeCSVIngestViaPlugins delegates to [plugin.DispatchCSV] which finds the
 // enabled CSVIngestor for csvType, runs IngestCSV, then fires matching IngestHooks.
 // Returns handled=false when no ingestor claimed csvType (caller should use the
@@ -74,6 +104,16 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 	log := logging.GetLogger()
 	cfg := config.GetConfig()
 	validate := validator.New()
+
+	pipelineStart := time.Now()
+	pipelineSucceeded := false
+	defer func() {
+		status := "error"
+		if pipelineSucceeded {
+			status = "success"
+		}
+		metrics.ObservePipelineTotal(status, pipelineStart)
+	}()
 
 	commitOnPermanentFailure := func(reason string) {
 		logPoisonMessage(log, msg, reason, nil)
@@ -566,9 +606,11 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
 		} else {
 			metrics.KafkaMessagesProcessed.Inc()
+			pipelineSucceeded = true
 		}
 	} else if appCfg.KafkaAutoCommit && kafkaTransientErr == nil && !reportProcessingFailed {
 		metrics.KafkaMessagesProcessed.Inc()
+		pipelineSucceeded = true
 	}
 }
 
@@ -589,31 +631,14 @@ func processContainerCSVIngest(ctx context.Context, fileURL string, kafkaMsg typ
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch container CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	tDigest := time.Now()
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "container")
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, "container", func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return processContainerDigestFallback(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native engine: digest processing failed: %v", err)
 		ingestionErrors.WithLabelValues("digest").Inc()
 		return fmt.Errorf("digest processing: %w", err)
 	}
-	if !handled {
-		if err := processContainerDigestFallback(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native engine: digest processing failed: %v", err)
-			ingestionErrors.WithLabelValues("digest").Inc()
-			return fmt.Errorf("digest processing: %w", err)
-		}
-	}
-	metrics.ObservePipelinePhase("digest", tDigest)
 	return nil
 }
 
@@ -655,20 +680,26 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 
 	batchState := &engine.ContainerRecBatchState{}
 	totalWritten := 0
-	tRec := time.Now()
 	strictAnalytics := appCfg.IngestStrictAnalytics
 
+	tRec := time.Now()
 	err = engine.RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []engine.ContainerRec) error {
-		n, batchErr := engine.WriteContainerRecBatch(
-			ctx, pool, log, batch, oldRecs, costData, orgID, clusterUUID, strictAnalytics, batchState,
-			func() { ingestionErrors.WithLabelValues("write").Inc() },
-		)
-		if batchErr != nil {
+		var n int
+		writeErr := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+			var batchErr error
+			n, batchErr = engine.WriteContainerRecBatch(
+				ctx, pool, log, batch, oldRecs, costData, orgID, clusterUUID, strictAnalytics, batchState,
+				func() { ingestionErrors.WithLabelValues("write").Inc() },
+			)
 			return batchErr
+		})
+		if writeErr != nil {
+			return writeErr
 		}
 		totalWritten += n
 		return nil
 	})
+	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tRec)
 	metrics.ObserveRecommendation("container", tRec)
 
 	if err != nil {
@@ -684,7 +715,9 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 	metrics.IncRecommendationsWritten("container", totalWritten)
 	log.Infof("native engine: wrote %d recommendations", totalWritten)
 
-	if refreshErr := engine.RefreshOrgMetadata(ctx, pool, orgID); refreshErr != nil {
+	if refreshErr := metrics.ObservePhase(metrics.PhaseMetadataRefresh, func() error {
+		return engine.RefreshOrgMetadata(ctx, pool, orgID)
+	}); refreshErr != nil {
 		log.Errorf("native engine: org metadata refresh failed: %v", refreshErr)
 		return fmt.Errorf("refresh org metadata: %w", refreshErr)
 	}
@@ -707,11 +740,11 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 		}
 	}
 
+	tPost := time.Now()
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	if plugin.EnabledFor("gpu") {
 		eg.Go(func() error {
-			tGPU := time.Now()
 			if err := engine.MarkContainersWithGPU(egCtx, pool, orgID, clusterUUID); err != nil {
 				log.Warnf("native engine: marking GPU containers failed: %v", err)
 			}
@@ -723,7 +756,6 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 			if err := engine.StoreGPUClassifications(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
 				log.Warnf("native engine: storing GPU classifications failed: %v", err)
 			}
-			metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
 			return nil
 		})
 	}
@@ -749,6 +781,7 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 			PluginHookErrors.WithLabelValues("cluster-quota", "after_container_recs").Inc()
 		}
 	}
+	metrics.ObservePipelinePhase(metrics.PhasePostProcess, tPost)
 	return nil
 }
 
@@ -763,7 +796,10 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 // Tier 1 node utilization signals, and persists the results.
 func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config, costData *costdata.ClusterCostData) error {
 	t0 := time.Now()
-	defer func() { metrics.ObserveRecommendation("node", t0) }()
+	defer func() {
+		metrics.ObservePipelinePhase(metrics.PhaseRecommend, t0)
+		metrics.ObserveRecommendation("node", t0)
+	}()
 
 	log := logging.ForOrg(orgID, clusterUUID)
 
@@ -802,7 +838,9 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	for i, tc := range terms {
 		validTerms[i] = tc.Name
 	}
-	if err := engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms); err != nil {
+	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+		return engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms)
+	}); err != nil {
 		log.Errorf("node recs: persist failed: %v", err)
 		return fmt.Errorf("persist node recommendations: %w", err)
 	}
@@ -818,26 +856,12 @@ func processNamespaceCSVIngest(ctx context.Context, fileURL string, kafkaMsg typ
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native namespace engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch namespace CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, "namespace")
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, "namespace", func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessNamespaceCSVToDigests(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native namespace engine: digest processing failed: %v", err)
 		return fmt.Errorf("namespace digest processing: %w", err)
-	}
-	if !handled {
-		if err := ingestion.ProcessNamespaceCSVToDigests(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native namespace engine: digest processing failed: %v", err)
-			return fmt.Errorf("namespace digest processing: %w", err)
-		}
 	}
 	return nil
 }
@@ -855,6 +879,7 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 	start := now.AddDate(0, 0, -nsCfg.MaxLookbackDays)
 	tNs := time.Now()
 	results, err := engine.RecommendAllNamespaces(ctx, pool, orgID, clusterUUID, start, now)
+	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tNs)
 	metrics.ObserveRecommendation("namespace", tNs)
 	if err != nil {
 		log.Errorf("native namespace engine: recommendation failed: %v", err)
@@ -866,7 +891,9 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 
-	if err := engine.WriteNamespaceRecommendations(ctx, pool, results); err != nil {
+	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+		return engine.WriteNamespaceRecommendations(ctx, pool, results)
+	}); err != nil {
 		log.Errorf("native namespace engine: writing recommendations failed: %v", err)
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
@@ -878,13 +905,16 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 		log.Errorf("native namespace engine: business hours recommendation failed: %v", bhErr)
 		return fmt.Errorf("recommend business hours namespaces: %w", bhErr)
 	} else if len(bhResults) > 0 {
-		if err := engine.WriteNamespaceRecommendations(ctx, pool, bhResults); err != nil {
+		if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+			return engine.WriteNamespaceRecommendations(ctx, pool, bhResults)
+		}); err != nil {
 			log.Errorf("native namespace engine: writing business hours recommendations failed: %v", err)
 			return fmt.Errorf("write business hours namespace recommendations: %w", err)
 		}
 		bhWritten = len(bhResults)
 	}
 
+	tPost := time.Now()
 	if err := engine.AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
 		log.Errorf("native namespace engine: idle state aggregation failed: %v", err)
 		return fmt.Errorf("aggregate namespace idle state: %w", err)
@@ -913,6 +943,7 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 			PluginHookErrors.WithLabelValues("quota", "after_namespace_ingest").Inc()
 		}
 	}
+	metrics.ObservePipelinePhase(metrics.PhasePostProcess, tPost)
 	return nil
 }
 
@@ -931,26 +962,12 @@ func processClusterQuotaCSVIngest(ctx context.Context, fileURL string, kafkaMsg 
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native cluster-quota engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch cluster-quota CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeClusterQuota))
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeClusterQuota), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessClusterQuotaCSV(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native cluster-quota engine: ingest failed: %v", err)
 		return fmt.Errorf("cluster-quota ingest: %w", err)
-	}
-	if !handled {
-		if err := ingestion.ProcessClusterQuotaCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native cluster-quota engine: ingest failed: %v", err)
-			return fmt.Errorf("cluster-quota ingest: %w", err)
-		}
 	}
 	return nil
 }
@@ -963,8 +980,12 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
+	var body io.ReadCloser
+	if err := metrics.ObservePhase(metrics.PhaseDownload, func() error {
+		var err error
+		body, err = utils.ReadCSVBodyFromUrl(fileURL)
+		return err
+	}); err != nil {
 		csvFetchError.Inc()
 		log.Errorf("native VM engine: unable to fetch cluster instance types JSON: %v", err)
 		return fmt.Errorf("fetch cluster instance types JSON: %w", err)
@@ -972,7 +993,9 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 	defer body.Close()
 
 	pool := db.GetPool()
-	if err := engine.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID); err != nil {
+	if err := metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
+		return engine.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID)
+	}); err != nil {
 		log.Errorf("native VM engine: cluster instance types ingest failed: %v", err)
 		return fmt.Errorf("cluster instance types ingest: %w", err)
 	}
@@ -994,26 +1017,12 @@ func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.Kafk
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native VM engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch VM CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(csvType))
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(csvType), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessVMCSV(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native VM engine: ingest failed: %v", err)
 		return fmt.Errorf("VM ingest: %w", err)
-	}
-	if !handled {
-		if err := ingestion.ProcessVMCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native VM engine: ingest failed: %v", err)
-			return fmt.Errorf("VM ingest: %w", err)
-		}
 	}
 	return nil
 }
@@ -1033,26 +1042,12 @@ func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native storage engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch storage CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeStorage))
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeStorage), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessStorageCSV(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native storage engine: digest processing failed: %v", err)
 		return fmt.Errorf("storage digest processing: %w", err)
-	}
-	if !handled {
-		if err := ingestion.ProcessStorageCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native storage engine: digest processing failed: %v", err)
-			return fmt.Errorf("storage digest processing: %w", err)
-		}
 	}
 	return nil
 }
@@ -1073,6 +1068,7 @@ func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
 
 	tPVC := time.Now()
 	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID, terms)
+	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tPVC)
 	metrics.ObserveRecommendation("pvc", tPVC)
 	if err != nil {
 		log.Errorf("native storage engine: PVC recommendation failed: %v", err)
@@ -1103,7 +1099,9 @@ func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
 	for i, tc := range terms {
 		validTerms[i] = tc.Name
 	}
-	if err := engine.WritePVCRecommendations(ctx, pool, results, validTerms); err != nil {
+	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+		return engine.WritePVCRecommendations(ctx, pool, results, validTerms)
+	}); err != nil {
 		log.Errorf("native storage engine: writing PVC recommendations failed: %v", err)
 		return fmt.Errorf("write PVC recommendations: %w", err)
 	}
@@ -1127,26 +1125,12 @@ func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg type
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	body, err := utils.ReadCSVBodyFromUrl(fileURL)
-	if err != nil {
-		csvFetchError.Inc()
-		log.Errorf("native snapshot engine: unable to fetch CSV from URL: %v", err)
-		return fmt.Errorf("fetch snapshot CSV: %w", err)
-	}
-	defer body.Close()
-
-	pool := db.GetPool()
-
-	handled, err := nativeCSVIngestViaPlugins(ctx, pool, body, orgID, clusterUUID, string(types.PayloadTypeSnapshot))
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeSnapshot), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessSnapshotCSV(ctx, pool, r, orgID, clusterUUID)
+	})
 	if err != nil {
 		log.Errorf("native snapshot engine: ingestion failed: %v", err)
 		return fmt.Errorf("snapshot ingestion: %w", err)
-	}
-	if !handled {
-		if err := ingestion.ProcessSnapshotCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
-			log.Errorf("native snapshot engine: ingestion failed: %v", err)
-			return fmt.Errorf("snapshot ingestion: %w", err)
-		}
 	}
 	return nil
 }
@@ -1181,6 +1165,7 @@ func runSnapshotRecommendations(kafkaMsg types.KafkaMsg) error {
 
 	tSnap := time.Now()
 	recs, err := engine.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
+	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tSnap)
 	metrics.ObserveRecommendation("snapshot", tSnap)
 	if err != nil {
 		log.Errorf("native snapshot engine: classification failed: %v", err)
@@ -1188,15 +1173,21 @@ func runSnapshotRecommendations(kafkaMsg types.KafkaMsg) error {
 	}
 
 	if len(recs) > 0 {
-		if err := engine.WriteSnapshotRecommendations(ctx, pool, recs); err != nil {
+		if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+			return engine.WriteSnapshotRecommendations(ctx, pool, recs)
+		}); err != nil {
 			log.Errorf("native snapshot engine: writing recommendations failed: %v", err)
 			return fmt.Errorf("write snapshot recommendations: %w", err)
 		}
 		log.Infof("native snapshot engine: wrote %d snapshot recommendations", len(recs))
 	}
 
-	removed, err := engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, settings.InventoryFreshHours, appCfg.SnapshotStaleGraceHours)
-	if err != nil {
+	var removed int64
+	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
+		var reconcileErr error
+		removed, reconcileErr = engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, settings.InventoryFreshHours, appCfg.SnapshotStaleGraceHours)
+		return reconcileErr
+	}); err != nil {
 		log.Errorf("native snapshot engine: reconciliation failed: %v", err)
 		return fmt.Errorf("reconcile snapshots: %w", err)
 	}

@@ -437,7 +437,7 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	if err := StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms, gpuCostData); err != nil {
 		return fmt.Errorf("store GPU classifications: %w", err)
 	}
-	metrics.ObservePipelinePhase("gpu_enrichment", tGPU)
+	metrics.ObservePipelinePhase(metrics.PhasePostProcess, tGPU)
 
 	// Time-slicing is evaluated at API read time; re-run classification path so persisted
 	// gpu_classification reflects new thresholds. Exercise timeslicing heuristics for observability.
