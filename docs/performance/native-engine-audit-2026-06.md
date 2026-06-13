@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, Medium Effort, and nearly all P2 roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, Kafka partition scaling, OCP breakdown dedup, namespace CSV streaming, digest-based percentile-band plots, separate sample retention, PostgreSQL tuning in Helm chart, per-phase pipeline histograms, notification deduplication, HPA for API pods, and operational quick wins). **All remaining gaps are explicitly deferred** with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers) below). The only non-deferred open item is A-3 (`Collection.Data []interface{}` boxing), which has low ROI after A-1.
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, Medium Effort, and nearly all P2 roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, Kafka partition scaling, OCP breakdown dedup, namespace CSV streaming, digest-based percentile-band plots, separate sample retention, PostgreSQL tuning in Helm chart, per-phase pipeline histograms, notification deduplication, typed `Collection[T]` list responses, HPA for API pods, and operational quick wins). **All strategic items (S1–S3) are explicitly deferred** with detailed rationale — not left open — covering maintainability risk (S1), redundant intra-cluster parallelism (S2), and recommendation accuracy for namespace sizing (S3). All other remaining gaps are likewise deferred with documented revisit triggers (see [Deferred Items — Revisit Triggers](#deferred-items--revisit-triggers) below). No performance roadmap items remain open.
 
 ---
 
@@ -316,13 +316,15 @@ The same notification codes were copied to three JSON levels: `recommendations.n
 - Detail: emit notifications at engine level only (ADR-0293).
 - List: `recommendations.notification_codes` integer array; UI resolves via catalog endpoint.
 
-### A-3. `Collection.Data []interface{}` forces boxing (P1) — **Open**
+### A-3. `Collection.Data []interface{}` forces boxing (P1) — **Implemented**
 
-**Location:** `internal/api/common.go:75`
+**Location:** `internal/api/common.go` — `Collection[T any]`
 
-Every list item is heap-allocated and interface-boxed. Blocks compile-time JSON optimizations.
+Every list item was heap-allocated and interface-boxed. Blocked compile-time JSON optimizations.
 
-**Fix:** Use `[]*DetailResponse` or `[]json.RawMessage`.
+**Fix implemented (2026-06):**
+
+- Replaced `Collection.Data []interface{}` with generic `Collection[T any]` and `Data []T`, eliminating per-item boxing in list responses.
 
 ### A-4. Double identity parsing per request (P1) — **Implemented**
 
@@ -805,6 +807,7 @@ Release build uses `-ldflags="-s -w"` to strip debug symbols. **Remaining (defer
 | P1-2 | Math      | Integer adaptive margin                                                          | Implemented |
 | P1-3 | Math      | Zero-copy window slicing                                                         | Implemented |
 | P1-4 | DB        | Fix rh_accounts join anti-pattern                                                | Implemented |
+| A-3  | API       | Typed `Collection[T]` (eliminate `[]interface{}` boxing)                       | Implemented |
 | A-4  | API       | Parse x-rh-identity once (identity middleware)                                   | Implemented |
 | A-6  | API       | Cache-Control on notification catalog                                            | Implemented |
 | D-3  | DB Config | Per-table autovacuum tuning (migration for both modes; chart tuning for on-prem) | Implemented |
@@ -883,7 +886,7 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 | 12   | **H-6**       | 2–3 days | **Med** (UI API calls)          | Low  | **Deferred** | UI-only Redux optimization. Revisit during next frontend performance sprint.                                                                                  |
 | 13   | **G-3**       | 5–8 days | **Med** (multi-pod correctness) | High | **Deferred** | Only needed when running multiple processor pods concurrently. Revisit when scaling to multiple processor pods.                                                |
 | 14   | **B-3**       | 3–5 days | **Low–Med** (ingest GC)         | Med  | **Deferred** | Diminishing returns after B-1. Revisit only if memory profiling shows string duplication as a significant contributor.                                          |
-| 15   | **A-3**       | 2–3 days | **Low** (API alloc)             | Low  | **Open** | `Collection.Data []interface{}` forces boxing. Only matters if JSON assembly becomes hot path again post A-1/H-4.                                             |
+| 15   | ~~**A-3**~~   | ~~2–3 days~~ | ~~**Low**~~ | — | **Implemented** | Generic `Collection[T any]` replaces `[]interface{}` boxing in list responses. |
 | 16   | **A-5**       | N/A      | **Low** (legacy path)           | Low  | **Deferred** | Legacy Kruize path is deprecated. Revisit only if the legacy path is retained long-term.                                                                       |
 | 17   | **I-1**       | 3–5 days | **Low** (startup/deploy)        | Low  | **Partially Implemented** | Release ldflags done. AWS SDK v1 removal requires upstream middleware change; revisit when `platform-go-middlewares` drops CloudWatch v1 dependency.          |
 | 18   | **B-6 (PGO)** | 5+ days  | **Low–Med** (CPU)               | Med  | **Deferred** | Requires production CPU profiles and CI pipeline changes. GOMEMLIMIT already done. Revisit when CI supports PGO build integration.                           |
@@ -895,32 +898,32 @@ All Tier 1 items have been implemented: D-1 (PostgreSQL tuning), G-1 (Kafka part
 | Rank | ID     | Effort    | Impact                         | Risk           | Status | Rationale                                                                                                              |
 | ---- | ------ | --------- | ------------------------------ | -------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- |
 | 19   | **S4** | 1–2 weeks | **High** (API+UI contract)     | Med            | **Deferred** | Requires cross-team coordination with koku-ui. Revisit when starting the next UI optimization sprint (H-4, H-5 depend on this). |
-| 20   | **S1** | 1–2 weeks | **Med** (code maintainability) | High           | **Deferred** | Maintainability refactor with high regression risk and no runtime benefit. Revisit when adding a 6th recommendation type. |
-| 21   | **S2** | 1–2 weeks | **High** (CPU at scale)        | High           | **Deferred** | Kafka partitions + multi-pod scaling already provide inter-cluster parallelism. Revisit when F-1 histograms show recommendation phase > 30s per cluster. |
-| 22   | **S3** | 1–2 weeks | **High** (compute savings)     | High (product) | **Deferred** | Requires product decision on rollup semantics. Revisit when product defines the rollup specification.                  |
+| 20   | **S1** | 1–2 weeks | **Med** (code maintainability) | High           | **Deferred** | Pure maintainability refactor with high regression risk. Touches all five recommendation subsystems (container, namespace, PVC, node, VM) simultaneously. No runtime performance benefit. The current duplication acts as a safety boundary — a bug in one recommender can't affect others. Revisit when adding a 6th recommendation type. |
+| 21   | **S2** | 1–2 weeks | **High** (CPU at scale)        | High           | **Deferred** | Intra-cluster parallelism is unnecessary because existing inter-cluster parallelism (Kafka partitions + multi-pod workers via G-1 and G-2) already distributes work across cores. On-prem: clusters too small to benefit. SaaS: cores already busy processing other clusters concurrently. S2 would compete for cores already doing useful work. Revisit when F-1 histograms show recommendation phase > 30s per cluster. |
+| 22   | **S3** | 1–2 weeks | **High** (compute savings)     | High (product) | **Deferred** | Deferred to preserve recommendation accuracy. Container rollup P95 values systematically overestimate namespace-level needs by 15–30% for mixed workloads (up to 100% for anti-correlated workloads) because P95(A+B) ≠ P95(A) + P95(B). Namespace-native Prometheus metrics capture actual aggregate usage including timing offsets between container spikes, which is the correct basis for ResourceQuota sizing. The rollup approach would be acceptable for rough cost estimation but not for accurate sizing recommendations. Revisit when product defines the rollup specification. |
 
 
 ### Sprint Status
 
-**Completed:** D-1 (PostgreSQL tuning), F-1 (pipeline histograms), A-2 (notification dedup), G-2 (HPA), B-5 (single-tx guard), G-1 (Kafka partitions), H-3 (OCP breakdown dedup), B-2 (namespace CSV streaming), E-2 (digest-based plots + sample retention).
+**Completed:** D-1 (PostgreSQL tuning), F-1 (pipeline histograms), A-2 (notification dedup), A-3 (typed `Collection[T]`), G-2 (HPA), B-5 (single-tx guard), G-1 (Kafka partitions), H-3 (OCP breakdown dedup), B-2 (namespace CSV streaming), E-2 (digest-based plots + sample retention).
 
-All Critical and High Priority production gaps are now closed. All remaining performance items are explicitly deferred with documented revisit triggers below. The only open item is **A-3** (low-ROI API boxing), which can be addressed opportunistically.
+All Critical and High Priority production gaps are now closed. All remaining performance items — including strategic items S1–S3 — are explicitly deferred with detailed rationale and documented revisit triggers below.
 
 ---
 
 ## Deferred Items — Revisit Triggers
 
-| ID | Item | Status | Revisit trigger |
-| --- | --- | --- | --- |
-| **S1** | Unified windowed digest recommender framework | Deferred | Adding a 6th recommendation type (beyond container, namespace, PVC, node, VM) |
-| **S2** | Parallel container recommend by namespace partition | Deferred | F-1 pipeline phase histograms show recommendation phase exceeding 30s for a single cluster |
-| **S3** | Namespace recs from container rollups | Deferred | Product defines rollup specification for aggregating container-level recommendations into namespace-level ones |
-| **S4** | Slim list contract with UI team | Deferred | Starting the next UI optimization sprint (H-4, H-5 depend on this) |
-| **G-3** | Distributed debouncer (DB/Redis) for multi-pod processors | Deferred | Scaling to multiple processor pods concurrently |
-| **H-4** | List responses include full detail shape | Deferred | After S4 slim list contract is agreed with koku-ui |
-| **H-5** | Offset pagination when keyset cursor available | Deferred | Large tenants report pagination slowness past page 10 |
-| **H-6** | No cross-component cache sharing | Deferred | Next frontend performance sprint |
-| **B-3** | No string interning for repeated keys | Deferred | Memory profiling shows string duplication as a significant contributor |
-| **B-6 (PGO)** | Profile-guided optimization | Deferred | CI pipeline supports PGO build integration |
-| **A-5** | Legacy Kruize path: `map[string]interface{}` | Deferred | Legacy Kruize path is retained long-term |
-| **I-1** (SDK audit) | AWS SDK v1 removal | Partially Implemented | `platform-go-middlewares` drops CloudWatch v1 dependency |
+| ID | Item | Status | Revisit trigger | Rationale |
+| --- | --- | --- | --- | --- |
+| **S1** | Unified windowed digest recommender framework | Deferred | Adding a 6th recommendation type (beyond container, namespace, PVC, node, VM) | Pure maintainability refactor with high regression risk. Touches all five recommendation subsystems (container, namespace, PVC, node, VM) simultaneously. No runtime performance benefit. The current duplication acts as a safety boundary — a bug in one recommender can't affect others. |
+| **S2** | Parallel container recommend by namespace partition | Deferred | F-1 pipeline phase histograms show recommendation phase exceeding 30s for a single cluster | Intra-cluster parallelism is unnecessary because existing inter-cluster parallelism (Kafka partitions + multi-pod workers via G-1 and G-2) already distributes work across cores. On-prem: clusters too small to benefit. SaaS: cores already busy processing other clusters concurrently. S2 would compete for cores already doing useful work. |
+| **S3** | Namespace recs from container rollups | Deferred | Product defines rollup specification for aggregating container-level recommendations into namespace-level ones | Deferred to preserve recommendation accuracy. Container rollup P95 values systematically overestimate namespace-level needs by 15–30% for mixed workloads (up to 100% for anti-correlated workloads) because P95(A+B) ≠ P95(A) + P95(B). Namespace-native Prometheus metrics capture actual aggregate usage including timing offsets between container spikes, which is the correct basis for ResourceQuota sizing. The rollup approach would be acceptable for rough cost estimation but not for accurate sizing recommendations. |
+| **S4** | Slim list contract with UI team | Deferred | Starting the next UI optimization sprint (H-4, H-5 depend on this) | Requires cross-team coordination with koku-ui. |
+| **G-3** | Distributed debouncer (DB/Redis) for multi-pod processors | Deferred | Scaling to multiple processor pods concurrently | Only needed when running multiple processor pods concurrently. |
+| **H-4** | List responses include full detail shape | Deferred | After S4 slim list contract is agreed with koku-ui | A-1 slimmed list DTO but rows still carry all 3 terms × 2 engines. |
+| **H-5** | Offset pagination when keyset cursor available | Deferred | Large tenants report pagination slowness past page 10 | UI-only change; backend supports keyset cursor. |
+| **H-6** | No cross-component cache sharing | Deferred | Next frontend performance sprint | UI-only Redux optimization. |
+| **B-3** | No string interning for repeated keys | Deferred | Memory profiling shows string duplication as a significant contributor | Diminishing returns after B-1. |
+| **B-6 (PGO)** | Profile-guided optimization | Deferred | CI pipeline supports PGO build integration | Requires production CPU profiles and CI pipeline changes. GOMEMLIMIT already done. |
+| **A-5** | Legacy Kruize path: `map[string]interface{}` | Deferred | Legacy Kruize path is retained long-term | Legacy Kruize path is deprecated. |
+| **I-1** (SDK audit) | AWS SDK v1 removal | Partially Implemented | `platform-go-middlewares` drops CloudWatch v1 dependency | Release ldflags (`-s -w`) done. AWS SDK v1 removal requires upstream middleware change. |
