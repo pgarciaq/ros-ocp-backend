@@ -8,7 +8,7 @@
 
 ## Overall Assessment
 
-**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, and Medium Effort roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, and operational quick wins). **Remaining gaps:** on-prem PostgreSQL server tuning in the Helm chart (D-1), strategic items (S1–S4), UI contract efficiency (H-3–H-6), ingest streaming for namespace CSV (B-2), sample/digest retention split (E-2), horizontal scaling (G-1–G-3), and assorted P2 observability/API items.
+**The rewrite achieved its primary goal:** digest data is fully `int64`, percentiles are precomputed at ingest time (not at recommendation time), and the streaming recommendation engine bounds memory. The `MarginScale`/basis-points pattern is solid where used. **All P0, P1, Medium Effort, and most P2 roadmap items are now implemented** (decay lookup tables, fused CPU+memory passes, zero-copy window slicing, integer adaptive margin, deferred org metadata refresh, batched PVC/GPU writes, list API pagination via `org_container_keys`, integer micro-cents savings, VM recommendation deferral, autovacuum tuning, graceful shutdown drain, GPU/node basis-point thresholds, high-cardinality label cleanup, `GOMEMLIMIT` in Helm, `/healthz` liveness probes, Grafana dashboard modernization, Kafka partition scaling, OCP breakdown dedup, namespace CSV streaming, digest-based percentile-band plots, separate sample retention, and operational quick wins). **Remaining gaps:** on-prem PostgreSQL server tuning in the Helm chart (D-1), strategic items (S1–S4), UI contract efficiency (H-4–H-6), horizontal scaling (G-2–G-3), per-phase pipeline histograms (F-1), and assorted P2 API/ingest items.
 
 ---
 
@@ -617,7 +617,7 @@ percentile-band (`p50`/`p95`/`p99`/`max`). See [ADR-0292](../adr/0292-digest-bas
 
 ### Key constraints
 
-- **Kafka: 3 partitions** -- hard cap on parallel upload processing. A 4th processor pod sits idle.
+- **Kafka: ~~3 partitions~~ configurable (default 12)** -- G-1 resolved; partition count now set via Helm values (`kafka.topics.rosEvents.partitions`).
 - **No HPA** -- chart has no HorizontalPodAutoscaler for any ROS component
 - **Synth manifest debouncer is process-local** -- not coordinated across pods; can cause duplicate rec runs
 - **In-process caches not shared** -- fleet/savings/RBAC/threshold caches are per-pod with TTL staleness
@@ -625,9 +625,9 @@ percentile-band (`p50`/`p95`/`p99`/`max`). See [ADR-0292](../adr/0292-digest-bas
 ### Scaling model
 
 - **API pods:** Stateless, scale freely (watch DB pool x replicas)
-- **Processor pods:** Scale up to Kafka partition count (currently 3)
+- **Processor pods:** Scale up to Kafka partition count (default 12 after G-1)
 - **Housekeeper:** Singleton
-- **To go beyond 3 parallel ingests:** Increase topic partitions first (3 -> 12 is typical next step)
+- **Scaling ingest:** Partition count now configurable via Helm values (G-1 implemented)
 
 ---
 
@@ -649,9 +649,14 @@ percentile-band (`p50`/`p95`/`p99`/`max`). See [ADR-0292](../adr/0292-digest-bas
 **Fix implemented (2026-06):**
 - Removed mock override in `optimizationsProjectsTable.tsx`; table now renders live API response.
 
-### H-3. OCP breakdown fires duplicate list calls (P1) — **Open**
+### H-3. OCP breakdown fires duplicate list calls (P1) — **Implemented**
 
-The breakdown page renders both `OptimizationsProjectsTable` and `OptimizationsContainersTable`, each making separate list requests with overlapping filters.
+The breakdown page rendered both `OptimizationsProjectsTable` and `OptimizationsContainersTable`, each making separate list requests with overlapping filters.
+
+**Fix implemented (2026-06):**
+- Lifted shared fetch logic into `useOptimizationsNamespacesReport` hook in koku-ui.
+- Both tables now receive the shared report via props instead of making independent API calls.
+- Eliminates ~50% of breakdown-page API traffic.
 
 ### H-4. List responses include full detail shape (P1) — **Open**
 
@@ -712,7 +717,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 
 | ID | Theme | Change | Status |
 |----|-------|--------|--------|
-| H-3 | UI | Single fetch on OCP breakdown | Open |
+| H-3 | UI | Single fetch on OCP breakdown | Implemented |
 | H-4 | API | List field projection (term/engine/fields) | Open |
 | H-5 | UI | Adopt cursor pagination | Open |
 | P1-1 | Math | Integer savings in micro-cents | Implemented |
@@ -738,7 +743,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 | ID | Theme | Change | Status |
 |----|-------|--------|--------|
 | E-2 | Lifecycle | Separate sample vs digest retention | Implemented |
-| G-1 | Scale | Increase Kafka partitions (3 -> 12) | Open |
+| G-1 | Scale | Increase Kafka partitions (3 -> 12) | Implemented |
 | G-2 | Scale | Add HPA for API pods | Open |
 | P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Implemented |
 | P2-2 | Math | Node utilization as basis points | Implemented |
@@ -772,10 +777,10 @@ Prioritized by **impact × feasibility / risk**. Effort estimates assume a singl
 | Rank | ID | Effort | Impact | Risk | Rationale |
 |------|----|--------|--------|------|-----------|
 | 1 | **D-1** | 2–3 days | **Critical** (on-prem prod) | Low | Stock 512Mi PostgreSQL cannot sustain 10k-container fleets. Exposing `postgresql.conf` tuning (or mandating external DB) is the #1 production correctness gap. No code changes in ros-ocp-backend — Helm chart + docs. |
-| 2 | **G-1** | 0.5–1 day | **High** (ingest throughput) | Low–Med | 3 Kafka partitions hard-cap parallel ingest; 4th processor pod sits idle. Increasing to 12 partitions is config-only and unlocks linear ingest scaling to ~12 concurrent manifests. Prerequisite before adding processor replicas. |
-| 3 | **H-3** | 1 day | **High** (API load) | Low | OCP breakdown page fires two overlapping list API calls. Single shared fetch (React context or lifted state) eliminates ~50% of breakdown-page API traffic with zero backend changes. |
-| 4 | **E-2** | 3–5 days | **Very high** (disk) | Med | `container_usage_samples` drives 90%+ of storage. 30-day sample retention + 6-month digest retention could cut disk 60–80% at 10k containers. Requires product sign-off on boxplot lookback window. |
-| 5 | **B-2** | 2–3 days | **Med–High** (ingest RAM) | Low | Namespace CSV fully materializes before grouping; container path already streams. Mirror `forEachCSVRow` + incremental flush pattern. Reduces peak RAM on large namespace manifests. |
+| 2 | ~~**G-1**~~ | ~~0.5–1 day~~ | ~~**High**~~ | — | **Implemented.** Kafka partitions configurable via Helm values (default 12). |
+| 3 | ~~**H-3**~~ | ~~1 day~~ | ~~**High**~~ | — | **Implemented.** Shared fetch hook in koku-ui eliminates duplicate breakdown API calls. |
+| 4 | ~~**E-2**~~ | ~~3–5 days~~ | ~~**Very high**~~ | — | **Implemented.** Digest-based percentile-band plots + `ROS_SAMPLE_RETENTION_DAYS` (default 45). |
+| 5 | ~~**B-2**~~ | ~~2–3 days~~ | ~~**Med–High**~~ | — | **Implemented.** Namespace CSV streaming mirrors container path. |
 
 ### Tier 2 — Worth Doing Soon (good ROI, moderate effort)
 
@@ -812,9 +817,11 @@ Prioritized by **impact × feasibility / risk**. Effort estimates assume a singl
 ### Recommended Next Sprint (2 weeks)
 
 1. **D-1** — PostgreSQL tuning in Helm chart (on-prem production blocker)
-2. **G-1** — Kafka partitions 3→12 (unblocks ingest scaling)
-3. **H-3** — Deduplicate OCP breakdown list calls (immediate API load reduction)
-4. **B-2** — Stream namespace CSV (ingest memory win, follows proven pattern)
-5. **F-1** — Per-phase pipeline histograms (enables data-driven prioritization of Tier 2+)
+2. **F-1** — Per-phase pipeline histograms (enables data-driven prioritization of remaining items)
+3. **H-4** — List field projection (`?term=short&engine=cost`) to cut JSON payload 60-80%
+4. **A-2** — Notification deduplication (30-50% JSON reduction per container row)
+5. **G-2** — HPA for API pods (stateless, low risk)
 
-This sequence addresses the three scaling ceilings (DB resources, Kafka parallelism, API waste) before investing in contract changes (S4/H-4) that require cross-team coordination.
+**Completed in prior sprint:** G-1 (Kafka partitions), H-3 (OCP breakdown dedup), B-2 (namespace CSV streaming), E-2 (digest-based plots + sample retention).
+
+This sequence addresses the remaining production correctness gap (D-1), then adds observability (F-1) to guide data-driven prioritization, then reduces API payload bloat (H-4, A-2), and enables auto-scaling (G-2).
