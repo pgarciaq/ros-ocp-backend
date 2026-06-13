@@ -293,3 +293,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0291](0291-integer-micro-cents-savings-computation.md) | Integer micro-cents savings computation | Engine / Algorithm | Performance | Accepted |
 | [0292](0292-digest-based-plot-percentile-bands.md) | Digest-based percentile-band plots with separate sample retention | Data Model | Performance | Accepted |
 | [0293](0293-engine-only-notification-deduplication.md) | Engine-only notification emission in container/namespace detail JSON | API Design | Performance | Accepted |
+| [0294](0294-slim-list-contract.md) | Slim list contract for container and namespace recommendations | API Design | Performance | Accepted |

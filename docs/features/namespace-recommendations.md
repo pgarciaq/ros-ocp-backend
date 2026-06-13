@@ -16,14 +16,29 @@ Public feature page: [docs-site/features/namespace-recommendations.md](../../doc
 ## Filters
 
 List supports `filter[cluster]`, `filter[project]` (namespace), tag filters,
-pagination, sorting, **`filter[engine]`** (`cost` or `performance`; legacy flat
-`?engine=` also accepted), and **`filter[stale]`**:
+pagination, sorting, **`filter[term]`** (`short`/`medium`/`long` or
+`short_term`/`medium_term`/`long_term`; legacy flat `?term=` also accepted),
+**`filter[engine]`** (`cost` or `performance`; legacy flat `?engine=` also
+accepted), and **`filter[stale]`**:
+
+| Term/engine filter | Behavior |
+|--------------------|----------|
+| omitted | List items include `short_term` cost only (slim default) |
+| `filter[term]=medium_term` | Only the medium-term block under `recommendation_terms` |
+| `filter[engine]=performance` | Only the performance engine under each included term |
 
 | Engine filter | Behavior |
 |---------------|----------|
 | omitted | Both `cost` and `performance` under each `recommendation_terms.<term>.recommendation_engines` |
 | `filter[engine]=cost` | Only the cost engine block is returned |
 | `filter[engine]=performance` | Only the performance engine block is returned |
+
+List items use a slim list DTO
+([`BuildNamespaceListResponse`](../../internal/model/list_response.go)) that
+preserves table columns (`current`, selected term cost `variation`,
+`notification_codes`, `monitoring_end_time`) while omitting plots and duplicate
+notification nesting. Detail still uses
+[`BuildNamespaceDetailResponse`](../../internal/model/detail_response.go).
 
 Cost uses lower usage percentiles for rightsizing; performance uses higher
 percentiles for headroom (same model as container recommendations).

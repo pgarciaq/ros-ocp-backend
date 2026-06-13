@@ -445,7 +445,9 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 
 	results := page.Results
 
-	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
+	if !shouldSkipListEnrichment(apiListOptions) {
+		EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
+	}
 
 	switch apiListOptions.Format {
 	case listoptions.ResponseFormatCSV:
@@ -552,7 +554,9 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	}
 
 	results := page.Results
-	EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
+	if !shouldSkipListEnrichment(apiListOptions) {
+		EnrichNativeContainerResults(c.Request().Context(), &NativeContainerEnrichmentInput{OrgID: OrgID, Results: results})
+	}
 	page.Results = results
 
 	return serveNativeList(c, page, apiListOptions)
@@ -772,7 +776,9 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 	}
 
 	if page.Count > 0 {
-		EnrichNativeNamespaceResults(c.Request().Context(), OrgID, page.Results)
+		if !shouldSkipListEnrichment(apiListOptions) {
+			EnrichNativeNamespaceResults(c.Request().Context(), OrgID, page.Results)
+		}
 		return serveNativeNamespaceList(c, page, apiListOptions)
 	}
 
@@ -810,9 +816,10 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
-		listData := make([]*model.NamespaceDetailResponse, len(results))
+		listOpts := listResponseOptions(c)
+		listData := make([]*model.NamespaceListResponse, len(results))
 		for i := range results {
-			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
+			listData[i] = model.BuildNamespaceListResponse(&results[i], listOpts)
 		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {

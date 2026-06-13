@@ -100,7 +100,7 @@ func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListP
 	return resp
 }
 
-func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection[*model.NamespaceDetailResponse] {
+func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection[*model.NamespaceListResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -111,7 +111,7 @@ func buildNamespaceListMeta(c echo.Context, orgID string, page model.NativeNames
 		nextCursor = namespaceNextCursor(page)
 	}
 
-	resp := PaginatedCollectionResponse[*model.NamespaceDetailResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
+	resp := PaginatedCollectionResponse[*model.NamespaceListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
 	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
 	return resp
 }

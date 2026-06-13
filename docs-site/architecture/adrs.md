@@ -52,6 +52,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0291](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0291-integer-micro-cents-savings-computation.md) | Integer micro-cents savings computation | Unified fixed-point savings math; eliminates float64 hot path (P1-1) |
 | [0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md) | Digest-based percentile-band plots | Replaces query-time sample boxplots; separate `ROS_SAMPLE_RETENTION_DAYS` (E-2) |
 | [0293](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0293-engine-only-notification-deduplication.md) | Engine-only notification emission | Detail: per-engine maps only; list: `notification_codes` array (A-2) |
+| [0294](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0294-slim-list-contract.md) | Slim list contract | List DTOs omit plots; default `short_term` cost; skip enrichment at `limit=1` (S4, H-4) |
 
 ## Domains covered
 

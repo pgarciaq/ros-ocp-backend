@@ -233,6 +233,100 @@ func detectSingleEngineFilter(terms map[string]TermRecommendation) string {
 	}
 }
 
+// NamespaceListResponse is the slim Kruize-compatible namespace list item. It
+// preserves the JSON fields the projects table reads while omitting plots,
+// duration_in_hours, business_hours, and per-engine notification maps.
+type NamespaceListResponse struct {
+	ID              string                       `json:"id"`
+	ClusterAlias    string                       `json:"cluster_alias"`
+	ClusterUUID     string                       `json:"cluster_uuid"`
+	Project         string                       `json:"project"`
+	SourceID        string                       `json:"source_id"`
+	LastReported    string                       `json:"last_reported"`
+	IdleState       string                       `json:"idle_state,omitempty"`
+	Recommendations NamespaceListRecommendations `json:"recommendations"`
+}
+
+// NamespaceListRecommendations wraps namespace list-level recommendation data.
+type NamespaceListRecommendations struct {
+	Current             *DetailResourceConfig `json:"current,omitempty"`
+	MonitoringEndTime   string                `json:"monitoring_end_time"`
+	NotificationCodes   []int16               `json:"notification_codes,omitempty"`
+	RecommendationTerms map[string]ListTerm   `json:"recommendation_terms"`
+}
+
+// BuildNamespaceListResponse maps a NativeNamespaceResult into a slim list DTO.
+// When the native payload is unfiltered it includes short_term cost only in
+// recommendation_terms; term/engine query filters narrow the included terms.
+func BuildNamespaceListResponse(native *NativeNamespaceResult, opts ListResponseOptions) *NamespaceListResponse {
+	terms := namespaceTermsFromNative(native)
+
+	var current *DetailResourceConfig
+	for _, termRec := range terms {
+		if current == nil {
+			current = extractCurrent(termRec.Cost)
+		}
+		if current == nil {
+			current = extractCurrent(termRec.Performance)
+		}
+		if current != nil {
+			break
+		}
+	}
+
+	recs := NamespaceListRecommendations{
+		Current:             current,
+		MonitoringEndTime:   namespaceMonitoringEndTime(native),
+		RecommendationTerms: buildListRecommendationTerms(terms, opts),
+	}
+	if codes := aggregateNotificationCodes(terms); len(codes) > 0 {
+		recs.NotificationCodes = codes
+	}
+
+	resp := &NamespaceListResponse{
+		ID:              native.ID,
+		ClusterAlias:    native.ClusterAlias,
+		ClusterUUID:     native.ClusterUUID,
+		Project:         native.Project,
+		SourceID:        native.SourceID,
+		LastReported:    native.LastReported,
+		IdleState:       native.IdleState,
+		Recommendations: recs,
+	}
+	if resp.IdleState == "" {
+		resp.IdleState = "active"
+	}
+	return resp
+}
+
+func namespaceTermsFromNative(native *NativeNamespaceResult) map[string]TermRecommendation {
+	if native == nil || len(native.Recommendations) == 0 {
+		return nil
+	}
+	terms := make(map[string]TermRecommendation)
+	for termKey, termVal := range native.Recommendations {
+		if termKey == "monitoring_end_time" {
+			continue
+		}
+		termRec, ok := termVal.(TermRecommendation)
+		if !ok {
+			continue
+		}
+		terms[termKey] = termRec
+	}
+	return terms
+}
+
+func namespaceMonitoringEndTime(native *NativeNamespaceResult) string {
+	if native == nil {
+		return ""
+	}
+	if v, ok := native.Recommendations["monitoring_end_time"].(string); ok {
+		return v
+	}
+	return ""
+}
+
 func aggregateNotificationCodes(terms map[string]TermRecommendation) []int16 {
 	seen := make(map[int16]struct{})
 	var codes []int16
