@@ -299,6 +299,7 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_RETENTION_MONTHS` | `6` | Digest partition retention (months). |
+| `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (days). |
 | `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (`container_usage_samples`, `namespace_usage_samples`). Shorter than digest retention; detail plots use digests. |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Container recommendation history and quality partition retention. |
 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | VM recommendation history snapshot retention (`vm_recommendation_history`). Exposed read-only as `history_retention_days` on `GET /settings/vm`. See [Configurability — VM](architecture/configurability.md#vm-admin-only-no-settings-api-field). |

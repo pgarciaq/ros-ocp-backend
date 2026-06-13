@@ -9,20 +9,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// BoxPlotDetails holds the five-number summary for a single metric in a bucket.
-type BoxPlotDetails struct {
-	Min    float64 `json:"min"`
-	Q1     float64 `json:"q1"`
-	Median float64 `json:"median"`
-	Q3     float64 `json:"q3"`
+// PlotDetails holds pre-aggregated percentile-band metrics for a single time bucket.
+type PlotDetails struct {
+	P50    float64 `json:"p50"`
+	P95    float64 `json:"p95"`
+	P99    float64 `json:"p99"`
 	Max    float64 `json:"max"`
 	Format string  `json:"format"`
 }
 
-// NativePlotsData holds CPU and memory boxplot data for a single time bucket.
+// NativePlotsData holds CPU and memory plot data for a single time bucket.
 type NativePlotsData struct {
-	CPUUsage    *BoxPlotDetails `json:"cpuUsage,omitempty"`
-	MemoryUsage *BoxPlotDetails `json:"memoryUsage,omitempty"`
+	CPUUsage    *PlotDetails `json:"cpuUsage,omitempty"`
+	MemoryUsage *PlotDetails `json:"memoryUsage,omitempty"`
 }
 
 // NativePlot is the top-level plots structure matching the Kruize JSON shape.
@@ -31,40 +30,23 @@ type NativePlot struct {
 	PlotsData  map[string]NativePlotsData `json:"plots_data"`
 }
 
-// ContainerKey identifies a unique container for boxplot queries.
+// ContainerKey identifies a unique container for plot queries.
 type ContainerKey struct {
 	OrgID         string
 	ClusterUUID   string
 	Namespace     string
 	Workload      string
+	WorkloadType  string
 	ContainerName string
 }
 
-// BucketGranularity constrains the SQL bucketing to known-safe expressions.
-type BucketGranularity int
+// dailyBucketKeyFormat is the Go time format for daily digest bucket keys in plots_data.
+const dailyBucketKeyFormat = "2006-01-02T15:04:05.000Z"
 
-const (
-	BucketGranularity6Hour BucketGranularity = iota
-	BucketGranularityDaily
-)
-
-func (bg BucketGranularity) sql() (string, error) {
-	switch bg {
-	case BucketGranularity6Hour:
-		return "to_timestamp(floor(extract(epoch from sample_time) / 21600) * 21600) AT TIME ZONE 'UTC'", nil
-	case BucketGranularityDaily:
-		return "date_trunc('day', sample_time AT TIME ZONE 'UTC')", nil
-	default:
-		return "", fmt.Errorf("unhandled BucketGranularity: %d", bg)
-	}
-}
-
-// TermWindow defines the time window and bucketing for a recommendation term.
+// TermWindow defines the time window for a recommendation term.
 type TermWindow struct {
 	Name        string
 	WindowHours int
-	Bucket      BucketGranularity
-	BucketKey   string // Go time format for the bucket key in plots_data
 }
 
 // defaultTermWindows are the hardcoded defaults when no org overrides exist.
@@ -72,25 +54,36 @@ var defaultTermWindows = map[string]TermWindow{
 	"short_term": {
 		Name:        "short_term",
 		WindowHours: 24,
-		Bucket:      BucketGranularity6Hour,
-		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"medium_term": {
 		Name:        "medium_term",
 		WindowHours: 7 * 24,
-		Bucket:      BucketGranularityDaily,
-		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 	"long_term": {
 		Name:        "long_term",
 		WindowHours: 15 * 24,
-		Bucket:      BucketGranularityDaily,
-		BucketKey:   "2006-01-02T15:04:05.000Z",
 	},
 }
 
 // termKeyNames maps term ordinals to API term key suffixes.
 var termKeyNames = [3]string{"short", "medium", "long"}
+
+func plotDetailsFromDigest(cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax float64) NativePlotsData {
+	return NativePlotsData{
+		CPUUsage: &PlotDetails{
+			P50: cpuP50 / 1000.0, P95: cpuP95 / 1000.0, P99: cpuP99 / 1000.0,
+			Max: cpuMax / 1000.0, Format: "cores",
+		},
+		MemoryUsage: &PlotDetails{
+			P50: memP50 / 1024.0, P95: memP95 / 1024.0, P99: memP99 / 1024.0,
+			Max: memMax / 1024.0, Format: "MiB",
+		},
+	}
+}
+
+func dailyBucketKey(bucketDate time.Time) string {
+	return bucketDate.UTC().Format(dailyBucketKeyFormat)
+}
 
 // loadTermWindows loads org-specific term configs from the database and builds
 // TermWindow entries. Falls back to defaultTermWindows when no overrides exist.
@@ -134,24 +127,16 @@ func loadTermWindows(ctx context.Context, pool *pgxpool.Pool, orgID string) (map
 	result := make(map[string]TermWindow, len(customs))
 	for _, c := range customs {
 		name := termKeyNames[c.Ord-1] + "_term"
-		windowHours := c.WindowDays * 24
-		bucket := BucketGranularityDaily
-		if c.WindowDays <= 1 {
-			bucket = BucketGranularity6Hour
-		}
 		result[name] = TermWindow{
 			Name:        name,
-			WindowHours: windowHours,
-			Bucket:      bucket,
-			BucketKey:   "2006-01-02T15:04:05.000Z",
+			WindowHours: c.WindowDays * 24,
 		}
 	}
 	return result, nil
 }
 
-// AssembleBoxplots queries container_usage_samples and computes exact
-// five-number summaries per time bucket using percentile_cont().
-// orgID is used to load per-org term window overrides from the database.
+// AssembleBoxplots queries daily_container_digests and returns pre-aggregated
+// percentile-band plot data per daily bucket.
 func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termName string, orgID string) (*NativePlot, error) {
 	windows, err := loadTermWindows(ctx, pool, orgID)
 	if err != nil {
@@ -162,37 +147,27 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 		return nil, fmt.Errorf("unknown term: %s", termName)
 	}
 
-	end := time.Now().UTC()
-	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
 
-	bucketSQL, err := tw.Bucket.sql()
-	if err != nil {
-		return nil, fmt.Errorf("bucket granularity: %w", err)
-	}
-
-	query := fmt.Sprintf(`
-		SELECT
-			%s AS bucket,
-			MIN(cpu_usage_mc)::float8,
-			percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			MAX(cpu_usage_mc)::float8,
-			MIN(mem_usage_kib)::float8,
-			percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			MAX(mem_usage_kib)::float8
-		FROM container_usage_samples
-		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
-		  AND workload = $4 AND container_name = $5
-		  AND sample_time >= $6 AND sample_time < $7
-		GROUP BY bucket
-		ORDER BY bucket`,
-		bucketSQL)
-
-	rows, err := pool.Query(ctx, query,
-		key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.ContainerName,
+	rows, err := pool.Query(ctx, `
+		SELECT bucket_date,
+			cpu_usage_p50_mc::float8,
+			cpu_usage_p95_mc::float8,
+			cpu_usage_p99_mc::float8,
+			cpu_usage_max_mc::float8,
+			memory_usage_p50_kib::float8,
+			memory_usage_p95_kib::float8,
+			memory_usage_p99_kib::float8,
+			memory_usage_max_kib::float8
+		FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = $2
+			AND namespace = $3 AND workload = $4
+			AND workload_type = $5 AND container_name = $6
+			AND bucket_date >= $7 AND bucket_date <= $8
+			AND schedule_type = 'all_hours'
+		ORDER BY bucket_date`,
+		key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.WorkloadType, key.ContainerName,
 		start, end)
 	if err != nil {
 		return nil, fmt.Errorf("AssembleBoxplots query: %w", err)
@@ -202,26 +177,17 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	plotsData := map[string]NativePlotsData{}
 	for rows.Next() {
 		var bucket time.Time
-		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
-		var memMin, memQ1, memMed, memQ3, memMax float64
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
 
 		if err := rows.Scan(&bucket,
-			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
-			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax); err != nil {
 			return nil, fmt.Errorf("AssembleBoxplots scan: %w", err)
 		}
 
-		bucketKey := bucket.UTC().Format(tw.BucketKey)
-		plotsData[bucketKey] = NativePlotsData{
-			CPUUsage: &BoxPlotDetails{
-				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
-				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
-			},
-			MemoryUsage: &BoxPlotDetails{
-				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
-				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
-			},
-		}
+		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleBoxplots rows: %w", err)
@@ -237,7 +203,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	}, nil
 }
 
-// AssembleAllTermBoxplots computes boxplots for multiple terms in a single query (UNION ALL).
+// AssembleAllTermBoxplots computes plots for multiple terms in a single query (UNION ALL).
 func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
@@ -247,39 +213,34 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 		return nil, fmt.Errorf("load term windows: %w", err)
 	}
 
-	end := time.Now().UTC()
+	end := time.Now().UTC().Truncate(24 * time.Hour)
 	var unionParts []string
-	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.ContainerName, end}
-	argN := 7
+	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.WorkloadType, key.ContainerName, end}
+	argN := 8
 
 	for _, termName := range termNames {
 		tw, ok := windows[termName]
 		if !ok {
 			continue
 		}
-		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
-		bucketSQL, err := tw.Bucket.sql()
-		if err != nil {
-			return nil, fmt.Errorf("bucket granularity for %s: %w", termName, err)
-		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
 		unionParts = append(unionParts, fmt.Sprintf(`
 			SELECT '%s' AS term_name,
-				%s AS bucket,
-				MIN(cpu_usage_mc)::float8,
-				percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				MAX(cpu_usage_mc)::float8,
-				MIN(mem_usage_kib)::float8,
-				percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				MAX(mem_usage_kib)::float8
-			FROM container_usage_samples
-			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
-			  AND workload = $4 AND container_name = $5
-			  AND sample_time >= $%d AND sample_time < $6
-			GROUP BY bucket`, termName, bucketSQL, argN))
+				bucket_date,
+				cpu_usage_p50_mc::float8,
+				cpu_usage_p95_mc::float8,
+				cpu_usage_p99_mc::float8,
+				cpu_usage_max_mc::float8,
+				memory_usage_p50_kib::float8,
+				memory_usage_p95_kib::float8,
+				memory_usage_p99_kib::float8,
+				memory_usage_max_kib::float8
+			FROM daily_container_digests
+			WHERE org_id = $1 AND cluster_uuid = $2
+				AND namespace = $3 AND workload = $4
+				AND workload_type = $5 AND container_name = $6
+				AND bucket_date >= $%d AND bucket_date <= $7
+				AND schedule_type = 'all_hours'`, termName, argN))
 		args = append(args, start)
 		argN++
 	}
@@ -288,50 +249,30 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 		return map[string]*NativePlot{}, nil
 	}
 
-	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket"
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("AssembleAllTermBoxplots query: %w", err)
 	}
 	defer rows.Close()
 
-	termBucketKeys := make(map[string]string)
-	for _, termName := range termNames {
-		if tw, ok := windows[termName]; ok {
-			termBucketKeys[termName] = tw.BucketKey
-		}
-	}
-
 	out := make(map[string]*NativePlot)
 	plotsByTerm := make(map[string]map[string]NativePlotsData)
 	for rows.Next() {
 		var termName string
 		var bucket time.Time
-		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
-		var memMin, memQ1, memMed, memQ3, memMax float64
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
 		if err := rows.Scan(&termName, &bucket,
-			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
-			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax); err != nil {
 			return nil, fmt.Errorf("AssembleAllTermBoxplots scan: %w", err)
-		}
-		bucketKeyFmt, ok := termBucketKeys[termName]
-		if !ok {
-			continue
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
 		}
-		bucketKey := bucket.UTC().Format(bucketKeyFmt)
-		plotsByTerm[termName][bucketKey] = NativePlotsData{
-			CPUUsage: &BoxPlotDetails{
-				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
-				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
-			},
-			MemoryUsage: &BoxPlotDetails{
-				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
-				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
-			},
-		}
+		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleAllTermBoxplots rows: %w", err)
@@ -346,17 +287,15 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 	return out, nil
 }
 
-// NamespaceKey identifies a unique namespace for boxplot queries.
+// NamespaceKey identifies a unique namespace for plot queries.
 type NamespaceKey struct {
 	OrgID       string
 	ClusterUUID string
 	Namespace   string
 }
 
-// AssembleNamespaceBoxplots queries namespace_usage_samples and computes exact
-// five-number summaries per time bucket using percentile_cont().
-// Mirrors AssembleBoxplots but with namespace-level granularity (no workload/container).
-// orgID is used to load per-org term window overrides from the database.
+// AssembleNamespaceBoxplots queries daily_namespace_digests and returns
+// pre-aggregated percentile-band plot data per daily bucket.
 func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string, orgID string) (*NativePlot, error) {
 	windows, err := loadTermWindows(ctx, pool, orgID)
 	if err != nil {
@@ -367,37 +306,25 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		return nil, fmt.Errorf("unknown term: %s", termName)
 	}
 
-	end := time.Now().UTC()
-	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
 
-	bucketSQL, err := tw.Bucket.sql()
-	if err != nil {
-		return nil, fmt.Errorf("bucket granularity: %w", err)
-	}
-
-	query := fmt.Sprintf(`
-		SELECT
-			%s AS bucket,
-			MIN(cpu_usage_mc)::float8,
-			percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-			MAX(cpu_usage_mc)::float8,
-			MIN(mem_usage_kib)::float8,
-			percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-			MAX(mem_usage_kib)::float8
-		FROM namespace_usage_samples
+	rows, err := pool.Query(ctx, `
+		SELECT bucket_date,
+			cpu_usage_p50_mc::float8,
+			cpu_usage_p95_mc::float8,
+			cpu_usage_p99_mc::float8,
+			cpu_usage_max_mc::float8,
+			memory_usage_p50_kib::float8,
+			memory_usage_p95_kib::float8,
+			memory_usage_p99_kib::float8,
+			memory_usage_max_kib::float8
+		FROM daily_namespace_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
-		  AND sample_time >= $4 AND sample_time < $5
-		GROUP BY bucket
-		ORDER BY bucket`,
-		bucketSQL)
-
-	rows, err := pool.Query(ctx, query,
-		key.OrgID, key.ClusterUUID, key.Namespace,
-		start, end)
+			AND bucket_date >= $4 AND bucket_date <= $5
+			AND schedule_type = 'all_hours'
+		ORDER BY bucket_date`,
+		key.OrgID, key.ClusterUUID, key.Namespace, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("AssembleNamespaceBoxplots query: %w", err)
 	}
@@ -406,26 +333,17 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 	plotsData := map[string]NativePlotsData{}
 	for rows.Next() {
 		var bucket time.Time
-		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
-		var memMin, memQ1, memMed, memQ3, memMax float64
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
 
 		if err := rows.Scan(&bucket,
-			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
-			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax); err != nil {
 			return nil, fmt.Errorf("AssembleNamespaceBoxplots scan: %w", err)
 		}
 
-		bucketKey := bucket.UTC().Format(tw.BucketKey)
-		plotsData[bucketKey] = NativePlotsData{
-			CPUUsage: &BoxPlotDetails{
-				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
-				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
-			},
-			MemoryUsage: &BoxPlotDetails{
-				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
-				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
-			},
-		}
+		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleNamespaceBoxplots rows: %w", err)
@@ -441,7 +359,7 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 	}, nil
 }
 
-// AssembleAllTermNamespaceBoxplots computes namespace boxplots for multiple terms in one query.
+// AssembleAllTermNamespaceBoxplots computes namespace plots for multiple terms in one query.
 func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
@@ -451,7 +369,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 		return nil, fmt.Errorf("load term windows: %w", err)
 	}
 
-	end := time.Now().UTC()
+	end := time.Now().UTC().Truncate(24 * time.Hour)
 	var unionParts []string
 	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, end}
 	argN := 5
@@ -461,28 +379,22 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 		if !ok {
 			continue
 		}
-		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour)
-		bucketSQL, err := tw.Bucket.sql()
-		if err != nil {
-			return nil, fmt.Errorf("bucket granularity for %s: %w", termName, err)
-		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
 		unionParts = append(unionParts, fmt.Sprintf(`
 			SELECT '%s' AS term_name,
-				%s AS bucket,
-				MIN(cpu_usage_mc)::float8,
-				percentile_cont(0.25) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				percentile_cont(0.5)  WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				percentile_cont(0.75) WITHIN GROUP (ORDER BY cpu_usage_mc)::float8,
-				MAX(cpu_usage_mc)::float8,
-				MIN(mem_usage_kib)::float8,
-				percentile_cont(0.25) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				percentile_cont(0.5)  WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				percentile_cont(0.75) WITHIN GROUP (ORDER BY mem_usage_kib)::float8,
-				MAX(mem_usage_kib)::float8
-			FROM namespace_usage_samples
+				bucket_date,
+				cpu_usage_p50_mc::float8,
+				cpu_usage_p95_mc::float8,
+				cpu_usage_p99_mc::float8,
+				cpu_usage_max_mc::float8,
+				memory_usage_p50_kib::float8,
+				memory_usage_p95_kib::float8,
+				memory_usage_p99_kib::float8,
+				memory_usage_max_kib::float8
+			FROM daily_namespace_digests
 			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
-			  AND sample_time >= $%d AND sample_time < $4
-			GROUP BY bucket`, termName, bucketSQL, argN))
+				AND bucket_date >= $%d AND bucket_date <= $4
+				AND schedule_type = 'all_hours'`, termName, argN))
 		args = append(args, start)
 		argN++
 	}
@@ -491,47 +403,30 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 		return map[string]*NativePlot{}, nil
 	}
 
-	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket"
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots query: %w", err)
 	}
 	defer rows.Close()
 
-	termBucketKeys := make(map[string]string)
-	for _, termName := range termNames {
-		if tw, ok := windows[termName]; ok {
-			termBucketKeys[termName] = tw.BucketKey
-		}
-	}
-
 	out := make(map[string]*NativePlot)
 	plotsByTerm := make(map[string]map[string]NativePlotsData)
 	for rows.Next() {
 		var termName string
 		var bucket time.Time
-		var cpuMin, cpuQ1, cpuMed, cpuQ3, cpuMax float64
-		var memMin, memQ1, memMed, memQ3, memMax float64
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
 		if err := rows.Scan(&termName, &bucket,
-			&cpuMin, &cpuQ1, &cpuMed, &cpuQ3, &cpuMax,
-			&memMin, &memQ1, &memMed, &memQ3, &memMax); err != nil {
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax); err != nil {
 			return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots scan: %w", err)
 		}
-		bucketKeyFmt := termBucketKeys[termName]
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
 		}
-		bucketKey := bucket.UTC().Format(bucketKeyFmt)
-		plotsByTerm[termName][bucketKey] = NativePlotsData{
-			CPUUsage: &BoxPlotDetails{
-				Min: cpuMin / 1000.0, Q1: cpuQ1 / 1000.0, Median: cpuMed / 1000.0,
-				Q3: cpuQ3 / 1000.0, Max: cpuMax / 1000.0, Format: "cores",
-			},
-			MemoryUsage: &BoxPlotDetails{
-				Min: memMin / 1024.0, Q1: memQ1 / 1024.0, Median: memMed / 1024.0,
-				Q3: memQ3 / 1024.0, Max: memMax / 1024.0, Format: "MiB",
-			},
-		}
+		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots rows: %w", err)

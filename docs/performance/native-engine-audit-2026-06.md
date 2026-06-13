@@ -556,9 +556,13 @@ No periodic cleanup; only removed on Sources destroy.
 
 Monthly partition dropping avoids mass DELETE autovacuum death spirals. Already implemented and working.
 
-### E-2. Consider separate sample retention (MEDIUM) — **Open**
+### E-2. Consider separate sample retention (MEDIUM) — **Implemented**
 
-Samples are needed for boxplot drill-down but not for recommendations (which use digests). A 30-day sample retention with 6-month digest retention would dramatically reduce disk usage.
+Samples are no longer needed for plot drill-down (detail API reads `daily_*_digests`).
+`ROS_SAMPLE_RETENTION_DAYS` (default 45) sweeps `container_usage_samples` and
+`namespace_usage_samples` independently of `ROS_RETENTION_MONTHS` (default 6).
+Plot response shape changed from boxplot (`min`/`q1`/`median`/`q3`/`max`) to
+percentile-band (`p50`/`p95`/`p99`/`max`). See [ADR-0292](../adr/0292-digest-based-plot-percentile-bands.md).
 
 ---
 
@@ -733,7 +737,7 @@ Loaded once at startup via `sync.Once`. No action needed.
 
 | ID | Theme | Change | Status |
 |----|-------|--------|--------|
-| E-2 | Lifecycle | Separate sample vs digest retention | Open |
+| E-2 | Lifecycle | Separate sample vs digest retention | Implemented |
 | G-1 | Scale | Increase Kafka partitions (3 -> 12) | Open |
 | G-2 | Scale | Add HPA for API pods | Open |
 | P2-1 | Math | GPU BP config (store thresholds as int32 BP) | Implemented |

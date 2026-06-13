@@ -31,7 +31,7 @@
 // # Traits Implemented
 //
 //   - [plugin.CSVIngestor] — parses "container" CSV type
-//   - [plugin.RetentionProvider] — sweeps daily_container_digests, container_usage_samples
+//   - [plugin.RetentionProvider] — sweeps daily_container_digests
 //   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days)
 package container
 
@@ -75,7 +75,7 @@ func (p *ContainerPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r i
 }
 
 func (p *ContainerPlugin) RetentionTables() []string {
-	return []string{"daily_container_digests", "container_usage_samples"}
+	return []string{"daily_container_digests"}
 }
 
 func (p *ContainerPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {

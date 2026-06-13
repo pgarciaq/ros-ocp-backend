@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0292](0292-digest-based-plot-percentile-bands.md)
 
 ## Context
 

@@ -419,6 +419,52 @@ func TestRunRetentionSweep_InvalidatesFleetCacheForPurgedNodeRecommendations(t *
 	assert.False(t, ok, "node recommendation purge should invalidate fleet summary cache for affected org")
 }
 
+func TestRunRetentionSweep_DropsOldSamplePartitionsWithShorterRetention(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_SAMPLE_RETENTION_DAYS", "45")
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	// Partition ~90 days ago: older than 45-day sample retention, younger than 6-month digest retention.
+	old := time.Now().UTC().AddDate(0, 0, -90)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	samplePart := fmt.Sprintf("container_usage_samples_%s", monthStart.Format("200601"))
+	digestPart := fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
+
+	for _, spec := range []struct{ table, part string }{
+		{"container_usage_samples", samplePart},
+		{"daily_container_digests", digestPart},
+	} {
+		sql := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
+			spec.part, spec.table, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+		)
+		_, err := pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	samplePartitions, err := listPartitions(ctx, pool, "container_usage_samples")
+	require.NoError(t, err)
+	for _, p := range samplePartitions {
+		assert.NotEqual(t, samplePart, p, "sample partition older than ROS_SAMPLE_RETENTION_DAYS should be dropped")
+	}
+
+	digestPartitions, err := listPartitions(ctx, pool, "daily_container_digests")
+	require.NoError(t, err)
+	digestFound := false
+	for _, p := range digestPartitions {
+		if p == digestPart {
+			digestFound = true
+			break
+		}
+	}
+	assert.True(t, digestFound, "digest partition within ROS_RETENTION_MONTHS should be kept")
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string

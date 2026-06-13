@@ -66,8 +66,8 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 			DataPoints: 4,
 			PlotsData: map[string]NativePlotsData{
 				"2026-03-25T00:00:00.000Z": {
-					CPUUsage:    &BoxPlotDetails{Min: 0.1, Q1: 0.2, Median: 0.3, Q3: 0.4, Max: 0.5, Format: "cores"},
-					MemoryUsage: &BoxPlotDetails{Min: 100, Q1: 200, Median: 300, Q3: 400, Max: 500, Format: "MiB"},
+					CPUUsage:    &PlotDetails{P50: 0.3, P95: 0.4, P99: 0.45, Max: 0.5, Format: "cores"},
+					MemoryUsage: &PlotDetails{P50: 300, P95: 400, P99: 450, Max: 500, Format: "MiB"},
 				},
 			},
 		},
@@ -446,8 +446,8 @@ func TestBuildNamespaceDetailResponse_StructureMatchesKruizeShape(t *testing.T) 
 			DataPoints: 3,
 			PlotsData: map[string]NativePlotsData{
 				"2026-04-10T00:00:00.000Z": {
-					CPUUsage:    &BoxPlotDetails{Min: 0.5, Q1: 1.0, Median: 1.5, Q3: 2.0, Max: 2.5, Format: "cores"},
-					MemoryUsage: &BoxPlotDetails{Min: 256, Q1: 512, Median: 768, Q3: 1024, Max: 1280, Format: "MiB"},
+					CPUUsage:    &PlotDetails{P50: 1.5, P95: 2.0, P99: 2.2, Max: 2.5, Format: "cores"},
+					MemoryUsage: &PlotDetails{P50: 768, P95: 1024, P99: 1152, Max: 1280, Format: "MiB"},
 				},
 			},
 		},

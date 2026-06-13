@@ -26,5 +26,5 @@ func TestNamespacePlugin_nameEnabledAndTypes(t *testing.T) {
 	assert.Equal(t, "namespace", p.Name())
 	assert.True(t, p.Enabled())
 	assert.Equal(t, []string{"namespace"}, p.SupportedCSVTypes())
-	assert.Equal(t, []string{"daily_namespace_digests", "namespace_usage_samples"}, p.RetentionTables())
+	assert.Equal(t, []string{"daily_namespace_digests"}, p.RetentionTables())
 }

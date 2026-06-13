@@ -38,13 +38,17 @@ var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 
 // Tables retained by the general ROS_RETENTION_MONTHS setting.
 // This fallback list is used when no RetentionProvider plugins are registered.
-// When plugins ARE registered, each plugin sweeps its own tables via SweepRetention.
+// When plugins ARE registered, each plugin sweeps its own digest tables via SweepRetention.
 var retainedTables = []string{
-	"container_usage_samples",
 	"daily_container_digests",
 	"daily_namespace_digests",
 	"daily_node_digests",
 	"gpu_container_digests",
+}
+
+// Tables retained by ROS_SAMPLE_RETENTION_DAYS (shorter than digest retention).
+var sampleRetainedTables = []string{
+	"container_usage_samples",
 	"namespace_usage_samples",
 }
 
@@ -118,6 +122,18 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 
 	cfg := config.GetConfig()
+
+	sampleDays := cfg.SampleRetentionDays
+	if sampleDays <= 0 {
+		sampleDays = 45
+	}
+	sampleCutoff := time.Now().UTC().AddDate(0, 0, -sampleDays)
+	sampleCutoffYM := sampleCutoff.Format("200601")
+	if err := SweepPartitionedTables(ctx, pool, sampleRetainedTables, sampleCutoffYM); err != nil {
+		logging.GetLogger().Warnf("retention: partitioned sweep (samples): %v", err)
+		errs = append(errs, err)
+	}
+
 	historyDays := cfg.HistoryRetentionDays
 	if historyDays <= 0 {
 		historyDays = 90

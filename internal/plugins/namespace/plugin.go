@@ -45,7 +45,7 @@
 //
 //   - [plugin.CSVIngestor] — parses "namespace" CSV type
 //   - [plugin.APIProvider] — namespace recommendation list/detail endpoints
-//   - [plugin.RetentionProvider] — sweeps daily_namespace_digests, namespace_usage_samples
+//   - [plugin.RetentionProvider] — sweeps daily_namespace_digests
 //   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days)
 package namespace
 
@@ -117,7 +117,7 @@ func (p *NamespacePlugin) RegisterRoutes(g *echo.Group) {
 }
 
 func (p *NamespacePlugin) RetentionTables() []string {
-	return []string{"daily_namespace_digests", "namespace_usage_samples"}
+	return []string{"daily_namespace_digests"}
 }
 
 func (p *NamespacePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {

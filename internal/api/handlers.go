@@ -884,6 +884,7 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 		ClusterUUID:   result.ClusterUUID,
 		Namespace:     result.Project,
 		Workload:      result.Workload,
+		WorkloadType:  result.WorkloadType,
 		ContainerName: result.Container,
 	}
 
