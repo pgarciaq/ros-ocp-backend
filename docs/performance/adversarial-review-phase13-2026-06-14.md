@@ -41,6 +41,8 @@
 | Current default | `api` (works) | `db` (broken — ROS queries its own DB for Koku tables that don't exist) |
 | Recommended fix | No change | Switch default to `tagsSource: api`; ensure `ros_tag_sync` runs on Koku worker |
 
+**Resolution (2026-06-14):** Switched on-prem default to `tagsSource: api` in `values.yaml`. Koku push sync (`ros_tag_sync`) is the canonical tag propagation mechanism for both SaaS and on-prem. The `koku-schema-grants` hook is now conditional on `tagsSource: db` for advanced users. Verified in E2E tests.
+
 ---
 
 ### 2. Missing `ROS_CSV_ALLOWED_HOSTS` will block processor startup in production
@@ -67,6 +69,8 @@
 | CSV source | S3 (AWS) — hostname known at deploy time | NooBaa/Ceph RGW/MinIO — varies per cluster |
 | Current state | Platform team sets in app-interface config | Chart never sets it → CrashLoopBackOff on upgrade |
 | Recommended fix | Document in deployment runbook | Auto-derive from `objectStorage.endpoint` in Helm values; fail at install if empty |
+
+**Resolution (2026-06-14):** Added `ros.csvAllowedHosts` to Helm values, auto-derived from `objectStorage.endpoint` when not explicitly set. Wired `ROS_CSV_ALLOWED_HOSTS` in `_feature-env.yaml` for processor and API deployments. Upgrades no longer cause CrashLoopBackOff.
 
 ---
 
@@ -95,6 +99,8 @@
 | Impact | N/A — hook not used | Hook finds zero schemas on fresh install |
 | Recommended fix | N/A | With `tagsSource: api` (finding #1), grants hook is unnecessary for tags. Keep hook but document it's only needed for `db` mode |
 
+**Resolution (2026-06-14):** With the switch to `tagsSource: api` (finding #1), the grants hook is no longer needed for tag filtering. The hook is now conditional — only rendered when `tagsSource: db`. Documented in values.yaml comments.
+
 ---
 
 ### 4. Masu internal endpoints use `AllowAny` — cluster lateral movement risk
@@ -119,6 +125,8 @@
 | Network isolation | Strong — service mesh + NetworkPolicies enforced by platform | Weak — single namespace, no default NetworkPolicies |
 | Impact | Acceptable with platform-level defense-in-depth | Higher risk — any pod can reach masu-server |
 | Recommended fix | Document as intentional internal-only | Add NetworkPolicy restricting masu-server ingress to koku-worker and ros-processor only |
+
+**Resolution (2026-06-14):** Added `masu-networkpolicy.yaml` restricting ingress to masu-server (port 8000) to koku-worker, ros-processor, and koku-server pods only. Gated by `networkPolicies.enabled: true` (default). Added security documentation comments to `effective_rates.py` and `reship_ros.py` in koku.
 
 ---
 
@@ -146,6 +154,8 @@
 | Recommended fix (SaaS) | Ensure SA list populated; fail startup if true + empty list | |
 | Recommended fix (on-prem) | | Set auth to `true`; populate SA list from chart; add NetworkPolicy |
 
+**Resolution (2026-06-14):** Set `ros.internalAuth.enabled: true` as default. Added `ros.internalAuth.allowedServiceAccounts` (defaults to `koku` SA). Wired `ROS_INTERNAL_TAGS_AUTH_REQUIRED` and `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` in chart templates.
+
 ---
 
 ### 6. Threshold/savings recalc spawns O(clusters) goroutines without context cancellation
@@ -171,6 +181,8 @@
 | Impact | High — goroutine pile-up, pool exhaustion during rolling deploys | Low — few clusters |
 | Recommended fix | Fix with worker-pool + `ctx.Done()` (SaaS scalability issue) | Same fix, lower priority but applied for code correctness |
 
+**Resolution (2026-06-14):** Replaced one-goroutine-per-cluster with fixed worker-pool pattern in both `threshold_recalculate.go` and `savings_recalculate.go`. Workers sized by `thresholdRecalcConcurrency()`. Added `ctx.Err()` checks during enqueue and inside worker loops. Added context-cancellation unit tests.
+
 ---
 
 ### 7. H-3 duplicate-call fix is incomplete in `optimizationsLink`
@@ -195,6 +207,8 @@
 | Traffic volume | High — many users navigating clusters/projects | Low — single operator |
 | Impact | Medium — unnecessary full payloads on every navigation | Low — few concurrent users |
 | Recommended fix | Fix before merge | Same fix for code hygiene |
+
+**Resolution (2026-06-14):** Replaced `fetchRosReport` dispatch in `optimizationsLink.tsx` with `useRosCount` hook, matching the pattern used by `optimizationsBadge` and `optimizationsSummary`. Shares Redux count cache and uses `limit=1`.
 
 ---
 
@@ -225,6 +239,8 @@ useMemo(() => {
 | Impact | Same — chart may not update correctly under React Strict Mode | Same |
 | Recommended fix | `useMemo` → `useEffect` — trivial, no config difference | Same |
 
+**Resolution (2026-06-14):** Changed `useMemo` to `useEffect` in `optimizationsBreakdownChart.tsx` for the `initDatum()` call. Removed unused `useMemo` import.
+
 ---
 
 ### 9. PostgreSQL connection budget is extremely tight at default scale
@@ -249,6 +265,8 @@ useMemo(() => {
 | Impact | Not an issue — RDS handles it | Real risk — HPA scaling → connection exhaustion |
 | Recommended fix | N/A | Raise to 200, document connection budget in README, cap HPA based on headroom |
 
+**Resolution (2026-06-14):** Raised `max_connections` from 100 to 200 in `values.yaml`. Added connection budget documentation in values.yaml comments and `docs/operations/database-tuning.md`. Linked from chart README.
+
 ---
 
 ## MEDIUM (fix soon after merge)
@@ -271,6 +289,8 @@ useMemo(() => {
 
 Same issue in both — docs say "shared PostgreSQL" but architecture doesn't share. Fix follows from finding #1 decision.
 
+**Resolution (2026-06-14):** Updated comments in `values.yaml` and `configmap-init.yaml` to correctly describe the API push mechanism. Removed misleading "shared PostgreSQL" references. Grants hook documented as conditional on `tagsSource: db`.
+
 ---
 
 ### 11. Cluster-quota savings migration lacks `ROUND` (integer dollars → cents)
@@ -291,6 +311,8 @@ Same issue in both — docs say "shared PostgreSQL" but architecture doesn't sha
 
 Same in both — pure code correctness. No deployment difference.
 
+**Resolution (2026-06-14):** Skipped — migration 000132 is already applied and the column is BIGINT. `ROUND()` on integer multiplication is a no-op. No new migration needed.
+
 ---
 
 ### 12. Dead field in threshold recalc flight struct (copy-paste)
@@ -308,6 +330,8 @@ Same in both — pure code correctness. No deployment difference.
 **SaaS vs On-prem implications:**
 
 Same in both — pure code cleanup. No deployment difference.
+
+**Resolution (2026-06-14):** Removed unused `latestSavings` field from `thresholdRecalcFlight`. Moved `recalcFlight` struct with `latestSavings` to `savings_recalc_guard.go` where it is actually used.
 
 ---
 
@@ -334,6 +358,8 @@ Same in both — pure code cleanup. No deployment difference.
 | 25s statement_timeout | Well-calibrated (5s buffer for response serialization) | Could raise, but 25s is reasonable default |
 | Recommended fix | Keep 25s default; add per-endpoint overrides + cancellation metrics | Same default; expose as Helm value for operators with large fleets |
 
+**Resolution (2026-06-14):** Added `ROS_API_STATEMENT_TIMEOUT_MS` env var (default 25000ms). Added `SetLocalStatementTimeout()` for per-endpoint overrides. Added `ros_api_statement_timeout_cancellations_total` Prometheus counter for PostgreSQL error code 57014 (query_canceled). The 25s default is kept as it aligns with the SaaS 30s ingress timeout.
+
 ---
 
 ### 14. Tag mirror only in one E2E test — not session fixture
@@ -355,6 +381,8 @@ Same in both — pure code cleanup. No deployment difference.
 
 On-prem only — mirror is an E2E test workaround for finding #1. SaaS uses `api` mode. Resolving finding #1 resolves this.
 
+**Resolution (2026-06-14):** Resolved by finding #1 — switching to `tagsSource: api` eliminates the need for cross-database tag mirroring in E2E tests.
+
 ---
 
 ### 15. koku phase13 bundles large unrelated changes (merge risk)
@@ -370,6 +398,8 @@ On-prem only — mirror is an E2E test workaround for finding #1. SaaS uses `api
 **SaaS vs On-prem implications:**
 
 Process issue, same for both. Split into separate PRs regardless of deployment target.
+
+**Resolution (2026-06-14):** Acknowledged — will be addressed by splitting into separate PRs when creating upstream merge requests. On the development branch, bundling is acceptable for iteration speed.
 
 ---
 
@@ -390,6 +420,8 @@ Process issue, same for both. Split into separate PRs regardless of deployment t
 | CI | Own pipeline with IQE profiles catching perf regressions | `run-pytest.sh` excludes extended/perf tests |
 | Recommended fix | Already covered by IQE | Add smoke perf assertions to default CI |
 
+**Resolution (2026-06-14):** Added `test_smoke_perf.py` with two smoke performance tests (container list <5s, API status <2s) using new `smoke_perf` marker. These run in the default CI pass.
+
 ---
 
 ### 17. `QueryStatementTimeoutMillis` panics on DB error
@@ -408,6 +440,8 @@ Process issue, same for both. Split into separate PRs regardless of deployment t
 
 Same in both — pure code quality. No deployment difference.
 
+**Resolution (2026-06-14):** Changed `QueryStatementTimeoutMillis` from `panic()` to returning `(int64, error)`. Updated all callers.
+
 ---
 
 ## LOW (nice to have)
@@ -418,17 +452,23 @@ Same in both — pure code quality. No deployment difference.
 
 **Issue:** ESLint exhaustive-deps likely suppressed; `dispatch`, `reportFetchStatus`, `reportError` omitted.
 
+**Resolution (2026-06-14):** The problematic `useEffect` with missing deps was removed entirely as part of finding #7's refactor (replaced with `useRosCount` hook).
+
 ---
 
 ### 19. Vendor directory bloat in ros-ocp-backend branch
 
 **Issue:** Thousands of vendor file changes inflate review diff and merge conflict risk. Prefer `go mod vendor` in CI only or separate vendor sync commit.
 
+**Resolution (2026-06-14):** Verified — no vendor directory bloat. `git diff --stat` between phase12 and HEAD shows zero vendor changes.
+
 ---
 
 ### 20. nise example backup files (`*.yml~`)
 
 **Repo:** nise — check diff for committed editor backups; remove from branch.
+
+**Resolution (2026-06-14):** Deleted committed editor backup files (`*.yml~`) from nise repo. Added `*~` to `.gitignore`.
 
 ---
 
@@ -437,6 +477,8 @@ Same in both — pure code quality. No deployment difference.
 **Repos:** costmgmt-api-cheatsheet, ros-ocp-backend `docs-site/`, cost-onprem-chart `docs/`
 
 **Issue:** Large doc additions may reference `tagsSource: db` "shared PostgreSQL" incorrectly (finding #10). Spot-check Bruno examples against live OpenAPI after savings-cents migrations.
+
+**Resolution (2026-06-14):** Updated costmgmt-api-cheatsheet: corrected `ROS_TAGS_SOURCE` default to `api`, fixed GPU time-slicing savings fields, fixed Bruno example sort parameter, regenerated HTML.
 
 ---
 
@@ -449,6 +491,8 @@ Same in both — pure code quality. No deployment difference.
 **SaaS vs On-prem implications (findings 18–22):**
 
 All code-quality or documentation issues with no SaaS/on-prem config difference.
+
+**Resolution (2026-06-14):** Added code comments in `handlers_node_recs.go` and `handlers_node_utilization.go` documenting DB-backed vs rejected `order_by` values. Updated OpenAPI spec description.
 
 ---
 
