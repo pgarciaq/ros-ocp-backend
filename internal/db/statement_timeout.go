@@ -8,8 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"gorm.io/gorm"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
@@ -59,6 +61,56 @@ func IngestStatementTimeoutSecs() int {
 		return 120
 	}
 	return cfg.DBIngestStatementTimeoutSecs
+}
+
+// HeavyAPIStatementTimeoutMS returns extended statement_timeout for aggregation and fleet-wide list endpoints.
+func HeavyAPIStatementTimeoutMS() int {
+	return 45000
+}
+
+// QueryRower is satisfied by pgx.Tx and *pgxpool.Pool for read queries.
+type QueryRower interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// WithHeavyStatementTimeout runs fn in a transaction with an extended SET LOCAL statement_timeout.
+func WithHeavyStatementTimeout(ctx context.Context, pool *pgxpool.Pool, fn func(ctx context.Context, q QueryRower) error) error {
+	return WithStatementTimeout(ctx, pool, time.Duration(HeavyAPIStatementTimeoutMS())*time.Millisecond, fn)
+}
+
+// WithStatementTimeout runs fn in a transaction with a custom SET LOCAL statement_timeout.
+func WithStatementTimeout(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, fn func(ctx context.Context, q QueryRower) error) error {
+	if pool == nil {
+		return fmt.Errorf("database pool unavailable")
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := SetLocalStatementTimeout(ctx, tx, timeout); err != nil {
+		return err
+	}
+	if err := fn(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// WithHeavyGORMStatementTimeout runs fn in a GORM transaction with extended SET LOCAL statement_timeout.
+func WithHeavyGORMStatementTimeout(fn func(tx *gorm.DB) error) error {
+	db := GetDB()
+	if db == nil {
+		return fmt.Errorf("database unavailable")
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		ms := HeavyAPIStatementTimeoutMS()
+		if err := tx.Exec(fmt.Sprintf("SET LOCAL statement_timeout = '%dms'", ms)).Error; err != nil {
+			return err
+		}
+		return fn(tx)
+	})
 }
 
 // SetLocalStatementTimeout overrides statement_timeout for the current transaction only via SET LOCAL.

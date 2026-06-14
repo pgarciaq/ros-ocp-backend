@@ -73,6 +73,20 @@ func roundUSD(v float64) float64 {
 	return math.Round(v*100) / 100
 }
 
+func runHeavyFleetSavingsQuery[T any](ctx context.Context, pool *pgxpool.Pool, fn func(ctx context.Context, q db.QueryRower) (T, error)) (T, error) {
+	var zero T
+	var result T
+	err := db.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q db.QueryRower) error {
+		var innerErr error
+		result, innerErr = fn(ctx, q)
+		return innerErr
+	})
+	if err != nil {
+		return zero, err
+	}
+	return result, nil
+}
+
 // GetFleetSavingsSummary returns aggregated savings across all clusters for the authenticated org.
 func GetFleetSavingsSummary(c echo.Context) error {
 	xrhid, err := requireXRHID(c)
@@ -180,7 +194,9 @@ func GetFleetSavingsSummary(c echo.Context) error {
 			}
 			clusterUUIDs = []string{clusterQueryFilter}
 		}
-		byIdle, qerr := queryFleetSavingsByIdleState(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile)
+		byIdle, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsByIdleStateResponse, error) {
+			return queryFleetSavingsByIdleState(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile)
+		})
 		if qerr != nil {
 			hlog.Errorf("fleet savings by idle_state query failed: %v", qerr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -215,13 +231,15 @@ func GetFleetSavingsSummary(c echo.Context) error {
 			clusterUUIDs = []string{clusterQueryFilter}
 		}
 		namespaceFilter := queryparams.FirstFilter(c, "project")
-		byTag, qerr := queryFleetSavingsByTag(ctx, pool, fleetSavingsByTagQuery{
-			OrgID:           orgID,
-			ClusterUUIDs:    clusterUUIDs,
-			NamespaceFilter: namespaceFilter,
-			EngineProfile:   engineProfile,
-			TermProfile:     termProfile,
-			TagKey:          groupByTagKey,
+		byTag, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsByTagResponse, error) {
+			return queryFleetSavingsByTag(ctx, q, fleetSavingsByTagQuery{
+				OrgID:           orgID,
+				ClusterUUIDs:    clusterUUIDs,
+				NamespaceFilter: namespaceFilter,
+				EngineProfile:   engineProfile,
+				TermProfile:     termProfile,
+				TagKey:          groupByTagKey,
+			})
 		})
 		if qerr != nil {
 			hlog.Errorf("fleet savings by tag query failed: %v", qerr)
@@ -235,7 +253,9 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 
 	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
-	summary, qerr := queryFleetSavingsSummary(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+	summary, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsSummaryResponse, error) {
+		return queryFleetSavingsSummary(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+	})
 	if qerr != nil {
 		hlog.Errorf("fleet savings summary query failed: %v", qerr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -307,7 +327,7 @@ func fleetSavingsSummaryFromCache(cached fleetsummary.CachedSavingsSummary) Flee
 	}
 }
 
-func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsSummaryResponse, error) {
+func queryFleetSavingsSummary(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsSummaryResponse, error) {
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
@@ -316,14 +336,14 @@ func queryFleetSavingsSummary(ctx context.Context, pool *pgxpool.Pool, orgID str
 		ByCluster: []FleetClusterSavings{},
 	}
 
-	byPlugin, totalCents, err := queryFleetSavingsByPlugin(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+	byPlugin, totalCents, err := queryFleetSavingsByPlugin(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
 		return resp, err
 	}
 	resp.ByPlugin = byPlugin
 	resp.EstimatedMonthlySavings = money.FormatCentsToAmount(totalCents, currency)
 
-	byCluster, err := queryFleetSavingsByCluster(ctx, pool, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+	byCluster, err := queryFleetSavingsByCluster(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
 		return resp, err
 	}
@@ -343,7 +363,7 @@ func fleetSavingsByPluginZeros(currency string) FleetSavingsByPlugin {
 	}
 }
 
-func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsByPlugin, int64, error) {
+func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsByPlugin, int64, error) {
 	var out FleetSavingsByPlugin
 	if currency == "" {
 		currency = costdata.DefaultCurrency
@@ -354,7 +374,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	vmTerm := savingsSummaryVMTerm(termProfile)
 
 	var containerCents, nodeCents, pvcCents, snapshotCents, vmCents int64
-	err := pool.QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 		SELECT
 			COALESCE((
 				SELECT SUM(estimated_savings_cents)
@@ -400,7 +420,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, pool *pgxpool.Pool, orgID st
 	return out, totalCents, nil
 }
 
-func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) ([]FleetClusterSavings, error) {
+func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) ([]FleetClusterSavings, error) {
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
@@ -410,7 +430,7 @@ func queryFleetSavingsByCluster(ctx context.Context, pool *pgxpool.Pool, orgID s
 	vmTerm := savingsSummaryVMTerm(termProfile)
 	noCostCode := fmt.Sprintf("%d", engine.NotifNoCostData)
 
-	rows, err := pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		WITH rec_clusters AS (
 			SELECT DISTINCT cluster_uuid::text AS cluster_uuid
 			FROM recommendation_sets
@@ -574,7 +594,7 @@ func savingsSummaryVMTerm(term string) string {
 	}
 }
 
-func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByIdleStateResponse, error) {
+func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByIdleStateResponse, error) {
 	resp := FleetSavingsByIdleStateResponse{
 		Data: []FleetIdleStateSavingsRow{},
 		Meta: FleetSavingsByIdleMeta{Count: 0},
@@ -583,7 +603,7 @@ func queryFleetSavingsByIdleState(ctx context.Context, pool *pgxpool.Pool, orgID
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 
-	rows, err := pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT idle_state,
 		       COUNT(DISTINCT (cluster_uuid::text, namespace, workload, container_name))::int AS container_count,
 		       COALESCE(SUM(estimated_waste_cents), 0)::float / 100.0 AS waste_usd

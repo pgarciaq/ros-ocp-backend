@@ -13,7 +13,21 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
 - Savings summary: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go)
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-06-15
+
+---
+
+## Statement timeouts (heavy endpoints)
+
+API connections use the session default from `ROS_API_STATEMENT_TIMEOUT_MS` (25s). Known heavy
+read paths extend the limit per transaction via `SET LOCAL` (45s):
+
+| Endpoint | Helper | Timeout |
+|----------|--------|---------|
+| `GET /recommendations/openshift/savings-summary` | `db.WithHeavyStatementTimeout` | 45s |
+| `GET /recommendations/openshift` (fleet-wide, no filters) | `db.WithHeavyGORMStatementTimeout` | 45s |
+
+Cancellations increment `ros_api_statement_timeout_cancellations_total` (PostgreSQL `57014`).
 
 ---
 

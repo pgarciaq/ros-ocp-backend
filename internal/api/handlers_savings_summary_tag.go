@@ -5,8 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -39,27 +38,27 @@ type fleetSavingsByTagQuery struct {
 
 func queryFleetSavingsByTag(
 	ctx context.Context,
-	pool *pgxpool.Pool,
-	q fleetSavingsByTagQuery,
+	q db.QueryRower,
+	params fleetSavingsByTagQuery,
 ) (FleetSavingsByTagResponse, error) {
 	resp := FleetSavingsByTagResponse{Data: []FleetTagSavingsRow{}}
 
-	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgsForColumn(q.OrgID, q.ClusterUUIDs, q.EngineProfile, q.TermProfile, "ock.cluster_uuid")
+	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgsForColumn(params.OrgID, params.ClusterUUIDs, params.EngineProfile, params.TermProfile, "ock.cluster_uuid")
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 	argIdx := len(args) + 1
 
 	namespaceFilter := ""
-	if q.NamespaceFilter != "" {
+	if params.NamespaceFilter != "" {
 		namespaceFilter = fmt.Sprintf(" AND ock.namespace = $%d", argIdx)
-		args = append(args, q.NamespaceFilter)
+		args = append(args, params.NamespaceFilter)
 		argIdx++
 	}
 
 	tagKeyParam := argIdx
-	args = append(args, q.TagKey)
+	args = append(args, params.TagKey)
 
-	rows, err := pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT ock.resolved_tags->>$`+fmt.Sprintf("%d", tagKeyParam)+` AS tag_value,
 		       COALESCE(SUM(rs.estimated_savings_cents), 0)::float / 100.0 AS savings_usd
 		FROM org_container_keys ock
@@ -82,7 +81,7 @@ func queryFleetSavingsByTag(
 	}
 	defer rows.Close()
 
-	currency := resolveFleetCurrency(ctx, q.OrgID, q.ClusterUUIDs)
+	currency := resolveFleetCurrency(ctx, params.OrgID, params.ClusterUUIDs)
 	for rows.Next() {
 		var tagValue sql.NullString
 		var savingsUSD float64

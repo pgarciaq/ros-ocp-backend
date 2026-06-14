@@ -401,16 +401,46 @@ func buildNativeContainerKeysPageQuery(
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
 func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+	run := func(fn func(*gorm.DB) (NativeListPage, error)) (NativeListPage, error) {
+		if isFleetWideNativeList(queryParams) {
+			var page NativeListPage
+			err := database.WithHeavyGORMStatementTimeout(func(tx *gorm.DB) error {
+				var innerErr error
+				page, innerErr = fn(tx)
+				return innerErr
+			})
+			return page, err
+		}
+		return fn(database.GetDB())
+	}
+
 	// Tag filters require org_container_keys (resolved_tags / Koku tag joins). The legacy DISTINCT
 	// path on recommendation_sets alone cannot apply tag predicates.
 	if usesOrgContainerKeys(queryParams) || len(TagFiltersFromParams(queryParams)) > 0 {
-		return getNativeRecommendationsFromOrgKeys(orgID, opts, queryParams, userPerms)
+		return run(func(gdb *gorm.DB) (NativeListPage, error) {
+			return getNativeRecommendationsFromOrgKeys(gdb, orgID, opts, queryParams, userPerms)
+		})
 	}
-	return getNativeRecommendationsDistinct(orgID, opts, queryParams, userPerms)
+	return run(func(gdb *gorm.DB) (NativeListPage, error) {
+		return getNativeRecommendationsDistinct(gdb, orgID, opts, queryParams, userPerms)
+	})
 }
 
-func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
-	db := database.GetDB()
+func isFleetWideNativeList(queryParams map[string]interface{}) bool {
+	if len(TagFiltersFromParams(queryParams)) > 0 {
+		return false
+	}
+	for key := range queryParams {
+		if key == TagFiltersQueryKey || key == "rs.stale = ?" {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+	db := gdb
 	keysParams, detailParams := splitNativeListQueryParams(queryParams)
 
 	limit := opts.Limit
@@ -491,8 +521,8 @@ func getNativeRecommendationsFromOrgKeys(orgID string, opts listoptions.ListOpti
 	}, nil
 }
 
-func getNativeRecommendationsDistinct(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
-	db := database.GetDB()
+func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+	db := gdb
 	limit := opts.Limit
 	if opts.Format == listoptions.ResponseFormatCSV {
 		limit = config.GetConfig().RecordLimitCSV
