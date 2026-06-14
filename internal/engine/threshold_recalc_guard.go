@@ -20,14 +20,13 @@ var thresholdRecalcCoalescedTotal = promauto.NewCounterVec(
 	[]string{"recommendation_type"},
 )
 
-type recalcFlight struct {
-	mu            sync.Mutex
-	running       bool
-	pending       bool
-	latestSavings savingsRecalcParams
+type thresholdRecalcFlight struct {
+	mu      sync.Mutex
+	running bool
+	pending bool
 }
 
-var thresholdRecalcFlights sync.Map // map[string]*recalcFlight
+var thresholdRecalcFlights sync.Map // map[string]*thresholdRecalcFlight
 
 func thresholdRecalcFlightKey(orgID, recType string) string {
 	return orgID + "\x00" + recType
@@ -40,8 +39,8 @@ func resetThresholdRecalcFlightsForTest() {
 
 func triggerThresholdRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgID, recType string) {
 	key := thresholdRecalcFlightKey(orgID, recType)
-	flightIface, _ := thresholdRecalcFlights.LoadOrStore(key, &recalcFlight{})
-	flight := flightIface.(*recalcFlight)
+	flightIface, _ := thresholdRecalcFlights.LoadOrStore(key, &thresholdRecalcFlight{})
+	flight := flightIface.(*thresholdRecalcFlight)
 
 	flight.mu.Lock()
 	if flight.running {

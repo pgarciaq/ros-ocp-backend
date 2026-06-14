@@ -24,6 +24,13 @@ type savingsRecalcParams struct {
 	recTypes    []string
 }
 
+type recalcFlight struct {
+	mu            sync.Mutex
+	running       bool
+	pending       bool
+	latestSavings savingsRecalcParams
+}
+
 var savingsRecalcFlights sync.Map // map[string]*recalcFlight
 
 func resetSavingsRecalcFlightsForTest() {
