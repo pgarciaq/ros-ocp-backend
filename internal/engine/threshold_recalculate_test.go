@@ -44,6 +44,40 @@ func TestListClustersForOrg(t *testing.T) {
 	assert.Len(t, clusters, 2)
 }
 
+func TestRecalculateThresholdsForOrg_StopsOnContextCancel(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-threshold-recalc-cancel"
+	seedClustersForRecalcTest(t, pool, orgID,
+		"10101010-1010-1010-1010-101010101010",
+		"20202020-2020-2020-2020-202020202020",
+		"30303030-3030-3030-3030-303030303030",
+	)
+
+	block := make(chan struct{})
+	restore := SetClusterRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID, recType string) error {
+		<-block
+		return nil
+	})
+	defer restore()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		RecalculateThresholdsForOrg(ctx, pool, orgID, "container")
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	close(block)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RecalculateThresholdsForOrg did not exit after context cancellation")
+	}
+}
+
 func TestRecalculateThresholdsForOrg_InvokesAllClusters(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := "org-threshold-recalc-fanout"

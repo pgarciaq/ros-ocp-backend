@@ -28,6 +28,40 @@ func TestNormalizeSavingsRecTypesForAPI(t *testing.T) {
 		NormalizeSavingsRecTypesForAPI([]string{"quota", "cluster-quota"}))
 }
 
+func TestRecalculateSavingsForOrg_StopsOnContextCancel(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-savings-recalc-cancel"
+	seedClustersForRecalcTest(t, pool, orgID,
+		"40404040-4040-4040-4040-404040404040",
+		"50505050-5050-5050-5050-505050505050",
+		"60606060-6060-6060-6060-606060606060",
+	)
+
+	block := make(chan struct{})
+	restore := SetClusterSavingsRecalcFuncForTest(func(ctx context.Context, p *pgxpool.Pool, oid, clusterUUID string, recTypes []string) error {
+		<-block
+		return nil
+	})
+	defer restore()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		RecalculateSavingsForOrg(ctx, pool, orgID, "", []string{savingsRecTypeNode})
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	close(block)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RecalculateSavingsForOrg did not exit after context cancellation")
+	}
+}
+
 func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing.T) {
 	config.ResetForTest()
 	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")

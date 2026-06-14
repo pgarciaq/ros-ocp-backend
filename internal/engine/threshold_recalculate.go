@@ -130,7 +130,8 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 		return
 	}
 
-	sem := make(chan struct{}, thresholdRecalcConcurrency())
+	sem := thresholdRecalcConcurrency()
+	jobs := make(chan string, len(clusters))
 	var wg sync.WaitGroup
 	var processed int
 	var skipped int
@@ -146,46 +147,61 @@ func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID,
 		currentHash = ""
 	}
 
-	for _, clusterUUID := range clusters {
+	for w := 0; w < sem; w++ {
 		wg.Add(1)
-		go func(clusterID string) {
+		go func() {
 			defer wg.Done()
-			if currentHash != "" {
-				skip, err := shouldSkipClusterThresholdRecalc(ctx, pool, orgID, clusterID, recType, currentHash)
-				if err != nil {
-					logging.ForOrg(orgID, clusterID).Warnf("threshold recalc skip check failed: %v", err)
-				} else if skip {
-					mu.Lock()
-					skipped++
-					mu.Unlock()
-					thresholdRecalculationTotal.WithLabelValues(recType, "skipped").Inc()
+			for clusterID := range jobs {
+				if err := ctx.Err(); err != nil {
 					return
 				}
-			}
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			if err := clusterRecalcFunc(ctx, pool, orgID, clusterID, recType); err != nil {
-				logging.ForOrg(orgID, clusterID).WithFields(map[string]interface{}{
-					"msg":                 "threshold recalculation cluster failed",
-					"recommendation_type": recType,
-					"error":               err.Error(),
-				}).Warn("threshold recalculation cluster failed")
-				thresholdRecalculationTotal.WithLabelValues(recType, "error").Inc()
-				return
-			}
-			mu.Lock()
-			processed++
-			mu.Unlock()
-			if currentHash != "" {
-				if err := setClusterRecalcHash(ctx, pool, orgID, clusterID, recType, currentHash); err != nil {
-					logging.ForOrg(orgID, clusterID).Warnf("threshold recalc hash persist failed: %v", err)
+				if currentHash != "" {
+					skip, err := shouldSkipClusterThresholdRecalc(ctx, pool, orgID, clusterID, recType, currentHash)
+					if err != nil {
+						logging.ForOrg(orgID, clusterID).Warnf("threshold recalc skip check failed: %v", err)
+					} else if skip {
+						mu.Lock()
+						skipped++
+						mu.Unlock()
+						thresholdRecalculationTotal.WithLabelValues(recType, "skipped").Inc()
+						continue
+					}
 				}
+				if err := ctx.Err(); err != nil {
+					return
+				}
+
+				if err := clusterRecalcFunc(ctx, pool, orgID, clusterID, recType); err != nil {
+					logging.ForOrg(orgID, clusterID).WithFields(map[string]interface{}{
+						"msg":                 "threshold recalculation cluster failed",
+						"recommendation_type": recType,
+						"error":               err.Error(),
+					}).Warn("threshold recalculation cluster failed")
+					thresholdRecalculationTotal.WithLabelValues(recType, "error").Inc()
+					continue
+				}
+				mu.Lock()
+				processed++
+				mu.Unlock()
+				if currentHash != "" {
+					if err := setClusterRecalcHash(ctx, pool, orgID, clusterID, recType, currentHash); err != nil {
+						logging.ForOrg(orgID, clusterID).Warnf("threshold recalc hash persist failed: %v", err)
+					}
+				}
+				thresholdRecalculationTotal.WithLabelValues(recType, "success").Inc()
 			}
-			thresholdRecalculationTotal.WithLabelValues(recType, "success").Inc()
-		}(clusterUUID)
+		}()
 	}
+
+enqueue:
+	for _, clusterUUID := range clusters {
+		select {
+		case <-ctx.Done():
+			break enqueue
+		case jobs <- clusterUUID:
+		}
+	}
+	close(jobs)
 	wg.Wait()
 
 	log.WithFields(map[string]interface{}{

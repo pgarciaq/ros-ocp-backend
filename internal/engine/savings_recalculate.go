@@ -137,36 +137,53 @@ func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 		return
 	}
 
-	sem := make(chan struct{}, thresholdRecalcConcurrency())
+	workers := thresholdRecalcConcurrency()
+	jobs := make(chan string, len(clusters))
 	var wg sync.WaitGroup
 	var processed int
 	var mu sync.Mutex
 
-	for _, cu := range clusters {
+	for w := 0; w < workers; w++ {
 		wg.Add(1)
-		go func(clusterID string) {
+		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			if err := clusterSavingsRecalcFunc(ctx, pool, orgID, clusterID, types); err != nil {
-				logging.ForOrg(orgID, clusterID).WithFields(map[string]interface{}{
-					"msg":   "savings recalculation cluster failed",
-					"error": err.Error(),
-				}).Warn("savings recalculation cluster failed")
-				for _, rt := range types {
-					savingsRecalculationTotal.WithLabelValues(rt, "error").Inc()
+			for clusterID := range jobs {
+				if err := ctx.Err(); err != nil {
+					return
 				}
-				return
+
+				if err := clusterSavingsRecalcFunc(ctx, pool, orgID, clusterID, types); err != nil {
+					logging.ForOrg(orgID, clusterID).WithFields(map[string]interface{}{
+						"msg":   "savings recalculation cluster failed",
+						"error": err.Error(),
+					}).Warn("savings recalculation cluster failed")
+					for _, rt := range types {
+						savingsRecalculationTotal.WithLabelValues(rt, "error").Inc()
+					}
+					continue
+				}
+				if err := ctx.Err(); err != nil {
+					return
+				}
+				mu.Lock()
+				processed++
+				mu.Unlock()
+				for _, rt := range types {
+					savingsRecalculationTotal.WithLabelValues(rt, "success").Inc()
+				}
 			}
-			mu.Lock()
-			processed++
-			mu.Unlock()
-			for _, rt := range types {
-				savingsRecalculationTotal.WithLabelValues(rt, "success").Inc()
-			}
-		}(cu)
+		}()
 	}
+
+enqueue:
+	for _, cu := range clusters {
+		select {
+		case <-ctx.Done():
+			break enqueue
+		case jobs <- cu:
+		}
+	}
+	close(jobs)
 	wg.Wait()
 
 	if containsSavingsRecType(types, savingsRecTypeContainer) {
