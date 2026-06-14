@@ -81,6 +81,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 **Effort:** 0.5–1 day  
 **SaaS vs on-prem:** SaaS platform config likely sets these env vars; on-prem chart gap is the blocker.
 
+**Resolution (2026-06-15):** Added `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=api` to `cost-onprem.koku.commonEnv` when `ros.api.tagsSource` is `api` (default). Added `cost-worker` to `ros-api-access` NetworkPolicy ingress. Added Helm lint tests in `test_chart_lint.py::TestSecurityEnvVars` asserting worker deployments contain `ROS_TAGS_SOURCE=api`.
+
 ---
 
 ### 24. Masu NetworkPolicy blocks ROS API effective_rates calls
@@ -97,6 +99,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 
 **Effort:** 1–2 hours  
 **SaaS vs on-prem:** On-prem only (chart NetworkPolicy). SaaS uses platform-level network controls.
+
+**Resolution (2026-06-15):** Added `ros-api` (`app.kubernetes.io/component: ros-api`) to masu `masu-access` NetworkPolicy ingress `from` list. Added Helm lint test `test_masu_networkpolicy_allows_ros_api`.
 
 ---
 
@@ -115,6 +119,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 **Effort:** 2–4 hours  
 **SaaS vs on-prem:** Primarily on-prem chart operators; SaaS sets explicit allowlists.
 
+**Resolution (2026-06-15):** `cost-onprem.ros.csvAllowedHosts` helper now strips `https://`/`http://` scheme and trailing `:port` from `objectStorage.endpoint`. Documented normalization in `values.yaml`. Added Helm test verifying `https://s3.example.com:443` renders as `s3.example.com`.
+
 ---
 
 ### 26. Per-endpoint statement timeout helper unused
@@ -131,6 +137,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 
 **Effort:** 0.5 day  
 **SaaS vs on-prem:** Both; configurable via `ROS_API_STATEMENT_TIMEOUT_MS` for on-prem large fleets.
+
+**Resolution (2026-06-15):** Added `db.WithHeavyStatementTimeout` (45s) and `db.WithHeavyGORMStatementTimeout`. Wired savings-summary aggregation queries and fleet-wide container list (no filters) to use extended timeouts. Documented endpoints in `docs/operations/query-performance.md`.
 
 ---
 
@@ -149,6 +157,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 **Effort:** 2–3 hours  
 **SaaS vs on-prem:** Both; on-prem higher risk if operators disable for debugging and forget to re-enable.
 
+**Resolution (2026-06-15):** `ValidateSecurityConfig()` now returns a fatal error when `!Development && !InternalTagsAuthRequired`. Added unit tests in `security_test.go`.
+
 ---
 
 ### 28. Smoke perf tests may flake; no Helm assertions for security env
@@ -166,6 +176,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 **Effort:** 2–4 hours  
 **SaaS vs on-prem:** On-prem CI focus.
 
+**Resolution (2026-06-15):** Added `TestSecurityEnvVars` Helm lint tests for `ROS_CSV_ALLOWED_HOSTS`, `ROS_TAGS_SOURCE=api`, and `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`. Smoke perf: container list threshold raised to 8s with best-of-2 retry.
+
 ---
 
 ### 29. Stale connection budget in `configuration.md`
@@ -182,6 +194,8 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 
 **Effort:** 15 minutes  
 **SaaS vs on-prem:** On-prem only.
+
+**Resolution (2026-06-15):** Updated `configuration.md` example `max_connections` from `100` to `200` with link to `database-tuning.md`.
 
 ---
 
