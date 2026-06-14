@@ -19,7 +19,20 @@ func ValidateSecurityConfig() error {
 	if err := validateCSVSecurity(c); err != nil {
 		return err
 	}
+	if err := validateInternalTagsAuth(c); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateInternalTagsAuth(c *Config) error {
+	if c.Development || c.InternalTagsAuthRequired {
+		return nil
+	}
+	return fmt.Errorf(
+		"config: ROS_INTERNAL_TAGS_AUTH_REQUIRED must be true in non-development mode; " +
+			"internal tag sync and savings recalc endpoints would be unauthenticated",
+	)
 }
 
 func validateCSVSecurity(c *Config) error {
