@@ -30,6 +30,11 @@ import (
 // GetNodeRecommendations handles GET /recommendations/openshift/gpu/timeslicing.
 // It computes GPU time-slicing recommendations by querying gpu_container_digests,
 // grouping by node × GPU model, and running the time-slicing engine.
+//
+// order_by sorting:
+//   - DB-backed (SQL ORDER BY on gpu_container_digests triple pagination): node_name, cluster_uuid, gpu_model (gpu_model_name alias)
+//   - Rejected with HTTP 400: recommended_replicas, confidence, total_node_savings, total_node_savings_usd —
+//     these are computed after per-triple aggregation and cannot be pushed down to SQL at scale.
 func GetNodeRecommendations(c echo.Context) error {
 	tGPU := time.Now()
 	defer func() { metrics.ObserveRecommendation("gpu", tGPU) }()

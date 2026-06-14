@@ -2284,7 +2284,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Sort field. Allowed values: node_name, cluster_uuid, gpu_model, recommended_replicas, confidence, total_node_savings",
+            "description": "Sort field. DB-backed (SQL ORDER BY on gpu_container_digests triples): node_name, cluster_uuid, gpu_model. Values recommended_replicas, confidence, and total_node_savings return HTTP 400 because they require post-aggregate computation.",
             "required": false,
             "schema": { "type": "string", "default": "node_name", "enum": ["node_name", "cluster_uuid", "gpu_model", "recommended_replicas", "confidence", "total_node_savings"] }
           },

@@ -78,6 +78,9 @@ type nodeUtilKey struct {
 
 // GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes (node CPU/memory utilization).
 //
+// order_by sorting (all DB-backed via SQL ORDER BY on node_utilization_recommendation_sets):
+//   node (alias node_name), estimated_monthly_savings (alias estimated_monthly_savings_usd; sorts on sort_savings column).
+//
 // Supported filters: cluster, node, term, engine, is_underutilized, is_overcommitted,
 // idle_state, stranded_resource (cpu|memory|none), instance_type, machineset_name.
 func GetNodeUtilizationRecs(c echo.Context) error {
