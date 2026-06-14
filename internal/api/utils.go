@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -1188,6 +1189,7 @@ func parseTagFiltersFromRequest(c echo.Context) ([]model.TagFilter, error) {
 // in the OpenAPI spec. The HTTP status code conveys severity; the message provides
 // actionable context. Logs the full error internally.
 func apiErrResponse(c echo.Context, err error, status int, userMsg string) error {
+	database.RecordStatementTimeoutCancellation(err)
 	log.Error(err.Error())
 	return c.JSON(status, echo.Map{"status": "error", "message": userMsg})
 }

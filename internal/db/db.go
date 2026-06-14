@@ -52,8 +52,8 @@ func SuspendForceTestPool() (restore func()) {
 }
 
 func setStatementTimeout(ctx context.Context, conn *pgconn.PgConn) error {
-	secs := StatementTimeoutSecs()
-	_, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", secs)).ReadAll()
+	ms := APIStatementTimeoutMS()
+	_, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = '%dms'", ms)).ReadAll()
 	return err
 }
 

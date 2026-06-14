@@ -121,5 +121,7 @@ func TestIngestTransactionUsesExtendedStatementTimeout(t *testing.T) {
 
 	require.NoError(t, db.SetLocalIngestStatementTimeout(ctx, tx))
 
-	assert.Equal(t, int64(120000), db.QueryStatementTimeoutMillis(ctx, tx))
+	ms, err := db.QueryStatementTimeoutMillis(ctx, tx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(120000), ms)
 }
