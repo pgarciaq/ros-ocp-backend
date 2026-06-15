@@ -90,6 +90,9 @@ Prior list items remain valid. **Phase13 additions:**
 - **BH enrichment page-scoped** — `QueryContainerDigestsByScheduleTypeForContainers` with `unnest` tuple filter (`recommend_business_hours.go:111-156`).
 - **Echo Prometheus `url` label uses route template** (`server.go:138`) — bounded cardinality vs raw paths.
 - **Vendor hygiene** — 174 MiB, zero test files under `vendor/`.
+- **Batched savings recalc** — `pgx.Batch` (chunk 500) for all savings update functions; replaces per-row UPDATEs (DB-N1).
+- **Page-scoped GPU enrichment** — `QueryGPURecommendationsForContainers` with `unnest` container filter, matching BH enrichment pattern (API-N1).
+- **Batched tag sync** — single `unnest`-based UPDATE for all namespaces in payload; replaces per-namespace loop (DB-N2).
 
 ---
 
@@ -103,7 +106,7 @@ Prior list items remain valid. **Phase13 additions:**
 
 ### P1 — High
 
-#### DB-N1. Savings recalculation uses per-row UPDATE loops
+#### DB-N1. Savings recalculation uses per-row UPDATE loops — **IMPLEMENTED**
 
 | Field | Value |
 |-------|-------|
@@ -120,7 +123,7 @@ Prior list items remain valid. **Phase13 additions:**
 
 ---
 
-#### API-N1. GPU list enrichment scans full cluster digests (not page-scoped)
+#### API-N1. GPU list enrichment scans full cluster digests (not page-scoped) — **IMPLEMENTED**
 
 | Field | Value |
 |-------|-------|
@@ -137,7 +140,7 @@ Prior list items remain valid. **Phase13 additions:**
 
 ---
 
-#### DB-N2. Tag sync performs full-org reset plus per-namespace UPDATE loop
+#### DB-N2. Tag sync performs full-org reset plus per-namespace UPDATE loop — **IMPLEMENTED**
 
 | Field | Value |
 |-------|-------|
@@ -337,9 +340,9 @@ Prior list items remain valid. **Phase13 additions:**
 
 | Rank | ID | Title | Impact | Effort | Risk |
 |------|-----|-------|--------|--------|------|
-| 1 | **DB-N1** | Batch savings-recalc UPDATEs | High on cost-model changes | M | Low |
-| 2 | **API-N1** | Page-scope GPU enrichment | High on GPU list API p95 | M | Low |
-| 3 | **DB-N2** | Batch tag sync UPDATEs | Medium on tag settings change | M | Medium |
+| 1 | **DB-N1** | Batch savings-recalc UPDATEs | High on cost-model changes | M | Low | **IMPLEMENTED** |
+| 2 | **API-N1** | Page-scope GPU enrichment | High on GPU list API p95 | M | Low | **IMPLEMENTED** |
+| 3 | **DB-N2** | Batch tag sync UPDATEs | Medium on tag settings change | M | Medium | **IMPLEMENTED** |
 | 4 | **DB-N3** | `org_namespace_keys` pagination | Medium–high at 1k+ namespaces | M | Medium |
 | 5 | **ALG-N1** | PVC decay lookup table | Low absolute | S | Low |
 | 6 | **OBS-N1** | Bound GPU model metric labels | Low (preventive) | S | Low |

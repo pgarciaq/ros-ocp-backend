@@ -379,3 +379,73 @@ func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 	ApplyClusterQuotaSavings(recs, cd)
 	require.Greater(t, recs[0].EstimatedSavingsCents, int64(100))
 }
+
+func TestUpdateContainerSavings_BatchUpdate(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-savings-batch-container"
+	clusterUUID := "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
+
+	for i, cn := range []string{"app", "sidecar", "worker"} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (
+				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+				term, engine, estimated_savings_cents, notification_codes, updated_at
+			) VALUES ($1, $2::uuid, 'batch-ns', 'batch-wl', 'Deployment', $3,
+				'medium', 'cost', 0, '{}', now())`,
+			orgID, clusterUUID, cn)
+		require.NoError(t, err, "seed container %d", i)
+	}
+
+	recs := []ContainerRec{
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "app", Term: "medium", Engine: "cost", EstimatedSavingsCents: 100, NotificationCodes: []int16{1}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "sidecar", Term: "medium", Engine: "cost", EstimatedSavingsCents: 200, NotificationCodes: []int16{2}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "worker", Term: "medium", Engine: "cost", EstimatedSavingsCents: 300, NotificationCodes: []int16{3}},
+	}
+	require.NoError(t, updateContainerSavings(ctx, pool, recs))
+
+	for _, want := range recs {
+		var got int64
+		err := pool.QueryRow(ctx, `
+			SELECT estimated_savings_cents FROM recommendation_sets
+			WHERE org_id = $1 AND cluster_uuid = $2::uuid AND container_name = $3`,
+			orgID, clusterUUID, want.ContainerName).Scan(&got)
+		require.NoError(t, err)
+		assert.Equal(t, want.EstimatedSavingsCents, got)
+	}
+}
+
+func TestUpdatePVCSavings_BatchUpdate(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-savings-batch-pvc"
+	clusterUUID := "dddddddd-dddd-dddd-dddd-dddddddddddd"
+	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
+
+	for _, pvc := range []string{"data-a", "data-b"} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO pvc_recommendation_sets (
+				org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+				estimated_savings_cents, notification_codes
+			) VALUES ($1, $2::uuid, 'pvc-ns', $3, 'medium', 0, '{}')`,
+			orgID, clusterUUID, pvc)
+		require.NoError(t, err)
+	}
+
+	recs := []PVCRec{
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "pvc-ns", PVC: "data-a", Term: "medium", EstimatedMonthlySavingsCents: 111, NotificationCodes: []int16{}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "pvc-ns", PVC: "data-b", Term: "medium", EstimatedMonthlySavingsCents: 222, NotificationCodes: []int16{}},
+	}
+	require.NoError(t, updatePVCSavings(ctx, pool, recs))
+
+	for _, want := range recs {
+		var got int64
+		err := pool.QueryRow(ctx, `
+			SELECT estimated_savings_cents FROM pvc_recommendation_sets
+			WHERE org_id = $1 AND cluster_uuid = $2::uuid AND persistentvolumeclaim = $3`,
+			orgID, clusterUUID, want.PVC).Scan(&got)
+		require.NoError(t, err)
+		assert.Equal(t, want.EstimatedMonthlySavingsCents, got)
+	}
+}

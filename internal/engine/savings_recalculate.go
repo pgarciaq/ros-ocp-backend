@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -495,33 +496,57 @@ func loadClusterQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Poo
 	return recs, rows.Err()
 }
 
+const containerSavingsUpdateSQL = `
+	UPDATE recommendation_sets
+	SET estimated_savings_cents = $1,
+	    notification_codes = $2,
+	    updated_at = now()
+	WHERE org_id = $3 AND cluster_uuid = $4::uuid
+	  AND namespace = $5 AND workload = $6 AND workload_type = $7
+	  AND container_name = $8 AND term = $9 AND engine = $10`
+
 func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
+	if len(recs) == 0 {
+		return nil
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	for _, r := range recs {
-		_, err := tx.Exec(ctx, `
-			UPDATE recommendation_sets
-			SET estimated_savings_cents = $1,
-			    notification_codes = $2,
-			    updated_at = now()
-			WHERE org_id = $3 AND cluster_uuid = $4::uuid
-			  AND namespace = $5 AND workload = $6 AND workload_type = $7
-			  AND container_name = $8 AND term = $9 AND engine = $10`,
-			r.EstimatedSavingsCents, r.NotificationCodes,
-			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
-		)
-		if err != nil {
-			return fmt.Errorf("update container savings %s/%s/%s: %w", r.Namespace, r.Workload, r.ContainerName, err)
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(containerSavingsUpdateSQL,
+				r.EstimatedSavingsCents, r.NotificationCodes,
+				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, len(chunk)); err != nil {
+			return fmt.Errorf("update container savings: %w", err)
 		}
 	}
 	return tx.Commit(ctx)
 }
 
+const nodeSavingsUpdateSQL = `
+	UPDATE node_recommendations
+	SET estimated_savings_cents = $1,
+	    notification_codes = $2,
+	    updated_at = now()
+	WHERE org_id = $3 AND cluster_uuid = $4::uuid
+	  AND node = $5 AND term = $6 AND engine = $7`
+
 func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recs []NodeRec) error {
+	if len(recs) == 0 {
+		return nil
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -532,77 +557,136 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		return fmt.Errorf("advisory lock: %w", err)
 	}
 
-	for _, r := range recs {
-		_, err := tx.Exec(ctx, `
-			UPDATE node_recommendations
-			SET estimated_savings_cents = $1,
-			    notification_codes = $2,
-			    updated_at = now()
-			WHERE org_id = $3 AND cluster_uuid = $4::uuid
-			  AND node = $5 AND term = $6 AND engine = $7`,
-			r.EstimatedMonthlySavingsCents, r.NotificationCodes,
-			orgID, clusterUUID, r.Node, r.Term, r.Engine,
-		)
-		if err != nil {
-			return fmt.Errorf("update node savings %s: %w", r.Node, err)
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(nodeSavingsUpdateSQL,
+				r.EstimatedMonthlySavingsCents, r.NotificationCodes,
+				orgID, clusterUUID, r.Node, r.Term, r.Engine,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, len(chunk)); err != nil {
+			return fmt.Errorf("update node savings: %w", err)
 		}
 	}
 	return tx.Commit(ctx)
 }
 
+const pvcSavingsUpdateSQL = `
+	UPDATE pvc_recommendation_sets
+	SET estimated_savings_cents = $1,
+	    notification_codes = $2,
+	    updated_at = now()
+	WHERE org_id = $3 AND cluster_uuid = $4::uuid
+	  AND namespace = $5 AND persistentvolumeclaim = $6 AND term = $7`
+
 func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) error {
-	for _, r := range recs {
-		_, err := pool.Exec(ctx, `
-			UPDATE pvc_recommendation_sets
-			SET estimated_savings_cents = $1,
-			    notification_codes = $2,
-			    updated_at = now()
-			WHERE org_id = $3 AND cluster_uuid = $4::uuid
-			  AND namespace = $5 AND persistentvolumeclaim = $6 AND term = $7`,
-			r.EstimatedMonthlySavingsCents, r.NotificationCodes,
-			r.OrgID, r.ClusterUUID, r.Namespace, r.PVC, r.Term,
-		)
-		if err != nil {
-			return fmt.Errorf("update pvc savings %s/%s: %w", r.Namespace, r.PVC, err)
+	if len(recs) == 0 {
+		return nil
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(pvcSavingsUpdateSQL,
+				r.EstimatedMonthlySavingsCents, r.NotificationCodes,
+				r.OrgID, r.ClusterUUID, r.Namespace, r.PVC, r.Term,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, len(chunk)); err != nil {
+			return fmt.Errorf("update pvc savings: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
+
+const quotaSavingsUpdateSQL = `
+	UPDATE quota_recommendation_sets
+	SET estimated_savings_cents = $1,
+	    updated_at = now()
+	WHERE org_id = $2 AND cluster_uuid = $3::uuid
+	  AND namespace = $4 AND quota_name = $5`
 
 func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec) error {
-	for _, r := range recs {
-		_, err := pool.Exec(ctx, `
-			UPDATE quota_recommendation_sets
-			SET estimated_savings_cents = $1,
-			    updated_at = now()
-			WHERE org_id = $2 AND cluster_uuid = $3::uuid
-			  AND namespace = $4 AND quota_name = $5`,
-			r.EstimatedSavingsCents,
-			r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
-		)
-		if err != nil {
-			return fmt.Errorf("update quota savings %s/%s: %w", r.Namespace, r.QuotaName, err)
+	if len(recs) == 0 {
+		return nil
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(quotaSavingsUpdateSQL,
+				r.EstimatedSavingsCents,
+				r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, len(chunk)); err != nil {
+			return fmt.Errorf("update quota savings: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
+const clusterQuotaSavingsUpdateSQL = `
+	UPDATE cluster_quota_recommendation_sets
+	SET estimated_savings_cents = $1,
+	    updated_at = now()
+	WHERE org_id = $2 AND cluster_uuid = $3::uuid
+	  AND cluster_quota_name = $4`
+
 func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []ClusterQuotaRec) error {
-	for _, r := range recs {
-		_, err := pool.Exec(ctx, `
-			UPDATE cluster_quota_recommendation_sets
-			SET estimated_savings_cents = $1,
-			    updated_at = now()
-			WHERE org_id = $2 AND cluster_uuid = $3::uuid
-			  AND cluster_quota_name = $4`,
-			r.EstimatedSavingsCents,
-			r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
-		)
-		if err != nil {
-			return fmt.Errorf("update cluster-quota savings %s: %w", r.ClusterQuotaName, err)
+	if len(recs) == 0 {
+		return nil
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := chunkStart + maxPgxBatchQueue
+		if chunkEnd > len(recs) {
+			chunkEnd = len(recs)
+		}
+		chunk := recs[chunkStart:chunkEnd]
+		batch := &pgx.Batch{}
+		for _, r := range chunk {
+			batch.Queue(clusterQuotaSavingsUpdateSQL,
+				r.EstimatedSavingsCents,
+				r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, len(chunk)); err != nil {
+			return fmt.Errorf("update cluster-quota savings: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 // NormalizeSavingsRecTypesForAPI validates recommendation type names for the internal API.

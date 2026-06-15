@@ -252,6 +252,52 @@ func TestSyncOrgTags_RemovedTagKeyClearsMetadataCatalog(t *testing.T) {
 	assert.JSONEq(t, `{"environment":"production"}`, tagsJSON)
 }
 
+func TestSyncOrgTags_BatchUpdatesMultipleNamespaces(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "tag-sync-batch-org"
+	clusterUUID := testutil.TestClusterUUID
+
+	for _, ns := range []string{"payments", "billing", "ledger"} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO org_container_keys (
+				org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags
+			) VALUES ($1, $2, $3, 'api-server', 'Deployment', 'api', '{"stale":"true"}'::jsonb)
+			ON CONFLICT (org_id, namespace, workload, container_name) DO UPDATE
+			SET cluster_uuid = EXCLUDED.cluster_uuid,
+			    resolved_tags = EXCLUDED.resolved_tags`,
+			orgID, clusterUUID, ns,
+		)
+		require.NoError(t, err)
+	}
+
+	svc := tags.NewSyncService(pool)
+	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
+		OrgID: orgID,
+		NamespaceTags: []tags.NamespaceTags{
+			{ClusterUUID: clusterUUID, Namespace: "payments", Tags: map[string]string{"team": "payments"}},
+			{ClusterUUID: clusterUUID, Namespace: "billing", Tags: map[string]string{"team": "billing"}},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, updated)
+
+	var paymentsTags, billingTags, ledgerTags string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT resolved_tags::text FROM org_container_keys
+		WHERE org_id = $1 AND namespace = 'payments'`, orgID).Scan(&paymentsTags))
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT resolved_tags::text FROM org_container_keys
+		WHERE org_id = $1 AND namespace = 'billing'`, orgID).Scan(&billingTags))
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT resolved_tags::text FROM org_container_keys
+		WHERE org_id = $1 AND namespace = 'ledger'`, orgID).Scan(&ledgerTags))
+
+	assert.JSONEq(t, `{"team":"payments"}`, paymentsTags)
+	assert.JSONEq(t, `{"team":"billing"}`, billingTags)
+	assert.JSONEq(t, `{}`, ledgerTags)
+}
+
 func TestParseTagFilters(t *testing.T) {
 	t.Parallel()
 

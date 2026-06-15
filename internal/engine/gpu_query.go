@@ -26,6 +26,14 @@ type containerID struct {
 	ContainerName string
 }
 
+// PageGPUKey identifies a container on a page for scoped GPU digest lookups.
+type PageGPUKey struct {
+	ClusterUUID   string
+	Namespace     string
+	Workload      string
+	ContainerName string
+}
+
 // QueryGPURecommendations reads gpu_container_digests for the given cluster and
 // time range, then calls RecommendGPU for each container × term.
 // Returns:
@@ -33,6 +41,61 @@ type containerID struct {
 //   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
 //   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
 func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+	return queryGPURecommendations(ctx, pool, orgID, clusterUUID, start, end, terms, digestFilters, nil)
+}
+
+// QueryGPURecommendationsForContainers loads GPU digest rows for specific containers on a page.
+func QueryGPURecommendationsForContainers(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+	pageKeys []PageGPUKey,
+	start, end time.Time,
+	terms []TermConfig,
+	digestFilters *GPUQueryFilters,
+) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+	if len(pageKeys) == 0 {
+		return nil, nil, nil, nil
+	}
+	namespaces := make([]string, 0, len(pageKeys))
+	workloads := make([]string, 0, len(pageKeys))
+	containers := make([]string, 0, len(pageKeys))
+	for _, key := range pageKeys {
+		if key.ClusterUUID != "" && key.ClusterUUID != clusterUUID {
+			continue
+		}
+		if key.Namespace == "" || key.Workload == "" || key.ContainerName == "" {
+			continue
+		}
+		namespaces = append(namespaces, key.Namespace)
+		workloads = append(workloads, key.Workload)
+		containers = append(containers, key.ContainerName)
+	}
+	if len(namespaces) == 0 {
+		return nil, nil, nil, nil
+	}
+	return queryGPURecommendations(ctx, pool, orgID, clusterUUID, start, end, terms, digestFilters, &gpuContainerFilter{
+		namespaces: namespaces,
+		workloads:  workloads,
+		containers: containers,
+	})
+}
+
+type gpuContainerFilter struct {
+	namespaces []string
+	workloads  []string
+	containers []string
+}
+
+func queryGPURecommendations(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+	start, end time.Time,
+	terms []TermConfig,
+	digestFilters *GPUQueryFilters,
+	containerFilter *gpuContainerFilter,
+) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
 	gpuSettings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("load gpu thresholds: %w", err)
@@ -51,6 +114,15 @@ func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		  AND interval_start >= $2 AND interval_start <= $3`
 	args := []interface{}{clusterUUID, start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02")}
 	argPos := 4
+	if containerFilter != nil && len(containerFilter.namespaces) > 0 {
+		query += fmt.Sprintf(`
+		  AND (namespace, workload, container_name) IN (
+			SELECT u.n, u.w, u.cn
+			FROM unnest($%d::text[], $%d::text[], $%d::text[]) AS u(n, w, cn)
+		  )`, argPos, argPos+1, argPos+2)
+		args = append(args, containerFilter.namespaces, containerFilter.workloads, containerFilter.containers)
+		argPos += 3
+	}
 	if digestFilters != nil {
 		if strings.TrimSpace(digestFilters.NodeNameExact) != "" {
 			query += fmt.Sprintf(" AND node_name = $%d", argPos)

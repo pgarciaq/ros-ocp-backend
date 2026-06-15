@@ -83,6 +83,14 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, req SyncRequest) (int, er
 	}
 	defer tx.Rollback(ctx)
 
+	validNamespaceTags := make([]NamespaceTags, 0, len(req.NamespaceTags))
+	for _, nt := range req.NamespaceTags {
+		if nt.Namespace == "" || nt.ClusterUUID == "" {
+			continue
+		}
+		validNamespaceTags = append(validNamespaceTags, nt)
+	}
+
 	if _, err := tx.Exec(ctx, `
 		UPDATE org_container_keys
 		SET resolved_tags = '{}'::jsonb
@@ -91,28 +99,37 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, req SyncRequest) (int, er
 	}
 
 	updated := 0
-	for _, nt := range req.NamespaceTags {
-		if nt.Namespace == "" || nt.ClusterUUID == "" {
-			continue
-		}
-		tags := normalizeNamespaceTags(nt.Tags)
-		payload, err := json.Marshal(tags)
-		if err != nil {
-			return 0, fmt.Errorf("marshal tags for %s/%s: %w", nt.ClusterUUID, nt.Namespace, err)
+	if len(validNamespaceTags) > 0 {
+		clusterUUIDs := make([]string, len(validNamespaceTags))
+		namespaces := make([]string, len(validNamespaceTags))
+		tagsPayloads := make([]string, len(validNamespaceTags))
+		for i, nt := range validNamespaceTags {
+			tags := normalizeNamespaceTags(nt.Tags)
+			payload, err := json.Marshal(tags)
+			if err != nil {
+				return 0, fmt.Errorf("marshal tags for %s/%s: %w", nt.ClusterUUID, nt.Namespace, err)
+			}
+			clusterUUIDs[i] = nt.ClusterUUID
+			namespaces[i] = nt.Namespace
+			tagsPayloads[i] = string(payload)
 		}
 
 		tag, err := tx.Exec(ctx, `
-			UPDATE org_container_keys
-			SET resolved_tags = $4::jsonb
-			WHERE org_id = $1
-			  AND cluster_uuid = $2::uuid
-			  AND namespace = $3`,
-			orgID, nt.ClusterUUID, nt.Namespace, string(payload),
+			UPDATE org_container_keys AS o
+			SET resolved_tags = v.tags::jsonb
+			FROM (
+				SELECT u.c, u.n, u.t AS tags
+				FROM unnest($2::uuid[], $3::text[], $4::text[]) AS u(c, n, t)
+			) AS v
+			WHERE o.org_id = $1
+			  AND o.cluster_uuid = v.c
+			  AND o.namespace = v.n`,
+			orgID, clusterUUIDs, namespaces, tagsPayloads,
 		)
 		if err != nil {
-			return 0, fmt.Errorf("update resolved_tags for %s/%s: %w", nt.ClusterUUID, nt.Namespace, err)
+			return 0, fmt.Errorf("batch update resolved_tags for org %q: %w", orgID, err)
 		}
-		updated += int(tag.RowsAffected())
+		updated = int(tag.RowsAffected())
 	}
 
 	tagKeysPayload, err := json.Marshal(tagKeys)

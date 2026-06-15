@@ -57,7 +57,17 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 	costProvider := getGPUCostProvider()
 
 	for clusterUUID, indices := range clusterMap {
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, terms, nil)
+		pageKeys := make([]engine.PageGPUKey, len(indices))
+		for i, idx := range indices {
+			r := results[idx]
+			pageKeys[i] = engine.PageGPUKey{
+				ClusterUUID:   r.ClusterUUID,
+				Namespace:     r.Project,
+				Workload:      r.Workload,
+				ContainerName: r.Container,
+			}
+		}
+		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendationsForContainers(ctx, pool, orgID, clusterUUID, pageKeys, start, now, terms, nil)
 		if err != nil {
 			log.Warnf("enrichWithGPU: failed for cluster %s: %v", clusterUUID, err)
 			continue
