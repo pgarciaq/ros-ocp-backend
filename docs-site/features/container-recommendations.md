@@ -143,7 +143,7 @@ GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
 ```
 
 Lookup by deterministic UUID v5 from `(cluster_uuid, namespace, workload, workload_type, container_name)`.
-Same schema as list items, with digest **percentile-band plots** (`p50`/`p95`/`p99`/`max`), `recommendations.current`, optional `gpu` block,
+Same schema as list items, with digest **[percentile-band plots](percentile-band-plots.md)** (`p50`/`p95`/`p99`/`max`), `recommendations.current`, optional `gpu` block,
 and idle/zombie fields when classified. List rows omit `plots` and per-engine `notifications` maps — those are detail-only.
 
 ```http

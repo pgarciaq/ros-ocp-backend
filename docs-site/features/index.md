@@ -44,6 +44,7 @@ dollar impact using Koku cost model rates.
 | [business-hours.md](business-hours.md) | Business-hours weighted analysis |
 | [configurable-thresholds.md](configurable-thresholds.md) | Per-tenant threshold tuning |
 | [tag-filtering.md](tag-filtering.md) | Label-based filtering |
+| [percentile-band-plots.md](percentile-band-plots.md) | Usage percentile-band plots (replaced boxplots) |
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |

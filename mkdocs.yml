@@ -92,6 +92,7 @@ nav:
       - History & Quality: features/history-and-quality.md
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
+      - Usage Percentile-Band Plots: features/percentile-band-plots.md
       - Virtual Machine Recommendations: features/virtual-machines.md
   - Features (planned):
       - planned-features/index.md
