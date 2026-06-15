@@ -38,9 +38,10 @@ performance engines.
 
 List items use a slim list DTO ([`BuildListResponse`](../../internal/model/list_response.go))
 that preserves the fields the UI table reads (`current`, `short_term` cost
-`variation`, top-level `notifications`) while omitting plots and duplicate
-notification nesting. The detail endpoint still uses
-[`BuildDetailResponse`](../../internal/model/detail_response.go).
+`variation`, top-level `notification_codes` int array) while omitting plots and
+per-engine `notifications` maps. The detail endpoint still uses
+[`BuildDetailResponse`](../../internal/model/detail_response.go) with full
+`notifications` maps and percentile-band plots.
 
 ### Pagination
 
@@ -85,7 +86,7 @@ see [`NativeContainerID`](../../internal/model/recommendation_set_native.go).
 The response includes:
 
 - Per-term CPU/memory requests and limits for **cost** and **performance** engines
-- Usage distribution box plots (`plots.plots_data`) when samples exist
+- Usage distribution percentile-band plots (`plots.plots_data`) when digest data exists — `p50`, `p95`, `p99`, `max` per bucket (ADR-0292)
 - `recommendations.current` — current request/limit amounts
 - `recommendations.replicas` — desired/available replica counts when known
 - Optional `gpu` block when GPU enrichment applies

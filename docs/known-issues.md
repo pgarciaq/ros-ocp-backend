@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work); 2026-06-10 (Kafka DLQ / Finding #18 mitigated)
+Last updated: 2026-06-15 (phase13 API contract — list `notification_codes`, detail-only plots/notifications; SPARSE_DATA code 77)
 
 ---
 
@@ -44,7 +44,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Fleet** | Fleet summary (cross-cluster container health aggregate) | **Shipping** |
 | **Fleet** | Fleet savings summary (cross-plugin persisted savings, `?engine=`) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
-| **Platform** | Notification system (**54** codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM) — [reference](architecture/notification-codes.md) | **Shipping** |
+| **Platform** | Notification system (**77** codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM, SPARSE_DATA) — [reference](architecture/notification-codes.md) | **Shipping** |
 | **Platform** | Per-plugin configurable recommendation terms (TermProvider trait) | **Shipping** |
 | **Platform** | Admin env-var locking of term settings (per-term, per-plugin) | **Shipping** |
 | **Platform** | Plugin capabilities endpoint (`GET /settings/capabilities`) | **Shipping** |
@@ -253,6 +253,15 @@ in the operator PromQL queries. This is a one-line change but trades off
 freshness after scale-down events. The 15-minute window is consistent with the
 existing `workload-pod-count` query.
 
+### Recently Implemented (Phase 13 — June 2026)
+
+| Feature | Description | Branch |
+|---------|-------------|--------|
+| Slim list API contract | List rows expose `notification_codes` (int array); full `notifications` maps and `plots` are detail-only (ADR-0293/0294) | `pgarciaq-rosocp-superpowers-phase13` |
+| Digest percentile-band plots | Replaced boxplot five-number summaries with `p50`/`p95`/`p99`/`max` from daily digests (ADR-0292) | same |
+| SPARSE_DATA notification | Code **77** for recommendations with ≤2 days of absolute data | same |
+| Heavy API statement timeouts | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` / `ROS_API_STATEMENT_TIMEOUT_MS` for savings-summary and fleet-wide list | same |
+
 ### Recently Implemented (Phase 8 — May 2026)
 
 | Feature | Description | Branch |
@@ -324,7 +333,7 @@ On-prem has no Unleash, so namespace recs are unconditionally enabled.
 
 **API status:** Fully implemented. `GET /openshift/namespace/recommendations`
 and `GET /recommendations/openshift/namespace/:recommendation-id` endpoints
-serve namespace recommendations with boxplots and CSV export.
+serve namespace recommendations with percentile-band plots and CSV export.
 
 **UI status:** Partial. The koku-ui `optimizationsProjectsTable` component
 fetches namespace recommendations, but the breakdown detail view is
@@ -919,7 +928,7 @@ See [features-f26-f33-f54-f55.md](./features-f26-f33-f54-f55.md) for full detail
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
 - **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` container health aggregate.
 - **Fleet savings summary:** `GET /recommendations/openshift/savings-summary` cross-plugin savings totals with optional `?engine=` (default `cost`). See [cost-integration.md](./architecture/cost-integration.md).
-- **Box plots (REQ-6.6):** Five-number summary (min, Q1, median, Q3, max) per term for containers and namespaces.
+- **Percentile-band plots (REQ-6.6):** `p50`/`p95`/`p99`/`max` bands per term from daily digests (ADR-0292); detail-only.
 - **Quality metrics (F53, REQ-10.6):** Stability %, adoption detection, OOM events after rec.
 - **History tracking (F56):** Time-series of past recs in `recommendation_history`, API at `/history`.
 

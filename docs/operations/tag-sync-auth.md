@@ -2,40 +2,19 @@
 
 Authentication for tag data transfer depends on deployment mode (`ROS_TAGS_SOURCE`).
 
----
-
-## On-Prem (`db` mode): Direct DB reads, authenticated internal endpoints
-
-When ROS and Koku share a PostgreSQL instance (default for cost-onprem), ROS reads tag
-data **directly from Koku tenant tables**:
-
-- `org{org_id}.reporting_enabledtagkeys`
-- `org{org_id}.reporting_ocptags_values`
-
-There is **no HTTP push** from Koku for tag filtering in db mode. ROS uses its database
-credentials to query Koku schemas on the same PostgreSQL server.
-
-Internal push endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`) remain
-registered but are not used for the on-prem data path. When called, they require bearer
-TokenReview auth when `ROS_INTERNAL_TAGS_AUTH_REQUIRED=true` (default) — set
-`ROS_INTERNAL_TAGS_AUTH_REQUIRED=false` for local dev without service account tokens.
-
-**What you still configure:**
-
-| Variable | Purpose |
-|----------|---------|
-| `ROS_TAGS_ENABLED=true` | Enables tag list filters |
-| `ROS_TAGS_SOURCE=db` | Default; selects direct DB reads |
-
-No Koku-side tag sync env vars are required.
+| Mode | Chart default (cost-onprem) | Binary default (`internal/config`) | When to use |
+|------|----------------------------|-----------------------------------|-------------|
+| **`api`** | `api` | `db` | **Primary path** — Koku pushes resolved tags via HTTP (chart default for on-prem; required for SaaS) |
+| **`db`** | — | `db` | **Advanced** — shared PostgreSQL instance; ROS reads Koku tenant tables at query time |
 
 ---
 
-## SaaS (`api` mode): ServiceAccount authentication
+## `api` mode: ServiceAccount authentication (primary)
 
-When Koku and ROS use separate databases, Koku pushes tags via HTTP. Internal endpoints
-are **not** exposed through public ROS identity/RBAC middleware — access is restricted
-to in-cluster callers with valid Kubernetes ServiceAccount identity.
+When `ROS_TAGS_SOURCE=api` (cost-onprem chart default and SaaS), Koku pushes resolved
+namespace tags via HTTP after summarization, tag settings changes, and a 6-hour safety-net.
+Internal endpoints are **not** exposed through public ROS identity/RBAC middleware — access
+is restricted to in-cluster callers with valid Kubernetes ServiceAccount identity.
 
 | Method | Path |
 |--------|------|
@@ -100,7 +79,7 @@ Internal endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`, `PO
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag sync API and list filters (cost-onprem chart default) |
-| `ROS_TAGS_SOURCE` | `api` | Must be `api` for push endpoints to accept traffic (`db` is advanced on-prem only) |
+| `ROS_TAGS_SOURCE` | `api` (chart) / `db` (binary) | Must be `api` for push endpoints to accept traffic (`db` is advanced shared-PostgreSQL only) |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated SA names; empty accepts any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only static bearer token |
 | `ROS_INTERNAL_ALLOWED_ORGS` | (empty) | Optional comma-separated org IDs internal endpoints may target; empty allows all |
@@ -280,7 +259,34 @@ Compare `synced_at` to the last OCP manifest completion time for the org.
 | Zero `updated` rows | Sync response `updated: 0` with non-empty payload | Investigate missing `org_container_keys` rows |
 | Removed keys | ROS log `tag sync: removed tag key` | Informational (expected on disable) |
 
-**On-prem (`db`):** Monitor Koku summarization completion instead — no `synced_at` push metadata.
+**On-prem (`db` mode):** Monitor Koku summarization completion instead — no `synced_at` push metadata.
+
+---
+
+## Advanced: Shared-PostgreSQL mode (`db`)
+
+When ROS and Koku share a PostgreSQL instance and operators set `ROS_TAGS_SOURCE=db`,
+ROS reads tag data **directly from Koku tenant tables**:
+
+- `org{org_id}.reporting_enabledtagkeys`
+- `org{org_id}.reporting_ocptags_values`
+
+There is **no HTTP push** from Koku for tag filtering in `db` mode. ROS uses its database
+credentials to query Koku schemas on the same PostgreSQL server.
+
+Internal push endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`) remain
+registered but are not used for the on-prem `db` data path. When called, they require bearer
+TokenReview auth when `ROS_INTERNAL_TAGS_AUTH_REQUIRED=true` (default) — set
+`ROS_INTERNAL_TAGS_AUTH_REQUIRED=false` for local dev without service account tokens.
+
+**What you configure:**
+
+| Variable | Purpose |
+|----------|---------|
+| `ROS_TAGS_ENABLED=true` | Enables tag list filters |
+| `ROS_TAGS_SOURCE=db` | Selects direct DB reads (binary default; override chart `api` default) |
+
+No Koku-side tag sync env vars are required in `db` mode.
 
 ---
 
@@ -331,8 +337,9 @@ mTLS establishes **bidirectional authentication** at the transport layer.
 - Payload validation and org scoping — ROS still validates `org_id` and full-replace semantics.
 - Periodic safety-net — still recommended until webhook-based instant sync exists.
 
-**On-prem note:** Shared-database deployments (`db` mode) do not need push auth today.
-mTLS applies when operators choose `api` source or for other ROS↔Koku HTTP integrations.
+**On-prem note:** Shared-database deployments (`db` mode) do not need push auth. The
+cost-onprem chart defaults to `api` mode, which uses the TokenReview flow documented above.
+mTLS applies when operators want transport-layer hardening for push sync or other ROS↔Koku HTTP integrations.
 
 ---
 

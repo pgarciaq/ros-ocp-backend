@@ -323,6 +323,8 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Connection max idle (minutes) <br><em>Close idle pool connections after N minutes; frees DB slots.</em> | 5 | `ROS_DB_MAX_CONN_IDLE_TIME` | — | — | No |
 | Statement cache mode <br><em>pgx `describe` (default) or `prepare` (session pooling only).</em> | `describe` | `ROS_DB_STATEMENT_CACHE_MODE` | — | — | No |
 | Pool acquire timeout (s); 0 = none <br><em>Max wait for pool conn; `0` waits forever. 5s → 503 under overload.</em> | 5 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | — | — | No |
+| API statement timeout (ms) <br><em>Session default for API/GORM queries; per-endpoint overrides via `SetLocalStatementTimeout()`. SaaS ingress is ~30s.</em> | 30000 | `ROS_API_STATEMENT_TIMEOUT_MS` | — | — | No |
+| Heavy API statement timeout (ms) <br><em>Extended `SET LOCAL` for savings-summary and fleet-wide container list. SaaS should use ~28000.</em> | 45000 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | — | — | No |
 | Kafka bootstrap servers <br><em>Broker list for upload + sources consumers; must match Strimzi DNS.</em> | `localhost:29092` | `KAFKA_BOOTSTRAP_SERVERS` | — | — | No |
 | Kafka consumer group <br><em>Processor consumer group for partition balance; **new id reprocesses offsets**.</em> | `ros-ocp` | `KAFKA_CONSUMER_GROUP_ID` | — | — | No |
 | Kafka auto-commit <br><em>`false` commits after successful processing (recommended). `true` risks loss on crash.</em> | false | `KAFKA_AUTO_COMMIT` | — | — | No |
@@ -343,7 +345,7 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Plugin allowlist (CSV); empty = all native <br><em>CSV of plugins to run; empty = all registered.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>CSV of plugins to skip; overrides allowlist.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 | Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | true | `ROS_TAGS_ENABLED` | — | — | No |
-| Tag source (`db` or `api`) <br><em>`db` = ROS-stored tags; `api` = live Koku (slower, fresher).</em> | `db` | `ROS_TAGS_SOURCE` | — | — | No |
+| Tag source (`db` or `api`) <br><em>Chart default `api` (Koku push sync into `resolved_tags`); binary default `db` (direct Koku PostgreSQL reads on shared instance — advanced).</em> | `api` (chart) / `db` (binary) | `ROS_TAGS_SOURCE` | — | — | No |
 | Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; required in api mode (non-dev).</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
 | Tag sync dev bearer token <br><em>Dev-only static token; blocked outside DEVELOPMENT=true.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
 | Tag sync max body (MiB) <br><em>Max tag sync POST body; prevents OOM from huge payloads.</em> | 10 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | — | — | No |
@@ -377,6 +379,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 | Recommendation history retention (days) <br><em>Archived prior recommendation versions kept for audit. Independent of digest partition retention.</em> | 90 | `ROS_HISTORY_RETENTION_DAYS` | — | — | No |
 | Stale recommendation cleanup (days) <br><em>Permanently delete stale recommendations after this many days. 30d default grace before UI cleanup. `ROS_STALE_ARCHIVE_DAYS` is a deprecated alias.</em> | 30 | `ROS_STALE_CLEANUP_DAYS` | — | — | No |
 | Digest partition retention (months) <br><em>Drop monthly digest partitions older than N months. **Irreversible**—align with lookback and compliance needs.</em> | 6 | `ROS_RETENTION_MONTHS` | — | — | No |
+| Raw sample partition retention (days) <br><em>Drop `container_usage_samples` / `namespace_usage_samples` partitions older than N days. Detail percentile-band plots use digests; samples are optional drill-down.</em> | 45 | `ROS_SAMPLE_RETENTION_DAYS` | — | — | No |
 | Plugin allowlist (CSV) <br><em>Only listed plugins run; empty = all. See General / Infrastructure for deploy-focused notes.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>Skipped plugins; overrides allowlist. Example: `gpu,snapshot` without DCGM or inventory.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 

@@ -41,7 +41,7 @@ ROS does **not** read Koku PostgreSQL line-item tables for recommendations. Usag
 2. **Koku listener** processes cost CSVs; [`ROSReportShipper`](../../../koku/koku/masu/external/ros_report_shipper.py) copies ROS files to the ROS S3 bucket and publishes one Kafka announce per file.
 3. **ROS processor** consumes `platform.upload.announce`, filters `category == "ros"`, downloads the presigned CSV URL, parses rows, and writes digests/recommendations to the **ROS PostgreSQL** database.
 
-ROS and Koku use **separate databases**. The only shared persistence in on-prem mode is PostgreSQL **instance** access for tag filtering (`ROS_TAGS_SOURCE=db`).
+ROS and Koku use **separate databases**. The only shared persistence in on-prem **advanced** mode is PostgreSQL **instance** access for tag filtering (`ROS_TAGS_SOURCE=db`). The cost-onprem chart defaults to `api` (push sync into `org_container_keys.resolved_tags`).
 
 ### Kafka message shape
 
@@ -62,14 +62,15 @@ CSV column headers must match koku-metrics-operator output ([`internal/ingestion
 
 ROS recommendation list APIs support `filter[tag:key]=value`. Tag **keys** are governed by Koku's **enabled tag keys** (`reporting_enabledtagkeys`, managed via Cost Management **Settings → Tags** and [`masu/api/enabled_tags.py`](../../../koku/koku/masu/api/enabled_tags.py) for pipeline enablement). Tags do **not** flow through `effective_rates` or the ingestion Kafka message; they are a parallel concern.
 
-| Deployment | `ROS_TAGS_SOURCE` | How tags reach ROS |
-|------------|-------------------|-------------------|
-| **On-prem** (default) | `db` | ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time — no HTTP sync |
-| **SaaS** | `api` | Koku Celery [`sync_ros_ocp_tags`](../../../koku/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` |
+| Deployment | Chart default | Binary default | How tags reach ROS |
+|------------|---------------|----------------|-------------------|
+| **On-prem** (cost-onprem chart) | `api` | `db` | **api:** Koku Celery [`sync_ros_ocp_tags`](../../../koku/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` (chart default). **db (advanced):** ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time on a shared PostgreSQL instance — no HTTP sync |
+| **SaaS** | `api` | `api` | Same push path as on-prem `api` mode |
 
 Detailed docs:
 
 - [tag-filtering.md](../features/tag-filtering.md) — filter syntax, lifecycle, SQL paths
+- [operations/tag-sync-auth.md](../operations/tag-sync-auth.md) — push auth (api mode, chart default)
 - [operations/tag-sync.md](../operations/tag-sync.md) — SaaS push API contract
 - Koku: [`ros-ocp-integration.md` § Tag Sync](../../../koku/docs/architecture/ros-ocp-integration.md#tag-sync-koku--ros)
 
@@ -457,8 +458,9 @@ Defined in migration `000040_add_no_cost_data_notification` as `NO_COST_DATA` (s
 
 Emitted on **container**, **node**, and **PVC** recommendations when Masu cost data is unavailable,
 `ROS_SAVINGS_ESTIMATES_ENABLED=false`, or (for containers) the workload namespace is absent from
-`namespace_aggregates`. API responses expose this as notification code **25** in the
-`notifications` object (key `"25"`) or `notification_codes` array.
+`namespace_aggregates`. API responses expose this as notification code **25**: list rows
+include it in `notification_codes` (int array); detail and per-engine blocks include the
+full `notifications` map (key `"25"`).
 
 GPU enrichment skips this notification; dollar fields are simply null/zero.
 

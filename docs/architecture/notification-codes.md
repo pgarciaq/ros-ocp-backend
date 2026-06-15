@@ -1,6 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
+The catalog defines **77** notification codes (including **SPARSE_DATA**, code 77).
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -11,22 +12,27 @@ For operator-facing explanations and remediation steps, see
 |-------|----------|------|
 | **Database** | `notification_code_definitions` (`code`, `name`, `severity`, `description`) | Source of truth for names and default messages |
 | **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–57) | Emitters reference numeric codes |
-| **API mapping** | [`internal/notifications/mapping.go`](../../internal/notifications/mapping.go) `Definitions` | Converts `SMALLINT[]` → Kruize-shaped `notifications` map for container/namespace/node/PVC/snapshot list APIs |
+| **API mapping** | [`internal/notifications/mapping.go`](../../internal/notifications/mapping.go) `Definitions` | Converts `SMALLINT[]` → full `notifications` map for **detail** and per-engine responses only |
 | **VM JSONB** | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) `vmBuildNotifications` | VM list/detail use lowercase `type` (`info`/`warning`/`critical`) in `vm_recommendations.notifications` |
 
 **Storage by plugin:**
 
-| Plugin | Table / column | Format |
-|--------|----------------|--------|
-| Container | `recommendation_sets.notification_codes` | `SMALLINT[]` + mapped `notifications` in API |
-| Namespace | `namespace_recommendation_sets.notification_codes` | `SMALLINT[]` + mapped `notifications` |
-| Node | `node_recommendations.notification_codes` | `SMALLINT[]` + mapped `notifications` |
-| GPU (container) | Embedded in GPU enrichment / recommendation flow | `SMALLINT[]` on container recs when merged |
-| GPU time-slicing | Node rec + candidate containers | Code **36** |
-| PVC | `pvc_recommendation_sets.notification_codes` | `SMALLINT[]` |
-| Snapshot | `snapshot_recommendation_sets.notification_codes` | `SMALLINT[]` |
-| VM | `vm_recommendations.notifications` | JSONB array of `{code,type,message}` |
-| Quota / ClusterResourceQuota | 70–73 | Near capacity, oversized/tighten, blocking, CRQ at capacity |
+| Plugin | Table / column | List API | Detail / per-engine API |
+|--------|----------------|----------|-------------------------|
+| Container | `recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
+| Namespace | `namespace_recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
+| Node | `node_recommendations.notification_codes` | `notification_codes` (int array) | Full `notifications` map per engine |
+| GPU (container) | Embedded in GPU enrichment / recommendation flow | `notification_codes` on list when present | Full map on detail GPU blocks |
+| GPU time-slicing | Node rec + candidate containers | `notification_codes` on list | Code **36** in engine `notifications` |
+| PVC | `pvc_recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
+| Snapshot | `snapshot_recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
+| VM | `vm_recommendations.notifications` | `notifications` JSON array | Same array on detail |
+| Quota / ClusterResourceQuota | 70–73 | `notification_codes` (int array) | Full `notifications` map on detail |
+
+**ADR-0293/0294 list contract:** List rows expose `notification_codes` only (slim DTO).
+Full `notifications` maps and `plots` are **detail-only**. Per-engine notification
+emission follows **A-2 deduplication** (ADR-0293): codes appear on engine blocks in
+detail responses, not duplicated at term or list level.
 
 **Reference API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` returns the full catalog from [`internal/notifications/Definitions`](../../internal/notifications/mapping.go) (sorted by code). Optional `filter[plugin]` (`container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `vm`, `quota`, `cluster-quota`) limits results. No identity header required. DB table `notification_code_definitions` remains the migration source of truth; Go maps must stay in sync (`TestDefinitionsMatchDB`).
 
@@ -42,7 +48,7 @@ When adding a code:
 
 ---
 
-## Master table (codes 1–63)
+## Master table (codes 1–77)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.

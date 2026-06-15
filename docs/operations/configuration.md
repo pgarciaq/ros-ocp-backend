@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-**Last updated:** 2026-06-12
+**Last updated:** 2026-06-15
 
 ---
 
@@ -54,6 +54,8 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_DB_MAX_CONNS` | `5` | Maximum pgxpool connections per process (API, processor, poller each have their own pool). GORM and pgxpool share this single pool via `stdlib.OpenDBFromPool`. Coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`. Legacy alias: `DB_POOL_SIZE` (deprecated). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout applied on pool connect (`AfterConnect`) for API and GORM paths. |
+| `ROS_API_STATEMENT_TIMEOUT_MS` | `30000` (ms) | Session default statement timeout for API/GORM paths (overrides `ROS_DB_STATEMENT_TIMEOUT` when set). Per-query overrides via `SetLocalStatementTimeout()`. |
+| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `45000` (ms) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). SaaS deployments should use ~`28000` to stay under ingress timeout. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
@@ -247,8 +249,7 @@ Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_RETENTION_MONTHS` | `6` | Monthly digest partition retention. |
-| `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (days). |
-| `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (`container_usage_samples`, `namespace_usage_samples`). Shorter than digest retention to reduce disk use; digest-based detail plots do not require samples. |
+| `ROS_SAMPLE_RETENTION_DAYS` | `45` | Raw usage sample partition retention (`container_usage_samples`, `namespace_usage_samples`). Shorter than digest retention to reduce disk use; detail percentile-band plots use digests and do not require samples. |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Recommendation history snapshot retention (days). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours without cluster report before recommendations marked stale. |
 | `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations older than N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
@@ -282,7 +283,7 @@ exposed for list filtering when tag sync is enabled.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag list filters (and push API when source=api); cost-onprem chart default. |
-| `ROS_TAGS_SOURCE` | `api` | `api` (chart default) = push into `resolved_tags`; `db` (advanced) = direct Koku PostgreSQL reads. |
+| `ROS_TAGS_SOURCE` | `api` (chart) / `db` (binary) | `api` (chart default) = Koku push into `resolved_tags`; `db` (binary default, advanced) = direct Koku PostgreSQL reads on shared instance. |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). **Required non-empty in production when `ROS_TAGS_SOURCE=api`.** |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). **Blocked at startup when `DEVELOPMENT` is not `true`.** |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |

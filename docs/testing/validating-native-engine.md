@@ -30,7 +30,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 |----------|------------------|------------------|
 | **Plugins (recommendation types)** | All nine native plugins produce correct rows and API responses | DB tables, list/detail APIs, processor logs |
 | **Cross-cutting** | Idle/zombie, business hours, fleet/savings summary, history/quality, terms, settings locks, dual engines | Filters, settings PUT, aggregate endpoints |
-| **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, box plots |
+| **Kruize API compatibility** | Same paths and JSON nesting as Kruize for koku-ui | Detail `recommendation_terms`, `format` fields, percentile-band plots (detail-only) |
 | **Data pipeline** | Kafka → S3 CSV download → digest → recommend | Listener + processor logs, `meta.count` |
 | **Performance** | Latency, memory, DB query time under load | Prometheus, `hey`/`k6`, processor duration logs |
 | **Regression** | Native vs Kruize where both can run (legacy env only) | Side-by-side comparison, known diffs doc |
@@ -76,7 +76,7 @@ Use this order for a new native-engine QE cycle. **Containers and Kruize-compati
 | **P0** | Container list + detail + **Kruize JSON shape** | Primary UI surface; regression vs Kruize |
 | **P0** | koku-ui-onprem smoke on `/optimizations` | End-user validation |
 | **P1** | Settings API (thresholds, terms, locks) + dual engine | Tenant tuning and cost vs performance |
-| **P1** | Idle/zombie + notifications + box plots | High-visibility UX |
+| **P1** | Idle/zombie + notifications + percentile-band plots | High-visibility UX |
 | **P1** | Namespace recommendations | Quota guidance in UI |
 | **P2** | GPU (MIG + time-slicing + summary) | Growing adoption |
 | **P2** | Node, PVC, quota, cluster-quota, snapshot | On-prem feature completeness |
@@ -1195,10 +1195,10 @@ The UI reads nested structures under `recommendations`, not flat millicore field
 | `recommendations.monitoring_end_time` | RFC3339 UTC string (from digest window) |
 | `recommendations.current` | `requests` / `limits` with `cpu` and `memory` objects |
 | `recommendations.recommendation_terms.<term>.duration_in_hours` | `24` / `168` / `360` for short/medium/long |
-| `recommendations.recommendation_terms.<term>.recommendation_engines.cost` | `config`, optional `variation`, `notifications`, optional `business_hours` |
+| `recommendations.recommendation_terms.<term>.recommendation_engines.cost` | `config`, optional `variation`, `notifications` (engine-only per ADR-0293), optional `business_hours` |
 | `recommendations.recommendation_terms.<term>.recommendation_engines.performance` | Same structure as cost |
-| `recommendations.recommendation_terms.<term>.plots.plots_data` | Box plot quartiles for CPU and memory |
-| `recommendations.recommendation_terms.<term>.notifications` | Map keyed by code string |
+| `recommendations.recommendation_terms.<term>.plots.plots_data` | Percentile-band plots (`p50`, `p95`, `p99`, `max`) for CPU and memory from daily digests (ADR-0292; detail-only) |
+| `recommendations.recommendation_terms.<term>.recommendation_engines.<engine>.notifications` | Map keyed by code string (detail/per-engine only; not on list rows) |
 
 Each resource value in **config** / **current** / **business_hours** must use:
 
@@ -1219,9 +1219,9 @@ Variation percentages use `format: "percent"` on `variation.requests.cpu` / `mem
 | 2 | Both engines present per term | jq `.recommendations.recommendation_terms.medium_term.recommendation_engines \| keys` → `["cost","performance"]` |
 | 3 | CPU format is `cores` | jq `...cost.config.requests.cpu.format` → `"cores"` |
 | 4 | Memory format is `MiB` | jq `...cost.config.requests.memory.format` → `"MiB"` |
-| 5 | Box plots non-empty for medium_term | jq `...medium_term.plots.plots_data` has CPU/memory series |
-| 6 | Notifications map shape | Keys are strings; values have `type`, `message`, `code` |
-| 7 | List view still works | `GET .../recommendations/openshift?limit=5` → `meta.count` > 0 |
+| 5 | Percentile-band plots non-empty for medium_term | jq `...medium_term.plots.plots_data` has CPU/memory series with `p50`/`p95`/`p99`/`max` |
+| 6 | Engine notifications map shape (detail only) | jq `...cost.notifications` — keys are strings; values have `type`, `message`, `code` |
+| 7 | List `notification_codes` | `GET .../recommendations/openshift?limit=5` → each row has `notification_codes` int array (no `notifications` map or `plots`) |
 | 8 | UI renders breakdown | Deploy koku-ui-onprem (see [End-to-end with koku-ui](#end-to-end-with-koku-ui)); open workload breakdown without JS errors |
 
 ```bash
@@ -1261,7 +1261,7 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 1 | Recommendations persisted | `SELECT count(*) FROM recommendation_sets WHERE org_id='1234567'` | > 0 after ingest |
 | 2 | All terms populated (when data allows) | Detail API `recommendation_terms` keys | `short_term`, `medium_term`, `long_term` |
 | 3 | Cost vs performance differ on spiky workloads | Compare `config.requests.cpu.amount` for same term | Performance ≥ cost on CPU for spike patterns |
-| 4 | Box plots populated | Detail `plots.plots_data` | Non-null CPU/memory quartiles |
+| 4 | Percentile-band plots populated | Detail `plots.plots_data` | Non-null CPU/memory bands (`p50`/`p95`/`p99`/`max`) |
 | 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
 | 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
@@ -1652,9 +1652,9 @@ For environments still running Kruize, compare outputs before cutover. **Product
 |--------|-----------------|--------|-----------|
 | Wait time | Up to `KRUIZE_WAIT_TIME` (hours) | Seconds–minutes inline | Native must not require poller |
 | Detail shape | Nested JSON in `recommendation_sets` | `DetailResponse` builder | Byte-compare key paths, not full blob |
-| Box plots | Pre-computed | On-the-fly from samples | Visual compare in UI |
+| Percentile-band plots | Pre-computed (Kruize) | From daily digests at detail read (ADR-0292) | Visual compare in UI; list excludes plots |
 | GPU / node / PVC / quota / VM | Not available | Full plugins | New coverage only on native |
-| Notification codes | Smaller set | 54 codes | Expect new codes; UI must tolerate unknown codes |
+| Notification codes | Smaller set | 77 codes | Expect new codes (incl. **77** SPARSE_DATA); UI must tolerate unknown codes |
 | Savings | Limited | Masu `effective_rates` | Enable `KOKU_MASU_URL` for parity tests |
 | `monitoring_start_time` | In Kruize JSON | Derived from digests | May differ by hours; document delta |
 
@@ -1703,8 +1703,8 @@ If using **Keycloak** on chart deployments, set `KEYCLOAK_*` vars per `apps/koku
 | 1 | `/optimizations` (or ROS module route) | Table loads; `meta.count` reflected in UI |
 | 2 | Container breakdown | Term tabs: short / medium / long |
 | 3 | Cost vs performance toggle | Different request/limit values |
-| 4 | Box plot charts | CPU and memory charts render (not empty skeleton) |
-| 5 | Notifications | Warning/info badges match API codes |
+| 4 | Percentile-band plot charts | CPU and memory charts render `p50`/`p95`/`p99`/`max` bands (not empty skeleton) |
+| 5 | Notifications | List badges from `notification_codes`; detail from per-engine `notifications` map |
 | 6 | Idle workloads | Filter or badge for idle/zombie if exposed |
 | 7 | GPU optimizations | GPU list/MIG pages if enabled in UI build |
 | 8 | Node optimizations | Node list loads |
@@ -1798,7 +1798,9 @@ Bruno equivalents: `VM recommendations list.bru`, `VM recommendations detail.bru
 
 ### Response checks (containers)
 
-List responses expose flat engine fields and/or nested terms depending on endpoint version; **detail** uses full Kruize nesting (see [Kruize API compatibility validation](#kruize-api-compatibility-validation)).
+List responses use the slim list DTO: `notification_codes` (int array) at the top level;
+no `plots` or per-engine `notifications` maps (ADR-0293/0294). **Detail** uses full
+Kruize nesting (see [Kruize API compatibility validation](#kruize-api-compatibility-validation)).
 
 Abbreviated list shape:
 
@@ -1812,6 +1814,7 @@ Abbreviated list shape:
     "container": "app",
     "workload": "api-deployment",
     "idle_state": "active",
+    "notification_codes": [1, 25],
     "recommendations": {
       "estimated_monthly_savings": { "value": "12.34", "units": "USD" },
       "short_term": { "cost": { }, "performance": { } },
@@ -1979,7 +1982,7 @@ Bruno: `PUT Settings VM.bru`, `DELETE Settings VM.bru`, `GET Settings Thresholds
 
 ## Notification codes
 
-ROS attaches integer **notification codes** to recommendations. The catalog defines **76 codes** across all plugins (containers through VM placement and quota; some reserved codes are not emitted yet).
+ROS attaches integer **notification codes** to recommendations. The catalog defines **77 codes** across all plugins (containers through VM placement and quota; some reserved codes are not emitted yet).
 
 - **Full catalog (all codes, severity, UI hints):** [Notification Codes](../architecture/notification-codes.md) (`docs-site/architecture/notification-codes.md`)
 - **Maintainer emitters:** `docs/architecture/notification-codes.md` in the repository
@@ -2014,13 +2017,14 @@ ROS attaches integer **notification codes** to recommendations. The catalog defi
 | 58–59 | INFO | Sequential / random I/O pattern | `high-io-vm-01` and I/O-heavy NISE VMs |
 | 60–63 | WARNING/INFO | Placement / NUMA / shared storage | `network-heavy-vm-01`, multi-VM co-location fixtures |
 | 64–69 | INFO | Power schedule, network QoS, storage tiering | Extended chart E2E templates |
+| 77 | INFO | Sparse data (≤2 days) | Any plugin with limited `data_days` |
 | 74 | WARNING | Near pod scheduling limit | Nodes with `pod_scheduling_headroom` &lt; 10% |
 | 76 | INFO | Fleet consolidation (MachineSet) | `node_count_reduction` with `machineset_name` |
 | 70–73 | WARNING/INFO/CRITICAL | ResourceQuota / ClusterResourceQuota | Near capacity, oversized, blocking, CRQ at capacity |
 
 **VM list filters (phase11+):** `filter[is_network_bound]=true|false`, `filter[guest_os]=windows` (substring, comma OR), plus existing `filter[has_gpu]`, `filter[gpu_classification]`.
 
-API: VM list/detail return `notifications` as a JSON array (`type`: `info` | `warning` | `critical`). List `metadata.is_network_bound` mirrors notification **55** eligibility. Containers use `notification_codes` + `notifications` map.
+API: VM list/detail return `notifications` as a JSON array (`type`: `info` | `warning` | `critical`). List `metadata.is_network_bound` mirrors notification **55** eligibility. Container/namespace/node/PVC list rows expose `notification_codes` (int array) only; detail and per-engine blocks include the full `notifications` map (ADR-0293/0294).
 
 ---
 
