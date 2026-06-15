@@ -18,13 +18,19 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 76 },
+  "meta": { "count": 77 },
   "data": [
     {
       "code": 2,
       "name": "STALE_DATA",
       "severity": "WARNING",
       "description": "No new metrics data received for more than 48 hours"
+    },
+    {
+      "code": 77,
+      "name": "SPARSE_DATA",
+      "severity": "INFO",
+      "description": "Recommendation based on limited data; accuracy improves with more observation time"
     }
   ]
 }

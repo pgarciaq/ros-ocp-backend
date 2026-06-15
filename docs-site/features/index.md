@@ -10,8 +10,10 @@ dollar impact using Koku cost model rates.
 | Feature | Plugins | Engines | Savings | Configurable |
 |---------|---------|---------|---------|--------------|
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
+| Usage Percentile-Band Plots | container, namespace | — | No | No (detail-only; `p50`/`p95`/`p99`/`max` from digests) |
 | Namespace Quota Optimization | namespace | cost, performance | No (by design; use container-level savings) | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
+| MachineSet Aggregation (Tier 1) | node | cost, performance | Yes (aggregated fleet savings) | Yes |
 | GPU MIG Profiling | gpu | single | Yes (container detail) | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
 | PVC Right-Sizing | pvc | single | Yes | Yes |
@@ -33,6 +35,7 @@ dollar impact using Koku cost model rates.
 | [quota-recommendations.md](quota-recommendations.md) | ResourceQuota right-sizing |
 | [cluster-resource-quota.md](cluster-resource-quota.md) | ClusterResourceQuota right-sizing |
 | [node-recommendations.md](node-recommendations.md) | Node consolidation |
+| [../plugin-reference/node.md](../plugin-reference/node.md#machineset-aggregation-api-get-machinesets) | MachineSet fleet aggregation (`GET .../machinesets`, Tier 1 shipped) |
 | [gpu-mig.md](gpu-mig.md) | GPU MIG profiling |
 | [gpu-time-slicing.md](gpu-time-slicing.md) | GPU time-slicing |
 | [pvc-rightsizing.md](pvc-rightsizing.md) | PVC storage right-sizing |
@@ -58,7 +61,8 @@ buffers and memory trend alerts.
 
 **[Node Consolidation](node-recommendations.md)** — Identifies underutilized,
 overcommitted, and stranded-resource nodes; recommends consolidation and target
-node sizing with dual cost/performance engines.
+node sizing with dual cost/performance engines. **`GET .../machinesets`** (Tier 1 shipped)
+aggregates node recommendations by MachineSet for fleet-level savings.
 
 **[GPU MIG Profiling](gpu-mig.md)** — Maps GPU utilization patterns to NVIDIA
 MIG profiles (1g.5gb through 7g.40gb) for hardware-isolated sharing.

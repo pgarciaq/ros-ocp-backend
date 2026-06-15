@@ -25,12 +25,16 @@ You can view it interactively using:
 | GPU | `/recommendations/openshift/gpu/timeslicing` | GET | Time-slicing recommendations |
 | GPU | `/recommendations/openshift/gpu/mig` | GET | MIG partition recommendations |
 | Nodes | `/recommendations/openshift/nodes` | GET | Node utilization recommendations |
+| MachineSets | `/recommendations/openshift/machinesets` | GET | MachineSet fleet aggregation (Tier 1 — groups node recommendations) |
 | PVCs | `/recommendations/openshift/pvcs` | GET | PVC right-sizing list — filters: `filter[cluster]`, `filter[project]`, `filter[storageclass]`, `filter[term]`, `filter[recommendation_type]`, `filter[tag:<key>]`; list rows include `estimated_monthly_savings`, `mounted_by`, `vm_name`, growth (`days_to_full`, `growth_bytes_per_day` on near-full/oversized when projected), orphan idle (`idle_since`, `idle_duration_days` on orphaned); `format=csv` or `Accept: text/csv` for export |
 | PVCs | `/recommendations/openshift/pvcs/detail` | GET | PVC detail — requires `cluster_uuid`, `namespace`, `persistentvolumeclaim`; returns all terms (with per-term growth fields when present), `mounted_by`, `vm_name`, plus `historical_usage` daily digests |
 | PVCs | `/recommendations/openshift/settings/pvc` | GET/PUT/DELETE | PVC utilization thresholds (`oversized_threshold`, `near_full_threshold`, `min_trend_days`, `days_to_full_alert`, `locked_fields`) |
-| PVCs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=pvc` for codes **20**, **25**, **29**, **30** (orphaned, no cost data, oversized, near-full) |
+| PVCs | `/recommendations/openshift/notification-codes` | GET | Notification code catalog — `filter[plugin]=container|namespace|node|gpu|pvc|snapshot|vm|quota|cluster-quota` |
 | Fleet | `/recommendations/openshift/savings-summary` | GET | Fleet savings rollup — `by_plugin.pvc` honors `term` only (engine-agnostic); `by_plugin.snapshot` is term-independent (sums all snapshot rows); container, node, and VM honor `engine` (default `cost`) and `term` (default `medium`) |
 | Quota | `/recommendations/openshift/quota` | GET | Namespace ResourceQuota right-sizing (`quota` plugin) |
+| Quota | `/recommendations/openshift/quota/detail` | GET | ResourceQuota detail |
+| Quota | `/recommendations/openshift/cluster-quota` | GET | ClusterResourceQuota right-sizing (`cluster-quota` plugin) |
+| Quota | `/recommendations/openshift/cluster-quota/detail` | GET | ClusterResourceQuota detail |
 | Namespaces | `/recommendations/openshift/namespaces` | GET | Namespace quota recommendations |
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration (`?recommendation_type=<plugin>`) |
@@ -52,6 +56,21 @@ You can view it interactively using:
 | VMs | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — `format=csv` supported |
 | VMs | `/recommendations/openshift/instance-types` | GET | Available instance types and preferences per cluster (`cluster_uuid` required) |
 | VMs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=vm` for codes **18**–**69** |
+
+## Non-OpenAPI routes
+
+These operational endpoints are served by the ROS API and processor binaries but are **not** part of `openapi.json`:
+
+| Path | Method | Description |
+|------|--------|-------------|
+| `/status` | GET | Trivial liveness — always 200 when process is up |
+| `/healthz` | GET | Deep liveness — goroutine count, GC pause thresholds |
+| `/readyz` | GET | Readiness — PostgreSQL ping; optional Kafka/S3 when `ROS_READINESS_CHECK_*` enabled |
+| `/internal/tags/sync` | POST | Koku tag push sync (full-replace per org) |
+| `/internal/tags/status` | GET | Tag sync freshness (`synced_at`, enabled key catalog) |
+| `/internal/recalculate-savings` | POST | Trigger savings recalculation after cost model updates |
+
+See [Monitoring](monitoring.md) for probe configuration and [Configuration — Tag Sync](configuration.md#tag-sync) for internal tag routes.
 
 When `ROS_SETTINGS_LOCKED=true`, settings GET responses include `settings_locked: true`; PUT/DELETE
 return `403`. See [Configuration — Global Settings Lock](configuration.md#global-settings-lock).

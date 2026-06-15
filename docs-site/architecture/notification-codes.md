@@ -9,16 +9,23 @@ GPUs, PVCs, snapshots, and virtual machines.
 
 ## How notifications appear in the API
 
-| Resource | List / detail fields | Notes |
-|----------|----------------------|-------|
-| Containers, namespaces, PVCs, snapshots | `notification_codes` (array) and `notifications` (map keyed by code string) | Map entries include `type`, `message`, `code` (Kruize-compatible shape) |
-| Nodes | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` | Map keyed by code string (`"11"`, `"13"`, …); no top-level `notification_codes` on list rows. Detail also exposes aggregated top-level `notifications`. Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. |
-| Virtual machines | `notifications` (JSON array) | `type` is lowercase: `info`, `warning`, `critical` |
+Per [ADR-0293](architecture/adrs.md), notifications are emitted **per engine** (cost and performance independently). List endpoints deduplicate codes across engines into a slim `notification_codes` int array; full `notifications` maps and usage `plots` are **detail-only** (or per-engine on detail).
 
-Example (container):
+| Resource | List rows | Detail / per-engine |
+|----------|-----------|---------------------|
+| Containers, namespaces, PVCs, snapshots | `notification_codes` (int array) | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape) |
+| Nodes | `notification_codes` on list rows (deduplicated across engines) | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. |
+| Virtual machines | `notification_codes` (int array) on list | `notifications` (JSON array) on detail; `type` is lowercase: `info`, `warning`, `critical` |
+
+Example (container list row):
 
 ```json
-"notification_codes": [1, 3],
+"notification_codes": [1, 3, 77]
+```
+
+Example (container detail — per engine):
+
+```json
 "notifications": {
   "1": { "type": "WARNING", "message": "Less than 4 days of data available for this workload", "code": 1 },
   "3": { "type": "CRITICAL", "message": "OOM kill events detected within the analysis window", "code": 3 }

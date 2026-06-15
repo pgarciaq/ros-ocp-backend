@@ -114,7 +114,7 @@ GET /api/cost-management/v1/recommendations/openshift
 Returns one row per container with nested `recommendations.recommendation_terms` for
 short/medium/long windows and cost/performance engines.
 
-**Offset pagination** (default for legacy clients):
+**Keyset pagination** (preferred): use `after` with `meta.next_cursor` when `meta.has_next` is true. Offset pagination remains for legacy clients:
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
@@ -143,8 +143,8 @@ GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
 ```
 
 Lookup by deterministic UUID v5 from `(cluster_uuid, namespace, workload, workload_type, container_name)`.
-Same schema as list items, with usage box plots, `recommendations.current`, optional `gpu` block,
-and idle/zombie fields when classified.
+Same schema as list items, with digest **percentile-band plots** (`p50`/`p95`/`p99`/`max`), `recommendations.current`, optional `gpu` block,
+and idle/zombie fields when classified. List rows omit `plots` and per-engine `notifications` maps — those are detail-only.
 
 ```http
 GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
@@ -162,6 +162,7 @@ GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
   "currency": "USD",
   "recommendations": {
     "monitoring_end_time": "2026-05-31T23:00:00.000Z",
+    "notification_codes": [1, 77],
     "estimated_monthly_savings": { "value": "12.500000", "units": "USD" },
     "recommendation_terms": {
       "medium_term": {
@@ -173,8 +174,7 @@ GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
                 "cpu": { "amount": 0.25, "format": "cores" },
                 "memory": { "amount": 384, "format": "MiB" }
               }
-            },
-            "notifications": { "1": { "type": "INFO", "code": 1, "message": "..." } }
+            }
           },
           "performance": {
             "config": {
@@ -274,7 +274,8 @@ Details: [API Pagination](../pagination.md).
   GET /api/cost-management/v1/recommendations/openshift/notification-codes?filter[plugin]=container
   ```
 
-  Container codes: **1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25**. See
+  Container codes: **1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25, 77** (`SPARSE_DATA`). List rows expose
+  `recommendations.notification_codes` (int array); resolve messages from detail per-engine `notifications` or the catalog endpoint. See
   [Notification codes API](../api-reference/notification-codes.md) and the
   [human-readable catalog](../architecture/notification-codes.md).
 

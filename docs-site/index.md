@@ -32,7 +32,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 | **Business hours** | Container, namespace | Dual all-hours vs business-hours streams when clusters run on a schedule |
 | **Historical tracking** | Container (primary) | Time-series of past recommendations; quality metrics (stability, adoption, OOM after change) |
 | **Tag filtering** | Container | Filter by OpenShift labels synced from Koku (`filter[tag:key]=value`) |
-| **Notification codes** | All native plugins | 54+ codes (confidence, OOM, idle, GPU, PVC, snapshot, VM guest-agent, disk, crash loop, …) — [lookup table](architecture/notification-codes.md) |
+| **Notification codes** | All native plugins | 77 notification codes (confidence, OOM, idle, GPU, PVC, snapshot, VM guest-agent, disk, crash loop, SPARSE_DATA, …) — [lookup table](architecture/notification-codes.md) |
 | **Configurable thresholds & terms** | Per plugin | Three-tier precedence: admin `ROS_*` env (locks) → tenant Settings API → compiled defaults; custom 1–90 day windows per term |
 | **Savings estimates** | Container, node, PVC, GPU, snapshot, quota (tighten) | Monthly dollar impact via Koku `effective_rates`; fleet rollup at `GET .../savings-summary` |
 

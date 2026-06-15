@@ -277,6 +277,8 @@ savings fields may be absent.
 
 ### Notifications
 
+**List contract (ADR-0293/0294):** List responses expose `recommendations.notification_codes` (deduplicated int array) for badges. They **omit** `plots` and per-engine `notifications` maps — fetch detail for usage percentile-band plots and full notification messages.
+
 **Detail** responses emit notification maps only on each engine:
 
 ```json
@@ -303,8 +305,8 @@ savings fields may be absent.
 
 Resolve messages via `GET .../notification-codes` or a cached catalog.
 
-See [Notification codes reference](architecture/notification-codes.md) for the complete catalog (codes 1–54).
-The table below is a summary; VM codes 37–54 and reserved codes are in the full reference.
+See [Notification codes reference](architecture/notification-codes.md) for the complete catalog (codes 1–77).
+The table below is a summary; VM codes 55–69, node codes 74–76, and SPARSE_DATA (**77**) are in the full reference.
 
 ### Confidence score
 
@@ -347,7 +349,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - Show a sortable PatternFly **Table** with columns: container, namespace, cluster, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), and estimated monthly savings.
 - Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.).
 - Color-code rows with **Badge** plus text labels (never color alone): red for abandoned (code 8), orange for idle (code 5), yellow for over-provisioned (negative variation), green for well-sized.
-- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for usage plots (digest percentiles), term selection, and notification details.
+- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for digest percentile-band usage plots, term selection, and notification details.
 - Default to **cost** engine and **medium_term**; provide toggles for engine and term on list and detail views.
 - Show **confidence_level** as a badge or **Progress** bar; warn when below 0.5 or notification codes 1/7 are present.
 - Include a "Show stale" toggle wired to `?stale=only`; default excludes stale rows.
@@ -1394,7 +1396,9 @@ Complements `GET /recommendations/openshift/savings-summary` (Section 6) with wo
 
 ### Pagination
 
-Standard `offset` + `limit` with `meta.count` and `links.first|previous|next|last`.
+**Preferred:** Keyset pagination via `after` + `meta.next_cursor` on container and namespace lists (see [API Pagination](pagination.md)).
+
+Standard `offset` + `limit` with `meta.count` and `links.first|previous|next|last` remains for legacy clients.
 
 Container/namespace lists paginate by **distinct containers/namespaces**, not by raw DB rows
 (each container row includes all term × engine combinations).
@@ -1466,6 +1470,22 @@ When `currency` is absent, fall back to `USD` (server default).
 | 34 | INFO | Snapshot older than retention | Stale snapshot badge |
 | 35 | INFO | Backup-tool managed snapshot | Caution — review retention policy |
 | 36 | INFO | GPU time-slicing candidate | Link to time-slicing view |
+| 55 | WARNING | VM network-saturated — n1 instance type | Network-optimized VM hint |
+| 56 | INFO | vGPU profile recommended | Apply `recommended_vgpu_profile` on guest |
+| 57 | WARNING | GPU time-slicing unsafe (frame buffer) | Do not time-slice; resize GPU |
+| 60 | WARNING | Redundant VMs on same node | Anti-affinity / spread HA peers |
+| 61 | INFO | Uneven VM distribution across nodes | Topology spread constraints |
+| 62 | INFO | VM shares storage — correlated group | Review coupled workloads |
+| 63 | WARNING | VM memory exceeds NUMA node capacity | Reduce memory or larger NUMA hosts |
+| 64 | INFO | Periodically idle (power-off schedule) | Schedule power-off during idle periods |
+| 65 | INFO | Network-bound — SR-IOV may help | High throughput network-bound VM |
+| 66 | INFO | Network-bound — DPDK may help | High PPS small-packet VM |
+| 67 | INFO | Sustained minimal disk I/O | Lower-cost storage tier |
+| 68 | INFO | Sustained random high IOPS | IOPS-optimized storage |
+| 69 | INFO | Sustained sequential high throughput | Throughput-optimized storage |
+| 74 | WARNING | Near pod scheduling limit | Limited headroom before consolidation |
+| 76 | INFO | Fleet consolidation (MachineSet) | Review `node_count_reduction` |
+| 77 | INFO | Sparse data (limited observation days) | Treat as early signal; wait for more data |
 
 Reference endpoint (if enabled): `GET /recommendations/openshift/notification-codes`.
 

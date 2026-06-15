@@ -11,7 +11,7 @@ first production-ready native engine release.
 
 - **[Container right-sizing](features/container-recommendations.md)** — Per-container CPU and memory requests/limits from usage digests, with idle detection and OOM-aware memory bumps.
 
-- **[Namespace recommendations](features/namespace-recommendations.md)** — Boxplot aggregation of container guidance into namespace-level quota targets with growth buffers.
+- **[Namespace recommendations](features/namespace-recommendations.md)** — Digest percentile-band aggregation (`p50`/`p95`/`p99`/`max`) of container guidance into namespace-level quota targets with growth buffers.
 
 - **[ResourceQuota recommendations](features/quota-recommendations.md)** — Namespace ResourceQuota tighten/raise/optimal analysis against container recommendation sums.
 

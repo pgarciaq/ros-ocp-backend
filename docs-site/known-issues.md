@@ -44,7 +44,7 @@ PostgreSQL 16 (no TimescaleDB or special extensions required).
 | **Fleet** | Fleet summary (cross-cluster container health aggregate) | **Shipping** |
 | **Fleet** | Fleet savings summary (cross-plugin persisted savings, `?engine=`) | **Shipping** |
 | **Platform** | RBAC (Insights RBAC middleware with cluster-level filtering) | **Shipping** |
-| **Platform** | Notification system (**54** codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM) — [reference](architecture/notification-codes.md) | **Shipping** |
+| **Platform** | Notification system (**77** codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM, SPARSE_DATA) — [reference](architecture/notification-codes.md) | **Shipping** |
 | **Platform** | Per-plugin configurable recommendation terms (TermProvider trait) | **Shipping** |
 | **Platform** | Admin env-var locking of term settings (per-term, per-plugin) | **Shipping** |
 | **Platform** | Plugin capabilities endpoint (`GET /settings/capabilities`) | **Shipping** |
@@ -155,7 +155,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 |-------|--------|----------|------|
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback | REQ-1.13 |
 | Node recommendation cold start (3 days) | New clusters return empty results from **`GET /recommendations/openshift/nodes`** (node utilization) until 3 days of data accumulates | Low — by design for accuracy | REQ-8c.3 |
-| Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain Kruize client code. Native engine runs alongside, not instead of. | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
+| Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain optional Kruize client code. **Native engine is primary**; Kruize is legacy/optional (`ROS_DISABLED_PLUGINS=kruize` on native-only deployments). | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
@@ -251,21 +251,21 @@ existing `workload-pod-count` query.
 
 ### Recently Implemented (Phase 8 — May 2026)
 
-| Feature | Description | Branch |
-|---------|-------------|--------|
-| Per-plugin configurable terms | `TermProvider` trait, `DefaultTerms()`, `MaxWindowDays()` per plugin | `pgarciaq-rosocp-superpowers-phase8` |
-| Admin env-var locking | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` overrides, makes terms read-only | same |
-| Capabilities endpoint | `GET /settings/capabilities` lists plugins + traits + lock status | same |
-| PVC per-term output | PVC recommendations now include short/medium/long term results | same |
-| Cache invalidation on PUT/DELETE | `InvalidateTermCache()` called after term settings changes | same |
-| Validation (422 responses) | `window_days > MaxWindowDays` returns proper error | same |
-| E2E integration tests | Term precedence + effects tested end-to-end | same |
-| MkDocs developer docs site | Auto-generated plugin API reference + narrative docs | same |
-| Root Makefile targets | `docker-build`, `docs-*`, `help` targets | same |
-| Structured logging | `internal/logging` package, org_id/request_id context everywhere | earlier phase |
-| Prometheus per-phase metrics | Histograms and error counters for observability | earlier phase |
-| .env file support | `godotenv` auto-loading for local development | earlier phase |
-| Plugin architecture docs | Comprehensive doc with trait matrix, term defaults, precedence | same |
+| Feature | Description |
+|---------|-------------|
+| Per-plugin configurable terms | `TermProvider` trait, `DefaultTerms()`, `MaxWindowDays()` per plugin |
+| Admin env-var locking | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` overrides, makes terms read-only |
+| Capabilities endpoint | `GET /settings/capabilities` lists plugins + traits + lock status |
+| PVC per-term output | PVC recommendations now include short/medium/long term results |
+| Cache invalidation on PUT/DELETE | `InvalidateTermCache()` called after term settings changes |
+| Validation (422 responses) | `window_days > MaxWindowDays` returns proper error |
+| E2E integration tests | Term precedence + effects tested end-to-end |
+| MkDocs developer docs site | Auto-generated plugin API reference + narrative docs |
+| Root Makefile targets | `docker-build`, `docs-*`, `help` targets |
+| Structured logging | `internal/logging` package, org_id/request_id context everywhere |
+| Prometheus per-phase metrics | Histograms and error counters for observability |
+| .env file support | `godotenv` auto-loading for local development |
+| Plugin architecture docs | Comprehensive doc with trait matrix, term defaults, precedence |
 
 ### Recently Fixed Caveats
 
@@ -320,7 +320,7 @@ On-prem has no Unleash, so namespace recs are unconditionally enabled.
 
 **API status:** Fully implemented. `GET /openshift/namespace/recommendations`
 and `GET /recommendations/openshift/namespace/:recommendation-id` endpoints
-serve namespace recommendations with boxplots and CSV export.
+serve namespace recommendations with digest percentile-band plots and CSV export.
 
 **UI status:** Partial. The koku-ui `optimizationsProjectsTable` component
 fetches namespace recommendations, but the breakdown detail view is
@@ -810,9 +810,9 @@ operator query scope is the gap. See
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
-The native engine runs alongside the legacy code path. Kruize client code
+The **native engine is primary** on all new deployments. Optional Kruize client code
 (`internal/utils/kruize/`), internal Kafka topic references, and deployment
-manifests remain. Removal is **next priority** after stabilization of all
+manifests remain for legacy cutover. Removal is **next priority** after stabilization of all
 currently implemented features.
 
 ---
@@ -915,7 +915,7 @@ See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full 
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
 - **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` container health aggregate.
 - **Fleet savings summary:** `GET /recommendations/openshift/savings-summary` cross-plugin savings totals with optional `?engine=` (default `cost`). See [cost-integration.md](./architecture/cost-integration.md).
-- **Box plots (REQ-6.6):** Five-number summary (min, Q1, median, Q3, max) per term for containers and namespaces.
+- **Percentile-band plots (REQ-6.6):** Digest percentile bands (`p50`, `p95`, `p99`, `max`) per term for containers and namespaces (detail-only; replaces legacy boxplots).
 - **Quality metrics (F53, REQ-10.6):** Stability %, adoption detection, OOM events after rec.
 - **History tracking (F56):** Time-series of past recs in `recommendation_history`, API at `/history`.
 
@@ -932,17 +932,35 @@ See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full 
 | `/recommendations/openshift/gpu/mig` | GET | Implemented — MIG profile recommendations list |
 | `/recommendations/openshift/nodes` | GET | Implemented — node CPU/memory utilization |
 | `/recommendations/openshift/nodes/utilization` | GET | Deprecated alias of `/nodes` (same behavior + warning) |
+| `/recommendations/openshift/machinesets` | GET | Implemented — MachineSet fleet aggregation (Tier 1) |
+| `/recommendations/openshift/vm` | GET | Implemented — VM rightsizing list (Preview Beta) |
+| `/recommendations/openshift/vm/detail` | GET | Implemented — VM detail with daily digests |
 | `/recommendations/openshift/fleet-summary` | GET | Implemented — container health aggregate |
 | `/recommendations/openshift/savings-summary` | GET | Implemented — cross-plugin savings (`?engine=cost\|performance`) |
 | `/recommendations/openshift/pvcs` | GET | Implemented |
-| `/openshift/namespace/recommendations` | GET | Implemented |
-| `/recommendations/openshift/namespace/:id` | GET | Implemented |
+| `/recommendations/openshift/quota` | GET | Implemented — namespace ResourceQuota |
+| `/recommendations/openshift/quota/detail` | GET | Implemented — ResourceQuota detail |
+| `/recommendations/openshift/cluster-quota` | GET | Implemented — ClusterResourceQuota |
+| `/recommendations/openshift/cluster-quota/detail` | GET | Implemented — ClusterResourceQuota detail |
+| `/openshift/namespace/recommendations` | GET | Implemented (legacy alias) |
+| `/recommendations/openshift/namespaces` | GET | Implemented |
+| `/recommendations/openshift/namespace/:id` | GET | Implemented (deprecated alias) |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented (per-plugin via `?recommendation_type=`) |
 | `/recommendations/openshift/settings/capabilities` | GET | Implemented |
+| `/recommendations/openshift/settings/quota` | GET, PUT, DELETE | Implemented |
+| `/recommendations/openshift/settings/cluster-quota` | GET, PUT, DELETE | Implemented |
+| `/recommendations/openshift/settings/vm` | GET, PUT, DELETE | Implemented |
+| `/recommendations/openshift/notification-codes` | GET | Implemented — notification code catalog |
 | `/recommendations/openshift/history` | GET | Implemented |
 | `/recommendations/openshift/quality` | GET | Implemented |
 | `/recommendations/openshift/snapshots` | GET | Implemented |
 | `/recommendations/openshift/settings/snapshot` | GET, PUT | Implemented |
+| `/internal/tags/sync` | POST | Implemented — Koku tag push sync (internal) |
+| `/internal/tags/status` | GET | Implemented — tag sync freshness (internal) |
+| `/internal/recalculate-savings` | POST | Implemented — savings recalculation trigger (internal) |
+| `/status` | GET | Implemented — liveness (non-OpenAPI) |
+| `/healthz` | GET | Implemented — deep liveness (non-OpenAPI) |
+| `/readyz` | GET | Implemented — readiness (non-OpenAPI) |
 
 ---
 
