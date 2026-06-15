@@ -125,6 +125,71 @@ to 180 days), recommendations are recalculated from digest data — no raw sampl
 are needed. The digests contain all the statistical information required for
 percentile sizing.
 
+## Generating test data
+
+Percentile-band charts need **multi-day data with per-hour usage variation**.
+NISE produces this when you generate ROS container CSVs with `--ros-ocp-info`.
+
+### How NISE creates variation
+
+Each hour in `ocp_ros_usage.csv` gets randomized CPU and memory usage via
+`generate_randomized_ros_usage()` in nise. For each container hour, nise
+derives `avg`, `min`, and `max` from uniform random distributions (for example,
+avg ±5% of a YAML-specified value, or 10–100% of the limit when unspecified).
+That hourly spread is what the ingestion pipeline aggregates into daily
+`p50`/`p95`/`p99`/`max` digests.
+
+**Avoid flat bands:** do not set `constant_values_ros_ocp: true` in the static
+YAML (or pass nise's `--constant-values-ros-ocp` flag). Constant mode gives every
+hour identical values, so all four percentiles collapse to the same number and
+the chart shows a flat line instead of shaded bands.
+
+### Minimal nise command
+
+Use a static YAML with a **date range of at least 7 days** (longer is better for
+`medium_term` plots). Edit `start_date` / `end_date` in the file before running:
+
+```bash
+nise report ocp \
+  --static-report-file examples/ros_ocp/ocp_static_data.yml \
+  --ocp-cluster-id <CLUSTER_UUID> \
+  --ros-ocp-info \
+  --write-monthly
+```
+
+See `nise/examples/ros_ocp/ocp_static_data.yml` for a full fixture. Upload the
+resulting tarball through ingress (or cost-onprem E2E helpers) so ros-ocp-backend
+can ingest it.
+
+### Data pipeline
+
+```
+nise (hourly ocp_ros_usage.csv)
+  → ros-processor ingest
+  → container_usage_samples
+  → daily_container_digests (p50, p95, p99, max per metric per day)
+  → detail API plots_data
+```
+
+Raw samples are retained only for `ROS_SAMPLE_RETENTION_DAYS` (default 7);
+plots read from digests after that window.
+
+### Verifying plots_data
+
+After ingestion completes, fetch a container detail response and inspect
+`plots_data`:
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "http://localhost:8000/api/cost-management/v1/recommendations/openshift/<recommendation-id>" \
+  | jq '.recommendations.recommendation_terms.short_term.plots.plots_data[:3]'
+```
+
+Confirm that `cpu_usage` and `memory_usage` entries across multiple days show
+**different** `p50`, `p95`, `p99`, and `max` values (with `p50 ≤ p95 ≤ p99 ≤ max`
+on each day). Identical values on every day indicate constant or insufficiently
+varied test data.
+
 ## Future applicability
 
 The digest + percentile-band architecture is designed to be reusable across

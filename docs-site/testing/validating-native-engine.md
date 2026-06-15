@@ -738,6 +738,12 @@ nise report ocp \
 
 See `docs-site/testing.md` for the full filename ↔ plugin matrix.
 
+**Percentile-band plots:** The default NISE command above produces hourly usage
+variation suitable for digest-based charts. For requirements (multi-day range, no
+`constant_values_ros_ocp`), the nise → digest → `plots_data` pipeline, and
+detail-API verification steps, see
+[Usage percentile-band plots](../features/percentile-band-plots.md#generating-test-data).
+
 ### VM recommendations data
 
 ```bash
