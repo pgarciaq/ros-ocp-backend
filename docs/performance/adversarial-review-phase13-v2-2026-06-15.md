@@ -212,23 +212,23 @@ Additionally, `ros-api-access` NetworkPolicy (always rendered, not gated) allows
 
 ## Priority Remediation Order
 
-| Priority | Finding | Effort | Rationale |
-|----------|---------|--------|-----------|
-| 1 | #23 Tag push end-to-end + ros-api NP | 0.5–1 day | Restores core on-prem tag filtering and savings callbacks |
-| 2 | #24 Masu NP missing ros-api | 1–2 hours | Restores GPU/BH savings on ros-api immediately |
-| 3 | #27 Fail startup when internal auth disabled | 2–3 hours | Closes security gap from finding #5 |
-| 4 | #26 Wire per-endpoint statement timeouts | 0.5 day | Completes finding #13 for heavy endpoints |
-| 5 | #25 CSV hostname normalization | 2–4 hours | Prevents operator footgun on endpoint format |
-| 6 | #28 Helm lint + perf test hardening | 2–4 hours | Prevents regression recurrence |
-| 7 | #29 Stale configuration.md | 15 min | Documentation hygiene |
+| Priority | Finding | Effort | Status |
+|----------|---------|--------|--------|
+| 1 | #23 Tag push end-to-end + ros-api NP | 0.5–1 day | ✅ Resolved 2026-06-15 |
+| 2 | #24 Masu NP missing ros-api | 1–2 hours | ✅ Resolved 2026-06-15 |
+| 3 | #27 Fail startup when internal auth disabled | 2–3 hours | ✅ Resolved 2026-06-15 |
+| 4 | #26 Wire per-endpoint statement timeouts | 0.5 day | ✅ Resolved 2026-06-15 |
+| 5 | #25 CSV hostname normalization | 2–4 hours | ✅ Resolved 2026-06-15 |
+| 6 | #28 Helm lint + perf test hardening | 2–4 hours | ✅ Resolved 2026-06-15 |
+| 7 | #29 Stale configuration.md | 15 min | ✅ Resolved 2026-06-15 |
 
 ## Overall Assessment
 
 The Phase 13 remediation **substantially improves** the ros-ocp-backend codebase: goroutine pile-up, panic-prone test helpers, copy-paste struct fields, and koku-ui performance footguns are fixed with tests. Helm defaults for `tagsSource: api`, CSV allowlist, connection budget, and internal auth are directionally correct.
 
-**Residual risk is integration-level, not algorithmic.** The highest-impact gap is that the tag architecture fix assumes a working Koku→ROS HTTP push path, but the chart does not configure Koku to push, and NetworkPolicies block the path even if it were configured. The masu NetworkPolicy regression is a direct side effect of finding #4's fix and will cause user-visible savings errors on ros-api.
+**All 7 findings from this incremental review have been resolved (2026-06-15).** The critical tag-push integration gap (#23) was fixed by wiring `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=api` on Koku workers and adding `cost-worker` to the `ros-api-access` NetworkPolicy. The masu NetworkPolicy regression (#24) was fixed by adding `ros-api` to the ingress allowlist. Security hardening (#27) now fails startup when internal auth is disabled in production. Per-endpoint statement timeouts (#26) are wired to savings summary and fleet-wide list handlers.
 
-**Recommendation before merge to upstream:** Fix #23 and #24, verify with an on-prem E2E run that (a) enables a tag in Koku Settings and confirms `org_tag_sync_metadata` populated, and (b) ros-api GPU savings non-zero with masu NetworkPolicy enabled. Re-run default CI smoke perf after cluster warm-up.
+**Recommendation before merge to upstream:** Verify with an on-prem E2E run that (a) tag push works end-to-end (enable a tag in Koku Settings, confirm ROS tag catalog populated), (b) ros-api GPU savings are non-zero with masu NetworkPolicy enabled, and (c) re-run default CI smoke perf after cluster warm-up. Split koku changes into separate PRs (finding #15 from v1).
 
 ---
 
