@@ -20,12 +20,22 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 ## Statement timeouts (heavy endpoints)
 
 API connections use the session default from `ROS_API_STATEMENT_TIMEOUT_MS` (25s). Known heavy
-read paths extend the limit per transaction via `SET LOCAL` (45s):
+read paths extend the limit per transaction via `SET LOCAL` (default 45s via
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS`):
 
 | Endpoint | Helper | Timeout |
 |----------|--------|---------|
-| `GET /recommendations/openshift/savings-summary` | `db.WithHeavyStatementTimeout` | 45s |
-| `GET /recommendations/openshift` (fleet-wide, no filters) | `db.WithHeavyGORMStatementTimeout` | 45s |
+| `GET /recommendations/openshift/savings-summary` | `db.WithHeavyStatementTimeout` | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` (default 45s) |
+| `GET /recommendations/openshift` (fleet-wide, no filters) | `db.WithHeavyGORMStatementTimeout` | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` (default 45s) |
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `45000` | Extended `SET LOCAL` timeout for savings-summary and fleet-wide container list |
+| `ROS_API_STATEMENT_TIMEOUT_MS` | `25000` | Session default for other API/GORM paths |
+
+**SaaS note:** console.redhat.com ingress/gateway timeout is ~30s. Set
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` (or similar) via app-interface so heavy queries
+cancel before the client receives a 504.
 
 Cancellations increment `ros_api_statement_timeout_cancellations_total` (PostgreSQL `57014`).
 

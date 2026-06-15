@@ -78,6 +78,7 @@ type Config struct {
 	DBAcquireTimeoutSecs         int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
 	DBStatementTimeoutSecs       int `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
 	DBAPIStatementTimeoutMS      int `mapstructure:"ROS_API_STATEMENT_TIMEOUT_MS"`
+	DBHeavyAPIStatementTimeoutMS int `mapstructure:"ROS_HEAVY_API_STATEMENT_TIMEOUT_MS"`
 	DBIngestStatementTimeoutSecs int `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
 	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
 	// ADR-0096: Strict analytics mode default true; set false for degraded ingest.

@@ -172,6 +172,20 @@ This incremental review (v3) examined remediation commits landed on 2026-06-15 a
 
 ---
 
+## Resolutions (2026-06-15)
+
+| # | Status | Resolution |
+|---|--------|------------|
+| 30 | ✅ Fixed | `cost-onprem-chart`: projected `ros-sa-token` volume (audience `ros-api`) and `ROS_SA_TOKEN_PATH` on Koku worker pods when `tagsSource=api`; Helm lint asserts mount. `koku`: `_read_bearer_token()` checks `ROS_SA_TOKEN_PATH` env first. |
+| 31 | ✅ Fixed | `koku/docs/architecture/ros-ocp-integration.md` updated — on-prem default is `api`; `db` documented as advanced shared-PostgreSQL option; cross-links to `cost-onprem/values.yaml`. |
+| 32 | ✅ Fixed | `cost-onprem-chart/docs/operations/configuration.md` prose updated to `max_connections=200` with link to `database-tuning.md`. |
+| 33 | ✅ Fixed | `ros-ocp-backend`: `HeavyAPIStatementTimeoutMS()` reads `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` (default 45000); documented SaaS ~28000 guidance in `query-performance.md`. |
+| 34 | ✅ Fixed | `cost-onprem-chart`: CSV allowlist normalization strips URL paths via `regexReplaceAll "/.*$"`; Helm lint test for `https://s3.example.com/bucket`. |
+| 35 | 🔄 Partial | Skeleton `@pytest.mark.extended` test added (`tests/suites/ros/test_tag_push_e2e.py`) with skip pending live-cluster validation. |
+| 36 | ✅ Fixed | `test_smoke_perf.py`: status endpoint uses shared `_measure_best_elapsed` best-of-2 retry helper. |
+
+---
+
 ## Areas Reviewed Outside v2 Scope (No Additional Issues)
 
 | Area | Assessment |

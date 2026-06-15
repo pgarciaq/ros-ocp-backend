@@ -64,7 +64,13 @@ func IngestStatementTimeoutSecs() int {
 }
 
 // HeavyAPIStatementTimeoutMS returns extended statement_timeout for aggregation and fleet-wide list endpoints.
+// ROS_HEAVY_API_STATEMENT_TIMEOUT_MS overrides the default (45000ms). SaaS deployments should set ~28000
+// to stay within the ~30s ingress/gateway budget.
 func HeavyAPIStatementTimeoutMS() int {
+	cfg := config.GetConfig()
+	if cfg != nil && cfg.DBHeavyAPIStatementTimeoutMS > 0 {
+		return cfg.DBHeavyAPIStatementTimeoutMS
+	}
 	return 45000
 }
 

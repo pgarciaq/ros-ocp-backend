@@ -45,11 +45,20 @@ func TestStatementTimeoutSecsFromConfig(t *testing.T) {
 func TestStatementTimeoutDefaultsWhenUnset(t *testing.T) {
 	t.Setenv("ROS_DB_STATEMENT_TIMEOUT", "")
 	t.Setenv("ROS_DB_INGEST_STATEMENT_TIMEOUT", "")
+	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "")
 	config.ResetForTest()
 
 	assert.Equal(t, 25000, database.APIStatementTimeoutMS())
 	assert.Equal(t, 25, database.StatementTimeoutSecs())
 	assert.Equal(t, 120, database.IngestStatementTimeoutSecs())
+	assert.Equal(t, 45000, database.HeavyAPIStatementTimeoutMS())
+}
+
+func TestHeavyAPIStatementTimeoutMSFromConfig(t *testing.T) {
+	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "28000")
+	config.ResetForTest()
+
+	assert.Equal(t, 28000, database.HeavyAPIStatementTimeoutMS())
 }
 
 func TestSetLocalIngestStatementTimeout_Integration(t *testing.T) {
