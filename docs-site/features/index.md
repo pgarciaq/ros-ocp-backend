@@ -10,7 +10,7 @@ dollar impact using Koku cost model rates.
 | Feature | Plugins | Engines | Savings | Configurable |
 |---------|---------|---------|---------|--------------|
 | Container Right-Sizing | container | cost, performance | Yes | Yes |
-| Usage Percentile-Band Plots | container, namespace | — | No | No (detail-only; `p50`/`p95`/`p99`/`max` from digests) |
+| Usage Percentile-Band Plots | container (shipped); vm, namespace, node, jvm (planned) | — | No | No (detail-only; `p50`/`p95`/`p99`/`max` from digests) |
 | Namespace Quota Optimization | namespace | cost, performance | No (by design; use container-level savings) | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
 | MachineSet Aggregation (Tier 1) | node | cost, performance | Yes (aggregated fleet savings) | Yes |

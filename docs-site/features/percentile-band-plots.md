@@ -136,7 +136,7 @@ recommendation types. Percentile-band plots are planned for:
 | **VM** (vCPU/memory) | Planned | Same shape as container; would use `daily_vm_digests` |
 | **Namespace** (quota utilization) | Planned | Shows how close to quota limits the namespace ran over time |
 | **Java/JVM** | Planned | Heap, GC pause, thread pool utilization distributions |
-| **Node** (consolidation) | Under evaluation | Node utilization bands could show fleet health, but node recs are about count rather than per-resource sizing |
+| **Node** (consolidation) | Planned | Per-node CPU/memory utilization bands justify consolidation decisions — low p95 = safe to consolidate, high p99 = risky despite low median |
 | **MachineSet** | Not applicable | Fleet aggregation endpoint; no per-resource time-series |
 
 As new recommendation types add digest pipelines, they will automatically
