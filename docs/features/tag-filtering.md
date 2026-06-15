@@ -52,7 +52,8 @@ depends on deployment topology, controlled by `ROS_TAGS_SOURCE`:
 
 | Mode | `ROS_TAGS_SOURCE` | Typical deployment |
 |------|-------------------|--------------------|
-| **On-prem (shared database)** | `db` (default) | cost-onprem Helm chart — Koku and ROS share one PostgreSQL |
+| **On-prem (push API, default)** | `api` (chart default) | cost-onprem Helm chart — Koku pushes tags to ROS via HTTP |
+| **On-prem (shared database, advanced)** | `db` | Shared PostgreSQL only — ROS SQL-joins Koku tag tables; requires `koku-schema-grants` |
 | **SaaS (push API)** | `api` | console.redhat.com — separate Koku and ROS databases |
 
 Both modes expose the **same public filter syntax** to clients. Only the internal
@@ -85,11 +86,15 @@ ROS does **not** expose a public `/tags` endpoint. End-user tag discovery uses K
 
 ## Architecture
 
-### On-Prem (Shared Database)
+### On-Prem (Shared Database, Advanced — `ROS_TAGS_SOURCE=db`)
 
-On-prem deployments run Koku and ros-ocp-backend against the **same PostgreSQL
-instance**. ROS does not copy tag data into its own tables for filtering. Instead,
-list queries **JOIN** ROS container rows to Koku tenant tag summary tables at query time.
+> **Note:** The cost-onprem Helm chart defaults to `tagsSource: api` (Koku push sync).
+> This section describes the advanced shared-database mode for operators who set
+> `ROS_TAGS_SOURCE=db` explicitly.
+
+On-prem deployments can run Koku and ros-ocp-backend against the **same PostgreSQL
+instance** and skip HTTP push. ROS does not copy tag data into its own tables for filtering.
+Instead, list queries **JOIN** ROS container rows to Koku tenant tag summary tables at query time.
 
 ```mermaid
 flowchart LR
@@ -430,7 +435,7 @@ See [tag-sync-auth.md](../operations/tag-sync-auth.md) for TokenReview authentic
 | Variable | Default | On-Prem | SaaS | Description |
 |----------|---------|---------|------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters + push API (api only) |
-| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = Koku table JOIN; `api` = `resolved_tags` |
+| `ROS_TAGS_SOURCE` | `api` | `api` (chart default) | `api` | `api` = push into `resolved_tags`; `db` = Koku table JOIN (advanced) |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | N/A | Optional | Comma-separated SA names allowed to push; empty = any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | N/A | Dev only | Static bearer when SA token unavailable (must match Koku) |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | N/A | Optional | Max body size (MiB) for `POST /internal/tags/sync` |
@@ -438,10 +443,10 @@ See [tag-sync-auth.md](../operations/tag-sync-auth.md) for TokenReview authentic
 **On-prem example (cost-onprem chart defaults):**
 
 ```yaml
-# ros.api.tagsEnabled: true, ros.api.tagsSource: db (values.yaml)
+# ros.api.tagsEnabled: true, ros.api.tagsSource: api (values.yaml)
 env:
   ROS_TAGS_ENABLED: "true"
-  ROS_TAGS_SOURCE: "db"
+  ROS_TAGS_SOURCE: "api"
 ```
 
 **SaaS example:**
@@ -455,16 +460,17 @@ env:
 
 ### Koku
 
-| Variable | Default | On-Prem (`db`) | SaaS (`api`) | Description |
-|----------|---------|----------------|--------------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Ignored for push | `true` | Enables Celery push tasks |
-| `ROS_TAGS_SOURCE` | `db` | `db` (default) | `api` | `db` = no push; `api` = HTTP sync |
-| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Unused | Required | ROS API base URL for push |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Unused | Dev only | Bearer token when SA mount missing |
-| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | Unused | Production | Projected SA token path on worker |
+| Variable | Default | On-Prem (`api`, chart default) | On-Prem (`db`, advanced) | SaaS (`api`) | Description |
+|----------|---------|-------------------------------|--------------------------|--------------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | `true` (chart wires) | Ignored for push | `true` | Enables Celery push tasks |
+| `ROS_TAGS_SOURCE` | `db` | `api` (chart default) | `db` | `api` | `api` = HTTP sync; `db` = no push |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Required (chart sets) | Unused | Required | ROS API base URL for push |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev only | Unused | Dev only | Bearer token when SA mount missing |
+| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `/var/run/secrets/ros/token` (projected) | Unused | Production | Projected SA token path on worker |
 
-When `ROS_TAGS_SOURCE=db`, **no Koku-side tag sync configuration is required**. Settings
-API hooks and post-summarization calls to `schedule_ros_tag_sync` are no-ops.
+When `ROS_TAGS_SOURCE=db` (advanced on-prem only), **no Koku-side tag sync configuration is
+required**. Settings API hooks and post-summarization calls to `schedule_ros_tag_sync` are
+no-ops.
 
 ---
 

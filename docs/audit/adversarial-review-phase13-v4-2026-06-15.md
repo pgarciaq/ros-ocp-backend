@@ -18,14 +18,14 @@ This incremental review (v4) examined post-v3 remediation commits (`87311a0`, `6
 
 | Dimension | Rating (1-5 stars) | Key gap |
 |-----------|-------------------|---------|
-| Security | ★★★★☆ | SA token mount complete; chart omits ROS `system:auth-delegator` RBAC for TokenReview |
+| Security | ★★★★★ | SA token mount complete; chart grants ROS `system:auth-delegator` RBAC |
 | Correctness | ★★★★☆ | Tag-push path code-complete; no live E2E proof yet |
 | Auditability | ★★★★☆ | Internal endpoint metrics and timeout cancellation counter present |
-| Operational robustness | ★★★★☆ | Projected token auto-refresh; TokenReview RBAC not chart-managed |
+| Operational robustness | ★★★★★ | Projected token auto-refresh; TokenReview RBAC chart-managed |
 | Performance | ★★★★☆ | Heavy timeout configurable; on-prem default 45s acceptable |
 | Design quality | ★★★★☆ | Conditional Helm helpers; transaction-scoped `SET LOCAL` pattern correct |
-| Maintainability | ★★★☆☆ | ROS docs still cite `db` default; tag-push E2E skipped; no `ROS_SA_TOKEN_PATH` unit test |
-| Governance | ★★★☆☆ | `ros-ocp-integration.md` fixed but ros-ocp-backend docs-site drift remains |
+| Maintainability | ★★★★☆ | Tag-push E2E still skipped; docs synced to `api` default |
+| Governance | ★★★★☆ | ROS docs-site synced; tag-push E2E skeleton remains |
 
 ## Previous Findings Verification
 
@@ -88,6 +88,12 @@ This incremental review (v4) examined post-v3 remediation commits (`87311a0`, `6
 **Effort:** 1–2 hours  
 **SaaS vs on-prem:** Documentation only.
 
+**Resolution (2026-06-15):** Updated `docs/operations/tag-sync.md`, `docs/features/tag-filtering.md`,
+`docs/operations/configuration.md`, `docs/testing/validating-native-engine.md`, and synced
+`docs-site/configuration.md` and `docs-site/testing/validating-native-engine.md` to document
+`api` as the on-prem chart default (`tagsSource: api`) with `db` retained as an advanced
+shared-PostgreSQL option.
+
 ---
 
 ### 38. Chart does not grant ROS ServiceAccount TokenReview RBAC
@@ -111,6 +117,11 @@ This incremental review (v4) examined post-v3 remediation commits (`87311a0`, `6
 **Effort:** 2–3 hours  
 **SaaS vs on-prem:** SaaS platform config likely handles this via app-interface; on-prem chart gap.
 
+**Resolution (2026-06-15):** Added `cost-onprem/templates/ros/clusterrolebinding-auth-delegator.yaml`
+binding `ros-backend` to `system:auth-delegator` when `ros.internalAuth.enabled=true` (default).
+Helm lint test `test_ros_auth_delegator_clusterrolebinding_when_internal_auth_enabled` asserts
+rendering. Documented troubleshooting in `docs/operations/tag-sync-auth.md`.
+
 ---
 
 ### 39. No koku unit test for `ROS_SA_TOKEN_PATH` env precedence
@@ -128,6 +139,10 @@ This incremental review (v4) examined post-v3 remediation commits (`87311a0`, `6
 **Effort:** 30 minutes  
 **SaaS vs on-prem:** Both.
 
+**Resolution (2026-06-15):** Added `RosBearerTokenPathTest.test_read_bearer_token_prefers_ros_sa_token_path_env`
+in `koku/masu/test/processor/test_ros_tag_sync.py` — patches `ROS_SA_TOKEN_PATH`, writes a temp
+token file, and asserts `_read_bearer_token()` returns its content ahead of the default K8s path.
+
 ---
 
 ### 40. `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` invalid values silently default
@@ -144,6 +159,11 @@ This incremental review (v4) examined post-v3 remediation commits (`87311a0`, `6
 
 **Effort:** 30 minutes  
 **SaaS vs on-prem:** Both.
+
+**Resolution (2026-06-15):** `HeavyAPIStatementTimeoutMS()` now logs a one-shot warning when
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` is set but parses to ≤ 0, then falls back to 45000ms.
+Unit test `TestHeavyAPIStatementTimeoutMSInvalidValuesUseDefaultAndWarn` covers zero and
+negative values.
 
 ---
 
@@ -166,6 +186,11 @@ These are uncommon misconfigurations; `values.yaml` documents hostname-only form
 **Effort:** 1 hour  
 **SaaS vs on-prem:** On-prem chart operators.
 
+**Resolution (2026-06-15):** `cost-onprem.ros.csvAllowedHosts` helper now strips `user:pass@`
+auth prefixes before hostname extraction; IPv6 bracket limitation documented in-template.
+Helm lint test `test_ros_processor_strips_auth_prefix_from_csv_allowed_hosts_endpoint` verifies
+`https://user:pass@s3.example.com:9000/bucket` → `s3.example.com`.
+
 ---
 
 ### 42. Debouncer lifecycle generation guard lacks dedicated regression test
@@ -182,6 +207,10 @@ These are uncommon misconfigurations; `values.yaml` documents hostname-only form
 
 **Effort:** 1 hour  
 **SaaS vs on-prem:** Both.
+
+**Resolution (2026-06-15):** Added `TestInitSynthManifestDebouncer_StaleShutdownGoroutineIgnored`
+— init with ctx1, re-init with ctx2, cancel ctx1, verify debounced recommendations still fire
+(proving stale shutdown goroutine did not call `ShutdownSynthManifestDebouncers`).
 
 ---
 

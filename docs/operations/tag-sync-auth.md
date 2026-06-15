@@ -100,7 +100,7 @@ Internal endpoints (`POST /internal/tags/sync`, `GET /internal/tags/status`, `PO
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag sync API and list filters (cost-onprem chart default) |
-| `ROS_TAGS_SOURCE` | `db` | Must be `api` for push endpoints to accept traffic |
+| `ROS_TAGS_SOURCE` | `api` | Must be `api` for push endpoints to accept traffic (`db` is advanced on-prem only) |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated SA names; empty accepts any authenticated SA |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only static bearer token |
 | `ROS_INTERNAL_ALLOWED_ORGS` | (empty) | Optional comma-separated org IDs internal endpoints may target; empty allows all |
@@ -172,9 +172,21 @@ task exits immediately as a no-op.
 ### TokenReview unavailable
 
 **Symptoms:** ROS logs `service account reviewer token unavailable` or TokenReview HTTP errors.
+Koku push requests return **401 Unauthorized** even with a valid projected worker token.
 
-**Causes:** ROS API pod not running with a mounted SA token; wrong `KUBERNETES_TOKEN_REVIEW_URL`;
-API server unreachable.
+**Common cause (on-prem):** The ROS ServiceAccount lacks permission to call the Kubernetes
+TokenReview API. ROS must hold the cluster `system:auth-delegator` ClusterRole (or equivalent
+`create` on `tokenreviews.authentication.k8s.io`). The cost-onprem chart creates a
+`ClusterRoleBinding` for `ros-backend` when `ros.internalAuth.enabled=true` (default).
+
+**Verify binding:**
+
+```bash
+kubectl get clusterrolebinding -l app.kubernetes.io/instance=cost-onprem | grep ros-auth-delegator
+```
+
+**Causes:** ROS API pod not running with a mounted SA token; missing `system:auth-delegator`
+binding for the ROS ServiceAccount; wrong `KUBERNETES_TOKEN_REVIEW_URL`; API server unreachable.
 
 **Recovery:**
 

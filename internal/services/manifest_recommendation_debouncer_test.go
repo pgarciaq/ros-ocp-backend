@@ -17,6 +17,40 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
+func TestInitSynthManifestDebouncer_StaleShutdownGoroutineIgnored(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_SYNTH_MANIFEST_QUIET_PERIOD", "1")
+	resetSynthManifestDebouncersForTest()
+	t.Cleanup(resetSynthManifestDebouncersForTest)
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	InitSynthManifestDebouncer(ctx1)
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	InitSynthManifestDebouncer(ctx2)
+
+	pool := testutil.SetupTestDB(t)
+	msg := testKafkaMsg()
+	msg.Object_keys = []string{"org1234567/source=abc/date=2026-06-11/ocp_ros_usage.csv"}
+
+	var runCount atomic.Int32
+	restore := setRunManifestRecommendationsHookForTest(func(context.Context, *pgxpool.Pool, types.KafkaMsg) error {
+		runCount.Add(1)
+		return nil
+	})
+	t.Cleanup(restore)
+
+	cancel1()
+	time.Sleep(150 * time.Millisecond)
+
+	deferSynthManifestRecommendations(pool, msg, synthesizeManifestID(msg))
+
+	require.Eventually(t, func() bool {
+		return runCount.Load() == 1
+	}, 3*time.Second, 20*time.Millisecond, "stale shutdown goroutine must not prevent debounced runs")
+}
+
 func TestScheduleManifestRecommendations_DefersSynthesizedManifest(t *testing.T) {
 	config.ResetForTest()
 	t.Setenv("ROS_SYNTH_MANIFEST_QUIET_PERIOD", "1")

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,9 +17,48 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 const pgErrQueryCanceled = "57014"
+
+const heavyAPIStatementTimeoutFallbackMS = 45000
+
+var (
+	heavyAPIStatementTimeoutWarnOnce sync.Once
+	heavyAPIStatementTimeoutWarnHook   = warnHeavyAPIStatementTimeoutFallback
+)
+
+func warnHeavyAPIStatementTimeoutFallback() {
+	raw := strings.TrimSpace(os.Getenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS"))
+	if raw == "" {
+		return
+	}
+	cfg := config.GetConfig()
+	if cfg != nil && cfg.DBHeavyAPIStatementTimeoutMS > 0 {
+		return
+	}
+	logging.GetLogger().Warnf(
+		"ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=%q is invalid; using default %dms",
+		raw,
+		heavyAPIStatementTimeoutFallbackMS,
+	)
+}
+
+func resetHeavyAPIStatementTimeoutWarnForTest() {
+	heavyAPIStatementTimeoutWarnOnce = sync.Once{}
+	heavyAPIStatementTimeoutWarnHook = warnHeavyAPIStatementTimeoutFallback
+}
+
+// ResetHeavyAPIStatementTimeoutWarnForTest resets one-shot warning state between tests.
+func ResetHeavyAPIStatementTimeoutWarnForTest() {
+	resetHeavyAPIStatementTimeoutWarnForTest()
+}
+
+// SetHeavyAPIStatementTimeoutWarnHookForTest overrides the invalid-value warning hook in tests.
+func SetHeavyAPIStatementTimeoutWarnHookForTest(hook func()) {
+	heavyAPIStatementTimeoutWarnHook = hook
+}
 
 var apiStatementTimeoutCancellations = promauto.NewCounter(
 	prometheus.CounterOpts{
@@ -71,7 +113,8 @@ func HeavyAPIStatementTimeoutMS() int {
 	if cfg != nil && cfg.DBHeavyAPIStatementTimeoutMS > 0 {
 		return cfg.DBHeavyAPIStatementTimeoutMS
 	}
-	return 45000
+	heavyAPIStatementTimeoutWarnOnce.Do(heavyAPIStatementTimeoutWarnHook)
+	return heavyAPIStatementTimeoutFallbackMS
 }
 
 // QueryRower is satisfied by pgx.Tx and *pgxpool.Pool for read queries.

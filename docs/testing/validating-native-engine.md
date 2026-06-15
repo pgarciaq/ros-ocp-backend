@@ -63,7 +63,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
-| Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=db` on-prem, `api` on SaaS). On-prem joins `org_container_keys.resolved_tags`; namespace list uses direct DB namespace-tag join. Empty matches return **HTTP 200** with `meta.count=0` (not 500); optional `meta.warnings` when tag key unknown or push sync stale |
+| Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=api` on-prem chart default and SaaS; `db` is advanced on-prem only). On-prem `api` mode uses push-synced `org_container_keys.resolved_tags`; `db` mode joins Koku tag tables. Empty matches return **HTTP 200** with `meta.count=0` (not 500); optional `meta.warnings` when tag key unknown or push sync stale |
 | Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, and quality list endpoints. **`GET .../history` is container-only** (namespace has a separate history route; there is no node history API). VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
 
 ### Validation priority (suggested order)
@@ -433,8 +433,8 @@ No docker-compose in `cost-onprem-chart`. Deploy on a cluster with `scripts/depl
 | `ROS_ENABLED_PLUGINS` | empty (all native) or explicit list | Allowlist plugins |
 | `ROS_DISABLED_PLUGINS` | `kruize` (recommended) | Ensure Kruize is off |
 | `ROS_ENABLE_VM_RECS` | `true` (default) | VM routes and plugin |
-| `ROS_TAGS_ENABLED` | `true` | Tag filters (on-prem: `ROS_TAGS_SOURCE=db`) |
-| `ROS_TAGS_SOURCE` | `db` when sharing Koku PostgreSQL | Read Koku tag tables |
+| `ROS_TAGS_ENABLED` | `true` | Tag filters (`ROS_TAGS_SOURCE=api` on-prem chart default) |
+| `ROS_TAGS_SOURCE` | `api` (cost-onprem chart default) | `api` = Koku push sync; `db` = advanced shared-PostgreSQL reads |
 | `KOKU_MASU_URL` | `http://localhost:5042` | Optional savings from masu |
 | `ROS_SETTINGS_LOCKED` | `false` for settings tests | `true` → PUT/DELETE return 403 |
 | `ROS_KAFKA_PARALLEL` | `true` | Parallel message processing |
@@ -642,7 +642,7 @@ These features work by deploying **only** the native engine ros-ocp-backend (ros
 | Settings API | Per-tenant threshold tuning |
 | History and Quality tracking | Recommendation change history |
 | RBAC | Standard platform RBAC integration |
-| On-prem tag filtering | Uses shared PostgreSQL tables (`ROS_TAGS_SOURCE=db`) |
+| On-prem tag filtering | Uses Koku push sync by default (`ROS_TAGS_SOURCE=api`); advanced `db` mode reads shared PostgreSQL tables |
 
 **This means you can start validating container and namespace recommendations immediately by deploying only ros-ocp-backend — no need for our forked koku-metrics-operator or koku.**
 

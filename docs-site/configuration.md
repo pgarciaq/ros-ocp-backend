@@ -445,23 +445,27 @@ disable tag filters entirely. **How tags reach list queries** is controlled by
 
 | Value | Deployment | Mechanism |
 |-------|------------|-----------|
-| `db` (default) | On-prem — shared PostgreSQL | ROS SQL-joins Koku tenant tag tables at query time |
+| `api` (default) | On-prem — cost-onprem chart | Koku Celery pushes tags to ROS internal HTTP API |
 | `api` | SaaS — separate databases | Koku Celery pushes tags to ROS internal HTTP API |
+| `db` (advanced) | On-prem — shared PostgreSQL | ROS SQL-joins Koku tenant tag tables at query time |
 
-Use **`db`** when Koku and ROS share one PostgreSQL instance (cost-onprem chart). ROS must
-use the chart's shared database connection to Koku tenant schemas (`reporting_enabledtagkeys`,
-`reporting_ocptags_values`). No Koku-side tag sync configuration is required — enable tag
-keys in **Settings → Tags** (ROS tag filtering is on by default).
+Use **`api`** for the cost-onprem chart default (`ros.api.tagsSource: api`). Koku workers
+push enabled tag keys and namespace tags to ROS; ROS stores them in `org_container_keys.resolved_tags`.
+The chart wires `ROS_TAGS_ENABLED`, `ROS_TAGS_SOURCE=api`, projected SA tokens, and
+`ROS_OCP_BACKEND_URL` on Koku Celery workers.
 
-Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery tasks,
-`ROS_OCP_BACKEND_URL`, and ServiceAccount (or dev token) authentication.
+Use **`db`** only as an advanced option when Koku and ROS share one PostgreSQL instance
+and you prefer direct table JOINs. ROS must use the chart's shared database connection to
+Koku tenant schemas (`reporting_enabledtagkeys`, `reporting_ocptags_values`). Requires the
+`koku-schema-grants` hook job. No Koku-side tag sync configuration is required — enable tag
+keys in **Settings → Tags** only.
 
 ### ROS environment variables
 
 | Variable | Default | On-Prem | SaaS | Description |
 |----------|---------|---------|------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters; push API active only when source=`api` |
-| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags` |
+| `ROS_TAGS_SOURCE` | `api` | `api` (chart default) | `api` | `api` = push into `resolved_tags`; `db` (advanced) = direct Koku PostgreSQL reads |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Required (non-dev) | Comma-separated SA names allowed to call push API |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only (`DEVELOPMENT=true`) | Static bearer token; blocked at startup outside development |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | — | SaaS (`api`) | Max request body size (MiB) for `POST /internal/tags/sync` |
@@ -472,19 +476,52 @@ Use **`api`** when Koku and ROS have separate databases. Requires Koku Celery ta
 
 Startup validation logs warnings (non-fatal) for internal auth without SA allowlist, permissive/empty CORS in production, and org allowlist with auth disabled.
 
-### Koku environment variables (SaaS / `api` source only)
+### Koku environment variables (push sync — on-prem default and SaaS)
 
-When `ROS_TAGS_SOURCE=db`, these variables are **ignored** — Koku does not push tags.
+When `ROS_TAGS_SOURCE=db` (advanced on-prem only), these variables are **ignored** — Koku
+does not push tags.
 
-| Variable | Default | On-Prem | SaaS | Description |
-|----------|---------|---------|------|-------------|
-| `ROS_TAGS_ENABLED` | `false` | Ignored | Set `true` | Enables Celery tag push tasks |
-| `ROS_TAGS_SOURCE` | `db` | `db` | `api` | Must be `api` for push sync to run |
-| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Unused | Required | ROS API base URL (no trailing path) |
-| `ROS_TAGS_DEV_TOKEN` | (empty) | Unused | Dev only | Bearer token when SA mount missing; must match ROS |
-| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | Unused | Production | Path to projected SA token on Koku worker |
+| Variable | Default | On-Prem (`api`, chart default) | On-Prem (`db`, advanced) | SaaS (`api`) | Description |
+|----------|---------|-------------------------------|--------------------------|--------------|-------------|
+| `ROS_TAGS_ENABLED` | `false` | `true` (chart wires) | Ignored | Set `true` | Enables Celery tag push tasks |
+| `ROS_TAGS_SOURCE` | `db` | `api` (chart default) | `db` | `api` | Must be `api` for push sync to run |
+| `ROS_OCP_BACKEND_URL` | `http://cost-onprem-ros-api:8000` | Required (chart sets) | Unused | Required | ROS API base URL (no trailing path) |
+| `ROS_TAGS_DEV_TOKEN` | (empty) | Dev only | Unused | Dev only | Bearer token when SA mount missing; must match ROS |
+| `ROS_TAGS_SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `/var/run/secrets/ros/token` (projected) | Unused | Production | Path to projected SA token on Koku worker |
 
-### On-prem (`ROS_TAGS_SOURCE=db`)
+### On-prem default (`ROS_TAGS_SOURCE=api`)
+
+Koku pushes resolved namespace tags after settings changes and OCP summarization (same
+mechanism as SaaS). The cost-onprem chart wires push env vars on Koku Celery workers and
+projects a ServiceAccount token with `audience: ros-api`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/cost-management/v1/internal/tags/sync` | Full-replace sync for one org |
+| `GET` | `/api/cost-management/v1/internal/tags/status?org_id=` | Freshness (`synced_at`, tag key catalog) |
+
+**Example on-prem configuration (chart defaults):**
+
+**Koku worker** (set via `cost-onprem.koku.commonEnv` when `tagsSource=api`):
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_OCP_BACKEND_URL: "http://cost-onprem-ros-api:8000"
+  ROS_SA_TOKEN_PATH: "/var/run/secrets/ros/token"
+```
+
+**ROS API:**
+
+```yaml
+env:
+  ROS_TAGS_ENABLED: "true"
+  ROS_TAGS_SOURCE: "api"
+  ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS: "koku"
+```
+
+### On-prem advanced (`ROS_TAGS_SOURCE=db`)
 
 ```mermaid
 flowchart TD
@@ -502,7 +539,7 @@ ROS reads:
 Schema name is `org` + bare `org_id` (e.g. `1234567` → `org1234567`).
 
 **No HTTP push, Celery sync, or ServiceAccount auth** is required on either service.
-Push endpoints return 404 in this mode.
+Push endpoints return 404 in this mode. Requires the `koku-schema-grants` Helm hook.
 
 **Operational risk:** ROS depends on Koku table layout (`reporting_enabledtagkeys`,
 `reporting_ocptags_values`). Koku schema changes can break tag filters; the startup DB probe

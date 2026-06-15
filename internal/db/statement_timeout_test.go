@@ -61,6 +61,30 @@ func TestHeavyAPIStatementTimeoutMSFromConfig(t *testing.T) {
 	assert.Equal(t, 28000, database.HeavyAPIStatementTimeoutMS())
 }
 
+func TestHeavyAPIStatementTimeoutMSInvalidValuesUseDefaultAndWarn(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "zero", value: "0"},
+		{name: "negative", value: "-100"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			database.ResetHeavyAPIStatementTimeoutWarnForTest()
+			t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", tc.value)
+			config.ResetForTest()
+
+			var warned bool
+			database.SetHeavyAPIStatementTimeoutWarnHookForTest(func() { warned = true })
+
+			assert.Equal(t, 45000, database.HeavyAPIStatementTimeoutMS())
+			assert.True(t, warned, "expected warning for invalid ROS_HEAVY_API_STATEMENT_TIMEOUT_MS")
+		})
+	}
+}
+
 func TestSetLocalIngestStatementTimeout_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

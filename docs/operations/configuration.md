@@ -282,7 +282,7 @@ exposed for list filtering when tag sync is enabled.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag list filters (and push API when source=api); cost-onprem chart default. |
-| `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
+| `ROS_TAGS_SOURCE` | `api` | `api` (chart default) = push into `resolved_tags`; `db` (advanced) = direct Koku PostgreSQL reads. |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). **Required non-empty in production when `ROS_TAGS_SOURCE=api`.** |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). **Blocked at startup when `DEVELOPMENT` is not `true`.** |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
