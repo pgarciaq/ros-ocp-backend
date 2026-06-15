@@ -40,6 +40,7 @@ var (
 
 	debouncerLifecycleCtx    context.Context
 	debouncerLifecycleCancel context.CancelFunc
+	debouncerLifecycleGen    atomic.Uint64
 	debouncerShutdown        atomic.Bool
 )
 
@@ -62,11 +63,16 @@ func InitSynthManifestDebouncer(parent context.Context) {
 		debouncerLifecycleCancel()
 	}
 	debouncerShutdown.Store(false)
+	gen := debouncerLifecycleGen.Add(1)
 	debouncerLifecycleCtx, debouncerLifecycleCancel = context.WithCancel(parent)
-	go func() {
+	go func(lifecycleGen uint64) {
 		<-parent.Done()
+		// Ignore stale shutdown goroutines from prior Init/reset cycles.
+		if debouncerLifecycleGen.Load() != lifecycleGen {
+			return
+		}
 		ShutdownSynthManifestDebouncers()
-	}()
+	}(gen)
 }
 
 func debouncerRunContext() context.Context {
@@ -180,6 +186,7 @@ func ShutdownSynthManifestDebouncers() {
 
 func resetSynthManifestDebouncersForTest() {
 	debouncerShutdown.Store(false)
+	debouncerLifecycleGen.Add(1)
 	if debouncerLifecycleCancel != nil {
 		debouncerLifecycleCancel()
 	}
