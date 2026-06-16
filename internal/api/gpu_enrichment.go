@@ -93,6 +93,10 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 		if loadErr != nil {
 			log.Warnf("enrichWithGPU: load persisted GPU savings failed for cluster %s: %v", clusterUUID, loadErr)
 		}
+		crossRefs, crossErr := engine.LoadPersistedGPUTimeslicingCrossRefs(ctx, pool, orgID, clusterUUID)
+		if crossErr != nil {
+			log.Warnf("enrichWithGPU: load persisted time-slicing cross-refs failed for cluster %s: %v", clusterUUID, crossErr)
+		}
 		for key, recs := range gpuRecs {
 			parts := strings.SplitN(key, "/", 3)
 			if len(parts) != 3 {
@@ -106,12 +110,27 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 				} else {
 					engine.ApplyGPUSavings(gpuRec, costData)
 				}
+				if ref, ok := crossRefs[lookup]; ok {
+					gpuRec.TimeSlicingNode = ref.Node
+					gpuRec.TimeSlicingReplicas = ref.Replicas
+					gpuRec.NotificationCodes = appendUniqueInt16(gpuRec.NotificationCodes, engine.NotifGPUTimeSharingCandidate)
+				}
 			}
 		}
 
+		// TODO: Remove fallback after backfill completes.
 		groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
 		for _, group := range groups {
-			engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgID, group, gpuRate, now)
+			needsFallback := false
+			for _, c := range group.Containers {
+				if c.Rec.TimeSlicingNode == "" || c.Rec.TimeSlicingReplicas == 0 {
+					needsFallback = true
+					break
+				}
+			}
+			if needsFallback {
+				engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgID, group, gpuRate, now)
+			}
 		}
 
 		for _, idx := range indices {
@@ -232,4 +251,13 @@ func toGPURecommendation(rec *engine.GPURec, currency string) *model.GPURecommen
 		result.EstimatedMonthlyGPUWaste = money.FormatCentsToAmountPtr(&cents, currency)
 	}
 	return result
+}
+
+func appendUniqueInt16(codes []int16, code int16) []int16 {
+	for _, c := range codes {
+		if c == code {
+			return codes
+		}
+	}
+	return append(codes, code)
 }

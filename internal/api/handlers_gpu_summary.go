@@ -55,6 +55,8 @@ func GetGPUSummary(c echo.Context) error {
 	}
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
+	// TODO: Consider counting actionable rows from node_gpu_timeslicing_recommendations
+	// instead of CountNodeGPUTriples once summary semantics align with list meta.count.
 	tsCount, err := engine.CountNodeGPUTriples(ctx, pool, orgIDStr, clusterUUIDs, start, now, now, "", "")
 	if err != nil {
 		hlog.Errorf("GetGPUSummary: timeslicing triple count failed: %v", err)

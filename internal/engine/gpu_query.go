@@ -457,3 +457,37 @@ func LoadPersistedGPUSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 	return out, rows.Err()
 }
+
+// GPUTimeslicingCrossRef holds denormalized node time-slicing cross-reference fields from recommendation_sets.
+type GPUTimeslicingCrossRef struct {
+	Node     string
+	Replicas int
+}
+
+// LoadPersistedGPUTimeslicingCrossRefs reads time_slicing_node and time_slicing_replicas for GPU containers.
+func LoadPersistedGPUTimeslicingCrossRefs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (map[string]GPUTimeslicingCrossRef, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT namespace, workload, container_name, term, time_slicing_node, time_slicing_replicas
+		FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND has_gpu = true
+		  AND time_slicing_node <> '' AND time_slicing_replicas > 0`,
+		orgID, clusterUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]GPUTimeslicingCrossRef)
+	for rows.Next() {
+		var ns, wl, cn, term, node string
+		var replicas int
+		if err := rows.Scan(&ns, &wl, &cn, &term, &node, &replicas); err != nil {
+			return nil, err
+		}
+		out[GPUSavingsLookupKey(ns, wl, cn, term)] = GPUTimeslicingCrossRef{
+			Node:     node,
+			Replicas: replicas,
+		}
+	}
+	return out, rows.Err()
+}

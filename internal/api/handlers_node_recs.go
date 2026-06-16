@@ -108,13 +108,6 @@ func GetNodeRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
 	}
 
-	if !engine.GPUOrderColumnSupportsTriplePagination(opts.OrderBy) {
-		return c.JSON(http.StatusBadRequest, echo.Map{
-			"status":  "error",
-			"message": fmt.Sprintf("order_by %q cannot be paginated at scale; use node_name, cluster_uuid, or gpu_model", opts.OrderBy),
-		})
-	}
-
 	if len(clusterUUIDs) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
@@ -126,6 +119,24 @@ func GetNodeRecommendations(c echo.Context) error {
 			},
 			Data:  []model.NodeGPURecommendation{},
 			Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
+		})
+	}
+
+	hasPersisted, persistErr := orgHasPersistedNodeGPUTimeslicingRecs(ctx, pool, orgIDStr)
+	if persistErr != nil {
+		hlog.Warnf("GetNodeRecommendations: persisted table check failed: %v", persistErr)
+	}
+	if hasPersisted {
+		return respondNodeGPURecommendationsFromTable(
+			c, ctx, pool, orgIDStr, userPerms, opts, clusterUUIDs,
+			clusterFilter, nodeNameFilter, gpuModelFilter, termFilter,
+		)
+	}
+
+	if !engine.GPUOrderColumnSupportsTriplePagination(opts.OrderBy) {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": fmt.Sprintf("order_by %q cannot be paginated at scale; use node_name, cluster_uuid, or gpu_model", opts.OrderBy),
 		})
 	}
 
