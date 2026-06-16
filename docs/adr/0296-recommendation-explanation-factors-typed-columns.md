@@ -42,7 +42,10 @@ driving factors.
 
 Each `Recommend*` function populates explanation fields on the rec struct;
 persistence maps rec struct fields → `expl_*` columns; API layers serialize these
-as a nested `explanation` object when the client requests it.
+as a nested `explanation` object when the client requests it. API uses
+always-SELECT + conditional-serialize: GORM fetches all fields; the response
+serializer includes explanation factors only when `?include=explanation` is
+requested.
 
 Scope covers all native-engine recommendation types:
 

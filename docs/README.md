@@ -26,7 +26,7 @@
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |
 | [api-versioning.md](architecture/api-versioning.md) | API versioning strategy and compatibility policy |
 | [native-migration.md](architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
-| [plans/gpu-timeslicing-implementation-plan.md](plans/gpu-timeslicing-implementation-plan.md) | GPU time-slicing design and implementation plan |
+| [plans/gpu-time-slicing-persistence.md](plans/gpu-time-slicing-persistence.md) | GPU time-slicing persistence plan (compute-at-ingest) |
 
 ## Operations & Maintenance
 

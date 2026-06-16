@@ -484,6 +484,18 @@ without waiting for natural re-ingestion.
    columns are populated
 7. Implement `include` parameter whitelist validation (see Security Considerations)
 
+### Query strategy: always SELECT, conditionally serialize
+
+GORM always fetches all struct fields (including `expl_*` columns) in a single
+query. No conditional query building is needed. The API serializer checks whether
+`?include=explanation` is present and conditionally includes the `explanation`
+object in the JSON response. This avoids maintaining two query paths and leverages
+GORM's default behavior.
+
+This means explanation columns are always read from disk with the row (they're in
+the same page), but only serialized to JSON when requested. The disk I/O cost is
+zero (same page fetch regardless) and the serialization cost is skipped by default.
+
 ### Phase 4 — Frontend guidance and user documentation (ships with or before Phase 5)
 
 Deliverables:
@@ -854,8 +866,10 @@ exists for the backfill.
 ### Query performance: no impact
 
 Explanation columns are never used in WHERE clauses, JOIN conditions, or ORDER BY.
-They are only included in SELECT when `?include=explanation` is requested. No index
-pressure, no query plan changes for existing queries.
+GORM always SELECTs all struct fields (including `expl_*` columns) in one query;
+the serializer omits the `explanation` JSON object unless `?include=explanation`
+is set. No index pressure, no query plan changes for existing queries, and no
+second query path to maintain.
 
 ---
 

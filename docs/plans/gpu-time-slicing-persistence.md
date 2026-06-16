@@ -10,6 +10,19 @@ and unblocks ADR-0296 explanation columns for this recommendation type.
 **Scope:** Node-level container GPU time-slicing (`GET .../gpu/timeslicing`). VM
 GPU time-slicing is already persisted on `vm_recommendations` and is out of scope.
 
+**Background:** The original GPU time-slicing feature (engine, API, pagination,
+RBAC) is complete. This plan covers the remaining work: persisting node
+time-slicing recommendations at ingest instead of computing them on every API read.
+
+Time-slicing recommendations are **mutually exclusive** with MIG recommendations
+per container: if a GPU gets a MIG recommendation, it does not get a time-slicing
+recommendation. MIG provides hardware isolation; time-slicing is temporal
+multiplexing with no memory isolation.
+
+**Route:** `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing`
+(`GetNodeRecommendations`). Tier 1 node CPU/memory utilization recommendations use
+`GET .../recommendations/openshift/nodes` — a different response type and handler.
+
 ---
 
 ## Current State: What Is Computed vs Persisted
@@ -369,10 +382,29 @@ Compare persisted rows against current read-time output for sample clusters (dif
 
 ---
 
+## Design Decisions
+
+Decisions from the original GPU time-slicing design review (still applicable):
+
+| # | Decision | Summary |
+|---|----------|---------|
+| D1 | Node name: last-seen, not unique key | `node_name` is a regular column, overwritten on upsert. Pod rescheduling snaps to the new node. |
+| D2 | Savings = cost avoidance | Savings represent potential reduction if GPU provisioning is adjusted, not direct removal. |
+| D3 | FB = Frame Buffer | GPU video memory (HBM). `fb_usage_max / total_fb` limits safe time-slicing (shared memory). |
+| D4 | 1 container = 1 GPU (v1) | No `gpu_count` column yet. Multi-GPU containers treated as 1 GPU. Follow-up: add `gpu_request_count` to operator ROS CSV (~3h total across operator + backend). |
+| D5 | `node` column always present | In ROS CSV since ROS support was added (column 13). No minimum version concern. |
+| D6 | 7-day freshness for node recs | Use 30-day digest window but skip nodes with no data in the last 7 days. |
+| D7 | Container cross-reference | Candidate containers get notification 36 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block (denormalized onto `recommendation_sets`). |
+
+See also [archive/gpu-recommendations.md](../archive/gpu-recommendations.md) Phase E
+section E13 for full rationale.
+
+---
+
 ## Related Documents
 
 - [ADR-0297](../adr/0297-gpu-time-slicing-recommendation-persistence.md)
 - [ADR-0115](../adr/0115-gpu-mig-idle-persist-timeslicing-read-time.md) (superseded for time-slicing)
 - [ADR-0296](../adr/0296-recommendation-explanation-factors-typed-columns.md)
 - [docs/plans/recommendation-explanations.md](recommendation-explanations.md) — Phase 0 prerequisite
-- [docs/plans/gpu-timeslicing-implementation-plan.md](gpu-timeslicing-implementation-plan.md) — original feature plan (API done; persistence was deferred)
+- [archive/gpu-timeslicing-tdd-plan.md](../archive/gpu-timeslicing-tdd-plan.md) — original TDD cycle plan (feature complete)
