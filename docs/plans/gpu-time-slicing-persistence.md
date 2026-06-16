@@ -25,6 +25,42 @@ multiplexing with no memory isolation.
 
 ---
 
+## Design Rationale
+
+### Why not keep compute-at-read?
+
+[ADR-0115](../adr/0115-gpu-mig-idle-persist-timeslicing-read-time.md) chose
+compute-at-read as a simpler initial path (fewer tables, fewer writes). The
+freshness concern that motivated that choice is a **non-issue**: time-slicing
+recommendations depend on accumulated historical digests (days to weeks of
+DCGM metrics), not on real-time container scheduling. A newly scheduled container
+has no digest history and would not change the recommendation output until
+enough data accumulates across subsequent ingest cycles. Recomputing on every
+API request repeats the same historical aggregation without surfacing fresher
+signal — the underlying data is bounded by the ingest cycle either way.
+
+### Benefits of persistence
+
+| Benefit | Detail |
+|---------|--------|
+| Explanation factors | Enables `?include=explanation` via ADR-0296 write-time `expl_*` columns |
+| History tracking | Append-only history table shows how replica counts and candidate sets evolve |
+| API latency | Indexed table read vs full digest scan + engine run on every list/detail request |
+| Consistency | Same compute-at-ingest pattern as PVC, quota, VM, and node CPU/memory recs — no special-case read path |
+
+### Cost
+
+Marginally more disk writes during ingest (one upsert per `(node, gpu_model, term)`
+triple per cluster payload). Trivial compared to digest flush volume.
+
+### Recomputation trigger
+
+Recompute on every ingest cycle when new GPU digest data arrives for a node —
+the same pattern as container CPU/memory recommendations. No separate scheduler
+or on-demand recompute path is required.
+
+---
+
 ## Current State: What Is Computed vs Persisted
 
 ### Computed today (engine)
@@ -99,7 +135,7 @@ Ingest (report_processor.go, GPU plugin enabled):
                                       → recommendation_sets (time_slicing_node, time_slicing_replicas denorm)
 
 API:
-  GET .../gpu/timeslicing          → SELECT from node_gpu_timeslicing_recommendations (+ JOIN candidates if normalized)
+  GET .../gpu/timeslicing          → SELECT from node_gpu_timeslicing_recommendations (candidate/impacted lists in text[] columns)
   Container list/detail            → read time_slicing_* from recommendation_sets; fallback to engine during backfill
 ```
 
@@ -145,28 +181,13 @@ CREATE INDEX IF NOT EXISTS idx_node_gpu_ts_list_sort
     ON node_gpu_timeslicing_recommendations (org_id, cluster_uuid, term, recommended_replicas);
 ```
 
-**Candidate membership** (optional Phase 1b — add if list filters need container-level SQL):
+**Container lists** — store on the parent row as PostgreSQL `text[]` columns
+(see Design Decision D8):
 
 ```sql
-CREATE TABLE IF NOT EXISTS node_gpu_timeslicing_candidates (
-    org_id          TEXT NOT NULL,
-    cluster_uuid    UUID NOT NULL,
-    node_name       TEXT NOT NULL,
-    gpu_model       TEXT NOT NULL,
-    term            TEXT NOT NULL,
-    namespace       TEXT NOT NULL,
-    workload        TEXT NOT NULL,
-    container_name  TEXT NOT NULL,
-    role            TEXT NOT NULL,  -- 'candidate' | 'impacted'
-    sm_active_avg   REAL NOT NULL DEFAULT 0,
-    classification  TEXT NOT NULL DEFAULT '',
-    PRIMARY KEY (org_id, cluster_uuid, node_name, gpu_model, term, namespace, workload, container_name, role)
-);
+    candidate_containers      TEXT[] NOT NULL DEFAULT '{}',  -- 'namespace/workload/container' refs
+    impacted_containers       TEXT[] NOT NULL DEFAULT '{}',
 ```
-
-For v1, **JSONB is acceptable for candidate/impacted arrays on the parent row**
-only if we defer normalized child table — prefer the child table if RBAC/tag
-filters on candidate namespace are required at SQL layer.
 
 **History table** — append-only, 90-day retention (match quota/VM):
 
@@ -273,7 +294,7 @@ Replace digest recompute path with SQL read from `node_gpu_timeslicing_recommend
    pagination once all actionable recs are persisted (simpler: paginate the rec table
    directly, matching PVC list pattern).
 2. Map rows → `model.NodeGPURecommendation` (existing response shape unchanged).
-3. Load candidate/impacted lists from child table or JSON column.
+3. Load candidate/impacted lists from `candidate_containers` / `impacted_containers` `text[]` columns.
 4. **Savings recalc at read:** Optional refresh from Masu rates when
    `estimated_savings_cents IS NULL` or cost cache stale (same fallback as container GPU).
 
@@ -395,6 +416,9 @@ Decisions from the original GPU time-slicing design review (still applicable):
 | D5 | `node` column always present | In ROS CSV since ROS support was added (column 13). No minimum version concern. |
 | D6 | 7-day freshness for node recs | Use 30-day digest window but skip nodes with no data in the last 7 days. |
 | D7 | Container cross-reference | Candidate containers get notification 36 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block (denormalized onto `recommendation_sets`). |
+| D8 | Container lists storage | Use PostgreSQL `text[]` columns (`candidate_containers`, `impacted_containers`) on the parent row. Native arrays are typed, GIN-indexable if needed, and avoid JSONB parsing overhead per [ADR-0048](../adr/0048-relational-columns-not-jsonb-blobs.md). Each element is a `namespace/workload/container` reference string. |
+| D9 | MIG ↔ time-slicing transitions | Let `StoreGPUClassifications` handle naturally. If a node changes classification (e.g., MIG-enabled), the old time-slicing recommendation becomes stale and is replaced on the next ingest upsert. No explicit deletion logic beyond the standard stale-key cleanup in `ComputeAndPersistNodeGPUTimeSlicingRecs`. |
+| D10 | Recomputation trigger | Recompute when new GPU digest data arrives for that node during the standard ingest cycle — same trigger as container CPU/memory recommendations. Threshold recalc path also re-runs when time-slicing settings change. |
 
 See also [archive/gpu-recommendations.md](../archive/gpu-recommendations.md) Phase E
 section E13 for full rationale.

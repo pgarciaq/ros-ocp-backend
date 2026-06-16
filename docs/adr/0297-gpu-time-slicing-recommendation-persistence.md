@@ -34,7 +34,22 @@ compute-at-read design because candidate sets and cost-model rates change betwee
 ingests. That trade-off made sense when time-slicing was API-only and savings were
 excluded from fleet summary ([ADR-0071](0071-exclude-gpu-from-savings-summary.md)).
 
-Two pressures now require persistence:
+ADR-0115's compute-at-read choice was a **pragmatic shortcut** for the initial
+implementation: fewer tables, fewer writes, and no history or explanation
+machinery to build. The presumed freshness benefit does not hold in practice.
+Time-slicing recommendations are derived entirely from **accumulated historical
+digests** (days to weeks of DCGM metrics per container), not from real-time
+cluster state. A newly scheduled container has zero digest history and cannot
+influence the recommendation until enough data accumulates across subsequent
+ingest cycles. The underlying inputs are therefore bounded by the ingest cycle
+regardless of whether the recommendation is computed at ingest or at API read —
+recomputing on every request does not surface fresher signal, it only repeats
+the same historical aggregation. Persistence is now required to support
+explanation factors (ADR-0296), history tracking, reduced API latency, and
+consistency with every other recommendation type (PVC, quota, VM, node CPU/memory)
+that already follows compute-at-ingest.
+
+Two additional pressures reinforce this shift:
 
 1. **Explanation factors** — [ADR-0296](0296-recommendation-explanation-factors-typed-columns.md)
    requires write-time capture of driving metrics. Node GPU time-slicing cannot
@@ -61,6 +76,12 @@ time-slicing uses a separate API response type (`NodeGPURecommendation`) with no
 backing recommendation table.
 
 ## Decision
+
+**This ADR supersedes the time-slicing portion of
+[ADR-0115](0115-gpu-mig-idle-persist-timeslicing-read-time.md).** MIG and idle
+GPU savings remain persisted at ingest as before; node GPU time-slicing moves from
+compute-at-read to compute-at-ingest. The freshness rationale that justified
+read-time computation no longer applies (see Context).
 
 Persist node GPU time-slicing recommendations to a dedicated table
 **`node_gpu_timeslicing_recommendations`** during cluster ingestion, following the
