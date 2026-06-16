@@ -9,7 +9,7 @@ This report documents a real-world benchmark of the ROS-OCP **native engine** on
 For architectural context, see [Why the Native Engine Was Built](../architecture/motivation.md). For scaling projections and tuning guidance, see [Performance and Scalability](performance-and-scalability.md).
 
 !!! note "Constrained environment"
-    All measurements below were taken on a **single-node OpenShift cluster** with minimal processor resources (100m CPU request, burst to 2 cores, 70 MB RSS). Production deployments with dedicated CPU and memory typically achieve **3–5× better throughput** than the numbers reported here.
+    All measurements below were taken on a **single-node OpenShift cluster** with limited processor resources (200m CPU request, 1 core limit, 512Mi memory request, 1Gi limit). Production deployments with dedicated CPU and memory typically achieve **3–5× better throughput** than the numbers reported here.
 
 ---
 
@@ -33,11 +33,13 @@ The numbers speak for themselves: sub-second recommendation generation, a 70 MB 
 |-----------|--------|
 | Platform | Single-Node OpenShift (SNO) |
 | Architecture | x86-64 (amd64) |
-| Hardware | Dell PowerEdge R640 |
+| Hardware | Dell PowerEdge R640 (8 cores, 78 GB RAM) |
 | Cluster ID | UXSNO |
+| OpenShift version | 4.21 (RHCOS 9.6) |
 | ROS processor pod | Single replica |
-| CPU request / limit | 100m request, burst to 2 cores |
-| Memory (RSS) | ~70 MB during benchmark |
+| CPU request / limit | 200m / 1 core |
+| Memory request / limit | 512Mi / 1Gi |
+| Memory (RSS observed) | ~70 MB during benchmark |
 | Goroutines | 15 |
 | Database | PostgreSQL 16 |
 | Message bus | Kafka (same path as cost-onprem production) |
@@ -200,7 +202,8 @@ The `uxsno-bulk-ingest` campaign uploaded **40 manifests** (10 clusters × 4 mon
 |--------|-------|
 | Pod RSS memory | 70 MB |
 | Goroutines / threads | 15 |
-| CPU request | 100m (burst to 2 cores) |
+| CPU request / limit | 200m / 1 core |
+| Memory request / limit | 512Mi / 1Gi |
 | Database size | 1 GB (3.13M data points + 7,715 recs) |
 | Services required | **Single pod** (ingestion + recommendation + API) |
 
