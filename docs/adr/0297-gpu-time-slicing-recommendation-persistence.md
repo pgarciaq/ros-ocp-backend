@@ -101,6 +101,12 @@ same patterns as PVC, quota, and VM recommendation types:
 5. **Container cross-reference** — Denormalize `time_slicing_node` and
    `time_slicing_replicas` onto `recommendation_sets` for SQL-filterable list
    queries (optional columns, populated when a container is a time-slicing candidate).
+6. **Container lists** — Store `candidate_containers` and `impacted_containers` as
+   `JSONB` on the parent row. Each entry is a structured object (namespace, workload,
+   container, sm_active_avg, classification); lists are always read/written as a complete
+   unit. Cross-container lookups use `recommendation_sets.time_slicing_node`, not
+   search inside the JSONB arrays. Type safety is enforced in Go; a GIN index can be
+   added later if needed.
 
 Do **not** reuse `node_recommendations` — that table is keyed by `(node, term, engine)`
 for dual cost/performance CPU/memory rows and has a different lifecycle.
@@ -122,12 +128,22 @@ GPU time-slicing has no engine split, is keyed by `(node, gpu_model, term)`, and
 carries container membership lists. Overloading the table would require nullable
 columns and complicate existing node utilization queries.
 
-### JSONB blob for candidate/impacted container lists
+### Child table for candidate/impacted container lists
 
-Flexible schema for variable-length container refs. Rejected per
-[ADR-0048](0048-relational-columns-not-jsonb-blobs.md): use a child table
-`node_gpu_timeslicing_candidates` for normalized membership if list endpoints
-need SQL filters; summary counts can live on the parent row.
+Normalized `node_gpu_timeslicing_candidates` rows with one row per container.
+Rejected: container lists are structured objects (5 fields each) always read/written
+as a complete unit; "find all recommendations for container Y" is handled by the
+`time_slicing_node` cross-reference on `recommendation_sets`, not by searching
+inside the lists. A child table adds JOIN overhead on every single-row fetch for
+2–8 items with no query benefit.
+
+### JSONB columns for candidate/impacted container lists (chosen)
+
+Store `candidate_containers` and `impacted_containers` as `JSONB` on the parent row.
+Accepted despite [ADR-0048](0048-relational-columns-not-jsonb-blobs.md) general
+guidance: these lists are never queried individually, type safety is enforced in Go,
+and JSONB avoids JOINs for the dominant access pattern (fetch one recommendation row).
+A GIN index can be added later if search-inside-list becomes a requirement.
 
 ### Persist recommendation metadata only; compute savings at read time
 

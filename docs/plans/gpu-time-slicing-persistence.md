@@ -135,7 +135,7 @@ Ingest (report_processor.go, GPU plugin enabled):
                                       → recommendation_sets (time_slicing_node, time_slicing_replicas denorm)
 
 API:
-  GET .../gpu/timeslicing          → SELECT from node_gpu_timeslicing_recommendations (candidate/impacted lists in text[] columns)
+  GET .../gpu/timeslicing          → SELECT from node_gpu_timeslicing_recommendations (candidate/impacted lists in JSONB columns)
   Container list/detail            → read time_slicing_* from recommendation_sets; fallback to engine during backfill
 ```
 
@@ -181,12 +181,12 @@ CREATE INDEX IF NOT EXISTS idx_node_gpu_ts_list_sort
     ON node_gpu_timeslicing_recommendations (org_id, cluster_uuid, term, recommended_replicas);
 ```
 
-**Container lists** — store on the parent row as PostgreSQL `text[]` columns
+**Container lists** — store on the parent row as PostgreSQL `JSONB` columns
 (see Design Decision D8):
 
 ```sql
-    candidate_containers      TEXT[] NOT NULL DEFAULT '{}',  -- 'namespace/workload/container' refs
-    impacted_containers       TEXT[] NOT NULL DEFAULT '{}',
+    candidate_containers      JSONB NOT NULL DEFAULT '[]',  -- [{namespace, workload, container, sm_active_avg, classification}, ...]
+    impacted_containers       JSONB NOT NULL DEFAULT '[]',
 ```
 
 **History table** — append-only, 90-day retention (match quota/VM):
@@ -294,7 +294,7 @@ Replace digest recompute path with SQL read from `node_gpu_timeslicing_recommend
    pagination once all actionable recs are persisted (simpler: paginate the rec table
    directly, matching PVC list pattern).
 2. Map rows → `model.NodeGPURecommendation` (existing response shape unchanged).
-3. Load candidate/impacted lists from `candidate_containers` / `impacted_containers` `text[]` columns.
+3. Load candidate/impacted lists from `candidate_containers` / `impacted_containers` JSONB columns.
 4. **Savings recalc at read:** Optional refresh from Masu rates when
    `estimated_savings_cents IS NULL` or cost cache stale (same fallback as container GPU).
 
@@ -416,7 +416,7 @@ Decisions from the original GPU time-slicing design review (still applicable):
 | D5 | `node` column always present | In ROS CSV since ROS support was added (column 13). No minimum version concern. |
 | D6 | 7-day freshness for node recs | Use 30-day digest window but skip nodes with no data in the last 7 days. |
 | D7 | Container cross-reference | Candidate containers get notification 36 + `time_slicing_node` and `time_slicing_replicas` fields on their GPU block (denormalized onto `recommendation_sets`). |
-| D8 | Container lists storage | Use PostgreSQL `text[]` columns (`candidate_containers`, `impacted_containers`) on the parent row. Native arrays are typed, GIN-indexable if needed, and avoid JSONB parsing overhead per [ADR-0048](../adr/0048-relational-columns-not-jsonb-blobs.md). Each element is a `namespace/workload/container` reference string. |
+| D8 | Container lists storage | Use PostgreSQL `JSONB` columns (`candidate_containers`, `impacted_containers`) on the parent row. Container lists are structured objects (5 fields each: namespace, workload, container, sm_active_avg, classification); always read/written as a complete unit — never queried individually. "Find all recommendations for container Y" is handled by the `time_slicing_node` cross-reference on `recommendation_sets`, not by searching inside the container lists. JSONB is faster than a child table for this access pattern (single row fetch, no JOIN, small cardinality of 2–8 items stored inline via TOAST). Type safety is enforced at the Go application layer (typed structs for serialization/deserialization). If a future query pattern ever requires searching inside the lists, a GIN index can be added trivially. |
 | D9 | MIG ↔ time-slicing transitions | Let `StoreGPUClassifications` handle naturally. If a node changes classification (e.g., MIG-enabled), the old time-slicing recommendation becomes stale and is replaced on the next ingest upsert. No explicit deletion logic beyond the standard stale-key cleanup in `ComputeAndPersistNodeGPUTimeSlicingRecs`. |
 | D10 | Recomputation trigger | Recompute when new GPU digest data arrives for that node during the standard ingest cycle — same trigger as container CPU/memory recommendations. Threshold recalc path also re-runs when time-slicing settings change. |
 
