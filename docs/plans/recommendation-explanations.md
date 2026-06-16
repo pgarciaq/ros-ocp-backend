@@ -482,17 +482,35 @@ without waiting for natural re-ingestion.
 5. Update OpenAPI spec (`docs/openapi/openapi.yaml` or generated spec)
 6. Contract tests: detail response includes `explanation` only when requested and
    columns are populated
+7. Implement `include` parameter whitelist validation (see Security Considerations)
 
-### Phase 4 — Frontend guidance (documentation — ships with or before Phase 5)
+### Phase 4 — Frontend guidance and user documentation (ships with or before Phase 5)
 
-Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
+Deliverables:
 
-- Generic `<RecommendationExplanation>` component consuming `explanation` object
-- Request detail with `?include=explanation` when the explainability panel is shown
-- Label map from factor keys → user-facing strings (i18n keys)
-- Hide section when all explanation fields are null (pre-backfill rows)
-- Hide BH section when BH scheduling is not configured (UI-only; backend returns
-  explanation for BH rows if they exist)
+1. **UI integration guide** — `docs-site/ui-integration-guide.md` section (existing plan):
+   - Generic `<RecommendationExplanation>` component spec
+   - Request detail with `?include=explanation`
+   - Label map from factor keys → user-facing strings (i18n keys)
+   - Hide section when explanation fields are null
+   - Hide BH section when BH scheduling is not configured
+
+2. **"Understanding Your Recommendations" page** — new `docs-site/architecture/understanding-recommendations.md`:
+   - User-friendly explanation of how each recommendation type is computed
+   - Why CPU uses P60 (cost) vs P98 (performance)
+   - Why memory uses P95/Max + adaptive margin + OOM bump
+   - What the confidence score means (data_days / window_days)
+   - How to read explanation factors in the UI panel
+   - Why a recommendation might be higher/lower than expected
+   - Common scenarios: "Why is my memory recommendation 4x current?" with worked examples
+   - References ADRs for deeper engineering context (links to `architecture/adrs.md`)
+   - Targeted at platform engineers and cluster admins, not engine developers
+
+3. **Operations documentation** — new section in `docs-site/operations/` (or existing page):
+   - Backfill endpoint usage: authentication, invocation, monitoring
+   - Admin-only access requirements
+   - How to verify backfill completion (SQL query for NULL explanation rows)
+   - GPU recompute fallback removal checklist
 
 Phase 4 is documentation-only; Phase 5 implements the same guidance in `koku-ui`.
 
@@ -736,6 +754,43 @@ include explanation factors from the moment Phase 2 ships.
 
 ---
 
+## Security Considerations
+
+### Backfill endpoint: admin-only access
+
+The backfill management endpoint (Phase 2.5) triggers expensive recomputation
+across all recommendation rows. It MUST:
+
+- Require admin authentication (not accessible to regular org users)
+- Be rate-limited or one-shot (prevent repeated triggers as a compute DoS vector)
+- Live on the internal admin API (same as other management endpoints), not the
+  public user-facing API
+- Log invocations with caller identity for audit
+
+### `?include=` parameter: whitelist validation
+
+The `include` query parameter parser MUST whitelist known values and silently
+ignore unknown ones:
+
+```go
+allowed := map[string]bool{"explanation": true}
+for _, v := range strings.Split(includeParam, ",") {
+    if allowed[strings.TrimSpace(v)] { ... }
+}
+```
+
+This prevents injection of arbitrary values. Unknown includes are ignored, not
+rejected — forward-compatible for when new includable sections are added.
+
+### Algorithm transparency: accepted risk
+
+Explanation factors reveal internal algorithm details (percentile choices, margin
+multipliers, OOM bump logic, threshold values). This is intentional — the project
+is open-source and users benefit from transparency. No information beyond what is
+already available in the source code is exposed.
+
+---
+
 ## Resolved Decisions
 
 | # | Question | Decision |
@@ -767,4 +822,6 @@ include explanation factors from the moment Phase 2 ships.
 | OpenAPI | `docs/openapi/` |
 | Tests | `internal/engine/*_test.go`, `internal/api/handlers_*_integration_test.go` |
 | Docs | ADR-0296 (this plan), optional `docs-site/` UI section |
+| Docs-site | `docs-site/architecture/understanding-recommendations.md` (new), `docs-site/operations/` backfill section, `docs-site/ui-integration-guide.md` update |
+| MkDocs nav | `mkdocs.yml` — add `architecture/understanding-recommendations.md` under Architecture; add backfill section under Operations (when Phase 4 docs are written) |
 | Frontend (`koku-ui`) | `apps/koku-ui-ros/src/api/ros/recommendations.ts`, `recommendations.test.ts`, `store/ros/rosActions.ts`, `routes/optimizations/optimizationsBreakdown/optimizationsBreakdown.tsx`, `RecommendationExplanation.tsx`, `optimizationsBreakdownUtilization.tsx`, `optimizationsBreakdownChart.tsx`, `locales/messages.ts` |
