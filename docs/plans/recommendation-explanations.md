@@ -409,7 +409,7 @@ managed, redundant, stale, never_restored, active).
 
 ## Implementation Phases
 
-### Phase 0 — Prerequisites (1 PR)
+### Phase 0 — Prerequisites (1 PR, ~2–3 days)
 
 Required before Phase 2c GPU work:
 
@@ -422,7 +422,7 @@ Required before Phase 2c GPU work:
 Explanation columns for node GPU time-slicing are added in Phase 2c once this
 table exists.
 
-### Phase 1 — Schema and types (1 PR)
+### Phase 1 — Schema and types (1 PR, ~1 day)
 
 1. Add `migrations/000145_recommendation_explanation_columns.{up,down}.sql`
    (live tables **and** history tables: `recommendation_history`,
@@ -432,7 +432,7 @@ table exists.
 3. Add API mapping types for the nested `explanation` JSON shape
 4. Unit tests: explanation field JSON tags match OpenAPI naming (snake_case)
 
-### Phase 2 — Engine capture (2–3 PRs)
+### Phase 2 — Engine capture (2–3 PRs, ~7 days total)
 
 Split by resource type to keep reviews manageable:
 
@@ -447,7 +447,7 @@ Each PR updates the corresponding `Write*` / `Persist*` SQL to include new colum
 History archive paths (`WriteRecommendationHistory`, etc.) copy explanation
 columns alongside recommendation values.
 
-### Phase 2.5 — Backfill (1 PR or ops runbook)
+### Phase 2.5 — Backfill (1 PR, ~2 days)
 
 After deploying migration + engine changes, run a one-shot backfill pass:
 
@@ -470,7 +470,7 @@ GPU rows backfilled here eliminate the need for digest recompute fallback on
 detail fetch. Container/namespace/node/PVC/quota/VM/snapshot rows get explanations
 without waiting for natural re-ingestion.
 
-### Phase 3 — API exposure (1 PR)
+### Phase 3 — API exposure (1 PR, ~1 day)
 
 1. Add `include` query parameter (comma-separated list; `explanation` only in v1)
    to detail handlers
@@ -496,7 +496,7 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 Phase 4 is documentation-only; Phase 5 implements the same guidance in `koku-ui`.
 
-### Phase 5 — UI Implementation (2–3 PRs, `koku-ui`)
+### Phase 5 — UI Implementation (2–3 PRs, ~5.5 days)
 
 Implement explainability in the ROS optimizations breakdown area
 (`apps/koku-ui-ros/`). The breakdown page today is container-focused: route
@@ -626,6 +626,42 @@ when backend columns are NULL (pre-backfill).
 
 ---
 
+## Recommended Execution Order
+
+The plan spans two repositories (`ros-ocp-backend` and `koku-ui`). The recommended
+order delivers end-to-end explainability for the most common case (container
+CPU/memory) as early as possible, then iterates:
+
+**Critical path (container end-to-end):**
+
+Phase 1 → Phase 2a → Phase 3 → Phase 5a
+
+This gives users a working "Why this recommendation?" panel for container
+CPU/memory recommendations in ~6 days.
+
+**Parallel / follow-up work:**
+
+| Order | Phase | Depends on | Effort |
+|-------|-------|------------|--------|
+| 1 | Phase 1 (migration + types) | — | 1 day |
+| 2 | Phase 2a (container + namespace) | Phase 1 | 2 days |
+| 3 | Phase 3 (API opt-in) | Phase 2a | 1 day |
+| 4 | Phase 5a (UI panel, container) | Phase 3 | 2 days |
+| 5 | Phase 2b (node + PVC) | Phase 1 | 1.5 days |
+| 6 | Phase 0 (GPU TS table) | — | 2–3 days |
+| 7 | Phase 2c (GPU + VM + TS) | Phase 0 + Phase 1 | 2 days |
+| 8 | Phase 2d (quota + CRQ + snapshot) | Phase 1 | 1.5 days |
+| 9 | Phase 5b (chart annotations) | Phase 5a | 1.5 days |
+| 10 | Phase 5c (multi-type rendering) | Phase 2b–2d + Phase 5a | 2 days |
+| 11 | Phase 2.5 (backfill) | Phase 2a–2d | 2 days |
+| 12 | GPU recompute removal (cleanup) | Phase 2.5 complete for GPU rows | 0.5 day |
+| **Total** | | | **~19–20 days** |
+
+Phase 0 and Phase 2b–2d can run in parallel with the critical path once Phase 1
+ships. Phase 5b/5c follow incrementally after Phase 5a.
+
+---
+
 ## Testing Approach
 
 ### Unit tests (engine)
@@ -686,7 +722,14 @@ when backend columns are NULL (pre-backfill).
 3. Deploy API with `?include=explanation` — UI opts in when ready
 4. Run backfill (Phase 2.5) — recompute full recommendations (values + explanations)
    for existing rows
-5. Remove GPU digest recompute fallback once backfill completes for GPU rows
+5. **GPU recompute removal (cleanup PR):** After backfill completes for GPU rows,
+   verify with:
+   ```sql
+   SELECT COUNT(*) FROM recommendation_sets WHERE has_gpu AND expl_gpu_sm_active_avg_bp IS NULL;
+   ```
+   When the count is zero, submit a cleanup PR that removes the digest recompute
+   fallback in `internal/api/gpu_enrichment.go`. This is a separate PR — do not
+   mix with feature work.
 
 New rows receive explanations automatically on ingestion. History snapshots
 include explanation factors from the moment Phase 2 ships.
