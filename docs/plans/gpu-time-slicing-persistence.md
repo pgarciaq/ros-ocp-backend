@@ -1,5 +1,9 @@
 # GPU Time-Slicing Recommendation Persistence — Implementation Plan
 
+**ADR:** [ADR-0297](../adr/0297-gpu-time-slicing-recommendation-persistence.md)  
+**Branch:** `pgarciaq-rosocp-superpowers-phase14`  
+**Status:** Planned
+
 ## Overview
 
 Move node GPU time-slicing recommendations from **compute-at-read** to
