@@ -577,6 +577,57 @@ func TestOpenAPI_GPUTimeslicingRecommendations_ResponseFields(t *testing.T) {
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
+func seedOpenAPINodeGPUTimeslicingHistory(t *testing.T, pool *pgxpool.Pool, orgID string) (clusterUUID, nodeName string) {
+	t.Helper()
+	ctx := context.Background()
+	clusterUUID = testutil.TestClusterUUID
+	nodeName = "openapi-gpu-ts-hist-node"
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-gpu-ts-hist', 'src-openapi-gpu-ts-hist', now()) ON CONFLICT DO NOTHING`,
+		clusterUUID,
+	)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_gpu_timeslicing_recommendation_history (
+			org_id, cluster_uuid, node_name, gpu_model, term,
+			recommended_replicas, confidence, candidate_count, impacted_count,
+			estimated_savings_cents
+		) VALUES (
+			$1, $2::uuid, $3, 'NVIDIA T4', 'medium',
+			4, 0.75, 2, 1, 40000
+		)`,
+		orgID, clusterUUID, nodeName,
+	)
+	require.NoError(t, err)
+	return clusterUUID, nodeName
+}
+
+func TestOpenAPI_GPUTimeslicingHistory_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-gpu-ts-hist"
+	clusterUUID, nodeName := seedOpenAPINodeGPUTimeslicingHistory(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		fmt.Sprintf("%s/recommendations/openshift/gpu/timeslicing/history?cluster_uuid=%s&node_name=%s&limit=10&offset=0",
+			apiV1Prefix, clusterUUID, nodeName))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing/history", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("NodeGPUTimeslicingHistoryRow"))
+}
+
 func TestOpenAPI_VMRecommendations_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
