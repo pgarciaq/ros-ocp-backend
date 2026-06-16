@@ -15,11 +15,9 @@ For migration steps from Kruize, see [Legacy-to-Native Engine Migration Guide](n
 Every container metric in the Kruize `remote_monitoring` path crossed **11 distinct serialize/deserialize boundaries** before reaching a REST API consumer. Each hop added CPU cost, latency, and failure surface — with no corresponding benefit.
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph cluster["OpenShift cluster"]
-        P[Prometheus]
-        O[koku-metrics-operator]
-        P -->|"① query"| O
+        P[Prometheus] -->|"① query"| O[koku-metrics-operator]
         O -->|"② CSV write"| CSV[CSV on disk]
     end
 
