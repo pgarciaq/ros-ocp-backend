@@ -68,7 +68,7 @@ The native engine collapses hops 5–10 into a single in-process path: **CSV par
 **Native pipeline (4 hops after cluster upload):**
 
 ```mermaid
-flowchart LR
+flowchart TD
     CSV[CSV from ingress] -->|"① parse + aggregate"| Engine[Native Go engine]
     Engine -->|"② COPY bulk write"| DB[(PostgreSQL)]
     DB -->|"③ read digests + compute"| Engine
