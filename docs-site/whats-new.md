@@ -53,6 +53,24 @@ first production-ready native engine release.
 
 - **OpenAPI specification** — Contract-tested REST API under `/api/cost-management/v1/recommendations/openshift/`. See [OpenAPI](openapi.md).
 
+## In progress (Phase 14)
+
+**Branch:** `pgarciaq-rosocp-superpowers-phase14`
+
+- **Recommendation explanations (ADR-0296)** — Persist engine intermediate values as typed
+  `expl_*` columns at write time; expose via `?include=explanation` on detail endpoints
+  so the UI can show *why* a recommendation was computed (percentiles, margins, idle
+  gates, quota headroom, and similar factors).
+- **GPU time-slicing persistence (ADR-0297)** — Move node GPU time-slicing from
+  compute-at-read to compute-at-ingest with history tracking; unblocks explanation
+  columns for that recommendation type.
+- **Backfill** — Re-run engines for existing recommendations missing explanation data.
+- **Documentation & UI** — "Understanding Your Recommendations" user guide and
+  koku-ui explanation panels.
+
+Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/recommendation-explanations.md),
+[`docs/plans/gpu-time-slicing-persistence.md`](../docs/plans/gpu-time-slicing-persistence.md).
+
 ## Coming soon
 
 - **[Seasonality & proactive recommendations](planned-features/seasonality.md)** — Learn

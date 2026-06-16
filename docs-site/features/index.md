@@ -117,7 +117,11 @@ Technical design: [`docs/design/vm-recommendations.md`](../../docs/design/vm-rec
 
 ## Planned capabilities
 
-Upcoming features (MachineSet Tier 2, seasonality, JVM, HPA/VPA, network, local mode)
+**Phase 14 (in progress):** recommendation explanation factors (`?include=explanation`
+on detail APIs) and GPU time-slicing persistence at ingest. See
+[What's New — Phase 14](../whats-new.md#in-progress-phase-14).
+
+Other upcoming features (MachineSet Tier 2, seasonality, JVM, HPA/VPA, network, local mode)
 are documented separately and are **not yet available**:
 
 **[Features (planned)](../planned-features/index.md)** — product direction, API sketches,

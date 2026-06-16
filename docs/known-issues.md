@@ -5,7 +5,18 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-15 (phase13 API contract — list `notification_codes`, detail-only plots/notifications; SPARSE_DATA code 77)
+Last updated: 2026-06-17 (Phase 14 in progress — recommendation explanations & GPU time-slicing persistence)
+
+---
+
+## Development Status
+
+| Phase | Focus | Status | Branch |
+|-------|-------|--------|--------|
+| Phase 13 | Performance audit, API contract polish, adversarial review remediations | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase13` |
+| Phase 14 | Recommendation explanations & GPU time-slicing persistence | **In Progress** | `pgarciaq-rosocp-superpowers-phase14` |
+
+**Phase 14 planned work:** typed `expl_*` explanation columns for all recommendation types (ADR-0296), GPU time-slicing persistence at ingest (ADR-0297), `?include=explanation` on detail APIs, backfill for existing rows, user-facing "Understanding Your Recommendations" docs, and koku-ui explanation panels. See [`docs/plans/recommendation-explanations.md`](plans/recommendation-explanations.md) and [`docs/plans/gpu-time-slicing-persistence.md`](plans/gpu-time-slicing-persistence.md).
 
 ---
 

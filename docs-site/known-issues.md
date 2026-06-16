@@ -5,7 +5,21 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-02 (CRQ gaps 9–10 — object-count policy, extended resources future work); 2026-06-10 (Kafka DLQ / consumer stall mitigated)
+Last updated: 2026-06-17 (Phase 14 in progress — recommendation explanations & GPU time-slicing persistence); 2026-06-10 (Kafka DLQ / consumer stall mitigated)
+
+---
+
+## Development Status
+
+| Phase | Focus | Status | Branch |
+|-------|-------|--------|--------|
+| Phase 13 | Performance audit, API contract polish, adversarial review remediations | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase13` |
+| Phase 14 | Recommendation explanations & GPU time-slicing persistence | **In Progress** | `pgarciaq-rosocp-superpowers-phase14` |
+
+**Phase 14 planned work:** typed explanation columns for all recommendation types,
+`?include=explanation` on detail APIs, GPU time-slicing persistence at ingest,
+backfill for existing recommendations, user-facing "Understanding Your Recommendations"
+documentation, and koku-ui explanation panels.
 
 ---
 

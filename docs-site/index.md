@@ -61,4 +61,4 @@ These capabilities span multiple plugins rather than separate registry entries:
 - [Plugin Execution Phases](architecture/plugin-phases.md) — Phase and priority ordering
 - [Plugin Reference](plugin-reference/index.md) — Auto-generated from source code
 - [OpenAPI Specification](openapi.md) — OpenAPI/Swagger docs
-- [Known Issues](known-issues.md) — Current limitations and workarounds
+- [Known Issues](known-issues.md) — Current limitations, development status, and workarounds

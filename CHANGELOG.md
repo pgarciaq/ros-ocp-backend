@@ -4,12 +4,34 @@ All notable API and behavioral changes to ROS-OCP-Backend are documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [In Progress] — Phase 14: Recommendation Explanations & GPU Time-Slicing Persistence
+
+**Branch:** `pgarciaq-rosocp-superpowers-phase14`
+
+### Planned
+
+- Typed explanation factor columns for all recommendation types ([ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
+- GPU time-slicing recommendation persistence — move node time-slicing from compute-at-read to compute-at-ingest ([ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md))
+- `?include=explanation` API parameter for opt-in explanation data on detail endpoints
+- User-facing documentation: "Understanding Your Recommendations" page
+- Backfill mechanism for existing recommendations without explanation columns
+- UI integration for explanation panels in koku-ui
 
 ### Added
 
-- ADR-0296: Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
-- Implementation plan: `docs/plans/recommendation-explanations.md` covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
+- [ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md): Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
+- [ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md): GPU time-slicing recommendation persistence at ingest
+- Implementation plan: [`docs/plans/recommendation-explanations.md`](docs/plans/recommendation-explanations.md) covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
+- Implementation plan: [`docs/plans/gpu-time-slicing-persistence.md`](docs/plans/gpu-time-slicing-persistence.md)
+
+---
+
+## [Unreleased]
+
+Phase 13 performance, API contract, and hardening work (branch `pgarciaq-rosocp-superpowers-phase13`).
+
+### Added
+
 - Per-phase Prometheus pipeline histograms (`rosocp_pipeline_phase_duration_seconds`) for `download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, and `metadata_refresh`
 - End-to-end pipeline duration histogram (`rosocp_pipeline_total_duration_seconds` with `status=success|error`)
 - Grafana dashboard panels for total pipeline duration and per-phase heatmap

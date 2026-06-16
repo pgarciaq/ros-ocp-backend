@@ -12,6 +12,7 @@ section.
 
 | Page | Topic |
 |------|-------|
+| *(Phase 14 — in progress)* | Recommendation explanations (`?include=explanation`) and GPU time-slicing persistence — see [What's New](../whats-new.md#in-progress-phase-14) and [`docs/plans/`](../../docs/plans/) |
 | [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 1 list API **shipped**; Tier 2 engine planned) |
 | [autoscaler-optimization.md](autoscaler-optimization.md) | MachineAutoscaler min/max bounds and scaling behavior (Tier 3) |
 | [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |
