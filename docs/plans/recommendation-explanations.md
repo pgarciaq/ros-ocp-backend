@@ -8,7 +8,7 @@
 
 Persist the intermediate values that drive each native-engine recommendation as
 typed database columns, written at recommendation time, and expose them via API
-detail responses as a nested `explanation` object.
+detail responses as a nested `explanation` object when requested.
 
 ## Recommendation Types in Scope
 
@@ -24,51 +24,81 @@ Verified against `docs/architecture/recommendation-engines.md` and `internal/eng
 | Namespace quota | `computeQuotaRecommendation` | `WriteQuotaRecommendations` | `quota_recommendation_sets` |
 | Cluster quota | `computeClusterQuotaRecommendation` | `WriteClusterQuotaRecommendations` | `cluster_quota_recommendation_sets` |
 | VM | `RecommendVM` | `UpsertVMRecommendation` (`vm_db.go`) | `vm_recommendations` |
+| Node GPU time-slicing | `RecommendNodeGPUTimeSlicing` (planned) | `PersistNodeGPUTimeSlicingRecs` (planned) | `node_gpu_timeslicing_recommendations` (Phase 0) |
 
-**Out of scope (v1):** Snapshot recommendations (`snapshot_recommendation_sets`),
-business-hours-only namespace rows (`schedule_type = 'business_hours'` get the
-same columns but share the namespace table), node GPU time-slicing list (still
-API-computed from digests — defer until persisted), recommendation history tables.
+**Out of scope (v1):** Snapshot recommendations (`snapshot_recommendation_sets`).
+
+**History tables in scope:** `recommendation_history`, `vm_recommendation_history`,
+`quota_recommendation_history`, and other quota/namespace history tables receive
+the same explanation columns. When a recommendation is archived to history, its
+explanation is archived with it.
 
 ---
 
 ## Cross-Cutting Design
 
-### Explanation struct pattern
+### Struct embedding for safety
 
-Each engine returns `(Rec, Explanation)` or embeds `Explanation` on the rec struct.
-Explanation structs live in `internal/engine/explanation.go` (new file) with
-table-specific sub-structs.
+Explanation factors are **embedded directly in the engine's result structs**, not
+populated manually into a separate `Explanation` struct at write time.
+
+`CPURec`, `MemoryRec`, `NodeRec`, `GPURec`, and similar structs already carry
+intermediate values computed during recommendation. Add `expl_*` fields to those
+structs (or embed a small factor sub-struct on the rec struct) and persist them
+directly from the same object that produced the recommendation. Do **not** copy
+values into a parallel `Explanation` type — that pattern drifts when algorithms
+change because engineers update the engine but forget the copy step.
 
 ```go
-// Example — container row (one term + engine)
-type ContainerExplanation struct {
-    DataDays              int
-    DecayHalfLifeHours    float64
-    CPUCostPercentileMC   int64  // decay-weighted percentile before margin
-    CPUPerfPercentileMC   int64
-    CPUUsageP95MC         int64
-    CPUUsageP50MC         int64
-    CPUUsageMeanMC        int64
-    CPUAdaptiveMarginBP   int32  // basis points (10000 = 100%)
-    CPUTrendSlope         float64
-    MemCostPercentileKiB  int64
-    MemPerfPercentileKiB  int64
-    MemUsageP95KiB        int64
-    MemUsageP50KiB        int64
-    MemUsageMeanKiB       int64
-    MemAdaptiveMarginBP   int32
-    MemTrendSlope         float64
-    OOMCountSum           int64
-    OOMBumpApplied        bool
-    CPUFloorApplied       bool
-    IsIdle                bool
+// Example — extend existing rec struct, not a separate Explanation type
+type CPURec struct {
+    CostRequestMC int64
+    // ... existing recommendation outputs ...
+
+    // Explanation factors — persisted as expl_* columns
+    CostPercentileMC     int64
+    PerfPercentileMC     int64
+    UsageP95MC           int64
+    AdaptiveMarginBP     int32
+    // ...
 }
 ```
 
+The write path maps rec struct fields → `expl_*` columns with a single mapping
+function per resource type. API serializers read the same columns back into the
+nested `explanation` JSON object.
+
+### Assemble from existing + new columns
+
+Some explanation factors already exist as first-class columns (e.g. PVC
+`usage_ratio`, `growth_bytes_per_day`; container `confidence_level`). The API
+**assembles** the `explanation` response from both existing columns and new
+`expl_*` columns — do not duplicate values in the database. When a factor is
+already stored under its canonical column name, the serializer includes it in
+`explanation` by reading that column, not by adding a redundant `expl_*` copy.
+
+**Confidence:** The existing `confidence_level` column (`dataDays / windowDays`,
+capped at 1.0) already exists on `recommendation_sets` and related tables. Include
+it in the API `explanation` response from that column. Do **not** add
+`expl_confidence` or any new confidence column.
+
+### Column prefix
+
+All new explanation columns use the **`expl_` prefix** to distinguish driving
+factors from recommendation outputs (`rec_*`, `current_*`, etc.).
+
 ### API shape
 
-Detail endpoints add a sibling `explanation` object (never on slim list DTOs):
+Explanation is **opt-in** via `?include=explanation` on detail endpoints. It is
+**not** included by default — this avoids bloating responses for consumers who
+do not need explainability data.
+
+When requested, detail handlers add a sibling `explanation` object (never on
+slim list DTOs):
+
+```
+GET /recommendations/openshift/{uuid}?include=explanation
+```
 
 ```json
 {
@@ -77,6 +107,7 @@ Detail endpoints add a sibling `explanation` object (never on slim list DTOs):
       "cost": {
         "cpu_request_millicores": 250,
         "explanation": {
+          "confidence_level": 0.857,
           "data_days": 7,
           "cpu_cost_percentile_millicores": 180,
           "cpu_adaptive_margin_basis_points": 11500,
@@ -91,12 +122,14 @@ Detail endpoints add a sibling `explanation` object (never on slim list DTOs):
 ```
 
 Namespace, node, PVC, quota, cluster-quota, and VM handlers follow the same
-pattern at their respective nesting level.
+opt-in pattern at their respective nesting level.
 
 ### Migration
 
 Single migration **`migrations/000145_recommendation_explanation_columns.up.sql`**
-(adds all columns, all nullable, no backfill). Down migration drops columns.
+(adds all columns to live **and history** tables, all nullable, no backfill in
+migration). Down migration drops columns.
+
 No `CONCURRENTLY` index needed — explanation columns are not filter/sort keys in v1.
 
 ### Integer scales
@@ -109,7 +142,7 @@ Follow [ADR-0295](../adr/0295-integer-first-architecture.md):
 | Memory | `BIGINT` KiB | Same as existing rec columns |
 | Margins/ratios | `INTEGER` basis points | 10000 = 100%; matches `MarginScale` |
 | GPU utilization | `INTEGER` basis points | Matches digest schema |
-| Growth slope | `BIGINT` bytes/day or `REAL` | PVC already uses `growth_bytes_per_day BIGINT` |
+| Growth slope | `BIGINT` bytes/day | PVC already uses `growth_bytes_per_day BIGINT` |
 | Percentiles (float legacy) | Prefer integers; use `REAL` only where engine already emits float32 utilizations (node CPU util p50/p95) |
 
 ---
@@ -147,9 +180,16 @@ Intermediate values currently computed then discarded in `multiCPUAndMemoryWeigh
 | `expl_cpu_floor_applied` | `BOOLEAN` | Whether 25 mCPU floor was applied | `applyFloor` |
 | `expl_is_idle` | `BOOLEAN` | Idle classification for this term | `cpuRec.IsIdle` |
 
-**Engine change:** Refactor `RecommendCPUAndMemory` to return `(CPURec, MemoryRec, ContainerExplanation)`. Populate explanation in `processContainer` inside `RecommendWorkloadsStreaming` (~L150–240 in `recommend_all.go`).
+**Not a new column:** `confidence_level` — already on the row; include in API
+`explanation` when `?include=explanation` is set.
 
-**API change:** Extend `EngineRecommendation` in `recommendation_set_native.go` with optional `Explanation *ContainerExplanationAPI`.
+**Engine change:** Extend `CPURec` / `MemoryRec` / `ContainerRec` with explanation
+fields embedded directly. Populate in `processContainer` inside
+`RecommendWorkloadsStreaming` (~L150–240 in `recommend_all.go`).
+
+**API change:** Extend `EngineRecommendation` in `recommendation_set_native.go`
+with optional `Explanation *ContainerExplanationAPI`, populated only when
+`?include=explanation` is present.
 
 ---
 
@@ -160,8 +200,11 @@ Intermediate values currently computed then discarded in `multiCPUAndMemoryWeigh
 **API today:** GPU block enriched at read time in detail response (`GPURecommendation` in [`internal/model/detail_response.go`](../../internal/model/detail_response.go))
 
 Today only classification, idle state, and savings are persisted; profile and
-utilization averages are recomputed from digests on detail fetch. v1 persists
-explanation factors at classification write time:
+utilization averages are recomputed from digests on detail fetch. After this
+feature, the GPU detail endpoint **reads from persisted columns only** — no more
+live recomputation from digests. Old rows with NULL explanation columns use the
+existing digest recompute as a **fallback only during the backfill window**; once
+backfill completes, all rows have persisted factors.
 
 | Column | Type | Description | Source |
 |--------|------|-------------|--------|
@@ -175,10 +218,11 @@ explanation factors at classification write time:
 | `expl_gpu_has_profiling_data` | `BOOLEAN` | Tier-1 vs Tier-2 classification | `GPURec.HasProfilingData` |
 | `expl_gpu_memory_bound` | `BOOLEAN` | Memory-bound flag | `GPURec.MemoryBoundDetected` |
 
-**Engine change:** Extend `GPURec` or return `GPUExplanation` from `RecommendGPUWithSettings`. Pass through `StoreGPUClassifications` batch UPDATE.
+**Engine change:** Extend `GPURec` with explanation fields embedded directly.
+Pass through `StoreGPUClassifications` batch UPDATE.
 
-**API change:** Prefer persisted explanation columns on detail; fall back to digest
-recompute only when columns are NULL (pre-migration rows).
+**API change:** Read persisted explanation columns when `?include=explanation`;
+fall back to digest recompute only when columns are NULL (pre-backfill rows).
 
 ---
 
@@ -192,6 +236,11 @@ Use **identical explanation columns** as container (`expl_*` prefix), one set pe
 `(namespace, term, engine, schedule_type)` row. Namespace aggregates digest rows
 across containers; explanation columns describe the aggregated window, not
 individual containers.
+
+**Business hours rows:** Same explanation columns on BH rows (`schedule_type =
+'business_hours'`). Show explanation for BH rows if the row exists. The UI hides
+the entire BH section when BH scheduling is not configured for the namespace — no
+special backend handling required.
 
 **Engine change:** Mirror container explanation capture in `recommendNamespaces` loop (~L146–180).
 
@@ -219,9 +268,10 @@ Existing columns (`cpu_util_p50`, `trend_slope`, `stranded_resource`,
 `suggested_instance_type`, `instance_type_reason`) remain; explanation columns
 capture inputs to sizing that are not already stored.
 
-**Engine change:** Extend `NodeRec` with `Explanation NodeExplanation` populated in `RecommendNodes` after `sizeNodeForEngine`.
+**Engine change:** Extend `NodeRec` with explanation fields embedded directly,
+populated in `RecommendNodes` after `sizeNodeForEngine`.
 
-**API change:** Add `explanation` to `NodeUtilizationEngineRec` in [`internal/model/node_cpu_mem_recommendation.go`](../../internal/model/node_cpu_mem_recommendation.go).
+**API change:** Add `explanation` to `NodeUtilizationEngineRec` in [`internal/model/node_cpu_mem_recommendation.go`](../../internal/model/node_cpu_mem_recommendation.go) when `?include=explanation`.
 
 ---
 
@@ -233,18 +283,15 @@ capture inputs to sizing that are not already stored.
 | Column | Type | Description | Source |
 |--------|------|-------------|--------|
 | `expl_data_days` | `INTEGER` | Days in window | `rec.DataDays` |
-| `expl_usage_ratio_bp` | `INTEGER` | Usage/capacity ratio (basis points) | `rec.UsageRatio * 10000` |
 | `expl_oversized_threshold_bp` | `INTEGER` | Configured oversized threshold | `PVCThresholdSettings.OversizedThreshold` |
 | `expl_near_full_threshold_bp` | `INTEGER` | Configured near-full threshold | `PVCThresholdSettings.NearFullThreshold` |
-| `expl_growth_bytes_per_day` | `BIGINT` | Decay-weighted growth slope | `computePVCGrowthSlope` |
 | `expl_recommended_size_multiplier` | `INTEGER` | Size multiplier applied (×100) | `PVCThresholdSettings.RecommendedSizeMultiplier` |
 | `expl_min_recommended_gib` | `INTEGER` | Floor GiB applied | `PVCThresholdSettings.MinRecommendedGiB` |
 | `expl_classification_reason` | `TEXT` | `orphaned` / `oversized` / `near_full` / `healthy` | switch branch in `computePVCRecommendation` |
 
-Several values overlap existing columns (`usage_ratio`, `growth_bytes_per_day`,
-`data_days`); explanation columns capture **thresholds and branch reason** not
-already stored. Consider aliasing existing columns in API rather than duplicating
-in DB where redundant — final schema review should drop duplicates.
+**Not new columns:** `usage_ratio` and `growth_bytes_per_day` already exist on
+the row. The API assembles them into `explanation` from those existing columns
+(see Cross-Cutting Design — assemble from existing + new columns).
 
 ---
 
@@ -312,14 +359,41 @@ TEXT columns if not sufficiently covered by `gpu_timeslice_rationale`.
 
 ---
 
+### 9. Node GPU time-slicing (`node_gpu_timeslicing_recommendations` — Phase 0)
+
+**Prerequisite:** Node GPU time-slicing recommendations are currently computed at
+API read time from digests. Phase 0 creates a `node_gpu_timeslicing_recommendations`
+table and moves compute-at-read to compute-at-ingest. Explanation columns for this
+type are added in Phase 2c after the table exists.
+
+See [Phase 0: Prerequisites](#phase-0--prerequisites) below.
+
+---
+
 ## Implementation Phases
+
+### Phase 0 — Prerequisites (1 PR)
+
+Required before Phase 2c GPU work:
+
+1. Create `node_gpu_timeslicing_recommendations` table (migration)
+2. Move node GPU time-slicing compute-at-read logic to compute-at-ingest
+   (`PersistNodeGPUTimeSlicingRecs` or equivalent)
+3. Update list/detail handlers to read from the new table instead of live digest
+   queries
+
+Explanation columns for node GPU time-slicing are added in Phase 2c once this
+table exists.
 
 ### Phase 1 — Schema and types (1 PR)
 
 1. Add `migrations/000145_recommendation_explanation_columns.{up,down}.sql`
-2. Add `internal/engine/explanation.go` with all explanation structs
-3. Extend engine rec structs with embedded `Explanation` field (zero value safe)
-4. Unit tests: explanation struct JSON tags match OpenAPI naming (snake_case)
+   (live tables **and** history tables: `recommendation_history`,
+   `vm_recommendation_history`, `quota_recommendation_history`, etc.)
+2. Extend engine rec structs (`CPURec`, `MemoryRec`, `NodeRec`, `GPURec`, etc.)
+   with embedded explanation fields (zero value safe)
+3. Add API mapping types for the nested `explanation` JSON shape
+4. Unit tests: explanation field JSON tags match OpenAPI naming (snake_case)
 
 ### Phase 2 — Engine capture (2–3 PRs)
 
@@ -327,29 +401,53 @@ Split by resource type to keep reviews manageable:
 
 | PR | Files | Functions |
 |----|-------|-----------|
-| 2a Container + namespace | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go` | Return + populate explanation |
+| 2a Container + namespace | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go` | Embed + populate explanation fields on rec structs |
 | 2b Node + PVC | `recommend_nodes.go`, `pvc_recommend.go` | Same |
-| 2c GPU + VM | `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go` | Same |
+| 2c GPU + VM + node GPU TS | `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, node GPU TS persist | Same (node GPU TS requires Phase 0) |
 | 2d Quota + CRQ | `recommend_quota.go`, `recommend_cluster_quota.go` | Same |
 
 Each PR updates the corresponding `Write*` / `Persist*` SQL to include new columns.
+History archive paths (`WriteRecommendationHistory`, etc.) copy explanation
+columns alongside recommendation values.
+
+### Phase 2.5 — Backfill (1 PR or ops runbook)
+
+After deploying migration + engine changes, run a one-shot backfill pass:
+
+1. Iterate recommendation rows where `expl_data_days IS NULL` (or any sentinel
+   explanation column)
+2. Load corresponding digests for each container/node/PVC/etc.
+3. Re-run the engine for that row
+4. Write **only** the explanation columns — do **not** change recommendation values
+5. Trigger via a management endpoint or CLI command (e.g.
+   `ros-ocp-backend backfill-explanations --org-id … --resource container`)
+
+GPU rows backfilled here eliminate the need for digest recompute fallback on
+detail fetch. Container/namespace/node/PVC/quota/VM rows get explanations without
+waiting for natural re-ingestion.
 
 ### Phase 3 — API exposure (1 PR)
 
-1. Add `Explanation` field to API DTOs (`EngineRecommendation`, `GPURecommendation`,
+1. Add `?include=explanation` query parameter to detail handlers
+2. Add `Explanation` field to API DTOs (`EngineRecommendation`, `GPURecommendation`,
    `NodeUtilizationEngineRec`, `PVCRecommendationResponse`, quota/VM handlers)
-2. Map DB columns → nested `explanation` in serializers (not list DTOs)
-3. Update OpenAPI spec (`docs/openapi/openapi.yaml` or generated spec)
-4. Contract tests: detail response includes `explanation` when columns populated
+3. Map DB columns (existing + new `expl_*`) → nested `explanation` in serializers
+   when `include=explanation` is set; omit entirely otherwise
+4. Include `confidence_level` from existing column in explanation response
+5. Update OpenAPI spec (`docs/openapi/openapi.yaml` or generated spec)
+6. Contract tests: detail response includes `explanation` only when requested and
+   columns are populated
 
 ### Phase 4 — Frontend guidance (documentation only)
 
 Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 - Generic `<RecommendationExplanation>` component consuming `explanation` object
+- Request detail with `?include=explanation` when the explainability panel is shown
 - Label map from factor keys → user-facing strings (i18n keys)
-- Hide section when all explanation fields are null (pre-migration rows)
-- Do **not** fetch explanations separately — they arrive on detail GET
+- Hide section when all explanation fields are null (pre-backfill rows)
+- Hide BH section when BH scheduling is not configured (UI-only; backend returns
+  explanation for BH rows if they exist)
 
 ---
 
@@ -359,7 +457,7 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 - Extend existing engine tests (`recommend_cpu_test.go`, `pvc_recommend_test.go`,
   `recommend_nodes_test.go`, `vm_recommender_test.go`, `recommend_quota_test.go`)
-  to assert explanation fields match known inputs
+  to assert explanation fields on rec structs match known inputs
 - Table-driven tests for classification branches (PVC orphaned vs oversized,
   quota tighten vs optimal, VM hysteresis held)
 
@@ -367,40 +465,57 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 - Insert recommendation via `Write*` functions; SELECT explanation columns;
   assert non-null for synthetic digest fixtures
+- Verify history archive copies explanation columns
 - Pattern: follow `recommend_all_test.go` / `WritePVCRecommendations_BatchUpsert`
 
 ### API contract tests
 
 - Extend `handlers_*_integration_test.go` detail fixtures
-- Assert `explanation` present and omits from list responses (ADR-0294 compliance)
+- Assert `explanation` present when `?include=explanation` and omitted otherwise
+- Assert `explanation` omits from list responses (ADR-0294 compliance)
 
 ### Migration test
 
-- `tests/migrations/` or manual: `migrate up 000145`, verify `\d recommendation_sets` shows new columns, `migrate down` drops cleanly
+- `tests/migrations/` or manual: `migrate up 000145`, verify `\d recommendation_sets`
+  and `\d recommendation_history` show new columns, `migrate down` drops cleanly
+
+### Backfill tests
+
+- Unit test backfill logic: engine re-run writes explanation columns without
+  mutating recommendation values
+- Integration test: NULL explanation row → backfill → columns populated,
+  recommendation values unchanged
 
 ---
 
 ## Rollout
 
-1. Deploy migration (additive, nullable — zero downtime)
+1. Deploy migration (additive, nullable — zero downtime; includes history tables)
 2. Deploy engine changes — new rows get explanations; old rows stay NULL
-3. Deploy API — UI shows "Explanation unavailable" for NULL (or hides panel)
-4. No backfill required — explanations appear as clusters re-ingest
-5. Optional: trigger `update_cost_model_costs`-style recalc endpoint per resource
-   if immediate backfill is desired (out of scope v1)
+3. Deploy API with `?include=explanation` — UI opts in when ready
+4. Run backfill (Phase 2.5) — populate explanation columns for existing rows
+   without changing recommendations
+5. Remove GPU digest recompute fallback once backfill completes for GPU rows
+
+New rows receive explanations automatically on ingestion. History snapshots
+include explanation factors from the moment Phase 2 ships.
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-1. **Prefix convention:** `expl_` DB prefix vs unprefixed names — plan uses `expl_`
-   to distinguish from recommendation outputs; confirm in schema review.
-2. **PVC duplication:** `usage_ratio` and `growth_bytes_per_day` already exist —
-   avoid redundant `expl_*` copies; API can assemble from both.
-3. **Node GPU time-slicing:** defer explanation persistence until node GPU recs
-   are written to a table (currently API-computed).
-4. **Business hours:** same explanation columns on BH rows; UI may hide unless
-   BH schedule is enabled for the namespace.
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | Column prefix convention | **`expl_` prefix** for all new explanation columns |
+| 2 | PVC duplicate columns | **No duplicates** — API assembles `usage_ratio` and `growth_bytes_per_day` from existing columns; only add `expl_*` for values not already stored |
+| 3 | Node GPU time-slicing | **Prerequisite for Phase 2c** — create `node_gpu_timeslicing_recommendations` table in Phase 0; explanation columns added after table exists |
+| 4 | Business hours | Show explanation for BH rows if the row exists; **UI hides BH section** when BH scheduling is not configured — no special backend handling |
+| 5 | Confidence column | Use existing **`confidence_level`** column — do not add `expl_confidence` |
+| 6 | Struct safety | **Embed explanation fields in engine rec structs** — do not copy to a separate `Explanation` type |
+| 7 | GPU read path | **Persist at classification; stop read-time recompute** — digest fallback only for NULL rows during backfill window |
+| 8 | API inclusion | **`?include=explanation` opt-in** — not included by default on detail responses |
+| 9 | History tables | **Include explanation columns** on history tables; archive explanation with recommendation |
+| 10 | Backfill | **One-shot backfill pass** (Phase 2.5) writes explanation columns only; triggered via management endpoint or CLI |
 
 ---
 
@@ -408,11 +523,13 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 | Area | Files to touch |
 |------|----------------|
-| Migration | `migrations/000145_recommendation_explanation_columns.{up,down}.sql` |
-| Engine types | `internal/engine/explanation.go`, `internal/engine/types.go` |
+| Migration | `migrations/000145_recommendation_explanation_columns.{up,down}.sql` (live + history tables) |
+| Phase 0 | New migration for `node_gpu_timeslicing_recommendations`, node GPU TS persist + handler |
+| Engine types | `internal/engine/types.go` (extend `CPURec`, `MemoryRec`, `NodeRec`, `GPURec`, etc.) |
 | Engine logic | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go`, `recommend_nodes.go`, `pvc_recommend.go`, `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, `recommend_quota.go`, `recommend_cluster_quota.go` |
+| Backfill | New CLI command or management endpoint (e.g. `cmd/backfill-explanations/` or admin handler) |
 | Models | `internal/model/recommendation_set_native.go`, `namespace_recommendation_set_native.go`, `node_cpu_mem_recommendation.go`, `detail_response.go`, `vm_recommendation.go` |
-| API handlers | `handlers_pvc.go`, `handlers_vm_recs.go`, `handlers_quota_recs.go`, `handlers_node_utilization.go`, `handlers_gpu_mig.go` |
+| API handlers | `handlers_pvc.go`, `handlers_vm_recs.go`, `handlers_quota_recs.go`, `handlers_node_utilization.go`, `handlers_gpu_mig.go` (+ `?include=explanation` parsing) |
 | OpenAPI | `docs/openapi/` |
 | Tests | `internal/engine/*_test.go`, `internal/api/handlers_*_integration_test.go` |
 | Docs | ADR-0296 (this plan), optional `docs-site/` UI section |
