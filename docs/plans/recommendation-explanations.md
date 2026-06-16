@@ -1,7 +1,7 @@
 # Implementation Plan: Recommendation Explanation Factors
 
 **ADR:** [ADR-0296](../adr/0296-recommendation-explanation-factors-typed-columns.md)  
-**Branch:** `pgarciaq-rosocp-superpowers-phase13`  
+**Branch:** `pgarciaq-rosocp-superpowers-phase14`  
 **Status:** Planned
 
 ## Goal
