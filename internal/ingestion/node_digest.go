@@ -191,6 +191,8 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 		return nil
 	}
 
+	startTime := time.Now()
+
 	EnsureNodeDigestPartitions(ctx, pool, accumulators)
 
 	entries := make([]nodeDigestEntry, 0, len(accumulators))
@@ -216,8 +218,9 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 		return fmt.Errorf("commit node digests tx: %w", err)
 	}
 
-	logging.ForOrg(orgID, clusterUUID).Infof("FlushNodeDigests: upserted %d node digests",
-		len(accumulators))
+	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+		"elapsed": time.Since(startTime).Round(time.Millisecond),
+	}).Infof("FlushNodeDigests: upserted %d node digests", len(accumulators))
 	return nil
 }
 

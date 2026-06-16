@@ -223,6 +223,8 @@ func parseAndDigestNamespaceCSVStream(
 		return upsertNamespaceUsageSamples(ctx, pool, batch, orgID, clusterUUID)
 	}
 
+	startTime := time.Now()
+
 	rowCount, err := forEachNamespaceCSVRow(r, func(row NamespaceMetricRow) error {
 		sampleBatch = append(sampleBatch, row)
 		if len(sampleBatch) >= streamSampleFlushRows {
@@ -257,9 +259,14 @@ func parseAndDigestNamespaceCSVStream(
 	}
 
 	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
-	logging.ForOrg(orgID, clusterUUID).Infof(
+	streamElapsed := time.Since(startTime).Round(time.Millisecond)
+	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+		"stream_elapsed": streamElapsed,
+	}).Infof(
 		"ProcessNamespaceCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
 		rowCount, len(grouped), digestBatchesFlushed)
+
+	upsertStart := time.Now()
 
 	if len(grouped) > 0 {
 		ensureNamespaceDigestPartitionsForKeys(ctx, pool, grouped)
@@ -274,6 +281,9 @@ func parseAndDigestNamespaceCSVStream(
 		}
 	}
 
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessNamespaceCSVToDigests: upserted %d digests", len(grouped))
+	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+		"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
+		"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
+	}).Infof("ProcessNamespaceCSVToDigests: upserted %d digests", len(grouped))
 	return rowCount, nil
 }

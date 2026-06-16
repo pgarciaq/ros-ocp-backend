@@ -236,6 +236,8 @@ func parseAndDigestCSVStream(
 		return upsertUsageSamples(ctx, pool, batch, orgID, clusterUUID)
 	}
 
+	startTime := time.Now()
+
 	rowCount, err := forEachCSVRow(r, func(row MetricRow) error {
 		sampleBatch = append(sampleBatch, row)
 		if len(sampleBatch) >= streamSampleFlushRows {
@@ -286,8 +288,13 @@ func parseAndDigestCSVStream(
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
 	useSingleIngestTx = singleIngestTxEligible(rowCount, len(grouped), digestBatchesFlushed)
 	metrics.SetIngestGroupsInMemory(len(grouped))
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
+	streamElapsed := time.Since(startTime).Round(time.Millisecond)
+	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+		"stream_elapsed": streamElapsed,
+	}).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
 		rowCount, len(grouped), digestBatchesFlushed)
+
+	upsertStart := time.Now()
 
 	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
 		return rowCount, fmt.Errorf("digest partitions: %w", err)
@@ -314,14 +321,20 @@ func parseAndDigestCSVStream(
 		if err := commitIngestInSingleTx(ctx, pool, deferredSamples, grouped, gpuAccum, nodeAccum, scheduleCache, orgID, clusterUUID); err != nil {
 			return rowCount, err
 		}
-		logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
+		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+			"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
+			"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
+		}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
 		return rowCount, nil
 	}
 
 	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
 		return rowCount, err
 	}
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
+	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+		"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
+		"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
+	}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
 
 	if gpuAccum != nil {
 		if err := gpuAccum.flush(ctx, pool, orgID, clusterUUID); err != nil {
