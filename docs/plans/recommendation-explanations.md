@@ -791,6 +791,74 @@ already available in the source code is exposed.
 
 ---
 
+## Performance and Scale
+
+### Engine computation overhead: none
+
+Explanation factors are values already computed internally during recommendation
+generation (percentiles, margins, peaks, OOM counts). We are persisting values
+that were previously discarded. Zero additional computation at recommendation time.
+
+### API response size: opt-in only
+
+The `?include=explanation` parameter is opt-in. Default responses are unchanged.
+No performance impact on existing consumers.
+
+### Migration speed: instant
+
+`ADD COLUMN ... NULL` on PostgreSQL is metadata-only (instant), even on large
+partitioned tables. No table rewrite required.
+
+### Row width increase: acceptable
+
+Each recommendation table gains ~6–10 nullable typed columns (float64, int, short
+strings), adding ~80–120 bytes per row when populated. This is far more compact
+than JSONB alternatives and negligible relative to the existing row width.
+
+### History table growth
+
+History tables already have a retention policy that limits how long rows are kept.
+Explanation columns add ~10% more storage per history row — a rounding error
+relative to the row itself.
+
+Future optimizations (not in scope for this plan, but noted for reference):
+- **PostgreSQL table partitioning by age** — partition history by month, drop old
+  partitions efficiently
+- **Compression** — PostgreSQL TOAST already compresses large values; for further
+  gains, consider TimescaleDB compression or pg_partman with tablespace tiering
+- **Archival** — move history older than N months to a read-only historian/cold
+  storage if query patterns warrant it
+
+None of these are needed today given the current data volumes and retention policy.
+
+### Backfill compute cost: one-time, bounded
+
+Backfill is a one-time operation. Per the native engine benchmark
+(https://pgarciaq.github.io/ros-ocp-backend/operations/benchmark-report/),
+full recommendation recomputation completes in ~35 minutes for the current dataset.
+Adding explanation factor capture to that recomputation adds negligible overhead
+(it's the same computation, just persisting more output columns).
+
+The backfill endpoint recomputes recommendations with explanation factors enabled,
+replacing existing recommendation rows. This is safe because the algorithm is
+deterministic — recomputation produces identical recommendations plus the new
+explanation columns.
+
+### Digest data availability: not a concern
+
+Backfill recomputes recommendations from the existing digest data in the database.
+Since we retain digests for the same duration as recommendations, all current
+recommendation rows have their source digests available. No data loss scenario
+exists for the backfill.
+
+### Query performance: no impact
+
+Explanation columns are never used in WHERE clauses, JOIN conditions, or ORDER BY.
+They are only included in SELECT when `?include=explanation` is requested. No index
+pressure, no query plan changes for existing queries.
+
+---
+
 ## Resolved Decisions
 
 | # | Question | Decision |
