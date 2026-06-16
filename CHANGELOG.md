@@ -11,7 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Planned
 
 - Typed explanation factor columns for all recommendation types ([ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
-- GPU time-slicing recommendation persistence — move node time-slicing from compute-at-read to compute-at-ingest ([ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md))
 - `?include=explanation` API parameter for opt-in explanation data on detail endpoints
 - User-facing documentation: "Understanding Your Recommendations" page
 - Backfill mechanism for existing recommendations without explanation columns
@@ -23,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - [ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md): GPU time-slicing recommendation persistence at ingest
 - Implementation plan: [`docs/plans/recommendation-explanations.md`](docs/plans/recommendation-explanations.md) covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
 - Implementation plan: [`docs/plans/gpu-time-slicing-persistence.md`](docs/plans/gpu-time-slicing-persistence.md)
+- **GPU time-slicing recommendation persistence** ([ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md)): move node time-slicing from compute-at-read to compute-at-ingest
+  - Migration 000145: `node_gpu_timeslicing_recommendations` table and `node_gpu_timeslicing_recommendations_history` history table
+  - `ComputeAndPersistNodeGPUTimeSlicingRecs` engine function persists recommendations during ingest
+  - GPU time-slicing list API reads from the persisted table with compute-at-read fallback for unmigrated rows
+  - `GET /recommendations/openshift/gpu/timeslicing/history` public endpoint for historical time-slicing recommendations
+  - `POST /recommendations/openshift/internal/backfill-gpu-timeslicing` admin endpoint to backfill persisted rows
+  - 90-day history retention for time-slicing recommendation history
+  - Sources cleaner integration for persisted time-slicing and history rows
+  - OpenAPI spec updated for new endpoints and response schemas
 
 ---
 
