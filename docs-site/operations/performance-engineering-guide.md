@@ -1,11 +1,11 @@
 # Performance Engineering Guide
 
-Operational guidance for sizing, tuning, and monitoring Red Hat Cost Management
-and ROS-OCP-Backend in **on-prem** and **SaaS** deployments.
+Operational guidance for sizing, tuning, and monitoring **ROS-OCP-Backend**
+(the OpenShift resource optimization service). This document covers the Go
+processor, API, and PostgreSQL data path only.
 
-For the full technical audit (code references, risk register, priority matrix),
-see the internal document:
-[`docs/audits/performance-scalability-analysis.md`](../../docs/audits/performance-scalability-analysis.md).
+For the full internal audit (code references, risk register, scaling cliffs),
+see [`docs/audits/performance-scalability-analysis.md`](../../docs/audits/performance-scalability-analysis.md).
 
 **Last updated:** 2026-06-16
 
@@ -15,242 +15,307 @@ see the internal document:
 
 | Symptom | Likely cause | First action |
 |---------|--------------|--------------|
-| All API costs `0.00` after ingest | Cost model not applied | Update cost model; trigger recalc |
-| UI shows old data after backend fix | 1-hour API cache | Flush Valkey; hard-refresh browser |
-| ROS API timeouts on large fleets | PostgreSQL `work_mem` too low | Apply Medium DB profile (below) |
-| Ingest never completes | Listener CPU / Kafka lag | Scale listener; check consumer lag |
-| `too many connections` | Connection pool exhaustion | Lower HPA max replicas or add PgBouncer |
-| Summary queue growing | Under-provisioned workers | Scale summary/OCP Celery workers |
+| Optimizations page slow or timing out | PostgreSQL undersized or `work_mem` too low | Increase DB memory; see [Database sizing](#database-sizing) |
+| Recommendations stale after ingest | Kafka lag or processor crash loop | Check processor logs; Kafka consumer lag |
+| `too many connections` in ROS logs | Pool × replicas exceeds PostgreSQL limit | Lower replicas or raise `max_connections`; tune `ROS_DB_MAX_CONNS` |
+| Pool acquire timeouts (5s) | Connection starvation | Check `rosocp_db_pool_acquired_conns`; reduce concurrent load |
+| API 504 on savings / fleet summary | Query exceeds gateway timeout | Set `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` (SaaS); increase DB `work_mem` |
+| Processor OOMKilled | Heap spike during large manifest | Set `GOMEMLIMIT` to ~90% of memory limit; increase processor memory |
+| Ingest never completes | Single Kafka partition bottleneck | Increase topic partitions; scale processor replicas |
+| All savings `$0.00` | Masu unreachable or cost model empty | Verify `KOKU_MASU_URL`; check masu logs |
+| Namespace tab slower than container tab | Expected — namespace list uses heavier SQL | Track P1 backlog; use filters to narrow results |
 
 ---
 
 ## Architecture at a glance
 
-**On-prem** (cost-onprem Helm chart):
+ROS-OCP-Backend runs as **separate Deployments** (same container image, different commands):
 
-- Single PostgreSQL hosts Koku, ROS, Kruize, and RBAC databases.
-- OCP data only; ingestion is **push** (operator → ingress → Kafka → listener).
-- Aggregation runs in **PostgreSQL** (no Trino).
+| Deployment | Command | Role |
+|------------|---------|------|
+| **ros-processor** | `rosocp start processor` | Consumes Kafka, downloads CSVs, writes digests, runs recommendation engine |
+| **ros-api** | `rosocp start api` | Serves REST API to the UI |
+| **ros-housekeeper** | `rosocp start housekeeper` | Partition retention, Sources cleanup (cron-style) |
 
-**SaaS** (console.redhat.com):
+Data flow:
 
-- **Schema-per-tenant** PostgreSQL (`org{org_id}`) for reporting data.
-- Cloud providers aggregated via **Trino** over Parquet in S3, then written to summary tables.
-- Separate read/write API tiers; workers scale with **KEDA** on queue depth.
-
----
-
-## On-prem sizing
-
-### Do not use chart defaults in production
-
-The Helm chart defaults (`512Mi` PostgreSQL, `30Gi` PVC, `work_mem=4MB`) are
-**demo/dev only**. The chart comments and
-[`database-tuning.md`](https://github.com/redhatinsights/cost-onprem-chart/blob/main/docs/operations/database-tuning.md)
-document production profiles.
-
-### Recommended starting profile (5k–15k containers)
-
-```yaml
-database:
-  resources:
-    requests:
-      memory: "4Gi"
-      cpu: "1000m"
-    limits:
-      memory: "4Gi"
-      cpu: "4000m"
-  storage:
-    size: "100Gi"
-  postgresqlConfiguration:
-    shared_buffers: "1GB"
-    work_mem: "32MB"
-    effective_cache_size: "3GB"
-    max_connections: "200"
-    maintenance_work_mem: "256MB"
-    random_page_cost: "1.1"
+```
+Cluster operator → Ingress upload → Kafka (hccm.ros.events)
+    → ros-processor → PostgreSQL (digests + recommendation_sets)
+    → ros-api → UI
 ```
 
-### Connection budget
-
-Default `max_connections=200`. Stay within this budget:
-
-| Component | Connections (defaults) |
-|-----------|----------------------|
-| ROS API | 5 × max HPA replicas (4) = 20 |
-| ROS processor + housekeeping | ~12 |
-| Koku API + Masu | ~10 |
-| Koku Celery | ~20 |
-| RBAC + Kruize | ~10 |
-| **Total (approx.)** | **~67** |
-
-If using external DBaaS with a lower cap, reduce `ros.dbMaxConns` and
-`ros.api.autoscaling.maxReplicas` together.
-
-### Worker and API scaling
-
-| Component | Demo | Production suggestion |
-|-----------|------|------------------------|
-| Koku API | 1 replica, 2 workers | 2 replicas, 3 workers, 2 CPU |
-| Summary Celery | 1 × concurrency 5 | 2 replicas, 4Gi memory each |
-| OCP Celery | 1 × concurrency 5 | 2 replicas for multi-source |
-| Listener | 1 replica | 2 replicas if Kafka partitions ≥ 2 |
-| Valkey | default | 1Gi memory limit |
+The **native Go engine** (default) computes recommendations from daily digest
+tables. Kruize is legacy; disable it in on-prem for best performance
+(`ROS_ENABLED_PLUGINS` without `kruize`).
 
 ---
 
-## SaaS operations notes
+## Deployment modes
 
-### Enable the read replica for report traffic
+### On-prem (cost-onprem Helm chart)
 
-Production deploys a read-only database (`cost-db-ro`) but **`USE_READREPLICA`
-defaults to `false`**. Setting it to `true` on `koku-api-reads` offloads report
-queries from the write primary.
+- ROS shares a **single PostgreSQL instance** with Koku, masu, and other services.
+- RBAC may be disabled; CSV downloads use internal MinIO/S3 URLs on `ROS_CSV_ALLOWED_HOSTS`.
+- Set **`GOMEMLIMIT`** via chart value `ros.goMemLimit` (recommended ~90% of pod memory limit).
+- Chart PostgreSQL defaults (512Mi, `work_mem=4MB`) are **demo only** — see [Database sizing](#database-sizing).
 
-### Worker autoscaling
+### SaaS (console.redhat.com / Clowder)
 
-Summary workers scale **1–10 replicas** via KEDA when Redis queue depth exceeds
-threshold (~13.5). Sustained max replicas indicates tenant overload — check
-Unleash **large-customer** / **penalty-customer** flags.
-
-### Large tenants
-
-Unleash flags route heavy tenants to XL or penalty worker queues and limit
-concurrent summary tasks to **2** with a **4-hour** lock timeout (vs 1 hour
-default).
+- Database, Kafka, and RBAC endpoints injected by Clowder.
+- RBAC cache (`ROS_RBAC_CACHE_TTL=60`) is important — every list call would otherwise hit RBAC HTTP.
+- Ingress/gateway timeout ≈ **30 seconds** — configure `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` on the API Deployment.
 
 ---
 
-## Caching
+## Database sizing
 
-### API response cache
+ROS is **PostgreSQL-bound** for both ingest (batched upserts) and API (keyset list queries).
 
-Report endpoints cache responses for **3600 seconds (1 hour)** in Valkey/Redis.
+### Minimum production profile (shared on-prem DB, up to ~5k containers)
 
-After any backend change that affects API output:
+| Parameter | Demo default | Recommended start |
+|-----------|--------------|-------------------|
+| PostgreSQL memory | 512Mi | **4Gi+** |
+| `max_connections` | 100 | **200+** |
+| `work_mem` | 4MB | **16MB–64MB** |
+| PVC | 30Gi | **100Gi+** (depends on retention) |
 
-1. Restart `koku-server` (or rollout API deployment).
-2. Flush cache: `redis-cli FLUSHALL` (or scoped flush of `api:*` keys).
-3. Hard-refresh the browser (`Ctrl+Shift+R`).
+Connection budget formula:
 
-Set `CACHED_VIEWS_DISABLED=True` only for debugging — it removes a critical
-latency optimization.
+```
+ROS connections ≈ ROS_DB_MAX_CONNS × (ros-api pods + ros-processor pods + housekeeper)
+Total PG connections ≈ ROS + Koku API + Koku workers + masu + overhead
+Keep total < 70% of max_connections
+```
 
-### RBAC cache
+Default **`ROS_DB_MAX_CONNS=5`** per process (`internal/config/config.go`). Example: 3 API + 2 processor pods → 25 ROS connections before housekeeper.
 
-RBAC permissions cache for **300 seconds** per user/org (configurable via
-`RBAC_CACHE_TIMEOUT`).
+### Retention and disk
 
----
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `ROS_RETENTION_MONTHS` | 6 | Daily digest partitions |
+| `ROS_SAMPLE_RETENTION_DAYS` | 45 | Raw `container_usage_samples` (optional; digests power UI plots) |
+| `ROS_HISTORY_RETENTION_DAYS` | 90 | Recommendation history/quality tables |
 
-## Celery queues
-
-### On-prem active queues
-
-| Queue | Purpose |
-|-------|---------|
-| `ocp` | OCP report processing |
-| `summary` | Daily summary table population |
-| `cost_model` | Rate application |
-| `priority` | Delayed / high-priority work |
-| `celery` | Default (beat tasks, maintenance) |
-
-Download, HCS, refresh, and subs queues are **disabled** (replicas: 0) in OCP-only mode.
-
-### Tuning knobs
-
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `CELERY_WORKER_PREFETCH_MULTIPLIER` | 1 | One task in flight per worker slot |
-| `MAX_CELERY_TASKS_PER_WORKER` | 10 | Recycle worker child processes (memory) |
-| `pollingTimer` | 300s (on-prem) | Orchestrator poll interval |
-
-Monitor queue depth via Masu metrics (`collect_queue_metrics`).
+Housekeeper drops old partitions — ensure cron/`housekeeper --partitions` runs on schedule.
 
 ---
 
-## ROS-OCP-Backend
+## Knobs that matter
 
-### Database pool
+### Processor / ingest
 
-Each ROS process uses **pgxpool** with `ROS_DB_MAX_CONNS=5` (Helm:
-`ros.dbMaxConns`). Total ROS connections = **5 × number of ROS pods**.
+| Variable | Default | When to change |
+|----------|---------|----------------|
+| `ROS_KAFKA_PARALLEL` | `true` | Set `false` only for debugging ordering issues |
+| `ROS_KAFKA_WORKERS` | `3` | Match expected partition parallelism; rarely need >5 |
+| `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Raise for very large single-file CSVs on slow storage |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Lower (500) if processor OOM during ingest; raise if flush overhead dominates |
+| `ROS_INGEST_STRICT_ANALYTICS` | `true` | Set `false` to commit recommendations even if history/quality writes fail (degraded mode) |
+| `ROS_CSV_MAX_BODY_BYTES` | 524288000 (500 MiB) | Lower if ingress should reject oversized payloads earlier |
+| `ROS_CSV_ALLOWED_HOSTS` | (empty) | **Required in production** — comma-separated download host allowlist |
+| `ROS_SYNTH_MANIFEST_QUIET_PERIOD` | `30` (seconds) | Debounce for synthesized manifest IDs |
 
-Set `GOMEMLIMIT` to ~90% of container memory limit (chart default: `922MiB` for
-1Gi pods).
+### API
 
-### Retention
+| Variable | Default | When to change |
+|----------|---------|----------------|
+| `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | API session timeout; rarely change |
+| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `45000` | **Set `28000` on SaaS** to fit ingress budget |
+| `ROS_API_MAX_OFFSET` | `10000` | Cap on offset pagination depth |
+| `ROS_RBAC_CACHE_TTL` | `60` (seconds) | `0` disables RBAC cache (dev only) |
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `500` | Raise for many concurrent users per org |
+| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` (seconds) | Fleet/savings summary LRU TTL |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max cached fleet/savings rollup entries |
 
-- **`ROS_SAMPLE_RETENTION_DAYS=45`** — raw usage samples (primary disk driver).
-- **`ROS_RETENTION_MONTHS=6`** — daily digests.
+### Recommendation engine
 
-Lowering sample retention reduces PostgreSQL disk use by roughly **60–80%**
-compared to the legacy 180-day default.
+| Variable | Default | When to change |
+|----------|---------|----------------|
+| `ROS_MAX_LOOKBACK_DAYS` | `90` | Digest query window for recommendations |
+| `ROS_THRESHOLD_RECALC_CONCURRENCY` | `3` | Parallel clusters on settings change; raise cautiously |
+| `ROS_RESHIP_CONCURRENCY` | `2` | Business-hours masu reship fan-out |
+| `ROS_STALENESS_THRESHOLD_HOURS` | `48` | When recs marked stale |
 
-### Query performance
+Per-term overrides: `ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS` etc. — see [Configurability Reference](../architecture/configurability.md).
 
-See [Query Performance](../query-performance.md) for index and pagination
-rules. At 200k+ containers per org, always filter on denormalized `org_id` —
-never scope through `clusters → rh_accounts` joins.
+### Connection pool (all processes)
+
+| Variable | Default | When to change |
+|----------|---------|----------------|
+| `ROS_DB_MAX_CONNS` | `5` | Raise to 8–10 **only** if PG headroom exists and pool metrics show sustained acquisition wait |
+| `ROS_DB_MIN_CONNS` | `2` | Warm connections; costs baseline PG slots |
+| `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | `0` = wait forever (not recommended) |
+| `ROS_DB_MAX_CONN_LIFETIME` | `30` (minutes) | |
+| `ROS_DB_STATEMENT_CACHE_MODE` | `describe` | pgx prepared-statement caching |
+
+Full list: [Configuration — Performance Tuning](../configuration.md#performance-tuning).
 
 ---
 
-## SLOs and alerting (starting points)
+## Go runtime memory
 
-| Signal | Target | Alert when |
-|--------|--------|------------|
-| OCP ingest → manifest complete | p95 < 30 min | > 45 min |
-| Report API latency (cached) | p95 < 3s | > 5s for 5 min |
-| PostgreSQL connections | < 70% of max | > 85% for 5 min |
-| Celery summary queue depth | steady state < 10 | > 50 for 15 min |
-| Kafka consumer lag (listener) | < 100 | > 1000 |
-| ROS `/readyz` | 99.9% | failing |
+| Variable | Recommendation |
+|----------|----------------|
+| `GOMEMLIMIT` | **~90% of container memory limit**, e.g. `922MiB` for a 1Gi limit. Use Go syntax (`MiB`), not Kubernetes `Mi`. |
+| GOMAXPROCS | Automatic via `automaxprocs` (imported in `cmd/start.go`) |
 
-### Useful checks
+Without `GOMEMLIMIT`, large manifest processing can OOMKill the processor before GC catches up.
+
+---
+
+## Kafka tuning
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `KAFKA_AUTO_COMMIT` | `false` (default) | Manual commit after successful processing — do not enable without understanding duplicate handling |
+| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | One group per environment |
+| `ROS_KAFKA_MAX_TRANSIENT_RETRIES` | `5` | Then message goes to DLQ |
+| `ROS_KAFKA_DLQ_TOPIC` | `hccm.ros.events.dlq` | Monitor for poison messages |
+| Topic partitions | ≥ processor replicas | Required for horizontal scale |
+
+**Scaling processors:** Adding pods without adding Kafka partitions does not increase throughput.
+
+---
+
+## What to monitor
+
+Prometheus metrics on **`PROMETHEUS_PORT`** (default **5005**), path `/metrics`.
+
+### Golden signals
+
+| Metric | What it tells you |
+|--------|-------------------|
+| `rosocp_pipeline_total_duration_seconds` | End-to-end manifest processing time |
+| `rosocp_pipeline_phase_duration_seconds{phase=...}` | Which phase is slow (download, recommend, write_digests, …) |
+| `rosocp_recommendation_duration_seconds{type="container"}` | Engine compute time per rec type |
+| `rosocp_db_pool_acquired_conns` / `rosocp_db_pool_max_conns` | Pool saturation |
+| `rosocp_db_pool_acquire_duration_seconds` | Cumulative wait for connections |
+| `rosocp_kafka_messages_processed_total` | Throughput |
+| `rosocp_kafka_dlq_messages_total` | Poison / exhausted retry messages |
+| `rosocp_api_statement_timeout_cancellations_total` | Queries killed by timeout |
+| `rosocp_echo_request_duration_seconds` | API latency by route template |
+
+### Cache health
+
+| Metric | Healthy pattern |
+|--------|-----------------|
+| `rosocp_fleet_summary_cache_hits_total` / misses | Hit ratio >60% on steady-state UI traffic |
+| `rosocp_rbac_cache_size` | Stable below max entries |
+| `rosocp_cost_cache_size` | Stable; evictions occasional |
+
+### Health endpoints
+
+| Path | Use |
+|------|-----|
+| `/healthz` | Liveness — goroutine count, GC pause, scheduler |
+| `/readyz` | Readiness — PostgreSQL ping |
+| `/status` | Basic app status |
+
+Alert if `/healthz` reports `goroutines` > `ROS_HEALTHZ_MAX_GOROUTINES` (5000) or GC pause > `ROS_HEALTHZ_MAX_GC_PAUSE_MS` (100).
+
+### External alerts (not exported by ROS)
+
+- **Kafka consumer lag** (Strimzi / burrow / broker JMX)
+- **PostgreSQL**: connections, disk, `pg_stat_user_tables.n_dead_tup`, long-running queries
+- **Ingress 5xx rate** on ROS API routes
+
+See also [Monitoring](../monitoring.md) and [Query Performance](../query-performance.md).
+
+---
+
+## Capacity planning
+
+### Rough ingest throughput
+
+Single processor pod on Medium DB, native engine, 3 Kafka workers:
+
+| Cluster size | Containers | Typical manifest time (order of magnitude) |
+|--------------|------------|------------------------------------------|
+| Small | <1k | 1–3 min |
+| Medium | 1k–5k | 3–10 min |
+| Large | 5k–15k | 10–30 min |
+| Very large | 15k+ | 30+ min — validate with `rosocp_pipeline_total_duration_seconds` |
+
+Times vary with CSV size, enabled plugins (GPU, VM, snapshot), and business-hours dual-stream ingest.
+
+### API capacity
+
+- Default container list uses **`org_container_keys`** — designed for fleets up to tens of thousands of containers with keyset pagination.
+- **Fleet summary** and **savings summary** are cached 5 minutes per org — first load after cache miss is expensive.
+- Plan **1 API pod per ~50 concurrent UI users** as a starting point; scale on `rosocp_echo_request_duration_seconds` p95.
+
+### When to add resources
+
+| Signal | Scale up |
+|--------|----------|
+| Kafka lag growing linearly | Processor replicas **and** topic partitions |
+| `rosocp_db_pool_acquired_conns` near max sustained | `ROS_DB_MAX_CONNS` or PG `max_connections` |
+| Recommend phase >50% of pipeline time | Processor CPU limit |
+| API p95 >2s on list routes | API replicas + PostgreSQL `work_mem`/IOPS |
+| Processor OOMKilled | Memory limit + `GOMEMLIMIT` |
+
+---
+
+## Troubleshooting workflows
+
+### 1. Ingest stuck / Kafka lag
 
 ```bash
-# On-prem: PostgreSQL connections
-kubectl exec -n cost-onprem statefulset/cost-onprem-database -- \
-  psql -U postgres -c "SELECT count(*) FROM pg_stat_activity;"
+# Processor logs (replace label selector for your chart)
+kubectl logs -n cost-onprem -l app.kubernetes.io/component=ros-processor --tail=100 | grep -iE 'error|failed|transient'
 
-# On-prem: top tables by size
-kubectl exec -n cost-onprem statefulset/cost-onprem-database -- \
-  psql -U postgres -d costonprem_ros -c \
-  "SELECT relname, pg_size_pretty(pg_total_relation_size(oid))
-   FROM pg_class WHERE relkind='r'
-   ORDER BY pg_total_relation_size(oid) DESC LIMIT 10;"
-
-# Flush API cache (on-prem)
-kubectl exec -n cost-onprem deploy/cost-onprem-cache -- redis-cli FLUSHALL
+# Check pipeline phase timing in metrics
+# rosocp_pipeline_phase_duration_seconds — which phase dominates?
 ```
+
+- Transient DB errors → message requeued (up to 5 retries)
+- After retries → DLQ topic; fix root cause and replay manually
+- Context canceled on rollout → normal; lag should recover
+
+### 2. API slow
+
+1. Check `rosocp_api_statement_timeout_cancellations_total` — if rising, DB tuning needed
+2. Check whether query uses **namespace** or **stale** filter (heavier paths)
+3. Flush is not needed — ROS has no Redis API cache; fleet summary LRU expires in 5m
+4. Verify RBAC cache hit rate if RBAC enabled
+
+### 3. Connection exhaustion
+
+```promql
+rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns > 0.8
+```
+
+Reduce replicas or increase PostgreSQL `max_connections`. Do not raise `ROS_DB_MAX_CONNS` without headroom.
+
+### 4. Post cost-model change slowdown
+
+Koku triggers **`POST /internal/recalculate-savings`** — fans out per cluster with coalescing. Expect temporary DB write load. Monitor `rosocp_savings_recalc_*` counters if exposed.
 
 ---
 
-## Priority improvements
+## Security vs performance
 
-| Priority | Action | Benefit |
-|----------|--------|---------|
-| **P0** | Size on-prem PostgreSQL (Medium+ profile) | Prevents OOM, timeouts, disk full |
-| **P0** | Enable SaaS read replica for API reads | Isolates report load from writes |
-| **P1** | PgBouncer in front of PostgreSQL | Prevents connection exhaustion |
-| **P1** | Scale listener + summary workers under load | Faster ingest |
-| **P2** | Automate cache flush on deploy | Eliminates stale UI |
-| **P2** | Remove Kruize when native ROS engine suffices | Frees DB connections and memory |
+- **`ROS_CSV_ALLOWED_HOSTS`** must be set in production (fail-closed). Each allowed host skips private-IP DNS deny when matched.
+- **`ROS_CSV_DENY_PRIVATE_NETWORKS=true`** (default) blocks SSRF to internal networks for non-allowlisted hosts.
+- Internal endpoints (`/internal/tags/sync`, `/internal/recalculate-savings`) should be NetworkPolicy-restricted — not performance-related but critical in multi-tenant SaaS.
+
+---
+
+## Upgrade / rollout notes
+
+- Processor SIGTERM waits up to **`ROS_SHUTDOWN_TIMEOUT_SECONDS`** (30s) for in-flight Kafka handlers before exit.
+- After upgrade, **Kafka lag** may spike while consumers rebalance — temporary.
+- Schema migrations run separately (`rosocp db migrate`); plan maintenance window for large DDL on big tables.
+- See [Upgrade Runbook](upgrade-runbook.md) for ordered steps.
 
 ---
 
 ## Related documentation
 
-- [Configuration](configuration.md) — Helm values and external infrastructure
-- [Query Performance](../query-performance.md) — ROS API index and pagination
-- [Monitoring](../monitoring.md) — Metrics and health endpoints
-- [Upgrade Runbook](upgrade-runbook.md) — Safe rollout procedures
-- Cost-onprem [database-tuning.md](https://github.com/redhatinsights/cost-onprem-chart/blob/main/docs/operations/database-tuning.md) — PostgreSQL profiles
-
----
-
-## Document history
-
-| Date | Change |
-|------|--------|
-| 2026-06-16 | Initial guide derived from platform performance audit |
+- [Configuration Reference](../configuration.md) — all environment variables
+- [Query Performance](../query-performance.md) — API query patterns and indexes
+- [Monitoring](../monitoring.md) — Grafana dashboards and alert rules
+- [Architecture: Recommendation Engines](../architecture/recommendation-engines.md) — engine behavior
