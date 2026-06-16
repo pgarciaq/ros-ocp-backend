@@ -1,7 +1,7 @@
 # UXSNO Benchmark Report
 
 > **Date:** 2026-06-16  
-> **Environment:** Single-Node OpenShift (SNO), aarch64, Dell R640  
+> **Environment:** Single-Node OpenShift (SNO), x86-64, Dell R640  
 > **Cluster name:** UXSNO
 
 This report documents a real-world benchmark of the ROS-OCP **native engine** on a resource-constrained Single-Node OpenShift cluster. The goal is to demonstrate what the engine delivers today — ingestion throughput, recommendation quality, and resource efficiency — using production-equivalent data paths and realistic multi-cluster scale.
@@ -32,7 +32,7 @@ The numbers speak for themselves: sub-second recommendation generation, a 70 MB 
 | Component | Detail |
 |-----------|--------|
 | Platform | Single-Node OpenShift (SNO) |
-| Architecture | aarch64 |
+| Architecture | x86-64 (amd64) |
 | Hardware | Dell PowerEdge R640 |
 | Cluster ID | UXSNO |
 | ROS processor pod | Single replica |
