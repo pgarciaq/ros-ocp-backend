@@ -90,6 +90,7 @@ func (p *GPUPlugin) RegisterRoutes(g *echo.Group) {
 	}
 	g.GET("/recommendations/openshift/gpu", rosapi.GetGPUSummary)
 	g.GET("/recommendations/openshift/gpu/timeslicing", rosapi.GetNodeRecommendations)
+	g.GET("/recommendations/openshift/gpu/timeslicing/history", rosapi.GetNodeGPUTimeslicingRecommendationHistory)
 	g.GET("/recommendations/openshift/gpu/mig", rosapi.GetGPUMIGRecommendations)
 }
 
