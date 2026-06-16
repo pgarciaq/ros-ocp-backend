@@ -154,6 +154,7 @@ nav:
   - Operations:
       - Monitoring: monitoring.md
       - Performance and Scalability: operations/performance-and-scalability.md
+      - UXSNO Benchmark Report: operations/benchmark-report.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
       - Configuration: configuration.md
       - Configuration (Operations): operations/configuration.md
