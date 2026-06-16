@@ -2034,3 +2034,107 @@ func TestGetNodeList_FilterTermLong(t *testing.T) {
 	require.NotNil(t, resp.Data[0].RecommendationTerms["long_term"].RecommendationEngines.Cost)
 	assert.NotContains(t, resp.Data[0].RecommendationTerms, "medium_term")
 }
+
+// --- Persisted table vs compute-at-read fallback ---
+
+func TestGetNodeRecommendations_FromPersistedTable(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := "org-gpu-ts-api-persist"
+	clusterUUID := testutil.TestClusterUUID
+	nodeName := "persisted-api-node"
+
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (9100, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (9100, $1, 'persisted-api-cluster', 'src-pap', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	candidates := `[{"namespace":"ml-team","workload":"training-a","container":"gpu-worker","sm_active_avg":0.12,"classification":"underutilized"}]`
+	impacted := `[{"namespace":"ml-team","workload":"heavy","container":"gpu-heavy","sm_active_avg":0.67,"classification":"well_utilized"}]`
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_gpu_timeslicing_recommendations (
+			org_id, cluster_uuid, node_name, gpu_model, term,
+			recommended_replicas, confidence, confidence_level,
+			candidate_count, impacted_count,
+			candidate_containers, impacted_containers,
+			notification_codes, estimated_savings_cents, savings_per_gpu_cents
+		) VALUES (
+			$1, $2, $3, 'NVIDIA T4', 'medium',
+			5, 0.72, 0.72, 1, 1,
+			$4::jsonb, $5::jsonb,
+			'{36}', 50000, 10000
+		)`,
+		orgID, clusterUUID, nodeName, candidates, impacted)
+	require.NoError(t, err)
+
+	app := setupNodeRecsEcho(pool)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bnode%5D="+nodeName, nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Data, 1)
+
+	nodeRec := response.Data[0]
+	assert.Equal(t, nodeName, nodeRec.NodeName)
+	assert.Equal(t, "gpu_time_slicing", nodeRec.RecommendationType)
+	assert.Equal(t, 5, nodeRec.RecommendedReplicas)
+	assert.InDelta(t, 0.72, float64(nodeRec.Confidence), 0.01)
+	assert.Equal(t, "NVIDIA T4", nodeRec.GPUModel)
+	require.Len(t, nodeRec.CandidateContainers, 1)
+	assert.Equal(t, "gpu-worker", nodeRec.CandidateContainers[0].Container)
+	require.NotNil(t, nodeRec.TotalNodeSavings)
+	assert.Equal(t, "500.00", nodeRec.TotalNodeSavings.Value)
+}
+
+func TestGetNodeRecommendations_FallbackWhenNoPersistedRows(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := "org-gpu-ts-api-fallback"
+	clusterUUID := testutil.TestClusterUUID
+
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (9200, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (9200, $1, 'fallback-cluster', 'src-fb', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	var persistedExists bool
+	err = pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM node_gpu_timeslicing_recommendations WHERE org_id = $1)`,
+		orgID).Scan(&persistedExists)
+	require.NoError(t, err)
+	require.False(t, persistedExists, "test org must have no persisted rows")
+
+	start := testutil.RecentStart()
+	seedGPUNodesForTimeslicing(t, pool, start, 7, "fallback-gpu-node")
+
+	app := setupNodeRecsEcho(pool)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response model.NodeRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.NotEmpty(t, response.Data, "fallback path should compute recommendations from digests")
+	assert.Equal(t, "fallback-gpu-node", response.Data[0].NodeName)
+	assert.Equal(t, "gpu_time_slicing", response.Data[0].RecommendationType)
+}

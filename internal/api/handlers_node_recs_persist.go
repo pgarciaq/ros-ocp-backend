@@ -335,16 +335,21 @@ func queryPersistedNodeGPURecRows(ctx context.Context, pool *pgxpool.Pool, query
 
 func scanNodeGPUTimeslicingRow(row pgx.Row) (model.NodeGPUTimeslicingRecommendation, error) {
 	var r model.NodeGPUTimeslicingRecommendation
+	var notificationCodes []int16
 	err := row.Scan(
 		&r.OrgID, &r.ClusterUUID, &r.NodeName, &r.GPUModel, &r.Term,
 		&r.RecommendedReplicas, &r.Confidence, &r.ConfidenceLevel,
 		&r.CandidateCount, &r.ImpactedCount,
 		&r.CandidateContainers, &r.ImpactedContainers,
-		&r.NotificationCodes,
+		&notificationCodes,
 		&r.EstimatedSavingsCents, &r.SavingsPerGPUCents,
 		&r.LastSeenAt, &r.UpdatedAt,
 	)
-	return r, err
+	if err != nil {
+		return r, err
+	}
+	r.NotificationCodes = model.SmallintArray(notificationCodes)
+	return r, nil
 }
 
 func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendation, currency string) model.NodeGPURecommendation {

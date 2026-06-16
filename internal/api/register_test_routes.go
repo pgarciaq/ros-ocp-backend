@@ -13,6 +13,7 @@ func RegisterTestInternalRoutes(e *echo.Echo) {
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
 	internal.POST("/recalculate-savings", PostRecalculateSavings)
+	internal.POST("/backfill-gpu-timeslicing", PostBackfillGPUTimeslicing)
 }
 
 // RegisterTestReferenceRoutes mounts reference endpoints that do not require identity middleware.

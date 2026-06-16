@@ -524,6 +524,59 @@ func TestOpenAPI_NodeRecommendations_ResponseFields(t *testing.T) {
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
+func seedOpenAPINodeGPUTimeslicingRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	t.Helper()
+	ctx := context.Background()
+	clusterUUID := testutil.TestClusterUUID
+	nodeName := "openapi-gpu-ts-node"
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'openapi-gpu-ts', 'src-openapi-gpu-ts', now()) ON CONFLICT DO NOTHING`,
+		clusterUUID,
+	)
+	require.NoError(t, err)
+
+	candidates := `[{"namespace":"ml","workload":"train","container":"gpu-1","sm_active_avg":0.12,"classification":"underutilized"}]`
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_gpu_timeslicing_recommendations (
+			org_id, cluster_uuid, node_name, gpu_model, term,
+			recommended_replicas, confidence, confidence_level,
+			candidate_count, impacted_count,
+			candidate_containers, impacted_containers,
+			notification_codes, estimated_savings_cents, savings_per_gpu_cents
+		) VALUES (
+			$1, $2, $3, 'NVIDIA T4', 'medium',
+			4, 0.75, 0.75, 1, 0,
+			$4::jsonb, '[]'::jsonb,
+			'{36}', 40000, 10000
+		)`,
+		orgID, clusterUUID, nodeName, candidates,
+	)
+	require.NoError(t, err)
+}
+
+func TestOpenAPI_GPUTimeslicingRecommendations_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-gpu-ts"
+	seedOpenAPINodeGPUTimeslicingRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/gpu/timeslicing?limit=10")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	schema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing", http.MethodGet, "200")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
+}
+
 func TestOpenAPI_VMRecommendations_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

@@ -197,6 +197,7 @@ func StartAPIServer(ctx context.Context) {
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
 	internal.POST("/recalculate-savings", PostRecalculateSavings)
+	internal.POST("/backfill-gpu-timeslicing", PostBackfillGPUTimeslicing)
 
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)

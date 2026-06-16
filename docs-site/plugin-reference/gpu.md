@@ -131,12 +131,21 @@ API list/detail exposes them as `estimated_monthly_gpu_savings` (`MoneyAmount`) 
 container `gpu` block. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads
 persisted cents when available; otherwise computes at read time.
 
-### Time-slicing (read-time)
+### Time-slicing (persisted at ingest)
 
-Node-level time-slicing dollar estimates on `GET .../gpu/timeslicing` and per-container
-`estimated_monthly_timeslicing_savings` are computed at **API read time** via
-[`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go). Candidate
-selection is fleet-level and changes with scheduling — these amounts are not persisted.
+Node-level time-slicing recommendations are **persisted during ingest** in
+`node_gpu_timeslicing_recommendations` (live) and
+`node_gpu_timeslicing_recommendation_history` (append-only). Dollar estimates are stored as
+`estimated_savings_cents` / `savings_per_gpu_cents` when GPU cost-model rates are available at
+ingest; otherwise those columns are NULL.
+
+The list endpoint (`GET .../gpu/timeslicing`) reads the live table. Container enrichment reads
+`time_slicing_node` and `time_slicing_replicas` from `recommendation_sets` when populated, with
+a compute-at-read fallback until backfill completes.
+
+**Backfill:** `POST /api/cost-management/v1/internal/backfill-gpu-timeslicing` (service-account auth).
+
+See [GPU time-slicing](../features/gpu-time-slicing.md).
 
 ### Fleet rollup
 

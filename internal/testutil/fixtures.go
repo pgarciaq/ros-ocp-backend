@@ -358,6 +358,39 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 	}
 }
 
+// SeedGPURecommendationSet inserts a minimal recommendation_sets row for GPU pipeline tests.
+func SeedGPURecommendationSet(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, namespace, workload, container, term string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, $3, $4, 'deployment', $5, $6, 'cost', false, now())
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) DO NOTHING`,
+		orgID, clusterUUID, namespace, workload, container, term,
+	)
+	if err != nil {
+		t.Fatalf("SeedGPURecommendationSet: %v", err)
+	}
+}
+
+// SeedOrgContainerKey inserts a row into org_container_keys for list API pagination.
+func SeedOrgContainerKey(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, namespace, workload, workloadType, container string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name, resolved_tags)
+		VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb)
+		ON CONFLICT (org_id, namespace, workload, container_name)
+		DO UPDATE SET cluster_uuid = EXCLUDED.cluster_uuid, workload_type = EXCLUDED.workload_type`,
+		orgID, clusterUUID, namespace, workload, workloadType, container,
+	)
+	if err != nil {
+		t.Fatalf("SeedOrgContainerKey: %v", err)
+	}
+}
+
 // SeedDigestSeriesFrom is like SeedDigestSeries but starts from the given date
 // instead of BaseDate. Use with RecentStart() for API integration tests.
 func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, baseCPU, cpuStep, baseMem, memStep int64) {
