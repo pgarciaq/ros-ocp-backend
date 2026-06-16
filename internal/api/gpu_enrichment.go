@@ -109,7 +109,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			}
 		}
 
-		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
+		groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
 		for _, group := range groups {
 			engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgID, group, gpuRate, now)
 		}

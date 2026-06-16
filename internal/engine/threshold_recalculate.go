@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -453,34 +452,10 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	if err := StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms, gpuCostData); err != nil {
 		return fmt.Errorf("store GPU classifications: %w", err)
 	}
+	if err := ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, gpuTerms, gpuCostData); err != nil {
+		return fmt.Errorf("persist node GPU time-slicing recommendations: %w", err)
+	}
 	metrics.ObservePipelinePhase(metrics.PhasePostProcess, tGPU)
-
-	// Time-slicing is evaluated at API read time; re-run classification path so persisted
-	// gpu_classification reflects new thresholds. Exercise timeslicing heuristics for observability.
-	gpuRecs, nodeMap, nodeLastSeen, err := QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, gpuTerms, nil)
-	if err != nil {
-		return fmt.Errorf("query GPU recommendations: %w", err)
-	}
-	if len(gpuRecs) == 0 {
-		return nil
-	}
-
-	var gpuRate *float32
-	if gpuCostData != nil {
-		for _, recs := range gpuRecs {
-			for _, rec := range recs {
-				ApplyGPUSavings(rec, gpuCostData)
-			}
-		}
-		if rate := GPUMonthlyRate(gpuCostData); rate > 0 {
-			r := float32(rate)
-			gpuRate = &r
-		}
-	}
-
-	for _, group := range groupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID) {
-		ComputeNodeTimeslicingRecForOrg(ctx, pool, orgID, group, gpuRate, now)
-	}
 	return nil
 }
 
@@ -517,50 +492,4 @@ func recalculatePVCCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 	metrics.IncRecommendationsWritten("pvc", len(results))
 	return nil
-}
-
-func groupGPURecsByNodeAndModel(gpuRecs map[string][]*GPURec, nodeMap map[string]string, nodeLastSeen map[string]time.Time, clusterUUID string) []NodeGPUGroup {
-	type groupKey struct {
-		node  string
-		model string
-		term  string
-	}
-	grouped := map[groupKey]*NodeGPUGroup{}
-
-	for key, recs := range gpuRecs {
-		nodeName := nodeMap[key]
-		if nodeName == "" {
-			continue
-		}
-		parts := strings.SplitN(key, "/", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		for _, rec := range recs {
-			gk := groupKey{node: nodeName, model: rec.GPUModelName, term: rec.Term}
-			g, ok := grouped[gk]
-			if !ok {
-				g = &NodeGPUGroup{
-					NodeName:    nodeName,
-					ClusterUUID: clusterUUID,
-					GPUModel:    rec.GPUModelName,
-					Term:        rec.Term,
-					LastSeen:    nodeLastSeen[nodeName],
-				}
-				grouped[gk] = g
-			}
-			g.Containers = append(g.Containers, NodeGPUContainer{
-				Namespace: parts[0],
-				Workload:  parts[1],
-				Container: parts[2],
-				Rec:       rec,
-			})
-		}
-	}
-
-	result := make([]NodeGPUGroup, 0, len(grouped))
-	for _, g := range grouped {
-		result = append(result, *g)
-	}
-	return result
 }

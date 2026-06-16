@@ -117,7 +117,7 @@ func TestGroupByNodeAndModel(t *testing.T) {
 		"gpu-node-1": time.Now().UTC().AddDate(0, 0, -2),
 	}
 
-	groups := groupByNodeAndModel(gpuRecs, nodeMap, lastSeen, "cluster-1")
+	groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, lastSeen, "cluster-1")
 
 	assert.Len(t, groups, 2, "should have 2 groups (T4 + A100 on same node)")
 
@@ -144,7 +144,7 @@ func TestGroupByNodeAndModel_SkipsMissingNode(t *testing.T) {
 	nodeMap := map[string]string{}
 	lastSeen := map[string]time.Time{}
 
-	groups := groupByNodeAndModel(gpuRecs, nodeMap, lastSeen, "cluster-1")
+	groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, lastSeen, "cluster-1")
 	assert.Len(t, groups, 0, "containers with no node mapping should be skipped")
 }
 

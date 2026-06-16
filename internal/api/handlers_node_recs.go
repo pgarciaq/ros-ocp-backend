@@ -334,7 +334,7 @@ func expandNodeGPURecsFromTriples(
 		if gpuRecs == nil {
 			continue
 		}
-		groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, tr.ClusterUUID)
+		groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, tr.ClusterUUID)
 		gpuRate := clusterRates[tr.ClusterUUID]
 		for _, group := range groups {
 			if group.NodeName != tr.NodeName || group.GPUModel != tr.GPUModel {
@@ -453,7 +453,7 @@ func collectNodeGPURecsForCluster(
 		}
 	}
 
-	groups := groupByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
+	groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
 	var recs []model.NodeGPURecommendation
 	for _, group := range groups {
 		tsRec := engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgIDStr, group, gpuRate, now)
@@ -489,53 +489,6 @@ func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 		uuids = append(uuids, uuid)
 	}
 	return uuids, rows.Err()
-}
-
-func groupByNodeAndModel(gpuRecs map[string][]*engine.GPURec, nodeMap map[string]string, nodeLastSeen map[string]time.Time, clusterUUID string) []engine.NodeGPUGroup {
-	type groupKey struct {
-		node  string
-		model string
-		term  string
-	}
-	grouped := map[groupKey]*engine.NodeGPUGroup{}
-
-	for key, recs := range gpuRecs {
-		nodeName := nodeMap[key]
-		if nodeName == "" {
-			continue
-		}
-		parts := strings.SplitN(key, "/", 3)
-		if len(parts) != 3 {
-			continue
-		}
-
-		for _, rec := range recs {
-			gk := groupKey{node: nodeName, model: rec.GPUModelName, term: rec.Term}
-			g, ok := grouped[gk]
-			if !ok {
-				g = &engine.NodeGPUGroup{
-					NodeName:    nodeName,
-					ClusterUUID: clusterUUID,
-					GPUModel:    rec.GPUModelName,
-					Term:        rec.Term,
-					LastSeen:    nodeLastSeen[nodeName],
-				}
-				grouped[gk] = g
-			}
-			g.Containers = append(g.Containers, engine.NodeGPUContainer{
-				Namespace: parts[0],
-				Workload:  parts[1],
-				Container: parts[2],
-				Rec:       rec,
-			})
-		}
-	}
-
-	result := make([]engine.NodeGPUGroup, 0, len(grouped))
-	for _, g := range grouped {
-		result = append(result, *g)
-	}
-	return result
 }
 
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) model.NodeGPURecommendation {

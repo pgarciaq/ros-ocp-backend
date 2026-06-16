@@ -756,6 +756,9 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 			if err := engine.StoreGPUClassifications(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
 				log.Warnf("native engine: storing GPU classifications failed: %v", err)
 			}
+			if err := engine.ComputeAndPersistNodeGPUTimeSlicingRecs(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
+				log.Warnf("native engine: persist node GPU time-slicing failed: %v", err)
+			}
 			return nil
 		})
 	}
