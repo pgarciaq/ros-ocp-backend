@@ -24,9 +24,8 @@ Verified against `docs/architecture/recommendation-engines.md` and `internal/eng
 | Namespace quota | `computeQuotaRecommendation` | `WriteQuotaRecommendations` | `quota_recommendation_sets` |
 | Cluster quota | `computeClusterQuotaRecommendation` | `WriteClusterQuotaRecommendations` | `cluster_quota_recommendation_sets` |
 | VM | `RecommendVM` | `UpsertVMRecommendation` (`vm_db.go`) | `vm_recommendations` |
+| Snapshot | `classifySnapshot` | `WriteSnapshotRecommendations` | `snapshot_recommendation_sets` |
 | Node GPU time-slicing | `RecommendNodeGPUTimeSlicing` (planned) | `PersistNodeGPUTimeSlicingRecs` (planned) | `node_gpu_timeslicing_recommendations` (Phase 0) |
-
-**Out of scope (v1):** Snapshot recommendations (`snapshot_recommendation_sets`).
 
 **History tables in scope:** `recommendation_history`, `vm_recommendation_history`,
 `quota_recommendation_history`, and other quota/namespace history tables receive
@@ -89,16 +88,22 @@ factors from recommendation outputs (`rec_*`, `current_*`, etc.).
 
 ### API shape
 
-Explanation is **opt-in** via `?include=explanation` on detail endpoints. It is
-**not** included by default — this avoids bloating responses for consumers who
-do not need explainability data.
+Explanation is **opt-in** via the `include` query parameter on detail endpoints.
+It is **not** included by default — this avoids bloating responses for consumers
+who do not need explainability data.
 
-When requested, detail handlers add a sibling `explanation` object (never on
-slim list DTOs):
+Define `include` in the OpenAPI spec as a **comma-separated list** of optional
+expansion tokens, even though `explanation` is the only supported value today.
+This avoids a breaking change when additional expansions are added later (e.g.
+`savings_detail`).
 
 ```
 GET /recommendations/openshift/{uuid}?include=explanation
+GET /recommendations/openshift/{uuid}?include=explanation,savings_detail   # future
 ```
+
+When requested, detail handlers add a sibling `explanation` object (never on
+slim list DTOs):
 
 ```json
 {
@@ -121,7 +126,7 @@ GET /recommendations/openshift/{uuid}?include=explanation
 }
 ```
 
-Namespace, node, PVC, quota, cluster-quota, and VM handlers follow the same
+Namespace, node, PVC, quota, cluster-quota, VM, and snapshot handlers follow the same
 opt-in pattern at their respective nesting level.
 
 ### Migration
@@ -370,6 +375,38 @@ See [Phase 0: Prerequisites](#phase-0--prerequisites) below.
 
 ---
 
+### 10. Snapshot (`snapshot_recommendation_sets`)
+
+**Engine:** `classifySnapshot` in [`internal/engine/snapshot_classify.go`](../../internal/engine/snapshot_classify.go)  
+**Write path:** `WriteSnapshotRecommendations` (same file)  
+**API:** [`internal/api/handlers_snapshot.go`](../../internal/api/handlers_snapshot.go)
+
+Snapshot recommendations are **simpler** than percentile/margin engines — they
+are rule-based classification, not statistical sizing. Most driving factors already
+exist as first-class columns: `age_days`, `source_pvc_exists`, `restored_pvc_count`,
+`managed_by`, `recommendation_type`. The API assembles those existing columns into
+`explanation` alongside three new columns that capture which threshold and rule
+fired:
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_threshold_used` | `INTEGER` | Threshold value that triggered classification (e.g. `orphan_age_days=7`) | `settings.OrphanAgeDays`, `settings.StaleAgeDays`, etc. |
+| `expl_threshold_name` | `TEXT` | Which setting was decisive | `'orphan_age_days'` / `'stale_age_days'` / `'redundancy_max'` etc. |
+| `expl_classification_rule` | `TEXT` | Human-readable rule that fired | e.g. `'source PVC deleted AND age > orphan threshold'` |
+
+**Not new columns:** `age_days`, `source_pvc_exists`, `restored_pvc_count`,
+`managed_by`, and `recommendation_type` — include in API `explanation` from
+existing columns.
+
+**Engine change:** Extend `SnapshotRec` with explanation fields embedded directly.
+Populate in `classifySnapshot` when each classification branch fires (orphaned,
+managed, redundant, stale, never_restored, active).
+
+**API change:** Add `explanation` to snapshot detail response when
+`?include=explanation` is set; assemble from existing columns + new `expl_*`.
+
+---
+
 ## Implementation Phases
 
 ### Phase 0 — Prerequisites (1 PR)
@@ -404,7 +441,7 @@ Split by resource type to keep reviews manageable:
 | 2a Container + namespace | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go` | Embed + populate explanation fields on rec structs |
 | 2b Node + PVC | `recommend_nodes.go`, `pvc_recommend.go` | Same |
 | 2c GPU + VM + node GPU TS | `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, node GPU TS persist | Same (node GPU TS requires Phase 0) |
-| 2d Quota + CRQ | `recommend_quota.go`, `recommend_cluster_quota.go` | Same |
+| 2d Quota + CRQ + snapshot | `recommend_quota.go`, `recommend_cluster_quota.go`, `snapshot_classify.go` | Same (snapshot is lightweight rule-based classification) |
 
 Each PR updates the corresponding `Write*` / `Persist*` SQL to include new columns.
 History archive paths (`WriteRecommendationHistory`, etc.) copy explanation
@@ -416,21 +453,29 @@ After deploying migration + engine changes, run a one-shot backfill pass:
 
 1. Iterate recommendation rows where `expl_data_days IS NULL` (or any sentinel
    explanation column)
-2. Load corresponding digests for each container/node/PVC/etc.
-3. Re-run the engine for that row
-4. Write **only** the explanation columns — do **not** change recommendation values
+2. Load corresponding digests / inventory for each container/node/PVC/snapshot/etc.
+3. Re-run the **full** recommendation engine for that row
+4. Write the **complete** recommendation row (values **and** explanation columns)
 5. Trigger via a management endpoint or CLI command (e.g.
    `ros-ocp-backend backfill-explanations --org-id … --resource container`)
+6. Support **`--concurrency N`** (or `--workers N`) and partition work by
+   `cluster_uuid` for parallelism at scale
+
+The algorithm has not changed, so recommendation values will be the same (or
+negligibly different due to time drift). Recomputing the full recommendation is
+simpler and safer than writing explanation columns alone — it eliminates any risk
+of explanation/recommendation mismatch.
 
 GPU rows backfilled here eliminate the need for digest recompute fallback on
-detail fetch. Container/namespace/node/PVC/quota/VM rows get explanations without
-waiting for natural re-ingestion.
+detail fetch. Container/namespace/node/PVC/quota/VM/snapshot rows get explanations
+without waiting for natural re-ingestion.
 
 ### Phase 3 — API exposure (1 PR)
 
-1. Add `?include=explanation` query parameter to detail handlers
+1. Add `include` query parameter (comma-separated list; `explanation` only in v1)
+   to detail handlers
 2. Add `Explanation` field to API DTOs (`EngineRecommendation`, `GPURecommendation`,
-   `NodeUtilizationEngineRec`, `PVCRecommendationResponse`, quota/VM handlers)
+   `NodeUtilizationEngineRec`, `PVCRecommendationResponse`, quota/VM/snapshot handlers)
 3. Map DB columns (existing + new `expl_*`) → nested `explanation` in serializers
    when `include=explanation` is set; omit entirely otherwise
 4. Include `confidence_level` from existing column in explanation response
@@ -481,10 +526,13 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
 ### Backfill tests
 
-- Unit test backfill logic: engine re-run writes explanation columns without
-  mutating recommendation values
+- Unit test backfill logic: engine re-run writes full recommendation row including
+  explanation columns; recommendation values match (or are negligibly different
+  due to time drift)
 - Integration test: NULL explanation row → backfill → columns populated,
-  recommendation values unchanged
+  recommendation values consistent with full recompute
+- Concurrency test: `--concurrency N` partitions by `cluster_uuid` without
+  duplicate work or data races
 
 ---
 
@@ -493,8 +541,8 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 1. Deploy migration (additive, nullable — zero downtime; includes history tables)
 2. Deploy engine changes — new rows get explanations; old rows stay NULL
 3. Deploy API with `?include=explanation` — UI opts in when ready
-4. Run backfill (Phase 2.5) — populate explanation columns for existing rows
-   without changing recommendations
+4. Run backfill (Phase 2.5) — recompute full recommendations (values + explanations)
+   for existing rows
 5. Remove GPU digest recompute fallback once backfill completes for GPU rows
 
 New rows receive explanations automatically on ingestion. History snapshots
@@ -513,9 +561,9 @@ include explanation factors from the moment Phase 2 ships.
 | 5 | Confidence column | Use existing **`confidence_level`** column — do not add `expl_confidence` |
 | 6 | Struct safety | **Embed explanation fields in engine rec structs** — do not copy to a separate `Explanation` type |
 | 7 | GPU read path | **Persist at classification; stop read-time recompute** — digest fallback only for NULL rows during backfill window |
-| 8 | API inclusion | **`?include=explanation` opt-in** — not included by default on detail responses |
+| 8 | API inclusion | **`include` query param (comma-separated list) opt-in** — `explanation` only in v1; not included by default on detail responses |
 | 9 | History tables | **Include explanation columns** on history tables; archive explanation with recommendation |
-| 10 | Backfill | **One-shot backfill pass** (Phase 2.5) writes explanation columns only; triggered via management endpoint or CLI |
+| 10 | Backfill | **One-shot backfill pass** (Phase 2.5) recomputes full recommendations (values + explanations); supports `--concurrency N` partitioned by `cluster_uuid`; triggered via management endpoint or CLI |
 
 ---
 
@@ -526,10 +574,10 @@ include explanation factors from the moment Phase 2 ships.
 | Migration | `migrations/000145_recommendation_explanation_columns.{up,down}.sql` (live + history tables) |
 | Phase 0 | New migration for `node_gpu_timeslicing_recommendations`, node GPU TS persist + handler |
 | Engine types | `internal/engine/types.go` (extend `CPURec`, `MemoryRec`, `NodeRec`, `GPURec`, etc.) |
-| Engine logic | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go`, `recommend_nodes.go`, `pvc_recommend.go`, `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, `recommend_quota.go`, `recommend_cluster_quota.go` |
+| Engine logic | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go`, `recommend_nodes.go`, `pvc_recommend.go`, `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, `recommend_quota.go`, `recommend_cluster_quota.go`, `snapshot_classify.go` |
 | Backfill | New CLI command or management endpoint (e.g. `cmd/backfill-explanations/` or admin handler) |
 | Models | `internal/model/recommendation_set_native.go`, `namespace_recommendation_set_native.go`, `node_cpu_mem_recommendation.go`, `detail_response.go`, `vm_recommendation.go` |
-| API handlers | `handlers_pvc.go`, `handlers_vm_recs.go`, `handlers_quota_recs.go`, `handlers_node_utilization.go`, `handlers_gpu_mig.go` (+ `?include=explanation` parsing) |
+| API handlers | `handlers_pvc.go`, `handlers_vm_recs.go`, `handlers_quota_recs.go`, `handlers_node_utilization.go`, `handlers_gpu_mig.go`, `handlers_snapshot.go` (+ `include` query param parsing) |
 | OpenAPI | `docs/openapi/` |
 | Tests | `internal/engine/*_test.go`, `internal/api/handlers_*_integration_test.go` |
 | Docs | ADR-0296 (this plan), optional `docs-site/` UI section |

@@ -11,10 +11,10 @@ Accepted
 ## Context
 
 The native Go engine produces recommendations for containers (CPU/memory), namespaces,
-nodes, PVCs, GPUs, VMs, namespace quotas, and cluster resource quotas. Each engine
-computes rich intermediate values — decay-weighted percentiles, adaptive margins,
-OOM bumps, growth slopes, utilization ratios, classification trees — but persists
-only the final recommendation numbers. Users see *what* was recommended without
+nodes, PVCs, GPUs, VMs, namespace quotas, cluster resource quotas, and volume
+snapshots. Each engine computes rich intermediate values — decay-weighted percentiles,
+adaptive margins, OOM bumps, growth slopes, utilization ratios, classification
+trees, snapshot age thresholds — but persists only the final recommendation numbers. Users see *what* was recommended without
 understanding *why*.
 
 This gap shows up in support tickets and UI reviews: a container with a 2× memory
@@ -56,6 +56,7 @@ Scope covers all native-engine recommendation types:
 | Namespace quota | `quota_recommendation_sets` |
 | Cluster resource quota | `cluster_quota_recommendation_sets` |
 | VM | `vm_recommendations` |
+| Snapshot | `snapshot_recommendation_sets` |
 | Node GPU time-slicing | `node_gpu_timeslicing_recommendations` (Phase 0 prerequisite) |
 
 History tables (`recommendation_history`, `vm_recommendation_history`,
@@ -82,9 +83,11 @@ after the table exists.
 Explanation columns are:
 
 - Written atomically with the recommendation row during ingestion
-- Exposed on **detail** endpoints via **`?include=explanation`** (opt-in, not
-  included by default — avoids bloating responses for consumers who do not need
-  explainability data; not on slim list DTOs per [ADR-0294](0294-slim-list-contract.md))
+- Exposed on **detail** endpoints via the **`include` query parameter** (OpenAPI:
+  comma-separated list; `explanation` only in v1; e.g. `?include=explanation`,
+  future `?include=explanation,savings_detail`) — opt-in, not included by default
+  — avoids bloating responses for consumers who do not need explainability data;
+  not on slim list DTOs per [ADR-0294](0294-slim-list-contract.md))
 - Integer-scaled where the engine already uses integer arithmetic ([ADR-0295](0295-integer-first-architecture.md))
 - Nullable — older rows and partial failures leave explanation fields empty until
   backfill
@@ -168,13 +171,16 @@ Opt-in via `?include=explanation` keeps the default payload slim.
 - **Migration coordination:** Single numbered migration (`000145`) adds all
   columns to live and history tables; down migration drops them.
 - **Backfill required:** Existing rows have NULL explanations until a one-shot
-  backfill pass (Phase 2.5) re-runs the engine and writes explanation columns
-  without changing recommendation values. Triggered via management endpoint or
-  CLI command.
+  backfill pass (Phase 2.5) re-runs the engine and writes the **full**
+  recommendation (values and explanation columns). The algorithm has not changed,
+  so values will match (or differ negligibly due to time drift). Supports
+  `--concurrency N` with work partitioned by `cluster_uuid`. Triggered via
+  management endpoint or CLI command.
 - **Phase 0 prerequisite:** Node GPU time-slicing must be persisted to a new
   table before its explanation columns can be added.
-- **API parameter:** Detail handlers must parse `?include=explanation` and
-  conditionally assemble the nested object.
+- **API parameter:** Detail handlers must parse the `include` query parameter
+  (comma-separated list) and conditionally assemble the nested object when
+  `explanation` is requested.
 
 ## Related Decisions
 
@@ -196,3 +202,4 @@ Opt-in via `?include=explanation` keeps the default payload slim.
 - [`internal/engine/recommend_cpu_and_memory.go`](../../internal/engine/recommend_cpu_and_memory.go)
 - [`internal/engine/recommend_all.go`](../../internal/engine/recommend_all.go)
 - [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
+- [`internal/engine/snapshot_classify.go`](../../internal/engine/snapshot_classify.go)
