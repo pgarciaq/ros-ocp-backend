@@ -41,13 +41,13 @@ The numbers speak for themselves: sub-second recommendation generation, a 70 MB 
 | Goroutines | 15 |
 | Database | PostgreSQL 16 |
 | Message bus | Kafka (same path as cost-onprem production) |
-| Object storage | S3-compatible (MinIO) for report packages |
+| Object storage | S3-compatible (S4/Ceph RGW) for report packages |
 
 ```mermaid
 flowchart TD
     subgraph cluster["UXSNO SNO cluster"]
         Job[uxsno-bulk-ingest Job] -->|tar.gz upload| Ingress[Ingress endpoint]
-        Ingress --> S3[(MinIO / S3)]
+        Ingress --> S3[(S4 / S3)]
     end
 
     subgraph ros["ROS-OCP native engine (single pod)"]
@@ -159,7 +159,7 @@ Each manifest cycle follows the native engine's standard pipeline: download, par
 
 | Phase | Duration |
 |-------|----------|
-| CSV download from S3/MinIO | ~2 sec |
+| CSV download from S3 (S4) | ~2 sec |
 | CSV parsing + digest computation | ~43 sec |
 | Namespace CSV processing | ~2 sec |
 | Debounce quiet period (coalesces rapid files) | 30 sec |
