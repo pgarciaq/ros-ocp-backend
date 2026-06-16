@@ -107,6 +107,7 @@ nav:
       - Local Mode: planned-features/local-mode.md
   - Architecture:
       - Architecture Decision Records: architecture/adrs.md
+      - Why the Native Engine: architecture/motivation.md
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
@@ -143,6 +144,7 @@ nav:
       - OpenAPI: openapi.md
   - Operations:
       - Monitoring: monitoring.md
+      - Performance and Scalability: operations/performance-and-scalability.md
       - Configuration: configuration.md
       - API Pagination: pagination.md
       - Query Performance: query-performance.md
