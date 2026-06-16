@@ -114,6 +114,8 @@ nav:
       - Decay Weights: architecture/decay-weights.md
       - Configurability Reference: architecture/configurability.md
       - Recommendation Math: architecture/recommendation-math.md
+      - Deterministic Recommendation IDs: architecture/recommendation-ids.md
+      - Database Conventions: architecture/database-conventions.md
       - GPU Classification: architecture/gpu-classification.md
       - GPU Catalogs: architecture/gpu-catalogs.md
       - Kafka Schema: architecture/kafka-schema.md
@@ -121,9 +123,14 @@ nav:
       - API Versioning: architecture/api-versioning.md
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md
+      - HPA/VPA Deployment Modes: architecture/hpa-vpa-deployment-modes.md
+      - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
+      - Performance Analysis (historical): architecture/performance-analysis.md
+      - Requirements Document: architecture/requirements.md
   - Testing:
       - Validating the Native Engine: testing/validating-native-engine.md
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
+      - TDD Test Plan: architecture/test-plan.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md
@@ -140,12 +147,16 @@ nav:
       - vm: plugin-reference/vm.md
       - kruize: plugin-reference/kruize.md
       - example (template): plugin-reference/example.md
+      - Query Parameters: plugin-reference/query-parameters.md
   - API Specification:
       - OpenAPI: openapi.md
+      - Notification Codes API: api-reference/notification-codes.md
   - Operations:
       - Monitoring: monitoring.md
+      - Performance and Scalability: operations/performance-and-scalability.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
       - Configuration: configuration.md
+      - Configuration (Operations): operations/configuration.md
       - API Pagination: pagination.md
       - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md
