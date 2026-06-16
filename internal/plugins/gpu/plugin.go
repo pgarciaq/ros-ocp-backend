@@ -94,11 +94,24 @@ func (p *GPUPlugin) RegisterRoutes(g *echo.Group) {
 }
 
 func (p *GPUPlugin) RetentionTables() []string {
-	return []string{"gpu_container_digests"}
+	return []string{
+		"gpu_container_digests",
+		"node_gpu_timeslicing_recommendations",
+		"node_gpu_timeslicing_recommendation_history",
+	}
 }
 
 func (p *GPUPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
-	return engine.SweepPartitionedTables(ctx, pool, p.RetentionTables(), olderThan.Format("200601"))
+	if err := engine.SweepPartitionedTables(ctx, pool, []string{"gpu_container_digests"}, olderThan.Format("200601")); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx,
+		`DELETE FROM node_gpu_timeslicing_recommendations WHERE COALESCE(last_seen_at, updated_at) < $1`,
+		olderThan,
+	); err != nil {
+		return err
+	}
+	return engine.PruneNodeGPUTimeslicingRecommendationHistory(ctx, pool)
 }
 
 func (p *GPUPlugin) DefaultTerms() []plugin.TermConfig {

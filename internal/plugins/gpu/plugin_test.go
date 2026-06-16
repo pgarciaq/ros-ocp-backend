@@ -30,7 +30,11 @@ func TestGPUPlugin_hookAfterTypes(t *testing.T) {
 
 	p := &GPUPlugin{}
 	assert.Equal(t, []string{"container"}, p.HookAfterCSVTypes())
-	assert.Equal(t, []string{"gpu_container_digests"}, p.RetentionTables())
+	assert.Equal(t, []string{
+		"gpu_container_digests",
+		"node_gpu_timeslicing_recommendations",
+		"node_gpu_timeslicing_recommendation_history",
+	}, p.RetentionTables())
 }
 
 // BH-UNIT-110: v1 GPU recommendations must not consume business_hours digest streams.
