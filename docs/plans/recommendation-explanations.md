@@ -483,7 +483,7 @@ without waiting for natural re-ingestion.
 6. Contract tests: detail response includes `explanation` only when requested and
    columns are populated
 
-### Phase 4 — Frontend guidance (documentation only)
+### Phase 4 — Frontend guidance (documentation — ships with or before Phase 5)
 
 Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 
@@ -493,6 +493,136 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
 - Hide section when all explanation fields are null (pre-backfill rows)
 - Hide BH section when BH scheduling is not configured (UI-only; backend returns
   explanation for BH rows if they exist)
+
+Phase 4 is documentation-only; Phase 5 implements the same guidance in `koku-ui`.
+
+### Phase 5 — UI Implementation (2–3 PRs, `koku-ui`)
+
+Implement explainability in the ROS optimizations breakdown area
+(`apps/koku-ui-ros/`). The breakdown page today is container-focused: route
+`/optimizations/details/breakdown?id={uuid}` loads a single recommendation detail
+via Redux and renders configuration YAML plus optional CPU/memory utilization charts.
+
+**Current UI architecture (baseline for Phase 5):**
+
+| Concern | Location |
+|---------|----------|
+| Breakdown page shell | [`apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdown.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdown.tsx) |
+| Configuration panel | [`optimizationsBreakdownConfiguration.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownConfiguration.tsx) |
+| Utilization charts | [`optimizationsBreakdownUtilization.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownUtilization.tsx) + [`optimizationsBreakdownChart.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownChart.tsx) |
+| Detail fetch (Redux thunk) | [`apps/koku-ui-ros/src/store/ros/rosActions.ts`](../../../koku-ui/apps/koku-ui-ros/src/store/ros/rosActions.ts) → `fetchRosReport` |
+| Axios API call | [`apps/koku-ui-ros/src/api/ros/recommendations.ts`](../../../koku-ui/apps/koku-ui-ros/src/api/ros/recommendations.ts) `runRosReport` (GET `recommendations/openshift/{uuid}`) |
+| API types | [`apps/koku-ui-ros/src/api/ros/recommendations.ts`](../../../koku-ui/apps/koku-ui-ros/src/api/ros/recommendations.ts) (`RecommendationEngine`, `RecommendationTerm`, etc.) |
+| i18n messages | [`apps/koku-ui-ros/src/locales/messages.ts`](../../../koku-ui/apps/koku-ui-ros/src/locales/messages.ts) (+ generated `locales/data.json`, `locales/translations.json`) |
+| Component library | PatternFly 6 (`@patternfly/react-core`, `@patternfly/react-charts/victory`) |
+
+The breakdown page reads the recommendation UUID from the URL query (`id`), dispatches
+`rosActions.fetchRosReport(RosPathsType.recommendation, RosType.ros, uuid)` in
+`useMapToProps`, and selects cached data via `rosSelectors.selectRos`. Charts render
+only when the box-plot feature toggle is enabled and `term.plots.plots_data` exists.
+
+Split into manageable PRs:
+
+#### PR 5a — API integration + "Why this recommendation?" panel (container type)
+
+1. **Detail fetch:** Append `?include=explanation` to the breakdown detail GET.
+   - Extend `runRosReport` in `recommendations.ts` to accept optional query params
+     (e.g. `include=explanation`), or add a dedicated detail helper used only from
+     breakdown fetch paths.
+   - Update `fetchRosReport` / breakdown `useMapToProps` so the breakdown page always
+     requests explanations (list endpoints unchanged).
+   - Bust or shorten Redux cache for detail rows when `include` changes (detail fetch
+     id should differ from list cache keys).
+2. **Types:** Add `Explanation` interfaces to `recommendations.ts` — nested under
+   `RecommendationEngine` at the same level as `config` (matches API shape under
+   `recommendation_engines.{cost|performance}`).
+3. **Component:** Create
+   [`RecommendationExplanation.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/RecommendationExplanation.tsx)
+   — PatternFly `ExpandableSection` (or `Panel` / `Card`) titled "Why this
+   recommendation?"
+   - Read `explanation` from the active term + optimization type
+     (`getRecommendationTerm` + `recommendation_engines[optimizationType]`).
+   - Render container CPU/memory factors as labeled key-value pairs using PatternFly
+     `DescriptionList` / `DescriptionListGroup`.
+   - Format values with existing helpers (`formatOptimization`, `formatPercentage`,
+     `unitsLookupKey`) where applicable; basis points → percent display.
+4. **Empty state:** When `explanation` is absent or all fields are null/undefined,
+   show an inline message: "Explanation data will be available after next processing
+   cycle" (i18n key). Do not render an empty expandable panel.
+5. **Placement:** Mount `<RecommendationExplanation>` in
+   `optimizationsBreakdown.tsx` inside each tab's content, above
+   `OptimizationsBreakdownConfiguration` (or between configuration and utilization).
+6. **i18n:** Add explanation panel title, empty-state text, and container factor labels
+   to `messages.ts`; run locale generation script if required by CI.
+
+#### PR 5b — Chart annotations
+
+Extend [`optimizationsBreakdownChart.tsx`](../../../koku-ui/apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownChart.tsx)
+(Victory / PatternFly charts):
+
+1. **Base percentile reference line:** Horizontal dashed `ChartLine` at the cost or
+   performance base percentile from `explanation` (e.g. `cpu_cost_percentile_millicores`
+   for cost tab / CPU chart). Pass explanation-derived values from
+   `OptimizationsBreakdownUtilization` into the chart as new props.
+2. **OOM markers:** When `oom_count_sum > 0`, add vertical reference markers on the
+   memory chart for days with OOM events (if plot data exposes OOM dates; otherwise
+   annotate chart subtitle with OOM count + `oom_bump_applied` from explanation).
+3. **Confidence badge:** PatternFly `Label` or `Badge` near the chart title showing
+   low / medium / high derived from `confidence_level` thresholds (document thresholds
+   in component or i18n descriptions).
+
+#### PR 5c — Multi-type explanation rendering
+
+Extend `<RecommendationExplanation>` (and reuse on future type-specific breakdown pages
+as they land):
+
+| Recommendation type | Key explanation fields to surface |
+|---------------------|-----------------------------------|
+| Container CPU/memory | Percentiles, adaptive margins, OOM, idle, data days |
+| Node | Utilization targets, headroom, sizing formula, consolidation |
+| PVC | Thresholds, classification reason, growth rate (from existing + expl columns) |
+| Quota / CRQ | Headroom, aggregation inputs, risk level, recommendation reason |
+| VM | Margins, hysteresis, guest agent, sizing branch, idle/abandoned flags |
+| GPU | Utilization averages, MIG profile, memory-bound flag |
+| Snapshot | Threshold name/value, classification rule (+ existing age/PVC columns) |
+
+Implementation notes:
+
+- Add a `recommendationType` prop (or infer from detail response metadata) and type-specific
+  label maps in `messages.ts` (prefix keys e.g. `explanationContainer*`, `explanationNode*`, …).
+- Use PatternFly `DescriptionList` for structured display; group CPU vs memory vs metadata
+  sections for container type.
+- Hide BH explanation subsection when BH scheduling is not configured (UI-only; same rule
+  as Phase 4 doc).
+
+**koku-ui files touched (summary):**
+
+| File | PR |
+|------|-----|
+| `apps/koku-ui-ros/src/api/ros/recommendations.ts` | 5a (types + `include` param) |
+| `apps/koku-ui-ros/src/api/ros/recommendations.test.ts` | 5a (assert `?include=explanation` on detail GET) |
+| `apps/koku-ui-ros/src/store/ros/rosActions.ts` | 5a (pass include to API) |
+| `apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdown.tsx` | 5a (mount panel) |
+| `apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/RecommendationExplanation.tsx` | 5a, 5c (new) |
+| `apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/RecommendationExplanation.test.tsx` | 5a (new) |
+| `apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownUtilization.tsx` | 5b |
+| `apps/koku-ui-ros/src/routes/optimizations/optimizationsBreakdown/optimizationsBreakdownChart.tsx` | 5b |
+| `apps/koku-ui-ros/src/locales/messages.ts` | 5a, 5c |
+| `apps/koku-ui-ros/locales/data.json`, `translations.json` | 5a, 5c (regenerated) |
+
+**Frontend testing (Phase 5):**
+
+- Jest + React Testing Library (existing pattern in
+  `apps/koku-ui-ros/src/routes/components/selectWrapper/`).
+- `RecommendationExplanation.test.tsx`: panel hidden when explanation empty; factors
+  rendered when fixture present; empty-state message when all null.
+- `recommendations.test.ts`: detail helper calls
+  `recommendations/openshift/{uuid}?include=explanation`.
+- Optional chart unit test: reference line y-value matches explanation percentile prop.
+
+**Dependency:** Phase 5a requires Phase 3 API (`?include=explanation`) deployed or
+available in dev. Phase 5b/5c can follow incrementally; empty states degrade gracefully
+when backend columns are NULL (pre-backfill).
 
 ---
 
@@ -533,6 +663,19 @@ Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
   recommendation values consistent with full recompute
 - Concurrency test: `--concurrency N` partitions by `cluster_uuid` without
   duplicate work or data races
+
+### Frontend tests (`koku-ui`)
+
+- **Unit tests:** `RecommendationExplanation.test.tsx` — panel show/hide based on
+  explanation data; labeled factors for container CPU/memory fixtures; empty-state
+  copy when explanation absent or all-null.
+- **API unit test:** Extend `recommendations.test.ts` — detail GET includes
+  `?include=explanation` when breakdown fetch requests explanations.
+- **Optional:** Chart annotation test in `optimizationsBreakdownChart.test.tsx` —
+  reference line y-coordinate matches passed percentile value.
+- **Manual:** On breakdown page (`/optimizations/details/breakdown?id=…`), verify
+  expandable panel, chart reference line, confidence badge, and graceful empty state
+  before backfill completes.
 
 ---
 
@@ -581,3 +724,4 @@ include explanation factors from the moment Phase 2 ships.
 | OpenAPI | `docs/openapi/` |
 | Tests | `internal/engine/*_test.go`, `internal/api/handlers_*_integration_test.go` |
 | Docs | ADR-0296 (this plan), optional `docs-site/` UI section |
+| Frontend (`koku-ui`) | `apps/koku-ui-ros/src/api/ros/recommendations.ts`, `recommendations.test.ts`, `store/ros/rosActions.ts`, `routes/optimizations/optimizationsBreakdown/optimizationsBreakdown.tsx`, `RecommendationExplanation.tsx`, `optimizationsBreakdownUtilization.tsx`, `optimizationsBreakdownChart.tsx`, `locales/messages.ts` |
