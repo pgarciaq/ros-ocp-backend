@@ -295,3 +295,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0293](0293-engine-only-notification-deduplication.md) | Engine-only notification emission in container/namespace detail JSON | API Design | Performance | Accepted |
 | [0294](0294-slim-list-contract.md) | Slim list contract for container and namespace recommendations | API Design | Performance | Accepted |
 | [0295](0295-integer-first-architecture.md) | Integer-first arithmetic across the native engine | Engine / Algorithm | Foundational | Accepted |
+| [0296](0296-recommendation-explanation-factors-typed-columns.md) | Store recommendation explanation factors as typed columns | Data Model / API Design | 13 | Accepted |

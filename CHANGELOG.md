@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ADR-0296: Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
+- Implementation plan: `docs/plans/recommendation-explanations.md` covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
 - Per-phase Prometheus pipeline histograms (`rosocp_pipeline_phase_duration_seconds`) for `download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, and `metadata_refresh`
 - End-to-end pipeline duration histogram (`rosocp_pipeline_total_duration_seconds` with `status=success|error`)
 - Grafana dashboard panels for total pipeline duration and per-phase heatmap

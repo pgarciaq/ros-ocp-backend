@@ -1,0 +1,418 @@
+# Implementation Plan: Recommendation Explanation Factors
+
+**ADR:** [ADR-0296](../adr/0296-recommendation-explanation-factors-typed-columns.md)  
+**Branch:** `pgarciaq-rosocp-superpowers-phase13`  
+**Status:** Planned
+
+## Goal
+
+Persist the intermediate values that drive each native-engine recommendation as
+typed database columns, written at recommendation time, and expose them via API
+detail responses as a nested `explanation` object.
+
+## Recommendation Types in Scope
+
+Verified against `docs/architecture/recommendation-engines.md` and `internal/engine/`:
+
+| Type | Engine entry point | Persist function | DB table |
+|------|-------------------|------------------|----------|
+| Container CPU/memory | `RecommendCPUAndMemory` | `WriteRecommendations` | `recommendation_sets` |
+| Container GPU | `RecommendGPUWithSettings` | `StoreGPUClassifications` | `recommendation_sets` |
+| Namespace CPU/memory | `RecommendCPUAndMemory` (via `recommendNamespaces`) | `WriteNamespaceRecommendations` | `namespace_recommendation_sets` |
+| Node CPU/memory | `RecommendNodes` | `PersistNodeRecommendations` | `node_recommendations` |
+| PVC/storage | `computePVCRecommendation` | `WritePVCRecommendations` | `pvc_recommendation_sets` |
+| Namespace quota | `computeQuotaRecommendation` | `WriteQuotaRecommendations` | `quota_recommendation_sets` |
+| Cluster quota | `computeClusterQuotaRecommendation` | `WriteClusterQuotaRecommendations` | `cluster_quota_recommendation_sets` |
+| VM | `RecommendVM` | `UpsertVMRecommendation` (`vm_db.go`) | `vm_recommendations` |
+
+**Out of scope (v1):** Snapshot recommendations (`snapshot_recommendation_sets`),
+business-hours-only namespace rows (`schedule_type = 'business_hours'` get the
+same columns but share the namespace table), node GPU time-slicing list (still
+API-computed from digests — defer until persisted), recommendation history tables.
+
+---
+
+## Cross-Cutting Design
+
+### Explanation struct pattern
+
+Each engine returns `(Rec, Explanation)` or embeds `Explanation` on the rec struct.
+Explanation structs live in `internal/engine/explanation.go` (new file) with
+table-specific sub-structs.
+
+```go
+// Example — container row (one term + engine)
+type ContainerExplanation struct {
+    DataDays              int
+    DecayHalfLifeHours    float64
+    CPUCostPercentileMC   int64  // decay-weighted percentile before margin
+    CPUPerfPercentileMC   int64
+    CPUUsageP95MC         int64
+    CPUUsageP50MC         int64
+    CPUUsageMeanMC        int64
+    CPUAdaptiveMarginBP   int32  // basis points (10000 = 100%)
+    CPUTrendSlope         float64
+    MemCostPercentileKiB  int64
+    MemPerfPercentileKiB  int64
+    MemUsageP95KiB        int64
+    MemUsageP50KiB        int64
+    MemUsageMeanKiB       int64
+    MemAdaptiveMarginBP   int32
+    MemTrendSlope         float64
+    OOMCountSum           int64
+    OOMBumpApplied        bool
+    CPUFloorApplied       bool
+    IsIdle                bool
+}
+```
+
+### API shape
+
+Detail endpoints add a sibling `explanation` object (never on slim list DTOs):
+
+```json
+{
+  "recommendations": {
+    "medium_term": {
+      "cost": {
+        "cpu_request_millicores": 250,
+        "explanation": {
+          "data_days": 7,
+          "cpu_cost_percentile_millicores": 180,
+          "cpu_adaptive_margin_basis_points": 11500,
+          "cpu_usage_p95_millicores": 160,
+          "oom_count_sum": 3,
+          "oom_bump_applied": true
+        }
+      }
+    }
+  }
+}
+```
+
+Namespace, node, PVC, quota, cluster-quota, and VM handlers follow the same
+pattern at their respective nesting level.
+
+### Migration
+
+Single migration **`migrations/000145_recommendation_explanation_columns.up.sql`**
+(adds all columns, all nullable, no backfill). Down migration drops columns.
+No `CONCURRENTLY` index needed — explanation columns are not filter/sort keys in v1.
+
+### Integer scales
+
+Follow [ADR-0295](../adr/0295-integer-first-architecture.md):
+
+| Quantity | Storage | Notes |
+|----------|---------|-------|
+| CPU | `BIGINT` millicores | Same as existing rec columns |
+| Memory | `BIGINT` KiB | Same as existing rec columns |
+| Margins/ratios | `INTEGER` basis points | 10000 = 100%; matches `MarginScale` |
+| GPU utilization | `INTEGER` basis points | Matches digest schema |
+| Growth slope | `BIGINT` bytes/day or `REAL` | PVC already uses `growth_bytes_per_day BIGINT` |
+| Percentiles (float legacy) | Prefer integers; use `REAL` only where engine already emits float32 utilizations (node CPU util p50/p95) |
+
+---
+
+## Per-Type Column Specification
+
+### 1. Container CPU/memory (`recommendation_sets`)
+
+**Engine:** `RecommendCPUAndMemory` in [`internal/engine/recommend_cpu_and_memory.go`](../../internal/engine/recommend_cpu_and_memory.go)  
+**Write path:** `WriteRecommendations` in [`internal/engine/recommend_all.go`](../../internal/engine/recommend_all.go) (~L350 INSERT)  
+**API assembly:** `assembleNativeResults` / detail handler in [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
+
+Intermediate values currently computed then discarded in `multiCPUAndMemoryWeightedPercentiles` and margin/OOM application:
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_data_days` | `INTEGER` | Days in term window | `ContainerRec.DataDays` |
+| `expl_decay_half_life_hours` | `REAL` | Term decay half-life | `TermConfig.DecayHalfLifeHours` |
+| `expl_cpu_cost_pct_mc` | `BIGINT` | Decay-weighted CPU cost percentile (pre-margin) | `multiCPUAndMemoryWeightedPercentiles` vals[0] |
+| `expl_cpu_perf_pct_mc` | `BIGINT` | Decay-weighted CPU perf percentile (pre-margin) | vals[1] |
+| `expl_cpu_usage_p95_mc` | `BIGINT` | Weighted avg P95 for margin calc | vals[2] |
+| `expl_cpu_usage_p50_mc` | `BIGINT` | Weighted avg P50 for margin calc | vals[3] |
+| `expl_cpu_usage_mean_mc` | `BIGINT` | Weighted avg mean for margin calc | vals[4] |
+| `expl_cpu_adaptive_margin_bp` | `INTEGER` | Applied CPU margin (basis points) | `ComputeAdaptiveMarginScaled` |
+| `expl_cpu_trend_slope` | `REAL` | CPU usage trend slope | `extras.TrendSlope` |
+| `expl_mem_cost_pct_kib` | `BIGINT` | Decay-weighted memory cost percentile | vals[5] |
+| `expl_mem_perf_pct_kib` | `BIGINT` | Decay-weighted memory perf percentile | vals[6] |
+| `expl_mem_usage_p95_kib` | `BIGINT` | Weighted avg mem P95 | vals[7] |
+| `expl_mem_usage_p50_kib` | `BIGINT` | Weighted avg mem P50 | vals[8] |
+| `expl_mem_usage_mean_kib` | `BIGINT` | Weighted avg mem mean | vals[9] |
+| `expl_mem_adaptive_margin_bp` | `INTEGER` | Applied memory margin (basis points) | `ComputeAdaptiveMarginScaled` |
+| `expl_mem_trend_slope` | `REAL` | Memory trend slope | `extras.MemTrendSlope` |
+| `expl_oom_count_sum` | `BIGINT` | OOM events in window | `memCfg.OOMCountSum` |
+| `expl_oom_bump_applied` | `BOOLEAN` | Whether OOM bump changed memory request | compare pre/post bump |
+| `expl_cpu_floor_applied` | `BOOLEAN` | Whether 25 mCPU floor was applied | `applyFloor` |
+| `expl_is_idle` | `BOOLEAN` | Idle classification for this term | `cpuRec.IsIdle` |
+
+**Engine change:** Refactor `RecommendCPUAndMemory` to return `(CPURec, MemoryRec, ContainerExplanation)`. Populate explanation in `processContainer` inside `RecommendWorkloadsStreaming` (~L150–240 in `recommend_all.go`).
+
+**API change:** Extend `EngineRecommendation` in `recommendation_set_native.go` with optional `Explanation *ContainerExplanationAPI`.
+
+---
+
+### 2. Container GPU (`recommendation_sets`, `has_gpu = true`)
+
+**Engine:** `RecommendGPUWithSettings` in [`internal/engine/gpu_recommender.go`](../../internal/engine/gpu_recommender.go)  
+**Write path:** `StoreGPUClassifications` → `queueGPUClassificationUpdate` in [`internal/engine/gpu_query.go`](../../internal/engine/gpu_query.go)  
+**API today:** GPU block enriched at read time in detail response (`GPURecommendation` in [`internal/model/detail_response.go`](../../internal/model/detail_response.go))
+
+Today only classification, idle state, and savings are persisted; profile and
+utilization averages are recomputed from digests on detail fetch. v1 persists
+explanation factors at classification write time:
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_gpu_sm_active_avg_bp` | `INTEGER` | Avg SM active (basis points) | `GPURec.SMActiveAvg` |
+| `expl_gpu_tensor_active_avg_bp` | `INTEGER` | Avg tensor pipe active | `GPURec.TensorPipeActiveAvg` |
+| `expl_gpu_dram_active_avg_bp` | `INTEGER` | Avg DRAM active | `GPURec.DRAMActiveAvg` |
+| `expl_gpu_fb_usage_max_mib` | `INTEGER` | Max frame buffer usage MiB | `GPURec.FBUsageMaxMiB` |
+| `expl_gpu_fb_p98_mib` | `INTEGER` | P98 FB for MIG selection | `percentileFB(digests, MIGFBPercentile)` |
+| `expl_gpu_recommended_profile` | `TEXT` | MIG profile chosen | `GPURec.RecommendedGPUProfile` |
+| `expl_gpu_current_profile` | `TEXT` | Current MIG profile | `GPURec.CurrentGPUProfile` |
+| `expl_gpu_has_profiling_data` | `BOOLEAN` | Tier-1 vs Tier-2 classification | `GPURec.HasProfilingData` |
+| `expl_gpu_memory_bound` | `BOOLEAN` | Memory-bound flag | `GPURec.MemoryBoundDetected` |
+
+**Engine change:** Extend `GPURec` or return `GPUExplanation` from `RecommendGPUWithSettings`. Pass through `StoreGPUClassifications` batch UPDATE.
+
+**API change:** Prefer persisted explanation columns on detail; fall back to digest
+recompute only when columns are NULL (pre-migration rows).
+
+---
+
+### 3. Namespace CPU/memory (`namespace_recommendation_sets`)
+
+**Engine:** Same as container — `RecommendCPUAndMemory` via [`internal/engine/recommend_namespace.go`](../../internal/engine/recommend_namespace.go)  
+**Write path:** `WriteNamespaceRecommendations` (same file, ~L200+)  
+**API:** [`internal/model/namespace_recommendation_set_native.go`](../../internal/model/namespace_recommendation_set_native.go)
+
+Use **identical explanation columns** as container (`expl_*` prefix), one set per
+`(namespace, term, engine, schedule_type)` row. Namespace aggregates digest rows
+across containers; explanation columns describe the aggregated window, not
+individual containers.
+
+**Engine change:** Mirror container explanation capture in `recommendNamespaces` loop (~L146–180).
+
+---
+
+### 4. Node CPU/memory (`node_recommendations`)
+
+**Engine:** `RecommendNodes` → `classifyNode` + `sizeNodeForEngine` in [`internal/engine/recommend_nodes.go`](../../internal/engine/recommend_nodes.go)  
+**Write path:** `PersistNodeRecommendations` (~L1050 INSERT)
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_data_days` | `INTEGER` | Days in term window | `NodeRec.DataDays` |
+| `expl_target_utilization_bp` | `INTEGER` | Engine target (8000 cost / 5500 perf) | `NodeEngineConfig.TargetUtilization` |
+| `expl_current_cpu_mc` | `BIGINT` | Node allocatable/request baseline CPU | `nodeClassification.CurrentCPUMC` |
+| `expl_current_mem_kib` | `BIGINT` | Node baseline memory | `nodeClassification.CurrentMemKiB` |
+| `expl_max_cpu_usage_p95_mc` | `BIGINT` | Max daily P95 CPU usage in window | `class.maxCPUUsageP95MC` |
+| `expl_max_mem_usage_p95_kib` | `BIGINT` | Max daily P95 mem usage | `class.maxMemUsageP95KiB` |
+| `expl_pod_scheduling_headroom_bp` | `INTEGER` | Pod scheduling headroom (basis points) | `class.PodSchedulingHeadroom` |
+| `expl_ema_imbalance_bp` | `INTEGER` | EMA-smoothed CPU/mem imbalance | stranded-resource calc |
+| `expl_consolidation_applied` | `BOOLEAN` | Instance-type consolidation changed suggestion | `applyInstanceTypeConsolidation` |
+| `expl_sizing_formula` | `TEXT` | `target_util` / `headroom_2x` / `idle` | engine branch taken |
+
+Existing columns (`cpu_util_p50`, `trend_slope`, `stranded_resource`,
+`suggested_instance_type`, `instance_type_reason`) remain; explanation columns
+capture inputs to sizing that are not already stored.
+
+**Engine change:** Extend `NodeRec` with `Explanation NodeExplanation` populated in `RecommendNodes` after `sizeNodeForEngine`.
+
+**API change:** Add `explanation` to `NodeUtilizationEngineRec` in [`internal/model/node_cpu_mem_recommendation.go`](../../internal/model/node_cpu_mem_recommendation.go).
+
+---
+
+### 5. PVC/storage (`pvc_recommendation_sets`)
+
+**Engine:** `computePVCRecommendation` in [`internal/engine/pvc_recommend.go`](../../internal/engine/pvc_recommend.go)  
+**Write path:** `WritePVCRecommendations`
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_data_days` | `INTEGER` | Days in window | `rec.DataDays` |
+| `expl_usage_ratio_bp` | `INTEGER` | Usage/capacity ratio (basis points) | `rec.UsageRatio * 10000` |
+| `expl_oversized_threshold_bp` | `INTEGER` | Configured oversized threshold | `PVCThresholdSettings.OversizedThreshold` |
+| `expl_near_full_threshold_bp` | `INTEGER` | Configured near-full threshold | `PVCThresholdSettings.NearFullThreshold` |
+| `expl_growth_bytes_per_day` | `BIGINT` | Decay-weighted growth slope | `computePVCGrowthSlope` |
+| `expl_recommended_size_multiplier` | `INTEGER` | Size multiplier applied (×100) | `PVCThresholdSettings.RecommendedSizeMultiplier` |
+| `expl_min_recommended_gib` | `INTEGER` | Floor GiB applied | `PVCThresholdSettings.MinRecommendedGiB` |
+| `expl_classification_reason` | `TEXT` | `orphaned` / `oversized` / `near_full` / `healthy` | switch branch in `computePVCRecommendation` |
+
+Several values overlap existing columns (`usage_ratio`, `growth_bytes_per_day`,
+`data_days`); explanation columns capture **thresholds and branch reason** not
+already stored. Consider aliasing existing columns in API rather than duplicating
+in DB where redundant — final schema review should drop duplicates.
+
+---
+
+### 6. Namespace quota (`quota_recommendation_sets`)
+
+**Engine:** `computeQuotaRecommendation` in [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go)  
+**Write path:** `WriteQuotaRecommendations`
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_headroom_bp` | `INTEGER` | Headroom basis points applied | `cfg.HeadroomBasisPoints` |
+| `expl_container_cpu_sum_mc` | `BIGINT` | Sum of container rec CPU requests | `ContainerQuotaAggregate.CPURequestSumMC` |
+| `expl_container_mem_sum_bytes` | `BIGINT` | Sum of container mem requests | `agg.MemoryRequestSumBytes` |
+| `expl_signal_c_cpu_used_mc` | `BIGINT` | max(quota used, container sum) CPU | utilization input |
+| `expl_max_utilization_bp` | `INTEGER` | Highest resource utilization BP | `maxQuotaUtilizationBP` |
+| `expl_risk_level` | `TEXT` | Derived risk band | `classifyQuotaRisk` |
+| `expl_recommendation_reason` | `TEXT` | `tighten` / `raise` / `optimal` branch | `classifyQuotaRecommendation` |
+
+Hard/used/recommended values already exist as first-class columns; explanation
+captures **aggregation inputs and classification logic**.
+
+---
+
+### 7. Cluster resource quota (`cluster_quota_recommendation_sets`)
+
+**Engine:** `computeClusterQuotaRecommendation` in [`internal/engine/recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go)  
+**Write path:** `WriteClusterQuotaRecommendations`
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_headroom_bp` | `INTEGER` | Headroom basis points | `cfg.HeadroomBasisPoints` |
+| `expl_ns_quota_cpu_sum_mc` | `BIGINT` | Sum of namespace quota recs CPU | `NamespaceQuotaClusterAggregate` |
+| `expl_ns_quota_mem_sum_bytes` | `BIGINT` | Sum of namespace quota recs mem | same |
+| `expl_base_cpu_mc` | `BIGINT` | max(CRQ used, NS agg) before headroom | `baseRecommended` |
+| `expl_max_utilization_bp` | `INTEGER` | Highest utilization BP | `maxClusterQuotaUtilizationBP` |
+| `expl_recommendation_reason` | `TEXT` | Classification branch | `classifyClusterQuotaRecommendation` |
+
+---
+
+### 8. VM (`vm_recommendations`)
+
+**Engine:** `RecommendVM` in [`internal/engine/vm_recommender.go`](../../internal/engine/vm_recommender.go)  
+**Write path:** `UpsertVMRecommendation` in [`internal/engine/vm_db.go`](../../internal/engine/vm_db.go)  
+**API:** [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go)
+
+| Column | Type | Description | Source |
+|--------|------|-------------|--------|
+| `expl_data_days` | `INTEGER` | Days in term window | `len(windowed)` |
+| `expl_max_cpu_usage_mc` | `BIGINT` | P95 or P99 max CPU in window | `vmMaxCPUUsage` |
+| `expl_max_mem_usage_kib` | `BIGINT` | Peak memory KiB | `vmMaxMemoryUsageKiB` |
+| `expl_cpu_margin_bp` | `INTEGER` | Applied CPU margin | `vmResolveCPUMargin` |
+| `expl_mem_margin_bp` | `INTEGER` | Applied memory margin | `cfg.MemMarginMin` scaled |
+| `expl_raw_recommended_vcpu` | `INTEGER` | Pre-hysteresis vCPU | `rawRecommendedVCPU` |
+| `expl_raw_recommended_mem_gib` | `INTEGER` | Pre-hysteresis memory GiB | `rawRecommendedMemGiB` |
+| `expl_downsize_hysteresis_held` | `BOOLEAN` | Downsize blocked by hysteresis | `downsizeHeld` |
+| `expl_guest_agent_used` | `BOOLEAN` | Sizing used guest-agent memory | `useAgentData` |
+| `expl_idle_detected` | `BOOLEAN` | VM idle classification | `isIdle` |
+| `expl_abandoned_detected` | `BOOLEAN` | VM abandoned | `isAbandoned` |
+| `expl_power_off_candidate` | `BOOLEAN` | Power-off candidate | `isPowerOffCandidate` |
+| `expl_sizing_branch` | `TEXT` | `abandoned` / `idle` / `active_downsize` / `active` | engine branch |
+
+GPU sub-recommendation within VM (`RecommendVMTimeSlicing`, MIG profile) can
+reuse VM GPU columns already on the row; add `expl_gpu_action` / `expl_gpu_rationale`
+TEXT columns if not sufficiently covered by `gpu_timeslice_rationale`.
+
+---
+
+## Implementation Phases
+
+### Phase 1 — Schema and types (1 PR)
+
+1. Add `migrations/000145_recommendation_explanation_columns.{up,down}.sql`
+2. Add `internal/engine/explanation.go` with all explanation structs
+3. Extend engine rec structs with embedded `Explanation` field (zero value safe)
+4. Unit tests: explanation struct JSON tags match OpenAPI naming (snake_case)
+
+### Phase 2 — Engine capture (2–3 PRs)
+
+Split by resource type to keep reviews manageable:
+
+| PR | Files | Functions |
+|----|-------|-----------|
+| 2a Container + namespace | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go` | Return + populate explanation |
+| 2b Node + PVC | `recommend_nodes.go`, `pvc_recommend.go` | Same |
+| 2c GPU + VM | `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go` | Same |
+| 2d Quota + CRQ | `recommend_quota.go`, `recommend_cluster_quota.go` | Same |
+
+Each PR updates the corresponding `Write*` / `Persist*` SQL to include new columns.
+
+### Phase 3 — API exposure (1 PR)
+
+1. Add `Explanation` field to API DTOs (`EngineRecommendation`, `GPURecommendation`,
+   `NodeUtilizationEngineRec`, `PVCRecommendationResponse`, quota/VM handlers)
+2. Map DB columns → nested `explanation` in serializers (not list DTOs)
+3. Update OpenAPI spec (`docs/openapi/openapi.yaml` or generated spec)
+4. Contract tests: detail response includes `explanation` when columns populated
+
+### Phase 4 — Frontend guidance (documentation only)
+
+Ship [`docs-site/ui-integration-guide.md`](../ui-integration-guide.md) section:
+
+- Generic `<RecommendationExplanation>` component consuming `explanation` object
+- Label map from factor keys → user-facing strings (i18n keys)
+- Hide section when all explanation fields are null (pre-migration rows)
+- Do **not** fetch explanations separately — they arrive on detail GET
+
+---
+
+## Testing Approach
+
+### Unit tests (engine)
+
+- Extend existing engine tests (`recommend_cpu_test.go`, `pvc_recommend_test.go`,
+  `recommend_nodes_test.go`, `vm_recommender_test.go`, `recommend_quota_test.go`)
+  to assert explanation fields match known inputs
+- Table-driven tests for classification branches (PVC orphaned vs oversized,
+  quota tighten vs optimal, VM hysteresis held)
+
+### Integration tests (DB round-trip)
+
+- Insert recommendation via `Write*` functions; SELECT explanation columns;
+  assert non-null for synthetic digest fixtures
+- Pattern: follow `recommend_all_test.go` / `WritePVCRecommendations_BatchUpsert`
+
+### API contract tests
+
+- Extend `handlers_*_integration_test.go` detail fixtures
+- Assert `explanation` present and omits from list responses (ADR-0294 compliance)
+
+### Migration test
+
+- `tests/migrations/` or manual: `migrate up 000145`, verify `\d recommendation_sets` shows new columns, `migrate down` drops cleanly
+
+---
+
+## Rollout
+
+1. Deploy migration (additive, nullable — zero downtime)
+2. Deploy engine changes — new rows get explanations; old rows stay NULL
+3. Deploy API — UI shows "Explanation unavailable" for NULL (or hides panel)
+4. No backfill required — explanations appear as clusters re-ingest
+5. Optional: trigger `update_cost_model_costs`-style recalc endpoint per resource
+   if immediate backfill is desired (out of scope v1)
+
+---
+
+## Open Questions
+
+1. **Prefix convention:** `expl_` DB prefix vs unprefixed names — plan uses `expl_`
+   to distinguish from recommendation outputs; confirm in schema review.
+2. **PVC duplication:** `usage_ratio` and `growth_bytes_per_day` already exist —
+   avoid redundant `expl_*` copies; API can assemble from both.
+3. **Node GPU time-slicing:** defer explanation persistence until node GPU recs
+   are written to a table (currently API-computed).
+4. **Business hours:** same explanation columns on BH rows; UI may hide unless
+   BH schedule is enabled for the namespace.
+
+---
+
+## File Checklist
+
+| Area | Files to touch |
+|------|----------------|
+| Migration | `migrations/000145_recommendation_explanation_columns.{up,down}.sql` |
+| Engine types | `internal/engine/explanation.go`, `internal/engine/types.go` |
+| Engine logic | `recommend_cpu_and_memory.go`, `recommend_all.go`, `recommend_namespace.go`, `recommend_nodes.go`, `pvc_recommend.go`, `gpu_recommender.go`, `gpu_query.go`, `vm_recommender.go`, `vm_db.go`, `recommend_quota.go`, `recommend_cluster_quota.go` |
+| Models | `internal/model/recommendation_set_native.go`, `namespace_recommendation_set_native.go`, `node_cpu_mem_recommendation.go`, `detail_response.go`, `vm_recommendation.go` |
+| API handlers | `handlers_pvc.go`, `handlers_vm_recs.go`, `handlers_quota_recs.go`, `handlers_node_utilization.go`, `handlers_gpu_mig.go` |
+| OpenAPI | `docs/openapi/` |
+| Tests | `internal/engine/*_test.go`, `internal/api/handlers_*_integration_test.go` |
+| Docs | ADR-0296 (this plan), optional `docs-site/` UI section |
