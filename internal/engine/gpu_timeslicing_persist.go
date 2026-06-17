@@ -158,7 +158,7 @@ func upsertNodeGPUTimeslicingRec(
 			candidate_containers, impacted_containers,
 			notification_codes,
 			estimated_savings_cents, savings_per_gpu_cents,
-			last_seen_at, updated_at
+			last_seen_at, updated_at,`+nodeGPUTimeslicingExplSQLColumns+`
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8,
@@ -166,7 +166,7 @@ func upsertNodeGPUTimeslicingRec(
 			$11, $12,
 			$13,
 			$14, $15,
-			$16, now()
+			$16, now(), $17, $18, $19, $20
 		)
 		ON CONFLICT (org_id, cluster_uuid, node_name, gpu_model, term) DO UPDATE SET
 			recommended_replicas = EXCLUDED.recommended_replicas,
@@ -180,14 +180,16 @@ func upsertNodeGPUTimeslicingRec(
 			estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 			savings_per_gpu_cents = EXCLUDED.savings_per_gpu_cents,
 			last_seen_at = EXCLUDED.last_seen_at,
-			updated_at = now()`,
-		orgID, clusterUUID, rec.NodeName, rec.GPUModel, rec.Term,
-		rec.RecommendedReplicas, rec.Confidence, rec.Confidence,
-		len(rec.CandidateContainers), len(rec.ImpactedContainers),
-		model.NodeContainerRefList(candidates), model.NodeContainerRefList(impacted),
-		rec.NotificationCodes,
-		estimatedSavingsCents, savingsPerGPUCents,
-		lastSeenAt,
+			updated_at = now(),`+nodeGPUTimeslicingExplUpdateSet,
+		append([]any{
+			orgID, clusterUUID, rec.NodeName, rec.GPUModel, rec.Term,
+			rec.RecommendedReplicas, rec.Confidence, rec.Confidence,
+			len(rec.CandidateContainers), len(rec.ImpactedContainers),
+			model.NodeContainerRefList(candidates), model.NodeContainerRefList(impacted),
+			rec.NotificationCodes,
+			estimatedSavingsCents, savingsPerGPUCents,
+			lastSeenAt,
+		}, appendNodeGPUTimeslicingExplArgs(nil, rec.Expl)...)...,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert node GPU time-slicing rec %s/%s [%s]: %w", rec.NodeName, rec.GPUModel, rec.Term, err)
@@ -231,12 +233,14 @@ func appendNodeGPUTimeslicingHistory(
 				org_id, cluster_uuid, node_name, gpu_model, term,
 				recommended_replicas, confidence,
 				candidate_count, impacted_count,
-				estimated_savings_cents
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			orgID, clusterUUID, rec.NodeName, rec.GPUModel, rec.Term,
-			rec.RecommendedReplicas, rec.Confidence,
-			len(rec.CandidateContainers), len(rec.ImpactedContainers),
-			estimatedSavingsCents,
+				estimated_savings_cents,`+nodeGPUTimeslicingExplSQLColumns+`
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			append([]any{
+				orgID, clusterUUID, rec.NodeName, rec.GPUModel, rec.Term,
+				rec.RecommendedReplicas, rec.Confidence,
+				len(rec.CandidateContainers), len(rec.ImpactedContainers),
+				estimatedSavingsCents,
+			}, appendNodeGPUTimeslicingExplArgs(nil, rec.Expl)...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("append node GPU time-slicing history %s/%s [%s]: %w",

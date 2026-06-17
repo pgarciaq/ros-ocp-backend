@@ -47,12 +47,14 @@ func AppendVMRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs
 				org_id, cluster_id, vm_name, namespace, term, engine,
 				recommended_vcpu, recommended_memory_gib, recommended_instance_type,
 				gpu_classification, recommended_gpu_action,
-				is_idle, is_abandoned, confidence
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-			r.OrgID, r.ClusterUUID.String(), r.VMName, r.Namespace, r.Term, r.Engine,
-			r.RecommendedVCPU, float64(r.RecommendedMemoryGiB), instType,
-			r.GPUClassification, r.RecommendedGPUAction,
-			r.IsIdle, r.IsAbandoned, r.Confidence,
+				is_idle, is_abandoned, confidence,`+vmExplSQLColumns+`
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
+			append([]any{
+				r.OrgID, r.ClusterUUID.String(), r.VMName, r.Namespace, r.Term, r.Engine,
+				r.RecommendedVCPU, float64(r.RecommendedMemoryGiB), instType,
+				r.GPUClassification, r.RecommendedGPUAction,
+				r.IsIdle, r.IsAbandoned, r.Confidence,
+			}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("insert VM rec history %s/%s: %w", r.Namespace, r.VMName, err)

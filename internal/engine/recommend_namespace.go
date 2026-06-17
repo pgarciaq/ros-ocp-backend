@@ -48,6 +48,8 @@ type NamespaceRec struct {
 
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
+
+	Expl ContainerExplanationFactors
 }
 
 // RecommendAllNamespaces reads all-hours namespace digests for an org+cluster,
@@ -147,7 +149,8 @@ func recommendNamespaces(
 				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
 				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, profile)
 
-				cpuRec, memRec := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
+				cpuRec, memRec, expl := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
+				expl.DataDays = dataDays
 
 				var recCPUReq, recCPULim, recMemReq, recMemLim int64
 				if profile == "performance" {
@@ -183,6 +186,7 @@ func recommendNamespaces(
 					Stale:                stale,
 					MonitoringStartTime:  monStart,
 					MonitoringEndTime:    end,
+					Expl:                 expl,
 				}
 				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
@@ -223,8 +227,8 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				variation_cpu_request_pct, variation_cpu_limit_pct,
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
-				monitoring_start_time, monitoring_end_time, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,now())
+				monitoring_start_time, monitoring_end_time,`+containerExplSQLColumns+`, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,`+containerExplValuePlaceholders(25)+`, now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -245,18 +249,20 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				stale = EXCLUDED.stale,
 				namespace_id = EXCLUDED.namespace_id,
 				monitoring_start_time = EXCLUDED.monitoring_start_time,
-				monitoring_end_time = EXCLUDED.monitoring_end_time,
+				monitoring_end_time = EXCLUDED.monitoring_end_time,`+containerExplUpdateSet+`,
 				updated_at = now()`,
-			r.OrgID, r.ClusterUUID, r.Namespace,
-			r.Term, r.Engine, namespaceID, scheduleType,
-			r.RecCPURequestMC, r.RecCPULimitMC,
-			r.RecMemRequestKiB, r.RecMemLimitKiB,
-			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
-			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationCPULimitPct,
-			r.VariationMemRequestPct, r.VariationMemLimitPct,
-			r.NotificationCodes, r.ConfidenceLevel, r.Stale,
-			r.MonitoringStartTime, r.MonitoringEndTime,
+			appendContainerExplArgs([]any{
+				r.OrgID, r.ClusterUUID, r.Namespace,
+				r.Term, r.Engine, namespaceID, scheduleType,
+				r.RecCPURequestMC, r.RecCPULimitMC,
+				r.RecMemRequestKiB, r.RecMemLimitKiB,
+				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+				r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+				r.VariationCPURequestPct, r.VariationCPULimitPct,
+				r.VariationMemRequestPct, r.VariationMemLimitPct,
+				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+				r.MonitoringStartTime, r.MonitoringEndTime,
+			}, r.Expl)...,
 		)
 	}
 
@@ -300,8 +306,8 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level,
 				monitoring_start_time, monitoring_end_time,
-				created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$24)
+				created_at, updated_at,`+containerExplSQLColumns+`
+			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$24,`+containerExplValuePlaceholders(25)+`)
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type, created_at)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -311,18 +317,20 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				rec_memory_limit_kib = EXCLUDED.rec_memory_limit_kib,
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
-				updated_at = EXCLUDED.updated_at`,
-			r.OrgID, r.ClusterUUID, r.Namespace, namespaceID,
-			r.Term, r.Engine, scheduleType,
-			r.RecCPURequestMC, r.RecCPULimitMC,
-			r.RecMemRequestKiB, r.RecMemLimitKiB,
-			r.CurrentCPURequestMC, r.CurrentCPULimitMC,
-			r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-			r.VariationCPURequestPct, r.VariationCPULimitPct,
-			r.VariationMemRequestPct, r.VariationMemLimitPct,
-			r.NotificationCodes, r.ConfidenceLevel,
-			r.MonitoringStartTime, r.MonitoringEndTime,
-			now,
+				updated_at = EXCLUDED.updated_at,`+containerExplUpdateSet,
+			appendContainerExplArgs(append([]any{
+				r.OrgID, r.ClusterUUID, r.Namespace, namespaceID,
+				r.Term, r.Engine, scheduleType,
+				r.RecCPURequestMC, r.RecCPULimitMC,
+				r.RecMemRequestKiB, r.RecMemLimitKiB,
+				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+				r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+				r.VariationCPURequestPct, r.VariationCPULimitPct,
+				r.VariationMemRequestPct, r.VariationMemLimitPct,
+				r.NotificationCodes, r.ConfidenceLevel,
+				r.MonitoringStartTime, r.MonitoringEndTime,
+				now,
+			}), r.Expl)...,
 		)
 	}
 

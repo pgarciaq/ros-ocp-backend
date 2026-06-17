@@ -38,8 +38,8 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 				rec_cpu_request_millicores, rec_cpu_limit_millicores,
 				rec_memory_request_kib, rec_memory_limit_kib,
 				notification_codes, confidence_level,
-				estimated_savings_cents, source_binary
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+				estimated_savings_cents, source_binary,`+containerExplSQLColumns+`
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,`+containerExplValuePlaceholders(18)+`)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -49,13 +49,15 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
-				source_binary = EXCLUDED.source_binary`,
-				recordedAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-				r.Term, r.Engine,
-				r.RecCPURequestMC, r.RecCPULimitMC,
-				r.RecMemRequestKiB, r.RecMemLimitKiB,
-				r.NotificationCodes, r.ConfidenceLevel,
-				r.EstimatedSavingsCents, sourceBinary,
+				source_binary = EXCLUDED.source_binary,`+containerExplUpdateSet+``,
+				appendContainerExplArgs([]any{
+					recordedAt, r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+					r.Term, r.Engine,
+					r.RecCPURequestMC, r.RecCPULimitMC,
+					r.RecMemRequestKiB, r.RecMemLimitKiB,
+					r.NotificationCodes, r.ConfidenceLevel,
+					r.EstimatedSavingsCents, sourceBinary,
+				}, r.Expl)...,
 			)
 		}
 

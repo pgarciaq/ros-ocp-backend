@@ -174,6 +174,27 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			engine TEXT NOT NULL DEFAULT 'cost',
 			PRIMARY KEY (org_id, cluster_uuid, node, term, engine)
 		)`,
+		`CREATE TABLE node_gpu_timeslicing_recommendations (
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			node_name TEXT NOT NULL,
+			gpu_model TEXT NOT NULL DEFAULT '',
+			term TEXT NOT NULL,
+			recommended_replicas INTEGER NOT NULL DEFAULT 1,
+			PRIMARY KEY (org_id, cluster_uuid, node_name, gpu_model, term)
+		)`,
+		`CREATE TABLE node_gpu_timeslicing_recommendation_history (
+			id BIGSERIAL PRIMARY KEY,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			node_name TEXT NOT NULL,
+			gpu_model TEXT NOT NULL DEFAULT '',
+			term TEXT NOT NULL,
+			recommended_replicas INTEGER NOT NULL DEFAULT 1,
+			confidence REAL NOT NULL DEFAULT 0,
+			candidate_count INTEGER NOT NULL DEFAULT 0,
+			impacted_count INTEGER NOT NULL DEFAULT 0
+		)`,
 		// Kruize-era tables referenced by the background-delete steps.
 		`CREATE TABLE clusters (
 			id BIGSERIAL PRIMARY KEY,

@@ -313,7 +313,16 @@ const gpuClassificationUpdateSQL = `
 	    gpu_idle_since = $9,
 	    gpu_idle_duration_days = $10,
 	    gpu_estimated_waste_cents = $11,
-	    estimated_gpu_savings_cents = $12
+	    estimated_gpu_savings_cents = $12,
+	    expl_gpu_sm_active_avg_bp = $13,
+	    expl_gpu_tensor_active_avg_bp = $14,
+	    expl_gpu_dram_active_avg_bp = $15,
+	    expl_gpu_fb_usage_max_mib = $16,
+	    expl_gpu_fb_p98_mib = $17,
+	    expl_gpu_recommended_profile = $18,
+	    expl_gpu_current_profile = $19,
+	    expl_gpu_has_profiling_data = $20,
+	    expl_gpu_memory_bound = $21
 	WHERE org_id = $1
 	  AND cluster_uuid = $2
 	  AND namespace = $3
@@ -328,13 +337,16 @@ type gpuClassificationWrite struct {
 	idleDurationDays                                       int
 	wasteCents                   int64
 	gpuSavingsCents              *int64
+	expl                         GPUExplanationFactors
 }
 
 func queueGPUClassificationUpdate(batch *pgx.Batch, w gpuClassificationWrite) {
 	batch.Queue(gpuClassificationUpdateSQL,
-		w.orgID, w.clusterUUID, w.namespace, w.workload, w.containerName,
-		w.classification, w.term,
-		w.idleState, w.idleSince, w.idleDurationDays, w.wasteCents, w.gpuSavingsCents,
+		append([]any{
+			w.orgID, w.clusterUUID, w.namespace, w.workload, w.containerName,
+			w.classification, w.term,
+			w.idleState, w.idleSince, w.idleDurationDays, w.wasteCents, w.gpuSavingsCents,
+		}, appendGPUExplArgs(nil, w.expl)...)...,
 	)
 }
 
@@ -401,6 +413,7 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 				idleDurationDays: rec.GPUIdleDurationDays,
 				wasteCents:       wasteCents,
 				gpuSavingsCents:  ComputeGPUSavingsCents(rec, costData),
+				expl:             gpuExplFromRec(*rec, rec.FBP98MiB),
 			})
 		}
 	}

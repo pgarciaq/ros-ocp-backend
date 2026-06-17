@@ -29,6 +29,7 @@ type TimeslicingRec struct {
 	CandidateContainers []GPUContainerRef
 	ImpactedContainers  []GPUContainerRef
 	NotificationCodes   []int16
+	Expl                NodeGPUTimeslicingExplanationFactors
 }
 
 // GPUContainerRef identifies a container within a time-slicing recommendation.
@@ -225,6 +226,12 @@ func ComputeNodeTimeslicingRecWithSettings(group NodeGPUGroup, gpuRate *float32,
 		TotalNodeSavings:    totalSavings,
 		Confidence:          confidence,
 		NotificationCodes:   []int16{NotifGPUTimeSharingCandidate},
+		Expl: NodeGPUTimeslicingExplanationFactors{
+			DataDays:           len(group.Containers),
+			CandidateCount:     len(candidates),
+			ImpactedCount:      len(impacted),
+			ClassificationRule: "majority underutilized GPU containers eligible for time-slicing",
+		},
 	}
 
 	for _, c := range candidates {

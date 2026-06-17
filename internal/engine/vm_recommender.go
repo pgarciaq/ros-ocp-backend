@@ -105,6 +105,9 @@ func RecommendVM(
 		rawRecommendedVCPU   int32
 		rawRecommendedMemGiB int32
 		downsizeHeld         bool
+		cpuMarginBP          int32
+		memMarginBP          int32
+		sizingBranch         string
 	)
 
 	if isAbandoned {
@@ -112,13 +115,17 @@ func RecommendVM(
 		recommendedMemGiB = 0
 		rawRecommendedVCPU = 0
 		rawRecommendedMemGiB = 0
+		sizingBranch = "abandoned"
 	} else if isIdle {
 		recommendedVCPU = 1
 		recommendedMemGiB = memFloorGiB
 		rawRecommendedVCPU = recommendedVCPU
 		rawRecommendedMemGiB = recommendedMemGiB
+		sizingBranch = "idle"
 	} else {
 		cpuMargin := vmResolveCPUMargin(cfg, engine, windowed, useP99CPU)
+		cpuMarginBP = int32(cpuMargin * float64(BasisPointsScale))
+		memMarginBP = int32(cfg.MemMarginMin * float64(BasisPointsScale))
 
 		recommendedMC := float64(maxCPUP95) * (1 + cpuMargin)
 		rawRecommendedVCPU = int32(math.Max(1, math.Ceil(recommendedMC/1000.0)))
@@ -150,6 +157,11 @@ func RecommendVM(
 		)
 		if memHeld {
 			downsizeHeld = true
+		}
+		if downsizeHeld {
+			sizingBranch = "active_downsize"
+		} else {
+			sizingBranch = "active"
 		}
 	}
 
@@ -274,6 +286,13 @@ func RecommendVM(
 	notifications = appendVMPlacementNotifications(notifications, placementNotifs)
 
 	now := time.Now().UTC()
+	dataDays := len(windowed)
+	guestAgentUsed := useAgentData
+	idleDetected := isIdle
+	abandonedDetected := isAbandoned
+	powerOffCandidate := isPowerOffCandidate
+	gpuAction := gpuAnalysis.Action
+	gpuRationale := gpuAnalysis.GPUTimeSliceRationale
 	rec := &model.VMRecommendation{
 		OrgID:                    orgID,
 		ClusterUUID:              clusterUUID,
@@ -325,6 +344,21 @@ func RecommendVM(
 		LastRecommendedAt:        now,
 		CreatedAt:                now,
 		UpdatedAt:                now,
+		ExplDataDays:             vmIntPtr(dataDays),
+		ExplMaxCPUUsageMC:        vmInt64Ptr(int64(maxCPUP95)),
+		ExplMaxMemUsageKiB:       vmInt64Ptr(maxMemKiB),
+		ExplCPUMarginBP:          vmInt32Ptr(cpuMarginBP),
+		ExplMemMarginBP:          vmInt32Ptr(memMarginBP),
+		ExplRawRecommendedVCPU:   vmInt32Ptr(rawRecommendedVCPU),
+		ExplRawRecommendedMemGiB: vmInt32Ptr(rawRecommendedMemGiB),
+		ExplDownsizeHysteresisHeld: &downsizeHeld,
+		ExplGuestAgentUsed:       &guestAgentUsed,
+		ExplIdleDetected:         &idleDetected,
+		ExplAbandonedDetected:    &abandonedDetected,
+		ExplPowerOffCandidate:    &powerOffCandidate,
+		ExplSizingBranch:         vmStringPtr(sizingBranch),
+		ExplGPUAction:            vmStringPtr(gpuAction),
+		ExplGPURationale:         vmStringPtr(gpuRationale),
 	}
 
 	return rec, nil
@@ -876,3 +910,64 @@ func vmClassifySeries(digests []model.DailyVMDigest, vcpu, memGiB int32, isIdle 
 	return vmSeriesGeneralPurpose
 }
 
+func vmIntPtr(v int) *int { return &v }
+func vmInt32Ptr(v int32) *int32 { return &v }
+func vmInt64Ptr(v int64) *int64 { return &v }
+func vmStringPtr(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func vmExplFromRecommendation(r model.VMRecommendation) VMExplanationFactors {
+	var dataDays int
+	if r.ExplDataDays != nil {
+		dataDays = *r.ExplDataDays
+	}
+	return VMExplanationFactors{
+		DataDays:               dataDays,
+		MaxCPUUsageMC:          vmDerefInt64(r.ExplMaxCPUUsageMC),
+		MaxMemUsageKiB:         vmDerefInt64(r.ExplMaxMemUsageKiB),
+		CPUMarginBP:            vmDerefInt32(r.ExplCPUMarginBP),
+		MemMarginBP:            vmDerefInt32(r.ExplMemMarginBP),
+		RawRecommendedVCPU:     vmDerefInt32(r.ExplRawRecommendedVCPU),
+		RawRecommendedMemGiB:   vmDerefInt32(r.ExplRawRecommendedMemGiB),
+		DownsizeHysteresisHeld: vmDerefBool(r.ExplDownsizeHysteresisHeld),
+		GuestAgentUsed:         vmDerefBool(r.ExplGuestAgentUsed),
+		IdleDetected:           vmDerefBool(r.ExplIdleDetected),
+		AbandonedDetected:      vmDerefBool(r.ExplAbandonedDetected),
+		PowerOffCandidate:      vmDerefBool(r.ExplPowerOffCandidate),
+		SizingBranch:           vmDerefString(r.ExplSizingBranch),
+		GPUAction:              vmDerefString(r.ExplGPUAction),
+		GPURationale:           vmDerefString(r.ExplGPURationale),
+	}
+}
+
+func vmDerefInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func vmDerefInt32(p *int32) int32 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func vmDerefBool(p *bool) bool {
+	if p == nil {
+		return false
+	}
+	return *p
+}
+
+func vmDerefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}

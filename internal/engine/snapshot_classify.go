@@ -39,6 +39,7 @@ type SnapshotRec struct {
 	RecommendationType   string
 	EstimatedCostCents *int64
 	NotificationCodes    []int16
+	Expl                   SnapshotExplanationFactors
 }
 
 // pvcGroup holds the indices of snapshots sharing the same source PVC.
@@ -160,14 +161,63 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		rec.ManagedBy = managedBy
 
 		// Classification with priority: Orphaned > Managed > Redundant > Stale > Never-restored > Active
-		classification, codes := classifySnapshot(snap, i, ageDays, managedBy, settings, pvcGroups, inventory)
+		classification, codes, expl := classifySnapshotWithExplanation(snap, i, ageDays, managedBy, settings, pvcGroups, inventory)
 		rec.RecommendationType = classification
 		rec.NotificationCodes = codes
+		rec.Expl = expl
 
 		recs = append(recs, rec)
 	}
 
 	return recs, nil
+}
+
+func classifySnapshotWithExplanation(
+	snap snapshotInventoryRow,
+	idx, ageDays int,
+	managedBy string,
+	settings SnapshotSettings,
+	pvcGroups map[string]*pvcGroup,
+	inventory []snapshotInventoryRow,
+) (string, []int16, SnapshotExplanationFactors) {
+	classification, codes := classifySnapshot(snap, idx, ageDays, managedBy, settings, pvcGroups, inventory)
+	var expl SnapshotExplanationFactors
+	switch classification {
+	case "orphaned":
+		expl = SnapshotExplanationFactors{
+			ThresholdUsed:      settings.OrphanAgeDays,
+			ThresholdName:      "orphan_age_days",
+			ClassificationRule: "source PVC deleted AND age > orphan threshold",
+		}
+	case "managed":
+		expl = SnapshotExplanationFactors{
+			ThresholdName:      "managed_by",
+			ClassificationRule: "backup tool detected: " + managedBy,
+		}
+	case "redundant":
+		expl = SnapshotExplanationFactors{
+			ThresholdUsed:      settings.RedundantThreshold,
+			ThresholdName:      "redundancy_max",
+			ClassificationRule: "age > stale threshold AND not among newest snapshots for source PVC",
+		}
+	case "stale":
+		expl = SnapshotExplanationFactors{
+			ThresholdUsed:      settings.StaleDays,
+			ThresholdName:      "stale_age_days",
+			ClassificationRule: "age > stale threshold AND never restored",
+		}
+	case "never_restored":
+		expl = SnapshotExplanationFactors{
+			ThresholdUsed:      settings.NeverRestoredDays,
+			ThresholdName:      "never_restored_days",
+			ClassificationRule: "age > never-restored threshold AND no restores",
+		}
+	default:
+		expl = SnapshotExplanationFactors{
+			ClassificationRule: "recent snapshot or has restores",
+		}
+	}
+	return classification, codes, expl
 }
 
 func classifySnapshot(
@@ -254,8 +304,8 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				creation_timestamp, restore_size_bytes, age_days,
 				source_pvc_exists, restored_pvc_count, managed_by,
 				recommendation_type, estimated_cost_cents,
-				notification_codes, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+				notification_codes, updated_at,`+snapshotExplSQLColumns+`
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, $18, $19)
 			ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
 			DO UPDATE SET
 				source_pvc_name = EXCLUDED.source_pvc_name,
@@ -270,13 +320,15 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				recommendation_type = EXCLUDED.recommendation_type,
 				estimated_cost_cents = EXCLUDED.estimated_cost_cents,
 				notification_codes = EXCLUDED.notification_codes,
-				updated_at = NOW()`,
-			rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.SnapshotName,
-			rec.SourcePVCName, rec.VolumeSnapshotClass, rec.StorageClass,
-			rec.CreationTimestamp, rec.RestoreSizeBytes, rec.AgeDays,
-			rec.SourcePVCExists, rec.RestoredPVCCount, rec.ManagedBy,
-			rec.RecommendationType, rec.EstimatedCostCents,
-			rec.NotificationCodes,
+				updated_at = NOW(),`+snapshotExplUpdateSet,
+			append([]any{
+				rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.SnapshotName,
+				rec.SourcePVCName, rec.VolumeSnapshotClass, rec.StorageClass,
+				rec.CreationTimestamp, rec.RestoreSizeBytes, rec.AgeDays,
+				rec.SourcePVCExists, rec.RestoredPVCCount, rec.ManagedBy,
+				rec.RecommendationType, rec.EstimatedCostCents,
+				rec.NotificationCodes,
+			}, appendSnapshotExplArgs(nil, rec.Expl)...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting snapshot recommendation %s/%s: %w", rec.Namespace, rec.SnapshotName, err)

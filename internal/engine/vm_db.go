@@ -111,7 +111,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 				gpu_utilization_avg_bp,
 				estimated_savings_cents, savings_currency,
-				last_recommended_at, updated_at
+				last_recommended_at, updated_at,`+vmExplSQLColumns+`
 			) VALUES (
 				$1, $2, $3, $4, $5,
 				$6, $7, $8, $9,
@@ -123,7 +123,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				$34, $35, $36,
 				$37,
 				$38, $39, $40, $41, $42, $43, $44, $45, $46, $47,
-				$48, $49, $50, now()
+				$48, $49, $50, now(), $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
 				guest_os = EXCLUDED.guest_os,
@@ -170,24 +170,26 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				savings_currency = EXCLUDED.savings_currency,
 				last_recommended_at = EXCLUDED.last_recommended_at,
-				updated_at = now()`,
-			r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
-			r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
-			r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
-			r.RecommendedInstanceType, r.RecommendedSeries,
-			r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
-			r.IsIdle, r.IsAbandoned, r.IsPowerOffCandidate, r.PowerOffIdleRatio,
-			r.IsOversized, r.IsNetworkBound,
-			r.IsRedundantPlacement, r.HasSharedStorage, r.NUMAOversized,
-			r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint, r.IOPattern,
-			r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
-			r.Notifications,
-			r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,
-			r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
-			r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
-			r.GPUUtilizationAvgBP,
-			r.EstimatedSavingsCents, r.SavingsCurrency,
-			r.LastRecommendedAt,
+				updated_at = now(),`+vmExplUpdateSet,
+			append([]any{
+				r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
+				r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
+				r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
+				r.RecommendedInstanceType, r.RecommendedSeries,
+				r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
+				r.IsIdle, r.IsAbandoned, r.IsPowerOffCandidate, r.PowerOffIdleRatio,
+				r.IsOversized, r.IsNetworkBound,
+				r.IsRedundantPlacement, r.HasSharedStorage, r.NUMAOversized,
+				r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint, r.IOPattern,
+				r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
+				r.Notifications,
+				r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,
+				r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
+				r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
+				r.GPUUtilizationAvgBP,
+				r.EstimatedSavingsCents, r.SavingsCurrency,
+				r.LastRecommendedAt,
+			}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert VM rec %s/%s: %w", r.Namespace, r.VMName, err)

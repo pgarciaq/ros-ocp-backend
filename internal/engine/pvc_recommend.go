@@ -63,6 +63,7 @@ type PVCRec struct {
 	Term                         string
 	IdleSince                    *time.Time
 	IdleDurationDays             int
+	Expl                         PVCExplanationFactors
 }
 
 // PVCConfidenceLevel returns 0.0–1.0 based on data coverage vs the term minimum.
@@ -203,6 +204,12 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		RequestBytes:  latest.RequestBytes,
 		DataDays:      len(digests),
 		Term:          tc.Name,
+		Expl: PVCExplanationFactors{
+			OversizedThresholdBP:      int32(settings.OversizedThreshold * float64(BasisPointsScale)),
+			NearFullThresholdBP:       int32(settings.NearFullThreshold * float64(BasisPointsScale)),
+			RecommendedSizeMultiplier: int32(settings.RecommendedSizeMultiplier * 100),
+			MinRecommendedGiB:         int32(settings.MinRecommendedGiB),
+		},
 	}
 
 	var maxUsage int64
@@ -243,12 +250,14 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	switch {
 	case allZero && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOrphaned
+		rec.Expl.ClassificationReason = PVCRecTypeOrphaned
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
 		rec.IdleSince = findPVCOrphanedSince(digests)
 		rec.IdleDurationDays = computeIdleDuration(rec.IdleSince)
 
 	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOversized
+		rec.Expl.ClassificationReason = PVCRecTypeOversized
 		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
 		minRecommended := int64(settings.MinRecommendedGiB) << 30
 		if recommended < minRecommended {
@@ -261,13 +270,17 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 
 	case rec.UsageRatio > settings.NearFullThreshold:
 		rec.RecommendationType = PVCRecTypeNearFull
+		rec.Expl.ClassificationReason = PVCRecTypeNearFull
 		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
 		rec.RecommendedBytes = &recommended
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
 
 	default:
 		rec.RecommendationType = PVCRecTypeHealthy
+		rec.Expl.ClassificationReason = PVCRecTypeHealthy
 	}
+
+	rec.Expl.DataDays = rec.DataDays
 
 	if rec.DaysToFull != nil && *rec.DaysToFull < settings.DaysToFullAlert && *rec.DaysToFull > 0 {
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
@@ -376,8 +389,10 @@ const pvcRecommendationUpsertSQL = `
 		notification_codes, data_days, term,
 		estimated_savings_cents,
 		idle_since, idle_duration_days,
+		expl_data_days, expl_oversized_threshold_bp, expl_near_full_threshold_bp,
+		expl_recommended_size_multiplier, expl_min_recommended_gib, expl_classification_reason,
 		updated_at
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, NOW())
 	ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
 	DO UPDATE SET
 		last_seen_pod = CASE
@@ -402,6 +417,12 @@ const pvcRecommendationUpsertSQL = `
 		estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 		idle_since = EXCLUDED.idle_since,
 		idle_duration_days = EXCLUDED.idle_duration_days,
+		expl_data_days = EXCLUDED.expl_data_days,
+		expl_oversized_threshold_bp = EXCLUDED.expl_oversized_threshold_bp,
+		expl_near_full_threshold_bp = EXCLUDED.expl_near_full_threshold_bp,
+		expl_recommended_size_multiplier = EXCLUDED.expl_recommended_size_multiplier,
+		expl_min_recommended_gib = EXCLUDED.expl_min_recommended_gib,
+		expl_classification_reason = EXCLUDED.expl_classification_reason,
 		updated_at = NOW()`
 
 func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
@@ -417,6 +438,12 @@ func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
 		notificationCodes, rec.DataDays, rec.Term,
 		rec.EstimatedMonthlySavingsCents,
 		rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
+		nullIntExpl(rec.Expl.DataDays),
+		nullInt32Expl(rec.Expl.OversizedThresholdBP),
+		nullInt32Expl(rec.Expl.NearFullThresholdBP),
+		nullInt32Expl(rec.Expl.RecommendedSizeMultiplier),
+		nullInt32Expl(rec.Expl.MinRecommendedGiB),
+		nullStringExpl(rec.Expl.ClassificationReason),
 	)
 }
 

@@ -116,7 +116,13 @@ func ListVMRecommendations(
 			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 			gpu_utilization_avg_bp,
 			estimated_savings_cents, savings_currency,
-			last_recommended_at, created_at, updated_at
+			last_recommended_at, created_at, updated_at,
+			expl_data_days, expl_max_cpu_usage_mc, expl_max_mem_usage_kib,
+			expl_cpu_margin_bp, expl_mem_margin_bp,
+			expl_raw_recommended_vcpu, expl_raw_recommended_mem_gib,
+			expl_downsize_hysteresis_held, expl_guest_agent_used,
+			expl_idle_detected, expl_abandoned_detected, expl_power_off_candidate,
+			expl_sizing_branch, expl_gpu_action, expl_gpu_rationale
 		FROM vm_recommendations` + where
 
 	if filters.UseKeyset {
@@ -197,7 +203,13 @@ func GetVMRecommendationDetail(
 			gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 			gpu_utilization_avg_bp,
 			estimated_savings_cents, savings_currency,
-			last_recommended_at, created_at, updated_at
+			last_recommended_at, created_at, updated_at,
+			expl_data_days, expl_max_cpu_usage_mc, expl_max_mem_usage_kib,
+			expl_cpu_margin_bp, expl_mem_margin_bp,
+			expl_raw_recommended_vcpu, expl_raw_recommended_mem_gib,
+			expl_downsize_hysteresis_held, expl_guest_agent_used,
+			expl_idle_detected, expl_abandoned_detected, expl_power_off_candidate,
+			expl_sizing_branch, expl_gpu_action, expl_gpu_rationale
 		FROM vm_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
 		  AND term = $5 AND engine = $6`
@@ -433,6 +445,12 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.GPUUtilizationAvgBP,
 		&r.EstimatedSavingsCents, &r.SavingsCurrency,
 		&r.LastRecommendedAt, &r.CreatedAt, &r.UpdatedAt,
+		&r.ExplDataDays, &r.ExplMaxCPUUsageMC, &r.ExplMaxMemUsageKiB,
+		&r.ExplCPUMarginBP, &r.ExplMemMarginBP,
+		&r.ExplRawRecommendedVCPU, &r.ExplRawRecommendedMemGiB,
+		&r.ExplDownsizeHysteresisHeld, &r.ExplGuestAgentUsed,
+		&r.ExplIdleDetected, &r.ExplAbandonedDetected, &r.ExplPowerOffCandidate,
+		&r.ExplSizingBranch, &r.ExplGPUAction, &r.ExplGPURationale,
 	)
 	if err != nil {
 		return model.VMRecommendation{}, fmt.Errorf("scan VM recommendation: %w", err)

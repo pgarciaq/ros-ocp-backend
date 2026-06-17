@@ -33,12 +33,14 @@ func AppendClusterQuotaRecommendationHistory(ctx context.Context, pool *pgxpool.
 				INSERT INTO cluster_quota_recommendation_history (
 					org_id, cluster_uuid, cluster_quota_name,
 					resource, recommendation_type, risk_level,
-					recommended_hard, current_hard, current_used, utilization_percent
-				) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)`,
-				r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
-				entry.resource, r.RecommendationType, r.RiskLevel,
-				nullableInt64(entry.recommendedHard), nullableInt64(entry.currentHard),
-				nullableInt64(entry.currentUsed), entry.utilizationPercent,
+					recommended_hard, current_hard, current_used, utilization_percent,`+clusterQuotaExplSQLColumns+`
+				) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+				append([]any{
+					r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
+					entry.resource, r.RecommendationType, r.RiskLevel,
+					nullableInt64(entry.recommendedHard), nullableInt64(entry.currentHard),
+					nullableInt64(entry.currentUsed), entry.utilizationPercent,
+				}, appendClusterQuotaExplArgs(nil, r.Expl)...)...,
 			)
 			if err != nil {
 				return fmt.Errorf("insert cluster quota rec history %s/%s: %w", r.ClusterQuotaName, entry.resource, err)

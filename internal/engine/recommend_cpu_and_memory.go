@@ -2,10 +2,11 @@ package engine
 
 // RecommendCPUAndMemory computes CPU and memory recommendations from the same
 // digest rows in a single weighted-percentile pass, avoiding duplicate row
-// iteration and decay weight lookups.
-func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConfig) (CPURec, MemoryRec) {
+// iteration and decay weight lookups. It also returns explanation factors
+// computed during the same pass for persistence as expl_* columns.
+func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConfig) (CPURec, MemoryRec, ContainerExplanationFactors) {
 	if len(rows) == 0 {
-		return CPURec{}, MemoryRec{}
+		return CPURec{}, MemoryRec{}, ContainerExplanationFactors{}
 	}
 
 	costCPU, perfCPU, avgCPUP95, avgCPUP50, avgCPUMean,
@@ -15,24 +16,51 @@ func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConf
 	cpuMarginScaled := ComputeAdaptiveMarginScaled(avgCPUP95, avgCPUP50, avgCPUMean, cpuCfg.MinMargin, cpuCfg.MaxMargin)
 	memMarginScaled := ComputeAdaptiveMarginScaled(avgMemP95, avgMemP50, avgMemMean, memCfg.MinMargin, memCfg.MaxMargin)
 
-	costCPUReq := applyFloor(ApplyScaledMargin(costCPU, cpuMarginScaled), cpuCfg.FloorMC)
+	costCPUReqBeforeFloor := ApplyScaledMargin(costCPU, cpuMarginScaled)
+	costCPUReq := applyFloor(costCPUReqBeforeFloor, cpuCfg.FloorMC)
+	cpuFloorApplied := costCPUReq > costCPUReqBeforeFloor
 	perfCPUReq := applyFloor(ApplyScaledMargin(perfCPU, cpuMarginScaled), cpuCfg.FloorMC)
 
 	limitMultScaled := ScaleLimitMultiplier(cpuCfg.LimitMultiplier)
 	costCPULim := ApplyScaledMargin(costCPUReq, limitMultScaled)
 	perfCPULim := ApplyScaledMargin(perfCPUReq, limitMultScaled)
 
-	costMemReq := ApplyScaledMargin(costMem, memMarginScaled)
-	perfMemReq := ApplyScaledMargin(perfMem, memMarginScaled)
-
+	costMemReqBeforeBump := ApplyScaledMargin(costMem, memMarginScaled)
+	perfMemReqBeforeBump := ApplyScaledMargin(perfMem, memMarginScaled)
+	costMemReq := costMemReqBeforeBump
+	perfMemReq := perfMemReqBeforeBump
+	oomBumpApplied := false
 	if memCfg.OOMCountSum > 0 {
 		costMemReq = ApplyOOMBumpScaled(costMemReq, memCfg.OOMCountSum, memCfg.OOMBaseBump, memCfg.OOMMaxBump)
 		perfMemReq = ApplyOOMBumpScaled(perfMemReq, memCfg.OOMCountSum, memCfg.OOMBaseBump, memCfg.OOMMaxBump)
+		oomBumpApplied = costMemReq != costMemReqBeforeBump || perfMemReq != perfMemReqBeforeBump
 	}
 
 	memLimitMultScaled := ScaleLimitMultiplier(memCfg.LimitMultiplier)
 	costMemLim := ApplyScaledMargin(costMemReq, memLimitMultScaled)
 	perfMemLim := ApplyScaledMargin(perfMemReq, memLimitMultScaled)
+
+	expl := ContainerExplanationFactors{
+		DecayHalfLifeHours:  cpuCfg.DecayHalfLifeHours,
+		CPUCostPctMC:        costCPU,
+		CPUPerfPctMC:        perfCPU,
+		CPUUsageP95MC:       avgCPUP95,
+		CPUUsageP50MC:       avgCPUP50,
+		CPUUsageMeanMC:      avgCPUMean,
+		CPUAdaptiveMarginBP: int32(cpuMarginScaled),
+		CPUTrendSlope:       cpuTrend,
+		MemCostPctKiB:       costMem,
+		MemPerfPctKiB:       perfMem,
+		MemUsageP95KiB:      avgMemP95,
+		MemUsageP50KiB:      avgMemP50,
+		MemUsageMeanKiB:     avgMemMean,
+		MemAdaptiveMarginBP: int32(memMarginScaled),
+		MemTrendSlope:       memTrend,
+		OOMCountSum:         memCfg.OOMCountSum,
+		OOMBumpApplied:      oomBumpApplied,
+		CPUFloorApplied:     cpuFloorApplied,
+		IsIdle:              isIdle,
+	}
 
 	return CPURec{
 			CostRequestMC: costCPUReq,
@@ -47,7 +75,7 @@ func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConf
 			PerfRequestKiB: perfMemReq,
 			PerfLimitKiB:   perfMemLim,
 			TrendSlope:     memTrend,
-		}
+		}, expl
 }
 
 func multiCPUAndMemoryWeightedPercentiles(

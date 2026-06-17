@@ -84,6 +84,7 @@ type NodeRec struct {
 	DataDays                     int
 	ConfidenceLevel              float32
 	NotificationCodes            []int16
+	Expl                         NodeExplanationFactors
 }
 
 // nodeClassification holds shared utilization signals and flags computed once per (node, term).
@@ -111,6 +112,7 @@ type nodeClassification struct {
 	maxMemUsageP95KiB  int64
 	maxCPURequestsMC   int64
 	maxMemRequestsKiB  int64
+	EMAImbalanceBP     int32
 }
 
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
@@ -156,6 +158,8 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				rec.NotificationCodes = evaluateNodeNotifications(rec.NotificationCodes, confidence, dataDays)
 				rec.RecommendedCPUMC, rec.RecommendedMemKiB, rec.NodeCountReduction =
 					sizeNodeForEngine(class, eng, nodeSettings)
+				rec.Expl = nodeExplanationFromClass(class, eng, rec.NodeCountReduction)
+				rec.Expl.DataDays = dataDays
 				results = append(results, rec)
 			}
 		}
@@ -396,6 +400,7 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 		}
 		smoothed := emaSmooth(imbalances, alpha)
 		finalImbalanceBP := int32(smoothed[len(smoothed)-1])
+		class.EMAImbalanceBP = finalImbalanceBP
 		if finalImbalanceBP > imbalanceThreshBP {
 			if avgCPU95BP > avgMem95BP {
 				s := "memory"
@@ -448,6 +453,30 @@ func sizeNodeForEngine(class nodeClassification, eng NodeEngineConfig, nodeSetti
 		}
 	}
 	return cpuMC, memKiB, nodeCountReduction
+}
+
+func nodeExplanationFromClass(class nodeClassification, eng NodeEngineConfig, nodeCountReduction int) NodeExplanationFactors {
+	formula := "target_util"
+	if class.IdleState == IdleStateIdle || class.IdleState == IdleStateZombie {
+		formula = "idle"
+	} else if class.IsUnderutilized && nodeCountReduction > 0 {
+		formula = "headroom_2x"
+	}
+	headroomBP := int32(-1)
+	if class.PodSchedulingHeadroom >= 0 {
+		headroomBP = int32(class.PodSchedulingHeadroom * float32(BasisPointsScale))
+	}
+	return NodeExplanationFactors{
+		TargetUtilizationBP:     int32(eng.TargetUtilization * float64(BasisPointsScale)),
+		CurrentCPUMC:            class.CurrentCPUMC,
+		CurrentMemKiB:           class.CurrentMemKiB,
+		MaxCPUUsageP95MC:        class.maxCPUUsageP95MC,
+		MaxMemUsageP95KiB:       class.maxMemUsageP95KiB,
+		PodSchedulingHeadroomBP: headroomBP,
+		EMAImbalanceBP:          class.EMAImbalanceBP,
+		ConsolidationApplied:    nodeCountReduction > 0,
+		SizingFormula:           formula,
+	}
 }
 
 // resolveNodeInstanceType returns the most recent non-empty instance type for a node.
@@ -1056,8 +1085,13 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				estimated_savings_cents, instance_type,
 				suggested_instance_type, instance_type_reason,
 				confidence_level, data_days,
+				expl_data_days, expl_target_utilization_bp,
+				expl_current_cpu_mc, expl_current_mem_kib,
+				expl_max_cpu_usage_p95_mc, expl_max_mem_usage_p95_kib,
+				expl_pod_scheduling_headroom_bp, expl_ema_imbalance_bp,
+				expl_consolidation_applied, expl_sizing_formula,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
@@ -1082,6 +1116,16 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				instance_type_reason = EXCLUDED.instance_type_reason,
 				confidence_level = EXCLUDED.confidence_level,
 				data_days = EXCLUDED.data_days,
+				expl_data_days = EXCLUDED.expl_data_days,
+				expl_target_utilization_bp = EXCLUDED.expl_target_utilization_bp,
+				expl_current_cpu_mc = EXCLUDED.expl_current_cpu_mc,
+				expl_current_mem_kib = EXCLUDED.expl_current_mem_kib,
+				expl_max_cpu_usage_p95_mc = EXCLUDED.expl_max_cpu_usage_p95_mc,
+				expl_max_mem_usage_p95_kib = EXCLUDED.expl_max_mem_usage_p95_kib,
+				expl_pod_scheduling_headroom_bp = EXCLUDED.expl_pod_scheduling_headroom_bp,
+				expl_ema_imbalance_bp = EXCLUDED.expl_ema_imbalance_bp,
+				expl_consolidation_applied = EXCLUDED.expl_consolidation_applied,
+				expl_sizing_formula = EXCLUDED.expl_sizing_formula,
 				updated_at = now()`,
 			orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
@@ -1091,6 +1135,16 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 			r.EstimatedMonthlySavingsCents, r.InstanceType,
 			nullStringOptional(r.SuggestedInstanceType), nullStringOptional(r.InstanceTypeReason),
 			r.ConfidenceLevel, r.DataDays,
+			nullIntExpl(r.Expl.DataDays),
+			nullInt32Expl(r.Expl.TargetUtilizationBP),
+			nullInt64Expl(r.Expl.CurrentCPUMC),
+			nullInt64Expl(r.Expl.CurrentMemKiB),
+			nullInt64Expl(r.Expl.MaxCPUUsageP95MC),
+			nullInt64Expl(r.Expl.MaxMemUsageP95KiB),
+			nullInt32Expl(r.Expl.PodSchedulingHeadroomBP),
+			nullInt32Expl(r.Expl.EMAImbalanceBP),
+			r.Expl.ConsolidationApplied,
+			nullStringExpl(r.Expl.SizingFormula),
 		)
 		if err != nil {
 			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)

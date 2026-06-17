@@ -56,6 +56,7 @@ type GPURec struct {
 	DRAMActiveAvg                  float32
 	SMActiveAvg                    float32
 	FBUsageMaxMiB                  float32
+	FBP98MiB                       int32
 	EstimatedGPUSavingsCents       *int64 // nil if no cost data (idle/MIG savings)
 	EstimatedTimeslicingSavingsUSD *float32 // nil if no cost data (per-candidate share of node time-slicing savings)
 	NotificationCodes              []int16
@@ -348,6 +349,7 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 	rec.DRAMActiveAvg = BasisPointsToFloat32(int32(sumDRAM / n))
 	rec.SMActiveAvg = BasisPointsToFloat32(int32(sumSM / n))
 	rec.FBUsageMaxMiB = float32(maxFB)
+	rec.FBP98MiB = int32(percentileFB(digests, settings.MIGFBPercentile))
 
 	if !hasProf {
 		rec.Classification = GPUClassNoProfiling

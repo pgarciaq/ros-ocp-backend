@@ -58,6 +58,7 @@ type ClusterQuotaRec struct {
 	RecommendationType               string
 	RiskLevel                        string
 	NotificationCodes                []int16
+	Expl                             ClusterQuotaExplanationFactors
 }
 
 // RecommendClusterQuotas produces per-CRQ recommendations for a cluster.
@@ -143,6 +144,15 @@ func computeClusterQuotaRecommendation(
 	rec.RiskLevel = classifyClusterQuotaRisk(util, cfg)
 	rec.RecommendationType, rec.CapacityFreed = classifyClusterQuotaRecommendation(snap, rec.Recommended, rec.StorageRecommendedBytes, rec.PodsRecommended, util, cfg)
 	rec.NotificationCodes = ClusterQuotaNotificationCodes(rec)
+
+	rec.Expl = ClusterQuotaExplanationFactors{
+		HeadroomBP:           int32(cfg.HeadroomBasisPoints),
+		NSQuotaCPUSumMC:     nsAgg.CPURequestRecommendedMC,
+		NSQuotaMemSumBytes:   nsAgg.MemoryRequestRecommendedBytes,
+		BaseCPUMC:            baseRecommended.CPURequestMillicores,
+		MaxUtilizationBP:     int32(maxClusterQuotaUtilizationBP(util)),
+		RecommendationReason: rec.RecommendationType,
+	}
 
 	return rec
 }
@@ -407,7 +417,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				savings_cpu_cores_freed, savings_memory_bytes_freed,
 				savings_storage_bytes_freed, savings_pods_freed,
 				estimated_savings_cents,
-				notification_codes, updated_at
+				notification_codes, updated_at,`+clusterQuotaExplSQLColumns+`
 			) VALUES (
 				$1, $2::uuid, $3, $4,
 				$5, $6,
@@ -420,7 +430,7 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				$25, $26, $27, $28,
 				$29, $30, $31, $32, $33,
 				$34,
-				NOW()
+				NOW(), $35, $36, $37, $38, $39, $40
 			)
 			ON CONFLICT (org_id, cluster_uuid, cluster_quota_name)
 			DO UPDATE SET
@@ -455,21 +465,23 @@ func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, r
 				savings_pods_freed = EXCLUDED.savings_pods_freed,
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				notification_codes = EXCLUDED.notification_codes,
-				updated_at = NOW()`,
-			r.OrgID, r.ClusterUUID, r.ClusterQuotaName, nullableString(r.Namespaces),
-			r.RecommendationType, r.RiskLevel,
-			nullableInt64(s.CPURequestHardMC), nullableInt64(s.CPURequestUsedMC), nullableInt64(r.Recommended.CPURequestMillicores),
-			nullableInt64(s.CPULimitHardMC), nullableInt64(s.CPULimitUsedMC), nullableInt64(r.Recommended.CPULimitMillicores),
-			nullableInt64(s.MemoryRequestHardBytes), nullableInt64(s.MemoryRequestUsedBytes), nullableInt64(r.Recommended.MemoryRequestBytes),
-			nullableInt64(s.MemoryLimitHardBytes), nullableInt64(s.MemoryLimitUsedBytes), nullableInt64(r.Recommended.MemoryLimitBytes),
-			nullableInt64(s.StorageRequestHardBytes), nullableInt64(s.StorageRequestUsedBytes), nullableInt64(r.StorageRecommendedBytes),
-			nullableInt64(s.PodsHard), nullableInt64(s.PodsUsed), nullableInt64(r.PodsRecommended),
-			r.UtilizationCPURequestPercent, r.UtilizationMemoryRequestPercent,
-			r.UtilizationStorageRequestPercent, r.UtilizationPodsPercent,
-			nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes),
-			nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
-			nullableInt64(r.EstimatedSavingsCents),
-			r.NotificationCodes,
+				updated_at = NOW(),`+clusterQuotaExplUpdateSet,
+			append([]any{
+				r.OrgID, r.ClusterUUID, r.ClusterQuotaName, nullableString(r.Namespaces),
+				r.RecommendationType, r.RiskLevel,
+				nullableInt64(s.CPURequestHardMC), nullableInt64(s.CPURequestUsedMC), nullableInt64(r.Recommended.CPURequestMillicores),
+				nullableInt64(s.CPULimitHardMC), nullableInt64(s.CPULimitUsedMC), nullableInt64(r.Recommended.CPULimitMillicores),
+				nullableInt64(s.MemoryRequestHardBytes), nullableInt64(s.MemoryRequestUsedBytes), nullableInt64(r.Recommended.MemoryRequestBytes),
+				nullableInt64(s.MemoryLimitHardBytes), nullableInt64(s.MemoryLimitUsedBytes), nullableInt64(r.Recommended.MemoryLimitBytes),
+				nullableInt64(s.StorageRequestHardBytes), nullableInt64(s.StorageRequestUsedBytes), nullableInt64(r.StorageRecommendedBytes),
+				nullableInt64(s.PodsHard), nullableInt64(s.PodsUsed), nullableInt64(r.PodsRecommended),
+				r.UtilizationCPURequestPercent, r.UtilizationMemoryRequestPercent,
+				r.UtilizationStorageRequestPercent, r.UtilizationPodsPercent,
+				nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes),
+				nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
+				nullableInt64(r.EstimatedSavingsCents),
+				r.NotificationCodes,
+			}, appendClusterQuotaExplArgs(nil, r.Expl)...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert cluster quota recommendation %s: %w", r.ClusterQuotaName, err)

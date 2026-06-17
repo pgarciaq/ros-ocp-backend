@@ -18,7 +18,7 @@ func TestRecommendCPUAndMemory_MatchesSeparateCalls(t *testing.T) {
 	memCfg := DefaultMemoryConfig(now, 72)
 	memCfg.OOMCountSum = 2
 
-	fusedCPU, fusedMem := RecommendCPUAndMemory(rows, cpuCfg, memCfg)
+	fusedCPU, fusedMem, _ := RecommendCPUAndMemory(rows, cpuCfg, memCfg)
 	separateCPU := RecommendCPU(rows, cpuCfg)
 	separateMem := RecommendMemory(rows, memCfg)
 
@@ -28,7 +28,7 @@ func TestRecommendCPUAndMemory_MatchesSeparateCalls(t *testing.T) {
 
 func TestRecommendCPUAndMemory_EmptyRows(t *testing.T) {
 	now := time.Now().UTC()
-	cpuRec, memRec := RecommendCPUAndMemory(nil, DefaultCPUConfig(now, 72), DefaultMemoryConfig(now, 72))
+	cpuRec, memRec, _ := RecommendCPUAndMemory(nil, DefaultCPUConfig(now, 72), DefaultMemoryConfig(now, 72))
 	assert.Equal(t, CPURec{}, cpuRec)
 	assert.Equal(t, MemoryRec{}, memRec)
 }
