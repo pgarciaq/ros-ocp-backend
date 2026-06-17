@@ -81,6 +81,23 @@ type VMRecommendation struct {
 	LastRecommendedAt time.Time `db:"last_recommended_at"`
 	CreatedAt         time.Time `db:"created_at"`
 	UpdatedAt         time.Time `db:"updated_at"`
+
+	// Explanation factors (expl_*), persisted at recommendation time.
+	ExplDataDays               *int    `db:"expl_data_days"`
+	ExplMaxCPUUsageMC          *int64  `db:"expl_max_cpu_usage_mc"`
+	ExplMaxMemUsageKiB         *int64  `db:"expl_max_mem_usage_kib"`
+	ExplCPUMarginBP            *int32  `db:"expl_cpu_margin_bp"`
+	ExplMemMarginBP            *int32  `db:"expl_mem_margin_bp"`
+	ExplRawRecommendedVCPU     *int32  `db:"expl_raw_recommended_vcpu"`
+	ExplRawRecommendedMemGiB    *int32  `db:"expl_raw_recommended_mem_gib"`
+	ExplDownsizeHysteresisHeld *bool   `db:"expl_downsize_hysteresis_held"`
+	ExplGuestAgentUsed         *bool   `db:"expl_guest_agent_used"`
+	ExplIdleDetected           *bool   `db:"expl_idle_detected"`
+	ExplAbandonedDetected      *bool   `db:"expl_abandoned_detected"`
+	ExplPowerOffCandidate      *bool   `db:"expl_power_off_candidate"`
+	ExplSizingBranch           *string `db:"expl_sizing_branch"`
+	ExplGPUAction              *string `db:"expl_gpu_action"`
+	ExplGPURationale           *string `db:"expl_gpu_rationale"`
 }
 
 // VMRecommendationStatus represents the recommendation status for filtering.

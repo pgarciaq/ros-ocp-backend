@@ -113,6 +113,8 @@ type ContainerRec struct {
 
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
+
+	Expl ContainerExplanationFactors
 }
 
 // TermConfig defines a recommendation term's parameters.

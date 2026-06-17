@@ -32,6 +32,7 @@ type NodeUtilizationEngineRec struct {
 	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
 	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	UpdatedAt               string                                     `json:"updated_at,omitempty"`
+	Explanation             *NodeExplanationAPI                        `json:"explanation,omitempty"`
 }
 
 // NodeUtilizationEngines groups cost and performance engine recommendations.

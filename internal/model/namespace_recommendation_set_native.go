@@ -58,6 +58,28 @@ type NativeNamespaceRow struct {
 
 	// PageSortText is the list sort key as text from the pagination subquery (not an API field).
 	PageSortText *string `gorm:"column:ros_ns_page_sort"`
+
+	// Explanation factor columns (expl_*), always loaded; serialized only when requested.
+	ExplDataDays            *int     `gorm:"column:expl_data_days"`
+	ExplDecayHalfLifeHours  *float64 `gorm:"column:expl_decay_half_life_hours"`
+	ExplCPUCostPctMC        *int64   `gorm:"column:expl_cpu_cost_pct_mc"`
+	ExplCPUPerfPctMC        *int64   `gorm:"column:expl_cpu_perf_pct_mc"`
+	ExplCPUUsageP95MC       *int64   `gorm:"column:expl_cpu_usage_p95_mc"`
+	ExplCPUUsageP50MC       *int64   `gorm:"column:expl_cpu_usage_p50_mc"`
+	ExplCPUUsageMeanMC      *int64   `gorm:"column:expl_cpu_usage_mean_mc"`
+	ExplCPUAdaptiveMarginBP *int32   `gorm:"column:expl_cpu_adaptive_margin_bp"`
+	ExplCPUTrendSlope       *float64 `gorm:"column:expl_cpu_trend_slope"`
+	ExplMemCostPctKiB       *int64   `gorm:"column:expl_mem_cost_pct_kib"`
+	ExplMemPerfPctKiB       *int64   `gorm:"column:expl_mem_perf_pct_kib"`
+	ExplMemUsageP95KiB      *int64   `gorm:"column:expl_mem_usage_p95_kib"`
+	ExplMemUsageP50KiB      *int64   `gorm:"column:expl_mem_usage_p50_kib"`
+	ExplMemUsageMeanKiB     *int64   `gorm:"column:expl_mem_usage_mean_kib"`
+	ExplMemAdaptiveMarginBP *int32   `gorm:"column:expl_mem_adaptive_margin_bp"`
+	ExplMemTrendSlope       *float64 `gorm:"column:expl_mem_trend_slope"`
+	ExplOOMCountSum         *int64   `gorm:"column:expl_oom_count_sum"`
+	ExplOOMBumpApplied      *bool    `gorm:"column:expl_oom_bump_applied"`
+	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied"`
+	ExplIsIdle              *bool    `gorm:"column:expl_is_idle"`
 }
 
 func (NativeNamespaceRow) TableName() string {
@@ -92,6 +114,14 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.variation_memory_request_pct, ns.variation_memory_limit_pct,
 	ns.notification_codes, ns.confidence_level, ns.stale, ns.idle_state,
 	ns.monitoring_end_time, ns.updated_at,
+	ns.expl_data_days, ns.expl_decay_half_life_hours,
+	ns.expl_cpu_cost_pct_mc, ns.expl_cpu_perf_pct_mc,
+	ns.expl_cpu_usage_p95_mc, ns.expl_cpu_usage_p50_mc, ns.expl_cpu_usage_mean_mc,
+	ns.expl_cpu_adaptive_margin_bp, ns.expl_cpu_trend_slope,
+	ns.expl_mem_cost_pct_kib, ns.expl_mem_perf_pct_kib,
+	ns.expl_mem_usage_p95_kib, ns.expl_mem_usage_p50_kib, ns.expl_mem_usage_mean_kib,
+	ns.expl_mem_adaptive_margin_bp, ns.expl_mem_trend_slope,
+	ns.expl_oom_count_sum, ns.expl_oom_bump_applied, ns.expl_cpu_floor_applied, ns.expl_is_idle,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
 // GetNativeNamespaceRecommendations queries the native relational columns from
@@ -164,7 +194,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 		return NativeNamespaceListPage{}, err
 	}
 
-	results := assembleNativeNamespaceResults(rows, sortExpr)
+	results := assembleNativeNamespaceResults(rows, sortExpr, false)
 
 	hasNext := len(results) > limit
 	var lastAnchor *NamespacePaginationAnchor
@@ -222,7 +252,7 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 
 // GetNativeNamespaceRecommendationByID fetches a single namespace's
 // recommendations by its deterministic UUID.
-func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
+func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
 	db := database.GetDB()
 
 	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
@@ -233,14 +263,14 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 	}
 
 	if len(rows) > 0 {
-		results := assembleNativeNamespaceResults(rows, "")
+		results := assembleNativeNamespaceResults(rows, "", includeExplanation)
 		if len(results) > 0 {
 			return &results[0], nil
 		}
 	}
 
 	// Fallback: scan namespace keys and match by UUID v5.
-	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms)
+	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms, includeExplanation)
 }
 
 // nativeNamespaceDetailQuery builds the primary detail lookup for a namespace recommendation.
@@ -257,7 +287,7 @@ func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 	return applyNativeNamespaceRBAC(query, userPerms)
 }
 
-func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string) (*NativeNamespaceResult, error) {
+func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
 	log.Warnf("namespace_id miss for %s in org %s — using fallback scan", id, orgID)
 
 	type nsKey struct {
@@ -310,7 +340,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		return nil, nil
 	}
 
-	results := assembleNativeNamespaceResults(rows, "")
+	results := assembleNativeNamespaceResults(rows, "", includeExplanation)
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -318,7 +348,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 }
 
 // assembleNativeNamespaceResults groups flat rows into nested NativeNamespaceResult structs.
-func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string) []NativeNamespaceResult {
+func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, includeExplanation bool) []NativeNamespaceResult {
 	type nsKey struct {
 		ClusterUUID   string
 		NamespaceName string
@@ -394,6 +424,11 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string) 
 				term.Cost = eng
 			case "performance":
 				term.Performance = eng
+			}
+			if includeExplanation {
+				if expl := BuildNamespaceExplanationAPI(r); expl != nil {
+					eng.Explanation = expl
+				}
 			}
 
 			terms[termKey] = term

@@ -244,6 +244,37 @@ type NativeRecommendationRow struct {
 	IngestHooksFailedAt   *time.Time `gorm:"column:ingest_hooks_failed_at"`
 
 	PageSortText *string `gorm:"column:ros_container_page_sort"`
+
+	// Explanation factor columns (expl_*), always loaded; serialized only when requested.
+	ExplDataDays            *int     `gorm:"column:expl_data_days"`
+	ExplDecayHalfLifeHours  *float64 `gorm:"column:expl_decay_half_life_hours"`
+	ExplCPUCostPctMC        *int64   `gorm:"column:expl_cpu_cost_pct_mc"`
+	ExplCPUPerfPctMC        *int64   `gorm:"column:expl_cpu_perf_pct_mc"`
+	ExplCPUUsageP95MC       *int64   `gorm:"column:expl_cpu_usage_p95_mc"`
+	ExplCPUUsageP50MC       *int64   `gorm:"column:expl_cpu_usage_p50_mc"`
+	ExplCPUUsageMeanMC      *int64   `gorm:"column:expl_cpu_usage_mean_mc"`
+	ExplCPUAdaptiveMarginBP *int32   `gorm:"column:expl_cpu_adaptive_margin_bp"`
+	ExplCPUTrendSlope       *float64 `gorm:"column:expl_cpu_trend_slope"`
+	ExplMemCostPctKiB       *int64   `gorm:"column:expl_mem_cost_pct_kib"`
+	ExplMemPerfPctKiB       *int64   `gorm:"column:expl_mem_perf_pct_kib"`
+	ExplMemUsageP95KiB      *int64   `gorm:"column:expl_mem_usage_p95_kib"`
+	ExplMemUsageP50KiB      *int64   `gorm:"column:expl_mem_usage_p50_kib"`
+	ExplMemUsageMeanKiB     *int64   `gorm:"column:expl_mem_usage_mean_kib"`
+	ExplMemAdaptiveMarginBP *int32   `gorm:"column:expl_mem_adaptive_margin_bp"`
+	ExplMemTrendSlope       *float64 `gorm:"column:expl_mem_trend_slope"`
+	ExplOOMCountSum         *int64   `gorm:"column:expl_oom_count_sum"`
+	ExplOOMBumpApplied      *bool    `gorm:"column:expl_oom_bump_applied"`
+	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied"`
+	ExplIsIdle              *bool    `gorm:"column:expl_is_idle"`
+	ExplGPUSMActiveAvgBP    *int32   `gorm:"column:expl_gpu_sm_active_avg_bp"`
+	ExplGPUTensorActiveAvgBP *int32  `gorm:"column:expl_gpu_tensor_active_avg_bp"`
+	ExplGPUDRAMActiveAvgBP  *int32   `gorm:"column:expl_gpu_dram_active_avg_bp"`
+	ExplGPUFBUsageMaxMiB    *int32   `gorm:"column:expl_gpu_fb_usage_max_mib"`
+	ExplGPUFBP98MiB         *int32   `gorm:"column:expl_gpu_fb_p98_mib"`
+	ExplGPURecommendedProfile *string `gorm:"column:expl_gpu_recommended_profile"`
+	ExplGPUCurrentProfile   *string  `gorm:"column:expl_gpu_current_profile"`
+	ExplGPUHasProfilingData *bool    `gorm:"column:expl_gpu_has_profiling_data"`
+	ExplGPUMemoryBound      *bool    `gorm:"column:expl_gpu_memory_bound"`
 }
 
 func (NativeRecommendationRow) TableName() string {
@@ -338,6 +369,7 @@ type EngineRecommendation struct {
 	NotificationCodes      SmallintArray                              `json:"notification_codes"`
 	Notifications          map[string]notifications.NotificationEntry `json:"notifications"`
 	BusinessHours          *BusinessHoursRecommendation               `json:"business_hours,omitempty"`
+	Explanation            *ContainerExplanationAPI                   `json:"explanation,omitempty"`
 }
 
 const nativeContainerRSJoin = `JOIN recommendation_sets rs ON rs.org_id = ock.org_id
@@ -489,7 +521,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows, sortExpr)
+	results := assembleNativeResults(rows, sortExpr, false)
 
 	hasNext := len(results) > limit
 	var lastAnchor *ContainerPaginationAnchor
@@ -576,7 +608,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows, sortExpr)
+	results := assembleNativeResults(rows, sortExpr, false)
 
 	hasNext := len(results) > limit
 	var lastAnchor *ContainerPaginationAnchor
@@ -690,6 +722,18 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
 	rs.monitoring_end_time,
+	rs.expl_data_days, rs.expl_decay_half_life_hours,
+	rs.expl_cpu_cost_pct_mc, rs.expl_cpu_perf_pct_mc,
+	rs.expl_cpu_usage_p95_mc, rs.expl_cpu_usage_p50_mc, rs.expl_cpu_usage_mean_mc,
+	rs.expl_cpu_adaptive_margin_bp, rs.expl_cpu_trend_slope,
+	rs.expl_mem_cost_pct_kib, rs.expl_mem_perf_pct_kib,
+	rs.expl_mem_usage_p95_kib, rs.expl_mem_usage_p50_kib, rs.expl_mem_usage_mean_kib,
+	rs.expl_mem_adaptive_margin_bp, rs.expl_mem_trend_slope,
+	rs.expl_oom_count_sum, rs.expl_oom_bump_applied, rs.expl_cpu_floor_applied, rs.expl_is_idle,
+	rs.expl_gpu_sm_active_avg_bp, rs.expl_gpu_tensor_active_avg_bp, rs.expl_gpu_dram_active_avg_bp,
+	rs.expl_gpu_fb_usage_max_mib, rs.expl_gpu_fb_p98_mib,
+	rs.expl_gpu_recommended_profile, rs.expl_gpu_current_profile,
+	rs.expl_gpu_has_profiling_data, rs.expl_gpu_memory_bound,
 	rs.updated_at,
 	c.source_id, c.cluster_alias, c.last_reported_at,
 	c.analytics_incomplete, c.analytics_incomplete_at,
@@ -697,7 +741,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 
 // GetNativeRecommendationByID fetches a single container's recommendations
 // by its deterministic UUID using the indexed container_id column (O(1)).
-func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string) (*NativeContainerResult, error) {
+func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeContainerResult, error) {
 	db := database.GetDB()
 
 	query := nativeContainerDetailQuery(db, orgID, id, userPerms)
@@ -711,10 +755,11 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 		return nil, nil
 	}
 
-	results := assembleNativeResults(rows, "")
+	results := assembleNativeResults(rows, "", includeExplanation)
 	if len(results) == 0 {
 		return nil, nil
 	}
+	attachPersistedGPUExplanations(&results[0], rows, includeExplanation)
 	return &results[0], nil
 }
 
@@ -731,7 +776,7 @@ func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 }
 
 // assembleNativeResults groups flat rows into nested NativeContainerResult structs.
-func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []NativeContainerResult {
+func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, includeExplanation bool) []NativeContainerResult {
 	type containerKey struct {
 		ClusterUUID   string
 		Namespace     string
@@ -850,6 +895,11 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 			case "performance":
 				term.Performance = eng
 			}
+			if includeExplanation {
+				if expl := BuildContainerExplanationAPI(r); expl != nil {
+					eng.Explanation = expl
+				}
+			}
 
 			result.Recommendations[termKey] = term
 		}
@@ -858,6 +908,32 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string) []Na
 	}
 
 	return results
+}
+
+func attachPersistedGPUExplanations(result *NativeContainerResult, rows []NativeRecommendationRow, includeExplanation bool) {
+	if !includeExplanation || result == nil {
+		return
+	}
+	for _, r := range rows {
+		expl := BuildGPUExplanationAPI(
+			r.ExplGPUSMActiveAvgBP, r.ExplGPUTensorActiveAvgBP, r.ExplGPUDRAMActiveAvgBP,
+			r.ExplGPUFBUsageMaxMiB, r.ExplGPUFBP98MiB,
+			r.ExplGPURecommendedProfile, r.ExplGPUCurrentProfile,
+			r.ExplGPUHasProfilingData, r.ExplGPUMemoryBound,
+		)
+		if expl == nil {
+			continue
+		}
+		if result.GPU == nil {
+			result.GPU = make(map[string]*GPURecommendation)
+		}
+		termKey := r.Term
+		if existing, ok := result.GPU[termKey]; ok {
+			existing.Explanation = expl
+		} else {
+			result.GPU[termKey] = &GPURecommendation{Explanation: expl}
+		}
+	}
 }
 
 // pickIdleSourceRow prefers the medium-term cost engine row for idle metadata.

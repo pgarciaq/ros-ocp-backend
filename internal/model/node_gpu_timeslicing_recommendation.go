@@ -28,6 +28,10 @@ type NodeGPUTimeslicingRecommendation struct {
 	SavingsPerGPUCents    *int64               `db:"savings_per_gpu_cents" json:"savings_per_gpu_cents,omitempty"`
 	LastSeenAt            *time.Time           `db:"last_seen_at" json:"last_seen_at,omitempty"`
 	UpdatedAt             time.Time            `db:"updated_at" json:"updated_at"`
+	ExplDataDays          *int                 `db:"expl_data_days" json:"expl_data_days,omitempty"`
+	ExplCandidateCount    *int                 `db:"expl_candidate_count" json:"expl_candidate_count,omitempty"`
+	ExplImpactedCount     *int                 `db:"expl_impacted_count" json:"expl_impacted_count,omitempty"`
+	ExplClassificationRule *string             `db:"expl_classification_rule" json:"expl_classification_rule,omitempty"`
 }
 
 // NodeGPUTimeslicingRecommendationHistory is an append-only history snapshot.

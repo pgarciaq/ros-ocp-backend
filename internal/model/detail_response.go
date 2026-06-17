@@ -29,6 +29,7 @@ type GPURecommendation struct {
 	Notifications                         []int16  `json:"notifications,omitempty"`
 	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`
 	TimeSlicingReplicas                   *int     `json:"time_slicing_replicas,omitempty"`
+	Explanation                           *GPUExplanationAPI `json:"explanation,omitempty"`
 }
 
 // DetailResponse is the strongly-typed Kruize-compatible response for the
@@ -112,6 +113,7 @@ type DetailEngine struct {
 	BusinessHours *BusinessHoursDetail                       `json:"business_hours,omitempty"`
 	Variation     *DetailResourceConfig                      `json:"variation,omitempty"`
 	Notifications map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	Explanation   *ContainerExplanationAPI                   `json:"explanation,omitempty"`
 }
 
 // DetailResourceConfig holds CPU and memory values for requests and limits.
@@ -269,6 +271,7 @@ func toDetailEngine(eng *EngineRecommendation) *DetailEngine {
 		Config:        config,
 		Variation:     variation,
 		Notifications: notifs,
+		Explanation:   eng.Explanation,
 	}
 	if eng.BusinessHours != nil {
 		de.BusinessHours = businessHoursToDetail(eng.BusinessHours)
