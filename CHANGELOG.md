@@ -10,14 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Planned
 
-- Typed explanation factor columns for all recommendation types ([ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
-- `?include=explanation` API parameter for opt-in explanation data on detail endpoints
-- User-facing documentation: "Understanding Your Recommendations" page
 - Backfill mechanism for existing recommendations without explanation columns
-- UI integration for explanation panels in koku-ui
+- UI integration for explanation panels in koku-ui (Phase 5)
 
 ### Added
 
+- Typed `expl_*` explanation columns for all native-engine recommendation types ([ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
+- Migration 000146: explanation columns on live and history recommendation tables
+- Engine capture: explanation factors embedded on rec structs and persisted at write time
+- `?include=explanation` query parameter on detail endpoints (comma-separated list; opt-in)
+- OpenAPI schemas for `ContainerExplanation`, `GPUExplanation`, `NodeExplanation`, and related types
+- User-facing documentation: [Understanding Your Recommendations](docs-site/architecture/understanding-recommendations.md)
 - [ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md): Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
 - [ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md): GPU time-slicing recommendation persistence at ingest
 - Implementation plan: [`docs/plans/recommendation-explanations.md`](docs/plans/recommendation-explanations.md) covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types

@@ -12,6 +12,26 @@ Both are fully supported simultaneously for backward compatibility. Clients may 
 or mix them in one request. For `order_by`, bracket syntax takes precedence when both forms
 are present.
 
+## Include expansions (`?include=`)
+
+Detail endpoints support an optional comma-separated `include` query parameter for
+opt-in response expansions:
+
+| Token | Effect |
+|-------|--------|
+| `explanation` | Adds nested `explanation` object with driving factors computed at recommendation time (ADR-0296) |
+
+```
+GET /recommendations/openshift/{uuid}?include=explanation
+GET /recommendations/openshift/{uuid}?include=explanation,savings_detail   # future
+```
+
+Unknown tokens are silently ignored. List endpoints do **not** include explanation by
+default — request it only on detail/breakdown fetches.
+
+See [Understanding Your Recommendations](../architecture/understanding-recommendations.md)
+for factor definitions.
+
 **Preferred going forward:** bracket syntax (`filter[…]`, `order_by[…]`, `filter[tag:…]`),
 aligned with Koku Cost Management report APIs. Flat syntax remains supported for koku-ui-ros,
 IQE plugins, and other legacy clients.

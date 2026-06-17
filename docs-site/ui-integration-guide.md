@@ -1509,6 +1509,41 @@ These patterns apply across multiple feature sections above. See each feature's 
 10. **Capabilities gate:** Call `/settings/capabilities` once per session to hide disabled plugin nav.
 11. **Plugin disabled:** Disabled plugins return `404` — do not render empty states that imply zero recommendations.
 12. **Currency / no cost data:** When code 25 present, show “—” instead of `$0.00` and link to cost model configuration.
+13. **Recommendation explanations:** Request detail with `?include=explanation` to populate a “Why this recommendation?” panel. Hide the section when `explanation` is absent or all fields are null. See [Understanding Your Recommendations](architecture/understanding-recommendations.md).
+
+---
+
+## 18. Recommendation Explanations (`?include=explanation`)
+
+Detail endpoints accept a comma-separated `include` query parameter. In v1 the only
+supported token is `explanation`:
+
+```http
+GET /recommendations/openshift/{uuid}?include=explanation
+GET /recommendations/openshift/namespaces/{uuid}?include=explanation
+GET /recommendations/openshift/nodes/{node}?include=explanation
+GET /recommendations/openshift/pvcs/detail?...&include=explanation
+GET /recommendations/openshift/quota/detail?...&include=explanation
+GET /recommendations/openshift/cluster-quota/detail?...&include=explanation
+GET /recommendations/openshift/vm/detail?...&include=explanation
+GET /recommendations/openshift/snapshots?include=explanation
+GET /recommendations/openshift/gpu/timeslicing?include=explanation
+```
+
+When present, each recommendation engine block (or list row) may include a sibling
+`explanation` object with driving factors. **List endpoints omit explanation by default**
+(ADR-0294 slim list contract). Only request explanations on detail/breakdown views.
+
+### UI component guidance
+
+- Use a PatternFly `ExpandableSection` titled “Why this recommendation?”
+- Render factors as `DescriptionList` key-value pairs
+- Format basis points as percentages (`11500` → `115%` margin)
+- Map factor keys to i18n labels (see [Understanding Your Recommendations](architecture/understanding-recommendations.md))
+- Empty state: “Explanation data will be available after the next processing cycle” when all fields are null
+
+Unknown `include` tokens are silently ignored — forward-compatible for future expansions
+(e.g. `savings_detail`).
 
 ---
 
