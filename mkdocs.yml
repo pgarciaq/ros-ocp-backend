@@ -157,8 +157,8 @@ nav:
       - Performance and Scalability: operations/performance-and-scalability.md
       - UXSNO Benchmark Report: operations/benchmark-report.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
-      - Configuration: configuration.md
-      - Configuration (Operations): operations/configuration.md
+      - Deployment Configuration: configuration.md
+      - Configuration Reference (Operations): operations/configuration.md
       - API Pagination: pagination.md
       - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md

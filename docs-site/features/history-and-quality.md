@@ -15,7 +15,7 @@ Recommendation **quality** measures whether recommendations are stable, adopted,
 and free of post-recommendation OOM events. Together they help operators trust
 ROS guidance and detect flip-flopping or ignored recommendations.
 
-## History {#history}
+## History
 
 Recommendation history is a **fleet-wide** API. There is no per-container ID sub-resource.
 
@@ -96,7 +96,7 @@ These are intentional boundaries, not missing implementations:
 | **GPU time-slicing / MIG recommendation history** | Not implemented — GPU recommendations have list/detail APIs but no `recommendation_history` writer |
 | **PVC recommendation snapshot history** | By design, not implemented — PVC detail exposes usage time-series only; see [PVC plugin](../plugin-reference/pvc.md#history) |
 
-## Quality {#quality}
+## Quality
 
 Quality metrics measure stability, adoption, and OOM signals after recommendations are issued. **Container-only.**
 

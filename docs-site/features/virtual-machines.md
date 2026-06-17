@@ -544,7 +544,7 @@ List, detail, and history filter clusters using `openshift.cluster` permissions 
 
 **ROS `savings`** on list/detail estimates monthly savings from those same direct rates when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
 
-### Placement and NUMA {#placement-and-numa}
+### Placement and NUMA
 
 Cluster-wide placement checks run during `recommendVM()` when `placement.enable_placement_checks`
 is true (default). Redundant VMs are grouped primarily by namespace and derived VM name prefix
@@ -630,7 +630,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **Live migration recommendations** | Target-node recommendations for live migration — see [Live migration (future)](#live-migration-future) |
 | **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](../../docs/design/vm-recommendations.md#full-network-qos-future) |
 
-### Network QoS hints (65–66) {#network-qos-hints-6566}
+### Network QoS hints (65–66)
 
 When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest metrics exceed thresholds, ROS may emit:
 
@@ -641,7 +641,7 @@ When a VM is **network-bound** (`is_network_bound`, n1 series) and latest digest
 
 Tune via `GET/PUT .../settings/vm` → `network_qos` or env vars `ROS_VM_NETWORK_QOS_*` (see [configuration](../configuration.md)).
 
-### Storage tiering hints (67–69) {#storage-tiering-hints-6769}
+### Storage tiering hints (67–69)
 
 When enough daily digests exist in the term window, ROS classifies each day’s disk I/O (same rules as aggregate `io_pattern`) and may emit:
 
@@ -655,7 +655,7 @@ These hints do not name a StorageClass or compute dollar savings; full tiering i
 
 Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STORAGE_TIERING_*` (see [configuration](../configuration.md)).
 
-### Live migration (future) {#live-migration-future}
+### Live migration (future)
 
 **Today:** ROS detects redundant or uneven VM placement (notifications **60**–**63**) and surfaces metadata such as `is_redundant_placement` and `has_shared_storage`.
 
@@ -663,7 +663,7 @@ Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STO
 
 This is separate from sizing recommendations: migration guidance will appear when the operator and API expose enough node capacity and migration state.
 
-### Smart co-location (future) {#smart-co-location-future}
+### Smart co-location (future)
 
 **Goal:** Recommend that communicating VMs be placed on the same node (or rack/failure domain) to reduce network latency and bandwidth consumption.
 

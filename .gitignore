@@ -53,6 +53,10 @@ docs-site/architecture/*
 !docs-site/architecture/decay-weights.md
 !docs-site/architecture/understanding-recommendations.md
 !docs-site/architecture/motivation.md
+!docs-site/architecture/koku-tdigest-idea.md
+!docs-site/architecture/performance-analysis.md
+!docs-site/architecture/requirements.md
+!docs-site/architecture/test-plan.md
 !docs-site/architecture/charts/
 !docs-site/architecture/charts/decay-weights-30d-hl10d.png
 !docs-site/architecture/charts/decay-weights-30d-hl15d.png
