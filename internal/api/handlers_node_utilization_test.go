@@ -34,7 +34,7 @@ func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 		},
 	}
 
-	out := groupNodeUtilizationRows(rows, "", "")
+	out := groupNodeUtilizationRows(rows, "", "", false)
 	require.Len(t, out, 1)
 
 	rec := out[0]
@@ -66,7 +66,7 @@ func TestGroupNodeUtilizationRows_TermFilterSelectsPrimary(t *testing.T) {
 		},
 	}
 
-	out := groupNodeUtilizationRows(rows, "", "short")
+	out := groupNodeUtilizationRows(rows, "", "short", false)
 	require.Len(t, out, 1)
 	assert.InDelta(t, 0.55, float64(out[0].Metrics.CPUUtilP95), 0.001)
 	assert.False(t, out[0].Classification.IsUnderutilized)
@@ -78,7 +78,7 @@ func TestGroupNodeUtilizationRows_EngineFilter(t *testing.T) {
 		{Node: "n1", ClusterUUID: "c-1", Term: "medium", Engine: "performance"},
 	}
 
-	out := groupNodeUtilizationRows(rows, "cost", "")
+	out := groupNodeUtilizationRows(rows, "cost", "", false)
 	require.Len(t, out, 1)
 	engines := out[0].RecommendationTerms["medium_term"].RecommendationEngines
 	require.NotNil(t, engines.Cost)
@@ -110,7 +110,7 @@ func TestGroupNodeUtilizationRows_PodCapacityFields(t *testing.T) {
 		},
 	}
 
-	out := groupNodeUtilizationRows(rows, "", "")
+	out := groupNodeUtilizationRows(rows, "", "", false)
 	require.Len(t, out, 1)
 	require.NotNil(t, out[0].PodCapacity)
 	assert.Equal(t, int64(100), *out[0].PodCapacity)
@@ -123,7 +123,7 @@ func TestGroupNodeUtilizationRows_OmitsPodCapacityWhenMissing(t *testing.T) {
 		{Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost", PodCount: 12},
 	}
 
-	out := groupNodeUtilizationRows(rows, "", "")
+	out := groupNodeUtilizationRows(rows, "", "", false)
 	require.Len(t, out, 1)
 	assert.Nil(t, out[0].PodCapacity)
 	assert.Nil(t, out[0].PodSchedulingHeadroom)

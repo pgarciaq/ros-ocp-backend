@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
@@ -35,6 +36,7 @@ type SnapshotRecommendationResponse struct {
 	RecommendationType   string                                     `json:"recommendation_type"`
 	EstimatedMonthlyCost *money.MoneyAmount                         `json:"estimated_monthly_cost,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	Explanation          *model.SnapshotExplanationAPI              `json:"explanation,omitempty"`
 }
 
 // SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
@@ -59,6 +61,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	}
 	orgID := xrhid.Identity.OrgID
 	hlog := requestLogger(c, orgID)
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
 
 	pool := db.GetPool()
 	if pool == nil {
@@ -194,7 +197,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	var data []SnapshotRecommendationResponse
 	for rows.Next() {
-		r, scanErr := scanSnapshotRecommendationRow(rows)
+		r, scanErr := scanSnapshotRecommendationRow(rows, includeExplanation)
 		if scanErr != nil {
 			hlog.Errorf("scanning snapshot recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{

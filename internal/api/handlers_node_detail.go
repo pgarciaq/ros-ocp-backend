@@ -103,7 +103,12 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 			nr.estimated_savings_cents,
 			nr.machineset_name, nr.suggested_instance_type, nr.instance_type_reason,
 			nr.confidence_level, nr.data_days,
-			COALESCE(nr.updated_at, 'epoch'::timestamptz)` + baseFrom + `
+			COALESCE(nr.updated_at, 'epoch'::timestamptz),
+			nr.expl_data_days, nr.expl_target_utilization_bp,
+			nr.expl_current_cpu_mc, nr.expl_current_mem_kib,
+			nr.expl_max_cpu_usage_p95_mc, nr.expl_max_mem_usage_p95_kib,
+			nr.expl_pod_scheduling_headroom_bp, nr.expl_ema_imbalance_bp,
+			nr.expl_consolidation_applied, nr.expl_sizing_formula` + baseFrom + `
 		ORDER BY nr.term, nr.engine`
 
 	rows, err := pool.Query(ctx, detailSQL, args...)
@@ -133,6 +138,11 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 			&row.MachineSetName, &row.SuggestedInstanceType, &row.InstanceTypeReason,
 			&row.ConfidenceLevel, &row.DataDays,
 			&row.UpdatedAt,
+			&row.ExplDataDays, &row.ExplTargetUtilizationBP,
+			&row.ExplCurrentCPUMC, &row.ExplCurrentMemKiB,
+			&row.ExplMaxCPUUsageP95MC, &row.ExplMaxMemUsageP95KiB,
+			&row.ExplPodSchedulingHeadroomBP, &row.ExplEMAImbalanceBP,
+			&row.ExplConsolidationApplied, &row.ExplSizingFormula,
 		)
 		if err != nil {
 			hlog.Warnf("GetNodeUtilizationDetail: scan failed: %v", err)
@@ -151,7 +161,7 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
 
-	grouped := groupNodeUtilizationRows(rawRows, "", "")
+	grouped := groupNodeUtilizationRows(rawRows, "", "", RequestIncludesExplanation(c.QueryParam("include")))
 	if len(grouped) == 0 {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}

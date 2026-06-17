@@ -36,7 +36,8 @@ const nodeGPUTimeslicingSelectSQL = `
 		t.candidate_containers, t.impacted_containers,
 		t.notification_codes,
 		t.estimated_savings_cents, t.savings_per_gpu_cents,
-		t.last_seen_at, t.updated_at
+		t.last_seen_at, t.updated_at,
+		t.expl_data_days, t.expl_candidate_count, t.expl_impacted_count, t.expl_classification_rule
 	FROM node_gpu_timeslicing_recommendations t`
 
 func orgHasPersistedNodeGPUTimeslicingRecs(ctx context.Context, pool *pgxpool.Pool, orgID string) (bool, error) {
@@ -57,6 +58,7 @@ func respondNodeGPURecommendationsFromTable(
 	opts listoptions.ListOptions,
 	clusterUUIDs []string,
 	clusterFilter, nodeNameFilter, gpuModelFilter, termFilter string,
+	includeExplanation bool,
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 
@@ -102,7 +104,7 @@ func respondNodeGPURecommendationsFromTable(
 	}
 
 	if tagFilterActive {
-		allRecs, listErr := queryPersistedNodeGPURecs(ctx, pool, filterSQL, args, orderCol, opts.OrderHow, 0, 0, false)
+		allRecs, listErr := queryPersistedNodeGPURecs(ctx, pool, filterSQL, args, orderCol, opts.OrderHow, 0, 0, false, includeExplanation)
 		if listErr != nil {
 			hlog.Errorf("GetNodeRecommendations: persisted list failed: %v", listErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load node GPU recommendations"})
@@ -151,7 +153,7 @@ func respondNodeGPURecommendationsFromTable(
 	}
 	paged, listErr := queryPersistedNodeGPURecsPage(
 		ctx, pool, filterSQL, args, argIdx, orderCol, opts.OrderHow,
-		pageLimitPlusOne, opts.Offset, cursor, hasCursor,
+		pageLimitPlusOne, opts.Offset, cursor, hasCursor, includeExplanation,
 	)
 	if listErr != nil {
 		if strings.Contains(listErr.Error(), "invalid after parameter") {
@@ -252,6 +254,7 @@ func queryPersistedNodeGPURecsPage(
 	limit, offset int,
 	cursor NodeGPUCursor,
 	hasCursor bool,
+	includeExplanation bool,
 ) ([]model.NodeGPURecommendation, error) {
 	query := nodeGPUTimeslicingSelectSQL + `
 		WHERE t.org_id = $1` + filterSQL
@@ -279,7 +282,7 @@ func queryPersistedNodeGPURecsPage(
 		}
 	}
 
-	recs, err := queryPersistedNodeGPURecRows(ctx, pool, query, args)
+	recs, err := queryPersistedNodeGPURecRows(ctx, pool, query, args, includeExplanation)
 	return recs, err
 }
 
@@ -291,6 +294,7 @@ func queryPersistedNodeGPURecs(
 	orderCol, orderHow string,
 	limit, offset int,
 	useOffset bool,
+	includeExplanation bool,
 ) ([]model.NodeGPURecommendation, error) {
 	query := nodeGPUTimeslicingSelectSQL + `
 		WHERE t.org_id = $1` + filterSQL +
@@ -302,10 +306,10 @@ func queryPersistedNodeGPURecs(
 	if useOffset && offset > 0 {
 		query += " OFFSET " + strconv.Itoa(offset)
 	}
-	return queryPersistedNodeGPURecRows(ctx, pool, query, args)
+	return queryPersistedNodeGPURecRows(ctx, pool, query, args, includeExplanation)
 }
 
-func queryPersistedNodeGPURecRows(ctx context.Context, pool *pgxpool.Pool, query string, args []interface{}) ([]model.NodeGPURecommendation, error) {
+func queryPersistedNodeGPURecRows(ctx context.Context, pool *pgxpool.Pool, query string, args []interface{}, includeExplanation bool) ([]model.NodeGPURecommendation, error) {
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -325,7 +329,7 @@ func queryPersistedNodeGPURecRows(ctx context.Context, pool *pgxpool.Pool, query
 			currency = fetchClusterCurrency(ctx, row.OrgID, clusterID)
 			clusterCurrency[clusterID] = currency
 		}
-		recs = append(recs, persistedRowToNodeGPURecommendation(row, currency))
+		recs = append(recs, persistedRowToNodeGPURecommendation(row, currency, includeExplanation))
 	}
 	if recs == nil {
 		recs = []model.NodeGPURecommendation{}
@@ -344,6 +348,7 @@ func scanNodeGPUTimeslicingRow(row pgx.Row) (model.NodeGPUTimeslicingRecommendat
 		&notificationCodes,
 		&r.EstimatedSavingsCents, &r.SavingsPerGPUCents,
 		&r.LastSeenAt, &r.UpdatedAt,
+		&r.ExplDataDays, &r.ExplCandidateCount, &r.ExplImpactedCount, &r.ExplClassificationRule,
 	)
 	if err != nil {
 		return r, err
@@ -352,7 +357,7 @@ func scanNodeGPUTimeslicingRow(row pgx.Row) (model.NodeGPUTimeslicingRecommendat
 	return r, nil
 }
 
-func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendation, currency string) model.NodeGPURecommendation {
+func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendation, currency string, includeExplanation bool) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{
 		NodeName:            row.NodeName,
 		ClusterUUID:         row.ClusterUUID.String(),
@@ -377,6 +382,11 @@ func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendat
 	rec.ImpactedContainers = []model.NodeContainerRef(row.ImpactedContainers)
 	if rec.ImpactedContainers == nil {
 		rec.ImpactedContainers = []model.NodeContainerRef{}
+	}
+	if includeExplanation {
+		rec.Explanation = model.BuildNodeGPUTimeslicingExplanationAPI(
+			row.ExplDataDays, row.ExplCandidateCount, row.ExplImpactedCount, row.ExplClassificationRule,
+		)
 	}
 	return rec
 }

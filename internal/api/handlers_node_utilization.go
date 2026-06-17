@@ -69,14 +69,29 @@ type nodeUtilRow struct {
 	ConfidenceLevel         sql.NullFloat64
 	DataDays                sql.NullInt32
 	UpdatedAt               time.Time
+	ExplDataDays            sql.NullInt32
+	ExplTargetUtilizationBP sql.NullInt32
+	ExplCurrentCPUMC        sql.NullInt64
+	ExplCurrentMemKiB       sql.NullInt64
+	ExplMaxCPUUsageP95MC    sql.NullInt64
+	ExplMaxMemUsageP95KiB   sql.NullInt64
+	ExplPodSchedulingHeadroomBP sql.NullInt32
+	ExplEMAImbalanceBP      sql.NullInt32
+	ExplConsolidationApplied sql.NullBool
+	ExplSizingFormula       sql.NullString
 }
+
+const nodeUtilExplSelect = `,
+			f.expl_data_days, f.expl_target_utilization_bp,
+			f.expl_current_cpu_mc, f.expl_current_mem_kib,
+			f.expl_max_cpu_usage_p95_mc, f.expl_max_mem_usage_p95_kib,
+			f.expl_pod_scheduling_headroom_bp, f.expl_ema_imbalance_bp,
+			f.expl_consolidation_applied, f.expl_sizing_formula`
 
 type nodeUtilKey struct {
 	ClusterUUID string
 	Node        string
 }
-
-// GetNodeUtilizationRecs handles GET /recommendations/openshift/nodes (node CPU/memory utilization).
 //
 // order_by sorting (all DB-backed via SQL ORDER BY on node_utilization_recommendation_sets):
 //   node (alias node_name), estimated_monthly_savings (alias estimated_monthly_savings_usd; sorts on sort_savings column).
@@ -397,7 +412,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			f.estimated_savings_cents,
 			f.suggested_instance_type, f.instance_type_reason,
 			f.confidence_level, f.data_days,
-			COALESCE(f.updated_at, 'epoch'::timestamptz)
+			COALESCE(f.updated_at, 'epoch'::timestamptz)` + nodeUtilExplSelect + `
 		FROM filtered f
 		INNER JOIN node_page np ON f.cluster_uuid = np.cluster_uuid AND f.node = np.node
 		ORDER BY np.sort_savings ` + orderHow + ` NULLS LAST, f.node, f.term, f.engine`
@@ -430,6 +445,11 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			&row.SuggestedInstanceType, &row.InstanceTypeReason,
 			&row.ConfidenceLevel, &row.DataDays,
 			&row.UpdatedAt,
+			&row.ExplDataDays, &row.ExplTargetUtilizationBP,
+			&row.ExplCurrentCPUMC, &row.ExplCurrentMemKiB,
+			&row.ExplMaxCPUUsageP95MC, &row.ExplMaxMemUsageP95KiB,
+			&row.ExplPodSchedulingHeadroomBP, &row.ExplEMAImbalanceBP,
+			&row.ExplConsolidationApplied, &row.ExplSizingFormula,
 		)
 		if err != nil {
 			scanErrors++
@@ -446,7 +466,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter)
+	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false)
 	enrichFleetConsolidationNotifications(pagedRecs, rawRows, termFilter, engineFilter)
 	if pagedRecs == nil {
 		pagedRecs = []model.NodeUtilizationRec{}
@@ -695,7 +715,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 	return c.Stream(http.StatusOK, "text/csv", pipeReader)
 }
 
-func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter string) []model.NodeUtilizationRec {
+func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter string, includeExplanation bool) []model.NodeUtilizationRec {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -738,7 +758,7 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 			termRec.RecommendationEngines = &model.NodeUtilizationEngines{}
 		}
 
-		engineRec := nodeUtilRowToEngineRec(row)
+		engineRec := nodeUtilRowToEngineRec(row, includeExplanation)
 		switch row.Engine {
 		case "cost":
 			termRec.RecommendationEngines.Cost = engineRec
@@ -824,7 +844,7 @@ func nodeUtilPrimaryScore(row *nodeUtilRow, termFilter, engineFilter string) int
 	return score
 }
 
-func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
+func nodeUtilRowToEngineRec(row nodeUtilRow, includeExplanation bool) *model.NodeUtilizationEngineRec {
 	rec := &model.NodeUtilizationEngineRec{
 		NodeCountReduction: row.NodeCountReduction,
 		Notifications:      notifications.MapToKruizeFormatForNode(row.NotificationCodes, row.StrandedResource, "", 0),
@@ -838,6 +858,26 @@ func nodeUtilRowToEngineRec(row nodeUtilRow) *model.NodeUtilizationEngineRec {
 	}
 	if row.EstimatedMonthlySavings.Valid {
 		rec.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&row.EstimatedMonthlySavings.Int64, money.DefaultCurrency)
+	}
+	if includeExplanation {
+		var confidence *float32
+		if row.ConfidenceLevel.Valid {
+			v := float32(row.ConfidenceLevel.Float64)
+			confidence = &v
+		}
+		rec.Explanation = model.BuildNodeExplanationAPI(
+			confidence,
+			nullInt32ToIntPtr(row.ExplDataDays),
+			nullInt32Ptr(row.ExplTargetUtilizationBP),
+			nullInt32Ptr(row.ExplPodSchedulingHeadroomBP),
+			nullInt32Ptr(row.ExplEMAImbalanceBP),
+			nullInt64Ptr(row.ExplCurrentCPUMC),
+			nullInt64Ptr(row.ExplMaxCPUUsageP95MC),
+			nullInt64Ptr(row.ExplCurrentMemKiB),
+			nullInt64Ptr(row.ExplMaxMemUsageP95KiB),
+			nullBoolPtr(row.ExplConsolidationApplied),
+			nullStringPtr(row.ExplSizingFormula),
+		)
 	}
 	return rec
 }
@@ -972,4 +1012,34 @@ func enrichFleetConsolidationNotifications(recs []model.NodeUtilizationRec, rawR
 		}
 		engRec.Notifications = notifications.MapToKruizeFormatForNode(codes, stranded, recs[i].MachineSetName, fleetTotal)
 	}
+}
+
+func nullInt32ToIntPtr(v sql.NullInt32) *int {
+	if !v.Valid {
+		return nil
+	}
+	i := int(v.Int32)
+	return &i
+}
+
+func nullInt32Ptr(v sql.NullInt32) *int32 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Int32
+}
+
+func nullBoolPtr(v sql.NullBool) *bool {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Bool
+}
+
+func nullStringPtr(v sql.NullString) *string {
+	if !v.Valid {
+		return nil
+	}
+	s := v.String
+	return &s
 }

@@ -273,6 +273,106 @@ func TestGetNativeRecommendationSet_DetailEndpoint(t *testing.T) {
 	})
 }
 
+func TestGetNativeRecommendationSet_DetailExplanationOptIn(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	database.DB = testutil.OpenTestGORM(pool)
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift?limit=1", nil)
+	listReq.Header.Set("X-Rh-Identity", identityHeader)
+	listRec := httptest.NewRecorder()
+	app.ServeHTTP(listRec, listReq)
+	require.Equal(t, http.StatusOK, listRec.Code)
+
+	var listResp struct {
+		Data []model.DetailResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &listResp))
+	require.NotEmpty(t, listResp.Data)
+	containerID := listResp.Data[0].ID
+
+	t.Run("default detail omits explanation", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var raw map[string]any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+		recsBlock, ok := raw["recommendations"].(map[string]any)
+		require.True(t, ok)
+		terms, ok := recsBlock["recommendation_terms"].(map[string]any)
+		require.True(t, ok)
+		for _, termVal := range terms {
+			termMap, ok := termVal.(map[string]any)
+			require.True(t, ok)
+			engines, ok := termMap["recommendation_engines"].(map[string]any)
+			require.True(t, ok)
+			for _, engVal := range engines {
+				engMap, ok := engVal.(map[string]any)
+				require.True(t, ok)
+				assert.NotContains(t, engMap, "explanation")
+			}
+		}
+	})
+
+	t.Run("include=explanation adds explanation when populated", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/"+containerID+"?include=explanation", nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var detail model.DetailResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+		require.NotEmpty(t, detail.Recommendations.RecommendationTerms)
+
+		found := false
+		for _, term := range detail.Recommendations.RecommendationTerms {
+			if term.RecommendationEngines == nil {
+				continue
+			}
+			for _, eng := range []*model.DetailEngine{term.RecommendationEngines.Cost, term.RecommendationEngines.Performance} {
+				if eng == nil {
+					continue
+				}
+				if eng.Explanation != nil && eng.Explanation.DataDays != nil {
+					found = true
+					assert.Greater(t, *eng.Explanation.DataDays, 0)
+				}
+			}
+		}
+		assert.True(t, found, "expected at least one engine with populated explanation.data_days")
+	})
+}
+
 func TestGetContainerDetail_DualEnginePresence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

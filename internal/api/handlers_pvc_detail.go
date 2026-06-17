@@ -103,8 +103,9 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 	summary.Namespace = id.namespace
 	summary.PersistentVolumeClaim = id.pvcName
 
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
 	for rows.Next() {
-		rec, scanErr := scanPVCRecommendationRow(rows)
+		rec, scanErr := scanPVCRecommendationRow(rows, includeExplanation)
 		if scanErr != nil {
 			hlog.Errorf("PVC detail scan failed: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{

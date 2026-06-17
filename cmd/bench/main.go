@@ -421,7 +421,7 @@ func benchmarkDetail(nContainers int, recs []engine.ContainerRec) float64 {
 	var totalMS float64
 	for i := 0; i < iterations; i++ {
 		t0 := time.Now()
-		_, err := model.GetNativeRecommendationByID(benchOrgID, id, map[string][]string{})
+		_, err := model.GetNativeRecommendationByID(benchOrgID, id, map[string][]string{}, false)
 		elapsed := time.Since(t0).Seconds() * 1000
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  WARNING detail query error: %v\n", err)

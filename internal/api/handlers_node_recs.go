@@ -130,6 +130,7 @@ func GetNodeRecommendations(c echo.Context) error {
 		return respondNodeGPURecommendationsFromTable(
 			c, ctx, pool, orgIDStr, userPerms, opts, clusterUUIDs,
 			clusterFilter, nodeNameFilter, gpuModelFilter, termFilter,
+			RequestIncludesExplanation(c.QueryParam("include")),
 		)
 	}
 

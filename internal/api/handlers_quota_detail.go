@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -33,6 +34,7 @@ type QuotaRecommendationDetailResponse struct {
 	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
 	History            []engine.QuotaRecommendationHistoryRow      `json:"history,omitempty"`
+	Explanation        *model.QuotaExplanationAPI                  `json:"explanation,omitempty"`
 }
 
 // ClusterQuotaRecommendationDetailResponse is the full CRQ recommendation for one object.
@@ -50,6 +52,7 @@ type ClusterQuotaRecommendationDetailResponse struct {
 	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	Namespaces           []string                                      `json:"namespaces,omitempty"`
 	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
+	Explanation          *model.ClusterQuotaExplanationAPI             `json:"explanation,omitempty"`
 }
 
 type quotaDetailIdentity struct {
@@ -141,7 +144,9 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 			utilization_storage_request_bp, utilization_pods_bp,
 			cpu_freed_millicores, memory_freed_bytes,
 			storage_freed_bytes, pods_freed,
-			estimated_savings_cents, currency, notification_codes, last_observed_at
+			estimated_savings_cents, currency, notification_codes, last_observed_at,
+			expl_headroom_bp, expl_container_cpu_sum_mc, expl_container_mem_sum_bytes,
+			expl_signal_c_cpu_used_mc, expl_max_utilization_bp, expl_risk_level, expl_recommendation_reason
 		FROM quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`
 	args := []any{orgID, id.clusterUUID, id.namespace}
@@ -153,7 +158,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 	}
 
 	row := pool.QueryRow(ctx, query, args...)
-	item, codes, headroomBP, err := scanQuotaDetailRow(row)
+	item, codes, headroomBP, expl, err := scanQuotaDetailRow(row)
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
@@ -197,6 +202,9 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		Notifications:       notifications.MapToKruizeFormat(codes),
 		LastObservedAt:      item.LastObservedAt,
 		History:             history,
+	}
+	if RequestIncludesExplanation(c.QueryParam("include")) {
+		detail.Explanation = expl
 	}
 	if detail.History == nil {
 		detail.History = []engine.QuotaRecommendationHistoryRow{}
@@ -244,13 +252,15 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			utilization_storage_request_percent, utilization_pods_percent,
 			savings_cpu_cores_freed, savings_memory_bytes_freed,
 			savings_storage_bytes_freed, savings_pods_freed,
-			estimated_savings_cents, notification_codes, namespaces
+			estimated_savings_cents, notification_codes, namespaces,
+			expl_headroom_bp, expl_ns_quota_cpu_sum_mc, expl_ns_quota_mem_sum_bytes,
+			expl_base_cpu_mc, expl_max_utilization_bp, expl_recommendation_reason
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND cluster_quota_name = $3`
 
 	currency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
 	row := pool.QueryRow(ctx, query, orgID, id.clusterUUID, id.clusterQuotaName)
-	item, codes, err := scanClusterQuotaDetailRow(row, currency)
+	item, codes, expl, err := scanClusterQuotaDetailRow(row, currency)
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
@@ -289,6 +299,9 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		Namespaces:         item.Namespaces,
 		History:            history,
 	}
+	if RequestIncludesExplanation(c.QueryParam("include")) {
+		detail.Explanation = expl
+	}
 	if detail.History == nil {
 		detail.History = []engine.ClusterQuotaRecommendationHistoryRow{}
 	}
@@ -299,7 +312,7 @@ type quotaDetailRowScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem, []int16, int, error) {
+func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem, []int16, int, *model.QuotaExplanationAPI, error) {
 	var item QuotaRecommendationListItem
 	var headroomBP int
 	var codes []int16
@@ -314,6 +327,9 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	var savings sql.NullInt64
 	var currency string
 	var lastObserved sql.NullTime
+	var explHeadroom, explMaxUtil sql.NullInt32
+	var explCPUSum, explMemSum, explSignalC sql.NullInt64
+	var explRisk, explReason sql.NullString
 
 	err := rows.Scan(
 		&item.ClusterUUID, &item.Namespace, &item.QuotaName, &item.RecommendationType, &item.RiskLevel, &headroomBP,
@@ -326,9 +342,10 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 		&storageUtil, &podsUtil,
 		&cpuFreed, &memFreed, &storageFreed, &podsFreed,
 		&savings, &currency, &codes, &lastObserved,
+		&explHeadroom, &explCPUSum, &explMemSum, &explSignalC, &explMaxUtil, &explRisk, &explReason,
 	)
 	if err != nil {
-		return item, nil, 0, err
+		return item, nil, 0, nil, err
 	}
 
 	item.QuotaHard = quotaValuesFromNullExtended(cpuReqHard, cpuLimHard, memReqHard, memLimHard, storageHard, podsHard)
@@ -342,10 +359,15 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 	if lastObserved.Valid {
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
 	}
-	return item, codes, headroomBP, nil
+	expl := model.BuildQuotaExplanationAPI(
+		nullInt32Ptr(explHeadroom), nullInt32Ptr(explMaxUtil),
+		nullInt64Ptr(explCPUSum), nullInt64Ptr(explMemSum), nullInt64Ptr(explSignalC),
+		nullStringPtr(explRisk), nullStringPtr(explReason),
+	)
+	return item, codes, headroomBP, expl, nil
 }
 
-func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (ClusterQuotaRecommendationListItem, []int16, error) {
+func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (ClusterQuotaRecommendationListItem, []int16, *model.ClusterQuotaExplanationAPI, error) {
 	var item ClusterQuotaRecommendationListItem
 	var codes []int16
 	var cpuReqHard, cpuLimHard, memReqHard, memLimHard sql.NullInt64
@@ -357,6 +379,9 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (Cl
 	var cpuCoresFreed, memFreed, storageFreed, podsFreed sql.NullInt64
 	var savings sql.NullInt64
 	var namespacesRaw sql.NullString
+	var explHeadroom, explMaxUtil sql.NullInt32
+	var explCPUSum, explMemSum, explBaseCPU sql.NullInt64
+	var explReason sql.NullString
 
 	err := rows.Scan(
 		&item.ClusterUUID, &item.ClusterQuotaName, &item.RecommendationType, &item.RiskLevel,
@@ -367,9 +392,10 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (Cl
 		&podsHard, &podsUsed, &podsRec,
 		&cpuReqUtil, &memReqUtil, &storageUtil, &podsUtil,
 		&cpuCoresFreed, &memFreed, &storageFreed, &podsFreed, &savings, &codes, &namespacesRaw,
+		&explHeadroom, &explCPUSum, &explMemSum, &explBaseCPU, &explMaxUtil, &explReason,
 	)
 	if err != nil {
-		return item, nil, err
+		return item, nil, nil, err
 	}
 
 	item.QuotaHard = clusterQuotaValuesFromNull(cpuReqHard, cpuLimHard, memReqHard, memLimHard, storageHard, podsHard)
@@ -388,5 +414,10 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (Cl
 		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
 	}
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
-	return item, codes, nil
+	expl := model.BuildClusterQuotaExplanationAPI(
+		nullInt32Ptr(explHeadroom), nullInt32Ptr(explMaxUtil),
+		nullInt64Ptr(explCPUSum), nullInt64Ptr(explMemSum), nullInt64Ptr(explBaseCPU),
+		nullStringPtr(explReason),
+	)
+	return item, codes, expl, nil
 }

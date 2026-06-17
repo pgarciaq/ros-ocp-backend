@@ -14,9 +14,10 @@ type NodeGPURecommendation struct {
 	TotalNodeSavings    *money.MoneyAmount `json:"total_node_savings,omitempty"`
 	Confidence          float32              `json:"confidence"`
 	ConfidenceLevel     float32            `json:"confidence_level"`
-	CandidateContainers []NodeContainerRef `json:"candidate_containers"`
-	ImpactedContainers  []NodeContainerRef `json:"impacted_containers"`
-	NotificationCodes   []int16            `json:"notification_codes"`
+	CandidateContainers []NodeContainerRef                  `json:"candidate_containers"`
+	ImpactedContainers  []NodeContainerRef                  `json:"impacted_containers"`
+	NotificationCodes   []int16                             `json:"notification_codes"`
+	Explanation         *NodeGPUTimeslicingExplanationAPI   `json:"explanation,omitempty"`
 }
 
 // NodeContainerRef identifies a container within a node-level recommendation.

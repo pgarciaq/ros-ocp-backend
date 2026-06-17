@@ -11,6 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -39,6 +40,7 @@ type PVCRecommendationResponse struct {
 	IdleSince                  *string                                    `json:"idle_since,omitempty"`
 	IdleDurationDays           *int                                       `json:"idle_duration_days,omitempty"`
 	ResizeNote                 string                                     `json:"resize_note,omitempty"`
+	Explanation                *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
 }
 
 const (
@@ -188,7 +190,7 @@ func GetPVCRecommendations(c echo.Context) error {
 
 	var data []PVCRecommendationResponse
 	for rows.Next() {
-		r, scanErr := scanPVCRecommendationRow(rows)
+		r, scanErr := scanPVCRecommendationRow(rows, false)
 		if scanErr != nil {
 			hlog.Errorf("scanning PVC recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{

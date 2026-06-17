@@ -100,6 +100,7 @@ type VMRecommendationItem struct {
 	Savings           *money.MoneyAmount `json:"savings"`
 	LastRecommendedAt string              `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
+	Explanation       *model.VMExplanationAPI `json:"explanation,omitempty"`
 }
 
 type vmDailyDigestItem struct {
@@ -457,6 +458,9 @@ func GetVMRecommendationDetail(c echo.Context) error {
 
 	item := vmRecToAPIItem(*rec)
 	item.DailyDigests = vmDigestsToAPI(digests)
+	if RequestIncludesExplanation(c.QueryParam("include")) {
+		item.Explanation = model.BuildVMExplanationAPI(*rec)
+	}
 	if item.GPU != nil && len(digests) > 0 {
 		gpuDetail := engine.AnalyzeVMGPU(digests, engine.VMRecConfigResolved())
 		item.GPU.GPUDevices = gpuDetail.GPUDevices

@@ -501,7 +501,8 @@ func GetNativeRecommendationSet(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation_id"})
 	}
 
-	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -581,7 +582,8 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation_id"})
 	}
 
-	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms)
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -864,7 +866,8 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "bad recommendation-id"})
 	}
 
-	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms)
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
+	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native namespace recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -914,10 +917,44 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	}
 
 	singleSlice := []model.NativeContainerResult{*result}
+	savedGPUExpl := savedGPUExplanations(result)
 	EnrichNativeContainerResults(ctx, &NativeContainerEnrichmentInput{OrgID: orgID, Results: singleSlice})
 	*result = singleSlice[0]
+	restoreGPUExplanations(result, savedGPUExpl)
 
 	return model.BuildDetailResponse(result, plots, met)
+}
+
+func savedGPUExplanations(result *model.NativeContainerResult) map[string]*model.GPUExplanationAPI {
+	if result == nil || result.GPU == nil {
+		return nil
+	}
+	saved := make(map[string]*model.GPUExplanationAPI)
+	for term, gpu := range result.GPU {
+		if gpu != nil && gpu.Explanation != nil {
+			saved[term] = gpu.Explanation
+		}
+	}
+	if len(saved) == 0 {
+		return nil
+	}
+	return saved
+}
+
+func restoreGPUExplanations(result *model.NativeContainerResult, saved map[string]*model.GPUExplanationAPI) {
+	if result == nil || len(saved) == 0 {
+		return
+	}
+	if result.GPU == nil {
+		result.GPU = make(map[string]*model.GPURecommendation)
+	}
+	for term, expl := range saved {
+		if gpu, ok := result.GPU[term]; ok && gpu != nil {
+			gpu.Explanation = expl
+		} else {
+			result.GPU[term] = &model.GPURecommendation{Explanation: expl}
+		}
+	}
 }
 
 // enrichNativeNamespaceDetail fetches boxplots and monitoring_end_time for a

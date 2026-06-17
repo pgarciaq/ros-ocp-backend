@@ -812,7 +812,7 @@ func TestGetNodeRecommendations_LimitOnePerRecommendation(t *testing.T) {
 	assert.True(t, resp.Meta.HasNext)
 }
 
-func TestGetNodeRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
+func TestGetNodeRecommendations_OrderByConfidence_PersistedTable(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
@@ -822,7 +822,8 @@ func TestGetNodeRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	// With persisted node_gpu_timeslicing_recommendations (Phase 0), confidence is a valid SQL order column.
+	require.Equal(t, http.StatusOK, rec.Code)
 }
 
 func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {
