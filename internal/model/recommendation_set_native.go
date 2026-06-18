@@ -307,6 +307,7 @@ type NativeContainerResult struct {
 	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
 	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
 	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
+	Tags                    map[string]string             `json:"tags,omitempty"`
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`

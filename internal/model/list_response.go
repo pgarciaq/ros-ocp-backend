@@ -32,6 +32,7 @@ type ListResponse struct {
 	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
 	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
 	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
+	Tags                    map[string]string             `json:"tags,omitempty"`
 	Recommendations         ListRecommendations           `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
@@ -127,6 +128,7 @@ func BuildListResponse(native *NativeContainerResult, monitoringEndTime time.Tim
 		PeakMemoryBytes:       native.PeakMemoryBytes,
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
 		IdleRecommendation:    native.IdleRecommendation,
+		Tags:                  native.Tags,
 		Recommendations:       recs,
 		GPU:                   native.GPU,
 	}

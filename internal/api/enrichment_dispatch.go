@@ -28,6 +28,7 @@ func EnrichNativeContainerResults(ctx context.Context, in *NativeContainerEnrich
 	}
 	enrichBusinessHoursContainers(ctx, in.OrgID, in.Results)
 	enrichContainerCurrency(ctx, in.OrgID, in.Results)
+	enrichContainerTags(ctx, in.OrgID, in.Results)
 }
 
 func enrichBusinessHoursContainers(ctx context.Context, orgID string, results []model.NativeContainerResult) {
