@@ -682,7 +682,8 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 	totalWritten := 0
 	strictAnalytics := appCfg.IngestStrictAnalytics
 
-	tRec := time.Now()
+	cycleStart := time.Now().UTC()
+	tRec := cycleStart
 	err = engine.RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []engine.ContainerRec) error {
 		var n int
 		writeErr := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
@@ -714,6 +715,13 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 	}
 	metrics.IncRecommendationsWritten("container", totalWritten)
 	log.Infof("native engine: wrote %d recommendations", totalWritten)
+
+	markedStale, staleErr := engine.MarkUnreportedContainersStale(ctx, pool, orgID, clusterUUID, cycleStart)
+	if staleErr != nil {
+		log.Warnf("native engine: marking unreported containers stale failed: %v", staleErr)
+	} else if markedStale > 0 {
+		log.Infof("native engine: marked %d unreported container recommendations stale", markedStale)
+	}
 
 	if refreshErr := metrics.ObservePhase(metrics.PhaseMetadataRefresh, func() error {
 		return engine.RefreshOrgMetadata(ctx, pool, orgID)

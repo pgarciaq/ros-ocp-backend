@@ -37,6 +37,37 @@ now - reference_time > ROS_STALENESS_THRESHOLD_HOURS (default 48)
 Implementation: [`isStaleRecommendation`](../../internal/engine/recommend_all.go),
 [`StalenessThreshold`](../../internal/engine/recommend_all.go).
 
+### Per-container composite-key sweep
+
+The cluster-level check above handles "cluster stopped reporting." A separate
+sweep handles "container's composite key changed" — when a key component
+(`workload_type`, `workload`, `namespace`, etc.) changes, the ON CONFLICT upsert
+creates a new row but the old row is never overwritten.
+
+After each reconcile cycle completes for a given org+cluster,
+[`MarkUnreportedContainersStale`](../../internal/engine/recommend_all.go) marks
+any non-stale `recommendation_sets` row whose `updated_at` was not refreshed:
+
+```text
+UPDATE recommendation_sets
+SET stale = true
+WHERE org_id = :org_id
+  AND cluster_uuid = :cluster_uuid
+  AND stale = false
+  AND updated_at < :cycleStart - interval '5 minutes'
+```
+
+`WriteRecommendations` sets `updated_at = now()` on every upsert, so rows with
+active composite keys are always refreshed. The 5-minute grace window prevents
+false positives from clock skew and transaction delays.
+
+This runs in both the Kafka ingestion path
+([`report_processor.go`](../../internal/processor/report_processor.go)) and the
+threshold-recalculation path
+([`threshold_recalculate.go`](../../internal/engine/threshold_recalculate.go)).
+
+See [ADR-0298](../adr/0298-composite-key-sweep-stale-detection.md).
+
 ## Configuration
 
 | Environment variable | Default | Description |
@@ -82,6 +113,12 @@ Cluster reporting → last_reported_at refreshed → stale = false
 stale = true, notification code 2
         ↓ (stale for > ROS_STALE_CLEANUP_DAYS, default 30d)
 Deleted by retention sweep
+
+Composite key changed (e.g., workload_type: deployment → statefulset)
+        ↓ (new row upserted with new key; old row's updated_at not refreshed)
+Post-reconcile sweep: old row → stale = true, notification code 2
+        ↓ (stale for > ROS_STALE_CLEANUP_DAYS, default 30d)
+Deleted by retention sweep
 ```
 
 Fresh reporting clears `stale` and removes code 2 on the next recommendation run.
@@ -94,6 +131,10 @@ Fresh reporting clears `stale` and removes code 2 on the next recommendation run
   staleness.
 - **Delayed uploads:** As long as ingestion updates `last_reported_at` within
   the threshold, recommendations stay non-stale even if digest dates lag.
+- **Workload type change:** When a container's deployment type changes (e.g.,
+  Deployment → StatefulSet), the new composite key receives a fresh
+  recommendation row. The old row's `updated_at` is not refreshed by the upsert,
+  so the post-reconcile composite-key sweep marks it stale on the same cycle.
 - **Snapshot staleness:** VolumeSnapshot classifications (`orphaned`, `stale`,
   etc.) use `GET /recommendations/openshift/snapshots` and
   `ROS_SNAPSHOT_*` / `/settings/snapshot`, not this threshold.
@@ -121,6 +162,15 @@ Details: [snapshot staleness feature](../features-f-snapshot-staleness.md),
 ROS v1 **classifies** VolumeSnapshots only. It does **not** run restore-and-verify,
 automated safe-delete, or Velero/OADP backup workflows. Cleanup remains manual or
 customer-owned automation against `GET .../snapshots` and namespace summary APIs.
+
+## Related ADRs
+
+- [ADR-0224](../adr/0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md): Cluster-level staleness precedence (`last_reported_at` overrides digest age)
+- [ADR-0298](../adr/0298-composite-key-sweep-stale-detection.md): Post-reconcile composite-key sweep
+- [ADR-0161](../adr/0161-staleness-threshold-hours-alias.md): Staleness threshold env alias
+- [ADR-0225](../adr/0225-filter-stale-tri-state-semantics.md): API `filter[stale]` tri-state semantics
+- [ADR-0255](../adr/0255-org-container-keys-refresh-deletes-stale.md): org_container_keys refresh deletes stale keys
+- [ADR-0132](../adr/0132-retention-policies-per-table.md): Retention policies (30-day stale cleanup)
 
 ## Koku-side stale source detection (SaaS)
 

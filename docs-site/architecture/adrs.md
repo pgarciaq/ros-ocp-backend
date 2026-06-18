@@ -54,6 +54,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0293](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0293-engine-only-notification-deduplication.md) | Engine-only notification emission | Detail: per-engine maps only; list: `notification_codes` array (A-2) |
 | [0294](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0294-slim-list-contract.md) | Slim list contract | List DTOs omit plots; default `short_term` cost; skip enrichment at `limit=1` (S4, H-4) |
 | [0295](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0295-integer-first-architecture.md) | Integer-first arithmetic | `int64` everywhere (cents, millicores, basis points, micro-cents); `float64` only at boundaries; umbrella for ADRs 0047/0064/0098/0280/0288/0291 |
+| [0298](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0298-composite-key-sweep-stale-detection.md) | Composite-key sweep for stale detection | Post-reconcile sweep marks rows stale when composite key changes; complements cluster-level staleness (ADR-0224) |
 
 ## Domains covered
 

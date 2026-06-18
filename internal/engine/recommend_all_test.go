@@ -754,3 +754,123 @@ func TestRecommendAllWorkloads_ShortTermWithFutureEnd(t *testing.T) {
 	assert.True(t, termsSeen["medium"] || termsSeen["long"],
 		"medium or long term should also be produced with 3 days of data")
 }
+
+func TestMarkUnreportedContainersStale(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := testutil.TestOrgID
+	cluster := testutil.TestClusterUUID
+
+	// Insert two recommendation rows: one "old" (simulating a workload_type that changed)
+	// and one "current" (the new composite key).
+	oldUpdated := time.Now().UTC().Add(-1 * time.Hour)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, 'ns', 'api', 'deployment', 'web', 'medium', 'cost', false, $3)`,
+		orgID, cluster, oldUpdated,
+	)
+	require.NoError(t, err)
+
+	// The "current" row was just upserted by the reconcile cycle (updated_at ≈ now).
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, 'ns', 'api', 'statefulset', 'web', 'medium', 'cost', false, now())`,
+		orgID, cluster,
+	)
+	require.NoError(t, err)
+
+	cycleStart := time.Now().UTC().Add(-30 * time.Second)
+	marked, err := MarkUnreportedContainersStale(ctx, pool, orgID, cluster, cycleStart)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), marked, "should mark the old deployment row stale")
+
+	// Verify: deployment row is stale, statefulset row is not.
+	var deploymentStale, statefulsetStale bool
+	err = pool.QueryRow(ctx,
+		`SELECT stale FROM recommendation_sets WHERE org_id=$1 AND cluster_uuid=$2
+		 AND workload_type='deployment' AND container_name='web'`,
+		orgID, cluster,
+	).Scan(&deploymentStale)
+	require.NoError(t, err)
+	assert.True(t, deploymentStale, "old deployment rec should be stale")
+
+	err = pool.QueryRow(ctx,
+		`SELECT stale FROM recommendation_sets WHERE org_id=$1 AND cluster_uuid=$2
+		 AND workload_type='statefulset' AND container_name='web'`,
+		orgID, cluster,
+	).Scan(&statefulsetStale)
+	require.NoError(t, err)
+	assert.False(t, statefulsetStale, "current statefulset rec should remain active")
+}
+
+func TestMarkUnreportedContainersStale_NoFalsePositivesOnEmptyCluster(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := "org-no-fp"
+	cluster := "aaaaaaaa-1111-2222-3333-444444444444"
+
+	// Insert a recommendation that was just updated.
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, 'ns', 'app', 'deployment', 'main', 'short', 'cost', false, now())`,
+		orgID, cluster,
+	)
+	require.NoError(t, err)
+
+	cycleStart := time.Now().UTC().Add(-5 * time.Second)
+	marked, err := MarkUnreportedContainersStale(ctx, pool, orgID, cluster, cycleStart)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), marked, "recently-updated rows should not be marked stale")
+}
+
+func TestMarkUnreportedContainersStale_DoesNotAffectOtherClusters(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := "org-cross-cluster"
+	clusterA := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	clusterB := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+	oldTime := time.Now().UTC().Add(-2 * time.Hour)
+	// Old row in cluster A (should be marked stale).
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, 'ns', 'app', 'deployment', 'main', 'short', 'cost', false, $3)`,
+		orgID, clusterA, oldTime,
+	)
+	require.NoError(t, err)
+
+	// Old row in cluster B (should NOT be affected by cluster A's reconcile).
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at
+		) VALUES ($1, $2, 'ns', 'app', 'deployment', 'main', 'short', 'cost', false, $3)`,
+		orgID, clusterB, oldTime,
+	)
+	require.NoError(t, err)
+
+	cycleStart := time.Now().UTC().Add(-30 * time.Second)
+	marked, err := MarkUnreportedContainersStale(ctx, pool, orgID, clusterA, cycleStart)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), marked)
+
+	// Verify cluster B's row is untouched.
+	var clusterBStale bool
+	err = pool.QueryRow(ctx,
+		`SELECT stale FROM recommendation_sets WHERE org_id=$1 AND cluster_uuid=$2`,
+		orgID, clusterB,
+	).Scan(&clusterBStale)
+	require.NoError(t, err)
+	assert.False(t, clusterBStale, "cluster B recommendations should be unaffected")
+}

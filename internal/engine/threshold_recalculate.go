@@ -305,7 +305,8 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	}
 
 	totalWritten := 0
-	tRec := time.Now()
+	cycleStart := time.Now().UTC()
+	tRec := cycleStart
 	err = RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []ContainerRec) error {
 		ApplySavingsEstimates(batch, costData)
 		if oldRecs != nil {
@@ -334,6 +335,11 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 		return fmt.Errorf("recommend workloads: %w", err)
 	}
 	if totalWritten > 0 {
+		if markedStale, staleErr := MarkUnreportedContainersStale(ctx, pool, orgID, clusterUUID, cycleStart); staleErr != nil {
+			log.Warnf("threshold recalc: marking unreported containers stale failed: %v", staleErr)
+		} else if markedStale > 0 {
+			log.Infof("threshold recalc: marked %d unreported container recommendations stale", markedStale)
+		}
 		metrics.IncRecommendationsWritten("container", totalWritten)
 		if err := RefreshOrgMetadata(ctx, pool, orgID); err != nil {
 			return fmt.Errorf("refresh org metadata: %w", err)

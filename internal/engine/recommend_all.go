@@ -618,6 +618,35 @@ func StalenessThreshold() time.Duration {
 	return DefaultStalenessThreshold
 }
 
+// MarkUnreportedContainersStale marks recommendation_sets rows stale when their
+// composite key no longer appears in the current digest data. This handles the
+// case where a container's workload_type (or other key column) changes: the old
+// row is never overwritten by the ON CONFLICT upsert (different key = new row),
+// so without this sweep the old recommendation lingers with stale=false despite
+// having no matching digest data.
+//
+// The mechanism relies on WriteRecommendations setting updated_at = now() for
+// every row it upserts. After a full reconcile cycle, any non-stale row whose
+// updated_at is older than cycleStart was not refreshed — its composite key has
+// no matching digests.
+//
+// A 5-minute grace window accounts for clock skew and transaction commit delays.
+func MarkUnreportedContainersStale(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, cycleStart time.Time) (int64, error) {
+	grace := cycleStart.Add(-5 * time.Minute)
+	tag, err := pool.Exec(ctx, `
+		UPDATE recommendation_sets
+		SET stale = true, updated_at = now()
+		WHERE org_id = $1 AND cluster_uuid = $2
+		  AND stale = false
+		  AND updated_at < $3`,
+		orgID, clusterUUID, grace,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("mark unreported containers stale: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // latestDigest returns the DigestRow with the most recent BucketDate.
 func latestDigest(rows []DigestRow) DigestRow {
 	if len(rows) == 0 {
