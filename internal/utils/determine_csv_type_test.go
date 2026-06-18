@@ -30,6 +30,12 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"ocp_ros_usage.csv", types.PayloadTypeContainer},
 		{"some/path/with/namespace/in/middle.csv", types.PayloadTypeContainer},
 
+		// Cost management CSV files (cm-openshift-*) must be classified as unknown
+		{"cm-openshift-pod-usage-202606.3.csv", types.PayloadTypeUnknown},
+		{"cm-openshift-pod-usage-202605.1.csv", types.PayloadTypeUnknown},
+		{"cm-openshift-node-capacity-202606.3.csv", types.PayloadTypeUnknown},
+		{"/tmp/cm-openshift-pod-usage-202606.3.csv", types.PayloadTypeUnknown},
+
 		// Nise-generated filenames with date/UUID prefix (contains fallback)
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_cluster_quota.csv", types.PayloadTypeClusterQuota},
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_namespace_usage.csv", types.PayloadTypeNamespace},

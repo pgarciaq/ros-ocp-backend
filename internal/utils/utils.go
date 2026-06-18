@@ -431,6 +431,12 @@ func isItFirstOfMonth(d time.Time) bool {
 
 func DetermineCSVType(fileName string) types.PayloadType {
 	base := filepath.Base(fileName)
+
+	// Cost management CSVs (cm-openshift-*) are not ROS files — skip them.
+	if strings.HasPrefix(base, "cm-openshift-") {
+		return types.PayloadTypeUnknown
+	}
+
 	type rule struct {
 		pattern string
 		ptype   types.PayloadType

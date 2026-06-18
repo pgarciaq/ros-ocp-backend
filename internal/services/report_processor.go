@@ -220,6 +220,11 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 
 		csvType = utils.DetermineCSVType(file)
 		reportType := string(csvType)
+		if csvType == types.PayloadTypeUnknown {
+			log.Infof("skipping unrecognized file %s (type %s)", filename, reportType)
+			markFileDone(ctx, pool, log, manifestID, filename)
+			continue
+		}
 		if useNativeCSVIngest && csvType == types.PayloadTypeContainer {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 			if err := processContainerCSVIngest(ctx, file, kafkaMsg); err != nil {

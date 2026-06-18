@@ -12,6 +12,7 @@ const (
 	PayloadTypeClusterQuota PayloadType = "cluster-quota"
 	PayloadTypeVM           PayloadType = "vm"
 	PayloadTypeVMGPU        PayloadType = "vm-gpu"
+	PayloadTypeUnknown      PayloadType = "unknown"
 )
 
 type KafkaMsg struct {
